@@ -1,0 +1,20 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Se asegura que la ruta base sea correctamente identificada
+  RewriteCond %{REQUEST_URI}::$1 ^(/.+)/(.*)::\2$
+  RewriteRule ^(.*) - [E=BASE:%1]
+  
+  # Regla de reescritura para manejar las solicitudes que no corresponden a un archivo real
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Habilitar el almacenamiento en caché si es necesario
+<IfModule mod_headers.c>
+    Header set Cache-Control "no-store"
+</IfModule>
+
+# Configuración adicional de PHP
+# Nota: OpenLiteSpeed generalmente maneja las configuraciones de PHP a través de su panel de control, pero esta directiva puede funcionar en algunos entornos.
+php_flag output_buffering On

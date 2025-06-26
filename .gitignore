@@ -1,0 +1,22 @@
+# Dependencias de Composer
+/vendor/
+
+# Archivos de logs, cache y temporales
+/var/
+/tmp/
+
+# Archivos de configuración de entorno (¡MUY IMPORTANTE!)
+# Si tienes un archivo .env con contraseñas o claves de API, añádelo aquí.
+.env
+.env.local
+.env.*.local
+
+# Carpetas específicas de tu servidor que no son parte del proyecto
+/awstats-icon/
+/cgi-bin/
+
+# Archivos de sistema operativo y editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
