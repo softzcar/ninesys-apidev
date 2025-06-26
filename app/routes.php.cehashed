@@ -1,0 +1,2044 @@
+<?php
+
+declare(strict_types=1);
+// ini_set('implicit_flush', 1);
+
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\App;
+
+date_default_timezone_set('America/Caracas');
+
+return function (App $app) {
+    $app->options('/{routes:.*}', function (Request $request, Response $response) {
+        // CORS Pre-Flight OPTIONS Request Handler
+        return $response;
+    });
+
+    // ROOT
+    $app->get('/', function (Request $request, Response $response) {
+        $array["api"] = "ninesys 4";
+        $array["Ver"] = "3.4.9 PLUS 01";
+
+        $response->getBody()->write(json_encode($array));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    /** * PRUEBAS DE HISTÓRICO */
+
+    /* $app->get('/h/backup/pagos', function (Request $request, Response $response) {
+        $sql = "SELECT MAX(_id) + 1 id FROM ordenes";
+
+        $localConnection = new LocalDB();
+        $data = $localConnection->goQueryCopy($sql);
+        $localConnection->disconnect();
+
+        if (!$data[0]["id"]) {
+            $data[0]["id"] = "1";
+        }
+
+        $input = str_pad($data[0]["id"], 3, "0", STR_PAD_LEFT);
+        // $input = '33';
+        // $nextId["crudo"] =  $data[0]["id"];
+        $nextId["id"] = str_pad($input, 3, "0", STR_PAD_LEFT);
+
+        $response->getBody()->write(json_encode($nextId));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    }); */
+    /** * FIN PRUEBAS DE HISTÓRICO */
+
+    /** * Login */
+    $app->post("/login", function (Request $request, Response $response, $args) {
+        $datosAcceso = $request->getParsedBody();
+        $localConnection = new LocalDB();
+
+        $sql = "SELECT _id, activo, username, departamento, nombre, email, comision, acceso, (SELECT app_key FROM config WHERE _id = 1) as token FROM empleados WHERE username = '" . $datosAcceso['username'] . "' AND password = '" . $datosAcceso['password'] . "' AND activo = 1";
+
+        // $sql = "SELECT _id, activo, username, departamento, nombre, email, comision, acceso FROM empleados WHERE username = '" . $datosAcceso['username'] . "' AND password = '" . $datosAcceso['password'] . "' AND activo = 1";
+
+        $data = $localConnection->goQuery($sql);
+        $localConnection->disconnect();
+
+        if (empty($data)) {
+            $data[0] = false;
+            $access = false;
+        } else {
+            $access = true;
+        }
+
+        $object['data']['access'] = $access;
+        $object['data']['res'] = $data[0];
+
+        if ($access) {
+            $object['data']['id_empleado'] = $data[0]['_id'];
+            $object['data']['departamento'] = $data[0]['departamento'];
+            $object['data']['nombre'] = $data[0]['nombre'];
+            $object['data']['username'] = $data[0]['username'];
+            $object['data']['email'] = $data[0]['email'];
+            $object['data']['comision'] = $data[0]['comision'];
+            $object['data']['acceso'] = intval($data[0]['acceso']);
+            $object['data']['app_key'] = $data[0]['token'];
+        } else {
+            $object['data']['id_empleado'] = null;
+            $object['data']['departamento'] = null;
+            $object['data']['nombre'] = null;
+            $object['data']['username'] = null;
+            $object['data']['email'] = null;
+            $object['data']['comision'] = 0;
+            $object['data']['acceso'] = 0;
+            $object['data']['token'] = 0;
+        }
+
+        // TODO ELIMINAR ESTE TIPO DE ACCESO ES DE LA VERSION 1
+        $object['dat'] = $object['data']['res'];
+
+        $response = $response
+            ->withHeader('Access-Control-Allow-Origin', '*')
+            ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+
+        $response->getBody()->write(json_encode($object));
+
+        return $response;
+    });
+
+    /**
+     * FIN LOGIN
+     */
+
+    /** * GENERAL */
+
+    $app->get('/next-id-order', function (Request $request, Response $response) {
+        $localConnection = new LocalDB();
+
+        $sql = "SELECT MAX(_id) + 1 id FROM ordenes";
+        $data = $localConnection->goQuery($sql);
+        $localConnection->disconnect();
+
+        if (!$data[0]["id"]) {
+            $data[0]["id"] = "1";
+        }
+
+        $input = str_pad($data[0]["id"], 3, "0", STR_PAD_LEFT);
+        $nextId["id"] = str_pad($input, 3, "0", STR_PAD_LEFT);
+
+        $response->getBody()->write(json_encode($nextId));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    /**
+     * FIN GENRAL
+     */
+
+    /** * TABLAS */
+    // REPORTE DE PRODUCCIÓN SEMANAL
+    $app->get('/ordenes-reporte-semanal-produccion/{fecha}', function (Request $request, Response $response, array $args) {
+        $fechaSegundos = strtotime($args['fecha']);
+        $week = date("W", $fechaSegundos);
+        $object["week"] = $week;
+        $localConnection = new LocalDB();
+
+        // ORDENES DE PRODUCIDAS EN LA SEMANA
+        $sql = "SELECT
+        a._id id_orden,
+        a.cliente_nombre cliente,    
+        DATE_FORMAT(a.fecha_inicio, '%d/%m/%Y') AS fecha_inicio,
+        DATE_FORMAT(a.fecha_entrega, '%d/%m/%Y') AS fecha_entrega,
+        a.status estatus
+        FROM
+        ordenes a
+        WHERE
+        WEEK(a.moment) = " . $week;
+        $object['items'] = $localConnection->goQuery($sql);
+
+        //PROPDUCTOS ASOICIADOS A LAS ORDENES DE LA SEMANA
+        $sql = "SELECT
+        a._id id_ordenes_productos,
+        a.id_orden,
+        a.id_woo,
+        a.name,
+        a.cantidad,
+        a.talla,
+        a.corte,
+        a.tela
+        FROM
+        ordenes_productos a
+        WHERE
+        a.id_woo != 11 AND 
+        a.id_woo != 12 AND 
+        a.id_woo != 13 AND 
+        a.id_woo != 14 AND 
+        a.id_woo != 15 AND 
+        a.id_woo != 16 AND 
+        a.id_woo != 112 AND 
+        a.id_woo != 113 AND 
+        a.id_woo != 168 AND 
+        a.id_woo != 169 AND 
+        WEEK(a.moment) = " . $week . " 
+        ORDER BY a.name ASC, a.corte ASC, a.talla ASC, a.tela ASC, a.id_orden ASC;";
+        $object['items_productos'] = $localConnection->goQuery($sql);
+
+
+        //INSERTAR PRODUCTOS EN items
+
+        foreach ($object['items'] as $key => $orden) {
+            foreach ($object['items_productos'] as $producto) {
+                if (!isset($object['items'][$key]['productos'])) {
+                    $object['items'][$key]['productos'] = [];
+                }
+
+                if ($producto['id_orden'] === $orden['id_orden']) {
+                    $object['items'][$key]['productos'][] = $producto;
+                }
+            }
+        }
+
+
+        $response->getBody()->write(json_encode($object));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+
+
+    // REPORTE SEMANAL DE ORDENES
+    $app->get('/ordenes-reporte-semanal/{fecha}', function (Request $request, Response $response, array $args) {
+        $fechaSegundos = strtotime($args['fecha']);
+        $week = date("W", $fechaSegundos);
+        $object["week"] = $week;
+        $localConnection = new LocalDB();
+
+        $sql = "SELECT
+        a._id orden,
+        a.cliente_nombre cliente,
+        a.pago_total total,
+        a.pago_abono abono,
+        a.pago_descuento descuento,
+        b.nombre empleado,
+        (a.pago_total - a.pago_descuento) - a.pago_abono AS total_pendiente
+        FROM
+        ordenes a
+        JOIN empleados b ON a.responsable = b._id
+        WHERE
+        WEEK(a.moment) = " . $week;
+        $object['items'] = $localConnection->goQuery($sql);
+
+        $sql = "SELECT
+        SUM(pago_abono) total_semana
+        FROM ordenes 
+        WHERE
+        WEEK(moment) = " . $week . " ORDER BY _id ASC";
+        $object['total_week'] = $localConnection->goQuery($sql);
+
+        if (is_null($object["total_week"][0]["total_semana"])) {
+            $object["total_week"][0]["total_semana"] = "0";
+        }
+
+        $sql = "SELECT
+        (SUM(pago_total) - SUM(pago_descuento)) - SUM(pago_abono) total_credito
+        FROM ordenes 
+        WHERE
+        WEEK(moment) = " . $week . " ORDER BY _id ASC";
+        $object['total_credito'] = $localConnection->goQuery($sql);
+
+        if (is_null($object["total_credito"][0]["total_credito"])) {
+            $object["total_credito"][0]["total_credito"] = "0";
+        }
+
+        $sql = "SELECT
+        SUM(pago_descuento) total_descuentos
+        FROM ordenes 
+        WHERE
+        WEEK(moment) = " . $week . " ORDER BY _id ASC";
+        $object['total_descuentos'] = $localConnection->goQuery($sql);
+
+        if (is_null($object["total_descuentos"][0]["total_descuentos"])) {
+            $object["total_descuentos"][0]["total_descuentos"] = "0";
+        }
+
+        $response->getBody()->write(json_encode($object));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // OBTENER PRESUPUESTOS GUARDADOS
+    $app->get('/presupuestos/guardados', function (Request $request, Response $response) {
+        $localConnection = new LocalDB();
+
+        $sql = "SELECT a._id, a.form, a.tipo, b._id AS id_empleadodo, b.nombre AS empleado 
+          FROM ordenes_tmp a 
+          JOIN empleados b ON a.id_empleado = b._id";
+
+        $object['items'] = $localConnection->goQuery($sql);
+
+        foreach ($object['items'] as $key => $item) {
+            $item[$key]['form'] = json_decode($item['form']);
+        }
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // OBTENER ORDENES GUARDADAS
+    $app->get('/ordenes/guardadas', function (Request $request, Response $response) {
+        $localConnection = new LocalDB();
+
+        $sql = "SELECT a._id, a.form, a.tipo, b._id AS id_empleadodo, b.nombre AS empleado 
+          FROM ordenes_tmp a 
+          JOIN empleados b ON a.id_empleado = b._id";
+
+        $object['items'] = $localConnection->goQuery($sql);
+
+        foreach ($object['items'] as $key => $item) {
+            // $item[$key]['form'] = json_decode($item['form']);
+            if (is_array($item) && isset($item['form'])) {
+                $item['form'] = json_decode($item['form']);
+            }
+        }
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    $app->get('/ordenes/guardadas-old', function (Request $request, Response $response) {
+        $localConnection = new LocalDB();
+
+        // $sql = "SELECT a._id, a.form, b._id id_empleadodo, b.nombre empleado FROM ordenes_tmp a JOIN empleados b ON a.id_empleado = b._id";
+        $sql = "SELECT a._id, a.form, b._id id_empleadodo, b.nombre empleado FROM ordenes_tmp a JOIN empleados b ON a.id_empleado = b._id";
+        // $object['sql'] = $sql;
+        $object['items'] = $localConnection->goQuery($sql);
+
+        foreach ($object['items'] as $key => $item) {
+            // $item[$key]['form'] = json_decode(addcslashes($item['form'])); // con error
+            $item[$key]['form'] = json_decode($item['form']);
+            // $item[$key]['form'] = json_encode(json_decode($item['form']));
+            // $items = stripslashes(trim($string));
+        }
+        /*$string=implode("",explode("\\", json_encode($object['items']) ));
+        $items = stripslashes(trim($string));
+        $items = stripslashes(trim($items));*/
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // ELIMINAR ORDENES GUARDADAS
+    $app->post('/ordenes/guardadas/eliminar', function (Request $request, Response $response) {
+        $localConnection = new LocalDB();
+        $data = $request->getParsedBody();
+        $sql = "DELETE FROM ordenes_tmp WHERE _id =  " . $data['id'];
+        $object['response_delete'] = json_encode($localConnection->goQuery($sql));
+        $object['sql_delete'] = $sql;
+
+        $sql = "SELECT a._id, a.form, b._id id_empleado, b.nombre empleado FROM ordenes_tmp a JOIN empleados b ON a.id_empleado = b._id";
+        $object['items'] = $localConnection->goQuery($sql);
+
+        $object['response'] = json_encode($localConnection->goQuery($sql));
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // GUARDAR ORDEN PARA REPTMARLA LUEGO
+    $app->post('/orden/guardar', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+
+        $localConnection = new LocalDB();
+
+        $sql = "INSERT INTO ordenes_tmp (form, id_empleado, tipo) VALUES ('" . $data["form"] . "', " . $data["id_empleado"] . ", '" . $data["tipo"] . "')";
+        $object['sql_insert'] = $sql;
+        $localConnection->goQuery($sql);
+
+        $sql = "SELECT a._id, a.form, b._id id_empleado, b.nombre empleado FROM ordenes_tmp a JOIN empleados b ON a.id_empleado = b._id";
+        $object['items'] = $localConnection->goQuery($sql);
+        $object['sql'] = $sql;
+
+        $string = implode("", explode("\\", json_encode($object['items'])));
+        $items = stripslashes(trim($string));
+        $items = stripslashes(trim($items));
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($items));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // ORDENES ACTIVAS
+    $app->get('/table/ordenes-activas/{id_empleado}', function (Request $request, Response $response, array $args) {
+
+        $localConnection = new LocalDB();
+        $sql = "SELECT departamento FROM empleados WHERE _id = " . $args["id_empleado"];
+        $departamento = $localConnection->goQuery($sql)[0]["departamento"];
+
+        if ($departamento === "Administración") {
+            $sql = "SELECT
+                ord.responsable,
+                ord._id orden,
+                ord._id id_father,
+                ord._id acc,
+                ord.cliente_nombre,
+                cus.phone,
+                cus.email,
+                ord.fecha_inicio,
+                ord.fecha_entrega,
+                ord.observaciones obs,
+                ord.status estatus
+            FROM
+                ordenes ord
+            JOIN customers cus ON ord.id_wp = cus._id
+            WHERE
+                (
+                ord.status
+                    = 'activa' OR
+                ord.status
+                    = 'En espera' OR
+                ord.status
+                    = 'terminada' OR
+                ord.status
+                    = 'pausada'
+            )
+            ORDER BY
+                ord._id
+            DESC;";
+        } else {
+            $sql = "SELECT
+                ord.responsable,
+                ord._id orden,
+                ord._id id_father,
+                ord._id acc,
+                ord.cliente_nombre,
+                cus.phone,
+                cus.email,
+                ord.fecha_inicio,
+                ord.fecha_entrega,
+                ord.observaciones obs,
+                ord.status estaus
+            FROM
+                ordenes ord
+            JOIN customers cus ON ord.id_wp = cus._id
+            WHERE
+                ord.responsable = '" . $args["id_empleado"] . "' AND(
+                ord.status
+                    = 'activa' OR
+                ord.status
+                    = 'En espera' OR
+                ord.status
+                    = 'terminada' OR
+                ord.status
+                    = 'pausada'
+            ) AND ord.pago_comision = 'pendiente'
+            ORDER BY
+                ord._id
+            DESC;";
+        }
+
+        $object["sql"] = $sql;
+
+        // Cabeceras de la tabla
+        $object['fields'][0]['key'] = "orden";
+        $object['fields'][0]['label'] = "Orden";
+        $object['fields'][0]['sortable'] = true;
+
+        $object['fields'][1]['key'] = "estatus";
+        $object['fields'][1]['label'] = "Estatus";
+        $object['fields'][1]['sortable'] = true;
+
+        $object['fields'][2]['key'] = "fecha_inicio";
+        $object['fields'][2]['label'] = "Inicio";
+        $object['fields'][2]['sortable'] = true;
+
+        $object['fields'][3]['key'] = "fecha_entrega";
+        $object['fields'][3]['label'] = "Entrega";
+        $object['fields'][3]['sortable'] = true;
+
+        $object['fields'][4]['key'] = "cliente_nombre";
+        $object['fields'][4]['label'] = "Cliente";
+        $object['fields'][4]['sortable'] = true;
+
+        $object['fields'][5]['key'] = "id_father";
+        $object['fields'][5]['label'] = "Vinculadas";
+        $object['fields'][5]['sortable'] = false;
+
+        $object['fields'][6]['key'] = "acc";
+        $object['fields'][6]['label'] = "Acciones";
+        $object['fields'][6]['sortable'] = false;
+
+        $object['items'] = $localConnection->goQuery($sql);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // TODAS LAS ORDENES
+    $app->get('/table/ordenes-todas', function (Request $request, Response $response, array $args) {
+
+        /*$sql = "SELECT
+        _id AS orden,
+        DATE_FORMAT(moment, '%d/%m/%Y') AS fecha,
+        cliente_nombre AS cliente,
+        pago_total AS monto,
+        pago_abono abono,
+        (pago_total - pago_abono) AS monto_pendiente,
+        status estatus
+        FROM
+        ordenes
+        WHERE status != 'cancelada'
+        ORDER BY _id DESC;";*/
+
+        $sql = "SELECT
+        a._id AS orden,
+        DATE_FORMAT(moment, '%d/%m/%Y') AS fecha,
+        a.cliente_nombre AS cliente,
+        a.pago_total AS monto,
+        a.pago_abono abono,
+        (SELECT cus.phone FROM customers cus WHERE cus._id = a.id_wp) phone,
+        (
+         SELECT
+         d.pago_total - SUM(c.abono) - SUM(c.descuento) AS total_deuda
+         FROM
+         abonos c
+         JOIN ordenes d ON
+         c.id_orden = d._id
+         WHERE
+         c.id_orden = a._id
+         ) AS monto_pendiente,
+        a.status estatus
+        FROM
+        ordenes AS a
+        WHERE a.status != 'cancelada'
+        ORDER BY a._id DESC;";
+
+        $localConnection = new LocalDB();
+        $items = $localConnection->goQuery($sql);
+
+        $object["items"] = $items;
+
+        // Cabeceras de la tabla
+        $object['fields'][0]['key'] = "orden";
+        $object['fields'][0]['label'] = "Orden";
+        $object['fields'][0]['sortable'] = true;
+
+        $object['fields'][1]['key'] = "fecha";
+        $object['fields'][1]['label'] = "Fecha";
+        $object['fields'][1]['sortable'] = true;
+
+        $object['fields'][2]['key'] = "cliente";
+        $object['fields'][2]['label'] = "Cliente";
+        $object['fields'][2]['sortable'] = true;
+
+        $object['fields'][3]['key'] = "monto";
+        $object['fields'][3]['label'] = "Monto";
+        $object['fields'][3]['sortable'] = true;
+
+        $object['fields'][3]['key'] = "acc";
+        $object['fields'][3]['label'] = "Acciones";
+        $object['fields'][3]['sortable'] = false;
+
+
+        // $object['items'] = $localConnection->goQuery($sql);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // ORDENES CON DEUDAA
+    $app->get('/table/ordenes-con-deuda', function (Request $request, Response $response, array $args) {
+
+        $sql = "SELECT
+        _id AS orden,
+        DATE_FORMAT(moment, '%d/%m/%Y') AS fecha,
+        cliente_nombre AS cliente,
+        pago_total AS monto
+        FROM
+        ordenes       
+        ORDER BY _id DESC;";
+
+
+        $sql = "SELECT
+        a._id orden,
+        a.responsable,
+        a._id orden,
+        a._id id_father,
+        a._id acc,
+        a.cliente_nombre cliente,
+        a.fecha_inicio,
+        a.fecha_entrega,
+        a.observaciones obs,
+        a.status estatus,
+        a.pago_total AS monto,
+        DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
+        (
+         SELECT
+         d.pago_total - SUM(c.abono) - SUM(c.descuento) AS total_deuda
+         FROM
+         abonos c
+         JOIN ordenes d ON
+         c.id_orden = d._id
+         WHERE
+         c.id_orden = a._id
+         ) AS total_deuda 
+        FROM
+        ordenes AS a
+        WHERE
+        a.status!= 'cancelada' AND 
+        (
+         SELECT
+         d.pago_total - SUM(c.abono) - SUM(c.descuento) AS total_deuda
+         FROM
+         abonos c
+         JOIN ordenes d ON
+         c.id_orden = d._id
+         WHERE
+         c.id_orden = a._id) > 0
+        ORDER BY
+        _id
+        DESC
+        ";
+        $localConnection = new LocalDB();
+        $items = $localConnection->goQuery($sql);
+
+        $object["items"] = $items;
+
+        // Cabeceras de la tabla
+        $object['fields'][0]['key'] = "orden";
+        $object['fields'][0]['label'] = "Orden";
+        $object['fields'][0]['sortable'] = true;
+
+        $object['fields'][1]['key'] = "fecha";
+        $object['fields'][1]['label'] = "Fecha";
+        $object['fields'][1]['sortable'] = true;
+
+        $object['fields'][2]['key'] = "cliente";
+        $object['fields'][2]['label'] = "Cliente";
+        $object['fields'][2]['sortable'] = true;
+
+        $object['fields'][3]['key'] = "monto";
+        $object['fields'][3]['label'] = "Monto";
+        $object['fields'][3]['sortable'] = true;
+
+        $object['fields'][3]['key'] = "acc";
+        $object['fields'][3]['label'] = "Acciones";
+        $object['fields'][3]['sortable'] = false;
+
+
+        // $object['items'] = $localConnection->goQuery($sql);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+    /**
+     * FIN TABLAS
+     */
+
+    /** * TELAS */
+
+    $app->get('/telas', function (Request $request, Response $response) {
+        $localConnection = new LocalDB();
+        $sql = "SELECT * FROM catalogo_telas ORDER BY tela";
+        $object['data'] = $localConnection->goQuery($sql);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    $app->post('/telas', function (Request $request, Response $response) {
+        $miTela = $request->getParsedBody();
+        $object['miTela'] = $miTela;
+
+        $miTela = $request->getParsedBody();
+
+        // Crear estructura de valores para insertar nuevo cliente
+        $values = "(";
+        $values .= "'" . $miTela['tela'] . "')";
+
+        $sql = "INSERT INTO catalogo_telas (`tela`) VALUES " . $values . ";";
+        $sql .= "SELECT * FROM catalogo_telas ORDER BY tela";
+
+        $localConnection = new LocalDB();
+        $object['response'] = json_encode($localConnection->goQuery($sql));
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    $app->post('/telas/{_id}/{tela}', function (Request $request, Response $response, array $args) {
+        // $miTela = $request->getParsedBody();
+        $localConnection = new LocalDB();
+        $values = "tela='" . $args['tela'] . "'";
+        $sql = "UPDATE catalogo_telas SET " . $values . " WHERE _id = " . $args['_id'] . ";";
+        $sql .= "SELECT * FROM catalogo_telas ORDER BY tela";
+        $object['sql'] = $sql;
+        $object['response'] = json_encode($localConnection->goQuery($sql));
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    $app->post('/telas/eliminar', function (Request $request, Response $response) {
+        $localConnection = new LocalDB();
+        $miEmpleado = $request->getParsedBody();
+        $object['miEmpleado'] = $miEmpleado;
+        $sql = "DELETE FROM catalogo_telas WHERE _id =  " . $miEmpleado['id'];
+        $object['sql'] = $sql;
+
+        $object['response'] = json_encode($localConnection->goQuery($sql));
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+    /**
+     * FIN TELAS
+     */
+
+    /**
+     * RETIROS
+     */
+
+    // REPORTE GENERAL DE PAGOS Y ABONOS
+    $app->get('/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}]', function (Request $request, Response $response, array $args) {
+
+        /** FONDO */
+        $localConnection = new LocalDB();
+        $inicio = isset($args['inicio']) ? $args['inicio'] : null;
+        $fin = isset($args['fin']) ? $args['fin'] : null;
+        $vendedor = isset($args["id_vendedor"]) ? $args["id_vendedor"] : null;
+
+        /* if (isset($args["id_vendedor"])) {
+            $vendedor = $args["id_vendedor"];
+        } else {
+            $object["vendedor"] = $args["id_vendedor"];
+            $vendedor = null;
+        } */
+
+        if (!is_null($vendedor)) {
+            if ($vendedor == '0') {
+                $searchVendedor = "";
+            } else {
+                $searchVendedor = " AND ord.responsable = " . $vendedor . " ";
+            }
+        } else {
+            $searchVendedor = "";
+        }
+
+        $object["searchVendedor"] = $searchVendedor;
+
+        if (is_null($inicio) || is_null($fin)) {
+            $sql = "SELECT
+                met._id,
+                met.id_orden,
+                ord.responsable id_empleado,
+                emp.nombre empleado,
+                met.metodo_pago,
+                met.monto,
+                met.detalle,
+                met.tasa,
+                met.moneda,
+                DATE_FORMAT(met.moment, '%d/%m/%Y') AS fecha,
+                DATE_FORMAT(met.moment, '%h:%i %p') AS hora
+            FROM
+                metodos_de_pago met
+            JOIN ordenes ord ON met.id_orden = ord._id 
+            JOIN empleados emp ON emp._id = ord.responsable
+            WHERE
+                YEAR(met.moment) = YEAR(CURDATE())
+                AND MONTH(met.moment) = MONTH(CURDATE()) 
+                " . $searchVendedor . "
+            ORDER BY
+                met.id_orden DESC, met.moment ASC;
+            ";
+        } else {
+            $sql = "SELECT
+                met._id,
+                met.id_orden,
+                ord.responsable id_empleado,
+                emp.nombre empleado,
+                met.metodo_pago,
+                met.monto,
+                met.detalle,
+                met.tasa,
+                met.moneda,
+                DATE_FORMAT(met.moment, '%d/%m/%Y') AS fecha,
+                DATE_FORMAT(met.moment, '%h:%i %p') AS hora
+            FROM
+                metodos_de_pago met
+            JOIN ordenes ord ON met.id_orden = ord._id 
+            JOIN empleados emp ON emp._id = ord.responsable
+            WHERE
+                DATE(met.moment) BETWEEN '" . $inicio . "' AND '" . $fin . "' 
+                " . $searchVendedor . "
+                ORDER BY
+                met.id_orden DESC, met.moment ASC;";
+        }
+
+        $object["sql_pagos"] = $sql;
+
+        $object["pagos"] = $localConnection->goQuery($sql);
+
+        // Buscar todos los empleados que sean vendedres o administradores
+        $sqlv = "SELECT _id value, nombre text FROM empleados WHERE departamento = 'Comercialización' OR departamento = 'Administración' AND activo = 1;";
+        $object["vendedores"] = $localConnection->goQuery($sqlv);
+
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Datos para efectuar el cietre de caja
+    $app->get('/cierre-de-caja', function (Request $request, Response $response, array $args) {
+        /** FONDO */
+        $localConnection = new LocalDB();
+        $sql = "SELECT dolares, pesos, bolivares FROM caja_fondos ORDER BY _id DESC LIMIT 1";
+        $fondo = $localConnection->goQuery($sql);
+        $object['data']['fondo'] = $fondo;
+
+        if (empty($fondo)) {
+            $fondo[0]["dolares"] = 0;
+            $fondo[0]["pesos"] = 0;
+            $fondo[0]["bolivares"] = 0;
+        }
+
+        // DÓLARES EN CAJA, 
+        $sql = "SELECT (SUM(monto) + " . $fondo[0]["dolares"] . ") monto, moneda, tasa, FORMAT(((SUM(monto) / tasa)) + " . $fondo[0]["dolares"] . ", 'C2') dolares FROM caja WHERE moneda= 'Dólares'";
+        $object["data"]["caja"] = $localConnection->goQuery($sql);
+
+        // PESOS EN CAJA, 
+        $sql = "SELECT (SUM(monto) + " . $fondo[0]["pesos"] . ") monto, moneda, tasa, FORMAT((SUM(monto) + " . $fondo[0]["pesos"] . ") / tasa, 'C2') dolares FROM caja WHERE moneda= 'Pesos'";
+        array_push($object["data"]["caja"], $localConnection->goQuery($sql)[0]);
+
+        // BOLIVARES     EN CAJA, 
+        $sql = "SELECT (SUM(monto) + " . $fondo[0]["bolivares"] . ") monto, moneda, tasa, FORMAT((SUM(monto) + " . $fondo[0]["bolivares"] . ") / tasa, 'C2') dolares FROM caja WHERE moneda= 'Bolívares'";
+        array_push($object["data"]["caja"], $localConnection->goQuery($sql)[0]);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Guardar Cierre de caja
+    $app->post("/cierre-de-caja", function (Request $request, Response $response, $args) {
+        $datosCierre = $request->getParsedBody();
+        $localConnection = new LocalDB();
+
+        // Guardamos el cierre
+        $sql = " INSERT INTO caja_cierres (dolares, pesos, bolivares, id_empleado) VALUES (" . $datosCierre["cierreDolaresEfectivo"] . ", " . $datosCierre["cierrePesosEfectivo"] . ", " . $datosCierre["cierreBolivaresEfectivo"] . ", " . $datosCierre["id_empleado"] . ");";
+        $sql .= "TRUNCATE caja;";
+        $sql .= "TRUNCATE caja_fondos;";
+        $sql .= "INSERT INTO caja_fondos (dolares, pesos, bolivares) VALUES (" . $datosCierre["fondoDolares"] . ", " . $datosCierre["fondoPesos"] . ", " . $datosCierre["fondoBolivares"] . ")";
+
+        $object["response"] = $localConnection->goQuery($sql);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode(str_replace("\r", "", $object)));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Reporte de caja
+    $app->get('/reporte-de-caja/{inicio}/{fin}/{id_vendedor}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        if ($args["inicio"] === $args["fin"]) {
+            $where = "a.moment LIKE '" . $args["inicio"] . "%';";
+        } else {
+            $where = "a.moment BETWEEN '" . $args["inicio"] . "' AND '" . $args["fin"] . "'";
+        }
+
+        $where .= " AND o.responsable = " . $args["id_vendedor"] . ";";
+
+
+        /** EFECTIVO */
+
+        // Dolares
+        // $sql = "SELECT SUM(`monto`) monto, 'Dólares' moneda, `tasa`, `metodo_pago` tipo, SUM(`monto`) dolares FROM `metodos_de_pago` WHERE metodo_pago = 'Efectivo' AND `moneda` = 'Dólares' AND " . $where;
+
+        $sql = "SELECT
+            SUM(a.monto) monto,
+            'Dólares' moneda,
+            a.tasa,
+            a.metodo_pago tipo,
+            SUM(a.monto) dolares,
+            o.responsable vendedor
+        FROM
+            metodos_de_pago AS a
+        JOIN ordenes AS o 
+            ON a.id_orden = o._id
+        WHERE o.responsable = 1 AND 
+            a.metodo_pago = 'Efectivo' AND a.moneda = 'Dólares' AND " . $where;
+        $object["data"]["efectivo"] = $localConnection->goQuery($sql);
+
+        // Pesos
+        $sql = "SELECT 
+            SUM(a.monto) monto, 
+            'Pesos' moneda, 
+            a.tasa, 
+            a.metodo_pago tipo, 
+            SUM(ROUND(a.monto / a.tasa, 2)) AS dolares 
+        FROM metodos_de_pago AS a
+        JOIN ordenes AS o 
+        ON a.id_orden = o._id       
+        WHERE a.metodo_pago = 'Efectivo' AND a.moneda = 'Pesos' AND " . $where;
+        // $object["sql"] = $sql;
+
+        array_push($object["data"]["efectivo"], $localConnection->goQuery($sql)[0]);
+
+        // Bolívares
+        $sql = "SELECT 
+            SUM(a.monto) monto, 
+             'Bolívares' moneda, 
+            a.tasa, 
+            a.metodo_pago tipo, 
+            SUM(ROUND(a.monto / a.tasa, 2)) AS dolares 
+        FROM metodos_de_pago AS a
+        JOIN ordenes AS o 
+        ON a.id_orden = o._id
+        WHERE a.metodo_pago = 'Efectivo' AND a.moneda = 'Bolívares' AND " . $where;
+
+        array_push($object["data"]["efectivo"], $localConnection->goQuery($sql)[0]);
+
+        /** MONEDA DIGITAL */
+
+        // ZELLE
+
+        $sql = "SELECT 
+             SUM(a.monto) monto, 
+             a.tasa, 
+             SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
+             a.moneda, 
+             'Zelle' metodo_pago, 
+             a.tipo_de_pago 
+             FROM metodos_de_pago AS a 
+             JOIN ordenes AS o 
+             ON a.id_orden = o._id
+             WHERE a.metodo_pago = 'Zelle' AND " . $where;
+        $object["data"]["digital"] = $localConnection->goQuery($sql);
+
+        // PAGOMOVIL (bOLIVARES)
+        $sql = "SELECT 
+            SUM(a.monto) monto, 
+            a.tasa, 
+            SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
+            a.moneda, 
+            'Pagomovil' metodo_pago, 
+            a.tipo_de_pago 
+            FROM metodos_de_pago AS a 
+            JOIN ordenes AS o 
+            ON a.id_orden = o._id
+            WHERE a.metodo_pago = 'Pagomovil' AND " . $where;
+
+        array_push($object["data"]["digital"], $localConnection->goQuery($sql)[0]);
+
+
+
+        // PUNTO (BOLIVARES)
+        $sql = "SELECT 
+            SUM(a.monto) monto, 
+            a.tasa, 
+            SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
+            a.moneda, 
+            'Punto' metodo_pago, 
+            a.tipo_de_pago 
+            FROM metodos_de_pago AS a 
+            JOIN ordenes AS  o 
+            ON a.id_orden = o._id
+            WHERE a.metodo_pago = 'Punto' AND " . $where;
+
+        array_push($object["data"]["digital"], $localConnection->goQuery($sql)[0]);
+
+        // TRANSFERENCIA (BOLIVARES)
+        $sql = "SELECT 
+            SUM(a.monto) monto, 
+            a.tasa, 
+            SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
+            a.moneda, 
+            'Transferencia' metodo_pago, 
+            a.tipo_de_pago 
+            FROM metodos_de_pago AS a 
+            JOIN ordenes AS o 
+            ON a.id_orden = o._id
+            WHERE a.metodo_pago = 'Punto' AND " . $where;
+
+        array_push($object["data"]["digital"], $localConnection->goQuery($sql)[0]);
+
+        /** RETIROS */
+        $sql = "SELECT 
+            a.monto, 
+            a.moneda, 
+            a.tasa, 
+            SUM(ROUND(a.monto / tasa, 2)) AS dolares, 
+            a.detalle_retiro, 
+            b.nombre 
+            FROM retiros AS a 
+            JOIN ordenes AS o ON o._id = a.id_empleado
+            JOIN empleados b ON b._id = o.responsable 
+            WHERE " . $where;
+
+
+        // $object["data"]["retiros"] = $sql;
+        $object["data"]["retiros"] = $localConnection->goQuery($sql);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Guardar nuevo retiro
+    $app->post('/retiro', function (Request $request, Response $response) {
+        $arr = $request->getParsedBody();
+        $localConnection = new LocalDB();
+        // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
+        $sql = "";
+
+        if (intval($arr["montoDolaresEfectivo"]) > 0) {
+            $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr["id_empleado"] . "', 'Dólares', 'Efectivo', '" . $arr["montoDolaresEfectivo"] . "', '" . $arr["detalle"] . "', '1');";
+        }
+
+        if (intval($arr["montoDolaresZelle"]) > 0) {
+            $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr["id_empleado"] . "', 'Dólares', 'Zelle', '" . $arr["montoDolaresZelle"] . "', '" . $arr["detalle"] . "', '1');";
+        }
+
+        if (intval($arr["montoDolaresPanama"]) > 0) {
+            $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr["id_empleado"] . "', 'Dólares', 'Panamá', '" . $arr["montoDolaresPanama"] . "', '" . $arr["detalle"] . "', '1');";
+        }
+
+        if (intval($arr["montoPesosEfectivo"]) > 0) {
+            $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr["id_empleado"] . "', 'Pesos', 'Efectivo', '" . $arr["montoPesosEfectivo"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_peso"] . "');";
+        }
+
+        if (intval($arr["montoPesosTransferencia"]) > 0) {
+            $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr["id_empleado"] . "', 'Pesos', 'Transferencia', '" . $arr["montoPesosTransferencia"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_peso"] . "');";
+        }
+
+        if (intval($arr["montoBolivaresEfectivo"]) > 0) {
+            $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr["id_empleado"] . "', 'Bolívares', 'Efectivo', '" . $arr["montoBolivaresEfectivo"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_dolar"] . "');";
+        }
+
+        if (intval($arr["montoBolivaresPunto"]) > 0) {
+            $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr["id_empleado"] . "', 'Bolívares', 'Punto', '" . $arr["montoBolivaresPunto"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_dolar"] . "');";
+        }
+
+        if (intval($arr["montoBolivaresPagomovil"]) > 0) {
+            $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr["id_empleado"] . "', 'Bolívares', 'Pagomovil', '" . $arr["montoBolivaresPagomovil"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_dolar"] . "');";
+        }
+
+        if (intval($arr["montoBolivaresTransferencia"]) > 0) {
+            $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr["id_empleado"] . "', 'Bolívares', 'Transferencia', '" . $arr["montoBolivaresTransferencia"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_dolar"] . "');";
+        }
+
+
+        $data = $localConnection->goQuery($sql);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($data));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Guardar nuevo abono
+    $app->post('/otro-abono', function (Request $request, Response $response) {
+        $arr = $request->getParsedBody();
+        $localConnection = new LocalDB();
+        // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
+        $sql = "";
+
+        if (intval($arr["montoDolaresEfectivo"]) > 0) {
+            $sql .= "INSERT INTO metodos_de_pago (tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ('" . $arr["tipoAbono"] . "', 'Dólares', 'Efectivo', '" . $arr["montoDolaresEfectivo"] . "', '" . $arr["detalle"] . "', '1');";
+            $sql .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES ('" . $arr["montoDolaresEfectivo"] . "', 'Dólares', 1, 'abono', '" . $arr['id_empleado'] . "');";
+        }
+
+        if (intval($arr["montoDolaresZelle"]) > 0) {
+            $sql .= "INSERT INTO metodos_de_pago (tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ('" . $arr["tipoAbono"] . "', 'Dólares', 'Zelle', '" . $arr["montoDolaresZelle"] . "', '" . $arr["detalle"] . "', '1');";
+        }
+
+        if (intval($arr["montoDolaresPanama"]) > 0) {
+            $sql .= "INSERT INTO metodos_de_pago (tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ('" . $arr["tipoAbono"] . "', 'Dólares', 'Panamá', '" . $arr["montoDolaresPanama"] . "', '" . $arr["detalle"] . "', '1');";
+        }
+
+        if (intval($arr["montoPesosEfectivo"]) > 0) {
+            $sql .= "INSERT INTO metodos_de_pago (tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ('" . $arr["tipoAbono"] . "', 'Pesos', 'Efectivo', '" . $arr["montoPesosEfectivo"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_peso"] . "');";
+            $sql .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES  ('" . $arr["montoPesosEfectivo"] . "', 'Pesos', '" . $arr["tasa_peso"] . "', 'abono', '" . $arr['id_empleado'] . "');";
+        }
+
+        if (intval($arr["montoPesosTransferencia"]) > 0) {
+            $sql .= "INSERT INTO metodos_de_pago (tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ('" . $arr["tipoAbono"] . "', 'Pesos', 'Transferencia', '" . $arr["montoPesosTransferencia"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_peso"] . "');";
+        }
+
+        if (intval($arr["montoBolivaresEfectivo"]) > 0) {
+            $sql .= "INSERT INTO metodos_de_pago (tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ('" . $arr["tipoAbono"] . "', 'Bolívares', 'Efectivo', '" . $arr["montoBolivaresEfectivo"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_dolar"] . "');";
+
+            $sql .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES ('" . $arr["montoBolivaresEfectivo"] . "', 'Bolívares', '" . $arr["tasa_dolar"] . "', 'abono', '" . $arr['id_empleado'] . "');";
+        }
+
+        if (intval($arr["montoBolivaresPunto"]) > 0) {
+            $sql .= "INSERT INTO metodos_de_pago (tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ('" . $arr["tipoAbono"] . "', 'Bolívares', 'Punto', '" . $arr["montoBolivaresPunto"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_dolar"] . "');";
+        }
+
+        if (intval($arr["montoBolivaresPagomovil"]) > 0) {
+            $sql .= "INSERT INTO metodos_de_pago (tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ('" . $arr["tipoAbono"] . "', 'Bolívares', 'Pagomovil', '" . $arr["montoBolivaresPagomovil"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_dolar"] . "');";
+        }
+
+        if (intval($arr["montoBolivaresTransferencia"]) > 0) {
+            $sql .= "INSERT INTO metodos_de_pago (moneda, metodo_pago, monto, detalle, tasa) VALUES ('" . $arr["tipoAbono"] . "', 'Bolívares', 'Transferencia', '" . $arr["montoBolivaresTransferencia"] . "', '" . $arr["detalle"] . "', '" . $arr["tasa_dolar"] . "');";
+        }
+
+        $data = $localConnection->goQuery($sql);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($data));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Obteber Retiros
+    $app->get('/retiros/{fecha}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        // Obtener retiros
+        $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN empleados b ON a.id_empleado = b._id WHERE a.moment LIKE '" . $args["fecha"] . "%'";
+
+        $object["data"]["retiros"] = $localConnection->goQuery($sql);
+
+        /** FONDO */
+        $sql = "SELECT dolares, pesos, bolivares FROM caja_fondos ORDER BY _id DESC LIMIT 1";
+        $fondo = $localConnection->goQuery($sql);
+        $object['data']['fondo'] = $fondo;
+
+        if (empty($fondo)) {
+            $fondo[0]["dolares"] = 0;
+            $fondo[0]["pesos"] = 0;
+            $fondo[0]["bolivares"] = 0;
+        }
+
+        // DÓLARES EN CAJA, 
+
+        $sql = "SELECT (SUM(monto) + " . $fondo[0]["dolares"] . ") monto, moneda, tasa, FORMAT(((SUM(monto) / tasa)) + " . $fondo[0]["dolares"] . ", 'C2') dolares FROM caja WHERE moneda= 'Dólares'";
+
+        $object["data"]["caja"] = $localConnection->goQuery($sql);
+
+        // PESOS EN CAJA, 
+        $sql = "SELECT (SUM(monto) + " . $fondo[0]["pesos"] . ") monto, moneda, tasa, FORMAT((SUM(monto) + " . $fondo[0]["pesos"] . ") / tasa, 'C2') dolares FROM caja WHERE moneda= 'Pesos'";
+
+        array_push($object["data"]["caja"], $localConnection->goQuery($sql)[0]);
+
+        // BOLIVARES     EN CAJA, 
+        $sql = "SELECT (SUM(monto) + " . $fondo[0]["bolivares"] . ") monto, moneda, tasa, FORMAT((SUM(monto) + " . $fondo[0]["bolivares"] . ") / tasa, 'C2') dolares FROM caja WHERE moneda= 'Bolívares'";
+
+        array_push($object["data"]["caja"], $localConnection->goQuery($sql)[0]);
+
+        // Obtener dolares
+        $sql = "SELECT SUM(monto/tasa) total  FROM metodos_de_pago WHERE moneda = 'Dólares' AND metodo_pago = 'Efectivo' AND  moment LIKE '" . $args["fecha"] . "%'";
+
+        $object["data"]["retiros_total"] = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Pagos Ordenes
+    $app->get('/pagos-ordenes/{fecha}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        $sql = "SELECT _id, moment, monto, moneda, metodo_pago, id_orden, tasa FROM metodos_de_pago WHERE moment LIKE '" . $args["fecha"] . "%'";
+        $object["data"] = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+    /**
+     * FIN RETIROS
+     */
+
+    /** * Diseños * */
+    // REVISAR DISEÑOS APRBADOS Y RECHAZADOS 
+    $app->get('/diseno/revisiones/{id_empleado}', function (Request $request, Response $response, array $args) {
+        $localConnection = new localDB();
+
+        $sql = "SELECT a.id_orden, b._id id_revision, a._id id_diseno, b.detalles, b.estatus, b.revision, c.id_wp id_cliente, c.cliente_nombre cliente FROM disenos a JOIN revisiones b ON a._id = b.id_diseno JOIN ordenes c ON c._id = a.id_orden WHERE a.id_empleado =" . $args["id_empleado"] . " AND c.status != 'entregada' AND c.status != 'cancelada' AND c.status != 'terminado'";
+        $object['revisiones'] = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $object["total_revisiones"] = count($object["revisiones"]);
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // REVISAR DISEÑO APROBADO
+    $app->get('/diseno/aprobado/{id_orden}', function (Request $request, Response $response, array $args) {
+        $localConnection = new localDB();
+        $sql = "SELECT revision, estatus, id_diseno FROM revisiones WHERE id_orden = " . $args["id_orden"] . " AND estatus = 'Aprobado'";
+        $resp = $localConnection->goQuery($sql);
+        $localConnection->disconnect();
+
+        if (empty($resp)) {
+            $object["aprobado"] = false;
+        } else {
+            $object["aprobado"] = true;
+            $object["data"] = $resp[0];
+        }
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Guardar link de google drive
+    $app->post('/disenos/link', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+        $localConnection = new LocalDB();
+
+        $sql = "UPDATE disenos SET linkdrive = '" . $data["url"] . "' WHERE id_orden = " . $data['id'];
+        $data = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($data));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Obtener datos para la aprobación del cliente
+    $app->get('/disenos/aprobacion-de-cliente/{id_orden}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        // $sql = "INSERT INTO aprobacion_clientes(id_orden, id_diseno) VALUES (" . $data["id_orden"] . ", " . $data["id_diseno"] . ");";
+        $sql = "SELECT
+            a._id id_orden,    
+            b._id id_diseno,
+            c.revision revision,
+            c.estatus estatus_aprobado, 
+            a.cliente_nombre nombre_cliente
+        FROM
+            ordenes AS a
+        LEFT JOIN disenos AS b ON a._id = b.id_orden
+        LEFT JOIN revisiones AS c ON c.id_diseno = b._id 
+        WHERE
+            a._id = " . $args["id_orden"];
+
+        $object['data'] = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object['data']));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Guardar registro de aprobacion de clientes
+    $app->post('/disenos/parobacion-de-cliente', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+        $localConnection = new LocalDB();
+
+        $sql = "UPDATE revisiones SET estatus = 'Aprobado' WHERE id_orden = " . $data["id_orden"] . ";";
+        $sql .= "INSERT INTO aprobacion_clientes(id_orden, id_diseno) VALUES (" . $data["id_orden"] . ", " . $data["id_diseno"] . ");";
+        $object = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Guardar ajustes y personalizaciones
+    $app->post('/diseno/ajustes-y-personalizaciones', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+        $localConnection = new LocalDB();
+
+        $monto_ajustes = $data["ajustes"];
+        $monto_personalizacion = $data["personalizaciones"];
+        $comision_ajustes = 0.2 * intval($monto_ajustes);
+        $comision_pesonalizacion = 0.3 * intval($monto_personalizacion);
+        $sql = "";
+
+        // Verificar si el registro de diseños y ajuste ya existe
+        $sql_tipo = "SELECT tipo FROM disenos_ajustes_y_personalizaciones WHERE tipo = 'ajuste' AND id_diseno = " . $data["id_diseno"] . " ORDER BY tipo ASC";
+        $dataRequest = $localConnection->goQuery($sql_tipo);
+        if (count($dataRequest) > 0) {
+            $ajuste = true;
+        } else {
+            $ajuste = false;
+        }
+
+        $sql_tipo = "SELECT tipo FROM disenos_ajustes_y_personalizaciones WHERE tipo = 'personalización' AND id_diseno = " . $data["id_diseno"] . " ORDER BY tipo ASC";
+        $dataRequest = $localConnection->goQuery($sql_tipo);
+        $object["personalizacion"] = count($dataRequest);
+        if (count($dataRequest) > 0) {
+            $personalizacion = true;
+        } else {
+            $personalizacion = false;
+        }
+
+        $sqlord = "SELECT id_orden, id_empleado FROM disenos WHERE _id = " . $data["id_diseno"];
+        $resultDiseno = $localConnection->goQuery($sqlord);
+
+        // Guardar cantidades de personalizaciones y ajustes
+        $sqlpa = "";
+        if ($ajuste) {
+            $sqlpa .= "UPDATE disenos_ajustes_y_personalizaciones SET cantidad = " . $monto_ajustes . " WHERE id_diseno = " . $data['id_diseno'] . " AND tipo = 'ajuste';";
+        } else {
+            $sqlpa .= "INSERT INTO disenos_ajustes_y_personalizaciones (id_diseno, id_orden, tipo, cantidad) VALUES (" . $data["id_diseno"] . ", " . $resultDiseno[0]["id_orden"] . ", 'ajuste', " . $monto_ajustes . ");";
+        }
+
+        if ($personalizacion) {
+            $sqlpa .= "UPDATE disenos_ajustes_y_personalizaciones SET cantidad = " . $monto_personalizacion . " WHERE id_diseno = " . $data['id_diseno'] . " AND tipo = 'personalizacion';";
+        } else {
+            $sqlpa .= "INSERT INTO disenos_ajustes_y_personalizaciones (id_diseno, id_orden, tipo, cantidad) VALUES (" . $data["id_diseno"] . ", " . $resultDiseno[0]["id_orden"] . ", 'personalizacion', " . $monto_personalizacion . ");";
+        }
+        $data = $localConnection->goQuery($sqlpa);
+
+        // Preparar datos para los pagos
+
+        // Buscar datos para el guardar los pagos
+        if (empty($dataRequest)) {
+
+            $sql .= "INSERT INTO pagos(cantidad, id_orden, estatus, monto_pago, id_empleado, detalle) VALUES (" . $monto_ajustes . ", " . $resultDiseno[0]["id_orden"] . ", 'aprobado' , " . $comision_ajustes . ", " . $resultDiseno[0]["id_empleado"] . ", 'ajuste');";
+            $sql .= "INSERT INTO pagos(cantidad, id_orden, estatus, monto_pago, id_empleado, detalle) VALUES (" . $monto_personalizacion . ", " . $resultDiseno[0]["id_orden"] . ", 'aprobado' , " . $comision_pesonalizacion . ", " . $resultDiseno[0]["id_empleado"] . ", 'personalización');";
+        } else {
+            $values = "monto_pago ='" . $comision_ajustes . "', cantidad = " . $monto_ajustes;
+            $sql .= "UPDATE pagos SET " . $values . " WHERE id_empleado = " . $resultDiseno[0]["id_empleado"] . " AND id_orden = " . $resultDiseno[0]["id_orden"] . " AND detalle = 'ajuste';";
+            $values = "monto_pago ='" . $comision_pesonalizacion . "', cantidad = " . $monto_personalizacion;
+            $sql .= "UPDATE pagos SET " . $values . " WHERE id_empleado = " . $resultDiseno[0]["id_empleado"] . " AND id_orden = " . $resultDiseno[0]["id_orden"] . " AND detalle = 'personalización';";
+        }
+        $data = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Obtener ajustes y personalizaciones de un diseno
+    $app->get('/disenos/ajustes-y-personalizaciones/{id_diseno}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        $sql = "SELECT a.tipo, a.cantidad, b.id_orden FROM disenos_ajustes_y_personalizaciones a JOIN disenos b ON b._id = a.id_diseno WHERE a.id_diseno = " . $args["id_diseno"];
+        $object = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Obtener link de google drive
+    $app->get('/disenos/link/{id}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        $sql = "SELECT linkdrive FROM disenos WHERE _id = " . $args["id"];
+        $object = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object[0]));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Obtener codigo del diseño
+    $app->get('/disenos/codigo/{id}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        $sql = "SELECT codigo_diseno FROM disenos WHERE _id = " . $args["id"];
+        $object = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Guardar codigo de diseno
+    $app->post('/disenos/codigo', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+        $localConnection = new LocalDB();
+
+        $sql = "UPDATE disenos SET codigo_diseno = '" . $data["cod"] . "' WHERE id_orden = " . $data['id'];
+        $data = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($sql));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Obtener diseños sin asignar
+    $app->get('/disenos', function (Request $request, Response $response) {
+        $localConnection = new LocalDB();
+
+        $object['disenos']['fields'][0]['key'] = "id";
+        $object['disenos']['fields'][0]['label'] = "Orden";
+
+        $object['disenos']['fields'][1]['key'] = "check";
+        $object['disenos']['fields'][1]['label'] = "Aprobado por el cliente";
+
+        $object['disenos']['fields'][2]['key'] = "tipo";
+        $object['disenos']['fields'][2]['label'] = "Tipo";
+
+        $object['disenos']['fields'][3]['key'] = "empleado";
+        $object['disenos']['fields'][3]['label'] = "Empleado";
+
+        $object['disenos']['fields'][4]['key'] = "vinculadas";
+        $object['disenos']['fields'][4]['label'] = "Vinculadas";
+
+        $object['disenos']['fields'][5]['key'] = "imagen";
+        $object['disenos']['fields'][5]['label'] = "Diseño";
+
+        // $sql = "SELECT a.id_orden imagen, a.id_orden vinculadas, a.tipo, c.check, a.id_orden id, a.id_empleado empleado, b.responsable FROM disenos a JOIN ordenes b ON b._id = a.id_orden LEFT JOIN aprobacion_clientes c ON c.id_orden = a.id_orden AND c.id_diseno = a._id WHERE a.tipo != 'no' AND a.terminado = 0 AND b.status != 'entregada' AND b.status != 'cancelada' AND b.status != 'terminado' ORDER BY a.id_orden DESC;";
+        $sql = "SELECT DISTINCT
+    a.id_orden imagen,
+    a.id_orden vinculadas,
+    a.tipo,
+    c.estatus `check`,
+    c.estatus estatus_revision,
+    a.id_orden id,
+    a.id_empleado empleado,
+    e.nombre nombre_empleado,
+    a.linkdrive
+FROM
+    disenos a
+LEFT JOIN empleados e ON 
+    e._id = a.id_empleado
+JOIN ordenes b ON
+    b._id = a.id_orden
+LEFT JOIN revisiones c ON
+    c.id_orden = a.id_orden AND c.id_diseno = a._id
+WHERE
+    a.tipo != 'no' AND a.terminado = 0 AND b.status != 'entregada' AND b.status != 'cancelada' AND b.status != 'terminado'
+ORDER BY
+    a.id_orden
+DESC;";
+
+        $object['disenos']["items"] = $localConnection->goQuery($sql);
+        $object['empleados'] = $localConnection->goQuery('SELECT * FROM empleados');
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Todos los diseños asignados
+    $app->get('/disenos/asignados', function (Request $request, Response $response) {
+        $localConnection = new LocalDB();
+
+        $object['disenos']['fields'][0]['key'] = "id";
+        $object['disenos']['fields'][0]['label'] = "Orden";
+        $object['disenos']['fields'][1]['key'] = "tipo";
+        $object['disenos']['fields'][1]['label'] = "Tipo";
+        $object['disenos']['fields'][2]['key'] = "empleado";
+        $object['disenos']['fields'][2]['label'] = "Empleado";
+
+        $sql = "SELECT a.tipo, a.id_orden, b.username, b.nombre, b._id id_empleado, FROM disenos a JOIN empleados b ON a.id_empleado = b._id  WHERE a.tipo = 'modas' OR a.tipo = 'gráfico' AND a.id_empleado > 0";
+
+        $object['disenos']["items"] = $localConnection->goQuery($sql);
+        $object['empleados'] = $localConnection->goQuery('SELECT * FROM empleados');
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Todos los diseños terminados
+    $app->get('/disenos/terminados', function (Request $request, Response $response) {
+        $localConnection = new LocalDB();
+
+        $object['fields'][0]['key'] = "orden";
+        $object['fields'][0]['label'] = "Orden";
+
+        $object['fields'][1]['key'] = "cliente";
+        $object['fields'][1]['label'] = "Cliente";
+
+        $object['fields'][2]['key'] = "disenador";
+        $object['fields'][2]['label'] = "Diseñador";
+
+        $object['fields'][3]['key'] = "inicio";
+        $object['fields'][3]['label'] = "Inicio";
+
+        $object['fields'][4]['key'] = "entrega";
+        $object['fields'][4]['label'] = "Entregado";
+
+        $object['fields'][5]['key'] = "tipo";
+        $object['fields'][5]['label'] = "Tipo";
+
+        $object['fields'][6]['key'] = "codigo_diseno";
+        $object['fields'][6]['label'] = "Codigo";
+
+        $object['fields'][7]['key'] = "linkdrive";
+        $object['fields'][7]['label'] = "Drive";
+
+        $object['fields'][8]['key'] = "imagen";
+        $object['fields'][8]['label'] = "Imagen";
+
+        // $sql = "SELECT a.id_orden orden, b.cliente_nombre cliente, c.nombre disenador, b.fecha_inicio inicio, b.fecha_entrega entrega, a.tipo, b._id imagen FROM disenos a JOIN ordenes b ON a.id_orden = b._id JOIN empleados c ON a.id_empleado = c._id WHERE a.terminado = 1;";
+
+        $sql = "SELECT
+            a.id_orden orden,
+            b.cliente_nombre cliente,
+            c._id id_empleado,
+            c.nombre disenador,
+            b.fecha_inicio inicio,
+            b.fecha_entrega entrega,
+            a.linkdrive,
+            a.codigo_diseno,
+            a.tipo,
+            b.status estatus_orden,
+            b._id imagen
+        FROM
+            disenos a
+        JOIN ordenes b ON
+            a.id_orden = b._id
+        JOIN empleados c ON
+            a.id_empleado = c._id
+        WHERE
+            a.terminado = 1 AND (b.status != 'entregada' OR b.status != 'cancelada')";
+
+        $object["items"] = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Diseñosasignados a Diseñador
+
+    $app->get('/disenos/asignados/{id_empleado}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        $object['fields'][0]['key'] = "id";
+        $object['fields'][0]['label'] = "Orden";
+
+        $object['fields'][1]['key'] = "cliente";
+        $object['fields'][1]['label'] = "Cliente";
+
+        $object['fields'][2]['key'] = "inicio";
+        $object['fields'][2]['label'] = "Inicio";
+
+        $object['fields'][3]['key'] = "revision";
+        $object['fields'][3]['label'] = "Revisión";
+        $object['fields'][3]['class'] = "text-center";
+
+        $object['fields'][4]['key'] = "tallas_y_personalizacion";
+        $object['fields'][4]['label'] = "Tallas y Personalización";
+        $object['fields'][4]['class'] = "text-center";
+
+        $object['fields'][5]['key'] = "id_orden";
+        $object['fields'][5]['label'] = "Vinculadas";
+        $object['fields'][5]['class'] = "text-center";
+
+        $object['fields'][6]['key'] = "codigo_diseno";
+        $object['fields'][6]['label'] = "Código Diseño";
+        $object['fields'][6]['class'] = "text-center";
+
+        $object['fields'][7]['key'] = "linkdrive";
+        $object['fields'][7]['label'] = "Google Drive";
+        $object['fields'][7]['class'] = "text-center";
+
+        $object['fields'][8]['key'] = "revision";
+        $object['fields'][8]['label'] = "Revisiones";
+        $object['fields'][8]['class'] = "text-center";
+
+        $sql = "SELECT 
+    a._id linkdrive, 
+    a.codigo_diseno, 
+    a.id_orden, 
+    a._id id_diseno,
+    a._id tallas_y_personalizacion,
+    a.id_orden id, 
+    a.id_orden imagen, 
+    a.id_orden revision, 
+    b.cliente_nombre cliente, 
+    b.fecha_inicio inicio, 
+    a.tipo,
+    c.estatus 
+    FROM disenos a 
+    LEFT JOIN revisiones c 
+    ON a._id = c.id_diseno 
+    JOIN ordenes b 
+    ON b._id = a.id_orden 
+    LEFT JOIN disenos d ON d._id = c.id_diseno
+    WHERE a.id_empleado =    " . $args["id_empleado"] . " 
+    AND a.terminado = 0 
+    ORDER BY a.id_orden ASC
+    ";
+        $object['sql_items'] = $sql;
+        $object["items"] = $localConnection->goQuery($sql);
+
+        $sql = "SELECT a.id_diseno id, a.revision, a.detalles detalles_revision, a.id_orden FROM revisiones a JOIN disenos b ON b._id = a.id_diseno WHERE b.id_empleado = " . $args["id_empleado"];
+        $object['sql_revisiones'] = $sql;
+        $object["revisiones"] = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // TODO eliminar ninesys antiguo => Obtener diseños pendientes por diseñador
+    $app->get('/disenos/pendientes/{id_empleado}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+        $sql = "SELECT a.id_orden orden, b.cliente_nombre cliente, b.fecha_inicio, b.status FROM disenos a JOIN ordenes b ON b._id = a.id_orden WHERE a.id_empleado = " . $args["id_empleado"] . " AND terminado = 0";
+
+        $disenos = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($disenos));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Obtener diseños terminados por diseñador
+    $app->get('/disenos/terminados/{id_empleado}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        $sql = "SELECT a.id_orden orden, b.cliente_nombre cliente, b.fecha_inicio, b.status FROM disenos a JOIN ordenes b ON b._id = a.id_orden WHERE a.id_empleado = " . $args["id_empleado"] . " AND terminado = 1";
+
+        $disenos = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($disenos));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Asignar diseñador
+    $app->put('/disenos/asign/{id_orden}/{empleado}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        $sql = "UPDATE disenos SET id_empleado = " . $args['empleado'] . " WHERE id_orden = " . $args['id_orden'];
+        $asignacion = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($sql));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Diseñador dar diseño por terminado
+    $app->put('/disenos/close/{id_orden}/{empleado}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        $sql = "UPDATE disenos SET terminado = 1 WHERE id_orden = " . $args['id_orden'] . " AND id_empleado = " . $args["empleado"];
+        $asignacion = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($asignacion));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+    /**
+     * Fin Diseños 
+     */
+
+    /**
+     * PAGOS
+     */
+    // Terminar planilla de pago
+    $app->post("/pagos/terminar-planilla", function (Request $request, Response $response, $args) {
+        // $order = $request->getParsedBody();
+        $localConnection = new LocalDB();
+        $myDate = new CustomTime();
+        $now = $myDate->today();
+
+        $sql = "UPDATE pagos SET fecha_pago = '" . $now . "' WHERE fecha_pago IS NULL";
+        $data = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($data));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // REALIZAR PAGO A EMPLEADOS
+    $app->post("/pagos/pagar-a-empleados", function (Request $request, Response $response, $args) {
+        $data = $request->getParsedBody();
+        $localConnection = new LocalDB();
+
+        $myDate = new CustomTime();
+        $now = $myDate->today();
+
+        $listaDeIdPagos = explode(',', $data['id_pagos']);
+        $params = "";
+
+        // REGISTRAR PAGOS
+        foreach ($listaDeIdPagos as $key => $value) {
+            $params .= " _id = " . $value . " OR ";
+        }
+
+        $params = substr($params, 0, -4); // Eliminamos el ultimo OR
+
+        $sql = "UPDATE pagos SET fecha_pago = '" . $now . "' WHERE " . $params . ";";
+        $data['resp_update'] = $localConnection->goQuery($sql);
+
+        $sql = "SELECT * FROM pagos WHERE " . $params;
+        $registrosParaProcesar = $localConnection->goQuery($sql);
+
+        // TODO PASAR PAGOS REGISTRADOS A HISTÓRICO
+        $newSql = "";
+        foreach ($registrosParaProcesar as $key => $pago) {
+            $values = $pago["_id"] . ",";
+            $values .= $pago["id_orden"] . ",";
+            if (!is_null($pago["id_metodos_de_pago"])) {
+                $values .= $pago["id_metodos_de_pago"] . ",";
+            } else {
+                $values .= 'null,';
+            }
+            if (!is_null($pago["id_lotes_detalles"])) {
+                $values .= $pago["id_lotes_detalles"] . ",";
+            } else {
+                $values .= 'null,';
+            }
+            $values .= $pago["id_empleado"] . ",";
+
+            if (!is_null($values .= $pago["cantidad"])) {
+                $values .= $pago["cantidad"] . ",";
+            } else {
+                $values .= 'null,';
+            }
+
+            $values .= $pago["monto_pago"] . ",";
+            $values .= "'" . $pago["detalle"] . "',";
+            $values .= "'" . $pago["estatus"] . "',";
+            $values .= "'" . $pago["fecha_pago"] . "',";
+            $values .= "'" . $pago["moment"] . "'";
+
+            $newSql .= "INSERT INTO history.pagos(_id, id_orden, id_metodos_de_pago, id_lotes_detalles, id_empleado, cantidad, monto_pago, detalle, estatus, fecha_pago, moment) VALUES (" . $values . ");";
+        }
+        $data["newSql"] = $newSql;
+
+        $data['resp_insert_history'] = $localConnection->goQuery($newSql);
+
+        // ELIMINAR LOS ITEMS QUE SE GUARDARON EN EL HISTÓRICO
+        $sqlDelete = "DELETE FROM api.pagos WHERE _id IN (" . $data["id_pagos"] . ")";
+        $data["sqlDelete"] = $sqlDelete;
+        $data['resp_delete'] = $localConnection->goQuery($sqlDelete);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($data));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    $app->post("/pagos/pagar-a-empleados-OLD", function (Request $request, Response $response, $args) {
+        $data = $request->getParsedBody();
+        $localConnection = new LocalDB();
+
+        $myDate = new CustomTime();
+        $now = $myDate->today();
+
+        $listaDeIdPagos = explode(',', $data['id_pagos']);
+        $params = "";
+
+        foreach ($listaDeIdPagos as $key => $value) {
+            $params .= " _id = " . $value . " OR ";
+        }
+        $params = substr($params, 0, -4); // Eliminamos el ultimo OR
+        $sql = "UPDATE pagos SET fecha_pago = '" . $now . "' WHERE " . $params;
+
+        $data = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($sql));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Lista de pagos semanales
+    $app->get('/pagos/semana/disenadores', function (Request $request, Response $response, array $args) {
+        // OBTERER PAGOS DE VENDEDORES
+        $localConnection = new LocalDB();
+
+        // DISEÑADORES
+        $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle detalle_pago, e._id id_diseno, b.nombre nombre, b.departamento, a.monto_pago pago, a.cantidad, c.name producto FROM pagos a JOIN disenos e ON e.id_empleado = a.id_empleado AND e.id_orden = a.id_orden JOIN empleados b ON b._id = a.id_empleado JOIN ordenes_productos c ON a.id_orden = c.id_orden AND c.id_category = 17 WHERE a.id_orden IS NOT NULL AND a.fecha_pago IS NULL AND a.monto_pago > 0 ORDER BY a.id_orden DESC";
+        $object['data']["diseno"] = $localConnection->goQuery($sql);
+
+        foreach ($object['data']["diseno"] as $key => $value) {
+            // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
+            $sqlTMP = "SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = " . $value["id_orden"];
+            $tmpResp = $localConnection->goQuery($sqlTMP);
+
+            if (!empty($tmpResp)) {
+                foreach ($tmpResp as $key2 => $value2) {
+                    $object["data"]["trabajos_adicionales"][] = $value2;
+                }
+            }
+        }
+
+        $trabajos_adicionales_nuevos = [];
+
+        if (!empty($object["data"]["trabajos_adicionales"])) {
+            foreach ($object["data"]["trabajos_adicionales"] as $trabajo_adicional) {
+                $existe = false;
+                foreach ($trabajos_adicionales_nuevos as $trabajo_adicional_nuevo) {
+                    if ($trabajo_adicional['_id'] == $trabajo_adicional_nuevo['_id']) {
+                        $existe = true;
+                        break;
+                    }
+                }
+                if (!$existe) {
+                    $trabajos_adicionales_nuevos[] = $trabajo_adicional;
+                }
+            }
+            $object["data"]["trabajos_adicionales"] = $trabajos_adicionales_nuevos;
+        } else {
+            $object["data"]["trabajos_adicionales"] = [];
+        }
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    $app->get('/pagos/semana/empleados', function (Request $request, Response $response, array $args) {
+        // OBTERER PAGOS DE VENDEDORES
+        $localConnection = new LocalDB();
+
+        // EMPLEADOS
+        $sql = 'SELECT
+    a._id id_pago,
+    b.id_woo cod,
+    b._id id_lotes_detalles,
+    b.id_orden orden,
+    b.id_woo id_woo,
+    d.name producto,
+    d.talla,
+    c._id id_empleado,
+    c.nombre,
+    c.comision,
+    c.departamento,
+    DATE_FORMAT(b.fecha_terminado, "%a") dia,
+    DATE_FORMAT(b.fecha_terminado, "%v") semana,
+    DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
+    a.monto_pago pago,
+    a.fecha_pago,
+    b.unidades_solicitadas cantidad,
+    TIMEDIFF(fecha_terminado, fecha_inicio) tiempo_transcurrido
+    FROM
+    pagos a
+    JOIN lotes_detalles b ON
+    a.id_lotes_detalles = b._id
+    JOIN empleados c ON
+    b.id_empleado = c._id
+    JOIN ordenes_productos d ON
+    b.id_ordenes_productos = d._id
+    WHERE
+                                                                                                                                                                                                                        -- YEARWEEK(a.moment) = YEARWEEK(NOW()) AND
+                                                                                                                                                                                                                        a.fecha_pago IS NULL
+                                                                                                                                                                                                                        ORDER BY
+                                                                                                                                                                                                                        c.nombre ASC,
+                                                                                                                                                                                                                        b.id_orden ASC,
+                                                                                                                                                                                                                        a._id ASC;';
+        // WHERE YEARWEEK(a.moment) = YEARWEEK(NOW())AND
+        $object['data']["empleados"] = $localConnection->goQuery($sql);
+
+
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+
+    $app->get('/pagos/semana/vendedores', function (Request $request, Response $response, array $args) {
+        // OBTERER PAGOS DE VENDEDORES
+        $localConnection = new LocalDB();
+
+        // VENDEDORES
+        // $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN abonos b ON b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE a.fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC";
+        $sql = "SELECT 
+    a._id AS id_pago,
+    a.id_orden,
+    a.id_empleado,
+    a.detalle,
+    a.cantidad,
+    a.monto_pago AS pago,
+    c.nombre,
+    d.status,
+    e.tipo_de_pago,
+    DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago
+    FROM 
+    pagos a
+    JOIN 
+    abonos b ON b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado
+    JOIN 
+    empleados c ON a.id_empleado = c._id
+    JOIN 
+    ordenes d ON a.id_orden = d._id
+    LEFT JOIN 
+    metodos_de_pago e ON e._id = a.id_metodos_de_pago
+    WHERE 
+    a.fecha_pago IS NULL
+    GROUP BY 
+    a._id
+    ORDER BY 
+    d._id ASC, a._id DESC;
+    ";
+
+        $object['data']["vendedores"] = $localConnection->goQuery($sql);
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+
+    // Lista de pagos semanales con filtro de fechas
+    $app->post('/pagos/semana', function (Request $request, Response $response, array $args) {
+        $data = $request->getParsedBody();
+        $localConnection = new LocalDB();
+
+        if ($data["fecha_inicio"] === $data["fecha_fin"]) {
+            $where = "e.moment LIKE '" . $data["fecha_inicio"] . "%' AND e.fecha_pago IS NULL";
+            $whereEmpleados = "b.fecha_terminado LIKE '" . $data["fecha_inicio"] . "%' AND e.fecha_pago IS NULL ";
+            // $where = "e.moment LIKE '" . $data["fecha_inicio"] . "%' ";
+        } else {
+            $where = "(DATE(e.moment) BETWEEN '" . $data["fecha_inicio"] . "'AND '" . $data["fecha_fin"] . "') ";
+            $whereEmpleados = "b.fecha_inicio >= '" . $data["fecha_inicio"] . "' AND DATE_ADD(b.fecha_terminado, INTERVAL -1 DAY) <= '" . $data["fecha_fin"] . "' ";
+        }
+
+        $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN abonos b ON b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . " AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC";
+        $object['data']["vendedores"] = $localConnection->goQuery($sql);
+        // FIN BUSCAR PAGOS DE VENDEDORES
+
+        // OBTENER PAGOS DE EMPLEADOS
+        $sql = 'SELECT
+    a._id id_pago,
+    b._id id_lotes_detalles,
+    b.id_orden orden,
+    b.id_woo id_woo,
+    d.name producto,
+    d.talla,
+    c._id id_empleado,
+    c.nombre,
+    c.comision,
+    c.departamento,
+    DATE_FORMAT(b.fecha_terminado, "%a") dia,
+    DATE_FORMAT(b.fecha_terminado, "%v") semana,
+    DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
+    b.unidades_solicitadas cantidad,
+    a.monto_pago pago,
+    a.fecha_pago,
+    a.cantidad,
+    TIMEDIFF(fecha_terminado, fecha_inicio) tiempo_transcurrido
+    FROM
+    pagos a
+    JOIN lotes_detalles b ON
+    a.id_lotes_detalles = b._id
+    JOIN empleados c ON
+    b.id_emple
