@@ -2455,30 +2455,56 @@ return function (App $app) {
     });
 
     // Datos para efectuar el cietre de caja
-    $app->get('/cierre-de-caja', function (Request $request, Response $response, array $args) {
-        /** FONDO */
+    $app->get('/cierre-de-caja/{id_vendedor}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
-        $sql = 'SELECT dolares, pesos, bolivares FROM caja_fondos ORDER BY _id DESC LIMIT 1';
-        $fondo = $localConnection->goQuery($sql);
-        $object['data']['fondo'] = $fondo;
+        $id_vendedor = $args['id_vendedor'];
+        $object = ['data' => []];
 
-        if (empty($fondo)) {
-            $fondo[0]['dolares'] = 0;
-            $fondo[0]['pesos'] = 0;
-            $fondo[0]['bolivares'] = 0;
+        // 1. Get the latest cash fund for the vendor using a prepared statement
+        $sql_fondo = 'SELECT dolares, pesos, bolivares FROM caja_fondos WHERE id_empleado = ? ORDER BY _id DESC LIMIT 1';
+        $fondo = $localConnection->goQuery($sql_fondo, [$id_vendedor]);
+
+        $fondo_dolares = !empty($fondo) ? (float) $fondo[0]['dolares'] : 0;
+        $fondo_pesos = !empty($fondo) ? (float) $fondo[0]['pesos'] : 0;
+        $fondo_bolivares = !empty($fondo) ? (float) $fondo[0]['bolivares'] : 0;
+
+        $object['data']['fondo'] = [['dolares' => $fondo_dolares, 'pesos' => $fondo_pesos, 'bolivares' => $fondo_bolivares]];
+
+        // 2. Get the sum of open cash transactions for each currency using a prepared statement
+        $sql_caja = 'SELECT 
+                        moneda, 
+                        (SUM(monto)) as total_monto                        
+                     FROM caja 
+                     WHERE id_empleado = ? AND id_caja_cierres IS NULL 
+                     GROUP BY moneda';
+        $caja_entries = $localConnection->goQuery($sql_caja, [$id_vendedor]);
+
+        $caja_dolares = 0;
+        $caja_pesos = 0;
+        $caja_bolivares = 0;
+
+        foreach ($caja_entries as $entry) {
+            switch ($entry['moneda']) {
+                case 'Dólares':
+                    $caja_dolares = (float) $entry['total_monto'];
+                    break;
+                case 'Pesos':
+                    $caja_pesos = (float) $entry['total_monto'];
+                    break;
+                case 'Bolívares':
+                    $caja_bolivares = (float) $entry['total_monto'];
+                    break;
+            }
         }
 
-        // DÓLARES EN CAJA,
-        $sql = 'SELECT (SUM(monto) + ' . $fondo[0]['dolares'] . ') monto, moneda, tasa, FORMAT(((SUM(monto) / tasa)) + ' . $fondo[0]['dolares'] . ", 'C2') dolares FROM caja WHERE moneda= 'Dólares'";
-        $object['data']['caja'] = $localConnection->goQuery($sql);
+        // 3. Calculate total cash on hand and structure the response
+        $total_dolares = $fondo_dolares + $caja_dolares;
+        $total_pesos = $fondo_pesos + $caja_pesos;
+        $total_bolivares = $fondo_bolivares + $caja_bolivares;
 
-        // PESOS EN CAJA,
-        $sql = 'SELECT (SUM(monto) + ' . $fondo[0]['pesos'] . ') monto, moneda, tasa, FORMAT((SUM(monto) + ' . $fondo[0]['pesos'] . ") / tasa, 'C2') dolares FROM caja WHERE moneda= 'Pesos'";
-        array_push($object['data']['caja'], $localConnection->goQuery($sql)[0]);
-
-        // BOLIVARES     EN CAJA,
-        $sql = 'SELECT (SUM(monto) + ' . $fondo[0]['bolivares'] . ') monto, moneda, tasa, FORMAT((SUM(monto) + ' . $fondo[0]['bolivares'] . ") / tasa, 'C2') dolares FROM caja WHERE moneda= 'Bolívares'";
-        array_push($object['data']['caja'], $localConnection->goQuery($sql)[0]);
+        $object['data']['dolares'] = [['moneda' => 'Dólares', 'monto' => $total_dolares]];
+        $object['data']['pesos'] = [['moneda' => 'Pesos', 'monto' => $total_pesos]];
+        $object['data']['bolivares'] = [['moneda' => 'Bolívares', 'monto' => $total_bolivares]];
 
         $localConnection->disconnect();
 
@@ -2489,26 +2515,6 @@ return function (App $app) {
     });
 
     // Guardar Cierre de caja
-    $app->post('/cierre-de-caja_danado', function (Request $request, Response $response, $args) {
-        $datosCierre = $request->getParsedBody();
-        $localConnection = new LocalDB();
-
-        // Guardamos el cierre
-        $sql = ' INSERT INTO caja_cierres (dolares, pesos, bolivares, id_empleado) VALUES (' . $datosCierre['cierreDolaresEfectivo'] . ', ' . $datosCierre['cierrePesosEfectivo'] . ', ' . $datosCierre['cierreBolivaresEfectivo'] . ', ' . $datosCierre['id_empleado'] . ');';
-        // $sql .= 'TRUNCATE caja;';
-        // $sql .= 'TRUNCATE caja_fondos;';
-        $sql .= 'INSERT INTO caja_fondos (dolares, pesos, bolivares) VALUES (' . $datosCierre['fondoDolares'] . ', ' . $datosCierre['fondoPesos'] . ', ' . $datosCierre['fondoBolivares'] . ')';
-
-        $object['response'] = $localConnection->goQuery($sql);
-        $localConnection->disconnect();
-
-        $response->getBody()->write(json_encode(str_replace("\r", '', $object)));
-
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(200);
-    });
-    // Guardar Cierre de caja
     $app->post('/cierre-de-caja-vendedor', function (Request $request, Response $response, $args) {
         $datosCierre = $request->getParsedBody();
         $localConnection = new LocalDB();
@@ -2517,11 +2523,19 @@ return function (App $app) {
 
         // Guardamos el cierre
         $sql = ' INSERT INTO caja_cierres (dolares, pesos, bolivares, id_empleado) VALUES (' . $datosCierre['cierreDolaresEfectivo'] . ', ' . $datosCierre['cierrePesosEfectivo'] . ', ' . $datosCierre['cierreBolivaresEfectivo'] . ', ' . $datosCierre['id_empleado'] . ');';
-        // $sql .= 'TRUNCATE caja;';
-        // $sql .= 'TRUNCATE caja_fondos;';
-        $sql .= 'INSERT INTO caja_fondos (dolares, pesos, bolivares) VALUES (' . $datosCierre['fondoDolares'] . ', ' . $datosCierre['fondoPesos'] . ', ' . $datosCierre['fondoBolivares'] . ')';
+        $responseCierreCaja = $localConnection->goQuery($sql);
 
-        $object['response'] = $localConnection->goQuery($sql);
+        // Identificamos el ID del INSERT
+        $insertID = $responseCierreCaja['insert_id'];
+
+        // Insertamos caja_fondos
+        $sql = "INSERT INTO caja_fondos (id_empleado, dolares, id_caja_cierres, pesos, bolivares) VALUES ({$datosCierre['id_empleado']}, {$datosCierre['fondoDolares']}, $insertID, {$datosCierre['fondoPesos']}, {$datosCierre['fondoBolivares']})";
+        $object['response_insert_caja_fondos'] = $localConnection->goQuery($sql);
+
+        // Actualizamos caja para los registros cerrados
+        $sql = "UPDATE caja SET id_caja_cierres = $insertID WHERE id_empleado = {$datosCierre['id_empleado']}";
+        $object['response_update_caja'] = $localConnection->goQuery($sql);
+
         $localConnection->disconnect();
 
         $response->getBody()->write(json_encode(str_replace("\r", '', $object)));
@@ -2544,24 +2558,6 @@ return function (App $app) {
         $where .= ' AND o.responsable = ' . $args['id_vendedor'] . ';';
 
         /** EFECTIVO */
-
-        // Dolares
-        // $sql = "SELECT SUM(`monto`) monto, 'Dólares' moneda, `tasa`, `metodo_pago` tipo, SUM(`monto`) dolares FROM `metodos_de_pago` WHERE metodo_pago = 'Efectivo' AND `moneda` = 'Dólares' AND " . $where;
-
-        /* $sql = "SELECT
-            SUM(a.monto) monto,
-            'Dólares' moneda,
-            a.tasa,
-            a.metodo_pago tipo,
-            SUM(a.monto) dolares,
-            o.responsable vendedor
-        FROM
-            metodos_de_pago AS a
-        JOIN ordenes AS o
-            ON a.id_orden = o._id
-        WHERE o.responsable = 1 AND
-            a.metodo_pago = 'Efectivo' AND a.moneda = 'Dólares' AND " . $where; */
-
         $sql = "SELECT
                     monto,
                     'Dólares' moneda,
@@ -2614,7 +2610,7 @@ return function (App $app) {
              JOIN ordenes AS o 
              ON a.id_orden = o._id
              WHERE a.metodo_pago = 'Zelle' AND " . $where;
-        $object['data']['digital'] = $localConnection->goQuery($sql);
+        $object['data']['digital']['zelle'] = $localConnection->goQuery($sql);
 
         // PAGOMOVIL (bOLIVARES)
         $sql = "SELECT 
@@ -2629,7 +2625,7 @@ return function (App $app) {
             ON a.id_orden = o._id
             WHERE a.metodo_pago = 'Pagomovil' AND " . $where;
 
-        array_push($object['data']['digital'], $localConnection->goQuery($sql)[0]);
+        $object['data']['digital']['pagomovil'] = $localConnection->goQuery($sql);
 
         // PUNTO (BOLIVARES)
         $sql = "SELECT 
@@ -2644,7 +2640,7 @@ return function (App $app) {
             ON a.id_orden = o._id
             WHERE a.metodo_pago = 'Punto' AND " . $where;
 
-        array_push($object['data']['digital'], $localConnection->goQuery($sql)[0]);
+        $object['data']['digital']['punto'] = $localConnection->goQuery($sql);
 
         // TRANSFERENCIA (BOLIVARES)
         $sql = "SELECT 
@@ -2657,9 +2653,9 @@ return function (App $app) {
             FROM metodos_de_pago AS a 
             JOIN ordenes AS o 
             ON a.id_orden = o._id
-            WHERE a.metodo_pago = 'Punto' AND " . $where;
+            WHERE a.metodo_pago = 'Transferencia' AND " . $where;
 
-        array_push($object['data']['digital'], $localConnection->goQuery($sql)[0]);
+        $object['data']['digital']['transferencia'] = $localConnection->goQuery($sql);
 
         /** RETIROS */
         $sql = 'SELECT 
@@ -13289,4 +13285,288 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             ->withStatus(200);
     });
     /* FIN ASISTENCIAS */
+
+    // =================================================================
+    // ENDPOINTS PARA GESTIÓN DE GASTOS FIJOS DE LA EMPRESA
+    // =================================================================
+
+    /**
+     * GET /gastos
+     * Obtiene todos los gastos fijos de la empresa autenticada.
+     */
+    $app->get('/gastos', function (Request $request, Response $response, array $args) {
+        $id_empresa = ID_EMPRESA;
+        if (!$id_empresa) {
+            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado. No se pudo identificar la empresa.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        $sql = 'SELECT _id, nombre, descripcion, monto, moneda, periodicidad, estatus 
+                FROM api_empresas.empresas_gastos 
+                WHERE id_empresa = ?';
+        $params = [$id_empresa];
+
+        try {
+            $db = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $gastos = $db->goQuery($sql, $params);
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode($gastos, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error en la base de datos: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    /**
+     * POST /gastos
+     * Crea un nuevo registro de gasto para la empresa.
+     */
+    $app->post('/gastos', function (Request $request, Response $response, array $args) {
+        $id_empresa = ID_EMPRESA;
+        if (!$id_empresa) {
+            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        $data = $request->getParsedBody();
+
+        if (empty($data['nombre']) || !isset($data['monto'])) {
+            $response->getBody()->write(json_encode(['error' => 'Los campos "nombre" y "monto" son obligatorios.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $sql = 'INSERT INTO api_empresas.empresas_gastos 
+                    (id_empresa, nombre, descripcion, monto, moneda, periodicidad, estatus) 
+                VALUES 
+                    (?, ?, ?, ?, ?, ?, ?)';
+
+        try {
+            $db = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $params = [
+                $id_empresa,
+                $data['nombre'],
+                $data['descripcion'] ?? null,
+                $data['monto'],
+                $data['moneda'] ?? 'USD',
+                $data['periodicidad'] ?? 'mensual',
+                $data['estatus'] ?? 'activo'
+            ];
+
+            $result = $db->goQuery($sql, $params);
+            $newId = $db->getLastID();
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode(['message' => 'Gasto creado exitosamente', 'id_gasto' => $newId]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error al crear el gasto: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    /**
+     * PUT /gastos/{id_gasto}
+     * Actualiza un gasto existente.
+     */
+    $app->put('/gastos/{id_gasto}', function (Request $request, Response $response, array $args) {
+        $id_empresa = ID_EMPRESA;
+        $id_gasto = $args['id_gasto'];
+        if (!$id_empresa) {
+            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        // Corrección: Leer y parsear manualmente el cuerpo de la solicitud PUT
+        $put_body = $request->getBody()->getContents();
+        parse_str($put_body, $data);
+
+        if (empty($data)) {
+            $response->getBody()->write(json_encode(['error' => 'No se proporcionaron datos para actualizar.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $fields = [];
+        $params = [];
+        foreach ($data as $key => $value) {
+            $fields[] = "$key = ?";
+            $params[] = $value;
+        }
+        $params[] = $id_gasto;
+        $params[] = $id_empresa;
+        $set_clause = implode(', ', $fields);
+
+        $sql = "UPDATE api_empresas.empresas_gastos SET $set_clause WHERE _id = ? AND id_empresa = ?";
+
+        try {
+            $db = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $result = $db->goQuery($sql, $params);
+            $db->disconnect();
+
+            // Nota: El método goQuery no parece devolver el número de filas afectadas,
+            // por lo que no podemos verificar si el gasto existía antes de actualizar.
+            // Se asume éxito si no hay excepción.
+
+            $response->getBody()->write(json_encode(['message' => 'Gasto actualizado exitosamente.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error al actualizar el gasto: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    /**
+     * DELETE /gastos/{id_gasto}
+     * Elimina un gasto.
+     */
+    $app->delete('/gastos/{id_gasto}', function (Request $request, Response $response, array $args) {
+        $id_empresa = ID_EMPRESA;
+        $id_gasto = $args['id_gasto'];
+        if (!$id_empresa) {
+            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        $sql = 'DELETE FROM api_empresas.empresas_gastos WHERE _id = ? AND id_empresa = ?';
+        $params = [$id_gasto, $id_empresa];
+
+        try {
+            $db = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $result = $db->goQuery($sql, $params);
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode(['message' => 'Gasto eliminado exitosamente.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error al eliminar el gasto: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    // FIN GESTIÓN GASTOS FIJOS DE LA EMPRESA
+
+    // =================================================================
+    // REPORTE DE COSTOS DE PRODUCCIÓN
+    // =================================================================
+    $app->get('/reportes/costos-produccion/{inicio}/{fin}', function (Request $request, Response $response, array $args) {
+        $inicio = $args['inicio'] ?? null;
+        $fin = $args['fin'] ?? null;
+        $id_empresa = ID_EMPRESA;
+
+        $finalResponse = [];
+
+        try {
+            // --- 1. Consulta del Reporte Principal (Base de datos de la empresa) ---
+            $db = new LocalDB();
+            $whereConditions = [];
+            $params = [];
+
+            if ($inicio && $fin) {
+                $whereConditions[] = 'DATE(a.moment) BETWEEN ? AND ?';
+                $params[] = $inicio;
+                $params[] = $fin;
+            }
+
+            $sqlReporte = 'SELECT
+            a._id AS id_orden,                
+            (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = a.responsable) vendedor,
+            COALESCE(prod.total_productos, 0) AS total_productos,
+            COALESCE(ins.costos_de_insumos, 0) AS costos_de_insumos,
+            COALESCE(eficiencia.eficiencia_del_corte, 0) AS eficiencia_del_corte,
+            COALESCE(mano_de_obra.costo_mano_de_obra, 0) AS costo_mano_de_obra,
+            COALESCE(tiempo.tiempo_de_produccion, 0) AS tiempo_de_produccion,
+            COALESCE(repo.total_reposiciones, 0) AS reposiciones
+        FROM
+            ordenes a
+        LEFT JOIN (
+            SELECT id_orden, SUM(cantidad) AS total_productos
+            FROM ordenes_productos
+            GROUP BY id_orden
+        ) prod ON a._id = prod.id_orden
+        LEFT JOIN (
+            SELECT c.id_orden, SUM((c.valor_inicial - c.valor_final) * d.costo) AS costos_de_insumos
+            FROM inventario_movimientos c JOIN inventario d ON c.id_insumo = d._id
+            GROUP BY c.id_orden
+        ) ins ON a._id = ins.id_orden
+        LEFT JOIN (
+            SELECT r.id_orden, SUM(r.metros - (r.desperdicio * i.rendimiento)) AS eficiencia_del_corte
+            FROM rendimiento r JOIN inventario i ON r.id_insumo = i._id
+            GROUP BY r.id_orden
+        ) eficiencia ON a._id = eficiencia.id_orden
+        LEFT JOIN (
+            SELECT id_orden, SUM(monto_pago) AS costo_mano_de_obra
+            FROM pagos
+            GROUP BY id_orden
+        ) mano_de_obra ON a._id = mano_de_obra.id_orden
+        LEFT JOIN (
+            SELECT
+                ldea.id_orden,
+                api_empresas.CalcularHorasLaborales(
+                    MIN(ldea.fecha_inicio),
+                    MAX(ldea.fecha_terminado),
+                    (SELECT horario_laboral FROM api_empresas.empresas LIMIT 1)
+                ) AS tiempo_de_produccion
+            FROM
+                lotes_detalles_empleados_asignados ldea
+            WHERE ldea.fecha_inicio IS NOT NULL AND ldea.fecha_terminado IS NOT NULL
+            GROUP BY ldea.id_orden
+        ) tiempo ON a._id = tiempo.id_orden
+        LEFT JOIN (
+            SELECT id_orden, COUNT(_id) AS total_reposiciones
+            FROM reposiciones
+            GROUP BY id_orden
+        ) repo ON a._id = repo.id_orden';
+
+            if (!empty($whereConditions)) {
+                $sqlReporte .= ' WHERE ' . implode(' AND ', $whereConditions);
+            }
+
+            $reporteData = $db->goQuery($sqlReporte, $params);
+            $finalResponse['reporte_data'] = $reporteData;
+            $db->disconnect();
+
+            // --- 2. Consulta de Gastos Fijos (Base de datos de empresas) ---
+            $dbEmpresas = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $sqlGastos = "SELECT SUM(
+                        CASE periodicidad
+                            WHEN 'mensual' THEN monto / 4.33
+                            WHEN 'trimestral' THEN monto / 13
+                            WHEN 'semestral' THEN monto / 26
+                            WHEN 'anual' THEN monto / 52
+                            ELSE 0
+                        END
+                    ) AS total_gastos_semanales
+                    FROM empresas_gastos
+                    WHERE id_empresa = ? AND estatus = 'activo'";
+
+            $gastosResult = $dbEmpresas->goQuery($sqlGastos, [$id_empresa]);
+            $totalGastosSemanales = !empty($gastosResult) ? (float) $gastosResult[0]['total_gastos_semanales'] : 0;
+            $dbEmpresas->disconnect();
+
+            // --- 3. Cálculos combinados ---
+            $totalProductosPeriodo = 0;
+            foreach ($reporteData as $row) {
+                $totalProductosPeriodo += $row['total_productos'];
+            }
+
+            $costoOperativoPorProducto = 0;
+            if ($totalProductosPeriodo > 0) {
+                $costoOperativoPorProducto = $totalGastosSemanales / $totalProductosPeriodo;
+            }
+
+            $finalResponse['costos_operativos'] = [
+                'total_gastos_semanales' => $totalGastosSemanales,
+                'total_productos_periodo' => $totalProductosPeriodo,
+                'costo_operativo_por_producto' => $costoOperativoPorProducto
+            ];
+
+            // --- 4. Enviar respuesta ---
+            $response->getBody()->write(json_encode($finalResponse, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error en la consulta del reporte: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
 };
