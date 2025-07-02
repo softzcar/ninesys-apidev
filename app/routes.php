@@ -21,7 +21,6 @@ return function (App $app) {
 
     $app->options('/{routes:.*}', function (Request $request, Response $response, array $args) {
         // CORS Pre-Flight OPTIONS Request Handler
-        $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
         return $response
             ->withHeader('Access-Control-Allow-Origin', '*')
             ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
@@ -2107,21 +2106,23 @@ return function (App $app) {
     $app->get('/insumos-productos-asignados', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
         $sql = 'SELECT
-                a._id id_product_insumos_asignados,                
-                b._id id_product,                
-                d._id id_departamento,                
+                a._id id_product_insumos_asignados,
+                b._id id_product,
+                d._id id_departamento,
                 b.product producto,
                 c.nombre insumo,
                 d.departamento,
                 a.cantidad,
                 a.unidad,
+                s.nombre AS talla,
                 a.tiempo tiempo_cero,
                 (SELECT tiempo FROM products_tiempos_de_produccion WHERE id_product = b._id AND id_departamento = a.id_departamento) tiempo
             FROM
                 product_insumos_asignados a
-            LEFT JOIN products b ON b._id = a.id_product 
+            LEFT JOIN products b ON b._id = a.id_product
             JOIN catalogo_insumos_productos c ON c._id = a.id_catalogo_insumos_productos
-            JOIN departamentos d ON d._id = a.id_departamento            
+            JOIN departamentos d ON d._id = a.id_departamento
+            LEFT JOIN sizes s ON s._id = a.id_talla
         ';
         $object = $localConnection->goQuery($sql);
         $localConnection->disconnect();
@@ -2246,12 +2247,27 @@ return function (App $app) {
         $miInsumo = $request->getParsedBody();
         $localConnection = new LocalDB();
 
-        $sql = 'INSERT INTO product_insumos_asignados (id_product, id_departamento, id_catalogo_insumos_productos, cantidad, unidad) VALUES (' . $miInsumo['id_product'] . ', ' . $miInsumo['departamento'] . ', ' . $miInsumo['insumo'] . ", '" . $miInsumo['cantidad'] . "', '" . $miInsumo['unidad'] . "');";
+        // Usar sentencias preparadas para prevenir inyección SQL
+        $sql = 'INSERT INTO product_insumos_asignados 
+                    (id_product, id_departamento, id_catalogo_insumos_productos, cantidad, unidad, id_talla) 
+                VALUES (?, ?, ?, ?, ?, ?)';
+
+        // Preparar los parámetros para la consulta
+        // Aseguramos que id_talla (recibido como id_size) sea null si no se envía o está vacío
+        $id_talla = isset($miInsumo['id_size']) && !empty($miInsumo['id_size']) && $miInsumo['id_size'] !== 'null' ? $miInsumo['id_size'] : null;
+
+        $params = [
+            $miInsumo['id_product'],
+            $miInsumo['departamento'],
+            $miInsumo['insumo'],
+            $miInsumo['cantidad'],
+            $miInsumo['unidad'],
+            $id_talla
+        ];
+
         $object['sql'] = $sql;
-        $object['response'] = $localConnection->goQuery($sql);
-
+        $object['response'] = $localConnection->goQuery($sql, $params);
         $localConnection->disconnect();
-
         $response->getBody()->write(json_encode($object));
 
         return $response
@@ -3355,23 +3371,27 @@ return function (App $app) {
         $sql = "SELECT
             a.id_orden orden,
             b.cliente_nombre cliente,
-            c._id id_empleado,
+            c.id_usuario id_empleado,
             c.nombre disenador,
             b.fecha_inicio inicio,
             b.fecha_entrega entrega,
             a.linkdrive,
             a.codigo_diseno,
-            a.tipo,
+            d.tipo, 
             b.status estatus_orden,
             b._id imagen
         FROM
             disenos a
         JOIN ordenes b ON
             a.id_orden = b._id
-        JOIN empleados c ON
-            a.id_empleado = c._id
+        LEFT JOIN revisiones d ON a._id = d.id_diseno
+        -- JOIN empleados c ON
+        JOIN api_empresas.empresas_usuarios c ON 
+            a.id_empleado = c.id_usuario
         WHERE
             a.terminado = 1 AND (b.status != 'entregada' OR b.status != 'cancelada')";
+
+        $object['sql'] = $sql;
 
         $object['items'] = $localConnection->goQuery($sql);
 
@@ -3656,6 +3676,7 @@ return function (App $app) {
 
         // DISEÑADORES
         $sql = 'SELECT
+                p._id id_pago,
                 p.id_orden,
                 r._id id_revision,
                 p.monto_pago,
@@ -3690,6 +3711,7 @@ return function (App $app) {
             JOIN revisiones r ON
                 p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado 
             WHERE p.fecha_pago IS  NULL 
+            GROUP BY p._id
         ';
         $object['data']['diseno'] = $localConnection->goQuery($sql);
 
@@ -3997,72 +4019,28 @@ return function (App $app) {
             b.id_orden ASC,
             a._id ASC;';
         $object['data']['empleados'] = $localConnection->goQuery($sql);
+        $object['sql_pagos_empleados'] = $sql;
 
         // DISENADORES
-        /* $sql = 'SELECT
+        $sql = 'SELECT
             p.id_orden,
             r._id id_revision,
             p.monto_pago,
             p.id_empleado,
-            p.fecha_apgo,
+            p.fecha_pago,
             (SELECT departamento FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado) departamento,
             (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado) nombre,
             (SELECT product producto FROM products WHERE _id = r.id_product) producto
 
         FROM
             pagos p
-        JOIN revisiones r ON p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado
+        JOIN revisiones r ON p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado 
+        GROUP BY p._id
         ';
+        $object['sql_disenos'] = $sql;
         $object['data']['diseno'] = $localConnection->goQuery($sql);
 
-        foreach ($object['data']['diseno'] as $key => $value) {
-            // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
-            $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ' . $value['id_orden'];
-            $tmpResp = $localConnection->goQuery($sqlTMP);
-
-            if (!empty($tmpResp)) {
-                foreach ($tmpResp as $key2 => $value2) {
-                    $object['data']['trabajos_adicionales'][] = $value2;
-                }
-            }
-        } */
-        /* $app->get('/pagos/semana/disenadores', function (Request $request, Response $response, array $args) {
-            // OBTERER PAGOS DE VENDEDORES
-            $localConnection = new LocalDB();
-
-            // DISEÑADORES
-            $sql = "SELECT
-                ord._id id_orden,
-                dis._id id_diseno,
-                dis.id_product,
-                rev._id id_revision,
-                dis.id_empleado id_disenador,
-                (
-                SELECT
-                    nombre
-                FROM
-                    api_empresas.empresas_usuarios
-                WHERE
-                    id_usuario = dis.id_empleado
-            ) disenador,
-            ord.id_wp id_cliente,
-            ord.cliente_nombre,
-            dis.tipo tipo_diseno,
-            rev.detalles,
-            rev.estatus,
-            rev.revision
-            FROM
-                ordenes ord
-            RIGHT JOIN disenos dis ON
-                dis.id_orden = ord._id
-            LEFT JOIN revisiones rev ON
-                rev.id_orden = ord._id AND rev.id_empleado = dis.id_empleado
-            WHERE
-                dis.id_product IS NOT NULL AND rev.estatus = 'Esperando Respuesta'
-            ORDER BY ord._id ASC, ord.cliente_nombre ASC
-            ";
-            $object['data']['diseno'] = $localConnection->goQuery($sql);
-
+        /* if (!empty($object['data']['diseno'])) {
             foreach ($object['data']['diseno'] as $key => $value) {
                 // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
                 $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ' . $value['id_orden'];
@@ -4073,29 +4051,12 @@ return function (App $app) {
                         $object['data']['trabajos_adicionales'][] = $value2;
                     }
                 }
-            } */
+            }
+        } else {
+            $object['data']['trabajos_adicionales'] = [];
+        } */
 
         $trabajos_adicionales_nuevos = [];
-
-        /*
-         * if (!empty($object['data']['trabajos_adicionales'])) {
-         *     foreach ($object['data']['trabajos_adicionales'] as $trabajo_adicional) {
-         *         $existe = false;
-         *         foreach ($trabajos_adicionales_nuevos as $trabajo_adicional_nuevo) {
-         *             if ($trabajo_adicional['_id'] == $trabajo_adicional_nuevo['_id']) {
-         *                 $existe = true;
-         *                 break;
-         *             }
-         *         }
-         *         if (!$existe) {
-         *             $trabajos_adicionales_nuevos[] = $trabajo_adicional;
-         *         }
-         *     }
-         *     $object['data']['trabajos_adicionales'] = $trabajos_adicionales_nuevos;
-         * } else {
-         *     $object['data']['trabajos_adicionales'] = [];
-         * }
-         */
         $localConnection->disconnect();
 
         $response->getBody()->write(json_encode($object));
@@ -4423,25 +4384,13 @@ return function (App $app) {
 
     $app->get('/products-attributes', function (Request $request, Response $response) {
         $localConnection = new LocalDB();
-        // BUSCAR CATALOGO DE ATRIBUTOS
-        $sql = 'SELECT * FROM products_attributes';
-        $object['products_attributes'] = $localConnection->goQuery($sql);
-
-        // BUSCAR ATRIBUTOS ASIGNADOS
-        $sql = 'SELECT
-            av._id,    
-            av.id_product_attribute,
-            ap.attribute_name,
-            av.attribute_value
-        FROM
-            products_attributes_values av
-        LEFT JOIN products_attributes ap ON ap._id = av.id_product_attribute';
-        $object['products_attributes_values'] = $localConnection->goQuery($sql);
-
+        $sql = 'SELECT attribute_name as name, _id FROM products_attributes ORDER BY name ASC';
+        $attributes = $localConnection->goQuery($sql);
         $localConnection->disconnect();
 
-        $response->getBody()->write(json_encode($object));
+        $object['data'] = $attributes;
 
+        $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
         return $response
             ->withHeader('Content-Type', 'application/json')
             ->withStatus(200);
@@ -4461,7 +4410,6 @@ return function (App $app) {
         $localConnection = new LocalDB();
         $sql = 'SELECT _id, id_orden, _id item, id_woo cod, name producto, cantidad, talla, tela, corte, precio_unitario precio, precio_woo precioWoo FROM ordenes_productos WHERE id_orden = ' . $args['orden'] . " AND category_name != 'Diseños'";
 
-        $object['sql'] = $sql;
         $object['data'] = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();
@@ -5442,6 +5390,58 @@ return function (App $app) {
         $sql = 'SELECT _id id_abono, abono, descuento, moment FROM abonos  WHERE id_orden = ' . $args['id'] . ' GROUP BY _id, id_orden';
         $datosAbono = $localConnection->goQuery($sql);
         $object['items'] = $datosAbono;
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
+    // REPORTE PAGOS DISEÑADORES
+    $app->get('/reportes/resumen/disenadores/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
+        $localConnection = new LocalDB();
+
+        $sql = 'SELECT departamento FROM departamentos WHERE _id = ' . $args['id_departamento'];
+        $departamento = $localConnection->goQuery($sql);
+        $object['departamento'] = $departamento[0]['departamento'];
+
+        $sql = "SELECT
+                a._id id_revision,
+                a.id_orden,
+                (SELECT product FROM products WHERE _id = a.id_product) producto,
+                b.monto_pago,
+                '{$object['departamento']}' departamento,
+                b.fecha_pago,
+                'terminada' progreso
+            FROM
+                revisiones a
+            JOIN pagos b ON b.id_orden = a.id_orden
+            JOIN ordenes c ON c._id = a.id_orden AND c.status NOT LIKE 'entregada' AND c.status NOT LIKE 'cancelada' AND c.status NOT LIKE 'terminada' 
+            WHERE b.id_empleado = {$args['id_empleado']} AND b.fecha_pago IS NOT NULL
+        ";
+        $object['ordenes_terminadas'] = $localConnection->goQuery($sql);
+
+        $sql = "SELECT
+            a._id AS id_revision,
+            a.id_orden,
+            p.product AS producto, -- Columna traída directamente del JOIN
+            'Diseño' AS departamento
+        FROM
+            revisiones a
+        -- Unir con productos para obtener el nombre de forma eficiente
+        LEFT JOIN products p ON p._id = a.id_product
+        -- Unir con pagos para poder filtrar por empleado
+        JOIN pagos b ON b.id_orden = a.id_orden
+        -- Unir con órdenes para filtrar por su estado
+        JOIN ordenes c ON c._id = a.id_orden
+        WHERE 
+            -- Condición principal sobre el empleado
+            b.id_empleado = {$args['id_empleado']}
+            -- Condición sobre el estado de la orden, simplificada con NOT IN
+            AND c.status NOT IN ('entregada', 'cancelada', 'terminada');
+        ";
+        $object['ordenes_pendientes'] = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();
 
@@ -7173,7 +7173,14 @@ return function (App $app) {
                         $values .= "''";
                     }
 
-                    $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela) VALUES (' . $values . ')';
+                    // Manejar el nuevo atributo. Si no está presente o está vacío, se insertará NULL.
+                    $id_products_attributes = 'NULL';
+                    if (isset($decodedObj['atributo']) && !is_null($decodedObj['atributo']) && $decodedObj['atributo'] !== '') {
+                        // Asegurarse de que es un entero para seguridad
+                        $id_products_attributes = intval($decodedObj['atributo']);
+                    }
+
+                    $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela, id_products_attributes) VALUES (' . $values . ', ' . $id_products_attributes . ')';
                     $object['sql_ordenes_productos'] = $sql2;
                     $object['producto_detalle'][] = $localConnection->goQuery($sql2);
 
@@ -12874,7 +12881,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             FROM
                 inventario
             WHERE
-                departamento = '" . $args[' departamento '] . "'
+                departamento = '" . $args['departamento'] . "'
             ORDER BY
                 insumo ASC;";
         }
@@ -13472,9 +13479,18 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             a._id AS id_orden,                
             (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = a.responsable) vendedor,
             COALESCE(prod.total_productos, 0) AS total_productos,
+            a.pago_total,
             COALESCE(ins.costos_de_insumos, 0) AS costos_de_insumos,
-            COALESCE(eficiencia.eficiencia_del_corte, 0) AS eficiencia_del_corte,
+            COALESCE(mat.material_consumido_val, 0) AS material_consumido,
+            (
+                CASE
+                    WHEN COALESCE(mat.material_consumido_val, 0) > 0 
+                    THEN ((COALESCE(mat.material_consumido_val, 0) - COALESCE(mat.desperdicio_total, 0)) / COALESCE(mat.material_consumido_val, 0)) * 100
+                    ELSE 0
+                END) AS eficiencia,
             COALESCE(mano_de_obra.costo_mano_de_obra, 0) AS costo_mano_de_obra,
+            (COALESCE(ins.costos_de_insumos, 0) + COALESCE(mano_de_obra.costo_mano_de_obra, 0)) AS costo_total,
+            (a.pago_total - (COALESCE(ins.costos_de_insumos, 0) + COALESCE(mano_de_obra.costo_mano_de_obra, 0))) AS ganancia,
             COALESCE(tiempo.tiempo_de_produccion, 0) AS tiempo_de_produccion,
             COALESCE(repo.total_reposiciones, 0) AS reposiciones
         FROM
@@ -13490,10 +13506,12 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             GROUP BY c.id_orden
         ) ins ON a._id = ins.id_orden
         LEFT JOIN (
-            SELECT r.id_orden, SUM(r.metros - (r.desperdicio * i.rendimiento)) AS eficiencia_del_corte
-            FROM rendimiento r JOIN inventario i ON r.id_insumo = i._id
-            GROUP BY r.id_orden
-        ) eficiencia ON a._id = eficiencia.id_orden
+            SELECT
+                r.id_orden,
+                SUM(r.metros) AS material_consumido_val,
+                SUM(r.desperdicio) AS desperdicio_total
+            FROM rendimiento r GROUP BY r.id_orden
+        ) mat ON a._id = mat.id_orden
         LEFT JOIN (
             SELECT id_orden, SUM(monto_pago) AS costo_mano_de_obra
             FROM pagos
@@ -13568,5 +13586,66 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $response->getBody()->write(json_encode(['error' => 'Error en la consulta del reporte: ' . $e->getMessage()]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
+    });
+
+    // =================================================================
+    // REPORTE DE MANO DE OBRA POR ORDEN
+    // =================================================================
+    $app->get('/reportes/mano-obra-por-orden/{id_orden}', function (Request $request, Response $response, array $args) {
+        $id_orden = $args['id_orden'];
+
+        $sql = 'SELECT
+                    p.id_empleado,
+                    eu.nombre AS nombre_empleado,
+                    p.detalle AS departamento,
+                    p.cantidad,
+                    p.monto_pago
+                FROM
+                    pagos p
+                JOIN
+                    api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario
+                WHERE
+                    p.id_orden = ?
+                ORDER BY
+                    eu.nombre, p.detalle';
+        $db = new LocalDB();
+        $data = $db->goQuery($sql, [$id_orden]);
+        $db->disconnect();
+        $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    });
+
+    // =================================================================
+    // REPORTE DE MATERIAL CONSUMIDO POR ORDEN
+    // =================================================================
+    $app->get('/reportes/material-consumido-por-orden/{id_orden}', function (Request $request, Response $response, array $args) {
+        $id_orden = $args['id_orden'];
+
+        $sql = "SELECT
+                    r.id_orden,
+                    i.insumo AS material,
+                    r.metros AS cantidad_consumida,
+                    i.unidad,
+                    r.desperdicio,
+                    CASE
+                        WHEN r.id_empleado_corte IS NOT NULL THEN (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado_corte)
+                        WHEN r.id_empleado_impresion IS NOT NULL THEN (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado_impresion)
+                        WHEN r.id_empleado_estampado IS NOT NULL THEN (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado_estampado)
+                        ELSE 'No Asignado'
+                    END AS empleado,
+                    CASE
+                        WHEN r.id_empleado_corte IS NOT NULL THEN 'Corte'
+                        WHEN r.id_empleado_impresion IS NOT NULL THEN 'Impresión'
+                        WHEN r.id_empleado_estampado IS NOT NULL THEN 'Estampado'
+                        ELSE 'No Asignado'
+                    END AS departamento
+                FROM rendimiento r
+                JOIN inventario i ON r.id_insumo = i._id
+                WHERE r.id_orden = ?";
+        $db = new LocalDB();
+        $data = $db->goQuery($sql, [$id_orden]);
+        $db->disconnect();
+        $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     });
 };
