@@ -2897,23 +2897,29 @@ return function (App $app) {
         $localConnection = new localDB();
 
         $sql = "SELECT
-            b.id_orden,    
-            b._id id_revision,
-            b.id_empleado id_disenador,
-            d.nombre disenador,
-            b.tipo tipo_diseno,
-            b.detalles,
-            b.estatus,
-            b.revision,
-            c.id_wp id_cliente, 
-            c.cliente_nombre cliente    
-        FROM revisiones b
-        JOIN ordenes c ON
-            c._id = b.id_orden
-        LEFT JOIN api_empresas.empresas_usuarios d ON b.id_empleado = d.id_usuario
-        WHERE
-            b.estatus = 'Esperando Respuesta' 
-        ORDER BY b.id_empleado ASC
+                b.id_orden,
+                b._id id_revision,
+                b.id_empleado id_disenador,
+                b.id_product,
+                (SELECT product FROM products WHERE _id = b.id_product) producto,
+                d.nombre disenador,
+                b.tipo tipo_diseno,
+                b.detalles,
+                b.estatus,
+                b.revision,
+                c.id_wp id_cliente,
+                c.cliente_nombre cliente
+            FROM
+                revisiones b
+            JOIN ordenes c ON
+                c._id = b.id_orden
+            LEFT JOIN api_empresas.empresas_usuarios d
+            ON
+                b.id_empleado = d.id_usuario
+            WHERE
+                b.estatus = 'Esperando Respuesta' AND b.id_product IS NOT NULL
+            ORDER BY
+                b.id_empleado ASC
         ";
         $object['revisiones'] = $localConnection->goQuery($sql);
 
@@ -2985,22 +2991,41 @@ return function (App $app) {
         $data = $request->getParsedBody();
         $localConnection = new LocalDB();
 
-        $sql = 'SELECT product FROM products WHERE _id = ' . $data['id_product'];
-        $object['sql_seect_prodcuts'] = $sql;
-        $response1 = $localConnection->goQuery($sql);
-        $product_name = $response1[0]['product'];
+        // 1. Validar y sanitizar datos
+        if (empty($data['id_product']) || empty($data['id_diseno']) || empty($data['id_revision'])) {
+            $response->getBody()->write(json_encode(['error' => 'Faltan datos requeridos (id_product, id_diseno, o id_revision).']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
 
-        $sql = "UPDATE disenos SET tipo = '" . $product_name . "', id_product = " . $data['id_product'] . ' WHERE _id = ' . $data['id_diseno'] . ';';
-        $sql .= "UPDATE revisiones SET tipo = '" . $product_name . "', id_product = " . $data['id_product'] . ' WHERE _id = ' . $data['id_revision'];
-        $object['sql_seect_updates'] = $sql;
-        $data = $localConnection->goQuery($sql);
+        $id_product = intval($data['id_product']);
+        $id_diseno = intval($data['id_diseno']);
+        $id_revision = intval($data['id_revision']);
 
-        $localConnection->disconnect();
+        try {
+            // 2. Obtener el nombre del producto de forma segura
+            $sql_product = 'SELECT product FROM products WHERE _id = ?';
+            $product_result = $localConnection->goQuery($sql_product, [$id_product]);
 
-        $response->getBody()->write(json_encode($product_name));
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(200);
+            if (empty($product_result)) {
+                throw new Exception('Producto no encontrado con ID: ' . $id_product);
+            }
+            $product_name = $product_result[0]['product'];
+
+            // 3. Actualizar ambas tablas
+            $sql_update_disenos = 'UPDATE disenos SET tipo = ?, id_product = ? WHERE _id = ?';
+            $localConnection->goQuery($sql_update_disenos, [$product_name, $id_product, $id_diseno]);
+
+            $sql_update_revisiones = 'UPDATE revisiones SET tipo = ?, id_product = ? WHERE _id = ?';
+            $localConnection->goQuery($sql_update_revisiones, [$product_name, $id_product, $id_revision]);
+
+            $response->getBody()->write(json_encode(['success' => true, 'message' => 'Tipo de diseño actualizado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error al actualizar el tipo de diseño: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        } finally {
+            $localConnection->disconnect();
+        }
     });
 
     // Obtener datos para la aprobación del cliente
@@ -3278,6 +3303,61 @@ return function (App $app) {
             ->withStatus(200);
     });
 
+    // Crear un nuevo "Proyecto de Diseño" con su primera revisión
+    $app->post('/disenos/nuevo-con-revision', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+        $localConnection = new LocalDB();
+
+        // 1. Validar que los datos necesarios llegaron
+        if (empty($data['id_orden']) || empty($data['id_empleado'])) {
+            $response->getBody()->write(json_encode(['error' => 'Faltan datos requeridos (orden o empleado).']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        // 2. Sanitizar datos de entrada para prevenir inyección SQL
+        $id_orden = intval($data['id_orden']);
+        $id_empleado = intval($data['id_empleado']);
+        // Usar valores por defecto si no se proporcionan
+        $id_product = isset($data['id_product']) ? intval($data['id_product']) : 'NULL';
+        $tipo_diseno = isset($data['tipo_diseno']) ? addslashes($data['tipo_diseno']) : 'Diseño por definir';
+
+        // 3. Crear el nuevo "Proyecto de Diseño" en la tabla `disenos`
+        $sqlDiseno = "INSERT INTO disenos (id_orden, id_empleado, id_product, tipo, origen) VALUES ({$id_orden}, {$id_empleado}, {$id_product}, '{$tipo_diseno}', 'agregado_posterior')";
+        $resultDiseno = $localConnection->goQuery($sqlDiseno);
+
+        // Verificar si hubo un error en la primera inserción
+        if (isset($resultDiseno['status']) && $resultDiseno['status'] === 'error') {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'Error al crear el proyecto de diseño.', 'details' => $resultDiseno['message']]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
+        // 4. Obtener el ID del nuevo registro en `disenos`
+        $id_diseno_nuevo = $resultDiseno['insert_id'];
+
+        // Verificar que obtuvimos un ID válido
+        if (empty($id_diseno_nuevo) || $id_diseno_nuevo == 0) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'No se pudo obtener el ID del nuevo diseño.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
+        // 5. Crear la primera revisión para este nuevo proyecto en la tabla `revisiones`
+        $sqlRevision = "INSERT INTO revisiones (id_orden, id_diseno, id_empleado, id_product, revision, tipo) VALUES ({$id_orden}, {$id_diseno_nuevo}, {$id_empleado}, {$id_product}, 1, '{$tipo_diseno}')";
+        $resultRevision = $localConnection->goQuery($sqlRevision);
+
+        // 6. Cerrar la conexión y enviar respuesta exitosa
+        $localConnection->disconnect();
+
+        $payload = json_encode([
+            'success' => true,
+            'message' => 'Nuevo proyecto de diseño y su primera revisión han sido creados.',
+            'id_diseno_nuevo' => $id_diseno_nuevo
+        ]);
+        $response->getBody()->write($payload);
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(201);  // 201 Created
+    });
+
     // Todos los diseños asignados
     $app->get('/disenos/asignados', function (Request $request, Response $response) {
         $localConnection = new LocalDB();
@@ -3514,26 +3594,50 @@ return function (App $app) {
     $app->put('/disenos/asign/{id_orden}/{empleado}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
 
-        // VERIFICAR SI EL DISEÑO YA AH SIDO ASIGNADO
-        $sql = 'SELECT _id FROM disenos WHERE id_empleado = ' . $args['empleado'] . ' AND id_orden = ' . $args['id_orden'];
-        $verificar_asignacion = $localConnection->goQuery($sql);
+        // Sanitizar datos de entrada
+        $id_orden = intval($args['id_orden']);
+        $id_empleado = intval($args['empleado']);
 
-        if (count($verificar_asignacion)) {
-            // UPDATE
-            $sql = 'UPDATE disenos SET id_empleado = ' . $args['empleado'] . ' WHERE id_orden = ' . $args['id_orden'];
-        } else {
-            // INSERT
-            $sql = "INSERT INTO `disenos`(`id_empleado`, `id_orden`) VALUES ('" . $args['empleado'] . "', '" . $args['id_orden'] . "')";
+        // 1. Crear el nuevo "Proyecto de Diseño" en la tabla `disenos`
+        // Se usa un tipo por defecto que indica que fue asignado pero no definido.
+        $sqlDiseno = "INSERT INTO disenos (id_orden, id_empleado, tipo, origen) VALUES ({$id_orden}, {$id_empleado}, 'Diseño Asignado', 'asignado')";
+        $resultDiseno = $localConnection->goQuery($sqlDiseno);
+
+        // Verificar si hubo un error en la inserción del diseño
+        if (isset($resultDiseno['status']) && $resultDiseno['status'] === 'error') {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'Error al crear el proyecto de diseño.', 'details' => $resultDiseno['message']]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
 
-        $asignacion = $localConnection->goQuery($sql);
+        // 2. Obtener el ID del nuevo registro en `disenos`
+        $id_diseno_nuevo = $resultDiseno['insert_id'];
 
+        // Verificar que obtuvimos un ID válido
+        if (empty($id_diseno_nuevo) || $id_diseno_nuevo == 0) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'No se pudo obtener el ID del nuevo diseño.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
+        // 3. Crear la primera revisión para este nuevo proyecto en la tabla `revisiones`
+        $sqlRevision = "INSERT INTO revisiones (id_orden, id_diseno, id_empleado, revision, tipo) VALUES ({$id_orden}, {$id_diseno_nuevo}, {$id_empleado}, 1, 'Diseño Asignado')";
+        $resultRevision = $localConnection->goQuery($sqlRevision);
+
+        // Verificar si hubo un error en la inserción de la revisión
+        if (isset($resultRevision['status']) && $resultRevision['status'] === 'error') {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'Error al crear la revisión inicial.', 'details' => $resultRevision['message']]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
+        // 4. Cerrar la conexión y enviar respuesta exitosa
         $localConnection->disconnect();
 
-        $response->getBody()->write(json_encode($sql));
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(200);
+        $payload = json_encode(['success' => true, 'message' => 'Diseño asignado y primera revisión creada correctamente.', 'id_diseno_nuevo' => $id_diseno_nuevo]);
+
+        $response->getBody()->write($payload);
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     });
 
     // Diseñador dar diseño por terminado
@@ -7094,7 +7198,7 @@ return function (App $app) {
                          $object['sales_commission_ISSET'][] = false;
                      } */
 
-            // GUARDAR DATOS DE DISEÑO
+            /* // GUARDAR DATOS DE DISEÑO
             $sql_diseno = '';
             if ($newJson['diseno_grafico'] == true) {
                 for ($i = 0; $i < intval($newJson['diseno_grafico_cantidad']); $i++) {
@@ -7111,7 +7215,7 @@ return function (App $app) {
             // AHORA LAS ORDENES PUEDEN PASAR SIN DISEñO Y SE PUEDE ASIGNAR POSERIORMETE A UN DISEÑADOR DE SER NECESARIO EN EL MODULO DE ADMINISRACION->ASIGNACION DE DISEÑOS
             if ($sql_diseno != '') {
                 $object['miDiseno'] = json_encode($localConnection->goQuery($sql_diseno));
-            }
+            } */
 
             // GUARDAR PRODUCTOS ASOCIADOS A LA ORDEN
             $sql = 'SELECT _id';
@@ -9034,45 +9138,71 @@ return function (App $app) {
     $app->get('/sse/diseno/{id_empleado}', function (Request $request, Response $response, array $args) {  // /lotes/en-proceso
         // $sql = "SELECT a._id orden, a._id vinculada, a.cliente_nombre cliente, b.prioridad, b.paso, a.fecha_inicio inicio, a.fecha_entrega entrega, a.observaciones detalles, a._id acciones, a.status estatus FROM ordenes a JOIN lotes b ON a._id = b.id_orden  WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' ORDER BY a._id DESC";
         $localConnection = new LocalDB();
-        $sql = 'SELECT
-            a.linkdrive,
-            a.codigo_diseno,
-            a.id_orden,
-            a._id id_diseno,
-            a.id_empleado id_disenador,
-            a._id tallas_y_personalizacion,
-            a.id_orden id,
-            a.id_orden imagen,
-            a.id_orden revision,
-            d.id_product,
-            a.linkdrive,
-            b.cliente_nombre cliente,
-            (SELECT cus.phone FROM customers cus WHERE cus._id = b.id_wp) phone,
-            b.fecha_inicio inicio,
-            c.tipo,
-            c.estatus,
-            b.status estatus_orden
-        FROM
-            disenos a
-        LEFT JOIN revisiones c ON
-            a._id = c.id_diseno 
-        JOIN ordenes b ON
-            b._id = a.id_orden 
-        LEFT JOIN disenos d ON
-            d._id = c.id_diseno
-        WHERE
-            a.id_empleado = ' . $args['id_empleado'] . " AND a.terminado = 0 AND(b.status = 'activa' OR b.status = 'pausada' OR b.status = 'En espera')
-        ORDER BY
-            a.id_orden
-        DESC
-            ";
-        $obj['sql'] = $sql;
+        $sql = "SELECT
+                    c._id id_revision,
+                    a.id_orden id,
+                    a.id_orden,
+                    a._id tallas_y_personalizacion,
+                    a.id_orden imagen,
+                    c._id revision,
+                    c.id_product,
+                    a._id id_diseno,
+                    a.id_empleado id_disenador,
+                    a.linkdrive,
+                    a.codigo_diseno,
+                    a.linkdrive,
+                    b.cliente_nombre cliente,
+                    (SELECT cus.phone FROM customers cus WHERE cus._id = b.id_wp) phone,
+                    b.fecha_inicio inicio,
+                    c.tipo,
+                    c.estatus,
+                    b.status estatus_orden
+                FROM
+                    disenos a
+                LEFT JOIN revisiones c ON
+                    a._id = c.id_diseno 
+                JOIN ordenes b ON
+                    b._id = a.id_orden 
+                -- LEFT JOIN disenos d ON
+                   -- d._id = c.id_diseno
+                WHERE
+                    a.id_empleado = {$args['id_empleado']} 
+                    AND a.terminado = 0 
+                    AND(b.status = 'activa' OR b.status = 'pausada' OR b.status = 'En espera')
+                GROUP BY c._id
+                ORDER BY
+                    a.id_orden
+                DESC
+        ";
+        $obj['sql_items'] = $sql;
 
         $obj['items'] = $localConnection->goQuery($sql);
 
         // $sql = "SELECT a.id_diseno id, a.revision, a.detalles detalles_revision, a.id_orden FROM revisiones a JOIN disenos b ON b._id = a.id_diseno WHERE b.id_empleado = " . $args["id_empleado"];
         // $sql = "SELECT estatus, detalles FROM revisiones WHERE _id = " . $args["id"];
         $sql = 'SELECT a._id id_revision, a.id_orden, a.id_diseno, a.id_empleado, a.id_product, a.revision, a.estatus, a.detalles FROM revisiones a JOIN disenos b ON b.id_orden = a.id_orden WHERE a.id_empleado = ' . $args['id_empleado'] . ' AND b.id_empleado = ' . $args['id_empleado'] . ' ORDER BY a._id DESC';
+
+        $sql = "SELECT DISTINCT
+                a._id id_revision,
+                a.id_orden,
+                a.id_diseno,
+                a.id_empleado,
+                a.id_product,
+                a.revision,
+                a.estatus,
+                a.tipo,
+                a.detalles
+            FROM
+                revisiones a
+            RIGHT JOIN disenos b ON
+                b.id_orden = a.id_orden
+            WHERE
+                a.id_empleado = {$args['id_empleado']} AND b.id_empleado = {$args['id_empleado']} AND a.estatus LIKE 'Esperando Respuesta' 
+            ORDER BY
+                a.id_orden
+            ASC
+        ";
+        $obj['sql_revisiones'] = $sql;
         $obj['revisiones'] = $localConnection->goQuery($sql);
 
         $sql = 'SELECT a.id_diseno, a.tipo, a.cantidad, b.id_orden FROM disenos_ajustes_y_personalizaciones a JOIN disenos b ON b._id = a.id_diseno WHERE b.id_empleado = ' . $args['id_empleado'];
