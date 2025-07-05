@@ -1164,7 +1164,7 @@ return function (App $app) {
                 $object['data']['orden_proceso'] = 0;
             } else {
                 // OBTENER DATOS DE LA EMPRESA
-                $sql = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, numero_registro_legal, horario_laboral, activo, db_host, db_user, db_password, `db_name` FROM empresas WHERE id_empresa = ' . $credenciales[0]['id_empresa'];
+                $sql = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, `db_name` FROM empresas WHERE id_empresa = ' . $credenciales[0]['id_empresa'];
                 $data_empresa = $localConnection->goQuery($sql);
 
                 // ESTABLECEMOS LOS DATOS DE CONEXIÓN A LA BASE DE DATOS
@@ -1276,6 +1276,7 @@ return function (App $app) {
                 $object['empresa']['telefono'] = $data_empresa[0]['telefono'];
                 $object['empresa']['email'] = $data_empresa[0]['email'];
                 $object['empresa']['horario_laboral'] = json_decode($data_empresa[0]['horario_laboral']);
+                $object['empresa']['tipos_de_monedas'] = json_decode($data_empresa[0]['tipos_de_monedas']);
                 $object['empresa']['pais'] = $data_empresa[0]['pais'];
                 $object['empresa']['numero_registro_legal'] = $data_empresa[0]['numero_registro_legal'];
                 $object['empresa']['activo'] = $data_empresa[0]['activo'];
@@ -1847,17 +1848,19 @@ return function (App $app) {
                 ordenes ord
             JOIN customers cus ON ord.id_wp = cus._id
             LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
-            WHERE
+            /*WHERE
                 (
                 ord.status
                     = 'activa' OR
+                ord.status
+                    = 'cancelada' OR
                 ord.status
                     = 'En espera' OR
                 ord.status
                     = 'terminada' OR
                 ord.status
                     = 'pausada' OR ord.status = 'entregada'
-            )
+            )*/
             ORDER BY
                 ord._id
             DESC;";
@@ -4003,42 +4006,46 @@ return function (App $app) {
 
         // VENDEDORES
         // $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN abonos b ON b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE a.fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC";
-        $sql = "SELECT 
-        a._id AS id_pago,
-        a.id_orden,
-        a.id_empleado,
-        a.detalle,
-        a.cantidad,
-        -- a.monto_pago AS pago,
-        (a.comision * a.cantidad) pago,
-        a.comision,
-        a.comision_tipo,
-        c.nombre,
-        d.pago_abono monto_abonado,
-        e.monto monto_abonado_abono,
-        d.status,
-        e.tipo_de_pago,
-        a.fecha_pago,
-        DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago
-        FROM 
-        pagos a
-        JOIN 
-        abonos b ON b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado
-        JOIN 
-        api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
-        JOIN 
-        ordenes d ON a.id_orden = d._id
-        LEFT JOIN 
-        metodos_de_pago e ON e._id = a.id_metodos_de_pago
-        WHERE 
-        a.fecha_pago IS NULL
-        GROUP BY 
-        a._id
-        ORDER BY 
-        d._id ASC, a._id DESC;
+        $sql = "SELECT
+                a._id AS id_pago,
+                a.id_orden,
+                a.id_empleado,
+                a.detalle,
+                a.cantidad,
+                a.monto_pago AS pago,
+                -- (a.comision * a.cantidad) pago,
+                a.comision,
+                a.comision_tipo,
+                c.nombre,
+                d.pago_abono monto_abonado,
+                e.monto monto_abonado_abono,
+                d.status,
+                e.tipo_de_pago,
+                a.fecha_pago,
+                DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago
+            FROM
+                pagos a
+            JOIN abonos b ON
+                b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado
+            JOIN api_empresas.empresas_usuarios c
+            ON
+                a.id_empleado = c.id_usuario
+            JOIN ordenes d ON
+                a.id_orden = d._id
+            LEFT JOIN metodos_de_pago e ON
+                e._id = a.id_metodos_de_pago
+            WHERE
+                a.fecha_pago IS NULL
+            GROUP BY
+                a._id
+            ORDER BY
+                d._id ASC,
+                a._id
+            DESC
+    ;
         ";
 
-        $object['sql'] = $sql;
+        // $object['sql'] = $sql;
         $object['data']['vendedores'] = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();
@@ -5931,6 +5938,16 @@ return function (App $app) {
             WHERE
                 a._id =' . $id;
             $object['orden'] = $localConnection->goQuery($sql);
+
+            // --- INICIO: CÁLCULO DE ABONOS Y DESCUENTOS ACTUALIZADOS ---
+            // 1. Obtener la suma total de todos los abonos y descuentos desde la tabla `abonos`.
+            $sql_abonos = 'SELECT SUM(abono) AS total_abonos, SUM(descuento) AS total_descuentos FROM abonos WHERE id_orden = ' . $id;
+            $totales_abonos = $localConnection->goQuery($sql_abonos);
+
+            // 2. Asignar los totales calculados directamente al objeto de la orden.
+            $object['orden'][0]['pago_abono'] = !empty($totales_abonos) ? (float) $totales_abonos[0]['total_abonos'] : 0;
+            $object['orden'][0]['pago_descuento'] = !empty($totales_abonos) ? (float) $totales_abonos[0]['total_descuentos'] : 0;
+            // --- FIN: CÁLCULO DE ABONOS Y DESCUENTOS ACTUALIZADOS ---
 
             // Buscar datos del diseño
             $sql = 'SELECT tipo FROM disenos WHERE id_orden =  ' . $id;
