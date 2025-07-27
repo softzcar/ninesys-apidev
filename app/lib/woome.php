@@ -875,6 +875,7 @@ class WooMe
         last_name billing_last_name, 
         cedula billing_postcode, 
         phone billing_phone, 
+        phone, 
         null billing_city, 
         null billing_state, 
         `address` billing_address_1, 
