@@ -3,6 +3,9 @@ class LocalDB
 {
     protected $sql;
     private $pdo;
+    private $dsn;
+    private $user;
+    private $pass;
 
     /*  public function __construct($sql = '')
      *     {
@@ -30,7 +33,7 @@ class LocalDB
             );
             $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         } catch (PDOException $e) {
-            die('Database connection failed: ' . $e->getMessage());
+            throw $e; // Re-throw the exception to be caught by the calling code
         }
     }
 
