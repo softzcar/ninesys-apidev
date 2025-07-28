@@ -5,6 +5,8 @@
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 // use LocalDB;
 
@@ -250,56 +252,6 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  /*
-   * $app->get('/prueba-formato-mensaje/{id_orden}', function (Request $request, Response $response, array $args) {
-   *     // Obtener la respuesta con los datos de la orden
-   *     $res = obtenerRespuestaBuscar($args['id_orden']);
-   *     $datos['phone'] = '584147307169';
-   *     $datos['template'] = 'welcome';
-   *     $datos['name'] = 'Roxana';
-   *     $datos['message'] = 'Mensaje desde la api principal ahora de nuevo';
-   *     $datos['id_cliente'] = '123';
-   *     $datos['object'] = $res;
-   *     // Definir la URL de la API externa que generará el Markdown
-   *     $apiUrl = 'https://ws.nineteengreen.com/send-message-template';
-   *
-   *     try {
-   *         // Configurar los parámetros de la solicitud
-   *         $options = [
-   *             'http' => [
-   *                 'header' => "Content-Type: application/json\r\n",
-   *                 'method' => 'POST',
-   *                 'content' => json_encode($datos),
-   *                 'timeout' => 60,  // Establecer un tiempo de espera
-   *             ],
-   *         ];
-   *
-   *         // Crear un contexto de flujo para la solicitud
-   *         $context = stream_context_create($options);
-   *
-   *         // Hacer la solicitud a la API externa
-   *         $result = file_get_contents($apiUrl, false, $context);
-   *
-   *         if ($result === FALSE) {
-   *             throw new \Exception('Error al llamar a la API externa');
-   *         }
-   *
-   *         // Escribir el resultado en el cuerpo de la respuesta
-   *         $response->getBody()->write($result);
-   *         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-   *     } catch (\Exception $e) {
-   *         // Obtener el error específico y el contenido devuelto
-   *         $errorDetail = [
-   *             'error' => 'Error al generar el formato de mensaje',
-   *             'details' => $e->getMessage(),
-   *             'url' => $apiUrl,
-   *             'response' => isset($http_response_header) ? implode("\n", $http_response_header) : 'No response headers'
-   *         ];
-   *         $response->getBody()->write(json_encode($errorDetail));
-   *         return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
-   *     }
-   * });
-   */
   $app->delete('/disenos/images/{id_orden}/{image_name}', function (Request $request, Response $response, array $args) {
     // Directorio base de imágenes
     $baseDir = 'images/' . ID_EMPRESA . '/orden_' . $args['id_orden'];
@@ -407,6 +359,234 @@ return function (App $app) {
       $response->getBody()->write(json_encode(['status' => 'error', 'message' => 'Error al subir la imagen: ' . $e->getMessage()], JSON_NUMERIC_CHECK));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     }
+  });
+
+  $app->get('/api/products/template-excel', function (Request $request, Response $response) {
+    try {
+      $localConnection = new LocalDB();
+      // CATEGORIAS
+      $categories = $localConnection->goQuery("SELECT _id, nombre FROM categories");
+      // CATEGORIAS
+      $categories = $localConnection->goQuery("SELECT _id, nombre FROM categories");
+
+      // ATRIBUTOS
+      $attributes = $localConnection->goQuery("SELECT _id, attribute_name FROM products_attributes");
+
+      $localConnection->disconnect();
+
+      // Create new Spreadsheet object
+      $spreadsheet = new Spreadsheet();
+
+      // --- Sheet: Products ---
+      $sheetProducts = $spreadsheet->getActiveSheet();
+      $sheetProducts->setTitle('Productos');
+
+      // Set headers for Products sheet
+      $headersProducts = ['SKU', 'Nombre', 'Descripción', 'Stock', 'Categoría', 'Atributos', 'Precio Venta', 'Precio Costo', 'Activo'];
+      $sheetProducts->fromArray($headersProducts, NULL, 'A1');
+
+      // Set column widths for Products sheet
+      foreach (range('A', 'I') as $col) {
+          $sheetProducts->getColumnDimension($col)->setAutoSize(true);
+      }
+
+      // --- Hidden Sheet: ListadoCategorias ---
+      $sheetCategories = $spreadsheet->createSheet();
+      $sheetCategories->setTitle('ListadoCategorias');
+      $sheetCategories->fromArray([['ID', 'Nombre']], NULL, 'A1'); // Headers for hidden sheet
+      $row = 2;
+      foreach ($categories as $category) {
+          $sheetCategories->setCellValue('A' . $row, $category['_id']);
+          $sheetCategories->setCellValue('B' . $row, $category['nombre']);
+          $row++;
+      }
+      $sheetCategories->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN); // Hide the sheet
+
+      // --- Hidden Sheet: ListadoAtributos ---
+      $sheetAttributes = $spreadsheet->createSheet();
+      $sheetAttributes->setTitle('ListadoAtributos');
+      $sheetAttributes->fromArray([['ID', 'Nombre']], NULL, 'A1'); // Headers for hidden sheet
+      $row = 2;
+      foreach ($attributes as $attribute) {
+          $sheetAttributes->setCellValue('A' . $row, $attribute['_id']);
+          $sheetAttributes->setCellValue('B' . $row, $attribute['attribute_name']);
+          $row++;
+      }
+      $sheetAttributes->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN); // Hide the sheet
+
+      // --- Hidden Sheet: ListadoSKUNombre (for Prices sheet dropdown) ---
+      $sheetSKUNombre = $spreadsheet->createSheet();
+      $sheetSKUNombre->setTitle('ListadoSKUNombre');
+      $sheetSKUNombre->setCellValue('A1', 'SKU - Nombre del Producto'); // Header
+      // Populate with formulas referencing 'Productos' sheet
+      for ($i = 2; $i <= 1000; $i++) { // Assuming data in 'Productos' sheet goes up to row 1000
+          $sheetSKUNombre->setCellValue('A' . $i, '=\'Productos\'!A' . $i . '&" - "&\'Productos\'!B' . $i);
+      }
+      $sheetSKUNombre->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN); // Hide the sheet
+
+      // --- Data Validation for Products sheet ---
+      // Category (Column E)
+      $categoryValidation = $sheetProducts->getCell('E2')->getDataValidation();
+      $categoryValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+      $categoryValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);
+      $categoryValidation->setAllowBlank(false);
+      $categoryValidation->setShowInputMessage(true);
+      $categoryValidation->setShowErrorMessage(true);
+      $categoryValidation->setShowDropDown(true);
+      $categoryValidation->setErrorTitle('Error de entrada');
+      $categoryValidation->setError('El valor no está en la lista.');
+      $categoryValidation->setPromptTitle('Seleccionar Categoría');
+      $categoryValidation->setPrompt('Por favor, seleccione una categoría de la lista.');
+      $categoryValidation->setFormula1("'ListadoCategorias'!
+B$2:
+B$" . (count($categories) + 1)); // Reference to names in hidden sheet
+
+      // Attributes (Column F)
+      $attributeValidation = $sheetProducts->getCell('F2')->getDataValidation();
+      $attributeValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+      $attributeValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);
+      $attributeValidation->setAllowBlank(true); // Attributes can be optional
+      $attributeValidation->setShowInputMessage(true);
+      $attributeValidation->setShowErrorMessage(true);
+      $attributeValidation->setShowDropDown(true);
+      $attributeValidation->setErrorTitle('Error de entrada');
+      $attributeValidation->setError('El valor no está en la lista de atributos.');
+      $attributeValidation->setPromptTitle('Seleccionar Atributo');
+      $attributeValidation->setPrompt('Por favor, seleccione un atributo de la lista.');
+      $attributeValidation->setFormula1("'ListadoAtributos'!
+B$2:
+B$" . (count($attributes) + 1)); // Reference to names in hidden sheet
+
+      // Active (Column I)
+      $activeValidation = $sheetProducts->getCell('I2')->getDataValidation();
+      $activeValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+      $activeValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);
+      $activeValidation->setAllowBlank(false);
+      $activeValidation->setShowInputMessage(true);
+      $activeValidation->setShowErrorMessage(true);
+      $activeValidation->setShowDropDown(true);
+      $activeValidation->setErrorTitle('Error de entrada');
+      $activeValidation->setError('El valor debe ser "Sí" o "No".');
+      $activeValidation->setPromptTitle('Producto Activo');
+      $activeValidation->setPrompt('Seleccione "Sí" para activo o "No" para inactivo.');
+      $activeValidation->setFormula1('"Sí,No"'); // Direct list
+
+      // Apply validation to a range (e.g., up to row 1000 for now, can be adjusted)
+      for ($i = 2; $i <= 1000; $i++) {
+          $sheetProducts->getCell('E' . $i)->setDataValidation(clone $categoryValidation);
+          $sheetProducts->getCell('F' . $i)->setDataValidation(clone $attributeValidation); // Apply to Attributes column
+          $sheetProducts->getCell('I' . $i)->setDataValidation(clone $activeValidation);
+      }
+
+      // --- Sheet: Prices ---
+      $sheetPrices = $spreadsheet->createSheet();
+      $sheetPrices->setTitle('Precios');
+
+      // Set headers for Prices sheet
+      $headersPrices = ['SKU_Producto', 'Valor_Precio', 'Descripción_Precio'];
+      $sheetPrices->fromArray($headersPrices, NULL, 'A1');
+
+      // Set column widths for Prices sheet
+      foreach (range('A', 'C') as $col) {
+          $sheetPrices->getColumnDimension($col)->setAutoSize(true);
+      }
+
+      // Define named range for SKUs in Products sheet for dynamic validation
+      $spreadsheet->addNamedRange(
+          new \PhpOffice\PhpSpreadsheet\NamedRange(
+              'SKU_Productos',
+              $sheetSKUNombre, // Reference the new hidden sheet with formulas
+              'A2:A1000' // Assuming data in 'ListadoSKUNombre' goes up to row 1000
+          )
+      );
+
+      // Data Validation for SKU_Producto in Prices sheet (Column A)
+      $skuValidation = $sheetPrices->getCell('A2')->getDataValidation();
+      $skuValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+      $skuValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);
+      $skuValidation->setAllowBlank(false);
+      $skuValidation->setShowInputMessage(true);
+      $skuValidation->setShowErrorMessage(true);
+      $skuValidation->setShowDropDown(true);
+      $skuValidation->setErrorTitle('SKU Inválido');
+      $skuValidation->setError('El SKU seleccionado no existe en la hoja de Productos.');
+      $skuValidation->setPromptTitle('Seleccionar SKU');
+      $skuValidation->setPrompt('Seleccione un SKU de la lista de productos.');
+      $skuValidation->setFormula1('SKU_Productos'); // Reference to the named range
+
+      // Apply SKU validation to a range (e.g., up to row 1000 for now)
+      for ($i = 2; $i <= 1000; $i++) {
+          $sheetPrices->getCell('A' . $i)->setDataValidation(clone $skuValidation);
+      }
+
+      // Save the Excel file
+      $fileName = 'plantilla_productos_' . ID_EMPRESA . '.xlsx';
+      $outputDirectory = __DIR__ . '/../public/downloads/carga_productos/';
+      $filePath = $outputDirectory . $fileName;
+
+      // Ensure the directory exists
+      if (!file_exists($outputDirectory)) {
+          mkdir($outputDirectory, 0777, true);
+      }
+
+      $writer = new Xlsx($spreadsheet);
+      $writer->save($filePath);
+
+      // Generate the file URL
+      $fileUrl = '/downloads/carga_productos/' . $fileName;
+
+      // Return success response with file URL
+      $response->getBody()->write(json_encode([
+          'success' => true,
+          'message' => 'Plantilla Excel generada exitosamente.',
+          'file_url' => $fileUrl
+      ], JSON_NUMERIC_CHECK));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+    } catch (\Exception $e) {
+      error_log("Error generating Excel: " . $e->getMessage());
+      $response->getBody()->write(json_encode([
+          'success' => false,
+          'message' => 'Error al generar la plantilla Excel. Por favor, inténtelo de nuevo más tarde.',
+          'error_details' => $e->getMessage() // Solo para depuración, quitar en producción
+      ], JSON_NUMERIC_CHECK));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(500);
+    }
+  });
+
+  $app->get('/api/products/template-excel-test', function (Request $request, Response $response) {
+    // Conexiona a la base de datos
+    $localConnection = new LocalDB();
+
+    // ATRIBUTOS
+    $sql = "SELECT _id, attribute_name FROM products_attributes";
+    $datax['atributos'] = $localConnection->goQuery($sql);
+     
+    // CATEGORIAS
+    $sql = "SELECT _id, nombre FROM categories";
+    $datax['categorias'] = $localConnection->goQuery($sql);
+    
+    $spreadsheet = new Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->setCellValue('A1', 'Hola Mundo desde PhpSpreadsheet (Correcto)!');
+    
+    $writer = new Xlsx($spreadsheet);
+    
+    $idEmpresa = ID_EMPRESA;
+    $filePath = __DIR__ . "/../public/downloads/carga_productos/carga_de_productos_{$idEmpresa}.xlsx"; // Guardar en el directorio public
+    $writer->save($filePath);
+    
+    $fileUrl = "/downloads/carga_productos/carga_de_productos_{$idEmpresa}.xlsx"; // URL para acceder al archivo
+    
+    $localConnection->disconnect();
+    // $response->getBody()->write(json_encode(['message' => 'Archivo Excel generado correctamente (Correcto)!', 'file_url' => $fileUrl], JSON_NUMERIC_CHECK));
+    $response->getBody()->write(json_encode($datax, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
   });
 
   /** * PRUEBAS DE HISTÓRICO */
@@ -1522,8 +1702,9 @@ return function (App $app) {
       $data[0]['id'] = '1';
     }
 
-    $input = str_pad($data[0]['id'], 3, '0', STR_PAD_LEFT);
-    $nextId['id'] = str_pad($input, 3, '0', STR_PAD_LEFT);
+    // Convertir el ID a string antes de pasarlo a str_pad() para compatibilidad con PHP 8+
+    // y eliminar la llamada redundante a str_pad.
+    $nextId['id'] = str_pad((string) $data[0]['id'], 3, '0', STR_PAD_LEFT);
 
     $response->getBody()->write(json_encode($nextId, JSON_NUMERIC_CHECK));
     return $response

@@ -8,6 +8,7 @@
 class CustomTime
 {
     protected $days;
+    private $newDate;
     // private $pdo;
 
     // TODO crear parametro apra dias atrás en el reporte...
