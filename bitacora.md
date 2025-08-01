@@ -2,6 +2,52 @@
 **Interacción con Gemini CLI - [Fecha: 2025-08-01]**
 
 **Contexto:**
+Se ha implementado un nuevo endpoint `/api/inventario/template-excel` para generar una plantilla de Excel para la carga masiva de ítems de inventario, basándose en la funcionalidad existente para productos.
+
+**Cambios Realizados:**
+
+1.  **Modificación de la Base de Datos:**
+    *   Se añadió la columna `rollo` de tipo `VARCHAR(128)` a la tabla `inventario`.
+
+2.  **Creación del Endpoint `/api/inventario/template-excel` en `app/routes.php`:**
+    *   **Consulta de Datos:** Se modificaron las consultas a la base de datos para obtener los departamentos de la tabla `departamentos`.
+    *   **Encabezados de Excel:** Se definieron los encabezados de la hoja de Excel para inventario: `Rollo`, `Nombre`, `Cantidad`, `Unidad`, `Costo`, `Rendimiento`, `Departamento`.
+    *   **Validación de Datos:**
+        *   Se implementó una lista desplegable para la columna `Unidad` con las opciones: `Metros`, `Kilos`, `Unidades`.
+        *   Se implementó una lista desplegable para la columna `Departamento` utilizando los datos obtenidos de la tabla `departamentos`.
+        *   Se añadieron validaciones numéricas para `Cantidad`, `Costo` y `Rendimiento`.
+        *   **Nueva validación de unicidad para 'Rollo':** Se añadió una validación personalizada para asegurar que el valor de 'Rollo' sea único, ignorando mayúsculas/minúsculas y guiones bajos, tanto en la base de datos como dentro del mismo archivo Excel.
+    *   **Nombre del Archivo:** El archivo generado se nombra `plantilla_inventario_` seguido de `ID_EMPRESA` y la extensión `.xlsx`.
+    *   **Directorio de Salida:** El archivo se guarda en un nuevo directorio `public/downloads/carga_inventario/`.
+
+**Impacto:**
+La nueva funcionalidad permite a los usuarios descargar una plantilla de Excel preconfigurada para la carga masiva de ítems de inventario, facilitando la introducción de datos y asegurando la consistencia mediante validaciones integradas y listas desplegables. La adición de la columna `rollo` en la base de datos prepara el sistema para la gestión de este nuevo campo en el inventario, y la validación de unicidad para 'Rollo' previene duplicados y errores de entrada.
+---
+---
+**Interacción con Gemini CLI - [Fecha: 2025-08-01]**
+
+**Contexto:**
+Se ha implementado un nuevo endpoint `/api/inventario/bulk-load` para manejar la carga masiva de ítems de inventario desde un archivo Excel.
+
+**Cambios Realizados:**
+
+1.  **Creación del Endpoint `/api/inventario/bulk-load` en `app/routes.php`:**
+    *   **Recepción de Datos:** El endpoint recibe un payload JSON con los ítems de inventario a procesar.
+    *   **Validación y Normalización:** Se valida la presencia de campos esenciales (`Rollo`, `Nombre`, `Cantidad`, `Unidad`, `Costo`, `Departamento`). El valor de `Rollo` se normaliza (mayúsculas, sin guiones bajos) para búsquedas insensibles a mayúsculas/minúsculas y guiones bajos.
+    *   **Mapeo de Departamentos:** Se mapea el nombre del departamento recibido a su ID correspondiente utilizando la tabla `departamentos`.
+    *   **Lógica de Inserción/Actualización:**
+        *   Se verifica si un ítem de inventario ya existe en la base de datos utilizando el `Rollo` normalizado.
+        *   Si el ítem existe, se actualizan sus datos.
+        *   Si el ítem no existe, se inserta como un nuevo registro.
+    *   **Manejo de Errores:** Se capturan y reportan errores durante el procesamiento, incluyendo ítems incompletos o departamentos no encontrados.
+
+**Impacto:**
+Este nuevo endpoint proporciona una forma robusta y eficiente de cargar y gestionar grandes volúmenes de datos de inventario, asegurando la integridad y consistencia de la información mediante validaciones y lógica de inserción/actualización inteligente.
+---
+---
+**Interacción con Gemini CLI - [Fecha: 2025-08-01]**
+
+**Contexto:**
 Se ha solucionado un error complejo en el endpoint `/api/products/bulk-load` que impedía la carga masiva de productos. El problema se manifestó en varias etapas, desde la recepción de datos hasta el manejo de la base de datos.
 
 **Análisis y Solución en Etapas:**
@@ -40,7 +86,7 @@ if (is_object($data)) {
 ```
 
 **Impacto:**
-Con esta modificación, el endpoint ahora es más robusto y puede manejar correctamente el JSON de entrada, solucionando el error y permitiendo que la carga masiva de productos funcione como se esperaba.
+Con esta modificación, el endpoint ahora es más robusto y puede manejar correctamente el JSON de entrada, solucionando el error y permitiendo que la lógica de carga masiva de productos funcione como se esperaba.
 ---
 ---
 **Interacción con Gemini CLI - [Fecha: 2025-08-01]**
@@ -238,6 +284,7 @@ Se eliminaron las transacciones (`beginTransaction`, `commit`, `rollBack`) del e
 **Impacto:**
 El endpoint ahora opera sin transacciones explícitas, lo que puede simplificar la lógica pero requiere un manejo cuidadoso de los errores para asegurar la consistencia de los datos.
 
+---
 ---
 **Interacción con Gemini CLI - [Fecha: 2025-08-01]**
 

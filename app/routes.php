@@ -524,6 +524,193 @@ return function (App $app) {
     }
   });
 
+  $app->get('/api/inventario/template-excel', function (Request $request, Response $response) {
+    try {
+      $localConnection = new LocalDB();
+
+      // Obtener departamentos para la lista de validación
+      $departamentos = $localConnection->goQuery("SELECT _id, departamento FROM departamentos");
+
+      // Obtener rollos existentes para validación de unicidad
+      $rollosExistentes = $localConnection->goQuery("SELECT rollo FROM inventario WHERE rollo IS NOT NULL AND rollo <> ''");
+
+      $localConnection->disconnect();
+
+      // Create new Spreadsheet object
+      $spreadsheet = new Spreadsheet();
+
+      // --- Sheet: Inventario ---
+      $sheetInventario = $spreadsheet->getActiveSheet();
+      $sheetInventario->setTitle('Inventario');
+
+      // Set headers for Inventario sheet
+      $headersInventario = ['Rollo', 'Nombre', 'Cantidad', 'Unidad', 'Costo', 'Rendimiento', 'Departamento'];
+      $sheetInventario->fromArray($headersInventario, NULL, 'A1');
+
+      // Set column widths for Inventario sheet
+      foreach (range('A', 'G') as $col) { // Adjusted range for new headers
+          $sheetInventario->getColumnDimension($col)->setAutoSize(true);
+      }
+
+      // --- Hidden Sheet: ListadoRollosNormalizado ---
+      $sheetRollosNormalizado = $spreadsheet->createSheet();
+      $sheetRollosNormalizado->setTitle('ListadoRollosNormalizado');
+      $sheetRollosNormalizado->setCellValue('A1', 'Rollo_Normalizado'); // Header
+      $row = 2;
+      foreach ($rollosExistentes as $rollo) {
+          $normalizedRollo = strtoupper(str_replace('_', '', $rollo['rollo']));
+          $sheetRollosNormalizado->setCellValue('A' . $row, $normalizedRollo);
+          $row++;
+      }
+      $sheetRollosNormalizado->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
+
+      // --- Hidden Sheet: ListadoUnidades ---
+      $sheetUnidades = $spreadsheet->createSheet();
+      $sheetUnidades->setTitle('ListadoUnidades');
+      $unidades = ['Metros', 'Kilos', 'Unidades'];
+      $sheetUnidades->fromArray([['Unidad']], NULL, 'A1'); // Header
+      $row = 2;
+      foreach ($unidades as $unidad) {
+          $sheetUnidades->setCellValue('A' . $row, $unidad);
+          $row++;
+      }
+      $sheetUnidades->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN); // Hide the sheet
+
+      // --- Hidden Sheet: ListadoDepartamentos ---
+      $sheetDepartamentos = $spreadsheet->createSheet();
+      $sheetDepartamentos->setTitle('ListadoDepartamentos');
+      $sheetDepartamentos->fromArray([['ID', 'Nombre']], NULL, 'A1'); // Headers for hidden sheet
+      $row = 2;
+      foreach ($departamentos as $departamento) {
+          $sheetDepartamentos->setCellValue('A' . $row, $departamento['_id']);
+          $sheetDepartamentos->setCellValue('B' . $row, $departamento['departamento']);
+          $row++;
+      }
+      $sheetDepartamentos->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN); // Hide the sheet
+
+      // --- Data Validation for Inventario sheet ---
+      // Rollo (Column A) - Custom validation for uniqueness (case-insensitive, underscore-insensitive)
+      $rolloValidation = $sheetInventario->getCell('A2')->getDataValidation();
+      $rolloValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_CUSTOM);
+      $rolloValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+      $rolloValidation->setAllowBlank(false);
+      $rolloValidation->setShowErrorMessage(true);
+      $rolloValidation->setErrorTitle('Rollo Duplicado');
+      $rolloValidation->setError('El Rollo que ingresó ya existe en la base de datos o en este mismo archivo.');
+      $formula = 'AND(COUNTIF(ListadoRollosNormalizado!A:A, SUBSTITUTE(UPPER(A2),"_",""))=0, COUNTIF(A:A,A2)=1)';
+      $rolloValidation->setFormula1($formula);
+
+      // Nombre (Column B) - No specific validation, can be text
+
+      // Cantidad (Column C) - Numeric validation
+      $cantidadValidation = $sheetInventario->getCell('C2')->getDataValidation();
+      $cantidadValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_DECIMAL);
+      $cantidadValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+      $cantidadValidation->setAllowBlank(false);
+      $cantidadValidation->setShowErrorMessage(true);
+      $cantidadValidation->setErrorTitle('Cantidad Inválida');
+      $cantidadValidation->setError('La cantidad debe ser un número.');
+      $cantidadValidation->setFormula1('0'); // Minimum value
+      $cantidadValidation->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_GREATERTHANOREQUAL);
+
+      // Unidad (Column D) - List validation
+      $unidadValidation = $sheetInventario->getCell('D2')->getDataValidation();
+      $unidadValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+      $unidadValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);
+      $unidadValidation->setAllowBlank(false);
+      $unidadValidation->setShowInputMessage(true);
+      $unidadValidation->setShowErrorMessage(true);
+      $unidadValidation->setShowDropDown(true);
+      $unidadValidation->setErrorTitle('Error de entrada');
+      $unidadValidation->setError('El valor no está en la lista de unidades.');
+      $unidadValidation->setPromptTitle('Seleccionar Unidad');
+      $unidadValidation->setPrompt('Por favor, seleccione una unidad de la lista (Metros, Kilos, Unidades).');
+      $unidadValidation->setFormula1("'ListadoUnidades'!A$2:A$" . (count($unidades) + 1)); // Reference to names in hidden sheet
+
+      // Costo (Column E) - Numeric validation
+      $costoValidation = $sheetInventario->getCell('E2')->getDataValidation();
+      $costoValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_DECIMAL);
+      $costoValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+      $costoValidation->setAllowBlank(false);
+      $costoValidation->setShowErrorMessage(true);
+      $costoValidation->setErrorTitle('Costo Inválido');
+      $costoValidation->setError('El costo debe ser un número.');
+      $costoValidation->setFormula1('0'); // Minimum value
+      $costoValidation->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_GREATERTHANOREQUAL);
+
+      // Rendimiento (Column F) - Numeric validation
+      $rendimientoValidation = $sheetInventario->getCell('F2')->getDataValidation();
+      $rendimientoValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_DECIMAL);
+      $rendimientoValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+      $rendimientoValidation->setAllowBlank(true); // Can be blank
+      $rendimientoValidation->setShowErrorMessage(true);
+      $rendimientoValidation->setErrorTitle('Rendimiento Inválido');
+      $rendimientoValidation->setError('El rendimiento debe ser un número.');
+      $rendimientoValidation->setFormula1('0'); // Minimum value
+      $rendimientoValidation->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_GREATERTHANOREQUAL);
+
+      // Departamento (Column G) - List validation
+      $departamentoValidation = $sheetInventario->getCell('G2')->getDataValidation();
+      $departamentoValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+      $departamentoValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);
+      $departamentoValidation->setAllowBlank(false);
+      $departamentoValidation->setShowInputMessage(true);
+      $departamentoValidation->setShowErrorMessage(true);
+      $departamentoValidation->setShowDropDown(true);
+      $departamentoValidation->setErrorTitle('Error de entrada');
+      $departamentoValidation->setError('El valor no está en la lista de departamentos.');
+      $departamentoValidation->setPromptTitle('Seleccionar Departamento');
+      $departamentoValidation->setPrompt('Por favor, seleccione un departamento de la lista.');
+      $departamentoValidation->setFormula1("'ListadoDepartamentos'!B$2:B$" . (count($departamentos) + 1)); // Reference to names in hidden sheet
+
+      // Apply validation to a range (e.g., up to row 1000)
+      for ($i = 2; $i <= 1000; $i++) {
+          $sheetInventario->getCell('A' . $i)->setDataValidation(clone $rolloValidation); // Apply to Rollo column
+          $sheetInventario->getCell('C' . $i)->setDataValidation(clone $cantidadValidation);
+          $sheetInventario->getCell('D' . $i)->setDataValidation(clone $unidadValidation);
+          $sheetInventario->getCell('E' . $i)->setDataValidation(clone $costoValidation);
+          $sheetInventario->getCell('F' . $i)->setDataValidation(clone $rendimientoValidation);
+          $sheetInventario->getCell('G' . $i)->setDataValidation(clone $departamentoValidation);
+      }
+
+      // Save the Excel file
+      $fileName = 'plantilla_inventario_' . ID_EMPRESA . '.xlsx';
+      $outputDirectory = __DIR__ . '/../public/downloads/carga_inventario/'; // New directory for inventory templates
+      $filePath = $outputDirectory . $fileName;
+
+      // Ensure the directory exists
+      if (!file_exists($outputDirectory)) {
+          mkdir($outputDirectory, 0777, true);
+      }
+
+      $writer = new Xlsx($spreadsheet);
+      $writer->save($filePath);
+
+      // Generate the file URL with a cache-busting query parameter
+      $fileUrl = '/downloads/carga_inventario/' . $fileName . '?v=' . time();
+
+      // Return success response with file URL
+      $response->getBody()->write(json_encode([
+          'success' => true,
+          'message' => 'Plantilla Excel de inventario generada exitosamente.',
+          'file_url' => $fileUrl
+      ], JSON_NUMERIC_CHECK));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+    } catch (\Exception $e) {
+      error_log("Error generating Excel for inventory: " . $e->getMessage());
+      $response->getBody()->write(json_encode([
+          'success' => false,
+          'message' => 'Error al generar la plantilla Excel de inventario. Por favor, inténtelo de nuevo más tarde.',
+          'error_details' => $e->getMessage() // Solo para depuración, quitar en producción
+      ], JSON_NUMERIC_CHECK));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(500);
+    }
+  });
+
   $app->get('/api/products/template-excel-test', function (Request $request, Response $response) {
     // Conexiona a la base de datos
     $localConnection = new LocalDB();
@@ -650,6 +837,109 @@ return function (App $app) {
 
     } catch (Exception $e) {
         $response->getBody()->write(json_encode(['error' => 'Error al procesar la carga masiva: ' . $e->getMessage()]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+        $db->disconnect();
+    }
+});
+
+  $app->post('/api/inventario/bulk-load', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+
+    // Forzar la conversión a array asociativo para asegurar compatibilidad
+    if (is_object($data)) {
+        $data = json_decode(json_encode($data), true);
+    }
+
+    $inventoryItems = is_string($data['inventoryItems']) ? json_decode($data['inventoryItems'], true) : ($data['inventoryItems'] ?? []);
+
+    if (empty($inventoryItems)) {
+        $response->getBody()->write(json_encode(['error' => 'No se enviaron ítems de inventario para procesar.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $db = new LocalDB();
+
+    try {
+        // Obtener mapeos para convertir nombres de departamentos a IDs
+        $departamentos_db = $db->goQuery("SELECT _id, departamento FROM departamentos");
+        $departamento_map = array_column($departamentos_db, '_id', 'departamento');
+
+        $processed_count = 0;
+        $error_list = [];
+
+        foreach ($inventoryItems as $item) {
+            $rollo = $item['Rollo'] ?? null;
+            $insumo = $item['Nombre'] ?? null;
+            $cantidad = $item['Cantidad'] ?? null;
+            $unidad = $item['Unidad'] ?? null;
+            $costo = $item['Costo'] ?? null;
+            $rendimiento = $item['Rendimiento'] ?? null;
+            $departamento_nombre = $item['Departamento'] ?? null;
+
+            // Validaciones básicas
+            if (empty($rollo) || empty($insumo) || empty($cantidad) || empty($unidad) || empty($costo) || empty($departamento_nombre)) {
+                $error_list[] = "Ítem de inventario incompleto (Rollo: {$rollo}, Nombre: {$insumo}). Se omitió.";
+                continue;
+            }
+
+            // Normalizar Rollo para la búsqueda
+            $normalized_rollo = strtoupper(str_replace('_', '', $rollo));
+
+            // Mapear el nombre del Departamento a su ID
+            $departamento_id = $departamento_map[$departamento_nombre] ?? null;
+
+            if ($departamento_id === null) {
+                $error_list[] = "Departamento '{$departamento_nombre}' no encontrado para el rollo {$rollo}. Se omitió.";
+                continue;
+            }
+
+            // Verificar si el ítem de inventario ya existe por Rollo (normalizado)
+            $check_sql = "SELECT _id, rollo FROM inventario WHERE REPLACE(UPPER(rollo), '_', '') = ?";
+            $existing_item = $db->goQuery($check_sql, [$normalized_rollo]);
+
+            $item_id = null;
+
+            if ($existing_item) {
+                // Lógica de ACTUALIZACIÓN
+                $item_id = $existing_item[0]['_id'];
+                $update_sql = "UPDATE inventario SET insumo = ?, unidad = ?, costo = ?, rendimiento = ?, cantidad = ?, departamento = ? WHERE _id = ?";
+                $db->goQuery($update_sql, [
+                    $insumo,
+                    $unidad,
+                    $costo,
+                    $rendimiento,
+                    $cantidad,
+                    $departamento_nombre,
+                    $item_id
+                ]);
+            } else {
+                // Lógica de INSERCIÓN
+                $insert_sql = "INSERT INTO inventario (rollo, insumo, unidad, costo, rendimiento, cantidad, departamento) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                $db->goQuery($insert_sql, [
+                    $rollo,
+                    $insumo,
+                    $unidad,
+                    $costo,
+                    $rendimiento,
+                    $cantidad,
+                    $departamento_nombre
+                ]);
+                $item_id = $db->getLastID(); // Se asume que LocalDB tiene un método para obtener el último ID
+            }
+            $processed_count++;
+        }
+
+        $message = "Carga masiva de inventario completada. Se procesaron {$processed_count} ítems.";
+        if (!empty($error_list)) {
+            $message .= " Errores: " . implode(', ', $error_list);
+        }
+
+        $response->getBody()->write(json_encode(['message' => $message]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (Exception $e) {
+        $response->getBody()->write(json_encode(['error' => 'Error al procesar la carga masiva de inventario: ' . $e->getMessage()]));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
         $db->disconnect();
