@@ -4,6 +4,7 @@
 # Archivos de logs, cache y temporales
 /var/
 /tmp/
+deploy_log_*.log
 
 # Archivos de configuración de entorno (¡MUY IMPORTANTE!)
 # Si tienes un archivo .env con contraseñas o claves de API, añádelo aquí.
@@ -20,3 +21,23 @@
 Thumbs.db
 .idea/
 .vscode/
+
+# Script de despliegue y backups
+/deploy.sh
+/backups/
+restore_backup.sh
+
+# Reportes
+reporte.md
+
+# Contenido autogenerado en public
+/public/error_log
+/public/php_errorlog
+/public/*.xlsx
+/public/downloads/carga_productos/*
+/public/images/*
+!/public/images/no-image.png
+/public/ssl.cert
+/public/ssl.combined
+/public/ssl.everything
+/public/ssl.key
