@@ -58,6 +58,7 @@ return function (App $app) {
     // Obtener el parámetro de consulta `id_empresa`
     $queryParams = $request->getQueryParams();
     $array['id_empresa'] = ID_EMPRESA;
+    $array['test'] = 'Modificacion 02';
 
     $response->getBody()->write(json_encode($array, JSON_NUMERIC_CHECK));
 
@@ -364,31 +365,51 @@ return function (App $app) {
   $app->get('/api/products/template-excel', function (Request $request, Response $response) {
     try {
       $localConnection = new LocalDB();
-      // CATEGORIAS
-      $categories = $localConnection->goQuery("SELECT _id, nombre FROM categories");
-      // CATEGORIAS
-      $categories = $localConnection->goQuery("SELECT _id, nombre FROM categories");
 
-      // ATRIBUTOS
+      // Obtener categorías y atributos para las listas de validación y mapeo
+      $categories = $localConnection->goQuery("SELECT _id, nombre FROM categories");
       $attributes = $localConnection->goQuery("SELECT _id, attribute_name FROM products_attributes");
+
+      // Mapear categorías por ID para fácil acceso
+      $categoryMap = [];
+      foreach ($categories as $cat) {
+          $categoryMap[$cat['_id']] = $cat['nombre'];
+      }
+
+      // Obtener productos existentes (filtrando SKUs nulos o vacíos)
+      $products = $localConnection->goQuery("SELECT _id, product, sku, fisico, price, comision, stock_quantity, product_description, category_ids FROM products WHERE sku IS NOT NULL AND sku <> ''");
+
+      
 
       $localConnection->disconnect();
 
       // Create new Spreadsheet object
       $spreadsheet = new Spreadsheet();
 
-      // --- Sheet: Products ---
+      // --- Sheet: Products (now for new products only) ---
       $sheetProducts = $spreadsheet->getActiveSheet();
       $sheetProducts->setTitle('Productos');
 
       // Set headers for Products sheet
-      $headersProducts = ['SKU', 'Nombre', 'Descripción', 'Stock', 'Categoría', 'Atributos', 'Precio Venta', 'Precio Costo', 'Activo'];
+      $headersProducts = ['SKU', 'Nombre', 'Precios', 'Precio Descripción', 'Categoría', 'Atributos'];
       $sheetProducts->fromArray($headersProducts, NULL, 'A1');
 
       // Set column widths for Products sheet
-      foreach (range('A', 'I') as $col) {
+      foreach (range('A', 'F') as $col) { // Adjusted range
           $sheetProducts->getColumnDimension($col)->setAutoSize(true);
       }
+
+      // --- Hidden Sheet: ListadoSKUNormalizado ---
+      $sheetSKUNormalizado = $spreadsheet->createSheet();
+      $sheetSKUNormalizado->setTitle('ListadoSKUNormalizado');
+      $sheetSKUNormalizado->setCellValue('A1', 'SKU_Normalizado'); // Header
+      $row = 2;
+      foreach ($products as $product) {
+          $normalizedSku = strtoupper(str_replace('_', '', $product['sku']));
+          $sheetSKUNormalizado->setCellValue('A' . $row, $normalizedSku);
+          $row++;
+      }
+      $sheetSKUNormalizado->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
 
       // --- Hidden Sheet: ListadoCategorias ---
       $sheetCategories = $spreadsheet->createSheet();
@@ -414,17 +435,20 @@ return function (App $app) {
       }
       $sheetAttributes->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN); // Hide the sheet
 
-      // --- Hidden Sheet: ListadoSKUNombre (for Prices sheet dropdown) ---
-      $sheetSKUNombre = $spreadsheet->createSheet();
-      $sheetSKUNombre->setTitle('ListadoSKUNombre');
-      $sheetSKUNombre->setCellValue('A1', 'SKU - Nombre del Producto'); // Header
-      // Populate with formulas referencing 'Productos' sheet
-      for ($i = 2; $i <= 1000; $i++) { // Assuming data in 'Productos' sheet goes up to row 1000
-          $sheetSKUNombre->setCellValue('A' . $i, '=\'Productos\'!A' . $i . '&" - "&\'Productos\'!B' . $i);
-      }
-      $sheetSKUNombre->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN); // Hide the sheet
+      
 
-      // --- Data Validation for Products sheet ---
+      // --- Data Validation for Products sheet (CORRECTED) ---
+      // SKU (Column A) - Custom validation for uniqueness (case-insensitive, underscore-insensitive)
+      $skuValidation = $sheetProducts->getCell('A2')->getDataValidation();
+      $skuValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_CUSTOM);
+      $skuValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+      $skuValidation->setAllowBlank(false);
+      $skuValidation->setShowErrorMessage(true);
+      $skuValidation->setErrorTitle('SKU Duplicado');
+      $skuValidation->setError('El SKU que ingresó ya existe en la base de datos o en este mismo archivo.');
+      $formula = 'AND(COUNTIF(ListadoSKUNormalizado!A:A, SUBSTITUTE(UPPER(A2),"_",""))=0, COUNTIF(A:A,A2)=1)';
+      $skuValidation->setFormula1($formula);
+
       // Category (Column E)
       $categoryValidation = $sheetProducts->getCell('E2')->getDataValidation();
       $categoryValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
@@ -437,9 +461,7 @@ return function (App $app) {
       $categoryValidation->setError('El valor no está en la lista.');
       $categoryValidation->setPromptTitle('Seleccionar Categoría');
       $categoryValidation->setPrompt('Por favor, seleccione una categoría de la lista.');
-      $categoryValidation->setFormula1("'ListadoCategorias'!
-B$2:
-B$" . (count($categories) + 1)); // Reference to names in hidden sheet
+      $categoryValidation->setFormula1("'ListadoCategorias'!B$2:B$" . (count($categories) + 1)); // Reference to names in hidden sheet
 
       // Attributes (Column F)
       $attributeValidation = $sheetProducts->getCell('F2')->getDataValidation();
@@ -453,71 +475,16 @@ B$" . (count($categories) + 1)); // Reference to names in hidden sheet
       $attributeValidation->setError('El valor no está en la lista de atributos.');
       $attributeValidation->setPromptTitle('Seleccionar Atributo');
       $attributeValidation->setPrompt('Por favor, seleccione un atributo de la lista.');
-      $attributeValidation->setFormula1("'ListadoAtributos'!
-B$2:
-B$" . (count($attributes) + 1)); // Reference to names in hidden sheet
-
-      // Active (Column I)
-      $activeValidation = $sheetProducts->getCell('I2')->getDataValidation();
-      $activeValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
-      $activeValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);
-      $activeValidation->setAllowBlank(false);
-      $activeValidation->setShowInputMessage(true);
-      $activeValidation->setShowErrorMessage(true);
-      $activeValidation->setShowDropDown(true);
-      $activeValidation->setErrorTitle('Error de entrada');
-      $activeValidation->setError('El valor debe ser "Sí" o "No".');
-      $activeValidation->setPromptTitle('Producto Activo');
-      $activeValidation->setPrompt('Seleccione "Sí" para activo o "No" para inactivo.');
-      $activeValidation->setFormula1('"Sí,No"'); // Direct list
+      $attributeValidation->setFormula1("'ListadoAtributos'!B$2:B$" . (count($attributes) + 1)); // Reference to names in hidden sheet
 
       // Apply validation to a range (e.g., up to row 1000 for now, can be adjusted)
       for ($i = 2; $i <= 1000; $i++) {
+          $sheetProducts->getCell('A' . $i)->setDataValidation(clone $skuValidation);
           $sheetProducts->getCell('E' . $i)->setDataValidation(clone $categoryValidation);
           $sheetProducts->getCell('F' . $i)->setDataValidation(clone $attributeValidation); // Apply to Attributes column
-          $sheetProducts->getCell('I' . $i)->setDataValidation(clone $activeValidation);
       }
 
-      // --- Sheet: Prices ---
-      $sheetPrices = $spreadsheet->createSheet();
-      $sheetPrices->setTitle('Precios');
-
-      // Set headers for Prices sheet
-      $headersPrices = ['SKU_Producto', 'Valor_Precio', 'Descripción_Precio'];
-      $sheetPrices->fromArray($headersPrices, NULL, 'A1');
-
-      // Set column widths for Prices sheet
-      foreach (range('A', 'C') as $col) {
-          $sheetPrices->getColumnDimension($col)->setAutoSize(true);
-      }
-
-      // Define named range for SKUs in Products sheet for dynamic validation
-      $spreadsheet->addNamedRange(
-          new \PhpOffice\PhpSpreadsheet\NamedRange(
-              'SKU_Productos',
-              $sheetSKUNombre, // Reference the new hidden sheet with formulas
-              'A2:A1000' // Assuming data in 'ListadoSKUNombre' goes up to row 1000
-          )
-      );
-
-      // Data Validation for SKU_Producto in Prices sheet (Column A)
-      $skuValidation = $sheetPrices->getCell('A2')->getDataValidation();
-      $skuValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
-      $skuValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);
-      $skuValidation->setAllowBlank(false);
-      $skuValidation->setShowInputMessage(true);
-      $skuValidation->setShowErrorMessage(true);
-      $skuValidation->setShowDropDown(true);
-      $skuValidation->setErrorTitle('SKU Inválido');
-      $skuValidation->setError('El SKU seleccionado no existe en la hoja de Productos.');
-      $skuValidation->setPromptTitle('Seleccionar SKU');
-      $skuValidation->setPrompt('Seleccione un SKU de la lista de productos.');
-      $skuValidation->setFormula1('SKU_Productos'); // Reference to the named range
-
-      // Apply SKU validation to a range (e.g., up to row 1000 for now)
-      for ($i = 2; $i <= 1000; $i++) {
-          $sheetPrices->getCell('A' . $i)->setDataValidation(clone $skuValidation);
-      }
+      
 
       // Save the Excel file
       $fileName = 'plantilla_productos_' . ID_EMPRESA . '.xlsx';
@@ -532,8 +499,8 @@ B$" . (count($attributes) + 1)); // Reference to names in hidden sheet
       $writer = new Xlsx($spreadsheet);
       $writer->save($filePath);
 
-      // Generate the file URL
-      $fileUrl = '/downloads/carga_productos/' . $fileName;
+      // Generate the file URL with a cache-busting query parameter
+      $fileUrl = '/downloads/carga_productos/' . $fileName . '?v=' . time();
 
       // Return success response with file URL
       $response->getBody()->write(json_encode([
@@ -588,6 +555,109 @@ B$" . (count($attributes) + 1)); // Reference to names in hidden sheet
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
   });
+/* 
+  $app->post('/api/products/bulk-load', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $products = $data['products'] ?? [];
+
+    if (empty($products)) {
+        $response->getBody()->write(json_encode(['error' => 'No se enviaron productos para procesar.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $db = new LocalDB();
+    $pdo = $db->getPDO(); // Asumimos que este método devuelve el objeto PDO para transacciones
+
+    try {
+        $pdo->beginTransaction();
+
+        // 1. Obtener mapeos para convertir nombres de Excel a IDs de la BD
+        $categories_db = $db->goQuery("SELECT _id, nombre FROM categories");
+        $category_map = array_column($categories_db, '_id', 'nombre');
+
+        $processed_count = 0;
+        $error_list = [];
+
+        foreach ($products as $product) {
+            $sku = $product['SKU'] ?? null;
+            if (empty($sku)) {
+                $error_list[] = "Se omitió un producto por no tener SKU.";
+                continue;
+            }
+
+            // 2. Mapear Categoría a ID
+            $category_name = $product['Categoría'] ?? null;
+            $category_id = isset($category_map[$category_name]) ? $category_map[$category_name] : null;
+
+            // 3. Verificar si el producto existe por SKU
+            $check_sql = "SELECT _id FROM products WHERE sku = ?";
+            $existing_product = $db->goQuery($check_sql, [$sku]);
+
+            $product_id = null;
+
+            if ($existing_product) {
+                // Lógica de ACTUALIZACIÓN
+                $product_id = $existing_product[0]['_id'];
+                $update_sql = "UPDATE products SET product = ?, stock_quantity = ?, category_ids = ? WHERE _id = ?";
+                $db->goQuery($update_sql, [
+                    $product['Nombre'] ?? 'Sin Nombre',
+                    $product['Stock'] ?? 0,
+                    $category_id,
+                    $product_id
+                ]);
+
+                // Borrar precios antiguos para reemplazarlos
+                $delete_prices_sql = "DELETE FROM products_prices WHERE id_product = ?";
+                $db->goQuery($delete_prices_sql, [$product_id]);
+
+            } else {
+                // Lógica de INSERCIÓN
+                $insert_sql = "INSERT INTO products (product, sku, stock_quantity, category_ids) VALUES (?, ?, ?, ?)";
+                $db->goQuery($insert_sql, [
+                    $product['Nombre'] ?? 'Sin Nombre',
+                    $sku,
+                    $product['Stock'] ?? 0,
+                    $category_id
+                ]);
+                $product_id = $db->getLastID(); // Asumimos que este método existe en LocalDB
+            }
+
+            // 4. Insertar los precios (para productos nuevos y actualizados)
+            if ($product_id && isset($product['precios']) && is_array($product['precios'])) {
+                foreach ($product['precios'] as $price_info) {
+                    if (isset($price_info['valor']) && isset($price_info['descripcion'])) {
+                        $insert_price_sql = "INSERT INTO products_prices (id_product, price, descripcion) VALUES (?, ?, ?)";
+                        $db->goQuery($insert_price_sql, [
+                            $product_id,
+                            $price_info['valor'],
+                            $price_info['descripcion']
+                        ]);
+                    }
+                }
+            }
+            $processed_count++;
+        }
+
+        $pdo->commit();
+
+        $message = "Carga masiva completada. Se procesaron {$processed_count} productos.";
+        if (!empty($error_list)) {
+            $message .= " Errores: " . implode(', ', $error_list);
+        }
+
+        $response->getBody()->write(json_encode(['message' => $message]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $response->getBody()->write(json_encode(['error' => 'Error crítico en la transacción: ' . $e->getMessage()]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+        $db->disconnect();
+    }
+  }); */
 
   /** * PRUEBAS DE HISTÓRICO */
 
@@ -2709,6 +2779,28 @@ DESC;";
 
     if (is_null($inicio) || is_null($fin)) {
       $sql = "SELECT
+    met._id,
+    ord._id orden,
+    ord.responsable id_empleado,
+    emp.nombre empleado,
+    met.metodo_pago,
+    met.monto,
+    met.detalle,
+    met.tasa,
+    met.moneda,
+    DATE_FORMAT(met.moment, '%d/%m/%Y') AS fecha,
+    DATE_FORMAT(met.moment, '%h:%i %p') AS hora
+FROM
+    metodos_de_pago met
+JOIN ordenes ord ON met.id_orden = ord._id
+JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
+WHERE
+    YEAR(met.moment) = YEAR(CURDATE())
+    -- AND MONTH(met.moment) = MONTH(CURDATE()) -- Comentar esta línea
+    {$searchVendedor}
+ORDER BY
+    met.id_orden DESC, met.moment ASC;";
+      /* $sql = "SELECT
                 met._id,
                 ord._id orden,
                 ord.responsable id_empleado,
@@ -2730,7 +2822,7 @@ DESC;";
                 " . $searchVendedor . '
             ORDER BY
                 met.id_orden DESC, met.moment ASC;
-            ';
+            '; */
     } else {
       $sql = "SELECT
                 met._id,
