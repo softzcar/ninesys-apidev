@@ -555,10 +555,16 @@ return function (App $app) {
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
   });
-/* 
+
   $app->post('/api/products/bulk-load', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
-    $products = $data['products'] ?? [];
+
+    // Forzar la conversión a array asociativo para asegurar compatibilidad
+    if (is_object($data)) {
+        $data = json_decode(json_encode($data), true);
+    }
+
+    $products = is_string($data['products']) ? json_decode($data['products'], true) : ($data['products'] ?? []);
 
     if (empty($products)) {
         $response->getBody()->write(json_encode(['error' => 'No se enviaron productos para procesar.']));
@@ -566,12 +572,9 @@ return function (App $app) {
     }
 
     $db = new LocalDB();
-    $pdo = $db->getPDO(); // Asumimos que este método devuelve el objeto PDO para transacciones
 
     try {
-        $pdo->beginTransaction();
-
-        // 1. Obtener mapeos para convertir nombres de Excel a IDs de la BD
+        // 1. Obtener mapeos para convertir nombres de categorías a IDs
         $categories_db = $db->goQuery("SELECT _id, nombre FROM categories");
         $category_map = array_column($categories_db, '_id', 'nombre');
 
@@ -585,11 +588,11 @@ return function (App $app) {
                 continue;
             }
 
-            // 2. Mapear Categoría a ID
+            // 2. Mapear el nombre de la Categoría a su ID
             $category_name = $product['Categoría'] ?? null;
-            $category_id = isset($category_map[$category_name]) ? $category_map[$category_name] : null;
+            $category_id = $category_map[$category_name] ?? null;
 
-            // 3. Verificar si el producto existe por SKU
+            // 3. Verificar si el producto ya existe por SKU
             $check_sql = "SELECT _id FROM products WHERE sku = ?";
             $existing_product = $db->goQuery($check_sql, [$sku]);
 
@@ -598,10 +601,9 @@ return function (App $app) {
             if ($existing_product) {
                 // Lógica de ACTUALIZACIÓN
                 $product_id = $existing_product[0]['_id'];
-                $update_sql = "UPDATE products SET product = ?, stock_quantity = ?, category_ids = ? WHERE _id = ?";
+                $update_sql = "UPDATE products SET product = ?, category_ids = ? WHERE _id = ?";
                 $db->goQuery($update_sql, [
                     $product['Nombre'] ?? 'Sin Nombre',
-                    $product['Stock'] ?? 0,
                     $category_id,
                     $product_id
                 ]);
@@ -612,19 +614,19 @@ return function (App $app) {
 
             } else {
                 // Lógica de INSERCIÓN
-                $insert_sql = "INSERT INTO products (product, sku, stock_quantity, category_ids) VALUES (?, ?, ?, ?)";
+                $insert_sql = "INSERT INTO products (product, sku, category_ids, fisico) VALUES (?, ?, ?, 1)";
                 $db->goQuery($insert_sql, [
                     $product['Nombre'] ?? 'Sin Nombre',
                     $sku,
-                    $product['Stock'] ?? 0,
                     $category_id
                 ]);
-                $product_id = $db->getLastID(); // Asumimos que este método existe en LocalDB
+                $product_id = $db->getLastID(); // Se asume que LocalDB tiene un método para obtener el último ID
             }
 
-            // 4. Insertar los precios (para productos nuevos y actualizados)
+            // 4. Insertar los precios (tanto para productos nuevos como actualizados)
             if ($product_id && isset($product['precios']) && is_array($product['precios'])) {
                 foreach ($product['precios'] as $price_info) {
+                    // Asegurarse de que tanto el valor como la descripción existan
                     if (isset($price_info['valor']) && isset($price_info['descripcion'])) {
                         $insert_price_sql = "INSERT INTO products_prices (id_product, price, descripcion) VALUES (?, ?, ?)";
                         $db->goQuery($insert_price_sql, [
@@ -638,8 +640,6 @@ return function (App $app) {
             $processed_count++;
         }
 
-        $pdo->commit();
-
         $message = "Carga masiva completada. Se procesaron {$processed_count} productos.";
         if (!empty($error_list)) {
             $message .= " Errores: " . implode(', ', $error_list);
@@ -649,15 +649,12 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
     } catch (Exception $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        $response->getBody()->write(json_encode(['error' => 'Error crítico en la transacción: ' . $e->getMessage()]));
+        $response->getBody()->write(json_encode(['error' => 'Error al procesar la carga masiva: ' . $e->getMessage()]));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
         $db->disconnect();
     }
-  }); */
+});
 
   /** * PRUEBAS DE HISTÓRICO */
 
