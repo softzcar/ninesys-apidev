@@ -297,3 +297,42 @@ Se modificó la línea 581 en `app/routes.php` para decodificar explícitamente 
 **Impacto:**
 El endpoint ahora procesa correctamente el payload de entrada, eliminando el error `foreach()` y permitiendo que la lógica de carga masiva de productos continúe su ejecución.
 ---
+**Interacción con Gemini CLI - [Fecha: 2025-08-06]**
+
+**Contexto:**
+Se ha implementado un CRUD completo para la nueva tabla `catalogo_impresoras`.
+
+**Cambios Realizados:**
+
+1.  **Creación de Endpoints CRUD en `app/routes.php`:**
+    *   `POST /impresoras`: Para crear una nueva impresora.
+    *   `GET /impresoras`: Para obtener todas las impresoras.
+    *   `PUT /impresoras/{id}`: Para actualizar una impresora existente.
+    *   `DELETE /impresoras/{id}`: Para eliminar una impresora.
+
+**Impacto:**
+La nueva funcionalidad permite a los usuarios gestionar el catálogo de impresoras a través de la API, facilitando la administración de los recursos de impresión de la empresa.
+
+---
+**Interacción con Gemini CLI - [Fecha: 2025-08-06]**
+
+**Contexto:**
+Se solucionó un problema en el endpoint `POST /impresoras` donde el cuerpo de la solicitud JSON no era parseado correctamente por el framework Slim, resultando en un `parsed_body` nulo y el error "El campo codigo_interno es obligatorio.".
+
+**Análisis y Solución:**
+Se determinó que la causa principal era la ausencia de la cabecera `Content-Type: application/json` en las solicitudes. Aunque se intentó una corrección inicial para forzar la conversión a array asociativo, la solución definitiva implicó que el cliente enviara los datos utilizando `application/x-www-form-urlencoded` (común con `URLSearchParams` en Axios), lo cual es manejado nativamente por `$request->getParsedBody()` de Slim.
+
+**Impacto:**
+El endpoint `POST /impresoras` ahora funciona correctamente, permitiendo la creación de nuevas impresoras cuando los datos se envían como `application/x-www-form-urlencoded`.
+
+---
+**Interacción con Gemini CLI - [Fecha: 2025-08-06]**
+
+**Contexto:**
+Se corrigió un error en el endpoint `PUT /impresoras/{id}` que resultaba en un `parsed_body` nulo y el error "foreach() argument must be of type array|object, null given". Esto se debe a que Slim no parsea automáticamente el cuerpo de las solicitudes `PUT` de la misma manera que las `POST`.
+
+**Análisis y Solución:**
+Se modificó el endpoint para leer el cuerpo de la solicitud sin procesar (`$request->getBody()`) y analizarlo manualmente utilizando `parse_str()` para convertir la cadena `application/x-www-form-urlencoded` en un array asociativo PHP.
+
+**Impacto:**
+El endpoint `PUT /impresoras/{id}` ahora puede recibir y procesar correctamente los datos enviados en el cuerpo de la solicitud, permitiendo la actualización de impresoras existentes.

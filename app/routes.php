@@ -946,6 +946,159 @@ return function (App $app) {
     }
 });
 
+  // CRUD para Catalogo de Impresoras
+  $app->post('/impresoras', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    try {
+        // Validación básica: el codigo_interno es obligatorio
+        if (empty($data['codigo_interno'])) {
+            $response->getBody()->write(json_encode(['error' => 'El campo codigo_interno es obligatorio.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $sql = "INSERT INTO catalogo_impresoras (codigo_interno, marca, modelo, ubicacion, tipo_tecnologia, estado, notas) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        
+        $params = [
+            $data['codigo_interno'],
+            $data['marca'] ?? null,
+            $data['modelo'] ?? null,
+            $data['ubicacion'] ?? null,
+            $data['tipo_tecnologia'] ?? null,
+            $data['estado'] ?? 'activa', // Valor por defecto 'activa'
+            $data['notas'] ?? null
+        ];
+
+        $localConnection->goQuery($sql, $params);
+        $new_id = $localConnection->getLastID();
+
+        $response->getBody()->write(json_encode(['message' => 'Impresora creada exitosamente.', 'id' => $new_id]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(201); // 201 Created
+
+    } catch (Exception $e) {
+        // Manejo de error, por ejemplo, si el codigo_interno ya existe (duplicado)
+        if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+            $response->getBody()->write(json_encode(['error' => 'Error: El codigo_interno ya existe.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(409); // 409 Conflict
+        }
+
+        error_log('Error al crear impresora: ' . $e->getMessage());
+        $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al crear la impresora.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+
+    } finally {
+        $localConnection->disconnect();
+    }
+  });
+
+  $app->get('/impresoras', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    try {
+        $sql = "SELECT _id, codigo_interno, marca, modelo, ubicacion, tipo_tecnologia, estado, notas, moment FROM catalogo_impresoras ORDER BY _id DESC";
+        $data = $localConnection->goQuery($sql);
+
+        $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (Exception $e) {
+        error_log('Error al obtener impresoras: ' . $e->getMessage());
+        $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al obtener las impresoras.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+
+    } finally {
+        $localConnection->disconnect();
+    }
+  });
+
+
+  $app->put('/impresoras/{id}', function (Request $request, Response $response, array $args) {
+    $id_impresora = $args['id'];
+    
+    // Parsear manualmente el cuerpo de la solicitud PUT
+    $raw_body = (string) $request->getBody();
+    parse_str($raw_body, $data);
+
+    $localConnection = new LocalDB();
+
+    try {
+        // Verificar si la impresora existe
+        $check_sql = "SELECT _id FROM catalogo_impresoras WHERE _id = ?";
+        $existing = $localConnection->goQuery($check_sql, [$id_impresora]);
+        if (!$existing) {
+            $response->getBody()->write(json_encode(['error' => 'La impresora con el ID proporcionado no existe.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(404); // Not Found
+        }
+
+        // Construir la consulta de actualización dinámicamente
+        $fields = [];
+        $params = [];
+        $allowed_fields = ['codigo_interno', 'marca', 'modelo', 'ubicacion', 'tipo_tecnologia', 'estado', 'notas'];
+
+        foreach ($data as $key => $value) {
+            if (in_array($key, $allowed_fields)) {
+                $fields[] = "`{$key}` = ?";
+                $params[] = $value;
+            }
+        }
+
+        if (empty($fields)) {
+            $response->getBody()->write(json_encode(['error' => 'No se proporcionaron campos para actualizar.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $sql = "UPDATE catalogo_impresoras SET " . implode(', ', $fields) . " WHERE _id = ?";
+        $params[] = $id_impresora;
+
+        $localConnection->goQuery($sql, $params);
+
+        $response->getBody()->write(json_encode(['message' => 'Impresora actualizada exitosamente.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (Exception $e) {
+        if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+            $response->getBody()->write(json_encode(['error' => 'Error: El codigo_interno ya existe.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(409); // Conflict
+        }
+
+        error_log('Error al actualizar impresora: ' . $e->getMessage());
+        $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al actualizar la impresora.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+
+    } finally {
+        $localConnection->disconnect();
+    }
+  });
+
+  $app->delete('/impresoras/{id}', function (Request $request, Response $response, array $args) {
+    $id_impresora = $args['id'];
+    $localConnection = new LocalDB();
+
+    try {
+        // Opcional: Verificar si la impresora existe antes de intentar eliminarla
+        $check_sql = "SELECT _id FROM catalogo_impresoras WHERE _id = ?";
+        $existing = $localConnection->goQuery($check_sql, [$id_impresora]);
+        if (!$existing) {
+            $response->getBody()->write(json_encode(['error' => 'La impresora con el ID proporcionado no existe.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(404); // Not Found
+        }
+
+        $sql = "DELETE FROM catalogo_impresoras WHERE _id = ?";
+        $localConnection->goQuery($sql, [$id_impresora]);
+
+        $response->getBody()->write(json_encode(['message' => 'Impresora eliminada exitosamente.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (Exception $e) {
+        error_log('Error al eliminar impresora: ' . $e->getMessage());
+        $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al eliminar la impresora.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+
+    } finally {
+        $localConnection->disconnect();
+    }
+  });
+
   /** * PRUEBAS DE HISTÓRICO */
 
   /* $app->get('/h/backup/pagos', function (Request $request, Response $response) {
