@@ -1070,6 +1070,47 @@ return function (App $app) {
     }
   });
 
+  $app->post('/inventario-tintas', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    try {
+        // Validación básica
+        if (empty($data['id_impresora']) || empty($data['id_insumo']) || empty($data['color']) || empty($data['mililitros'])) {
+            $response->getBody()->write(json_encode(['error' => 'Faltan campos obligatorios.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        // PREPARAR FECHA
+        $myDate = new CustomTime();
+        $now = $myDate->today();
+
+        $sql = "INSERT INTO tintas_recargas (id_catalogo_impresora, id_insumo, color, cantidad, fecha_recarga) VALUES (?, ?, ?, ?, ?)";
+        
+        $params = [
+            $data['id_impresora'],
+            $data['id_insumo'],
+            $data['color'],
+            $data['mililitros'],
+            $now
+        ];
+
+        $localConnection->goQuery($sql, $params);
+        $new_id = $localConnection->getLastID();
+
+        $response->getBody()->write(json_encode(['message' => 'Recarga de tinta registrada exitosamente.', 'id' => $new_id]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
+
+    } catch (Exception $e) {
+        error_log('Error al registrar recarga de tinta: ' . $e->getMessage());
+        $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al registrar la recarga.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+
+    } finally {
+        $localConnection->disconnect();
+    }
+  });
+
   $app->delete('/impresoras/{id}', function (Request $request, Response $response, array $args) {
     $id_impresora = $args['id'];
     $localConnection = new LocalDB();
@@ -7033,7 +7074,7 @@ if ($departamento === 'Diseño') {
 
                 $localConnection->disconnect();
 
-                $response->getBody()->write($object);
+                $response->getBody()->write(json_encode($object));
                 return $response
                 ->withHeader('Content-Type', $contentType)
                 ->withStatus(200);
@@ -12357,10 +12398,12 @@ if ($departamento === 'Diseño') {
     $values .= "'" . $misTintas['m'] . "',";
     $values .= "'" . $misTintas['y'] . "',";
     $values .= "'" . $misTintas['k'] . "',";
+    $values .= "'" . $misTintas['w'] . "',";
     $values .= "'" . $misTintas['id_orden'] . "',";
-    $values .= "'" . $misTintas['id_empleado'] . "')";
+    $values .= "'" . $misTintas['id_empleado'] . "',";
+    $values .= "'" . $misTintas['id_impresora'] . "')";
 
-    $sql = 'INSERT INTO tintas (`moment`, `c`, `m`, `y`, `k`, `id_orden`, `id_empleado`) VALUES ' . $values;
+    $sql = 'INSERT INTO tintas (`moment`, `c`, `m`, `y`, `k`, `w`, `id_orden`, `id_empleado`, `id_catalogo_impresoras`) VALUES ' . $values;
     $object['sql'] = $sql;
 
     $object['response'] = json_encode($localConnection->goQuery($sql));
@@ -13787,13 +13830,15 @@ if ($departamento === 'Diseño') {
     $values .= "'" . $miInsumo['cantidad'] . "')";
 
     $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad) VALUES ' . $values . ';';
-    $object = $localConnection->goQuery($sql);
+    $object['response_insert_inventario'] = $localConnection->goQuery($sql);
+    
     $sql = 'SELECT _id last_insert_id FROM inventario ORDER BY _id DESC LIMIT 1;';
     $object = $localConnection->goQuery($sql);
-
-    // Accede al ID del registro insertado
-    /* $sql = "SELECT LAST_INSERT_ID() as last_insert_id";
-        $object['data'] = json_encode($localConnection->goQuery($sql)); */
+    
+    if ($miInsumo['es_tinta']) {
+      $sql = "INSERT INTO `tinta_filtro`(`id_inventario`, `color`) VALUES ({$object[0]['last_insert_id']}, '{$miInsumo['color']}');";
+     $object['response_insert_tinta_filtro'] = $localConnection->goQuery($sql);
+    }
 
     $localConnection->disconnect();
 
@@ -14409,6 +14454,32 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
   });
+
+  // INVENTARIO DE TINTAS
+  $app->get('/inventario-tintas', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+    // $localConnection->conectar();
+
+    $sql = "SELECT
+        a._id id_insumo,
+        b.color,
+        a.costo,
+        a.cantidad
+        FROM
+        inventario a
+        JOIN tinta_filtro b ON b.id_inventario = a._id
+        WHERE a.cantidad > 0";
+
+    $data = $localConnection->goQuery($sql);
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($data,
+        JSON_NUMERIC_CHECK));
+    return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+});
 
   // EFICIENCIA CON DATOS COMPLETOS
   // TODO ESTABLECER PARÁMETROS APRA OBTENER VARIAS ORDENES
