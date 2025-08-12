@@ -876,6 +876,7 @@ return function (App $app) {
             $costo = $item['Costo'] ?? null;
             $rendimiento = $item['Rendimiento'] ?? null;
             $departamento_nombre = $item['Departamento'] ?? null;
+            $sku = $item['SKU'] ?? null;
 
             // Validaciones básicas
             if (empty($rollo) || empty($insumo) || empty($cantidad) || empty($unidad) || empty($costo) || empty($departamento_nombre)) {
@@ -895,7 +896,7 @@ return function (App $app) {
             }
 
             // Verificar si el ítem de inventario ya existe por Rollo (normalizado)
-            $check_sql = "SELECT _id, rollo FROM inventario WHERE REPLACE(UPPER(rollo), '_', '') = ?";
+            $check_sql = "SELECT _id, rollo, sku FROM inventario WHERE REPLACE(UPPER(rollo), '_', '') = ?";
             $existing_item = $db->goQuery($check_sql, [$normalized_rollo]);
 
             $item_id = null;
@@ -903,7 +904,7 @@ return function (App $app) {
             if ($existing_item) {
                 // Lógica de ACTUALIZACIÓN
                 $item_id = $existing_item[0]['_id'];
-                $update_sql = "UPDATE inventario SET insumo = ?, unidad = ?, costo = ?, rendimiento = ?, cantidad = ?, departamento = ? WHERE _id = ?";
+                $update_sql = "UPDATE inventario SET insumo = ?, unidad = ?, costo = ?, rendimiento = ?, cantidad = ?, departamento = ?, sku = ? WHERE _id = ?";
                 $db->goQuery($update_sql, [
                     $insumo,
                     $unidad,
@@ -911,11 +912,12 @@ return function (App $app) {
                     $rendimiento,
                     $cantidad,
                     $departamento_nombre,
+                    $sku,
                     $item_id
                 ]);
             } else {
                 // Lógica de INSERCIÓN
-                $insert_sql = "INSERT INTO inventario (rollo, insumo, unidad, costo, rendimiento, cantidad, departamento) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                $insert_sql = "INSERT INTO inventario (rollo, insumo, unidad, costo, rendimiento, cantidad, departamento, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
                 $db->goQuery($insert_sql, [
                     $rollo,
                     $insumo,
@@ -923,7 +925,8 @@ return function (App $app) {
                     $costo,
                     $rendimiento,
                     $cantidad,
-                    $departamento_nombre
+                    $departamento_nombre,
+                    $sku
                 ]);
                 $item_id = $db->getLastID(); // Se asume que LocalDB tiene un método para obtener el último ID
             }
@@ -995,8 +998,48 @@ return function (App $app) {
   $app->get('/impresoras', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
     try {
-        $sql = "SELECT _id, codigo_interno, marca, modelo, ubicacion, tipo_tecnologia, estado, notas, moment FROM catalogo_impresoras ORDER BY _id DESC";
+        $sql = "SELECT 
+                    ci._id, 
+                    ci.codigo_interno, 
+                    ci.marca, 
+                    ci.modelo, 
+                    ci.ubicacion, 
+                    ci.tipo_tecnologia, 
+                    ci.estado, 
+                    ci.notas, 
+                    ci.moment,
+                    CONCAT(
+                        '[',
+                        GROUP_CONCAT(
+                            JSON_OBJECT(
+                                'id', tr._id,
+                                'id_catalogo_impresora', tr.id_catalogo_impresora,
+                                'id_insumo', tr.id_insumo,
+                                'color', tr.color,
+                                'cantidad', tr.cantidad,
+                                'fecha_recarga', tr.fecha_recarga
+                            )
+                        ),
+                        ']'
+                    ) AS tintas_recargas
+                FROM 
+                    catalogo_impresoras ci
+                LEFT JOIN 
+                    tintas_recargas tr ON ci._id = tr.id_catalogo_impresora
+                GROUP BY 
+                    ci._id, ci.codigo_interno, ci.marca, ci.modelo, ci.ubicacion, ci.tipo_tecnologia, ci.estado, ci.notas, ci.moment
+                ORDER BY 
+                    ci._id DESC";
         $data = $localConnection->goQuery($sql);
+
+        // Decodificar el JSON de tintas_recargas para cada fila
+        foreach ($data as &$row) {
+            $row['tintas_recargas'] = json_decode($row['tintas_recargas'], true);
+            // Si no hay recargas, json_decode puede devolver null o un array con un solo null. Aseguramos un array vacío.
+            if ($row['tintas_recargas'] === null || (is_array($row['tintas_recargas']) && count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0] === null)) {
+                $row['tintas_recargas'] = [];
+            }
+        }
 
         $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
@@ -3128,7 +3171,7 @@ DESC;";
   });
 
   /** CATALOG DE INSUMOS PARA CLASIFICACIÓN DE PROIDUCTOS */
-  $app->post('/catalogo-insumos-productos', function (Request $request, Response $response) {
+  $app->post('/catalogo-insumos-productos', function (Request $request, Response $response) { 
     $miInsumo = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -13827,9 +13870,11 @@ if ($departamento === 'Diseño') {
     $values .= "'" . $miInsumo['unidad'] . "',";
     $values .= "'" . $miInsumo['rendimiento'] . "',";
     $values .= "'" . $miInsumo['costo'] . "',";
-    $values .= "'" . $miInsumo['cantidad'] . "')";
+    $values .= "'" . $miInsumo['cantidad'] . "',";
+    $values .= "'" . $miInsumo['sku'] . "',";
+    $values .= "'" . $miInsumo['id_catalogo_producto'] . "')";
 
-    $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad) VALUES ' . $values . ';';
+    $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo) VALUES ' . $values . ';';
     $object['response_insert_inventario'] = $localConnection->goQuery($sql);
     
     $sql = 'SELECT _id last_insert_id FROM inventario ORDER BY _id DESC LIMIT 1;';
@@ -13860,7 +13905,9 @@ if ($departamento === 'Diseño') {
     $values .= "cantidad='" . $miInsumo['cantidad'] . "',";
     $values .= "rendimiento='" . $miInsumo['rendimiento'] . "',";
     $values .= "costo='" . $miInsumo['costo'] . "',";
-    $values .= "departamento='" . $miInsumo['departamento'] . "'";
+    $values .= "departamento='" . $miInsumo['departamento'] . "',";
+    $values .= "sku='" . $miInsumo['sku'] . "',";
+    $values .= "id_catalogo='" . $miInsumo['id_catalogo'] . "'";
 
     $sql = 'UPDATE inventario SET ' . $values . ' WHERE _id = ' . $miInsumo['_id'];
     $object['sql'] = $sql;
@@ -13902,7 +13949,7 @@ if ($departamento === 'Diseño') {
     $sql = 'SELECT * FROM ordenes_productos WHERE id_orden = ' . $args['id_orden'] . ' AND id_empleado = ' . $args['id_empleado'];
     $object['items'] = $localConnection->goQuery($sql);
 
-    $sql = 'SELECT b._id, a._id id_insumo, a.cantidad, a.unidad, a.insumo FROM inventario a JOIN inventario_movimientos b ON a._id = b.id_insumo  WHERE b.id_orden = ' . $args['id_orden'] . ' AND b.id_empleado = ' . $args['id_empleado'];
+    $sql = 'SELECT b._id, a._id id_insumo, a.cantidad, a.unidad, a.insumo, a.sku FROM inventario a JOIN inventario_movimientos b ON a._id = b.id_insumo  WHERE b.id_orden = ' . $args['id_orden'] . ' AND b.id_empleado = ' . $args['id_empleado'];
     $object['movimientos'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
@@ -13940,7 +13987,7 @@ if ($departamento === 'Diseño') {
     // $object['id_insumo'] = $object['miinsumo']->_id;
 
     if (empty(json_decode($object['miinsumo']))) {
-      $sql = 'SELECT cantidad, insumo, unidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
+      $sql = 'SELECT cantidad, insumo, unidad, sku FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
       $cantidad = $localConnection->goQuery($sql);
       $object['cantidad_Recuperada'] = $cantidad;
 
@@ -14027,7 +14074,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     }
 
     // buscar cantidad actual del producto
-    $sql_check = 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
+    $sql_check = 'SELECT cantidad, sku FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
     $object['sql_cantidad_producto'] = $sql_check;
     $cantidad_producto = $localConnection->goQuery($sql_check);
     $object['cantidad_producto'] = $cantidad_producto;
@@ -14037,7 +14084,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
     if ($miInsumo['departamento'] === 'Estampado' || $miInsumo['departamento'] === 'Corte') {
       // 1.- Busar rendimiento de la tela
-      $sql = 'SELECT rendimiento FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
+      $sql = 'SELECT rendimiento, sku FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
       $tmpRendimiento = $localConnection->goQuery($sql);
       $rendimiento = floatval($tmpRendimiento[0]['rendimiento']);
 
@@ -14242,7 +14289,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
   // Reporte de insumos por número de orden
   $app->get('/insumos/reporte/orden/{id}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
-    $sql = "SELECT b._id id_insumo, a.id_orden,  b.insumo, a.valor_inicial, a.valor_final, a.id_producto, DATE_FORMAT(a.moment, '%d/%m/%Y') moment FROM inventario_movimientos a JOIN inventario b ON a.id_insumo = b._id WHERE a.id_orden = " . $args['id'] . ' ORDER BY a.id_producto';
+    $sql = "SELECT b._id id_insumo, a.id_orden,  b.insumo, b.sku, a.valor_inicial, a.valor_final, a.id_producto, DATE_FORMAT(a.moment, '%d/%m/%Y') moment FROM inventario_movimientos a JOIN inventario b ON a.id_insumo = b._id WHERE a.id_orden = " . $args['id'] . ' ORDER BY a.id_producto';
 
     $object['sql'] = $sql;
 
@@ -14282,7 +14329,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
   $app->get('/insumos/reporte/insumos/{id}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "SELECT a.id_orden, b.nombre, c.insumo, a.valor_inicial, a.valor_final, DATE_FORMAT(a.moment, '%d/%m/%Y') moment FROM inventario_movimientos a JOIN empleados b ON a.id_empleado = b._id JOIN inventario c ON a.id_insumo = c._id WHERE a.id_insumo =" . $args['id'] . ' ORDER BY c.insumo';
+    $sql = "SELECT a.id_orden, b.nombre, c.insumo, c.sku, a.valor_inicial, a.valor_final, DATE_FORMAT(a.moment, '%d/%m/%Y') moment FROM inventario_movimientos a JOIN empleados b ON a.id_empleado = b._id JOIN inventario c ON a.id_insumo = c._id WHERE a.id_insumo =" . $args['id'] . ' ORDER BY c.insumo';
     $object['sql'] = $sql;
     $object['items'] = $localConnection->goQuery($sql);
 
@@ -14320,6 +14367,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     a.name producto,
     b.id_insumo,   
     d.insumo,
+    d.sku,
     b.valor_inicial,
     b.valor_final,   
     c.nombre,
@@ -14384,6 +14432,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
       $sql = 'SELECT
                 _id,
                 _id rollo,
+                sku,
                 insumo,
                 cantidad cantidad_inicial,
                 cantidad cantidad_final,
@@ -14402,6 +14451,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
       $sql = "SELECT
                 _id,
                 _id rollo,
+                sku,
                 insumo,
                 cantidad cantidad_inicial,
                 cantidad cantidad_final,
@@ -14462,6 +14512,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
     $sql = "SELECT
         a._id id_insumo,
+        a.sku,
         b.color,
         a.costo,
         a.cantidad
@@ -14489,6 +14540,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     $sql = "SELECT
                     a.name producto,
                     (SELECT insumo FROM inventario WHERE _id = a.id_woo) insumo,
+                    (SELECT sku FROM inventario WHERE _id = a.id_woo) sku,
                     SUM(a.cantidad) cantidadProductosOrden,
                     (b.valor_inicial - b.valor_final) consumoRealTotalOrdenUnidadBase,
                     (SELECT rendimiento FROM inventario WHERE _id = a.id_woo) factorConversionUnidadInsumo,
@@ -14595,6 +14647,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     $sql = "SELECT
                     a._id id_insumo,
                     a.insumo nombre_inusmo,
+                    a.sku,
                     a.rendimiento,
                     a.cantidad cantidad_insumo,
                     (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = {$data['id_orden']}) total_productos                    
@@ -15062,7 +15115,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             GROUP BY id_orden
         ) prod ON a._id = prod.id_orden
         LEFT JOIN (
-            SELECT c.id_orden, SUM((c.valor_inicial - c.valor_final) * d.costo) AS costos_de_insumos
+            SELECT c.id_orden, SUM((c.valor_inicial - c.valor_final) * d.costo) AS costos_de_insumos, GROUP_CONCAT(d.sku) AS skus
             FROM inventario_movimientos c JOIN inventario d ON c.id_insumo = d._id
             GROUP BY c.id_orden
         ) ins ON a._id = ins.id_orden
@@ -15185,6 +15238,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     $sql = "SELECT
                     r.id_orden,
                     i.insumo AS material,
+                    i.sku,
                     r.metros AS cantidad_consumida,
                     i.unidad,
                     r.desperdicio,
