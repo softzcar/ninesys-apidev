@@ -2,11 +2,11 @@
 
 // ini_set('implicit_flush', 1);
 
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 // use LocalDB;
 
@@ -367,19 +367,17 @@ return function (App $app) {
       $localConnection = new LocalDB();
 
       // Obtener categorías y atributos para las listas de validación y mapeo
-      $categories = $localConnection->goQuery("SELECT _id, nombre FROM categories");
-      $attributes = $localConnection->goQuery("SELECT _id, attribute_name FROM products_attributes");
+      $categories = $localConnection->goQuery('SELECT _id, nombre FROM categories');
+      $attributes = $localConnection->goQuery('SELECT _id, attribute_name FROM products_attributes');
 
       // Mapear categorías por ID para fácil acceso
       $categoryMap = [];
       foreach ($categories as $cat) {
-          $categoryMap[$cat['_id']] = $cat['nombre'];
+        $categoryMap[$cat['_id']] = $cat['nombre'];
       }
 
       // Obtener productos existentes (filtrando SKUs nulos o vacíos)
       $products = $localConnection->goQuery("SELECT _id, product, sku, fisico, price, comision, stock_quantity, product_description, category_ids FROM products WHERE sku IS NOT NULL AND sku <> ''");
-
-      
 
       $localConnection->disconnect();
 
@@ -395,47 +393,45 @@ return function (App $app) {
       $sheetProducts->fromArray($headersProducts, NULL, 'A1');
 
       // Set column widths for Products sheet
-      foreach (range('A', 'F') as $col) { // Adjusted range
-          $sheetProducts->getColumnDimension($col)->setAutoSize(true);
+      foreach (range('A', 'F') as $col) {  // Adjusted range
+        $sheetProducts->getColumnDimension($col)->setAutoSize(true);
       }
 
       // --- Hidden Sheet: ListadoSKUNormalizado ---
       $sheetSKUNormalizado = $spreadsheet->createSheet();
       $sheetSKUNormalizado->setTitle('ListadoSKUNormalizado');
-      $sheetSKUNormalizado->setCellValue('A1', 'SKU_Normalizado'); // Header
+      $sheetSKUNormalizado->setCellValue('A1', 'SKU_Normalizado');  // Header
       $row = 2;
       foreach ($products as $product) {
-          $normalizedSku = strtoupper(str_replace('_', '', $product['sku']));
-          $sheetSKUNormalizado->setCellValue('A' . $row, $normalizedSku);
-          $row++;
+        $normalizedSku = strtoupper(str_replace('_', '', $product['sku']));
+        $sheetSKUNormalizado->setCellValue('A' . $row, $normalizedSku);
+        $row++;
       }
       $sheetSKUNormalizado->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
 
       // --- Hidden Sheet: ListadoCategorias ---
       $sheetCategories = $spreadsheet->createSheet();
       $sheetCategories->setTitle('ListadoCategorias');
-      $sheetCategories->fromArray([['ID', 'Nombre']], NULL, 'A1'); // Headers for hidden sheet
+      $sheetCategories->fromArray([['ID', 'Nombre']], NULL, 'A1');  // Headers for hidden sheet
       $row = 2;
       foreach ($categories as $category) {
-          $sheetCategories->setCellValue('A' . $row, $category['_id']);
-          $sheetCategories->setCellValue('B' . $row, $category['nombre']);
-          $row++;
+        $sheetCategories->setCellValue('A' . $row, $category['_id']);
+        $sheetCategories->setCellValue('B' . $row, $category['nombre']);
+        $row++;
       }
-      $sheetCategories->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN); // Hide the sheet
+      $sheetCategories->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);  // Hide the sheet
 
       // --- Hidden Sheet: ListadoAtributos ---
       $sheetAttributes = $spreadsheet->createSheet();
       $sheetAttributes->setTitle('ListadoAtributos');
-      $sheetAttributes->fromArray([['ID', 'Nombre']], NULL, 'A1'); // Headers for hidden sheet
+      $sheetAttributes->fromArray([['ID', 'Nombre']], NULL, 'A1');  // Headers for hidden sheet
       $row = 2;
       foreach ($attributes as $attribute) {
-          $sheetAttributes->setCellValue('A' . $row, $attribute['_id']);
-          $sheetAttributes->setCellValue('B' . $row, $attribute['attribute_name']);
-          $row++;
+        $sheetAttributes->setCellValue('A' . $row, $attribute['_id']);
+        $sheetAttributes->setCellValue('B' . $row, $attribute['attribute_name']);
+        $row++;
       }
-      $sheetAttributes->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN); // Hide the sheet
-
-      
+      $sheetAttributes->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);  // Hide the sheet
 
       // --- Data Validation for Products sheet (CORRECTED) ---
       // SKU (Column A) - Custom validation for uniqueness (case-insensitive, underscore-insensitive)
@@ -461,13 +457,13 @@ return function (App $app) {
       $categoryValidation->setError('El valor no está en la lista.');
       $categoryValidation->setPromptTitle('Seleccionar Categoría');
       $categoryValidation->setPrompt('Por favor, seleccione una categoría de la lista.');
-      $categoryValidation->setFormula1("'ListadoCategorias'!B$2:B$" . (count($categories) + 1)); // Reference to names in hidden sheet
+      $categoryValidation->setFormula1('\'ListadoCategorias\'!B$2:B$' . (count($categories) + 1));  // Reference to names in hidden sheet
 
       // Attributes (Column F)
       $attributeValidation = $sheetProducts->getCell('F2')->getDataValidation();
       $attributeValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
       $attributeValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);
-      $attributeValidation->setAllowBlank(true); // Attributes can be optional
+      $attributeValidation->setAllowBlank(true);  // Attributes can be optional
       $attributeValidation->setShowInputMessage(true);
       $attributeValidation->setShowErrorMessage(true);
       $attributeValidation->setShowDropDown(true);
@@ -475,16 +471,14 @@ return function (App $app) {
       $attributeValidation->setError('El valor no está en la lista de atributos.');
       $attributeValidation->setPromptTitle('Seleccionar Atributo');
       $attributeValidation->setPrompt('Por favor, seleccione un atributo de la lista.');
-      $attributeValidation->setFormula1("'ListadoAtributos'!B$2:B$" . (count($attributes) + 1)); // Reference to names in hidden sheet
+      $attributeValidation->setFormula1('\'ListadoAtributos\'!B$2:B$' . (count($attributes) + 1));  // Reference to names in hidden sheet
 
       // Apply validation to a range (e.g., up to row 1000 for now, can be adjusted)
       for ($i = 2; $i <= 1000; $i++) {
-          $sheetProducts->getCell('A' . $i)->setDataValidation(clone $skuValidation);
-          $sheetProducts->getCell('E' . $i)->setDataValidation(clone $categoryValidation);
-          $sheetProducts->getCell('F' . $i)->setDataValidation(clone $attributeValidation); // Apply to Attributes column
+        $sheetProducts->getCell('A' . $i)->setDataValidation(clone $skuValidation);
+        $sheetProducts->getCell('E' . $i)->setDataValidation(clone $categoryValidation);
+        $sheetProducts->getCell('F' . $i)->setDataValidation(clone $attributeValidation);  // Apply to Attributes column
       }
-
-      
 
       // Save the Excel file
       $fileName = 'plantilla_productos_' . ID_EMPRESA . '.xlsx';
@@ -493,7 +487,7 @@ return function (App $app) {
 
       // Ensure the directory exists
       if (!file_exists($outputDirectory)) {
-          mkdir($outputDirectory, 0777, true);
+        mkdir($outputDirectory, 0777, true);
       }
 
       $writer = new Xlsx($spreadsheet);
@@ -504,19 +498,19 @@ return function (App $app) {
 
       // Return success response with file URL
       $response->getBody()->write(json_encode([
-          'success' => true,
-          'message' => 'Plantilla Excel generada exitosamente.',
-          'file_url' => $fileUrl
+        'success' => true,
+        'message' => 'Plantilla Excel generada exitosamente.',
+        'file_url' => $fileUrl
       ], JSON_NUMERIC_CHECK));
       return $response
         ->withHeader('Content-Type', 'application/json')
         ->withStatus(200);
     } catch (\Exception $e) {
-      error_log("Error generating Excel: " . $e->getMessage());
+      error_log('Error generating Excel: ' . $e->getMessage());
       $response->getBody()->write(json_encode([
-          'success' => false,
-          'message' => 'Error al generar la plantilla Excel. Por favor, inténtelo de nuevo más tarde.',
-          'error_details' => $e->getMessage() // Solo para depuración, quitar en producción
+        'success' => false,
+        'message' => 'Error al generar la plantilla Excel. Por favor, inténtelo de nuevo más tarde.',
+        'error_details' => $e->getMessage()  // Solo para depuración, quitar en producción
       ], JSON_NUMERIC_CHECK));
       return $response
         ->withHeader('Content-Type', 'application/json')
@@ -529,10 +523,16 @@ return function (App $app) {
       $localConnection = new LocalDB();
 
       // Obtener departamentos para la lista de validación
-      $departamentos = $localConnection->goQuery("SELECT _id, departamento FROM departamentos");
+      $departamentos = $localConnection->goQuery('SELECT _id, departamento FROM departamentos');
+      if (!is_array($departamentos)) {
+        $departamentos = [];
+      }
 
       // Obtener rollos existentes para validación de unicidad
-      $rollosExistentes = $localConnection->goQuery("SELECT rollo FROM inventario WHERE rollo IS NOT NULL AND rollo <> ''");
+      $rollosExistentes = $localConnection->goQuery("SELECT insumo FROM inventario WHERE insumo IS NOT NULL AND insumo <> ''");
+      if (!is_array($rollosExistentes)) {
+        $rollosExistentes = [];
+      }
 
       $localConnection->disconnect();
 
@@ -548,19 +548,21 @@ return function (App $app) {
       $sheetInventario->fromArray($headersInventario, NULL, 'A1');
 
       // Set column widths for Inventario sheet
-      foreach (range('A', 'G') as $col) { // Adjusted range for new headers
-          $sheetInventario->getColumnDimension($col)->setAutoSize(true);
+      foreach (range('A', 'G') as $col) {  // Adjusted range for new headers
+        $sheetInventario->getColumnDimension($col)->setAutoSize(true);
       }
 
       // --- Hidden Sheet: ListadoRollosNormalizado ---
       $sheetRollosNormalizado = $spreadsheet->createSheet();
       $sheetRollosNormalizado->setTitle('ListadoRollosNormalizado');
-      $sheetRollosNormalizado->setCellValue('A1', 'Rollo_Normalizado'); // Header
+      $sheetRollosNormalizado->setCellValue('A1', 'Rollo_Normalizado');  // Header
       $row = 2;
       foreach ($rollosExistentes as $rollo) {
+        if (is_array($rollo) && isset($rollo['rollo'])) {  // Add this check
           $normalizedRollo = strtoupper(str_replace('_', '', $rollo['rollo']));
           $sheetRollosNormalizado->setCellValue('A' . $row, $normalizedRollo);
           $row++;
+        }
       }
       $sheetRollosNormalizado->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
 
@@ -568,25 +570,27 @@ return function (App $app) {
       $sheetUnidades = $spreadsheet->createSheet();
       $sheetUnidades->setTitle('ListadoUnidades');
       $unidades = ['Metros', 'Kilos', 'Unidades'];
-      $sheetUnidades->fromArray([['Unidad']], NULL, 'A1'); // Header
+      $sheetUnidades->fromArray([['Unidad']], NULL, 'A1');  // Header
       $row = 2;
       foreach ($unidades as $unidad) {
-          $sheetUnidades->setCellValue('A' . $row, $unidad);
-          $row++;
+        $sheetUnidades->setCellValue('A' . $row, $unidad);
+        $row++;
       }
-      $sheetUnidades->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN); // Hide the sheet
+      $sheetUnidades->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);  // Hide the sheet
 
       // --- Hidden Sheet: ListadoDepartamentos ---
       $sheetDepartamentos = $spreadsheet->createSheet();
       $sheetDepartamentos->setTitle('ListadoDepartamentos');
-      $sheetDepartamentos->fromArray([['ID', 'Nombre']], NULL, 'A1'); // Headers for hidden sheet
+      $sheetDepartamentos->fromArray([['ID', 'Nombre']], NULL, 'A1');  // Headers for hidden sheet
       $row = 2;
       foreach ($departamentos as $departamento) {
+        if (is_array($departamento) && isset($departamento['_id']) && isset($departamento['departamento'])) {  // Add this check
           $sheetDepartamentos->setCellValue('A' . $row, $departamento['_id']);
           $sheetDepartamentos->setCellValue('B' . $row, $departamento['departamento']);
           $row++;
+        }
       }
-      $sheetDepartamentos->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN); // Hide the sheet
+      $sheetDepartamentos->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);  // Hide the sheet
 
       // --- Data Validation for Inventario sheet ---
       // Rollo (Column A) - Custom validation for uniqueness (case-insensitive, underscore-insensitive)
@@ -610,7 +614,7 @@ return function (App $app) {
       $cantidadValidation->setShowErrorMessage(true);
       $cantidadValidation->setErrorTitle('Cantidad Inválida');
       $cantidadValidation->setError('La cantidad debe ser un número.');
-      $cantidadValidation->setFormula1('0'); // Minimum value
+      $cantidadValidation->setFormula1('0');  // Minimum value
       $cantidadValidation->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_GREATERTHANOREQUAL);
 
       // Unidad (Column D) - List validation
@@ -625,7 +629,7 @@ return function (App $app) {
       $unidadValidation->setError('El valor no está en la lista de unidades.');
       $unidadValidation->setPromptTitle('Seleccionar Unidad');
       $unidadValidation->setPrompt('Por favor, seleccione una unidad de la lista (Metros, Kilos, Unidades).');
-      $unidadValidation->setFormula1("'ListadoUnidades'!A$2:A$" . (count($unidades) + 1)); // Reference to names in hidden sheet
+      $unidadValidation->setFormula1('\'ListadoUnidades\'!A$2:A$' . (count($unidades) + 1));  // Reference to names in hidden sheet
 
       // Costo (Column E) - Numeric validation
       $costoValidation = $sheetInventario->getCell('E2')->getDataValidation();
@@ -635,18 +639,18 @@ return function (App $app) {
       $costoValidation->setShowErrorMessage(true);
       $costoValidation->setErrorTitle('Costo Inválido');
       $costoValidation->setError('El costo debe ser un número.');
-      $costoValidation->setFormula1('0'); // Minimum value
+      $costoValidation->setFormula1('0');  // Minimum value
       $costoValidation->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_GREATERTHANOREQUAL);
 
       // Rendimiento (Column F) - Numeric validation
       $rendimientoValidation = $sheetInventario->getCell('F2')->getDataValidation();
       $rendimientoValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_DECIMAL);
       $rendimientoValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
-      $rendimientoValidation->setAllowBlank(true); // Can be blank
+      $rendimientoValidation->setAllowBlank(true);  // Can be blank
       $rendimientoValidation->setShowErrorMessage(true);
       $rendimientoValidation->setErrorTitle('Rendimiento Inválido');
       $rendimientoValidation->setError('El rendimiento debe ser un número.');
-      $rendimientoValidation->setFormula1('0'); // Minimum value
+      $rendimientoValidation->setFormula1('0');  // Minimum value
       $rendimientoValidation->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_GREATERTHANOREQUAL);
 
       // Departamento (Column G) - List validation
@@ -661,26 +665,26 @@ return function (App $app) {
       $departamentoValidation->setError('El valor no está en la lista de departamentos.');
       $departamentoValidation->setPromptTitle('Seleccionar Departamento');
       $departamentoValidation->setPrompt('Por favor, seleccione un departamento de la lista.');
-      $departamentoValidation->setFormula1("'ListadoDepartamentos'!B$2:B$" . (count($departamentos) + 1)); // Reference to names in hidden sheet
+      $departamentoValidation->setFormula1('\'ListadoDepartamentos\'!B$2:B$' . (count($departamentos) + 1));  // Reference to names in hidden sheet
 
       // Apply validation to a range (e.g., up to row 1000)
       for ($i = 2; $i <= 1000; $i++) {
-          $sheetInventario->getCell('A' . $i)->setDataValidation(clone $rolloValidation); // Apply to Rollo column
-          $sheetInventario->getCell('C' . $i)->setDataValidation(clone $cantidadValidation);
-          $sheetInventario->getCell('D' . $i)->setDataValidation(clone $unidadValidation);
-          $sheetInventario->getCell('E' . $i)->setDataValidation(clone $costoValidation);
-          $sheetInventario->getCell('F' . $i)->setDataValidation(clone $rendimientoValidation);
-          $sheetInventario->getCell('G' . $i)->setDataValidation(clone $departamentoValidation);
+        $sheetInventario->getCell('A' . $i)->setDataValidation(clone $rolloValidation);  // Apply to Rollo column
+        $sheetInventario->getCell('C' . $i)->setDataValidation(clone $cantidadValidation);
+        $sheetInventario->getCell('D' . $i)->setDataValidation(clone $unidadValidation);
+        $sheetInventario->getCell('E' . $i)->setDataValidation(clone $costoValidation);
+        $sheetInventario->getCell('F' . $i)->setDataValidation(clone $rendimientoValidation);
+        $sheetInventario->getCell('G' . $i)->setDataValidation(clone $departamentoValidation);
       }
 
       // Save the Excel file
       $fileName = 'plantilla_inventario_' . ID_EMPRESA . '.xlsx';
-      $outputDirectory = __DIR__ . '/../public/downloads/carga_inventario/'; // New directory for inventory templates
+      $outputDirectory = __DIR__ . '/../public/downloads/carga_inventario/';  // New directory for inventory templates
       $filePath = $outputDirectory . $fileName;
 
       // Ensure the directory exists
       if (!file_exists($outputDirectory)) {
-          mkdir($outputDirectory, 0777, true);
+        mkdir($outputDirectory, 0777, true);
       }
 
       $writer = new Xlsx($spreadsheet);
@@ -691,19 +695,19 @@ return function (App $app) {
 
       // Return success response with file URL
       $response->getBody()->write(json_encode([
-          'success' => true,
-          'message' => 'Plantilla Excel de inventario generada exitosamente.',
-          'file_url' => $fileUrl
+        'success' => true,
+        'message' => 'Plantilla Excel de inventario generada exitosamente.',
+        'file_url' => $fileUrl
       ], JSON_NUMERIC_CHECK));
       return $response
         ->withHeader('Content-Type', 'application/json')
         ->withStatus(200);
     } catch (\Exception $e) {
-      error_log("Error generating Excel for inventory: " . $e->getMessage());
+      error_log('Error generating Excel for inventory: ' . $e->getMessage());
       $response->getBody()->write(json_encode([
-          'success' => false,
-          'message' => 'Error al generar la plantilla Excel de inventario. Por favor, inténtelo de nuevo más tarde.',
-          'error_details' => $e->getMessage() // Solo para depuración, quitar en producción
+        'success' => false,
+        'message' => 'Error al generar la plantilla Excel de inventario. Por favor, inténtelo de nuevo más tarde.',
+        'error_details' => $e->getMessage()  // Solo para depuración, quitar en producción
       ], JSON_NUMERIC_CHECK));
       return $response
         ->withHeader('Content-Type', 'application/json')
@@ -716,25 +720,25 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     // ATRIBUTOS
-    $sql = "SELECT _id, attribute_name FROM products_attributes";
+    $sql = 'SELECT _id, attribute_name FROM products_attributes';
     $datax['atributos'] = $localConnection->goQuery($sql);
-     
+
     // CATEGORIAS
-    $sql = "SELECT _id, nombre FROM categories";
+    $sql = 'SELECT _id, nombre FROM categories';
     $datax['categorias'] = $localConnection->goQuery($sql);
-    
+
     $spreadsheet = new Spreadsheet();
     $sheet = $spreadsheet->getActiveSheet();
     $sheet->setCellValue('A1', 'Hola Mundo desde PhpSpreadsheet (Correcto)!');
-    
+
     $writer = new Xlsx($spreadsheet);
-    
+
     $idEmpresa = ID_EMPRESA;
-    $filePath = __DIR__ . "/../public/downloads/carga_productos/carga_de_productos_{$idEmpresa}.xlsx"; // Guardar en el directorio public
+    $filePath = __DIR__ . "/../public/downloads/carga_productos/carga_de_productos_{$idEmpresa}.xlsx";  // Guardar en el directorio public
     $writer->save($filePath);
-    
-    $fileUrl = "/downloads/carga_productos/carga_de_productos_{$idEmpresa}.xlsx"; // URL para acceder al archivo
-    
+
+    $fileUrl = "/downloads/carga_productos/carga_de_productos_{$idEmpresa}.xlsx";  // URL para acceder al archivo
+
     $localConnection->disconnect();
     // $response->getBody()->write(json_encode(['message' => 'Archivo Excel generado correctamente (Correcto)!', 'file_url' => $fileUrl], JSON_NUMERIC_CHECK));
     $response->getBody()->write(json_encode($datax, JSON_NUMERIC_CHECK));
@@ -748,206 +752,323 @@ return function (App $app) {
 
     // Forzar la conversión a array asociativo para asegurar compatibilidad
     if (is_object($data)) {
-        $data = json_decode(json_encode($data), true);
+      $data = json_decode(json_encode($data), true);
     }
 
     $products = is_string($data['products']) ? json_decode($data['products'], true) : ($data['products'] ?? []);
 
     if (empty($products)) {
-        $response->getBody()->write(json_encode(['error' => 'No se enviaron productos para procesar.']));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      $response->getBody()->write(json_encode(['error' => 'No se enviaron productos para procesar.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
     $db = new LocalDB();
 
     try {
-        // 1. Obtener mapeos para convertir nombres de categorías a IDs
-        $categories_db = $db->goQuery("SELECT _id, nombre FROM categories");
-        $category_map = array_column($categories_db, '_id', 'nombre');
+      // 1. Obtener mapeos para convertir nombres de categorías a IDs
+      $categories_db = $db->goQuery('SELECT _id, nombre FROM categories');
+      $category_map = array_column($categories_db, '_id', 'nombre');
 
-        $processed_count = 0;
-        $error_list = [];
+      $processed_count = 0;
+      $error_list = [];
 
-        foreach ($products as $product) {
-            $sku = $product['SKU'] ?? null;
-            if (empty($sku)) {
-                $error_list[] = "Se omitió un producto por no tener SKU.";
-                continue;
-            }
-
-            // 2. Mapear el nombre de la Categoría a su ID
-            $category_name = $product['Categoría'] ?? null;
-            $category_id = $category_map[$category_name] ?? null;
-
-            // 3. Verificar si el producto ya existe por SKU
-            $check_sql = "SELECT _id FROM products WHERE sku = ?";
-            $existing_product = $db->goQuery($check_sql, [$sku]);
-
-            $product_id = null;
-
-            if ($existing_product) {
-                // Lógica de ACTUALIZACIÓN
-                $product_id = $existing_product[0]['_id'];
-                $update_sql = "UPDATE products SET product = ?, category_ids = ? WHERE _id = ?";
-                $db->goQuery($update_sql, [
-                    $product['Nombre'] ?? 'Sin Nombre',
-                    $category_id,
-                    $product_id
-                ]);
-
-                // Borrar precios antiguos para reemplazarlos
-                $delete_prices_sql = "DELETE FROM products_prices WHERE id_product = ?";
-                $db->goQuery($delete_prices_sql, [$product_id]);
-
-            } else {
-                // Lógica de INSERCIÓN
-                $insert_sql = "INSERT INTO products (product, sku, category_ids, fisico) VALUES (?, ?, ?, 1)";
-                $db->goQuery($insert_sql, [
-                    $product['Nombre'] ?? 'Sin Nombre',
-                    $sku,
-                    $category_id
-                ]);
-                $product_id = $db->getLastID(); // Se asume que LocalDB tiene un método para obtener el último ID
-            }
-
-            // 4. Insertar los precios (tanto para productos nuevos como actualizados)
-            if ($product_id && isset($product['precios']) && is_array($product['precios'])) {
-                foreach ($product['precios'] as $price_info) {
-                    // Asegurarse de que tanto el valor como la descripción existan
-                    if (isset($price_info['valor']) && isset($price_info['descripcion'])) {
-                        $insert_price_sql = "INSERT INTO products_prices (id_product, price, descripcion) VALUES (?, ?, ?)";
-                        $db->goQuery($insert_price_sql, [
-                            $product_id,
-                            $price_info['valor'],
-                            $price_info['descripcion']
-                        ]);
-                    }
-                }
-            }
-            $processed_count++;
+      foreach ($products as $product) {
+        $sku = $product['SKU'] ?? null;
+        if (empty($sku)) {
+          $error_list[] = 'Se omitió un producto por no tener SKU.';
+          continue;
         }
 
-        $message = "Carga masiva completada. Se procesaron {$processed_count} productos.";
-        if (!empty($error_list)) {
-            $message .= " Errores: " . implode(', ', $error_list);
+        // 2. Mapear el nombre de la Categoría a su ID
+        $category_name = $product['Categoría'] ?? null;
+        $category_id = $category_map[$category_name] ?? null;
+
+        // 3. Verificar si el producto ya existe por SKU
+        $check_sql = 'SELECT _id FROM products WHERE sku = ?';
+        $existing_product = $db->goQuery($check_sql, [$sku]);
+
+        $product_id = null;
+
+        if ($existing_product) {
+          // Lógica de ACTUALIZACIÓN
+          $product_id = $existing_product[0]['_id'];
+          $update_sql = 'UPDATE products SET product = ?, category_ids = ? WHERE _id = ?';
+          $db->goQuery($update_sql, [
+            $product['Nombre'] ?? 'Sin Nombre',
+            $category_id,
+            $product_id
+          ]);
+
+          // Borrar precios antiguos para reemplazarlos
+          $delete_prices_sql = 'DELETE FROM products_prices WHERE id_product = ?';
+          $db->goQuery($delete_prices_sql, [$product_id]);
+        } else {
+          // Lógica de INSERCIÓN
+          $insert_sql = 'INSERT INTO products (product, sku, category_ids, fisico) VALUES (?, ?, ?, 1)';
+          $db->goQuery($insert_sql, [
+            $product['Nombre'] ?? 'Sin Nombre',
+            $sku,
+            $category_id
+          ]);
+          $product_id = $db->getLastID();  // Se asume que LocalDB tiene un método para obtener el último ID
         }
 
-        $response->getBody()->write(json_encode(['message' => $message]));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        // 4. Insertar los precios (tanto para productos nuevos como actualizados)
+        if ($product_id && isset($product['precios']) && is_array($product['precios'])) {
+          foreach ($product['precios'] as $price_info) {
+            // Asegurarse de que tanto el valor como la descripción existan
+            if (isset($price_info['valor']) && isset($price_info['descripcion'])) {
+              $insert_price_sql = 'INSERT INTO products_prices (id_product, price, descripcion) VALUES (?, ?, ?)';
+              $db->goQuery($insert_price_sql, [
+                $product_id,
+                $price_info['valor'],
+                $price_info['descripcion']
+              ]);
+            }
+          }
+        }
+        $processed_count++;
+      }
 
+      $message = "Carga masiva completada. Se procesaron {$processed_count} productos.";
+      if (!empty($error_list)) {
+        $message .= ' Errores: ' . implode(', ', $error_list);
+      }
+
+      $response->getBody()->write(json_encode(['message' => $message]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     } catch (Exception $e) {
-        $response->getBody()->write(json_encode(['error' => 'Error al procesar la carga masiva: ' . $e->getMessage()]));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+      $response->getBody()->write(json_encode(['error' => 'Error al procesar la carga masiva: ' . $e->getMessage()]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
-        $db->disconnect();
+      $db->disconnect();
     }
-});
+  });
 
   $app->post('/api/inventario/bulk-load', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
 
     // Forzar la conversión a array asociativo para asegurar compatibilidad
     if (is_object($data)) {
-        $data = json_decode(json_encode($data), true);
+      $data = json_decode(json_encode($data), true);
     }
 
     $inventoryItems = is_string($data['inventoryItems']) ? json_decode($data['inventoryItems'], true) : ($data['inventoryItems'] ?? []);
 
     if (empty($inventoryItems)) {
-        $response->getBody()->write(json_encode(['error' => 'No se enviaron ítems de inventario para procesar.']));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      $response->getBody()->write(json_encode(['error' => 'No se enviaron ítems de inventario para procesar.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
     $db = new LocalDB();
 
     try {
-        // Obtener mapeos para convertir nombres de departamentos a IDs
-        $departamentos_db = $db->goQuery("SELECT _id, departamento FROM departamentos");
-        $departamento_map = array_column($departamentos_db, '_id', 'departamento');
+      // Obtener mapeos para convertir nombres de departamentos a IDs
+      $departamentos_db = $db->goQuery('SELECT _id, departamento FROM departamentos');
+      $departamento_map = array_column($departamentos_db, '_id', 'departamento');
 
-        $processed_count = 0;
-        $error_list = [];
+      $processed_count = 0;
+      $error_list = [];
 
-        foreach ($inventoryItems as $item) {
-            $rollo = $item['Rollo'] ?? null;
-            $insumo = $item['Nombre'] ?? null;
-            $cantidad = $item['Cantidad'] ?? null;
-            $unidad = $item['Unidad'] ?? null;
-            $costo = $item['Costo'] ?? null;
-            $rendimiento = $item['Rendimiento'] ?? null;
-            $departamento_nombre = $item['Departamento'] ?? null;
-            $sku = $item['SKU'] ?? null;
+      foreach ($inventoryItems as $item) {
+        $rollo = $item['Rollo'] ?? null;
+        $insumo = $item['Nombre'] ?? null;
+        $cantidad = $item['Cantidad'] ?? null;
+        $unidad = $item['Unidad'] ?? null;
+        $costo = $item['Costo'] ?? null;
+        $rendimiento = $item['Rendimiento'] ?? null;
+        $departamento_nombre = $item['Departamento'] ?? null;
+        $sku = $item['SKU'] ?? null;
 
-            // Validaciones básicas
-            if (empty($rollo) || empty($insumo) || empty($cantidad) || empty($unidad) || empty($costo) || empty($departamento_nombre)) {
-                $error_list[] = "Ítem de inventario incompleto (Rollo: {$rollo}, Nombre: {$insumo}). Se omitió.";
-                continue;
-            }
-
-            // Normalizar Rollo para la búsqueda
-            $normalized_rollo = strtoupper(str_replace('_', '', $rollo));
-
-            // Mapear el nombre del Departamento a su ID
-            $departamento_id = $departamento_map[$departamento_nombre] ?? null;
-
-            if ($departamento_id === null) {
-                $error_list[] = "Departamento '{$departamento_nombre}' no encontrado para el rollo {$rollo}. Se omitió.";
-                continue;
-            }
-
-            // Verificar si el ítem de inventario ya existe por Rollo (normalizado)
-            $check_sql = "SELECT _id, rollo, sku FROM inventario WHERE REPLACE(UPPER(rollo), '_', '') = ?";
-            $existing_item = $db->goQuery($check_sql, [$normalized_rollo]);
-
-            $item_id = null;
-
-            if ($existing_item) {
-                // Lógica de ACTUALIZACIÓN
-                $item_id = $existing_item[0]['_id'];
-                $update_sql = "UPDATE inventario SET insumo = ?, unidad = ?, costo = ?, rendimiento = ?, cantidad = ?, departamento = ?, sku = ? WHERE _id = ?";
-                $db->goQuery($update_sql, [
-                    $insumo,
-                    $unidad,
-                    $costo,
-                    $rendimiento,
-                    $cantidad,
-                    $departamento_nombre,
-                    $sku,
-                    $item_id
-                ]);
-            } else {
-                // Lógica de INSERCIÓN
-                $insert_sql = "INSERT INTO inventario (rollo, insumo, unidad, costo, rendimiento, cantidad, departamento, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-                $db->goQuery($insert_sql, [
-                    $rollo,
-                    $insumo,
-                    $unidad,
-                    $costo,
-                    $rendimiento,
-                    $cantidad,
-                    $departamento_nombre,
-                    $sku
-                ]);
-                $item_id = $db->getLastID(); // Se asume que LocalDB tiene un método para obtener el último ID
-            }
-            $processed_count++;
+        // Validaciones básicas
+        if (empty($rollo) || empty($insumo) || empty($cantidad) || empty($unidad) || empty($costo) || empty($departamento_nombre)) {
+          $error_list[] = "Ítem de inventario incompleto (Rollo: {$rollo}, Nombre: {$insumo}). Se omitió.";
+          continue;
         }
 
-        $message = "Carga masiva de inventario completada. Se procesaron {$processed_count} ítems.";
-        if (!empty($error_list)) {
-            $message .= " Errores: " . implode(', ', $error_list);
+        // Normalizar Rollo para la búsqueda
+        $normalized_rollo = strtoupper(str_replace('_', '', $rollo));
+
+        // Mapear el nombre del Departamento a su ID
+        $departamento_id = $departamento_map[$departamento_nombre] ?? null;
+
+        if ($departamento_id === null) {
+          $error_list[] = "Departamento '{$departamento_nombre}' no encontrado para el rollo {$rollo}. Se omitió.";
+          continue;
         }
 
-        $response->getBody()->write(json_encode(['message' => $message]));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        // Verificar si el ítem de inventario ya existe por Rollo (normalizado)
+        $check_sql = "SELECT _id, rollo, sku FROM inventario WHERE REPLACE(UPPER(rollo), '_', '') = ?";
+        $existing_item = $db->goQuery($check_sql, [$normalized_rollo]);
 
+        $item_id = null;
+
+        if ($existing_item) {
+          // Lógica de ACTUALIZACIÓN
+          $item_id = $existing_item[0]['_id'];
+          $update_sql = 'UPDATE inventario SET insumo = ?, unidad = ?, costo = ?, rendimiento = ?, cantidad = ?, departamento = ?, sku = ? WHERE _id = ?';
+          $db->goQuery($update_sql, [
+            $insumo,
+            $unidad,
+            $costo,
+            $rendimiento,
+            $cantidad,
+            $departamento_nombre,
+            $sku,
+            $item_id
+          ]);
+        } else {
+          // Lógica de INSERCIÓN
+          $insert_sql = 'INSERT INTO inventario (rollo, insumo, unidad, costo, rendimiento, cantidad, departamento, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+          $db->goQuery($insert_sql, [
+            $rollo,
+            $insumo,
+            $unidad,
+            $costo,
+            $rendimiento,
+            $cantidad,
+            $departamento_nombre,
+            $sku
+          ]);
+          $item_id = $db->getLastID();  // Se asume que LocalDB tiene un método para obtener el último ID
+        }
+        $processed_count++;
+      }
+
+      $message = "Carga masiva de inventario completada. Se procesaron {$processed_count} ítems.";
+      if (!empty($error_list)) {
+        $message .= ' Errores: ' . implode(', ', $error_list);
+      }
+
+      $response->getBody()->write(json_encode(['message' => $message]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     } catch (Exception $e) {
-        $response->getBody()->write(json_encode(['error' => 'Error al procesar la carga masiva de inventario: ' . $e->getMessage()]));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+      $response->getBody()->write(json_encode(['error' => 'Error al procesar la carga masiva de inventario: ' . $e->getMessage()]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
-        $db->disconnect();
+      $db->disconnect();
     }
-});
+  });
+
+  /**
+   * =================================================================
+   * ENDPOINTS PARA GESTIÓN DE LOTES DE FABRICACIÓN (CORREGIDO)
+   * =================================================================
+   */
+
+  /**
+   * POST /lotes
+   * Crea un nuevo lote de fabricación a partir de una lista de órdenes.
+   */
+  $app->post('/lotes', function (Request $request, Response $response) {
+    // 1. Obtener los datos del cuerpo de la solicitud
+    $data = $request->getParsedBody();
+    $id_empleado = $data['id_empleado'] ?? null;
+    $id_departamento = $data['id_departamento'] ?? null;
+    $ordenes_str = $data['ordenes'] ?? '';
+
+    // 2. Validar que los datos necesarios están presentes
+    if (empty($id_empleado) || empty($id_departamento) || empty($ordenes_str)) {
+      $error_response = ['error' => 'Faltan parámetros requeridos: id_empleado, id_departamento y ordenes son obligatorios.'];
+      $response->getBody()->write(json_encode($error_response));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection = new LocalDB();
+    $object = [];  // Objeto para la respuesta final
+    $status_code = 201;  // Código de éxito por defecto
+
+    try {
+      // 3. Crear el registro maestro del lote en la tabla `empleados_lotes_fabricacion`.
+      // Se asume que el estado inicial es '0' (pendiente).
+      $sql_create_lote = 'INSERT INTO empleados_lotes_fabricacion (id_empleado, id_departamento, estado) VALUES (?, ?, 0)';
+      $params_create_lote = [$id_empleado, $id_departamento];
+
+      $localConnection->goQuery($sql_create_lote, $params_create_lote);
+
+      // 4. Obtener el ID del lote recién creado desde la tabla correcta
+      $result_last_id = $localConnection->goQuery('SELECT MAX(_id) id FROM empleados_lotes_fabricacion');
+      $id_lote = $result_last_id[0]['id'] ?? null;
+
+      if (empty($id_lote)) {
+        throw new Exception('No se pudo obtener el ID del lote recién creado tras la inserción.');
+      }
+
+      // 5. Vincular cada orden al nuevo lote en la tabla `empleados_lotes_fabricacion_items`
+      $ordenes_ids = explode(',', $ordenes_str);
+
+      $sql_link_orden = 'INSERT INTO empleados_lotes_fabricacion_items (id_lote, id_orden) VALUES (?, ?)';
+
+      foreach ($ordenes_ids as $id_orden) {
+        $trimmed_id_orden = trim($id_orden);
+        if (is_numeric($trimmed_id_orden) && !empty($trimmed_id_orden)) {
+          $params_link_orden = [$id_lote, $trimmed_id_orden];
+          $localConnection->goQuery($sql_link_orden, $params_link_orden);
+        }
+      }
+
+      // 6. Preparar la respuesta de éxito
+      $object['message'] = 'Lote creado exitosamente.';
+      $object['id_lote'] = $id_lote;
+    } catch (Exception $e) {
+      $object['error'] = 'Error del servidor al crear el lote: ' . $e->getMessage();
+      $status_code = 500;
+    } finally {
+      if ($localConnection) {
+        $localConnection->disconnect();
+      }
+    }
+
+    // 7. Devolver la respuesta JSON
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus($status_code);
+  });
+
+  /**
+   * POST /lotes/{id}/iniciar
+   * Inicia todas las órdenes contenidas en un lote de fabricación.
+   */
+  $app->post('/lotes/{id}/iniciar', function (Request $request, Response $response, array $args) {
+    $id_lote = intval($args['id']);
+    $localConnection = new LocalDB();
+
+    // NOTA: Operaciones secuenciales. Considerar añadir transacciones a LocalDB
+    // para mayor robustez.
+    try {
+      // 1. Actualizar el estado del lote
+      $sql_update_lote = "UPDATE empleados_lotes_fabricacion SET estado = 'en_curso', fecha_inicio = NOW() WHERE id = ? AND estado = 'pendiente'";
+      $result = $localConnection->goQuery($sql_update_lote, [$id_lote]);
+
+      // 2. Obtener todas las órdenes del lote
+      $sql_get_ordenes = 'SELECT id_orden FROM empleados_lotes_fabricacion_items WHERE id_lote = ?';
+      $ordenes_del_lote = $localConnection->goQuery($sql_get_ordenes, [$id_lote]);
+
+      if (empty($ordenes_del_lote)) {
+        throw new Exception("No se encontraron órdenes para el lote {$id_lote}.");
+      }
+
+      // 3. Iniciar cada orden individualmente (ajusta la tabla/campos según tu lógica real)
+      $sql_iniciar_orden = "UPDATE lotes_detalles_empleados_asignados SET fecha_inicio = NOW(), progreso = 'en curso' WHERE id_orden = ?";
+
+      foreach ($ordenes_del_lote as $orden) {
+        $localConnection->goQuery($sql_iniciar_orden, [$orden['id_orden']]);
+      }
+
+      $response->getBody()->write(json_encode([
+        'status' => 'success',
+        'message' => "Lote {$id_lote} y sus " . count($ordenes_del_lote) . ' órdenes han sido iniciados.'
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      error_log("Error al iniciar lote {$id_lote}: " . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al iniciar el lote.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
 
   // CRUD para Catalogo de Impresoras
   $app->post('/impresoras', function (Request $request, Response $response) {
@@ -955,50 +1076,48 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
-        // Validación básica: el codigo_interno es obligatorio
-        if (empty($data['codigo_interno'])) {
-            $response->getBody()->write(json_encode(['error' => 'El campo codigo_interno es obligatorio.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
-        }
+      // Validación básica: el codigo_interno es obligatorio
+      if (empty($data['codigo_interno'])) {
+        $response->getBody()->write(json_encode(['error' => 'El campo codigo_interno es obligatorio.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
 
-        $sql = "INSERT INTO catalogo_impresoras (codigo_interno, marca, modelo, ubicacion, tipo_tecnologia, estado, notas) VALUES (?, ?, ?, ?, ?, ?, ?)";
-        
-        $params = [
-            $data['codigo_interno'],
-            $data['marca'] ?? null,
-            $data['modelo'] ?? null,
-            $data['ubicacion'] ?? null,
-            $data['tipo_tecnologia'] ?? null,
-            $data['estado'] ?? 'activa', // Valor por defecto 'activa'
-            $data['notas'] ?? null
-        ];
+      $sql = 'INSERT INTO catalogo_impresoras (codigo_interno, marca, modelo, ubicacion, tipo_tecnologia, estado, notas) VALUES (?, ?, ?, ?, ?, ?, ?)';
 
-        $localConnection->goQuery($sql, $params);
-        $new_id = $localConnection->getLastID();
+      $params = [
+        $data['codigo_interno'],
+        $data['marca'] ?? null,
+        $data['modelo'] ?? null,
+        $data['ubicacion'] ?? null,
+        $data['tipo_tecnologia'] ?? null,
+        $data['estado'] ?? 'activa',  // Valor por defecto 'activa'
+        $data['notas'] ?? null
+      ];
 
-        $response->getBody()->write(json_encode(['message' => 'Impresora creada exitosamente.', 'id' => $new_id]));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(201); // 201 Created
+      $localConnection->goQuery($sql, $params);
+      $new_id = $localConnection->getLastID();
 
+      $response->getBody()->write(json_encode(['message' => 'Impresora creada exitosamente.', 'id' => $new_id]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(201);  // 201 Created
     } catch (Exception $e) {
-        // Manejo de error, por ejemplo, si el codigo_interno ya existe (duplicado)
-        if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
-            $response->getBody()->write(json_encode(['error' => 'Error: El codigo_interno ya existe.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(409); // 409 Conflict
-        }
+      // Manejo de error, por ejemplo, si el codigo_interno ya existe (duplicado)
+      if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+        $response->getBody()->write(json_encode(['error' => 'Error: El codigo_interno ya existe.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(409);  // 409 Conflict
+      }
 
-        error_log('Error al crear impresora: ' . $e->getMessage());
-        $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al crear la impresora.']));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
-
+      error_log('Error al crear impresora: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al crear la impresora.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
-        $localConnection->disconnect();
+      $localConnection->disconnect();
     }
   });
 
   $app->get('/impresoras', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
     try {
-        $sql = "SELECT 
+      $sql = "SELECT 
                     ci._id, 
                     ci.codigo_interno, 
                     ci.marca, 
@@ -1030,34 +1149,147 @@ return function (App $app) {
                     ci._id, ci.codigo_interno, ci.marca, ci.modelo, ci.ubicacion, ci.tipo_tecnologia, ci.estado, ci.notas, ci.moment
                 ORDER BY 
                     ci._id DESC";
-        $data = $localConnection->goQuery($sql);
+      $data = $localConnection->goQuery($sql);
 
-        // Decodificar el JSON de tintas_recargas para cada fila
-        foreach ($data as &$row) {
-            $row['tintas_recargas'] = json_decode($row['tintas_recargas'], true);
-            // Si no hay recargas, json_decode puede devolver null o un array con un solo null. Aseguramos un array vacío.
-            if ($row['tintas_recargas'] === null || (is_array($row['tintas_recargas']) && count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0] === null)) {
-                $row['tintas_recargas'] = [];
-            }
+      // Decodificar el JSON de tintas_recargas para cada fila
+      foreach ($data as &$row) {
+        $row['tintas_recargas'] = json_decode($row['tintas_recargas'], true);
+        // Si no hay recargas, json_decode puede devolver null o un array con un solo null. Aseguramos un array vacío.
+        if ($row['tintas_recargas'] === null || (is_array($row['tintas_recargas']) && count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0] === null)) {
+          $row['tintas_recargas'] = [];
         }
+      }
 
-        $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-
+      $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     } catch (Exception $e) {
-        error_log('Error al obtener impresoras: ' . $e->getMessage());
-        $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al obtener las impresoras.']));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
-
+      error_log('Error al obtener impresoras: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al obtener las impresoras.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
-        $localConnection->disconnect();
+      $localConnection->disconnect();
+    }
+  });
+  $app->get('/impresoras-tintas-actual', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    try {
+      $sql = <<<SQL
+        -- Usamos Common Table Expressions (CTEs) para organizar la lógica en pasos.
+
+        WITH 
+        -- =======================================================================================
+        -- PASO 1: "Desglosar" el consumo. La tabla `tintas` tiene una columna por color.
+        -- La convertimos a un formato largo (una fila por consumo de color) para facilitar los cálculos.
+        -- =======================================================================================
+        consumo_desglosado AS (
+            SELECT id_catalogo_impresoras, 'C' AS color, c AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE c > 0
+            UNION ALL
+            SELECT id_catalogo_impresoras, 'M' AS color, m AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE m > 0
+            UNION ALL
+            SELECT id_catalogo_impresoras, 'Y' AS color, y AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE y > 0
+            UNION ALL
+            SELECT id_catalogo_impresoras, 'K' AS color, k AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE k > 0
+            UNION ALL
+            SELECT id_catalogo_impresoras, 'W' AS color, w AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE w > 0
+        ),
+
+        -- =======================================================================================
+        -- PASO 2: Encontrar la fecha de la ÚLTIMA CONSUMO para cada tanque (impresora + color).
+        -- Esto nos ayudará a saber desde cuándo debemos sumar las recargas.
+        -- =======================================================================================
+        last_consumption_per_tank AS (
+            SELECT
+                id_catalogo_impresoras,
+                color,
+                MAX(fecha_orden) AS last_consumption_date
+            FROM
+                consumo_desglosado
+            GROUP BY
+                id_catalogo_impresoras,
+                color
+        ),
+
+        -- =======================================================================================
+        -- PASO 3: Calcular la CANTIDAD TOTAL recargada para cada tanque desde la última vez que hubo consumo.
+        -- Si nunca hubo consumo, se suman todas las recargas.
+        -- =======================================================================================
+        total_recargas_desde_ultimo_consumo AS (
+            SELECT
+                tr.id_catalogo_impresora,
+                tr.color,
+                SUM(tr.cantidad) AS total_cantidad_recargada,
+                MAX(tr.fecha_recarga) AS fecha_ultima_recarga -- La fecha de la última recarga sigue siendo útil
+            FROM
+                tintas_recargas tr
+            GROUP BY
+                tr.id_catalogo_impresora,
+                tr.color
+        )
+
+        -- =======================================================================================
+        -- PASO 4: Unir todo y calcular el resultado final.
+        -- =======================================================================================
+        SELECT
+            ci.codigo_interno AS impresora,
+            trslc.color,
+            ci.capacidad_contenedor AS capacidad_tanque_ml,
+            trslc.fecha_ultima_recarga AS fecha_ultima_recarga,
+            trslc.total_cantidad_recargada AS total_recargado_ml,
+            -- Sumamos todo el consumo que ocurrió DESPUÉS de la última recarga.
+            COALESCE(SUM(cd.consumo), 0) AS consumo_desde_ultima_recarga_ml,
+            -- El cálculo final: Tinta recargada MENOS tinta consumida.
+            (COALESCE(trslc.total_cantidad_recargada, 0) - COALESCE(SUM(cd.consumo), 0)) AS tinta_restante_estimada_ml
+        FROM
+            -- Empezamos con el total de recargas desde el último consumo
+            total_recargas_desde_ultimo_consumo trslc
+            
+        -- Unimos con el catálogo de impresoras para obtener sus nombres
+        JOIN
+            catalogo_impresoras ci ON ci._id = trslc.id_catalogo_impresora
+            
+        -- Hacemos un LEFT JOIN con el consumo. Usamos LEFT por si no ha habido consumo desde la última recarga.
+        LEFT JOIN
+            consumo_desglosado cd 
+            ON trslc.id_catalogo_impresora = cd.id_catalogo_impresoras 
+            AND trslc.color = cd.color
+            -- ¡ESTA ES LA LÓGICA CLAVE! Solo contamos el consumo cuya fecha de orden es POSTERIOR a la fecha de la última recarga.
+            AND cd.fecha_orden > trslc.fecha_ultima_recarga
+            
+        GROUP BY
+            ci.codigo_interno,
+            trslc.color,
+            ci.capacidad_contenedor,
+            trslc.fecha_ultima_recarga,
+            trslc.total_cantidad_recargada
+        ORDER BY
+            impresora,
+            color;
+        SQL;
+      $data = $localConnection->goQuery($sql);
+
+      // Decodificar el JSON de tintas_recargas para cada fila
+      /* foreach ($data as &$row) {
+          $row['tintas_recargas'] = json_decode($row['tintas_recargas'], true);
+          // Si no hay recargas, json_decode puede devolver null o un array con un solo null. Aseguramos un array vacío.
+          if ($row['tintas_recargas'] === null || (is_array($row['tintas_recargas']) && count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0] === null)) {
+              $row['tintas_recargas'] = [];
+          }
+      } */
+
+      $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      error_log('Error al obtener las tintas de las impresoras: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al obtener las tintas de las impresoras.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
     }
   });
 
-
   $app->put('/impresoras/{id}', function (Request $request, Response $response, array $args) {
     $id_impresora = $args['id'];
-    
+
     // Parsear manualmente el cuerpo de la solicitud PUT
     $raw_body = (string) $request->getBody();
     parse_str($raw_body, $data);
@@ -1065,51 +1297,49 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
-        // Verificar si la impresora existe
-        $check_sql = "SELECT _id FROM catalogo_impresoras WHERE _id = ?";
-        $existing = $localConnection->goQuery($check_sql, [$id_impresora]);
-        if (!$existing) {
-            $response->getBody()->write(json_encode(['error' => 'La impresora con el ID proporcionado no existe.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(404); // Not Found
+      // Verificar si la impresora existe
+      $check_sql = 'SELECT _id FROM catalogo_impresoras WHERE _id = ?';
+      $existing = $localConnection->goQuery($check_sql, [$id_impresora]);
+      if (!$existing) {
+        $response->getBody()->write(json_encode(['error' => 'La impresora con el ID proporcionado no existe.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(404);  // Not Found
+      }
+
+      // Construir la consulta de actualización dinámicamente
+      $fields = [];
+      $params = [];
+      $allowed_fields = ['codigo_interno', 'marca', 'modelo', 'ubicacion', 'tipo_tecnologia', 'estado', 'notas'];
+
+      foreach ($data as $key => $value) {
+        if (in_array($key, $allowed_fields)) {
+          $fields[] = "`{$key}` = ?";
+          $params[] = $value;
         }
+      }
 
-        // Construir la consulta de actualización dinámicamente
-        $fields = [];
-        $params = [];
-        $allowed_fields = ['codigo_interno', 'marca', 'modelo', 'ubicacion', 'tipo_tecnologia', 'estado', 'notas'];
+      if (empty($fields)) {
+        $response->getBody()->write(json_encode(['error' => 'No se proporcionaron campos para actualizar.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
 
-        foreach ($data as $key => $value) {
-            if (in_array($key, $allowed_fields)) {
-                $fields[] = "`{$key}` = ?";
-                $params[] = $value;
-            }
-        }
+      $sql = 'UPDATE catalogo_impresoras SET ' . implode(', ', $fields) . ' WHERE _id = ?';
+      $params[] = $id_impresora;
 
-        if (empty($fields)) {
-            $response->getBody()->write(json_encode(['error' => 'No se proporcionaron campos para actualizar.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
-        }
+      $localConnection->goQuery($sql, $params);
 
-        $sql = "UPDATE catalogo_impresoras SET " . implode(', ', $fields) . " WHERE _id = ?";
-        $params[] = $id_impresora;
-
-        $localConnection->goQuery($sql, $params);
-
-        $response->getBody()->write(json_encode(['message' => 'Impresora actualizada exitosamente.']));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-
+      $response->getBody()->write(json_encode(['message' => 'Impresora actualizada exitosamente.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     } catch (Exception $e) {
-        if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
-            $response->getBody()->write(json_encode(['error' => 'Error: El codigo_interno ya existe.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(409); // Conflict
-        }
+      if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+        $response->getBody()->write(json_encode(['error' => 'Error: El codigo_interno ya existe.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(409);  // Conflict
+      }
 
-        error_log('Error al actualizar impresora: ' . $e->getMessage());
-        $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al actualizar la impresora.']));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
-
+      error_log('Error al actualizar impresora: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al actualizar la impresora.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
-        $localConnection->disconnect();
+      $localConnection->disconnect();
     }
   });
 
@@ -1118,39 +1348,54 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
-        // Validación básica
-        if (empty($data['id_impresora']) || empty($data['id_insumo']) || empty($data['color']) || empty($data['mililitros'])) {
-            $response->getBody()->write(json_encode(['error' => 'Faltan campos obligatorios.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
-        }
+      // Validación básica
+      if (empty($data['id_impresora']) || empty($data['id_insumo']) || empty($data['color']) || empty($data['mililitros'])) {
+        $response->getBody()->write(json_encode(['error' => 'Faltan campos obligatorios.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
 
-        // PREPARAR FECHA
-        $myDate = new CustomTime();
-        $now = $myDate->today();
+      // PREPARAR FECHA
+      $myDate = new CustomTime();
+      $now = $myDate->today();
 
-        $sql = "INSERT INTO tintas_recargas (id_catalogo_impresora, id_insumo, color, cantidad, fecha_recarga) VALUES (?, ?, ?, ?, ?)";
-        
-        $params = [
-            $data['id_impresora'],
-            $data['id_insumo'],
-            $data['color'],
-            $data['mililitros'],
-            $now
-        ];
+      $sql = 'INSERT INTO tintas_recargas (id_catalogo_impresora, id_insumo, color, cantidad, fecha_recarga) VALUES (?, ?, ?, ?, ?)';
 
-        $localConnection->goQuery($sql, $params);
-        $new_id = $localConnection->getLastID();
+      $params = [
+        $data['id_impresora'],
+        $data['id_insumo'],
+        $data['color'],
+        $data['mililitros'],
+        $now
+      ];
 
-        $response->getBody()->write(json_encode(['message' => 'Recarga de tinta registrada exitosamente.', 'id' => $new_id]));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
+      $localConnection->goQuery($sql, $params);
+      $new_id = $localConnection->getLastID();
 
+      // Obtener la cantidad actual del insumo en inventario
+      $sql_get_cantidad = 'SELECT cantidad FROM inventario WHERE _id = ?';
+      $current_cantidad_result = $localConnection->goQuery($sql_get_cantidad, [$data['id_insumo']]);
+
+      if (is_array($current_cantidad_result) && !empty($current_cantidad_result) && isset($current_cantidad_result[0]['cantidad'])) {
+        $current_cantidad = (float) $current_cantidad_result[0]['cantidad'];
+        $mililitros_a_restar = (float) $data['mililitros'];
+        $new_cantidad = $current_cantidad - $mililitros_a_restar;
+
+        // Actualizar la cantidad en la tabla inventario
+        $sql_update_inventario = 'UPDATE inventario SET cantidad = ? WHERE _id = ?';
+        $localConnection->goQuery($sql_update_inventario, [$new_cantidad, $data['id_insumo']]);
+      } else {
+        // Manejar el caso donde el insumo no se encuentra o no tiene cantidad
+        throw new Exception('Insumo no encontrado o cantidad no disponible en inventario.');
+      }
+
+      $response->getBody()->write(json_encode(['message' => 'Recarga de tinta registrada exitosamente y cantidad de insumo actualizada.', 'id' => $new_id]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
     } catch (Exception $e) {
-        error_log('Error al registrar recarga de tinta: ' . $e->getMessage());
-        $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al registrar la recarga.']));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
-
+      error_log('Error al registrar recarga de tinta: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al registrar la recarga.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
-        $localConnection->disconnect();
+      $localConnection->disconnect();
     }
   });
 
@@ -1159,27 +1404,25 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
-        // Opcional: Verificar si la impresora existe antes de intentar eliminarla
-        $check_sql = "SELECT _id FROM catalogo_impresoras WHERE _id = ?";
-        $existing = $localConnection->goQuery($check_sql, [$id_impresora]);
-        if (!$existing) {
-            $response->getBody()->write(json_encode(['error' => 'La impresora con el ID proporcionado no existe.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(404); // Not Found
-        }
+      // Opcional: Verificar si la impresora existe antes de intentar eliminarla
+      $check_sql = 'SELECT _id FROM catalogo_impresoras WHERE _id = ?';
+      $existing = $localConnection->goQuery($check_sql, [$id_impresora]);
+      if (!$existing) {
+        $response->getBody()->write(json_encode(['error' => 'La impresora con el ID proporcionado no existe.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(404);  // Not Found
+      }
 
-        $sql = "DELETE FROM catalogo_impresoras WHERE _id = ?";
-        $localConnection->goQuery($sql, [$id_impresora]);
+      $sql = 'DELETE FROM catalogo_impresoras WHERE _id = ?';
+      $localConnection->goQuery($sql, [$id_impresora]);
 
-        $response->getBody()->write(json_encode(['message' => 'Impresora eliminada exitosamente.']));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-
+      $response->getBody()->write(json_encode(['message' => 'Impresora eliminada exitosamente.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     } catch (Exception $e) {
-        error_log('Error al eliminar impresora: ' . $e->getMessage());
-        $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al eliminar la impresora.']));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
-
+      error_log('Error al eliminar impresora: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al eliminar la impresora.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
-        $localConnection->disconnect();
+      $localConnection->disconnect();
     }
   });
 
@@ -3171,7 +3414,7 @@ DESC;";
   });
 
   /** CATALOG DE INSUMOS PARA CLASIFICACIÓN DE PROIDUCTOS */
-  $app->post('/catalogo-insumos-productos', function (Request $request, Response $response) { 
+  $app->post('/catalogo-insumos-productos', function (Request $request, Response $response) {
     $miInsumo = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -3338,11 +3581,11 @@ ORDER BY
                 DATE_FORMAT(met.moment, '%h:%i %p') AS hora
             FROM
                 metodos_de_pago met
-            JOIN ordenes ord ON met.id_orden = ord._id 
+            JOIN ordenes ord ON met.id_orden = ord._id
             JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
             WHERE
                 YEAR(met.moment) = YEAR(CURDATE())
-                AND MONTH(met.moment) = MONTH(CURDATE()) 
+                AND MONTH(met.moment) = MONTH(CURDATE())
                 " . $searchVendedor . '
             ORDER BY
                 met.id_orden DESC, met.moment ASC;
@@ -6523,22 +6766,26 @@ ORDER BY
     $sql = "SELECT DISTINCT
                 a._id id_lote_detalles,
                 a.id_orden,
+                (SELECT cliente_nombre FROM ordenes WHERE _id = a.id_orden) cliente,
                 a.fecha_inicio,
                 a.fecha_terminado,
                 a.progreso,
+                (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = a.id_orden) total_productos,
                 d.comision_tipo,
                 -- d.monto_pago,
                 (d.comision* d.cantidad) monto_pago,
-                TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) AS tiempo_empleado,
+                TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) AS tiempo_empleado,
                 c.tiempo tiempo_estimado_de_produccion,
-                (TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) - c.tiempo) rendimiento,
+                (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - c.tiempo) rendimiento,
                 d.cantidad unidades,
                 (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$args['id_departamento']}) cantidad_empleados_asigandos,
                 b.id_woo id_producto,
                 e.product,
+                'EficienciaInsumos' eficiencia_insumos,
                 b.talla
             FROM
                 lotes_detalles_empleados_asignados a
+            -- RIGHT JOIN ordenes ord ON ord._id = a.id_orden
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
@@ -6555,14 +6802,16 @@ ORDER BY
     $sql = "SELECT DISTINCT
                 a._id id_lote_detalles,
                 a.id_orden,
+                ord.cliente_nombre cliente,
                 a.fecha_inicio,
                 a.fecha_terminado,
                 a.progreso,
                 d.comision_tipo,
-                TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) AS tiempo_empleado,
+                TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) AS tiempo_empleado,
                 c.tiempo tiempo_estimado_de_produccion,
-                (TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) - c.tiempo) rendimiento,
+                (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - c.tiempo) rendimiento,
                 b.cantidad unidades,
+                SUM(b.cantidad) total_productos,
                 (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$args['id_departamento']}) cantidad_empleados_asigandos,
                 b.id_woo id_producto,
                 e.product,
@@ -6571,16 +6820,158 @@ ORDER BY
                 ((SUM(b.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_fija
             FROM
                 lotes_detalles_empleados_asignados a
+            JOIN ordenes ord ON ord._id = a.id_orden
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
             LEFT JOIN api_empresas.empresas_usuarios d ON d.id_usuario = a.id_empleado
-            WHERE a.id_empleado = {$args['id_empleado']} AND /*a.fecha_terminado IS NULL AND*/ a.id_departamento = {$args['id_departamento']}
-            GROUP BY a.id_orden ORDER BY a.id_orden ASC
+            LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = ord._id
+            WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
+            GROUP BY a.id_orden ORDER BY ofo.orden_fila ASC, a.id_orden DESC, a.progreso ASC
         ";
     $pendientes = $localConnection->goQuery($sql);
     $object['sql_pendientes'] = $sql;
     $object['ordenes_pendientes'] = $pendientes;
+
+    // ORDENES PARA CALCULO DE TIEMPO
+    $sql = "SELECT 
+            y.id_orden,
+            MAX(ofo.orden_fila) AS orden_fila,
+            (SELECT COUNT(_id) FROM inventario_movimientos WHERE id_orden = y.id_orden AND id_empleado = y.id_empleado) AS extra,
+            (SELECT COUNT(_id) FROM reposiciones WHERE id_departamento = 4 AND id_empleado = 20 AND terminada = 0 AND id_orden = y.id_orden) AS en_reposiciones,
+            (SELECT COUNT(_id) FROM tintas WHERE id_orden = y.id_orden) AS en_tintas,
+            (SELECT COUNT(_id) FROM inventario_movimientos WHERE id_orden = y.id_orden AND id_empleado = 20) AS en_inv_mov,
+            (SELECT valor_inicial FROM inventario_movimientos WHERE id_orden = y.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_inicial,
+            (SELECT valor_final FROM inventario_movimientos WHERE id_orden = y.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_final,
+            MAX(c.prioridad) AS prioridad,
+            MAX(z.unidades_produccion) AS unidades_solicitadas,
+            SUM(a.cantidad) AS unidades,
+            SUM(a.cantidad) AS piezas_actuales,
+            MAX(y.fecha_inicio) AS fecha_inicio,
+            MAX(y.fecha_terminado) AS fecha_terminado,
+            MAX(DATE_FORMAT(d.fecha_entrega, '%d-%m-%Y')) AS fecha_entrega,
+            MAX(y._id) AS lotes_detalles_empleados_asignados,
+            y.id_departamento,
+            (SELECT MIN(dep.orden_proceso) FROM lotes_detalles_empleados_asignados ldea JOIN departamentos dep ON ldea.id_departamento = dep._id WHERE ldea.id_orden = y.id_orden) AS orden_proceso_min,
+            (SELECT orden_proceso FROM departamentos WHERE _id = 4) AS orden_proceso_departamento,            
+            (SELECT orden_proceso FROM departamentos WHERE _id = MAX(c.id_departamento_actual)) AS orden_proceso,
+            MAX(c.id_departamento_actual) AS id_departamento_actual,
+            y.id_orden AS orden,
+            GROUP_CONCAT(DISTINCT a.name SEPARATOR ', ') AS producto,
+            y.id_empleado,
+            MAX(x.detalle) AS detalle_reposicion,
+            GROUP_CONCAT(DISTINCT (SELECT nombre FROM sizes WHERE _id = a.id_size) SEPARATOR ', ') AS talla,
+            GROUP_CONCAT(DISTINCT a.corte SEPARATOR ', ') AS corte,
+            GROUP_CONCAT(DISTINCT a.tela SEPARATOR ', ') AS tela,
+            MAX(tp.tiempo) AS tiempo_produccion,
+            MAX(y.procentaje_comision) AS procentaje_comision,
+            MAX(c.paso) AS paso,
+            MAX(d.status) AS status,
+            MAX(d.fecha_entrega) AS fecha_enrega_raw,
+            MAX(d.fecha_entrega) AS fecha_enrega_orden,
+            MAX(y.progreso) AS progreso,
+            NULL AS detalles_revision
+        FROM
+            lotes_detalles_empleados_asignados y
+            JOIN ordenes_productos a ON y.id_orden = a.id_orden
+            JOIN ordenes d ON a.id_orden = d._id
+            JOIN products p ON p._id = a.id_woo
+            JOIN products_tiempos_de_produccion tp ON tp.id_product = p._id AND tp.id_departamento = 4
+            LEFT JOIN lotes c ON c.id_orden = y.id_orden
+            LEFT JOIN lotes_historico_solicitadas z ON z.id_orden = a.id_orden
+            LEFT JOIN reposiciones x ON x.id_orden = d._id AND x.id_empleado = y.id_empleado AND x.id_ordenes_productos = a._id
+            LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = d._id
+        -- ============================ WHERE CORREGIDO Y ALINEADO ============================
+        WHERE  
+            (y.id_empleado = 20)
+            AND (y.id_departamento = 4)
+            -- Se eliminan los filtros extra de 'status' y 'fisico' para que la lógica de filtrado sea idéntica a la de la consulta de 'ordenes pendientes'.
+        -- ========================================================================
+        GROUP BY
+            y.id_orden, y.id_empleado, y.id_departamento
+        ORDER BY
+            orden_fila ASC,
+            y.id_orden DESC;
+        ";
+
+    $ordenes = $localConnection->goQuery($sql);
+    $object['sql_ordenes'] = $sql;
+    $object['ordenes'] = $ordenes;
+
+    // EFICIENCIA DE INSUMOS
+    $sql = "SELECT
+          est.id_orden,
+          est.id_empleado,
+          est.id_departamento,
+          est.nombre_empleado,
+          est.nombre_departamento,
+          est.fecha_asignacion,
+          est.nombre_producto,
+          est.talla,
+          est.nombre_insumo,
+          est.cantidad_piezas,
+          est.consumo_estimado_total,
+          COALESCE(consumo_r.consumo_real_total, 0) AS consumo_real_total,
+          (COALESCE(consumo_r.consumo_real_total, 0) - COALESCE(est.consumo_estimado_total, 0)) AS diferencia
+      FROM
+          (
+              SELECT
+                  op.id_orden,
+                  ldea.id_empleado,
+                  ldea.id_departamento,
+                  p.product AS nombre_producto,
+                  s.nombre AS talla,
+                  cip.nombre AS nombre_insumo,
+                  SUM(op.cantidad) AS cantidad_piezas,
+                  SUM(op.cantidad * COALESCE(pia.cantidad, 0)) AS consumo_estimado_total,
+                  eu.nombre AS nombre_empleado,
+                  dep.departamento AS nombre_departamento,
+                  ldea.fecha_inicio AS fecha_asignacion
+              FROM
+                  lotes_detalles_empleados_asignados ldea
+              JOIN ordenes_productos op ON ldea.id_orden = op.id_orden
+              JOIN products p ON op.id_woo = p._id
+              LEFT JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
+              LEFT JOIN departamentos dep ON ldea.id_departamento = dep._id
+              LEFT JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product 
+                                                      AND op.id_size = pia.id_talla
+                                                      AND ldea.id_departamento = pia.id_departamento
+              LEFT JOIN sizes s ON op.id_size = s._id
+              LEFT JOIN catalogo_insumos_productos cip ON pia.id_catalogo_insumos_productos = cip._id
+              WHERE
+                  -- ldea.id_orden = 2008
+                  ldea.id_empleado = {$args['id_empleado']}
+                  AND ldea.id_departamento = {$args['id_departamento']}
+              GROUP BY
+                  ldea.id_orden, ldea.id_empleado, ldea.id_departamento,
+                  p.product, s.nombre, cip.nombre,
+                  eu.nombre, dep.departamento, ldea.fecha_inicio
+          ) AS est
+      LEFT JOIN
+          (
+              SELECT
+                  id_orden,
+                  id_departamento,
+                  id_empleado,
+                  -- Agrupamos todo el consumo real, sin importar el insumo específico
+                  SUM(valor_inicial - valor_final) AS consumo_real_total
+              FROM
+                  inventario_movimientos
+              WHERE
+                  -- id_orden = 2008
+                  id_empleado = {$args['id_empleado']}
+                  AND id_departamento = {$args['id_departamento']}
+              GROUP BY
+                  -- Quitamos id_catalogo_insumos_prodcutos del GROUP BY
+                  id_orden, id_departamento, id_empleado
+          ) AS consumo_r ON est.id_orden = consumo_r.id_orden
+                        AND est.id_departamento = consumo_r.id_departamento
+                        AND est.id_empleado = consumo_r.id_empleado;
+                        -- Se elimina la condición de 'id_catalogo_insumos_productos' del JOIN final
+      ";
+    $reficiencia_insumos = $localConnection->goQuery($sql);
+    $object['sql_eficiencia_insumos'] = $sql;
+    $object['eficiencia_inusmos'] = $reficiencia_insumos;
 
     $localConnection->disconnect();
 
@@ -6895,7 +7286,7 @@ if ($departamento === 'Diseño') {
       $object['customer']['telefono'] = $customer[0]['billing_phone'];
 
       // Buscar datos de la orden!
-      $sql = "SELECT
+      $sql = 'SELECT
                 a._id,
                 a.status,
                 a.cliente_nombre,
@@ -6911,7 +7302,7 @@ if ($departamento === 'Diseño') {
             LEFT JOIN ordenes_observaciones obs ON obs.id_orden = a._id
             LEFT JOIN api_empresas.empresas_usuarios c ON c.id_usuario = a.responsable 
             WHERE
-                a._id =" . $id;
+                a._id =' . $id;
       $object['orden'] = $localConnection->goQuery($sql);
 
       // --- INICIO: CÁLCULO DE ABONOS Y DESCUENTOS ACTUALIZADOS ---
@@ -8259,8 +8650,8 @@ if ($departamento === 'Diseño') {
     $nuevo_abono_total = $abono_historico + $arr['abono'];
 
     // Se elimina el campo `observaciones` de la actualización principal
-    $sql_update_orden = "UPDATE ordenes SET
-        pago_total = " . $arr['total'] . ',
+    $sql_update_orden = 'UPDATE ordenes SET
+        pago_total = ' . $arr['total'] . ',
         pago_abono = ' . $nuevo_abono_total . ',
         pago_descuento = ' . $arr['descuento'] . ",
         fecha_entrega = '" . $arr['fechaEntrega'] . "'
@@ -10083,7 +10474,6 @@ if ($departamento === 'Diseño') {
         ";
     $obj['items_old'] = $localConnection->goQuery($sql);
 
-
     // ITEMS DE LISTA DE PRODUCCIÓN
     $sql = "SELECT
             a._id AS orden,
@@ -10171,10 +10561,8 @@ if ($departamento === 'Diseño') {
         ORDER BY
             f.orden_fila ASC;
     ";
-    
-    $obj['items'] = $localConnection->goQuery($sql);
 
-    
+    $obj['items'] = $localConnection->goQuery($sql);
 
     // ITEMS POR ASIGNAR
     $sql = 'SELECT
@@ -10375,7 +10763,6 @@ if ($departamento === 'Diseño') {
       $obj['empleados'] = $items;
 
       $localConnection->disconnect();
-
 
       // CREAR CAMPOS DE LA TABLA
       $obj['fields'][0]['key'] = 'orden';
@@ -12436,17 +12823,21 @@ if ($departamento === 'Diseño') {
 
     // Crear estructura de valores para insertar nuevo cliente
     $values = '(';
-    $values .= "'" . $now . "',";
-    $values .= "'" . $misTintas['c'] . "',";
-    $values .= "'" . $misTintas['m'] . "',";
-    $values .= "'" . $misTintas['y'] . "',";
-    $values .= "'" . $misTintas['k'] . "',";
-    $values .= "'" . $misTintas['w'] . "',";
+    $values .= (isset($misTintas['c']) && $misTintas['c'] !== '' && $misTintas['c'] !== null && $misTintas['c'] !== 'null') ? "'" . $misTintas['c'] . "'" : 'NULL';
+    $values .= ',';
+    $values .= (isset($misTintas['m']) && $misTintas['m'] !== '' && $misTintas['m'] !== null && $misTintas['m'] !== 'null') ? "'" . $misTintas['m'] . "'" : 'NULL';
+    $values .= ',';
+    $values .= (isset($misTintas['y']) && $misTintas['y'] !== '' && $misTintas['y'] !== null && $misTintas['y'] !== 'null') ? "'" . $misTintas['y'] . "'" : 'NULL';
+    $values .= ',';
+    $values .= (isset($misTintas['k']) && $misTintas['k'] !== '' && $misTintas['k'] !== null && $misTintas['k'] !== 'null') ? "'" . $misTintas['k'] . "'" : 'NULL';
+    $values .= ',';
+    $values .= (isset($misTintas['w']) && $misTintas['w'] !== '' && $misTintas['w'] !== null && $misTintas['w'] !== 'null') ? "'" . $misTintas['w'] . "'" : 'NULL';
+    $values .= ',';
     $values .= "'" . $misTintas['id_orden'] . "',";
     $values .= "'" . $misTintas['id_empleado'] . "',";
     $values .= "'" . $misTintas['id_impresora'] . "')";
 
-    $sql = 'INSERT INTO tintas (`moment`, `c`, `m`, `y`, `k`, `w`, `id_orden`, `id_empleado`, `id_catalogo_impresoras`) VALUES ' . $values;
+    $sql = 'INSERT INTO tintas (`c`, `m`, `y`, `k`, `w`, `id_orden`, `id_empleado`, `id_catalogo_impresoras`) VALUES ' . $values;
     $object['sql'] = $sql;
 
     $object['response'] = json_encode($localConnection->goQuery($sql));
@@ -13792,6 +14183,7 @@ if ($departamento === 'Diseño') {
 
     $sql = 'SELECT
             imo.id_orden,
+            inv.sku,
             inv._id id_insumo,
             inv.insumo nombre_insumo,    
             inv.color,
@@ -13810,7 +14202,67 @@ if ($departamento === 'Diseño') {
         ORDER BY imo.id_orden ASC, inv.insumo ASC';
     $object['insumos_consumidos'] = $localConnection->goQuery($sql);
 
-    $sql = 'SELECT imo.id_orden, imo.c cyan, imo.m magenta, imo.y yellow, imo.k black, (imo.c + imo.m + imo.y + imo.k) total_tinta FROM tintas imo ' . $where . ' ORDER BY imo.id_orden ASC';
+    // $sql = 'SELECT imo.id_orden, imo.c cyan, imo.m magenta, imo.y yellow, imo.k black, (imo.c + imo.m + imo.y + imo.k) total_tinta FROM tintas imo ' . $where . ' ORDER BY imo.id_orden ASC';
+    $sql = <<<SQL
+      -- Usamos dos CTEs: uno para encontrar el costo por ml, y otro para calcular el costo total por orden.
+      WITH 
+      -- CTE 1: Encuentra el costo por ml de la última recarga para cada tanque.
+      last_ink_refill_cost AS (
+          SELECT
+              tr.id_catalogo_impresora,
+              tr.color,
+              -- Calculamos el costo por ml dividiendo el costo total de la botella por su cantidad.
+              CASE 
+                  WHEN inv.cantidad > 0 THEN (inv.costo / inv.cantidad)
+                  ELSE 0 
+              END AS ink_cost_per_ml,
+              ROW_NUMBER() OVER (PARTITION BY tr.id_catalogo_impresora, tr.color ORDER BY tr.fecha_recarga DESC) as rn
+          FROM
+              tintas_recargas tr
+          JOIN
+              inventario inv ON tr.id_insumo = inv._id
+      ),
+      -- CTE 2: Usa el CTE anterior para calcular el costo total de la tinta para cada orden.
+      costos_por_orden AS (
+          SELECT
+              tin.id_orden,
+              ROUND(
+                  (COALESCE(tin.c, 0) * COALESCE(lic_c.ink_cost_per_ml, 0)) +
+                  (COALESCE(tin.m, 0) * COALESCE(lic_m.ink_cost_per_ml, 0)) +
+                  (COALESCE(tin.y, 0) * COALESCE(lic_y.ink_cost_per_ml, 0)) +
+                  (COALESCE(tin.k, 0) * COALESCE(lic_k.ink_cost_per_ml, 0)) +
+                  (COALESCE(tin.w, 0) * COALESCE(lic_w.ink_cost_per_ml, 0))
+              , 2) AS total_tinta_costo
+          FROM
+              tintas tin
+          LEFT JOIN last_ink_refill_cost lic_c ON lic_c.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_c.color = 'C' AND lic_c.rn = 1
+          LEFT JOIN last_ink_refill_cost lic_m ON lic_m.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_m.color = 'M' AND lic_m.rn = 1
+          LEFT JOIN last_ink_refill_cost lic_y ON lic_y.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_y.color = 'Y' AND lic_y.rn = 1
+          LEFT JOIN last_ink_refill_cost lic_k ON lic_k.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_k.color = 'K' AND lic_k.rn = 1
+          LEFT JOIN last_ink_refill_cost lic_w ON lic_w.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_w.color = 'W' AND lic_w.rn = 1
+          GROUP BY tin.id_orden
+      )
+
+      -- Consulta Final: Unimos tu consulta original con nuestros costos calculados.
+      SELECT 
+          imo.id_orden, 
+          imo.c AS cyan, 
+          imo.m AS magenta, 
+          imo.y AS yellow, 
+          imo.k AS black,
+          -- Nota: He añadido la tinta blanca (w) al total para que sea consistente con el cálculo de costos.
+          (COALESCE(imo.c, 0) + COALESCE(imo.m, 0) + COALESCE(imo.y, 0) + COALESCE(imo.k, 0) + COALESCE(imo.w, 0)) AS total_tinta_consumo_ml,
+          -- La nueva columna con el costo total
+          cpo.total_tinta_costo
+      FROM 
+          tintas imo
+      -- Unimos con los resultados de nuestro CTE de costos
+      LEFT JOIN 
+          costos_por_orden cpo ON imo.id_orden = cpo.id_orden
+      {$where}
+      ORDER BY 
+          imo.id_orden ASC
+      SQL;
     $object['tintas'] = $localConnection->goQuery($sql);
     $object['sql'] = $sql;
     $localConnection->disconnect();
@@ -13858,40 +14310,69 @@ if ($departamento === 'Diseño') {
   $app->post('/insumos/nuevo', function (Request $request, Response $response, $args) {
     $miInsumo = $request->getParsedBody();
     $localConnection = new LocalDB();
-
-    // PREPARAR FECHAS
     $myDate = new CustomTime();
     $now = $myDate->today();
+    $createdInsumos = [];
 
-    $values = '(';
-    $values .= "'" . $now . "',";
-    $values .= "'" . $miInsumo['insumo'] . "',";
-    $values .= "'" . $miInsumo['departamento'] . "',";
-    $values .= "'" . $miInsumo['unidad'] . "',";
-    $values .= "'" . $miInsumo['rendimiento'] . "',";
-    $values .= "'" . $miInsumo['costo'] . "',";
-    $values .= "'" . $miInsumo['cantidad'] . "',";
-    $values .= "'" . $miInsumo['sku'] . "',";
-    $values .= "'" . $miInsumo['id_catalogo_producto'] . "')";
+    try {
+      if (isset($miInsumo['es_tinta']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN) && isset($miInsumo['cantidad']) && intval($miInsumo['cantidad']) > 1) {
+        for ($i = 0; $i < intval($miInsumo['cantidad']); $i++) {
+          $currentCantidad = (isset($miInsumo['mililitros']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN)) ? $miInsumo['mililitros'] : 1;
+          $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$currentCantidad}, '{$miInsumo['sku']}', '{$miInsumo['id_catalogo_producto']}')";
+          $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo) VALUES ' . $values;
+          $result = $localConnection->goQuery($sql);
+          $lastId = $localConnection->getLastID();
 
-    $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo) VALUES ' . $values . ';';
-    $object['response_insert_inventario'] = $localConnection->goQuery($sql);
-    
-    $sql = 'SELECT _id last_insert_id FROM inventario ORDER BY _id DESC LIMIT 1;';
-    $object = $localConnection->goQuery($sql);
-    
-    if ($miInsumo['es_tinta']) {
-      $sql = "INSERT INTO `tinta_filtro`(`id_inventario`, `color`) VALUES ({$object[0]['last_insert_id']}, '{$miInsumo['color']}');";
-     $object['response_insert_tinta_filtro'] = $localConnection->goQuery($sql);
+          $sqlTinta = "INSERT INTO `tinta_filtro`(`id_inventario`, `color`) VALUES ({$lastId}, '{$miInsumo['color']}')";
+          $localConnection->goQuery($sqlTinta);
+
+          $newInsumo = $miInsumo;
+          $newInsumo['_id'] = $lastId;
+          $newInsumo['cantidad'] = 1;
+          $newInsumo['sku'] = $miInsumo['sku'] . '-' . $lastId;
+          $createdInsumos[] = $newInsumo;
+        }
+      } else {
+        $cantidad = $miInsumo['cantidad'] ?? 1;
+        if (isset($miInsumo['mililitros']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN)) {
+          $cantidad = $miInsumo['mililitros'];
+        }
+        $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$cantidad}, '{$miInsumo['sku']}', '{$miInsumo['id_catalogo_producto']}')";
+        $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo) VALUES ' . $values;
+        $result = $localConnection->goQuery($sql);
+        $lastId = $localConnection->getLastID();
+
+        if (isset($miInsumo['es_tinta']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN)) {
+          $sqlTinta = "INSERT INTO `tinta_filtro`(`id_inventario`, `color`) VALUES ({$lastId}, '{$miInsumo['color']}')";
+          $localConnection->goQuery($sqlTinta);
+        }
+
+        $newInsumo = $miInsumo;
+        $newInsumo['_id'] = $lastId;
+        $newInsumo['sku'] = $miInsumo['sku'] . '-' . $lastId;
+        $createdInsumos[] = $newInsumo;
+      }
+
+      $localConnection->disconnect();
+
+      $responseData = [
+        'error' => false,
+        'message' => 'Insumos creados exitosamente.',
+        'data' => $createdInsumos
+      ];
+
+      $response->getBody()->write(json_encode($responseData, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      $localConnection->disconnect();
+      $responseData = [
+        'error' => true,
+        'message' => 'Error al crear insumo(s): ' . $e->getMessage(),
+        'data' => []
+      ];
+      $response->getBody()->write(json_encode($responseData, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     }
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
   });
 
   // EDITAR INSUMO
@@ -14510,7 +14991,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     $localConnection = new LocalDB();
     // $localConnection->conectar();
 
-    $sql = "SELECT
+    $sql = 'SELECT
         a._id id_insumo,
         a.sku,
         b.color,
@@ -14519,18 +15000,18 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         FROM
         inventario a
         JOIN tinta_filtro b ON b.id_inventario = a._id
-        WHERE a.cantidad > 0";
+        WHERE a.cantidad > 0';
 
     $data = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($data,
-        JSON_NUMERIC_CHECK));
+      JSON_NUMERIC_CHECK));
     return $response
-        ->withHeader('Content-Type', 'application/json')
-        ->withStatus(200);
-});
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
 
   // EFICIENCIA CON DATOS COMPLETOS
   // TODO ESTABLECER PARÁMETROS APRA OBTENER VARIAS ORDENES
@@ -15262,5 +15743,22 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     $db->disconnect();
     $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
+  $app->get('/calculo-pago-real', function (Request $request, Response $response) {
+    $sql = "
+        SELECT AVG(tasa) as promedio_tasa
+        FROM metodos_de_pago
+        WHERE
+            moneda = 'Bolívares'
+            AND metodo_pago IN ('Pagomovil', 'Transferencia')
+            AND DATE(moment) = CURDATE()
+    ";
+
+$db = new LocalDB();
+$data = $db->goQuery($sql);
+$db->disconnect();
+$response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 };
