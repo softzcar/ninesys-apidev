@@ -1070,6 +1070,48 @@ return function (App $app) {
     }
   });
 
+  /**
+   * POST /lotes/{id}/terminar
+   * Termina todas las órdenes contenidas en un lote de fabricación.
+   */
+  $app->post('/lotes/{id}/terminar', function (Request $request, Response $response, array $args) {
+    $id_lote = intval($args['id']);
+    $localConnection = new LocalDB();
+
+    try {
+      // 1. Actualizar el estado del lote a 'terminado'
+      $sql_update_lote = "UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_terminado = NOW() WHERE _id = ? AND estado = 'en_curso'";
+      $localConnection->goQuery($sql_update_lote, [$id_lote]);
+
+      // 2. Obtener todas las órdenes del lote
+      $sql_get_ordenes = 'SELECT id_orden FROM empleados_lotes_fabricacion_items WHERE id_lote = ?';
+      $ordenes_del_lote = $localConnection->goQuery($sql_get_ordenes, [$id_lote]);
+
+      if (empty($ordenes_del_lote)) {
+        throw new Exception("No se encontraron órdenes para el lote {$id_lote}.");
+      }
+
+      // 3. Terminar cada orden individualmente (en la tabla de asignaciones)
+      $sql_terminar_orden = "UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = NOW(), progreso = 'terminado' WHERE id_orden = ? AND progreso = 'en curso'";
+
+      foreach ($ordenes_del_lote as $orden) {
+        $localConnection->goQuery($sql_terminar_orden, [$orden['id_orden']]);
+      }
+
+      $response->getBody()->write(json_encode([
+        'status' => 'success',
+        'message' => "Lote {$id_lote} y sus " . count($ordenes_del_lote) . ' órdenes han sido terminados.'
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      error_log("Error al terminar lote {$id_lote}: " . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al terminar el lote.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
   // CRUD para Catalogo de Impresoras
   $app->post('/impresoras', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
@@ -13052,6 +13094,297 @@ if ($departamento === 'Diseño') {
       ->withStatus(200);
   });
 
+  // REGSTRAR LOTES DE ORDENES DESDE EMPLEADOS
+
+  /**
+   * POST /lotes/{id}/finalizar-departamento
+   * Finaliza un lote de fabricación para un departamento específico, actualizando el estado de las órdenes
+   * contenidas, registrando los pagos a los empleados y avanzando el proceso.
+   */
+  $app->post('/lotes/{id}/finalizar-departamento', function (Request $request, Response $response, array $args) {
+    $id_lote = intval($args['id']);
+    $data = $request->getParsedBody();
+    $id_departamento = $data['id_departamento'] ?? null;
+    $id_empleado = $data['id_empleado'] ?? null;  // Employee who is finishing the batch
+
+    if (empty($id_departamento) || empty($id_empleado)) {
+      $response->getBody()->write(json_encode(['error' => 'Faltan parámetros
+    requeridos: id_departamento y id_empleado.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(
+        400
+      );
+    }
+
+    $localConnection = new LocalDB();
+    $response_data = [];
+
+    try {
+      $localConnection->beginTransaction();  // Iniciar transacción
+
+      // 1. Get batch details (including start time)
+      $sql_get_batch = 'SELECT fecha_inicio FROM empleados_lotes_fabricacion WHERE
+    _id = ?';
+      $batch_info = $localConnection->goQuery($sql_get_batch, [$id_lote]);
+      if (empty($batch_info)) {
+        throw new Exception("Lote {$id_lote} no encontrado.");
+      }
+      $fecha_inicio_batch = $batch_info[0]['fecha_inicio'];
+      $fecha_terminado_batch = date('Y-m-d H:i:s');  // Current time as batch end time
+
+      // 2. Get all orders in the batch with their quantities
+      $sql_get_orders_in_batch = '
+        SELECT
+            elfi.id_orden,
+            op.cantidad AS unidades_solicitadas,
+            op._id AS id_ordenes_productos,
+            op.id_woo, 
+            ldea.id_lotes_detalles_empleados_asignados,
+            ld.id_lotes_detalles
+        FROM
+            empleados_lotes_fabricacion_items elfi
+        JOIN
+            ordenes_productos op ON elfi.id_orden = op.id_orden
+        LEFT JOIN
+            lotes_detalles ld ON ld.id_orden = elfi.id_orden AND
+    ld.id_departamento = ? AND ld.id_woo = op.id_woo
+        LEFT JOIN
+            lotes_detalles_empleados_asignados ldea ON ldea.id_orden =
+    elfi.id_orden AND ldea.id_departamento = ? AND ldea.id_empleado = ?
+        WHERE
+            elfi.id_lote = ?
+    ';
+      $orders_in_batch = $localConnection->goQuery($sql_get_orders_in_batch, [
+        $id_departamento, $id_departamento, $id_empleado, $id_lote
+      ]);
+
+      if (empty($orders_in_batch)) {
+        throw new Exception("No se encontraron órdenes para el lote {$id_lote} en
+        el departamento {$id_departamento}.");
+      }
+
+      // Calculate total units in batch for proportional distribution
+      $total_units_in_batch = array_sum(array_column($orders_in_batch,
+        'unidades_solicitadas'));
+      if ($total_units_in_batch == 0) {
+        $total_units_in_batch = 1;  // Avoid division by zero
+      }
+
+      // Calculate total batch duration in seconds
+      $batch_start_timestamp = strtotime($fecha_inicio_batch);
+      $batch_end_timestamp = strtotime($fecha_terminado_batch);
+      $tiempo_total_batch_segundos = $batch_end_timestamp - $batch_start_timestamp;
+
+      // Get next department for 'paso' update
+      $sql_next_depto = 'SELECT _id, departamento, orden_proceso FROM departamentos
+    WHERE orden_proceso > (SELECT orden_proceso FROM departamentos WHERE _id = ?) ORDER BY
+    orden_proceso ASC LIMIT 1';
+      $next_depto_info = $localConnection->goQuery($sql_next_depto, [
+        $id_departamento
+      ]);
+      $next_paso_name = $next_depto_info[0]['departamento'] ?? 'terminado';
+      $next_paso_id = $next_depto_info[0]['_id'] ?? 0;  // Assuming 0 for 'terminado'
+
+      // Update batch status to 'terminado'
+      $sql_update_batch_status = "UPDATE empleados_lotes_fabricacion SET estado =
+    'terminado', fecha_fin = ? WHERE _id = ?";
+      $localConnection->goQuery($sql_update_batch_status, [$fecha_terminado_batch,
+        $id_lote]);
+
+      foreach ($orders_in_batch as $order) {
+        $id_orden = $order['id_orden'];
+        $unidades_orden = $order['unidades_solicitadas'];
+        $id_ordenes_productos = $order['id_ordenes_productos'];
+        $id_woo = $order['id_woo'];
+        $id_lotes_detalles_empleados_asignados = $order[
+          'id_lotes_detalles_empleados_asignados'
+        ];
+        $id_lotes_detalles = $order['id_lotes_detalles'];
+
+        // Estimate individual order end time
+        $estimated_time_for_order_seconds = ($unidades_orden
+          / $total_units_in_batch) * $tiempo_total_batch_segundos;
+        $estimated_fecha_terminado_order = date('Y-m-d H:i:s',
+          $batch_start_timestamp + $estimated_time_for_order_seconds);
+
+        // --- Apply 'fin' logic similar to /registrar-paso-empleado ---
+
+        // Update lotes table (overall order progress)
+        $sql_update_lotes = 'UPDATE lotes SET paso = ?, id_departamento_actual = ?
+        WHERE id_orden = ?';
+        $localConnection->goQuery($sql_update_lotes, [$next_paso_name,
+          $next_paso_id, $id_orden]);
+
+        // Update lotes_detalles (task details)
+        $sql_update_lotes_detalles = "UPDATE lotes_detalles SET fecha_terminado =
+        ?, progreso = 'terminada' WHERE id_orden = ? AND id_departamento = ? AND id_woo = ?";
+        $localConnection->goQuery($sql_update_lotes_detalles, [
+          $estimated_fecha_terminado_order, $id_orden, $id_departamento, $id_woo
+        ]);
+
+        // Update lotes_detalles_empleados_asignados (employee assignment details)
+        $sql_update_ldea = "UPDATE lotes_detalles_empleados_asignados SET
+        fecha_terminado = ?, progreso = 'terminada' WHERE id_lotes_detalles = ? AND
+        id_empleado = ? AND id_departamento = ?";
+        $localConnection->goQuery($sql_update_ldea, [
+          $estimated_fecha_terminado_order, $id_lotes_detalles_empleados_asignados, $id_empleado,
+          $id_departamento
+        ]);
+
+        // Calculate and insert into pagos table
+        $sql_get_comision_info = 'SELECT comision, comision_tipo FROM
+        api_empresas.empresas_usuarios WHERE id_usuario = ?';
+        $comision_info = $localConnection->goQuery($sql_get_comision_info, [
+          $id_empleado
+        ]);
+        $comision_value = $comision_info[0]['comision'] ?? 0;
+        $comision_type = $comision_info[0]['comision_tipo'] ?? 'fija';
+
+        $monto_pago = 0;
+        if ($comision_type === 'variable') {
+          $sql_get_product_comision = 'SELECT comision FROM products WHERE _id =
+        ?';
+          $product_comision_info = $localConnection->goQuery(
+            $sql_get_product_comision, [$id_woo]
+          );
+          $product_comision = $product_comision_info[0]['comision'] ?? 0;
+          $monto_pago = $unidades_orden * $product_comision;
+        } else {
+          $monto_pago = $unidades_orden * $comision_value;
+        }
+
+        $sql_insert_pago = "INSERT INTO pagos (id_orden, id_departamento,
+        comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago,
+        id_empleado, detalle, fecha_pago) VALUES (?, ?, ?, ?, ?, ?, 'aprobado', ?, ?, ?, ?)";
+        $localConnection->goQuery($sql_insert_pago, [
+          $id_orden,
+          $id_departamento,
+          $comision_value,
+          $comision_type,
+          $unidades_orden,
+          $id_lotes_detalles,
+          $monto_pago,
+          $id_empleado,
+          $next_paso_name,
+          $estimated_fecha_terminado_order
+        ]);
+      }
+
+      $localConnection->commit();  // Confirmar transacción
+      $response_data = ['status' => 'success', 'message' => "Lote {$id_lote}
+    finalizado en el departamento {$id_departamento}."];
+    } catch (Exception $e) {
+      $localConnection->rollBack();  // Revertir transacción en caso de error
+      error_log("Error al finalizar lote {$id_lote} en departamento
+    {$id_departamento}: " . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del
+    servidor al finalizar el lote: ' . $e->getMessage()]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(
+        500
+      );
+    } finally {
+      $localConnection->disconnect();
+    }
+
+    $response->getBody()->write(json_encode($response_data, JSON_NUMERIC_CHECK));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
+  /**
+   * POST /lotes/activos
+   * Obtiene los lotes activos (pendientes o en curso) para un empleado y departamento específicos.
+   */
+  $app->post('/lotes/activos', function (Request $request, Response $response, array $args) {
+    // Cambiado de getQueryParams() a getParsedBody() según la convención existente.
+    $data = $request->getParsedBody();
+    $id_empleado = $data['id_empleado'] ?? null;
+    $id_departamento = $data['id_departamento'] ?? null;
+
+    if (empty($id_empleado) || empty($id_departamento)) {
+      $response->getBody()->write(json_encode(['error' => 'Faltan parámetros requeridos: id_empleado y id_departamento.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection = new LocalDB();
+    $result_data = [];  // Renombrado para evitar conflicto con $data del request
+
+    try {
+      $sql = "
+          SELECT
+              elf._id AS id,
+              elf.estado,
+              elf.fecha_inicio,
+              elf.fecha_fin,
+              GROUP_CONCAT(
+                  JSON_OBJECT(
+                      'id_orden', elfi.id_orden,
+                      'cliente_nombre', o.cliente_nombre,
+                      'productos', (
+                          SELECT
+                              GROUP_CONCAT(
+                                  JSON_OBJECT(
+                                      'id_producto', op._id,
+                                      'name', op.name,
+                                      'cantidad', op.cantidad,
+                                      'talla', op.talla,
+                                      'corte', op.corte,
+                                      'tela', op.tela
+                                  )
+                              )
+                          FROM
+                              ordenes_productos op
+                          WHERE
+                              op.id_orden = elfi.id_orden
+                      )
+                  )
+              ) AS ordenes
+          FROM
+              empleados_lotes_fabricacion elf
+          JOIN
+              empleados_lotes_fabricacion_items elfi ON elf._id = elfi.id_lote
+          JOIN
+              ordenes o ON elfi.id_orden = o._id
+          WHERE
+              elf.id_empleado = ? AND elf.id_departamento = ?
+              AND elf.estado IN ('pendiente', 'en_curso')
+          GROUP BY
+              elf._id, elf.estado, elf.fecha_inicio, elf.fecha_fin
+          ORDER BY
+              elf.fecha_inicio DESC, elf._id DESC
+      ";
+
+      $params = [$id_empleado, $id_departamento];
+      $query_result = $localConnection->goQuery($sql, $params);
+
+      // Decode the 'ordenes' JSON string for each batch
+      foreach ($query_result as &$row) {
+        if (!empty($row['ordenes'])) {
+          $row['ordenes'] = json_decode('[' . $row['ordenes'] . ']', true);
+          // Decode 'productos' within each order
+          foreach ($row['ordenes'] as &$order) {
+            if (!empty($order['productos'])) {
+              // Ensure 'productos' is decoded correctly, handling potential multiple JSON objects
+              $order['productos'] = json_decode('[' . $order['productos'] . ']', true);
+            } else {
+              $order['productos'] = [];
+            }
+          }
+        } else {
+          $row['ordenes'] = [];
+        }
+      }
+      $result_data = $query_result;
+
+      $response->getBody()->write(json_encode($result_data, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      error_log('Error al obtener lotes activos: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al obtener lotes activos: ' . $e->getMessage()]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
   // Control de de estado del proceso de produccion del empleado
   $app->post('/empleados/registrar-paso/{tipo}/{departamento}/{id_lotes_detalles}/{unidades}', function (Request $request, Response $response, array $args) {
     // PREPARAR FECHAS
@@ -15745,20 +16078,54 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 
-  $app->get('/calculo-pago-real', function (Request $request, Response $response) {
-    $sql = "
-        SELECT AVG(tasa) as promedio_tasa
-        FROM metodos_de_pago
-        WHERE
-            moneda = 'Bolívares'
-            AND metodo_pago IN ('Pagomovil', 'Transferencia')
-            AND DATE(moment) = CURDATE()
-    ";
+  $app->get('/calculo-pago-real/{dias}', function (Request $request, Response $response, array $args) {
+    if (!isset($args['dias'])) {
+      $data['dias'] = $args['dias'];
+    } else {
+      $db = new LocalDB();
 
-$db = new LocalDB();
-$data = $db->goQuery($sql);
-$db->disconnect();
-$response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
-return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+      $sql = "SELECT 
+            AVG(tasa) as promedio_tasa
+          FROM metodos_de_pago
+          WHERE
+              moneda = 'Bolívares'
+              AND metodo_pago IN ('Pagomovil', 'Transferencia')
+              AND DATE(moment) = CURDATE()";
+
+      $resp = $db->goQuery($sql);
+
+      $precio_hora = 2.5;
+      $horas_por_dia = 8;
+      $porcentaje_ajuste = 20;
+
+      $ht = floatval($args['dias']) * $horas_por_dia;
+      $data['horas_trabajadas'] = $ht;
+
+      $data['dolares'] = $ht * $precio_hora;
+
+      $data['porcentaje_ajuste'] = $porcentaje_ajuste;
+
+      $tasa = floatval($resp[0]['promedio_tasa']);
+      $data['tasa_promedio'] = number_format($tasa, 2, '.', '');
+
+      $tasa_ajustada = ($tasa) * $porcentaje_ajuste / 100;
+
+      $ajuste = number_format($tasa_ajustada, 2, '.', '');
+
+      $data['monto_ajuste'] = number_format($tasa_ajustada, 2, '.', '');
+
+      $data['tasa_ajustada'] = number_format(($ajuste + $tasa), 2, '.', '');
+
+      // $total_pago = ($tasa * $ht) + (($tasa* $ht) * $porcentaje_ajuste / 100);
+      $total_pago = $data['dolares'] * $data['tasa_ajustada'];
+
+      // $data["bolivares_con descuento"] = number_format(($data['dolares'] * $data["tasa_promedio"]), 2, '.', '');
+      $data['bolivares_real'] = number_format($total_pago, 2, '.', '');
+
+      $db->disconnect();
+    }
+
+    $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 };

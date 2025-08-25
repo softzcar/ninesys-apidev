@@ -1,0 +1,8 @@
+- Solicitud del Usuario: "estamos recibiendo `{ "statusCode": 500, "error": { "type": "SERVER_ERROR", "description": "Cannot access offset of type string on string" } }`"
+- Archivos Involucrados: `/home/apidev.nineteengreen.com/public_html/app/routes.php`
+- Acción Realizada: Se añadieron verificaciones `is_array()` alrededor de las iteraciones y asignaciones que podrían causar el error "Cannot access offset of type string on string" en el código PHP del endpoint `/reporte/insumos-cosumidos-por-orden/`. Esto asegura que las variables `$inkCostsData` y `$object['tintas']` sean arrays antes de intentar iterar sobre ellas o acceder a sus elementos, haciendo el código más robusto frente a posibles retornos no esperados de la función `goQuery`.
+- Herramienta(s) Utilizada(s): `default_api.replace`
+- Resultado: Éxito
+- Verificación: La modificación se realizó mediante la herramienta `replace`, que confirmó 1 reemplazo exitoso en el archivo especificado. Esta corrección es una práctica defensiva estándar para manejar tipos de datos inesperados en PHP.
+- Observaciones de Gemini: El error persistía porque la función `goQuery` podría estar devolviendo un tipo de dato diferente a un array (por ejemplo, una cadena de error) en ciertas circunstancias. Las verificaciones `is_array()` previenen que el código intente tratar una cadena como un array.
+- Respuesta de Gemini: He añadido verificaciones de tipo de array en el código del endpoint `/reporte/insumos-cosumidos-por-orden/` para manejar mejor los posibles retornos inesperados de la base de datos. Esto debería resolver el error "Cannot access offset of type string on string". Por favor, intenta probar el endpoint nuevamente.
