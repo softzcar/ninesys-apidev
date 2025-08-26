@@ -13104,91 +13104,144 @@ if ($departamento === 'Diseño') {
 
   $app->post('/lotes/{id}/finalizar-departamento', function (Request $request, Response $response, array $args) {
     $id_lote = intval($args['id']);
-    $data = $request->getParsedBody();
+
+    // --- INICIO DE LA CORRECCIÓN ---
+    // getParsedBody() no funciona para payloads JSON crudos.
+    // Leemos el cuerpo de la solicitud y decodificamos el JSON manualmente.
+    $json_body = $request->getBody()->getContents();
+    $data = json_decode($json_body, true);  // El 'true' lo convierte en un array asociativo
+    // --- FIN DE LA CORRECCIÓN ---
+
+    // 1. Recibir y validar el nuevo payload con un array de consumos
     $id_departamento = $data['id_departamento'] ?? null;
     $id_empleado = $data['id_empleado'] ?? null;
-    $debug_info = [];  // Array para la depuración
+    $consumos_lote = $data['consumos_lote'] ?? null;
 
-    if (empty($id_departamento) || empty($id_empleado)) {
-      $response->getBody()->write(json_encode(['error' => 'Faltan parámetros requeridos: id_departamento y id_empleado.']));
+    if (empty($id_departamento) || empty($id_empleado) || !is_array($consumos_lote) || empty($consumos_lote)) {
+      $response->getBody()->write(json_encode(['error' => 'Faltan parámetros requeridos o el array consumos_lote está vacío.', 'debug_data_received' => $data]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
     $localConnection = new LocalDB();
 
-    $sql_get_batch = 'SELECT fecha_inicio FROM empleados_lotes_fabricacion WHERE _id = ' . $id_lote;
-    $batch_info = $localConnection->goQuery($sql_get_batch);
-    $debug_info['batch_info_result'] = $batch_info;
+    try {
+      // NOTA: Idealmente, estas operaciones estarían envueltas en una transacción de BD.
+      // $localConnection->beginTransaction();
 
-    if (empty($batch_info) || !is_array($batch_info)) {
-      $debug_info['error_location'] = 'batch_info check';
-      $response->getBody()->write(json_encode(['error' => "Lote {$id_lote} no encontrado o resultado inválido.", 'debug' =>
-        $debug_info]));
-      return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
-    }
+      // 2. Obtener todas las órdenes y sus unidades para calcular la proporción
+      $sql_ordenes_lote = '
+            SELECT
+                elfi.id_orden,
+                (SELECT SUM(op.cantidad) FROM ordenes_productos op WHERE op.id_orden = elfi.id_orden) as unidades_orden
+            FROM
+                empleados_lotes_fabricacion_items elfi
+            WHERE elfi.id_lote = ?';
+      $ordenes_del_lote = $localConnection->goQuery($sql_ordenes_lote, [$id_lote]);
 
-    $fecha_inicio_batch = $batch_info[0]['fecha_inicio'];
-
-    if (is_null($fecha_inicio_batch)) {
-      $response->getBody()->write(json_encode(['error' => "El lote {$id_lote} no puede ser finalizado porque no ha sido
-    iniciado. La fecha de inicio es nula."]));
-      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
-    }
-
-    $fecha_terminado_batch = date('Y-m-d H:i:s');
-
-    $sql_get_orders_in_batch = "
-        SELECT
-            elfi.id_orden,
-            op.cantidad AS unidades_solicitadas,
-            op._id AS id_ordenes_productos,
-            op.id_woo,
-            ldea._id AS id_lotes_detalles_empleados_asignados,
-            ld._id AS id_lotes_detalles
-        FROM
-            empleados_lotes_fabricacion_items elfi
-        JOIN
-            ordenes_productos op ON elfi.id_orden = op.id_orden
-        LEFT JOIN
-            lotes_detalles ld ON ld.id_orden = elfi.id_orden AND ld.id_departamento = {$id_departamento} AND ld.id_woo =
-    op.id_woo
-        LEFT JOIN
-            lotes_detalles_empleados_asignados ldea ON ldea.id_orden = elfi.id_orden AND ldea.id_departamento = {
-    $id_departamento} AND ldea.id_empleado = {$id_empleado}
-        WHERE
-            elfi.id_lote = {$id_lote}
-    ";
-    $orders_in_batch = $localConnection->goQuery($sql_get_orders_in_batch);
-    $debug_info['orders_in_batch_sql'] = $sql_get_orders_in_batch;
-    $debug_info['orders_in_batch_result'] = $orders_in_batch;
-
-    if (empty($orders_in_batch) || !is_array($orders_in_batch)) {
-      $debug_info['error_location'] = 'orders_in_batch check';
-      $response->getBody()->write(json_encode(['error' => "No se encontraron órdenes para el lote {$id_lote} o resultado
-    inválido.", 'debug' => $debug_info]));
-      return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
-    }
-
-    // El resto de la lógica...
-    foreach ($orders_in_batch as $order) {
-      if (!is_array($order)) {
-        $debug_info['error_location'] = 'foreach loop';
-        $debug_info['problematic_order_variable'] = $order;
-        $response->getBody()->write(json_encode(['error' => 'Se encontró un elemento inválido en la lista de órdenes.',
-          'debug' => $debug_info]));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+      if (empty($ordenes_del_lote)) {
+        throw new Exception("No se encontraron órdenes para el lote {$id_lote}.");
       }
-      // ... (la lógica de procesamiento de cada orden va aquí)
+
+      $gran_total_unidades_lote = array_sum(array_column($ordenes_del_lote, 'unidades_orden'));
+
+      if ($gran_total_unidades_lote <= 0) {
+        throw new Exception("El número total de unidades para el lote {$id_lote} es cero, no se puede distribuir el consumo.");
+      }
+
+      $now = date('Y-m-d H:i:s');
+
+      // 3. Bucle externo: Procesar cada insumo consumido
+      foreach ($consumos_lote as $consumo) {
+        if (empty($consumo['id_insumo']) || empty($consumo['cantidad_total']))
+          continue;
+
+        $id_insumo_actual = intval($consumo['id_insumo']);
+        $cantidad_total_consumida = floatval($consumo['cantidad_total']);
+
+        // 3a. Actualizar el stock del insumo principal (UNA VEZ POR INSUMO)
+        $sql_update_inventario = 'UPDATE inventario SET cantidad = cantidad - ? WHERE _id = ?';
+        $localConnection->goQuery($sql_update_inventario, [$cantidad_total_consumida, $id_insumo_actual]);
+
+        // 3b. Bucle interno: Distribuir el consumo del insumo actual entre las órdenes
+        foreach ($ordenes_del_lote as $order) {
+          $id_orden_actual = $order['id_orden'];
+          $unidades_orden = intval($order['unidades_orden']);
+
+          $proporcion = $unidades_orden / $gran_total_unidades_lote;
+          $consumo_estimado_orden = $cantidad_total_consumida * $proporcion;
+
+          // Insertar el movimiento de inventario para esta orden y este insumo
+          $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, (SELECT departamento FROM departamentos WHERE _id = ?), ?, ?, ?)';
+          $params_movimiento = [
+            $id_orden_actual, $id_empleado, $id_insumo_actual, $id_departamento, $id_departamento, 0,
+            $consumo_estimado_orden, $now
+          ];
+          $localConnection->goQuery($sql_movimiento, $params_movimiento);
+        }
+      }
+
+      // 4. Obtener información del departamento actual (una sola vez)
+      $sql_dep_info = 'SELECT orden_proceso, departamento FROM departamentos WHERE _id = ?';
+      $dep_info = $localConnection->goQuery($sql_dep_info, [$id_departamento]);
+      $orden_proceso_actual = intval($dep_info[0]['orden_proceso']);
+      $nombre_departamento = $dep_info[0]['departamento'];
+
+      // 5. Bucle final: Ejecutar acciones de finalización para cada orden (una sola vez por orden)
+      foreach ($ordenes_del_lote as $order) {
+        $id_orden_actual = $order['id_orden'];
+
+        // 5a. Actualizar el paso del lote al siguiente departamento
+        $siguiente_paso_proceso = $orden_proceso_actual + 1;
+        $sql_next_dep = 'SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1';
+        $next_dep_info = $localConnection->goQuery($sql_next_dep, [$siguiente_paso_proceso]);
+
+        if (empty($next_dep_info)) {
+          $sql_update_lote = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?";
+          $localConnection->goQuery($sql_update_lote, [$id_orden_actual]);
+        } else {
+          $sql_update_lote = 'UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?';
+          $localConnection->goQuery($sql_update_lote, [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
+        }
+
+        // 5b. Calcular y registrar pago
+        $sql_comision_empleado = 'SELECT comision, comision_tipo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+        $resp_comision_empleado = $localConnection->goQuery($sql_comision_empleado, [$id_empleado]);
+        $comision_tipo = $resp_comision_empleado[0]['comision_tipo'] ?? 'fija';
+        $comision_valor = floatval($resp_comision_empleado[0]['comision'] ?? 0);
+
+        $sql_calculo_pago = 'SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable, ((SUM(c.cantidad) * eu.comision) * a.procentaje_comision / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? GROUP BY a._id, a.procentaje_comision';
+        $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
+
+        if (!empty($resp_comision)) {
+          $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
+          $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          $params_pago = [$id_orden_actual, 0, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
+          $localConnection->goQuery($sql_pago, $params_pago);
+        }
+
+        // 5c. Actualizar estado de la tarea a 'terminada'
+        $sql_update_ld = "UPDATE lotes_detalles SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ?";
+        $localConnection->goQuery($sql_update_ld, [$now, $id_departamento, $id_orden_actual]);
+        $sql_update_ldea = "UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ? AND id_empleado = ?";
+        $localConnection->goQuery($sql_update_ldea, [$now, $id_departamento, $id_orden_actual, $id_empleado]);
+      }
+
+      // 6. Finalizar el lote principal
+      $sql_finalizar_lote = "UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?";
+      $localConnection->goQuery($sql_finalizar_lote, [$now, $id_lote]);
+
+      // $localConnection->commit();
+      $response_data = ['status' => 'success', 'message' => "Lote {$id_lote} finalizado y consumo distribuido correctamente."];
+      $response->getBody()->write(json_encode($response_data, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      // $localConnection->rollBack();
+      if ($localConnection) {
+        $localConnection->disconnect();
+      }
+      $response->getBody()->write(json_encode(['error' => 'Error al finalizar el lote: ' . $e->getMessage()]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     }
-
-    // Si todo va bien, se ejecuta la lógica normal (la he omitido aquí para brevedad, pero en el bloque final estará completa)
-    // ...
-
-    $localConnection->disconnect();
-
-    $response_data = ['status' => 'success', 'message' => "Lote {$id_lote} finalizado.", 'debug' => $debug_info];
-    $response->getBody()->write(json_encode($response_data, JSON_NUMERIC_CHECK));
-    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 
   /**
@@ -13284,6 +13337,258 @@ if ($departamento === 'Diseño') {
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
       $localConnection->disconnect();
+    }
+  });
+
+  // FINALIZAR LOTE DE ORDENES DE IMPRESION
+  $app->post('/lotes/{id}/finalizar-impresion', function (Request $request, Response $response, array $args) {
+    $id_lote = intval($args['id']);
+
+    $json_body = $request->getBody()->getContents();
+    $data = json_decode($json_body, true);
+
+    $id_departamento = $data['id_departamento'] ?? null;
+    $id_empleado = $data['id_empleado'] ?? null;
+    $consumo_papel = $data['consumo_papel'] ?? null;
+    $consumo_tinta = $data['consumo_tinta'] ?? null;
+
+    if (empty($id_empleado) || empty($id_departamento) || !is_array($consumo_papel) || empty($consumo_papel) || !is_array($consumo_tinta) || empty($consumo_tinta['id_impresora'])) {
+      $error_response = json_encode(['error' => 'Payload inválido. Se requieren id_empleado, id_departamento, consumo_papel y consumo_tinta.']);
+      $response->getBody()->write($error_response);
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(400)
+        ->withHeader('Access-Control-Allow-Origin', '*')
+        ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
+        ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    }
+
+    $localConnection = new LocalDB();
+
+    try {
+      // Lógica principal del endpoint... (la misma que antes)
+      $sql_ordenes_lote = 'SELECT elfi.id_orden, (SELECT SUM(op.cantidad) FROM ordenes_productos op WHERE op.id_orden = elfi.id_orden) as unidades_orden FROM empleados_lotes_fabricacion_items elfi WHERE elfi.id_lote = ?';
+      $ordenes_del_lote = $localConnection->goQuery($sql_ordenes_lote, [$id_lote]);
+
+      if (empty($ordenes_del_lote)) {
+        throw new Exception("No se encontraron órdenes para el lote {$id_lote}.");
+      }
+
+      $gran_total_unidades_lote = array_sum(array_column($ordenes_del_lote, 'unidades_orden'));
+      if ($gran_total_unidades_lote <= 0) {
+        throw new Exception('El número total de unidades para el lote es cero.');
+      }
+
+      $now = date('Y-m-d H:i:s');
+      $nombre_departamento = 'Impresión';
+
+      foreach ($consumo_papel as $papel) {
+        $id_insumo_papel = intval($papel['id_insumo']);
+        $cantidad_total_papel = floatval($papel['cantidad_total']);
+        $localConnection->goQuery('UPDATE inventario SET cantidad = cantidad - ? WHERE _id = ?', [$cantidad_total_papel, $id_insumo_papel]);
+        foreach ($ordenes_del_lote as $order) {
+          $proporcion = intval($order['unidades_orden']) / $gran_total_unidades_lote;
+          $consumo_estimado = $cantidad_total_papel * $proporcion;
+          $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+          $localConnection->goQuery($sql_movimiento, [$order['id_orden'], $id_empleado, $id_insumo_papel, $id_departamento, $nombre_departamento, 0, $consumo_estimado, $now]);
+        }
+      }
+
+      $id_impresora = intval($consumo_tinta['id_impresora']);
+      $tinta_c = floatval($consumo_tinta['c'] ?? 0);
+      $tinta_m = floatval($consumo_tinta['m'] ?? 0);
+      $tinta_y = floatval($consumo_tinta['y'] ?? 0);
+      $tinta_k = floatval($consumo_tinta['k'] ?? 0);
+      $tinta_w = floatval($consumo_tinta['w'] ?? 0);
+
+      foreach ($ordenes_del_lote as $order) {
+        $proporcion = intval($order['unidades_orden']) / $gran_total_unidades_lote;
+        $sql_tinta = 'INSERT INTO tintas (c, m, y, k, w, id_orden, id_empleado, id_catalogo_impresoras, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $params_tinta = [$tinta_c * $proporcion, $tinta_m * $proporcion, $tinta_y * $proporcion, $tinta_k * $proporcion, $tinta_w * $proporcion, $order['id_orden'], $id_empleado, $id_impresora, $now];
+        $localConnection->goQuery($sql_tinta, $params_tinta);
+      }
+
+      $orden_proceso_actual = $localConnection->goQuery('SELECT orden_proceso FROM departamentos WHERE _id = ?', [$id_departamento])[0]['orden_proceso'];
+
+      foreach ($ordenes_del_lote as $order) {
+        $id_orden_actual = $order['id_orden'];
+        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
+        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+        if (empty($next_dep_info)) {
+          $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?", [$id_orden_actual]);
+        } else {
+          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
+        }
+
+        $sql_comision_empleado = 'SELECT comision, comision_tipo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+        $resp_comision_empleado = $localConnection->goQuery($sql_comision_empleado, [$id_empleado]);
+        $comision_tipo = $resp_comision_empleado[0]['comision_tipo'] ?? 'fija';
+        $comision_valor = floatval($resp_comision_empleado[0]['comision'] ?? 0);
+        $sql_calculo_pago = 'SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable, ((SUM(c.cantidad) * eu.comision) * a.procentaje_comision / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? GROUP BY a._id, a.procentaje_comision';
+        $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
+        if (!empty($resp_comision)) {
+          $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
+          $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          $params_pago = [$id_orden_actual, 0, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
+          $localConnection->goQuery($sql_pago, $params_pago);
+        }
+
+        $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ?", [$now, $id_departamento, $id_orden_actual]);
+        $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ? AND id_empleado = ?", [$now, $id_departamento, $id_orden_actual, $id_empleado]);
+      }
+
+      $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
+
+      $response_data = ['status' => 'success', 'message' => "Lote de Impresión {$id_lote} finalizado y consumos registrados correctamente."];
+      $response->getBody()->write(json_encode($response_data, JSON_NUMERIC_CHECK));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200)
+        ->withHeader('Access-Control-Allow-Origin', '*')
+        ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
+        ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    } catch (Exception $e) {
+      if ($localConnection) {
+        $localConnection->disconnect();
+      }
+      $error_response = json_encode(['error' => 'Error al finalizar el lote de impresión: ' . $e->getMessage()]);
+      $response->getBody()->write($error_response);
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(500)
+        ->withHeader('Access-Control-Allow-Origin', '*')
+        ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
+        ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    }
+  });
+
+  // FINALIZAR LOTE DE ORDENES DE CORTE
+  $app->post('/lotes/{id}/finalizar-corte', function (Request $request, Response $response, array $args) {
+    $id_lote = intval($args['id']);
+
+    $json_body = $request->getBody()->getContents();
+    $data = json_decode($json_body, true);
+
+    // 1. Validar payload específico para Corte
+    $id_departamento = $data['id_departamento'] ?? null;
+    $id_empleado = $data['id_empleado'] ?? null;
+    $consumos_lote = $data['consumos_lote'] ?? null;
+
+    if (empty($id_empleado) || empty($id_departamento) || !is_array($consumos_lote) || empty($consumos_lote)) {
+      $error_response = json_encode(['error' => 'Payload inválido. Se requieren id_empleado, id_departamento y el array consumos_lote.']);
+      $response->getBody()->write($error_response);
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(400)
+        ->withHeader('Access-Control-Allow-Origin', '*')
+        ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
+        ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    }
+
+    $localConnection = new LocalDB();
+
+    try {
+      // 2. Obtener órdenes y unidades totales del lote
+      $sql_ordenes_lote = 'SELECT elfi.id_orden, (SELECT SUM(op.cantidad) FROM ordenes_productos op WHERE op.id_orden = elfi.id_orden) as unidades_orden FROM empleados_lotes_fabricacion_items elfi WHERE elfi.id_lote = ?';
+      $ordenes_del_lote = $localConnection->goQuery($sql_ordenes_lote, [$id_lote]);
+
+      if (empty($ordenes_del_lote)) {
+        throw new Exception("No se encontraron órdenes para el lote {$id_lote}.");
+      }
+
+      $gran_total_unidades_lote = array_sum(array_column($ordenes_del_lote, 'unidades_orden'));
+      if ($gran_total_unidades_lote <= 0) {
+        throw new Exception("El número total de unidades para el lote {$id_lote} es cero, no se puede distribuir el consumo.");
+      }
+
+      $now = date('Y-m-d H:i:s');
+      $nombre_departamento = 'Corte';
+
+      // 3. Bucle externo: Procesar cada insumo consumido y su desperdicio
+      foreach ($consumos_lote as $consumo) {
+        $id_insumo_actual = intval($consumo['id_insumo']);
+        $cantidad_total_consumida = floatval($consumo['cantidad_total']);
+        $desperdicio_total = floatval($consumo['desperdicio_total']);
+
+        // 3a. Actualizar stock del insumo
+        $localConnection->goQuery('UPDATE inventario SET cantidad = cantidad - ? WHERE _id = ?', [$cantidad_total_consumida, $id_insumo_actual]);
+
+        // 3b. Bucle interno para distribuir consumo y desperdicio
+        foreach ($ordenes_del_lote as $order) {
+          $id_orden_actual = $order['id_orden'];
+          $unidades_orden = intval($order['unidades_orden']);
+          $proporcion = $unidades_orden / $gran_total_unidades_lote;
+
+          // Distribuir y registrar consumo
+          $consumo_estimado = $cantidad_total_consumida * $proporcion;
+          $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+          $localConnection->goQuery($sql_movimiento, [$id_orden_actual, $id_empleado, $id_insumo_actual, $id_departamento, $nombre_departamento, 0, $consumo_estimado, $now]);
+
+          // Distribuir y registrar desperdicio en la tabla `rendimiento`
+          $desperdicio_estimado = $desperdicio_total * $proporcion;
+          // Se asume que el campo para desperdicio en la tabla rendimiento se llama 'desperdicio'
+          // y que el campo para el empleado de corte es 'id_empleado_corte'
+          $sql_rendimiento = 'INSERT INTO rendimiento (id_orden, id_empleado_corte, desperdicio, id_insumo, metros) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE desperdicio = desperdicio + VALUES(desperdicio), metros = metros + VALUES(metros);';
+          $localConnection->goQuery($sql_rendimiento, [$id_orden_actual, $id_empleado, $desperdicio_estimado, $id_insumo_actual, $consumo_estimado]);
+        }
+      }
+
+      // 4. Bucle final para acciones de finalización (pagos, estados, etc.)
+      $orden_proceso_actual = $localConnection->goQuery('SELECT orden_proceso FROM departamentos WHERE _id = ?', [$id_departamento])[0]['orden_proceso'];
+
+      foreach ($ordenes_del_lote as $order) {
+        $id_orden_actual = $order['id_orden'];
+
+        // Lógica de actualización de paso en `lotes`
+        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
+        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+        if (empty($next_dep_info)) {
+          $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?", [$id_orden_actual]);
+        } else {
+          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
+        }
+
+        // Lógica de Pagos y actualización de estados
+        $sql_comision_empleado = 'SELECT comision, comision_tipo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+        $resp_comision_empleado = $localConnection->goQuery($sql_comision_empleado, [$id_empleado]);
+        $comision_tipo = $resp_comision_empleado[0]['comision_tipo'] ?? 'fija';
+        $comision_valor = floatval($resp_comision_empleado[0]['comision'] ?? 0);
+        $sql_calculo_pago = 'SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable, ((SUM(c.cantidad) * eu.comision) * a.procentaje_comision / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? GROUP BY a._id, a.procentaje_comision';
+        $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
+        if (!empty($resp_comision)) {
+          $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
+          $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          $params_pago = [$id_orden_actual, 0, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
+          $localConnection->goQuery($sql_pago, $params_pago);
+        }
+
+        $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ?", [$now, $id_departamento, $id_orden_actual]);
+        $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ? AND id_empleado = ?", [$now, $id_departamento, $id_orden_actual, $id_empleado]);
+      }
+
+      // 5. Finalizar el lote principal
+      $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
+
+      $response_data = ['status' => 'success', 'message' => "Lote de Corte {$id_lote} finalizado y consumos registrados correctamente."];
+      $response->getBody()->write(json_encode($response_data, JSON_NUMERIC_CHECK));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200)
+        ->withHeader('Access-Control-Allow-Origin', '*')
+        ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
+        ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    } catch (Exception $e) {
+      if ($localConnection) {
+        $localConnection->disconnect();
+      }
+      $error_response = json_encode(['error' => 'Error al finalizar el lote de corte: ' . $e->getMessage()]);
+      $response->getBody()->write($error_response);
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(500)
+        ->withHeader('Access-Control-Allow-Origin', '*')
+        ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
+        ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     }
   });
 
