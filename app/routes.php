@@ -7342,12 +7342,12 @@ if ($departamento === 'Diseño') {
                 b.cedula,
                 a.fecha_inicio,
                 a.fecha_entrega,
-                obs.observaciones,
+                -- obs.observaciones,
                 a.pago_total
             FROM
                 ordenes a
             JOIN customers b ON a.id_wp = b._id
-            LEFT JOIN ordenes_observaciones obs ON obs.id_orden = a._id
+            -- LEFT JOIN ordenes_observaciones obs ON obs.id_orden = a._id
             LEFT JOIN api_empresas.empresas_usuarios c ON c.id_usuario = a.responsable 
             WHERE
                 a._id =' . $id;
