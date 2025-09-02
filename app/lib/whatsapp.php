@@ -9,7 +9,55 @@ class WhatsAppAPIClient
     $this->apiUrl = $apiUrl;
   }
 
-  public function sendMessage($id_empresa, $id_orden, $template, $data)
+  public function sendMessage($id_empresa, $payload)
+{
+  $this->apiUrl = 'https://ws.nineteengreen.com/send-message/' . $id_empresa;
+  try {
+    $options = [
+      'http' => [
+        'method' => 'POST',
+        'header' => "Content-Type: application/json\\r\\n",
+        'content' => json_encode($payload),
+        'timeout' => 10,
+        'ignore_errors' => true,
+      ],
+    ];
+
+    $context = stream_context_create($options);
+    $result = @file_get_contents($this->apiUrl, false, $context);
+
+    if ($result === false) {
+      $error = error_get_last();
+      throw new \Exception('Error al llamar a la API externa: ' . ($error ? $error['message'] : 'Error desconocido'));
+    }
+
+    $http_response_header_string = implode("\r\n", $http_response_header);
+    preg_match('{HTTP\/\d+\.\d+ (\d+) }i', $http_response_header_string, $matches);
+    $http_status_code = isset($matches[1]) ? (int) $matches[1] : 0;
+
+    if ($http_status_code < 200 || $http_status_code >= 300) {
+      throw new \Exception('Error HTTP ' . $http_status_code . ' al llamar a la API externa: ' . $result);
+    }
+
+    $responseData = json_decode($result, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      throw new \Exception('Respuesta de la API no es un JSON válido: ' . json_last_error_msg());
+    }
+
+    return $responseData;
+  } catch (\Exception $e) {
+    $errorDetail = [
+      'error' => 'Error al generar el formato de mensaje 001',
+      'details' => $e->getMessage(),
+      'url' => $this->apiUrl,
+      'response' => isset($http_response_header_string) ? $http_response_header_string : 'No response headers',
+      'code' => $http_status_code > 0 ? $http_status_code : 500
+    ];
+    return $errorDetail;
+  }
+}
+
+  public function sendMessage_old($id_empresa, $id_orden, $template, $data)
   {
     $response = $this->getInfo($id_orden);
 
@@ -31,12 +79,13 @@ class WhatsAppAPIClient
       return [
         'error' => 'Error al obtener información de la orden',
         'details' => 'La respuesta de getInfo() no es válida o está vacía.',
-        'code' => 500
+        'code' => 500 
       ];
     }
 
     $newResponse['data']['template'] = $template;
-    $newResponse['data']['data'] = $data;
+    // $newResponse['data']['data'] = $data;
+    $newResponse['data']['object'] = $data['object'];
 
     $this->apiUrl = 'https://ws.nineteengreen.com/send-message/' . $id_empresa;  // Asegúrate de que la URL sea correcta para enviar mensajes
 

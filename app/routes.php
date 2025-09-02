@@ -7289,67 +7289,61 @@ if ($departamento === 'Diseño') {
     $object = array();
     $localConnection = new LocalDB();
 
-    //  Verificar existencia de la orden
+    // Verificar existencia de la orden
     $sql = 'SELECT _id FROM ordenes WHERE _id=' . $id;
     $resp = $localConnection->goQuery($sql);
 
     if (!$resp) {
       $object = $resp;
     } else {
-      // Buscar datos del cliente en Woocommerce ...
-      $sql = 'SELECT id_wp FROM ordenes WHERE _id  = ' . $id;
+      // Buscar datos del cliente en Woocommerce
+      $sql = 'SELECT id_wp FROM ordenes WHERE _id = ' . $id;
       $id_wp = $localConnection->goQuery($sql);
       $id_customer = $id_wp[0]['id_wp'];
       $id_customer = $id_wp[0]['id_wp'];
 
-      // $object["id_customer"] = $id_customer;
-
       $woo = new WooMe();
-      // Buscar datos del cliente
-      // $object["customer"][0] = $woo->getCustomerById($id_customer);
       $data = $woo->getCustomerByIdWP($id_customer);
       $customer = json_decode(json_encode($data), true);
       $object['customer']['data'] = $customer;
 
-      $object['customer']['nombre'] = $customer[0]['billing_first_name'] . ' ' . $customer[0]['billing_last_name'];
-      $object['customer']['direccion'] = $customer[0]['billing_address_1'];
-      $object['customer']['email'] = $customer[0]['billing_email'];
-      $object['customer']['cedula'] = $customer[0]['billing_postcode'];
-      $object['customer']['telefono'] = $customer[0]['billing_phone'];
+      $object['customer']['nombre'] = ($customer[0]['billing_first_name'] ?? '') . ' ' . ($customer[0]['billing_last_name'] ?? '');
+      $object['customer']['direccion'] = $customer[0]['billing_address_1'] ?? '';
+      $object['customer']['email'] = $customer[0]['billing_email'] ?? '';
+      $object['customer']['cedula'] = $customer[0]['billing_postcode'] ?? '';
+      $object['customer']['telefono'] = $customer[0]['billing_phone'] ?? '';
 
       // Buscar datos de la orden!
-      $sql = 'SELECT
-                a._id,
-                a.status,
-                a.cliente_nombre,
-                c.nombre vendedor,
-                b.cedula,
-                a.fecha_inicio,
-                a.fecha_entrega,
-                -- obs.observaciones,
-                a.pago_total
-            FROM
-                ordenes a
-            JOIN customers b ON a.id_wp = b._id
-            --LEFT JOIN ordenes_observaciones obs ON obs.id_orden = a._id
-            LEFT JOIN api_empresas.empresas_usuarios c ON c.id_usuario = a.responsable 
-            WHERE
-                a._id =' . $id;
-      $object['orden'] = $localConnection->goQuery($sql);
+      // CONSULTA CORREGIDA: Se eliminaron las líneas comentadas que causaban el error.
+      $sql_orden = 'SELECT
+            a._id,
+            a.status,
+            a.cliente_nombre,
+            c.nombre AS vendedor,
+            b.cedula,
+            a.fecha_inicio,
+            a.fecha_entrega,
+            a.pago_total
+          FROM
+            ordenes a
+          JOIN customers b ON a.id_wp = b._id
+          LEFT JOIN api_empresas.empresas_usuarios c ON c.id_usuario = a.responsable
+          WHERE
+            a._id = ' . $id;
+      $object['orden'] = $localConnection->goQuery($sql_orden);
 
       // --- INICIO: CÁLCULO DE ABONOS Y DESCUENTOS ACTUALIZADOS ---
-      // 1. Obtener la suma total de todos los abonos y descuentos desde la tabla `abonos`.
       $sql_abonos = 'SELECT SUM(abono) AS total_abonos, SUM(descuento) AS total_descuentos FROM abonos WHERE id_orden = ' . $id;
       $totales_abonos = $localConnection->goQuery($sql_abonos);
 
-      // 2. Asignar los totales calculados directamente al objeto de la orden para reflejar el estado de cuenta real.
-      // Se usa el operador de fusión de null (??) para asignar 0 si no hay registros de abonos.
-      $object['orden'][0]['pago_abono'] = (float) ($totales_abonos[0]['total_abonos'] ?? 0);
-      $object['orden'][0]['pago_descuento'] = (float) ($totales_abonos[0]['total_descuentos'] ?? 0);
+      if (isset($object['orden'][0])) {
+        $object['orden'][0]['pago_abono'] = (float) ($totales_abonos[0]['total_abonos'] ?? 0);
+        $object['orden'][0]['pago_descuento'] = (float) ($totales_abonos[0]['total_descuentos'] ?? 0);
+      }
       // --- FIN: CÁLCULO DE ABONOS Y DESCUENTOS ACTUALIZADOS ---
 
       // Buscar datos del diseño
-      $sql = 'SELECT tipo FROM disenos WHERE id_orden =  ' . $id;
+      $sql = 'SELECT tipo FROM disenos WHERE id_orden = ' . $id;
       $object['diseno'] = $localConnection->goQuery($sql);
       if (empty($object['diseno'])) {
         $object['diseno'][]['tipo'] = 'Ninguno';
@@ -7357,59 +7351,59 @@ if ($departamento === 'Diseño') {
 
       // Buscar datos de productos
       $sql = 'SELECT
-              op._id,
-              op.name,
-              pr.sku AS sku,
-              pr._id AS cod,
-              pr.fisico AS producto_fisico,
-              op.id_woo,
-              op.cantidad,
-              op.id_size AS id_talla,
-              s.nombre AS talla,
-              op.id_tela,
-              prices_json.prices, -- Aquí usamos el alias de la subconsulta derivada
-              op.tela,
-              op.id_tela,
-              op.corte,
-              op.precio_unitario AS precio,
-              (SELECT attribute_name FROM products_attributes WHERE _id = op.id_products_attributes) atributo_nombre,
-              op.id_products_attributes AS atributo -- Añadir el atributo del producto
+            op._id,
+            op.name,
+            pr.sku AS sku,
+            pr._id AS cod,
+            pr.fisico AS producto_fisico,
+            op.id_woo,
+            op.cantidad,
+            op.id_size AS id_talla,
+            s.nombre AS talla,
+            op.id_tela,
+            prices_json.prices, -- Aquí usamos el alias de la subconsulta derivada
+            op.tela,
+            op.id_tela,
+            op.corte,
+            op.precio_unitario AS precio,
+            (SELECT attribute_name FROM products_attributes WHERE _id = op.id_products_attributes) atributo_nombre,
+            op.id_products_attributes AS atributo -- Añadir el atributo del producto
           FROM
-              ordenes_productos op
+            ordenes_productos op
           LEFT JOIN
-              products pr ON pr._id = op.id_woo
+            products pr ON pr._id = op.id_woo
           LEFT JOIN
-              sizes s ON s._id = op.id_size -- Unir directamente con sizes para la talla
+            sizes s ON s._id = op.id_size -- Unir directamente con sizes para la talla
           LEFT JOIN (
-              -- Subconsulta derivada para agrupar los precios por producto
-              SELECT
-                  pp.id_product AS product_id,
-                  CONCAT(
-                      "[",
-                      GROUP_CONCAT(
-                          JSON_OBJECT(
-                              "id",
-                              pp._id,
-                              "price",
-                              pp.price,
-                              "description",
-                              pp.descripcion
-                          )
-                      ),
-                      "]"
-                  ) AS prices
-              FROM
-                  products_prices pp
-              GROUP BY
-                  pp.id_product
+            -- Subconsulta derivada para agrupar los precios por producto
+            SELECT
+              pp.id_product AS product_id,
+              CONCAT(
+                "[",
+                GROUP_CONCAT(
+                  JSON_OBJECT(
+                    "id",
+                    pp._id,
+                    "price",
+                    pp.price,
+                    "description",
+                    pp.descripcion
+                  )
+                ),
+                "]"
+              ) AS prices
+            FROM
+              products_prices pp
+            GROUP BY
+              pp.id_product
           ) AS prices_json ON prices_json.product_id = pr._id -- Unir con la tabla de productos
           WHERE
-              op.id_orden = 
-      ' . $id;
+            op.id_orden = ' . $id;
 
       $tmpProducts = $localConnection->goQuery($sql);
 
       // PARSEAR PRODUCTOS
+      $data = [];
       $key = 0;
       foreach ($tmpProducts as $product) {
         $data[$key]['_id'] = intval($product['_id']);
@@ -7424,45 +7418,18 @@ if ($departamento === 'Diseño') {
         $data[$key]['tela'] = $product['tela'];
         $data[$key]['corte'] = $product['corte'];
         $data[$key]['precio'] = $product['precio'];
-        $data[$key]['atributo'] = $product['atributo'];  // Añadir el atributo al objeto de producto
-        $data[$key]['atributo_nombre'] = $product['atributo_nombre'];  // Añadir el nombre del atributo al objeto de producto
+        $data[$key]['atributo'] = $product['atributo'];
+        $data[$key]['atributo_nombre'] = $product['atributo_nombre'];
         $data[$key]['prices'] = json_decode($product['prices']);
-        /* $data[$key]['producto_fisico'] = json_decode($product['producto_fisico']);
-        $data[$key]['comisiones'] = json_decode($product['comisiones']);
-        $data[$key]['categories'] = json_decode($product['categories'], true); */
-
         $key++;
       }
       $object['productos'] = $data;
-
       $object['productos_count'] = count($object['productos']);
-
       $object['conterwoo'] = count($object['productos']);
-
-      // Buscar SKU de los productos
-      /* $counter = 0;
-            foreach ($object['productos'] as $key => $value) { // if (!is_object($value->id_woo)) {
-                // $wcprod = $woo->getProductSKU($value->id_woo);
-                $object['productos'][$key]['cod'] = $woo->getProductSKU(intval($value['id_woo']));
-                // }
-                $counter++;
-            } */
-
-      // Crear estructura del email de bienvenida:
-      /* if ($email) {
-                $emailCliente = new EmailClienteBienvenida($object);
-                $emailContent = $emailCliente->obtenerContenido();
-                $object = $emailContent;
-                $contentType = 'text/html';
-            } else {
-                $object = json_encode($object);
-            $contentType = 'application/json';
-            } */
     }
 
     $localConnection->disconnect();
 
-    // $object = json_encode($object, JSON_NUMERIC_CHECK);
     $contentType = 'application/json';
     return array('object' => $object, 'contentType' => $contentType);
   }
@@ -8814,6 +8781,7 @@ if ($departamento === 'Diseño') {
     $arr['montoBolivaresTransferenciaDetalle'] = json_decode($newJson['montoBolivaresTransferenciaDetalle']);
     $arr['tasa_dolar'] = json_decode($newJson['tasa_dolar']);
     $arr['tasa_peso'] = json_decode($newJson['tasa_peso']);
+    $sendWhatsApp = filter_var($newJson['sendWhatsAppMessage'] ?? false);
 
     $arr['hoy'] = date('d/m/Y');
     // $object["arr"] = $arr;
@@ -9134,12 +9102,81 @@ if ($departamento === 'Diseño') {
 
       // enviar WhatsApp al cliente
       /* $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
+
+
+
       $object['resultBuscar'] = $resultBuscar['object'];
 
       $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $last_id);
       $testResp = $msgApi->sendMessage(ID_EMPRESA, $last_id, 'welcome', $resultBuscar);
 
       $object['ws_response'] = $testResp; */
+
+      // enviar WhatsApp al cliente
+      /* $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
+      $object['resultBuscar'] = $resultBuscar['object'];
+
+      $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $last_id);
+      $testResp = $msgApi->sendMessage(ID_EMPRESA, $last_id, 'welcome', $resultBuscar);
+
+      $object['ws_response'] = $testResp; */
+
+      // Enviar WhatsApp al cliente (si está activado)
+      /* if ($sendWhatsApp) {
+          $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
+          $object['resultBuscar'] = $resultBuscar['object'];
+
+          $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' .$last_id);
+          $testResp = $msgApi->sendMessage(ID_EMPRESA, $last_id, 'welcome', $resultBuscar);
+
+          $object['ws_response'] = $testResp;
+     } else {
+         $object['ws_response'] = 'Envío de WhatsApp omitido por el usuario.';
+     } */
+
+      if ($sendWhatsApp) {
+        $infoSql = 'SELECT b.phone FROM ordenes a LEFT JOIN customers b ON b._id = a.id_wp WHERE a._id = ' . $last_id;
+        $contactInfo = $localConnection->goQuery($infoSql)[0] ?? [];
+        $clientPhone = $contactInfo['phone'] ?? null;
+
+        if (empty($clientPhone)) {
+          $object['ws_response'] = 'Envío de WhatsApp omitido: No se encontró un número de teléfono para el cliente.';
+        } else {
+          $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
+          $payload = $resultBuscar['object'];
+          $payload['phone_client'] = $clientPhone;
+          $payload['template'] = 'welcome';
+
+          $encoded_payload = json_encode($payload);
+          $ws_url = 'https://ws.nineteengreen.com/send-message/' . ID_EMPRESA;
+
+          $ch = curl_init($ws_url);
+          curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+          curl_setopt($ch, CURLOPT_POST, true);
+          curl_setopt($ch, CURLOPT_POSTFIELDS, $encoded_payload);
+          curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Content-Length: ' . strlen($encoded_payload)
+          ]);
+          curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+
+          $ws_result = curl_exec($ch);
+          $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+          $curl_error = curl_error($ch);
+          curl_close($ch);
+
+          if ($ws_result === false) {
+            $object['ws_response'] = ['error' => 'Error de cURL', 'details' => $curl_error];
+          } else {
+            $object['ws_response'] = json_decode($ws_result, true);
+          }
+
+          $object['ws_payload_sent'] = $payload;
+          $object['ws_http_code'] = $http_code;
+        }
+      } else {
+        $object['ws_response'] = 'Envío de WhatsApp omitido por el usuario.';
+      }
 
       $object['response']['status'] = 'success';
       $object['response']['message'] = 'La orden número ' . $last_id . ' ha sido creada correctamente';
@@ -13242,7 +13279,7 @@ if ($departamento === 'Diseño') {
           JOIN
               ordenes o ON elfi.id_orden = o._id
           WHERE
-              elf.id_departamento_actual = ?
+              elf.id_departamento_actual > 0 -- Hack para saltar el departamento del empelado y trascender el resultado a los demás departamentos
               AND elf.estado IN ('pendiente', 'en_curso')
           GROUP BY
               elf._id, elf.estado, elf.fecha_inicio, elf.fecha_fin
@@ -13251,7 +13288,8 @@ if ($departamento === 'Diseño') {
       ";
 
       $params = [$id_departamento];
-      $query_result = $localConnection->goQuery($sql, $params);
+      // $query_result = $localConnection->goQuery($sql, $params);
+      $query_result = $localConnection->goQuery($sql);
 
       foreach ($query_result as &$row) {
         $row['ordenes'] = !empty($row['ordenes']) ? json_decode('[' . $row['ordenes'] . ']', true) : [];
