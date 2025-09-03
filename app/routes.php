@@ -1070,7 +1070,7 @@ return function (App $app) {
 
     try {
       // 1. Actualizar el estado del lote a 'terminado'
-      $sql_update_lote = "UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_terminado = NOW() WHERE _id = ? AND estado = 'en_curso'";
+      $sql_update_lote = "UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_terminado = NOW() WHERE _id = ? AND estado = 'pendiente'";
       $localConnection->goQuery($sql_update_lote, [$id_lote]);
 
       // 2. Obtener todas las órdenes del lote
@@ -13279,7 +13279,10 @@ if ($departamento === 'Diseño') {
           JOIN
               ordenes o ON elfi.id_orden = o._id
           WHERE
-              elf.id_departamento_actual > 0 -- Hack para saltar el departamento del empelado y trascender el resultado a los demás departamentos
+              -- elf.id_departamento_actual > 0 -- Hack para saltar el departamento del empelado y trascender el resultado a los demás departamentos
+              elf.id_departamento_actual = {$data['id_departamento']} 
+              AND
+              elf.id_empleado = {$data['id_empleado']} 
               AND elf.estado IN ('pendiente', 'en_curso')
           GROUP BY
               elf._id, elf.estado, elf.fecha_inicio, elf.fecha_fin
@@ -13403,7 +13406,7 @@ if ($departamento === 'Diseño') {
         $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ? AND id_empleado = ?", [$now, $id_departamento, $id_orden_actual, $id_empleado]);
       }
 
-      $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
+      $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'pendiente', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
 
       $response_data = ['status' => 'success', 'message' => "Lote de Impresión {$id_lote} finalizado y consumos registrados correctamente."];
       $response->getBody()->write(json_encode($response_data, JSON_NUMERIC_CHECK));
