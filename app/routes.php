@@ -529,7 +529,7 @@ return function (App $app) {
       }
 
       // Obtener rollos existentes para validación de unicidad
-      $rollosExistentes = $localConnection->goQuery("SELECT insumo FROM inventario WHERE insumo IS NOT NULL AND insumo <> ''");
+      $rollosExistentes = $localConnection->goQuery("SELECT sku, insumo FROM inventario WHERE insumo IS NOT NULL AND insumo <> ''");
       if (!is_array($rollosExistentes)) {
         $rollosExistentes = [];
       }
@@ -544,7 +544,7 @@ return function (App $app) {
       $sheetInventario->setTitle('Inventario');
 
       // Set headers for Inventario sheet
-      $headersInventario = ['Rollo', 'Nombre', 'Cantidad', 'Unidad', 'Costo', 'Rendimiento', 'Departamento'];
+      $headersInventario = ['SKU', 'Nombre', 'Cantidad', 'Unidad', 'Costo', 'Rendimiento', 'Departamento'];
       $sheetInventario->fromArray($headersInventario, NULL, 'A1');
 
       // Set column widths for Inventario sheet
@@ -558,8 +558,8 @@ return function (App $app) {
       $sheetRollosNormalizado->setCellValue('A1', 'Rollo_Normalizado');  // Header
       $row = 2;
       foreach ($rollosExistentes as $rollo) {
-        if (is_array($rollo) && isset($rollo['rollo'])) {  // Add this check
-          $normalizedRollo = strtoupper(str_replace('_', '', $rollo['rollo']));
+        if (is_array($rollo) && isset($rollo['sku'])) {  // Add this check
+          $normalizedRollo = strtoupper(str_replace('_', '', $rollo['sku']));
           $sheetRollosNormalizado->setCellValue('A' . $row, $normalizedRollo);
           $row++;
         }
