@@ -1299,46 +1299,75 @@ return function (App $app) {
     $localConnection = new LocalDB();
     $debug_info = [];  // Array para la depuración
 
-    // 1. Actualizar el estado del lote principal a 'en_curso' y registrar la fecha de inicio
-    $sql_update_lote = "UPDATE empleados_lotes_fabricacion SET estado = 'en_curso', fecha_inicio = NOW() WHERE _id = {$id_lote}
-    AND estado = 'pendiente'";
-    $update_result = $localConnection->goQuery($sql_update_lote);
+    try {
+      // --- INICIO DE LA CORRECCIÓN ---
 
-    // Guardar información de depuración
-    $debug_info['update_sql'] = $sql_update_lote;
-    $debug_info['update_result'] = $update_result;
+      // 1. OBTENER EL DEPARTAMENTO ACTUAL DEL LOTE
+      $sql_get_lote_depto = 'SELECT id_departamento_actual FROM empleados_lotes_fabricacion WHERE _id = ?';
+      $lote_info = $localConnection->goQuery($sql_get_lote_depto, [$id_lote]);
 
-    // 2. Obtener todas las órdenes que pertenecen a este lote
-    $sql_get_ordenes = "SELECT id_orden FROM empleados_lotes_fabricacion_items WHERE id_lote = {$id_lote}";
-    $ordenes_del_lote = $localConnection->goQuery($sql_get_ordenes);
+      if (empty($lote_info) || !isset($lote_info[0]['id_departamento_actual'])) {
+        throw new Exception('No se pudo encontrar el lote o su departamento actual.');
+      }
+      $id_departamento_actual = $lote_info[0]['id_departamento_actual'];
+      $debug_info['departamento_actual_del_lote'] = $id_departamento_actual;
 
-    if (!empty($ordenes_del_lote)) {
-      // 3. Si hay órdenes en el lote, iniciar cada una de sus tareas de empleado
-      $sql_iniciar_tareas = '';
-      foreach ($ordenes_del_lote as $orden) {
-        $id_orden_actual = $orden['id_orden'];
-        // Actualizar el progreso a 'en curso' y registrar la fecha de inicio para cada tarea
-        $sql_iniciar_tareas .= "UPDATE lotes_detalles_empleados_asignados SET fecha_inicio = NOW(), progreso = 'en curso'
-            WHERE id_orden = {$id_orden_actual};";
+      // --- FIN DE LA CORRECCIÓN ---
+
+      // 2. Actualizar el estado del lote principal a 'en_curso' y registrar la fecha de inicio
+      $sql_update_lote = "UPDATE empleados_lotes_fabricacion SET estado = 'en_curso', fecha_inicio = NOW() WHERE _id = ? AND estado = 'pendiente'";
+      $update_result = $localConnection->goQuery($sql_update_lote, [$id_lote]);
+
+      // Guardar información de depuración
+      $debug_info['update_lote_sql'] = $sql_update_lote;
+      $debug_info['update_lote_result'] = $update_result;
+
+      // 3. Obtener todas las órdenes que pertenecen a este lote
+      $sql_get_ordenes = 'SELECT id_orden FROM empleados_lotes_fabricacion_items WHERE id_lote = ?';
+      $ordenes_del_lote = $localConnection->goQuery($sql_get_ordenes, [$id_lote]);
+
+      if (!empty($ordenes_del_lote)) {
+        // 4. Si hay órdenes en el lote, iniciar cada una de sus tareas de empleado
+        $sql_iniciar_tareas = '';
+        foreach ($ordenes_del_lote as $orden) {
+          $id_orden_actual = $orden['id_orden'];
+
+          // --- INICIO DE LA CORRECCIÓN ---
+          // Actualizar el progreso a 'en curso' y registrar la fecha de inicio SOLO para las tareas del departamento actual.
+          $sql_iniciar_tareas .= "UPDATE lotes_detalles_empleados_asignados SET fecha_inicio = NOW(), progreso = 'en curso'
+                        WHERE id_orden = {$id_orden_actual} AND id_departamento = {$id_departamento_actual};";
+          // --- FIN DE LA CORRECCIÓN ---
+        }
+
+        // Ejecutar las consultas de actualización en un solo lote para mayor eficiencia
+        if (!empty($sql_iniciar_tareas)) {
+          $debug_info['iniciar_tareas_sql'] = $sql_iniciar_tareas;
+          $localConnection->goQuery($sql_iniciar_tareas);
+        }
       }
 
-      // Ejecutar las consultas de actualización en un solo lote para mayor eficiencia
-      if (!empty($sql_iniciar_tareas)) {
-        $localConnection->goQuery($sql_iniciar_tareas);
+      $localConnection->disconnect();
+
+      // 5. Construir la respuesta final
+      $final_response = [
+        'status' => 'success',
+        'message' => "Lote {$id_lote} y sus " . count($ordenes_del_lote) . " órdenes han sido iniciados en el departamento #{$id_departamento_actual}.",
+        'debug' => $debug_info
+      ];
+
+      $response->getBody()->write(json_encode($final_response));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      if ($localConnection) {
+        $localConnection->disconnect();
       }
+      $error_response = [
+        'error' => 'Error al iniciar el lote: ' . $e->getMessage(),
+        'debug' => $debug_info
+      ];
+      $response->getBody()->write(json_encode($error_response));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     }
-
-    $localConnection->disconnect();
-
-    // 4. Construir la respuesta final incluyendo información de depuración
-    $final_response = [
-      'status' => 'success',
-      'message' => "Lote {$id_lote} y sus " . count($ordenes_del_lote) . ' órdenes han sido iniciados.',
-      'debug' => $debug_info
-    ];
-
-    $response->getBody()->write(json_encode($final_response));
-    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 
   /**
@@ -13561,7 +13590,7 @@ if ($departamento === 'Diseño') {
               ordenes o ON elfi.id_orden = o._id
           WHERE
               -- elf.id_departamento_actual > 0 -- Hack para saltar el departamento del empelado y trascender el resultado a los demás departamentos
-              elf.id_departamento_actual = {$data['id_departamento']} 
+              elf.id_departamento_creador = {$data['id_departamento']} 
               AND
               elf.id_empleado = {$data['id_empleado']} 
               AND elf.estado IN ('pendiente', 'en_curso')
@@ -13687,7 +13716,7 @@ if ($departamento === 'Diseño') {
         $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ? AND id_empleado = ?", [$now, $id_departamento, $id_orden_actual, $id_empleado]);
       }
 
-      $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'pendiente', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
+      $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
 
       $response_data = ['status' => 'success', 'message' => "Lote de Impresión {$id_lote} finalizado y consumos registrados correctamente."];
       $response->getBody()->write(json_encode($response_data, JSON_NUMERIC_CHECK));
