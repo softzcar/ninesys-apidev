@@ -13503,9 +13503,18 @@ if ($departamento === 'Diseño') {
       $sql_dep_info = 'SELECT orden_proceso, departamento FROM departamentos WHERE _id = ?';
       $dep_info = $localConnection->goQuery($sql_dep_info, [$id_departamento]);
       $nombre_departamento = $dep_info[0]['departamento'];
+      $orden_proceso_actual = $dep_info[0]['orden_proceso'];
 
       foreach ($ordenes_del_lote as $order) {
         $id_orden_actual = $order['id_orden'];
+
+        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
+        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+        if (empty($next_dep_info)) {
+          $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?", [$id_orden_actual]);
+        } else {
+          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
+        }
 
         $sql_comision_empleado = 'SELECT comision, comision_tipo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
         $resp_comision_empleado = $localConnection->goQuery($sql_comision_empleado, [$id_empleado]);
@@ -13525,20 +13534,7 @@ if ($departamento === 'Diseño') {
         $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ? AND id_empleado = ?", [$now, $id_departamento, $id_orden_actual, $id_empleado]);
       }
 
-      // --- INICIO: LÓGICA DE TRANSICIÓN DEL LOTE (MODIFICADO) ---
-      $current_proceso = $dep_info[0]['orden_proceso'];
-      $sql_next_dep = 'SELECT _id FROM departamentos WHERE orden_proceso > ? AND asignar_numero_de_paso = 1 ORDER BY orden_proceso ASC LIMIT 1';
-      $next_dep_info = $localConnection->goQuery($sql_next_dep, [$current_proceso]);
-
-      if (!empty($next_dep_info)) {
-        $next_dep_id = $next_dep_info[0]['_id'];
-        $sql_update_batch = 'UPDATE empleados_lotes_fabricacion SET id_departamento_actual = ? WHERE _id = ?';
-        $localConnection->goQuery($sql_update_batch, [$next_dep_id, $id_lote]);
-      } else {
-        $sql_finish_batch = "UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?";
-        $localConnection->goQuery($sql_finish_batch, [$now, $id_lote]);
-      }
-      // --- FIN: LÓGICA DE TRANSICIÓN DEL LOTE ---
+      $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
 
       $response_data = ['status' => 'success', 'message' => "Lote {$id_lote} finalizado en este departamento y transicionado correctamente."];
       $response->getBody()->write(json_encode($response_data, JSON_NUMERIC_CHECK));
