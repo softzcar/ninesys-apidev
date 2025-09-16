@@ -598,27 +598,24 @@ class WooMe
     return json_encode($this->woocommerce->post('products', $data));
   }
 
-  public function createProductLite($name, $pricesDat, $category, $sku)
+  public function createProductLite($name, $pricesDat, $category, $sku, $attributesDat)
   {
     // CREAR EL NUEVO PRODUCTO
     $sql = "INSERT INTO `products`(
-            `product`,
-            `sku`,
-            `category_ids`
-        )
-        VALUES(
-            '" . $name . "',
-            '" . $sku . "',
-            '" . $category . "'
-        );";
+                `product`,
+                `sku`,
+                `category_ids`
+            )
+            VALUES(
+                '" . $name . "',
+                '" . $sku . "',
+                '" . $category . "'
+            );";
     $localConnection = new LocalDB();
     $localConnection->goQuery($sql);
-
     $sql = 'SELECT MAX(_id) id from products';
     $requestNewProduct['product'] = $localConnection->goQuery($sql);
-
     $newID = $requestNewProduct['product'][0]['id'];
-
     // ASIGNAR PRECIOS
     $prices = json_decode($pricesDat, true);
     if (!empty($prices)) {
@@ -628,25 +625,43 @@ class WooMe
         $values[] = "($newID, {$price['price']}, '{$price['descripcion']}')";
       }
       $sql .= implode(', ', $values) . ';';
-
       // Ejecutar la consulta
       $localConnection->goQuery($sql);
     } else {
       $sql = 'NO HAY PRECIOS PARA PROCESAR';
     }
-
-    $sqlCreate = $sql;
-
+    // ASIGNAR ATRIBUTOS
+    $attributes = json_decode($attributesDat, true);
+    if (!empty($attributes)) {
+      $sql = 'INSERT INTO products_attributes_values (id_product, id_product_attribute, `attribute_value`) VALUES ';
+      $values = [];
+      foreach ($attributes as $attribute) {
+        $values[] = "($newID, {$attribute['attribute']}, '{$attribute['descripcion']}')";
+      }
+      $sql .= implode(', ', $values) . ';';
+      // Ejecutar la consulta
+      $localConnection->goQuery($sql);
+    } else {
+      $sql = 'NO HAY ATRIBUTOS PARA PROCESAR';
+    }
+    // $sqlCreate = $sql; // Ya no necesitamos esta variable
     $sql = 'SELECT * FROM products WHERE _id = ' . $newID;
     $resp['product'] = $localConnection->goQuery($sql);
-
     $sql = 'SELECT * FROM products_prices WHERE id_product = ' . $newID;
     $resp['prices'] = $localConnection->goQuery($sql);
-
+    $sql = 'SELECT * FROM products_attributes_values WHERE id_product = ' . $newID;
+    $resp['attributes'] = $localConnection->goQuery($sql);
     // Desconectar
     $localConnection->disconnect();
-
-    return json_encode($sqlCreate);
+    // --- INICIO DE LA CORRECCIÓN ---
+    // La variable $resp['product'] contiene un array con un solo elemento (el producto).
+    // Lo extraemos.
+    $productData = $resp['product'][0];
+    // Creamos el payload final con la estructura que el frontend espera.
+    $finalPayload = ['product' => $productData, 'prices' => $resp['prices'], 'attributes' => $resp['attributes']];
+    // Devolvemos el array. El endpoint se encargará de codificarlo a JSON.
+    return $finalPayload;
+    // --- FIN DE LA CORRECCIÓN ---
   }
 
   /* public function createProductLite($name, $prices, $category, $sku, $stock_quantity)

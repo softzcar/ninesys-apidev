@@ -1,0 +1,8 @@
+- Solicitud del Usuario: muy bien estamos retornando la informacion que estemos necesitando, pero al enviar los resultados necesitamos hacer un `json_decode` para ese campo, de manera que el endpoint retorne ese json correctamente
+- Archivos Involucrados: ['/home/apidev.nineteengreen.com/public_html/app/routes.php']
+- Acción Realizada: Se agregó un bucle `foreach` en el endpoint `GET /table/ordenes-activas/{id_empleado}` para decodificar el campo `product_categories` de un string JSON a un objeto PHP antes de enviar la respuesta.
+- Herramienta(s) Utilizada(s): default_api.replace
+- Resultado: Éxito
+- Verificación: Se verificó que el código para decodificar el campo `product_categories` fue agregado correctamente antes de enviar la respuesta JSON.
+- Observaciones de Gemini: La consulta SQL devuelve el campo `product_categories` como un string JSON. Es necesario decodificarlo en PHP para que se muestre como un objeto JSON en la respuesta final del endpoint.
+- Respuesta de Gemini: Hecho. Agregué la lógica para decodificar el campo `product_categories` antes de enviar la respuesta, por lo que ahora debería mostrarse como un objeto JSON correctamente.

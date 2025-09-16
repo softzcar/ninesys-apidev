@@ -1,0 +1,8 @@
+- Solicitud del Usuario: bueno no lo conseguinos hoy por favor genera un log que esta tara ha quedado epndiente para revisarla el lunes
+- Archivos Involucrados: [/home/apidev.nineteengreen.com/public_html/app/routes.php]
+- Acción Realizada: Se añadió una línea de depuración (`error_log`) en el endpoint `POST /ordenes/nueva/custom` para inspeccionar el valor de `guardar_stock` y su interpretación booleana. La tarea de depuración y resolución de la asignación incorrecta de comisiones cuando `guardar_stock` es `true` queda pendiente.
+- Herramienta(s) Utilizada(s): [default_api.write_file, default_api.run_shell_command]
+- Resultado: Parcial (depuración iniciada, resolución pendiente)
+- Verificación: Se confirmó la inserción de las líneas de depuración en el código. La verificación de la solución final se realizará el lunes.
+- Observaciones de Gemini: La depuración del problema de la comisión requiere la colaboración del usuario para obtener los logs del servidor. La tarea se retomará el lunes con la información proporcionada por el usuario.
+- Respuesta de Gemini: He registrado que la tarea de depuración de la comisión en el endpoint `POST /ordenes/nueva/custom` queda pendiente. La revisaremos el lunes.

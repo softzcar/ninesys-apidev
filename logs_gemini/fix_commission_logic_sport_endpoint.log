@@ -1,0 +1,8 @@
+- Solicitud del Usuario: ok pero no tenemos que tener en cuenta le dato que nos llaga llamdo `sales_commission` simplemente si `abomo > 0` se ejecuta el código apra la comisnos del vendedor
+- Archivos Involucrados: ['/home/apidev.nineteengreen.com/public_html/app/routes.php']
+- Acción Realizada: Se modificó el endpoint `/ordenes/nueva/sport` para que la lógica de comisiones solo verifique si el abono es mayor a 0, ignorando el flag `sales_commission`.
+- Herramienta(s) Utilizada(s): default_api.replace
+- Resultado: Éxito
+- Verificación: Se verificó que el bloque de código de la comisión en el endpoint `/ordenes/nueva/sport` fue reemplazado con la nueva lógica que solo valida `floatval($newJson['abono']) > 0`.
+- Observaciones de Gemini: La lógica anterior en el endpoint `/ordenes/nueva/sport` consideraba el flag `guardar_stock`, lo cual era incorrecto para este caso de uso. La nueva lógica simplificada se alinea con los requerimientos del usuario.
+- Respuesta de Gemini: Hecho. He actualizado la lógica en el endpoint `/ordenes/nueva/sport` para que la comisión del vendedor se calcule siempre que haya un abono (`abono > 0`), sin considerar el flag `sales_commission`.

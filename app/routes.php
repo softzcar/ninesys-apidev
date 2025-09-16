@@ -3208,15 +3208,29 @@ return function (App $app) {
                 ord.pago_total total,
                 ord.fecha_inicio,
                 ord.fecha_entrega,
-                -- ord.observaciones obs,
-                -- (SELECT DISTINCT a.id_orden, SUM(a.abono) abono, SUM(a.descuento) descuento, b.pago_total total, SUM(a.abono) + SUM(a.descuento) total_abono_descuento, a.detalle, a.moment  FROM abonos a JOIN ordenes b ON a.id_orden = b._id WHERE a.id_orden = ord._id) data_bono,
+                (
+                    SELECT
+                        CONCAT(
+                            '[',
+                            GROUP_CONCAT(
+                                DISTINCT JSON_OBJECT(
+                                    'category_name',
+                                    op.category_name
+                                )
+                            ),
+                            ']'
+                        )
+                    FROM
+                        ordenes_productos op
+                    WHERE
+                        op.id_orden = ord._id
+                ) AS product_categories,
                 ord.status estatus
             FROM
                 ordenes ord
             JOIN customers cus ON ord.id_wp = cus._id
             LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
             WHERE
-                (
                 ord.status
                     = 'activa' OR
                 ord.status
@@ -3224,8 +3238,9 @@ return function (App $app) {
                 ord.status
                     = 'terminada' OR
                 ord.status
-                    = 'pausada'
-            )
+                    = 'pausada' OR 
+                (ord.status 
+                    = 'entregada' AND ord.pago_comision = 'pendiente')             
             ORDER BY
                 ord._id
             DESC;";
@@ -3242,14 +3257,30 @@ return function (App $app) {
                 cus.email,
                 ord.fecha_inicio,
                 ord.fecha_entrega,
-                -- ord.observaciones obs,
+                (
+                    SELECT
+                        CONCAT(
+                            '[',
+                            GROUP_CONCAT(
+                                DISTINCT JSON_OBJECT(
+                                    'category_name',
+                                    op.category_name
+                                )
+                            ),
+                            ']'
+                        )
+                    FROM
+                        ordenes_productos op
+                    WHERE
+                        op.id_orden = ord._id
+                ) AS product_categories,
                 ord.status estaus
             FROM
                 ordenes ord
             JOIN customers cus ON ord.id_wp = cus._id
             LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
             WHERE
-                ord.responsable = '" . $args['id_empleado'] . "' AND(
+                ord.responsable = '{$args['id_empleado']}' AND(
                 ord.status
                     = 'activa' OR
                 ord.status
@@ -3257,12 +3288,16 @@ return function (App $app) {
                 ord.status
                     = 'terminada' OR
                 ord.status
-                    = 'pausada'
+                    = 'pausada' OR 
+                (ord.status 
+                   = 'entregada' AND ord.pago_comision = 'pendiente') 
             ) AND ord.pago_comision = 'pendiente'
             ORDER BY
                 ord._id
             DESC;";
     }
+
+    $object['sql'] = $sql;
 
     // Cabeceras de la tabla
     $object['fields'][0]['key'] = 'orden';
@@ -3293,7 +3328,13 @@ return function (App $app) {
     $object['fields'][6]['label'] = 'Acciones';
     $object['fields'][6]['sortable'] = false;
 
-    $object['items'] = $localConnection->goQuery($sql);
+    $items = $localConnection->goQuery($sql);
+    foreach ($items as &$item) {
+        if (isset($item['product_categories'])) {
+            $item['product_categories'] = json_decode($item['product_categories']);
+        }
+    }
+    $object['items'] = $items;
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
@@ -3318,31 +3359,40 @@ return function (App $app) {
     cus.email,
     ord.fecha_inicio,
     ord.fecha_entrega,
-    ord.pago_total AS total, -- <-- AÑADE ESTA LÍNEA
-    -- ord.observaciones obs,
+    ord.pago_total AS total,
+    (
+        SELECT
+            CONCAT(
+                '[',
+                GROUP_CONCAT(
+                    DISTINCT JSON_OBJECT(
+                        'category_name',
+                        op.category_name
+                    )
+                ),
+                ']'
+            )
+        FROM
+            ordenes_productos op
+        WHERE
+            op.id_orden = ord._id
+    ) AS product_categories,
     ord.status estatus
 FROM
     ordenes ord
 JOIN customers cus ON ord.id_wp = cus._id
 LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
-/*WHERE
-    (
-    ord.status
-        = 'activa' OR
-    ord.status
-        = 'cancelada' OR
-    ord.status
-        = 'En espera' OR
-    ord.status
-        = 'terminada' OR
-    ord.status
-        = 'pausada' OR ord.status = 'entregada'
-    )*/
 ORDER BY
     ord._id
 DESC;";
 
-    $object['items'] = $localConnection->goQuery($sql);
+    $items = $localConnection->goQuery($sql);
+    foreach ($items as &$item) {
+        if (isset($item['product_categories'])) {
+            $item['product_categories'] = json_decode($item['product_categories']);
+        }
+    }
+    $object['items'] = $items;
     $localConnection->disconnect();
 
     // Cabeceras de la tabla
@@ -3897,6 +3947,23 @@ DESC;";
     met.detalle,
     met.tasa,
     met.moneda,
+    (
+        SELECT
+            CONCAT(
+                '[',
+                GROUP_CONCAT(
+                    DISTINCT JSON_OBJECT(
+                        'category_name',
+                        op.category_name
+                    )
+                ),
+                ']'
+            )
+        FROM
+            ordenes_productos op
+        WHERE
+            op.id_orden = ord._id
+    ) AS product_categories,
     DATE_FORMAT(met.moment, '%d/%m/%Y') AS fecha,
     DATE_FORMAT(met.moment, '%h:%i %p') AS hora
 FROM
@@ -3943,6 +4010,23 @@ ORDER BY
                 met.detalle,
                 met.tasa,
                 met.moneda,
+                (
+                    SELECT
+                        CONCAT(
+                            '[',
+                            GROUP_CONCAT(
+                                DISTINCT JSON_OBJECT(
+                                    'category_name',
+                                    op.category_name
+                                )
+                            ),
+                            ']'
+                        )
+                    FROM
+                        ordenes_productos op
+                    WHERE
+                        op.id_orden = ord._id
+                ) AS product_categories,
                 DATE_FORMAT(met.moment, '%d/%m/%Y') AS fecha,
                 DATE_FORMAT(met.moment, '%h:%i %p') AS hora
             FROM
@@ -3956,9 +4040,18 @@ ORDER BY
                 met.id_orden DESC, met.moment ASC;';
     }
 
-    $object['sql_pagos'] = $sql;
+    // $object['sql_pagos'] = $sql;
 
     $object['pagos'] = $localConnection->goQuery($sql);
+
+    $pagos = $object['pagos'];
+
+    foreach ($pagos as &$pago) {
+        if (isset($pago['product_categories'])) {
+            $pago['product_categories'] = json_decode($pago['product_categories']);
+        }
+    }
+    $object['pagos'] = $pagos;
 
     // Buscar todos los empleados que sean vendedres o administradores
     $sqlv = "SELECT id_usuario _id, nombre FROM api_empresas.empresas_usuarios WHERE departamento = 'Comercialización' OR departamento = 'Administración' AND activo = 1;";
@@ -6028,6 +6121,27 @@ ORDER BY
       ->withStatus(200);
   });
 
+  $app->post('/products-attributes', function (Request $request, Response $response) {
+    $miAtributo = $request->getParsedBody();
+
+    // Crear estructura de valores para insertar nuevo atributo de producto
+    $values = '(';
+    $values .= "'" . $miAtributo['nombre'] . "')";
+
+    $sql = 'INSERT INTO products_attributes (`attribute_name`) VALUES ' . $values . ';';
+    $sql .= 'SELECT * FROM products_attributes ORDER BY products_attributes';
+
+    $localConnection = new LocalDB();
+    $object['response'] = json_encode($localConnection->goQuery($sql));
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   $app->get('/products-attributes', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
     $sql = 'SELECT attribute_name as name, _id FROM products_attributes ORDER BY name ASC';
@@ -6106,13 +6220,9 @@ ORDER BY
   // $app->post('/products/lite/{name}/{price}/{categories}', function (Request $request, Response $response, array $args) {
   $app->post('/products/lite', function (Request $request, Response $response, array $args) {
     $data = $request->getParsedBody();
-    $product['product'] = $data['product'];
-    $product['category'] = $data['category'];
-    $product['sku'] = $data['sku'];
-    $product['prices'] = $data['prices'];
 
     $woo = new WooMe();
-    $responseProd = $woo->createProductLite($data['product'], $product['prices'], $data['category'], $data['sku']);
+    $responseProd = $woo->createProductLite($data['product'], $data['prices'], $data['category'], $data['sku'], $data['attributes']);
 
     // $response->getBody()->write($responseProd);
     $response->getBody()->write(json_encode($responseProd));
@@ -9092,6 +9202,7 @@ if ($departamento === 'Diseño') {
     $arr['tasa_dolar'] = json_decode($newJson['tasa_dolar']);
     $arr['tasa_peso'] = json_decode($newJson['tasa_peso']);
     $sendWhatsApp = filter_var($newJson['sendWhatsAppMessage'] ?? false);
+    $guardar_stock = filter_var($newJson['guardar_stock'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
     $arr['hoy'] = date('d/m/Y');
     // $object["arr"] = $arr;
@@ -9172,7 +9283,7 @@ if ($departamento === 'Diseño') {
 
       // CALCULAMOE ES PORCENTAJE DEL VENDEDOR
       // if (isset($arg["sales_commission"])) { // sales_comission no llega en el Payload vamoa a validar el valor de abono
-      if (floatval($newJson['abono']) > 0) {
+      if (floatval($newJson['abono']) > 0 && !$guardar_stock) {
         // $object['sales_commission_ISSET'][] = $arg["sales_commission"];
 
         // BUSCAR COMISION DEL VENDEDOR
@@ -9189,6 +9300,7 @@ if ($departamento === 'Diseño') {
 
         $pago_vendedor = floatval($newJson['abono']) * $comision / 100;
         $pago_vendedor = number_format($pago_vendedor, 2);
+        
         $sql = "INSERT INTO pagos (moment, comision, comision_tipo, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES ('" . $now . "', " . $comision . ", '" . $comisionTipo . "', '" . $last_id . "',  '" . $newJson['responsable'] . "', '" . $pago_vendedor . "', 'Comercialización', 'aprobado')";
         $object['resultado_abono'] = json_encode($localConnection->goQuery($sql));
         $object['pago a vendedor'] = 'SI hubo comisión, cliente normal';
@@ -9357,6 +9469,33 @@ if ($departamento === 'Diseño') {
         $object['miLote'] = json_encode($localConnection->goQuery($sql_lote));
       }
 
+      // INICIO: Lógica condicional para guardar stock en /nueva/custom
+      
+
+      if ($guardar_stock) {
+        $stock_updates = [];
+        foreach ($misProductos as $producto) {
+          $product_id = intval($producto['cod']);
+          $quantity = intval($producto['cantidad']);
+          if (isset($stock_updates[$product_id])) {
+            $stock_updates[$product_id] += $quantity;
+          } else {
+            $stock_updates[$product_id] = $quantity;
+          }
+        }
+
+        $sql_stock_update = '';
+        foreach ($stock_updates as $product_id => $total_quantity) {
+          $sql_stock_update .= "UPDATE products SET stock_quantity = stock_quantity + {$total_quantity} WHERE _id = {$product_id};";
+        }
+
+        if (!empty($sql_stock_update)) {
+          $object['custom_stock_update_sql'] = $sql_stock_update;
+          $object['custom_stock_update_response'] = $localConnection->goQuery($sql_stock_update);
+        }
+      }
+      // FIN: Lógica condicional para guardar stock en /nueva/custom
+
       // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
       $sql_metodos_pago = '';
 
@@ -9403,46 +9542,6 @@ if ($departamento === 'Diseño') {
       if ($sql_metodos_pago != '') {
         $object['metodos_pago'][$i] = $localConnection->goQuery($sql_metodos_pago);
       }
-
-      // enviar email - obtener formato
-      // $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
-      // $object["resultBuscar"] = $resultBuscar["object"];
-      /* $result = $woo->sendMail($orderWC->id, $resultBuscar["object"]);
-          $object["sendMail"] = $result; */
-
-      // enviar WhatsApp al cliente
-      /* $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
-
-
-
-      $object['resultBuscar'] = $resultBuscar['object'];
-
-      $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $last_id);
-      $testResp = $msgApi->sendMessage(ID_EMPRESA, $last_id, 'welcome', $resultBuscar);
-
-      $object['ws_response'] = $testResp; */
-
-      // enviar WhatsApp al cliente
-      /* $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
-      $object['resultBuscar'] = $resultBuscar['object'];
-
-      $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $last_id);
-      $testResp = $msgApi->sendMessage(ID_EMPRESA, $last_id, 'welcome', $resultBuscar);
-
-      $object['ws_response'] = $testResp; */
-
-      // Enviar WhatsApp al cliente (si está activado)
-      /* if ($sendWhatsApp) {
-          $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
-          $object['resultBuscar'] = $resultBuscar['object'];
-
-          $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' .$last_id);
-          $testResp = $msgApi->sendMessage(ID_EMPRESA, $last_id, 'welcome', $resultBuscar);
-
-          $object['ws_response'] = $testResp;
-     } else {
-         $object['ws_response'] = 'Envío de WhatsApp omitido por el usuario.';
-     } */
 
       if ($sendWhatsApp) {
         $infoSql = 'SELECT b.phone FROM ordenes a LEFT JOIN customers b ON b._id = a.id_wp WHERE a._id = ' . $last_id;
@@ -9507,7 +9606,6 @@ if ($departamento === 'Diseño') {
     $misProductos = json_decode($newJson['productos'], true);
     $localConnection = new LocalDB();
 
-    // $misProductosLotesDealles = json_decode($newJson['productos_lotes_detalles'], true);
     $count = count($misProductos);
 
     $arr['id_wp'] = json_decode($newJson['id']);
@@ -9516,7 +9614,11 @@ if ($departamento === 'Diseño') {
     $arr['apellido'] = json_decode($newJson['apellido']);
     $arr['cedula'] = json_decode($newJson['cedula']);
     $arr['telefono'] = json_decode($newJson['telefono']);
-    $arr['email'] = json_decode($newJson['email']);
+    if (is_null(json_decode($newJson['email']))) {
+      $arr['email'] = json_decode($newJson['email']);
+    } else {
+      $arr['email'] = strtolower(json_decode($newJson['email']));
+    }
     $arr['direccion'] = json_decode($newJson['direccion']);
     $arr['fechaEntrega'] = json_decode($newJson['fechaEntrega']);
     $arr['misProductos'] = json_decode($newJson['productos'], true);
@@ -9551,228 +9653,147 @@ if ($departamento === 'Diseño') {
     $arr['montoBolivaresTransferenciaDetalle'] = json_decode($newJson['montoBolivaresTransferenciaDetalle']);
     $arr['tasa_dolar'] = json_decode($newJson['tasa_dolar']);
     $arr['tasa_peso'] = json_decode($newJson['tasa_peso']);
+    $sendWhatsApp = filter_var($newJson['sendWhatsAppMessage'] ?? false);
 
     $arr['hoy'] = date('d/m/Y');
-    // $object["arr"] = $arr;
     $cliente = $newJson['nombre'] . ' ' . $newJson['apellido'];
 
-    // PREPARAR FECHAS
     $myDate = new CustomTime();
     $now = $myDate->today();
 
-    // Crear nueva orden en Woocommerce
     $orderWC = 0;
-    /* $woo = new WooMe();
-        $orderWC = $woo->createOrder($arr, $newJson);
-        $object["create_product_WC"] = $orderWC;*/
-    /* $response->getBody()->write(json_encode($object));
-        return $response
-        ->withHeader('Content-Type', 'application/json')
-        ->withStatus(200); */
-    /* *** */
 
-    /* Enviar email al cliente */
-    // $woo = new WooMe();
-    // Por ejemplo:
-    // $woo->sendMail($orderWC->id, 'Mensaje de confirmacion de cracion de orden para el cliente'); // Reemplaza "enviarCorreoElectronico" con la función real
+    $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, `status`, tipo ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  '" . $arr['id_wp'] . "', '" . $arr['cedula'] . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'entregada', 'sport')";
+    $nueva_oreden_response = $localConnection->goQuery($sql);
+    $object['nueva_oreden_sql'] = $sql;
 
-    /* Craer orden en nunesys */
-    $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status, tipo ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  '" . $arr['id_wp'] . "', '" . $arr['cedula'] . "', '" . addslashes($newJson['obs']) . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'entregada', 'sport')";
+    if (isset($nueva_oreden_response['status']) && $nueva_oreden_response['status'] === 'error') {
+      $object['orden_creada'] = false;
+      $object['response'] = $nueva_oreden_response;
+      $object['response']['status'] = 'error';
+    } else {
+      $object['orden_creada'] = true;
+      $last_id = $nueva_oreden_response['insert_id'];
 
-    $object['nueva_oreden_response'] = json_encode($localConnection->goQuery($sql));
-
-    // Obtenr id de la orden creada
-    $last = $localConnection->goQuery('SELECT MAX(_id) id FROM ordenes');
-    $last_id = intval($last[0]['id']);
-    $object['last_id'] = $last_id;
-
-    // Guardar orden vinculada
-    if ($arr['vinculada'] != 0 || $arr['vinculada'] != '0') {
-      $sql = "INSERT INTO ordenes_vinculadas (moment, id_father, id_child) VALUES ('" . $now . "', " . $arr['vinculada'] . ', ' . $last_id . ')';
-      $object['response_orden_vinculada'] = json_encode($localConnection->goQuery($sql));
-    }
-
-    // Crear abono inicial de la orden
-    $sql = "INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento) VALUES ('" . $now . "', '" . $last_id . "',  '" . $newJson['responsable'] . "', '" . $newJson['abono'] . "', '" . $newJson['descuento'] . "');";
-    $object['response_primer_abono'] = json_encode($localConnection->goQuery($sql));
-
-    // CALCULAMOE ES PORCENTAJE DEL VENDEDOR
-    // if (isset($arg["sales_commission"])) { // sales_comission no llega en el Payload vamoa a validar el valor de abono
-    if (floatval($newJson['abono']) > 0) {
-      // $object['sales_commission_ISSET'][] = $arg["sales_commission"];
-      $pago_vendedor = floatval($newJson['abono']) * 5 / 100;
-      $pago_vendedor = number_format($pago_vendedor, 2);
-      $sql = "INSERT INTO pagos (moment, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES ('" . $now . "', '" . $last_id . "',  '" . $newJson['responsable'] . "', '" . $pago_vendedor . "', 'Comercialización', 'aprobado')";
-      $object['resultado_abono'] = json_encode($localConnection->goQuery($sql));
-      $object['pago a vendedor'] = 'SI hubo comisión, cliente normal';
-      /* if ($arg["sales_commission"] === true) {
-                $object['sales_commission_ISSET'][] = true;
-                } else {
-                    $object["pago a vendedor"] = "NO hubo comisión, cliente excento";
-                } */
-    }  /*  else {
-    $object['sales_commission_ISSET'][] = false;
-    } */
-
-    // GUARDAR PRODUCTOS ASOCIADOS A LA ORDEN
-    $sql = 'SELECT _id';
-
-    for ($i = 0; $i <= $count; $i++) {
-      if (isset($misProductos[$i])) {
-        // PREPARAR FECHAS
-        $myDate = new CustomTime();
-        $now = $myDate->today();
-
-        $decodedObj = $misProductos[$i];
-
-        $cat_name = 'Uncatagorized';
-
-        $values = "'" . $now . "',";
-        $values .= $decodedObj['precio'] . ',';
-        $values .= "'" . $decodedObj['precioWoo'] . "',";
-        $values .= "'" . $decodedObj['producto'] . "',";
-        $values .= $last_id . ',';
-        $values .= $decodedObj['cod'] . ',';
-        $values .= $decodedObj['cantidad'] . ',';
-        $values .= $decodedObj['categoria'] . ',';
-        $values .= "'" . $cat_name . "',";
-        // $values .= "'" . $tmp["->name"] . "',";
-
-        if (isset($decodedObj['talla'])) {
-          $values .= "'" . $decodedObj['talla'] . "',";
-        } else {
-          $values .= "'',";
-        }
-
-        if (isset($decodedObj['corte'])) {
-          $values .= "'" . $decodedObj['corte'] . "',";
-        } else {
-          $values .= "'',";
-        }
-
-        if (isset($decodedObj['tela'])) {
-          $values .= "'" . $decodedObj['tela'] . "'";
-        } else {
-          $values .= "''";
-        }
-
-        $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela) VALUES (' . $values . ')';
-        $object['sql_ordenes_productos'] = $sql2;
-        $object['producto_detalle'][] = $localConnection->goQuery($sql2);
-
-        // BUSCAR EMPLEADOS Y GUARDARLOS EN UN VECTOR PARA ASIGANR A CASDA UNO ...
-        /* if ($misProductos[$i] != '') {
-            $sql_order = "SELECT * FROM ordenes WHERE _id = " . $last_id;
-            $myOrder = $localConnection->goQuery($sql_order);
-            $object['myOrder_sql'] = $sql_order;
-            $object['myOrder'] = $myOrder;
-
-    // Obtenr ultimo ID del producto creado
-                        $last_prod = $localConnection->goQuery("SELECT MAX(_id) id FROM ordenes_productos");
-                        $last_id_ordenes_productos = intval($last_prod[0]['id']);
-
-    // PREPARAR FECHAS
-                        $myDate = new CustomTime();
-                        $now = $myDate->today();
-
-    // FILTRAR DISEñOS POR `id_woo` PARA EVITAR INCUIRLOS COMO PRODUCTOS EN EL LOTE PORQUE EL CONTROL DE DISEÑOS DE LLEVA EN LA TABLA `disenos`
-                        $myWooId = intval($decodedObj['cod']);
-                        if ($myWooId != 11 && $myWooId != 12 && $myWooId != 13 && $myWooId != 14 && $myWooId != 15 && $myWooId != 16 && $myWooId != 112 && $myWooId != 113 && $myWooId != 168 && $myWooId != 169 && $myWooId != 170 && $myWooId != 171 && $myWooId != 172 && $myWooId != 173) {
-                            $sql_lote_detalles = "";
-    // $sql_lote_detalles = "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Responsable');";
-    // $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Diseño');";
-                            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Corte');";
-                            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Impresión');";
-                            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Estampado');";
-                            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Costura');";
-                            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Limpieza');";
-                            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Revisión');";
-                            $object['sql_lotes_detalles'][$i] = $sql_lote_detalles;
-                            $object['lote_detalles'][$i] = $localConnection->goQuery($sql_lote_detalles);
-                        }
-                    } */
+      if (!empty($newJson['obs'])) {
+        $observaciones = addslashes($newJson['obs']);
+        $sql_obs = "INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES ({$last_id}, '{$observaciones}')";
+        $object['sql_observaciones'] = $sql_obs;
+        $localConnection->goQuery($sql_obs);
       }
+
+      // GUARDAR PRODUCTOS ASOCIADOS A LA ORDEN
+      $sql = 'SELECT _id';
+
+      for ($i = 0; $i <= $count; $i++) {
+        if (isset($misProductos[$i])) {
+          // PREPARAR FECHAS
+          $myDate = new CustomTime();
+          $now = $myDate->today();
+
+          $decodedObj = $misProductos[$i];
+
+          $cat_name = 'Uncatagorized';
+
+          $values = "'" . $now . "',";
+          $values .= $decodedObj['precio'] . ',';
+          $values .= "'" . $decodedObj['precio'] . "',";
+          $values .= "'" . $decodedObj['producto'] . "',";
+          $values .= $last_id . ',';
+          $values .= $decodedObj['cod'] . ',';
+          $values .= $decodedObj['cantidad'] . ',';
+          $values .= $decodedObj['categoria'] . ',';
+          $values .= "'" . $cat_name . "',";
+
+          if (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '') {
+            $id_talla = intval($decodedObj['talla']);
+            $values .= $id_talla . ',';
+            $values .= "(SELECT nombre FROM sizes WHERE _id = {$id_talla}),";
+          } else {
+            $values .= 'NULL, NULL,';
+          }
+
+          if (isset($decodedObj['corte'])) {
+            $values .= "'" . $decodedObj['corte'] . "',";
+          } else {
+            $values .= "'',";
+          }
+
+          if (isset($decodedObj['tela'])) {
+            $values .= "'" . $decodedObj['tela'] . "',";
+            $values .= '(SELECT tela FROM catalogo_telas WHERE _id = ' . intval($decodedObj['tela']) . ')';
+          } else {
+            $values .= "NULL, ''";
+          }
+
+          $id_products_attributes = 'NULL';
+          if (isset($decodedObj['atributo']) && !is_null($decodedObj['atributo']) && $decodedObj['atributo'] !== '') {
+            $id_products_attributes = intval($decodedObj['atributo']);
+          }
+
+          $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes) VALUES (' . $values . ', ' . $id_products_attributes . ')';
+          $object['sql_ordenes_productos'] = $sql2;
+          $object['producto_detalle'][] = $localConnection->goQuery($sql2);
+        }
+      }
+
+      $stock_updates = [];
+      foreach ($misProductos as $producto) {
+        $product_id = intval($producto['cod']);
+        $quantity = intval($producto['cantidad']);
+        if (isset($stock_updates[$product_id])) {
+          $stock_updates[$product_id] += $quantity;
+        } else {
+          $stock_updates[$product_id] = $quantity;
+        }
+      }
+
+      $sql_stock_update = '';
+      foreach ($stock_updates as $product_id => $total_quantity) {
+        // $sql_stock_update .= "UPDATE products SET stock_quantity = stock_quantity + {$total_quantity} WHERE _id = {$product_id};";
+        $sql_stock_update .= "UPDATE products SET stock_quantity = stock_quantity - {$total_quantity} WHERE _id = {$product_id};";
+      }
+
+      if (!empty($sql_stock_update)) {
+        $object['stock_update_sql'] = $sql_stock_update;
+        $object['stock_update_response'] = $localConnection->goQuery($sql_stock_update);
+      }
+
+      // INICIO: Lógica de comisión para vendedores (copiada de /nueva/custom)
+      // NUEVO: Debugging para guardar_stock
+      error_log('DEBUG: guardar_stock raw value: ' . ($newJson['guardar_stock'] ?? 'NOT SET'));
+      error_log('DEBUG: guardar_stock filter_var result: ' . (filter_var($newJson['guardar_stock'] ?? null, FILTER_VALIDATE_BOOLEAN) ? 'TRUE' : 'FALSE'));
+
+      if (floatval($newJson['abono']) > 0 && !(isset($newJson['guardar_stock']) && filter_var($newJson['guardar_stock'], FILTER_VALIDATE_BOOLEAN))) {
+        // BUSCAR COMISION DEL VENDEDOR
+        $sql_comision = 'SELECT comision, comision_tipo FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $newJson['responsable'];
+        $respComisionArr = $localConnection->goQuery($sql_comision);
+
+        if (!empty($respComisionArr)) {
+          $respComision = $respComisionArr[0];
+          $comisionTipo = $respComision['comision_tipo'];
+          $comisionFloat = floatval($respComision['comision']);
+          $comision = number_format($comisionFloat, 2);
+
+          $pago_vendedor = floatval($newJson['abono']) * $comision / 100;
+          $pago_vendedor = number_format($pago_vendedor, 2);
+
+          $sql_pago = "INSERT INTO pagos (moment, comision, comision_tipo, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES ('" . $now . "', " . $comision . ", '" . $comisionTipo . "', '" . $last_id . "',  '" . $newJson['responsable'] . "', '" . $pago_vendedor . "', 'Comercialización', 'aprobado')";
+          $object['resultado_abono'] = $localConnection->goQuery($sql_pago);
+          $object['pago_a_vendedor'] = 'SI hubo comisión, cliente normal';
+        } else {
+          $object['pago_a_vendedor'] = 'NO se encontró información de comisión para el vendedor.';
+        }
+      }
+      // FIN: Lógica de comisión para vendedores
+
+      $response->getBody()->write(json_encode($object));
+      $localConnection->disconnect();
+
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
     }
-
-    // GUARDAR LOTE
-
-    /* // -> VERIFICAR SI LA ORDEN ES SOLO DE DISEÑO NO CREAR EL LOTE
-                $sql_verify = "SELECT category_name FROM ordenes_productos WHERE id_orden = " . $last_id;
-                $resultVerify = $localConnection->goQuery($sql_verify);
-
-                $guardarLote = true;
-                if (!empty($resultVerify)) {
-        // if (count($resultVerify) === 1 && substr($resultVerify["category_name"], 0, strlen("Diseños")) === "Diseños") {
-                    if (count($resultVerify) === 1 && $resultVerify[0]["category_name"] === "Diseños") {
-                        $guardarLote = false;
-                    }
-                }
-
-    $object["guardar_en_lote"] = $guardarLote;
-
-    if ($guardarLote) {
-        $sql_lote = "INSERT INTO lotes (moment, fecha, id_orden, lote, paso) VALUES ('" . $now . "', '" . date("Y-m-d") . "', " . $last_id . ", " . $last_id . ", 'producción')";
-        $object['miLote'] = json_encode($localConnection->goQuery($sql_lote));
-    } */
-
-    // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
-    $sql_metodos_pago = '';
-
-    if (intval($arr['montoDolaresEfectivo']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Efectivo', '" . $arr['montoDolaresEfectivo'] . "', '1', 'Nueva Orden');";
-      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoDolaresEfectivo'] . "', 'Dólares', 1, 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
-    }
-
-    if (intval($arr['montoDolaresZelle']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Zelle', '" . $arr['montoDolaresZelle'] . "', '1', 'Nueva Orden');";
-    }
-
-    if (intval($arr['montoDolaresPanama']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Panamá', '" . $arr['montoDolaresPanama'] . "', '1', 'Nueva Orden');";
-    }
-
-    if (intval($arr['montoPesosEfectivo']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Pesos', 'Efectivo', '" . $arr['montoPesosEfectivo'] . "', '" . $arr['tasa_peso'] . "', 'Nueva Orden');";
-      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoPesosEfectivo'] . "', 'Pesos', '" . $arr['tasa_peso'] . "', 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
-    }
-
-    if (intval($arr['montoPesosTransferencia']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Pesos', 'Transferencia', '" . $arr['montoPesosTransferencia'] . "', '" . $arr['tasa_peso'] . "', 'Nueva Orden');";
-    }
-
-    if (intval($arr['montoBolivaresEfectivo']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Efectivo', '" . $arr['montoBolivaresEfectivo'] . "', '" . $arr['tasa_dolar'] . "', 'Nueva Orden');";
-
-      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoBolivaresEfectivo'] . "', 'Bolívares', '" . $arr['tasa_dolar'] . "', 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
-    }
-
-    if (intval($arr['montoBolivaresPunto']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Punto', '" . $arr['montoBolivaresPunto'] . "', '" . $arr['tasa_dolar'] . "', 'Nueva Orden');";
-    }
-
-    if (intval($arr['montoBolivaresPagomovil']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Pagomovil', '" . $arr['montoBolivaresPagomovil'] . "', '" . $arr['tasa_dolar'] . "', 'Nueva Orden');";
-    }
-
-    if (intval($arr['montoBolivaresTransferencia']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Transferencia', '" . $arr['montoBolivaresTransferencia'] . "', '" . $arr['tasa_dolar'] . "', 'Nueva Orden');";
-    }
-
-    $object['metodos_pago'][$i] = $localConnection->goQuery($sql_metodos_pago);
-
-    // enviar email - obtener formato
-    $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
-    $object['resultBuscar'] = $resultBuscar['object'];
-    /*  $result = $woo->sendMail($orderWC->id, $resultBuscar["object"]);
-        $object["sendMail"] = $result; */
-
-    $response->getBody()->write(json_encode($object));
-
-    $localConnection->disconnect();
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
   });
 
   // FIN CREAR NUEVA ORDEN
@@ -14273,50 +14294,13 @@ if ($departamento === 'Diseño') {
       ->withStatus(200);
   });
 
-  // PROYECCION DE FECHAS DE ENTREGA DE ORDENES
-  $app->get('/ordenes/proyeccion-entrega', function (Request $request, Response $response, array $args) {
+
+// PROYECCION DE FECHAS DE ENTREGA DE ORDENES
+$app->get('/ordenes/proyeccion-entrega', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    // PRIMERA VERSION CON DETALLES POR DEPARTAMENTO
+    // --- INICIO CONSULTA ANTIGUA ---
     /* $sql = "SELECT
-            a.id_orden,
-            a.id_woo AS id_producto,
-            b.id_empleado,
-            a.name AS nombre_producto,
-            a.cantidad,
-            dep._id AS id_departamento,
-            dep.departamento AS nombre_departamento,
-            b.fecha_inicio,
-            b.fecha_terminado,
-            (SELECT CONCAT(fecha_entrega, ' 08:30:00' ) FROM ordenes WHERE _id = a.id_orden) fecha_entrega_orden,
-            d.tiempo AS tiempo_estimado_produccion,
-            (SELECT SUM(tiempo) FROM products_tiempos_de_produccion WHERE id_product = a.id_woo) tiempo_acumulado,
-            ofo.orden_fila AS orden_fila_orden,
-            dep.orden_proceso AS orden_proceso_departamento
-        FROM
-            ordenes_productos a
-        LEFT JOIN
-            lotes_detalles_empleados_asignados b ON b.id_orden = a.id_orden
-        JOIN
-            products_tiempos_de_produccion d ON d.id_product = a.id_woo AND d.id_departamento = b.id_departamento
-        JOIN
-            ordenes c ON c._id = b.id_orden
-        JOIN
-            departamentos dep ON dep._id = b.id_departamento
-        LEFT JOIN
-            ordenes_fila_orden ofo ON ofo.id_orden = a.id_orden
-        WHERE
-            (c.status LIKE 'En espera' OR c.status LIKE 'activa')
-        GROUP BY a._id, b.id_departamento
-        ORDER BY
-            ofo.orden_fila ASC,
-            c._id ASC,
-            dep.orden_proceso ASC,
-            a.id_woo ASC;
-    "; */
-
-    // SEBUNDA VERSIÓN CON TIEMPO GLOBAL POR ORDEN
-    $sql = "SELECT
                     a.id_orden,
                     c.status,
                     b.id_empleado, -- Asume un único empleado por orden-departamento
@@ -14359,7 +14343,69 @@ if ($departamento === 'Diseño') {
                     ofo.orden_fila ASC,
                     a.id_orden ASC,
                     dep.orden_proceso ASC;
-        ";
+        "; */
+    // --- FIN CONSULTA ANTIGUA ---
+
+
+    // --- INICIO DE LA SEGUNDA CORRECCIÓN ---
+    $sql = "
+        -- Versión 3: Consulta robusta con CTE para pre-agregar datos de asignación
+        WITH AssignmentData AS (
+            -- Primero, consolidamos todo lo de la tabla de asignaciones en una sola fila por tarea
+            SELECT
+                id_orden,
+                id_departamento,
+                COUNT(DISTINCT id_empleado) AS numero_de_empleados,
+                MIN(fecha_inicio) AS fecha_inicio_agregada,
+                MAX(fecha_terminado) AS fecha_terminado_agregada
+            FROM
+                lotes_detalles_empleados_asignados
+            GROUP BY
+                id_orden,
+                id_departamento
+        )
+        -- Consulta principal que ahora une los datos pre-agregados
+        SELECT
+            a.id_orden,
+            c.status,
+            d.id_departamento,
+            dep.departamento AS nombre_departamento,
+            ad.fecha_inicio_agregada AS fecha_inicio,
+            ad.fecha_terminado_agregada AS fecha_terminado,
+            c.fecha_entrega AS fecha_entrega_de_la_orden,
+            (SELECT CONCAT(o.fecha_entrega, ' 08:30:00') FROM ordenes o WHERE o._id = a.id_orden) AS fecha_entrega_orden,
+            SUM(a.cantidad) AS total_unidades,
+            -- La división ahora usa el conteo pre-calculado del CTE
+            (SUM(d.tiempo * a.cantidad) / COALESCE(ad.numero_de_empleados, 1)) AS tiempo_total_orden_depto,
+            ofo.orden_fila AS orden_fila_orden,
+            dep.orden_proceso AS orden_proceso_departamento
+        FROM
+            ordenes_productos a
+        -- Unimos las tablas principales
+        JOIN
+            products_tiempos_de_produccion d ON d.id_product = a.id_woo
+        JOIN
+            departamentos dep ON dep._id = d.id_departamento
+        JOIN
+            ordenes c ON c._id = a.id_orden
+        -- Hacemos LEFT JOIN a nuestros datos de asignación ya consolidados
+        LEFT JOIN
+            AssignmentData ad ON ad.id_orden = a.id_orden AND ad.id_departamento = d.id_departamento
+        LEFT JOIN
+            ordenes_fila_orden ofo ON ofo.id_orden = a.id_orden
+        WHERE
+            a.id_orden = 2287
+            AND (c.status LIKE 'En espera' OR c.status LIKE 'activa' OR c.status LIKE 'pausada')
+        -- Agrupamos por la tarea (orden y departamento)
+        GROUP BY
+            a.id_orden,
+            d.id_departamento
+        ORDER BY
+            ofo.orden_fila ASC,
+            a.id_orden ASC,
+            dep.orden_proceso ASC;
+    ";
+    // --- FIN DE LA SEGUNDA CORRECCIÓN ---
 
     $rspRendimientoTiempo = $localConnection->goQuery($sql);
     $object = $rspRendimientoTiempo;
@@ -14368,9 +14414,10 @@ if ($departamento === 'Diseño') {
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
     return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+});
+
 
   // Obtener ordenes asociadas a los empleados V2
   $app->get('/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso}', function (Request $request, Response $response, array $args) {

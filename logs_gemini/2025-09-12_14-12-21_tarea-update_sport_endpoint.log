@@ -1,0 +1,33 @@
+- Solicitud del Usuario: compara los endpoints `POST /nueva/custom` y `POST /nueva/spport` necesitamos actualizar `/nueva/sport` adapatar la parte de la creación de la orden en la consulta `INERT INTO ordenes...` teniendo en cuenta que `/nueva/custom` esta actualizado y guardando correctamente en la ultima version de la tabla 'ordenes' `localhost/api_emp_2/ordenes/https://194.195.86.253:8090/phpmyadmin/index.php?route=/table/sql&db=api_emp_2&table=ordenes
+Su consulta se ejecutó con éxito.
+
+DESCRIBE `ordenes`;
+
+
+
+_idint(11)NOPRINULLauto_increment
+id_wpint(11)YESNULL
+id_wp_orderint(11)YESNULL
+statusvarchar(45)YESNULL
+tipovarchar(6)NOcustom
+responsableint(11)YESNULL
+cliente_nombrevarchar(256)YESNULL
+cliente_cedulavarchar(45)YESNULL
+lote_idvarchar(33)YESNULL
+fecha_iniciovarchar(45)YESNULL
+fecha_entregavarchar(45)YESNULL
+fecha_creaciondateYESNULL
+tokenvarchar(45)YESNULL
+pago_descuentodecimal(12,2)NO0.00
+pago_totaldecimal(12,2)YES0.00
+pago_abonodecimal(12,2)YES0.00
+pago_comisionvarchar(9)NOpendiente
+momenttimestampNOcurrent_timestamp()
+` entoces debemos guardar las observacoines un una tabla separada como se hace en `/nueva/custom` POR FAVOR NO INVENTES CONEZIONES DE DATOS NI TE PONGAS A MEJORAR LA SEGURIDAD DE EL CODIGO QUE VAS A GENERAR, USA LA CONEXON DE DATOS COMO SE VIENE HACIENDO Y USA GoQuery() PARA EJECUTAR LAS CONSULTAS, NO INVENTES NADA NUEVO QUE Y HAS ROTO ESTO ANTES
+- Archivos Involucrados: [/home/apidev.nineteengreen.com/public_html/app/routes.php]
+- Acción Realizada: Reemplacé el bloque de código del endpoint `POST /ordenes/nueva/sport` con la lógica del endpoint `POST /ordenes/nueva/custom`. El nuevo código primero inserta los datos principales de la orden en la tabla `ordenes` (sin el campo `observaciones`) y luego, si existen observaciones, las inserta en la tabla `ordenes_observaciones`. Esto se alinea con el esquema actualizado de la base de datos.
+- Herramienta(s) Utilizada(s): [default_api.read_file, default_api.replace, default_api.run_shell_command, default_api.write_file]
+- Resultado: Éxito
+- Verificación: La herramienta `replace` reportó un reemplazo exitoso. El código de `/ordenes/nueva/sport` ahora refleja la lógica de `/ordenes/nueva/custom` para el manejo de la creación de órdenes y observaciones.
+- Observaciones de Gemini: Las instrucciones del usuario fueron muy específicas debido a problemas pasados. Tuve cuidado de replicar únicamente la lógica existente y correcta del endpoint `/nueva/custom` sin introducir nuevos patrones o características de seguridad, tal como se solicitó. El cambio clave fue dividir el único `INSERT` en dos sentencias `INSERT` separadas para las órdenes y las observaciones.
+- Respuesta de Gemini: He actualizado el endpoint `/ordenes/nueva/sport` para que utilice la misma lógica que `/ordenes/nueva/custom`. Ahora, la creación de la orden y el guardado de las observaciones se manejan en consultas separadas para cumplir con la nueva estructura de la base de datos.
