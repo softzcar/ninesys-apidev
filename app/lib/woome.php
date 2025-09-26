@@ -598,7 +598,7 @@ class WooMe
     return json_encode($this->woocommerce->post('products', $data));
   }
 
-  public function createProductLite($name, $pricesDat, $category, $sku, $attributesDat)
+  public function createProductLite($name, $pricesDat, $category, $sku)
   {
     // CREAR EL NUEVO PRODUCTO
     $sql = "INSERT INTO `products`(
@@ -622,7 +622,7 @@ class WooMe
       $sql = 'INSERT INTO products_prices (id_product, price, `descripcion`) VALUES ';
       $values = [];
       foreach ($prices as $price) {
-        $values[] = "($newID, {$price['price']}, '{$price['descripcion']}')";
+        $values[] = "($newID, {$price['price']}, '{$price['description']}')";
       }
       $sql .= implode(', ', $values) . ';';
       // Ejecutar la consulta
@@ -631,8 +631,8 @@ class WooMe
       $sql = 'NO HAY PRECIOS PARA PROCESAR';
     }
     // ASIGNAR ATRIBUTOS
-    $attributes = json_decode($attributesDat, true);
-    if (!empty($attributes)) {
+   /* $attributes = json_decode($attributesDat, true);
+     if (!empty($attributes)) {
       $sql = 'INSERT INTO products_attributes_values (id_product, id_product_attribute, `attribute_value`) VALUES ';
       $values = [];
       foreach ($attributes as $attribute) {
@@ -643,14 +643,14 @@ class WooMe
       $localConnection->goQuery($sql);
     } else {
       $sql = 'NO HAY ATRIBUTOS PARA PROCESAR';
-    }
+    } */
     // $sqlCreate = $sql; // Ya no necesitamos esta variable
     $sql = 'SELECT * FROM products WHERE _id = ' . $newID;
     $resp['product'] = $localConnection->goQuery($sql);
-    $sql = 'SELECT * FROM products_prices WHERE id_product = ' . $newID;
+    $sql = 'SELECT _id, id_product, price, descripcion description  FROM products_prices WHERE id_product = ' . $newID;
     $resp['prices'] = $localConnection->goQuery($sql);
-    $sql = 'SELECT * FROM products_attributes_values WHERE id_product = ' . $newID;
-    $resp['attributes'] = $localConnection->goQuery($sql);
+    // $sql = 'SELECT * FROM products_attributes_values WHERE id_product = ' . $newID;
+    // $resp['attributes'] = $localConnection->goQuery($sql);
     // Desconectar
     $localConnection->disconnect();
     // --- INICIO DE LA CORRECCIÓN ---
@@ -658,7 +658,7 @@ class WooMe
     // Lo extraemos.
     $productData = $resp['product'][0];
     // Creamos el payload final con la estructura que el frontend espera.
-    $finalPayload = ['product' => $productData, 'prices' => $resp['prices'], 'attributes' => $resp['attributes']];
+    $finalPayload = ['product' => $productData, 'prices' => $resp['prices']];
     // Devolvemos el array. El endpoint se encargará de codificarlo a JSON.
     return $finalPayload;
     // --- FIN DE LA CORRECCIÓN ---

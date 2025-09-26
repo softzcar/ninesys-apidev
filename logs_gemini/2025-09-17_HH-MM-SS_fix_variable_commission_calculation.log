@@ -1,0 +1,12 @@
+
+- Solicitud del Usuario: El endpoint `POST registrar-paso-empleado` está guardando la comisión en 'cero' para empleados con comisión variable, cuando debería calcularse usando `products.comision`.
+- Archivos Involucrados: `/home/apidev.nineteengreen.com/public_html/app/routes.php`
+- Acción Realizada: Se modificó la consulta SQL dentro del endpoint `POST registrar-paso-empleado` para que el cálculo de `total_comision_variable` utilice `b.comision` (de `api_empresas.empresas_usuarios`) en lugar de `a.procentaje_comision` (de `lotes_detalles_empleados_asignados`).
+  - Línea modificada:
+    - Antes: `((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable,`
+    - Después: `((SUM(c.cantidad) * d.comision) * b.comision / 100) AS total_comision_variable,`
+- Herramienta(s) Utilizada(s): `default_api.search_file_content`, `default_api.read_file`, `default_api.replace`
+- Resultado: Éxito
+- Verificación: La modificación se realizó correctamente en el archivo `app/routes.php`.
+- Observaciones de Gemini: La lógica original parecía mezclar el origen de la comisión variable, lo que resultaba en un cálculo incorrecto si `a.procentaje_comision` no estaba configurado adecuadamente. El cambio asegura que la comisión variable del empleado, definida en `empresas_usuarios`, se aplique correctamente al `comision` del producto.
+- Respuesta de Gemini: He modificado el archivo `app/routes.php` para corregir el cálculo de la comisión variable. Ahora, el endpoint `POST registrar-paso-empleado` debería calcular correctamente la comisión utilizando la información de `empresas_usuarios` y `products.comision`.

@@ -1,0 +1,10 @@
+- Solicitud del Usuario: [ok p[rocedamos a implementar el cambio adaptado a nuestro endpoint con error]
+- Archivos Involucrados: [/home/apidev.nineteengreen.com/public_html/app/routes.php]
+- Acción Realizada: [Se refactorizó el endpoint `/send-message` para utilizar el método `sendDirectMessageToNode` de la clase `WhatsAppAPIClient`. Esto alinea su funcionamiento con el del endpoint `/ws/build-message/interno`, que ya enviaba mensajes directos correctamente. La nueva implementación busca el número de teléfono del cliente en la base de datos y llama al método `sendDirectMessageToNode` para enviar un mensaje de texto libre, en lugar de intentar usar una plantilla a través de cURL.]
+- Herramienta(s) Utilizada(s): [default_api.replace]
+- Resultado: [Éxito]
+- Verificación: [La herramienta `replace` confirmó la modificación exitosa. El nuevo código utiliza un método (`sendDirectMessageToNode`) que ya ha demostrado funcionar para el envío de mensajes directos en otros endpoints, lo que debería resolver el error que reportaba el usuario.]
+- Observaciones de Gemini: [El error se debía a que se intentaba usar una lógica de plantillas (`template: 'general'`) para enviar un mensaje de texto libre. La solución correcta, sugerida por el usuario al señalar un endpoint funcional, fue adoptar el método `sendDirectMessageToNode`, diseñado para este tipo de mensajes directos.]
+- Respuesta de Gemini: [Correcto. Implementaré la solución que hemos acordado, adaptando la lógica del endpoint funcional `/ws/build-message/interno` a nuestro endpoint `/send-message`.
+
+Voy a reemplazar el código actual del endpoint para que utilice el método `sendDirectMessageToNode()`, que es la forma correcta de enviar mensajes de texto directos. Procedo con el cambio.]

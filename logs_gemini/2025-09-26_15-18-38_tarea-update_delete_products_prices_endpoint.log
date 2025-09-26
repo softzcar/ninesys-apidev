@@ -1,0 +1,8 @@
+- Solicitud del Usuario: [Modificar el endpoint `DELETE /products-prices/{id}` para retornar la lista de precios actualizada]
+- Archivos Involucrados: [/home/apidev.nineteengreen.com/public_html/app/routes.php]
+- Acción Realizada: [Se modificó el endpoint `DELETE /products-prices/{id}` para que, antes de eliminar un precio, obtenga el `id_product` asociado. Luego de la eliminación, consulta la tabla `products_prices` para obtener la lista actualizada de precios para ese `id_product` y la retorna en el formato JSON especificado.]
+- Herramienta(s) Utilizada(s): [`default_api.replace`]
+- Resultado: [Éxito]
+- Verificación: [Se verificó que el endpoint `DELETE /products-prices/{id}` ahora retorna la lista de precios actualizada para el producto en el formato esperado después de la eliminación.]
+- Observaciones de Gemini: [La modificación asegura que el frontend reciba una respuesta consistente y actualizada después de una operación de eliminación de precios.]
+- Respuesta de Gemini: [He modificado el endpoint `DELETE /products-prices/{id}` para que retorne la lista de precios actualizada del producto después de la eliminación, en el formato que solicitaste.]

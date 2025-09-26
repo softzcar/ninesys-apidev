@@ -28,7 +28,7 @@ class IdEmpresaMiddleware implements Middleware
                 ]);
                 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-                $sql = 'SELECT db_host, db_user, db_password, db_name FROM empresas WHERE id_empresa = :id_empresa';
+                $sql = 'SELECT db_host, db_user, db_password, nombre, db_name FROM empresas WHERE id_empresa = :id_empresa';
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute(['id_empresa' => $id_empresa]);
 
@@ -37,6 +37,7 @@ class IdEmpresaMiddleware implements Middleware
                 if ($connectionDetails) {
                     define('ESTATUS', 'accedido');
                     define('LOCAL_DNS', 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name']);
+                    define('EMPRESA_NOMBRE', $connectionDetails['nombre']);
                     define('LOCAL_USER', $connectionDetails['db_user']);
                     define('LOCAL_PASS', $connectionDetails['db_password']);
                     define('LOCAL_DB', $connectionDetails['db_name']);

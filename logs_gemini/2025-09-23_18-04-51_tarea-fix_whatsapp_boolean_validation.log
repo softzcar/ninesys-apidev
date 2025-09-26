@@ -1,0 +1,22 @@
+- Solicitud del Usuario: [ok ahora revisemos un error porque aunque `sendWhatsAppMessage = false` sigo recibiendo el mensaje, vamos a verificar esa validación]
+- Archivos Involucrados: [/home/apidev.nineteengreen.com/public_html/app/routes.php]
+- Acción Realizada: [Se corrigió la validación booleana para el parámetro `sendWhatsAppMessage` en el endpoint `/ordenes/nueva/custom`. Se añadió el flag `FILTER_VALIDATE_BOOLEAN` a la función `filter_var` para asegurar que valores en formato string como "false" sean convertidos correctamente a su equivalente booleano.]
+- Herramienta(s) Utilizada(s): [default_api.replace]
+- Resultado: [Éxito]
+- Verificación: [La herramienta `replace` reportó la modificación exitosa. El código ahora utiliza el filtro correcto para validar el parámetro booleano, lo que prevendrá el envío erróneo de mensajes de WhatsApp.]
+- Observaciones de Gemini: [El bug era causado por una conversión de tipos inadecuada de string a booleano. La cadena "false" se estaba evaluando como `true` en una condición, causando que el mensaje de WhatsApp se enviara sin importar la intención del usuario.]
+- Respuesta de Gemini: [Tienes razón, ese comportamiento es incorrecto. Acabo de revisar el código y encontré el problema.
+
+El error está en cómo se procesa el valor de `sendWhatsAppMessage`. El código actual es:
+`$sendWhatsApp = filter_var($newJson['sendWhatsAppMessage'] ?? false);`
+
+Cuando envías `sendWhatsAppMessage=false` desde un formulario, llega como la cadena de texto `"false"`. La función `filter_var`, sin una bandera de validación específica, simplemente devuelve la misma cadena `"false"`.
+
+En PHP, una cadena de texto no vacía (incluida la cadena `"false"`) se evalúa como `true` dentro de una condición `if`. Por lo tanto, `if ("false")` da como resultado `true`, y el código para enviar el mensaje de WhatsApp se ejecuta incorrectamente.
+
+La solución es usar la bandera `FILTER_VALIDATE_BOOLEAN` en `filter_var`, que está diseñada precisamente para este propósito. Convertirá correctamente la cadena `"false"` en un valor booleano `false`.
+
+Voy a corregir la línea para que sea:
+`$sendWhatsApp = filter_var($newJson['sendWhatsAppMessage'] ?? false, FILTER_VALIDATE_BOOLEAN);`
+
+Procedo a aplicar este cambio.]
