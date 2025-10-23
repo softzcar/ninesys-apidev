@@ -1,0 +1,8 @@
+- Solicitud del Usuario: El usuario está recibiendo un error `number_format(): Argument #1 ($num) must be of type int|float, string given` al llamar al endpoint `POST /ordenes/nueva/custom`.
+- Archivos Involucrados: /home/apidev.nineteengreen.com/public_html/app/routes.php
+- Acción Realizada: Se modificó la línea `number_format($respComision['comision'], 2);` a `number_format(floatval($respComision['comision']), 2);` dentro del bloque `elseif ($comisionTipo === 'fija')` en el endpoint `POST /ordenes/nueva/custom` para asegurar que el valor sea un float antes de ser pasado a la función `number_format()`.
+- Herramienta(s) Utilizada(s): `default_api.read_file`, `default_api.replace`, `default_api.write_file`
+- Resultado: Éxito
+- Verificación: La modificación se realizó correctamente en el archivo `app/routes.php`.
+- Observaciones de Gemini: El error se debía a que la función `number_format()` esperaba un tipo `int` o `float` pero recibía un `string`. La solución fue castear explícitamente el valor a `float`.
+- Respuesta de Gemini: He aplicado la corrección al archivo `app/routes.nineteengreen.com/public_html/app/routes.php`. Por favor, verifica si el error se ha resuelto.

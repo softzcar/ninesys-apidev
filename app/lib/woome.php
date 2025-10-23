@@ -79,67 +79,89 @@ class WooMe
         p._id, p.sku, p.product, p.stock_quantity, p.price;
     "; */
 
-    $sql = 'SELECT
+    $sql = <<<SQL
+        SELECT
             p._id AS cod,
-            p.sku, 
+            p.sku,
             p.product AS `name`,
             p.stock_quantity,
-            p.comision,            
+            p.comision,
             p.price,
             p.fisico producto_fisico,
-            CONCAT(
-                "[",
-                GROUP_CONCAT(
-                    JSON_OBJECT(
-                        "id",
-                        pp._id,
-                        "price",
-                        pp.price,
-                        "description",
-                        pp.descripcion
-                    )
-                ),
-                "]"
-            ) AS prices,
-            
-            CONCAT(
-                "[",
-                GROUP_CONCAT(
-                    JSON_OBJECT(
-                        "id_products_conisiones",
-                        pc._id,
-                        "id_product",
-                        pc.id_product,
-                        "comision",
-                        pc.comision,
-                        "id_departamento",
-                        pc.id_departamento
-                    )
-                ),
-                "]"
-            ) AS comisiones,
-            
-            CONCAT(
-                "[",
-                GROUP_CONCAT(
-                    JSON_OBJECT("id", c._id, "name", c.nombre)
-                ),
-                "]"
-            ) AS categories
+            p.es_diseno,
+            COALESCE(pp_agg.prices_json, '[]') AS prices,
+            COALESCE(pc_agg.comisiones_json, '[]') AS comisiones,
+            COALESCE(cat_agg.categories_json, '[]') AS categories
         FROM
             products p
-        LEFT JOIN products_prices pp ON
-            pp.id_product = p._id
-        LEFT JOIN products_comisiones pc ON
-            pc.id_product = p._id
-        LEFT JOIN categories c ON
-            FIND_IN_SET(c._id, p.category_ids)
+        LEFT JOIN (
+            SELECT
+                pp_inner.id_product,
+                CONCAT(
+                    "[",
+                    GROUP_CONCAT(
+                        JSON_OBJECT(
+                            "id", pp_inner._id,
+                            "price", pp_inner.price,
+                            "description", pp_inner.descripcion
+                        )
+                        ORDER BY pp_inner._id
+                    ),
+                    "]"
+                ) AS prices_json
+            FROM
+                products_prices pp_inner
+            GROUP BY
+                pp_inner.id_product
+        ) pp_agg ON p._id = pp_agg.id_product
+        LEFT JOIN (
+            SELECT
+                pc_inner.id_product,
+                CONCAT(
+                    "[",
+                    GROUP_CONCAT(
+                        JSON_OBJECT(
+                            "id_products_conisiones", pc_inner._id,
+                            "id_product", pc_inner.id_product,
+                            "comision", pc_inner.comision,
+                            "id_departamento", pc_inner.id_departamento
+                        )
+                        ORDER BY pc_inner._id
+                    ),
+                    "]"
+                ) AS comisiones_json
+            FROM
+                products_comisiones pc_inner
+            GROUP BY
+                pc_inner.id_product
+        ) pc_agg ON p._id = pc_agg.id_product
+        LEFT JOIN (
+            SELECT
+                p_inner._id AS product_id,
+                CONCAT(
+                    "[",
+                    GROUP_CONCAT(
+                        JSON_OBJECT("id", c_inner._id, "name", c_inner.nombre)
+                        ORDER BY c_inner._id
+                    ),
+                    "]"
+                ) AS categories_json
+            FROM
+                products p_inner
+            JOIN categories c_inner ON FIND_IN_SET(c_inner._id, p_inner.category_ids)
+            GROUP BY
+                p_inner._id
+        ) cat_agg ON p._id = cat_agg.product_id
         GROUP BY
             p._id,
             p.sku,
             p.product,
             p.stock_quantity,
-            p.price;';
+            p.comision,
+            p.price,
+            p.fisico,
+            p.es_diseno;
+        SQL;
 
     $localConnection = new LocalDB();
     $products = $localConnection->goQuery($sql);
@@ -157,6 +179,7 @@ class WooMe
       $data[$key]['regular_price'] = 0;
       $data[$key]['prices'] = json_decode($product['prices']);
       $data[$key]['producto_fisico'] = json_decode($product['producto_fisico']);
+      $data[$key]['es_diseno'] = json_decode($product['es_diseno']);
       $data[$key]['comisiones'] = json_decode($product['comisiones']);
       $data[$key]['categories'] = json_decode($product['categories'], true);
 
@@ -598,18 +621,22 @@ class WooMe
     return json_encode($this->woocommerce->post('products', $data));
   }
 
-  public function createProductLite($name, $pricesDat, $category, $sku)
+  public function createProductLite($name, $pricesDat, $category, $sku, $producto_fisico = 0, $es_diseno = 0)
   {
     // CREAR EL NUEVO PRODUCTO
     $sql = "INSERT INTO `products`(
                 `product`,
                 `sku`,
-                `category_ids`
+                `category_ids`,
+                `fisico`,
+                `es_diseno`
             )
             VALUES(
                 '" . $name . "',
                 '" . $sku . "',
-                '" . $category . "'
+                '" . $category . "',
+                '" . $producto_fisico . "',
+                '" . $es_diseno . "'
             );";
     $localConnection = new LocalDB();
     $localConnection->goQuery($sql);
@@ -662,6 +689,34 @@ class WooMe
     // Devolvemos el array. El endpoint se encargará de codificarlo a JSON.
     return $finalPayload;
     // --- FIN DE LA CORRECCIÓN ---
+  }
+
+  public function updateProductLite($id, $name, $sku, $category, $producto_fisico = 0, $es_diseno = 0)
+  {
+    $localConnection = new LocalDB();
+
+    // ACTUALIZAR PRODUCTO
+    $sql = "UPDATE `products` SET
+                `product` = '" . $name . "',
+                `sku` = '" . $sku . "',
+                `category_ids` = '" . $category . "',
+                `fisico` = '" . $producto_fisico . "',
+                `es_diseno` = '" . $es_diseno . "'
+            WHERE `_id` = " . $id;
+
+    $resp = $localConnection->goQuery($sql);
+
+    // OBTENER PRODUCTO ACTUALIZADO
+    $sql = 'SELECT * FROM products WHERE _id = ' . $id;
+    $product = $localConnection->goQuery($sql);
+
+    // OBTENER PRECIOS DEL PRODUCTO
+    $sql = 'SELECT _id, id_product, price, descripcion description FROM products_prices WHERE id_product = ' . $id;
+    $prices = $localConnection->goQuery($sql);
+
+    $localConnection->disconnect();
+
+    return ['product' => $product[0], 'prices' => $prices];
   }
 
   /* public function createProductLite($name, $prices, $category, $sku, $stock_quantity)

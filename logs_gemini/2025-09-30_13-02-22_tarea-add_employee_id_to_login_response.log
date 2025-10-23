@@ -1,0 +1,8 @@
+- Solicitud del Usuario: [vamos a unbicar el endpoint `POST /login` en @app/routes.php allí en caso de obtener `company_full_config = false` debemos dentro de `datos_usuario` retornar el ID del empleado.]
+- Archivos Involucrados: [/home/apidev.nineteengreen.com/public_html/app/routes.php]
+- Acción Realizada: [Se modificó el endpoint `POST /login` en el archivo `app/routes.php` para incluir el `id_usuario` en el array `datos_usuario` cuando `company_full_config` es `false`.]
+- Herramienta(s) Utilizada(s): [`default_api.read_file`, `default_api.search_file_content`, `default_api.replace`, `default_api.write_file`]
+- Resultado: [Éxito]
+- Verificación: [Se verificó que el código se haya modificado correctamente en el archivo `app/routes.php`.]
+- Observaciones de Gemini: [La solicitud del usuario fue clara y precisa, lo que facilitó la identificación y modificación del código.]
+- Respuesta de Gemini: [He modificado el archivo como se solicitó. Ahora crearé un archivo de registro para esta tarea.]
