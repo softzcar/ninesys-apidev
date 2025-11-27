@@ -3,6 +3,7 @@
 /**
  * llamdas a Woocomemrce
  */
+// namespace App\Lib;
 
 use Automattic\WooCommerce\Client;
 
@@ -173,7 +174,7 @@ class WooMe
       $data[$key]['cod'] = intval($product['cod']);
       $data[$key]['sku'] = $product['sku'];
       $data[$key]['name'] = $product['name'];
-      $data[$key]['comision'] = $product['comision'];
+      $data[$key]['comision'] = floatval($product['comision']);
       $data[$key]['stock_quantity'] = $product['stock_quantity'];
       // $data[$key]['regular_price'] = $product['price'];
       $data[$key]['regular_price'] = 0;

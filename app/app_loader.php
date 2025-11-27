@@ -3,8 +3,7 @@ $base = __DIR__ . '/../app/';
 
 $folders = [
   'lib',
-  'model',
-  'routes'
+  'model'
 ];
 
 foreach ($folders as $f) {

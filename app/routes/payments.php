@@ -1,0 +1,906 @@
+<?php
+
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\App;
+
+return function (App $app) {
+
+
+  /** PAGOS */
+  // Terminar planilla de pago
+  $app->post('/pagos/terminar-planilla', function (Request $request, Response $response, $args) {
+    // $order = $request->getParsedBody();
+    $localConnection = new LocalDB();
+    $myDate = new CustomTime();
+    $now = $myDate->today();
+
+    $sql = "UPDATE pagos SET fecha_pago = '" . $now . "' WHERE fecha_pago IS NULL";
+    $data = $localConnection->goQuery($sql);
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($data));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  // REALIZAR PAGO A EMPLEADOS
+  $app->post('/pagos/pagar-a-empleados', function (Request $request, Response $response, $args) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    $myDate = new CustomTime();
+    $now = $myDate->today();
+
+    // Sanitizar y convertir los IDs de pago a un array de enteros.
+    $listaDeIdPagos = array_map('intval', explode(',', $data['id_pagos'] ?? ''));
+    $cantidadDePagos = count($listaDeIdPagos);
+
+    if ($cantidadDePagos === 0) {
+      $response->getBody()->write(json_encode(['error' => 'No se proporcionaron IDs de pago válidos.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    // Procesar bonos, descuentos, salario y comisión
+    $totalBonos = 0;
+    $totalDescuentos = 0;
+    $salario = floatval($data['salario'] ?? 0);
+    $comision = floatval($data['comision'] ?? 0);
+
+    // Procesar bonos
+    if (isset($data['bonos']) && $data['bonos'] !== '0') {
+      $bonosArray = json_decode($data['bonos'], true);
+      if (is_array($bonosArray)) {
+        foreach ($bonosArray as $bono) {
+          $monto = floatval($bono['monto'] ?? 0);
+          $descripcion = $bono['descripcion'] ?? '';
+          $totalBonos += $monto;
+
+          // Dividir el monto del bono entre la cantidad de pagos
+          $montoPorPago = $monto / $cantidadDePagos;
+
+          foreach ($listaDeIdPagos as $idPago) {
+            $sql = "INSERT INTO pagos_abonos (id_pago, monto, descripcion) VALUES (?, ?, ?)";
+            $localConnection->goQuery($sql, [$idPago, $montoPorPago, $descripcion]);
+          }
+        }
+      }
+    }
+
+    // Procesar descuentos
+    if (isset($data['descuentos']) && $data['descuentos'] !== '0') {
+      $descuentosArray = json_decode($data['descuentos'], true);
+      if (is_array($descuentosArray)) {
+        foreach ($descuentosArray as $descuento) {
+          $monto = floatval($descuento['monto'] ?? 0);
+          $descripcion = $descuento['descripcion'] ?? '';
+          $totalDescuentos += $monto;
+
+          // Dividir el monto del descuento entre la cantidad de pagos
+          $montoPorPago = $monto / $cantidadDePagos;
+
+          foreach ($listaDeIdPagos as $idPago) {
+            $sql = "INSERT INTO pagos_descuentos (id_pago, monto, descripcion) VALUES (?, ?, ?)";
+            $localConnection->goQuery($sql, [$idPago, $montoPorPago, $descripcion]);
+          }
+        }
+      }
+    }
+
+    // Procesar salario si existe
+    if ($salario > 0) {
+      // Buscar frecuencia de salario
+      $sql = "SELECT salario_periodo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?";
+      $data = $localConnection->goQuery($sql, [$data['id_empleado']]);
+      $periodo = $data[0]['salario_periodo'];
+
+
+      // Dividir el salario entre la cantidad de pagos
+      $salarioPorPago = $salario / $cantidadDePagos;
+      foreach ($listaDeIdPagos as $idPago) {
+        $sql = "INSERT INTO pagos_salarios (id_pago, tipo_salario, numero_semana, monto) VALUES (?, ?, ?, ?)";
+        $localConnection->goQuery($sql, [$idPago, $periodo, date('W'), $salarioPorPago]);
+      }
+    }
+
+    // Calcular el monto total del pago y el monto por cada registro de pago
+    $montoTotalPago = ($salario + $comision + $totalBonos) - $totalDescuentos;
+    $montoPorRegistroDePago = $montoTotalPago / $cantidadDePagos;
+
+
+    // Crear placeholders (?) para la cláusula IN
+    $placeholders = implode(',', array_fill(0, count($listaDeIdPagos), '?'));
+
+    // Actualizar pagos con fecha_pago y el monto_pago DIVIDIDO
+    $sql = "UPDATE pagos SET fecha_pago = ?, monto_pago = ? WHERE _id IN ({$placeholders})";
+    $params = array_merge([$now, $montoPorRegistroDePago], $listaDeIdPagos);
+    $data['resp_update'] = $localConnection->goQuery($sql, $params);
+
+    // Opcional: Volver a consultar los registros actualizados
+    $sqlSelect = "SELECT * FROM pagos WHERE _id IN ({$placeholders})";
+    $registrosParaProcesar = $localConnection->goQuery($sqlSelect, $listaDeIdPagos);
+
+    $localConnection->disconnect();
+
+    $data['resumen_pago'] = [
+      'cantidad_pagos' => $cantidadDePagos,
+      'monto_total_pagado' => $montoTotalPago,
+      'monto_por_registro' => $montoPorRegistroDePago
+    ];
+
+    $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  // Lista de pagos semanales
+  $app->get('/pagos/semana/disenadores', function (Request $request, Response $response, array $args) {
+    // OBTENER PAGOS DE DISEÑADORES
+    $localConnection = new LocalDB();
+
+    // DISEÑADORES
+    $sql = 'SELECT
+                p._id id_pago,
+                p.id_orden,
+                r._id id_revision,
+                p.monto_pago pago,
+                p.id_empleado,
+                p.fecha_pago,
+                (SELECT numero_semana FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+                (
+                SELECT
+                    departamento
+                FROM
+                    api_empresas.empresas_usuarios
+                WHERE
+                    id_usuario = r.id_empleado
+            ) departamento,
+                (
+                SELECT
+                    salario_tipo
+                FROM
+                    api_empresas.empresas_usuarios
+                WHERE
+                    id_usuario = r.id_empleado
+            ) salario_tipo,
+            (
+                SELECT
+                    nombre
+                FROM
+                    api_empresas.empresas_usuarios
+                WHERE
+                    id_usuario = r.id_empleado
+            ) nombre,
+            (
+                SELECT
+                    product producto
+                FROM
+                    products
+                WHERE
+                    _id = r.id_product
+            ) producto
+            FROM
+                pagos p
+            JOIN revisiones r ON
+                p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado 
+            WHERE p.fecha_pago IS  NULL 
+            GROUP BY p._id
+        ';
+    $object['data']['diseno'] = $localConnection->goQuery($sql);
+
+    foreach ($object['data']['diseno'] as $key => $value) {
+      // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
+      $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ' . $value['id_orden'];
+      $tmpResp = $localConnection->goQuery($sqlTMP);
+
+      if (!empty($tmpResp)) {
+        foreach ($tmpResp as $key2 => $value2) {
+          $object['data']['trabajos_adicionales'][] = $value2;
+        }
+      }
+    }
+    /* $app->get('/pagos/semana/disenadores', function (Request $request, Response $response, array $args) {
+        // OBTERER PAGOS DE VENDEDORES
+        $localConnection = new LocalDB();
+
+        // DISEÑADORES
+        $sql = "SELECT
+            ord._id id_orden,
+            dis._id id_diseno,
+            dis.id_product,
+            rev._id id_revision,
+            dis.id_empleado id_disenador,
+            (
+            SELECT
+                nombre
+            FROM
+                api_empresas.empresas_usuarios
+            WHERE
+                id_usuario = dis.id_empleado
+        ) disenador,
+        ord.id_wp id_cliente,
+        ord.cliente_nombre,
+        dis.tipo tipo_diseno,
+        rev.detalles,
+        rev.estatus,
+        rev.revision
+        FROM
+            ordenes ord
+        RIGHT JOIN disenos dis ON
+            dis.id_orden = ord._id
+        LEFT JOIN revisiones rev ON
+            rev.id_orden = ord._id AND rev.id_empleado = dis.id_empleado
+        WHERE
+            dis.id_product IS NOT NULL AND rev.estatus = 'Esperando Respuesta'
+        ORDER BY ord._id ASC, ord.cliente_nombre ASC
+        ";
+        $object['data']['diseno'] = $localConnection->goQuery($sql);
+
+        foreach ($object['data']['diseno'] as $key => $value) {
+            // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
+            $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ' . $value['id_orden'];
+            $tmpResp = $localConnection->goQuery($sqlTMP);
+
+            if (!empty($tmpResp)) {
+                foreach ($tmpResp as $key2 => $value2) {
+                    $object['data']['trabajos_adicionales'][] = $value2;
+                }
+            }
+        } */
+
+    // TODO REPROGRAMAR PAGOS POR TAREASADICIONALES, PRIMERO DEBEN SER APROBADAS PARA SU PAGO
+    /* $trabajos_adicionales_nuevos = [];
+
+    if (!empty($object['data']['trabajos_adicionales'])) {
+        foreach ($object['data']['trabajos_adicionales'] as $trabajo_adicional) {
+            $existe = false;
+            foreach ($trabajos_adicionales_nuevos as $trabajo_adicional_nuevo) {
+                if ($trabajo_adicional['_id'] == $trabajo_adicional_nuevo['_id']) {
+                    $existe = true;
+                    break;
+                }
+            }
+            if (!$existe) {
+                $trabajos_adicionales_nuevos[] = $trabajo_adicional;
+            }
+        }
+        $object['data']['trabajos_adicionales'] = $trabajos_adicionales_nuevos;
+    } else {
+        $object['data']['trabajos_adicionales'] = [];
+    } */
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->get('/pagos/semana/empleados', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+
+    // --- 1. Consulta para empleados con COMISIÓN FIJA ---
+    $sql_fija = "SELECT DISTINCT
+                    a._id AS id_pago,
+                    'N/A' as cod,
+                    b._id AS id_lotes_detalles,
+                    b.id_orden AS orden,
+                    b.id_orden AS id_orden, 
+                    'Pago Fijo Global' AS producto,
+                    a.cantidad,
+                    'N/A' as talla,
+                    c.id_usuario AS id_empleado,
+                    c.nombre,
+                    a.monto_pago AS pago,
+                    c.comision,
+                    c.comision_tipo,
+                    c.salario_tipo,
+                    a.detalle AS departamento,
+                    DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
+                    DATE_FORMAT(b.fecha_terminado, '%v') AS semana,
+                    DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
+                    a.fecha_pago,
+                    TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido
+                FROM
+                    pagos a
+                JOIN
+                    lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+                JOIN
+                    api_empresas.empresas_usuarios c ON b.id_empleado = c.id_usuario
+                WHERE
+                    a.fecha_pago IS NULL
+                    AND c.comision_tipo = 'fija'";
+
+    $pagos_fijos = $localConnection->goQuery($sql_fija);
+    if (!is_array($pagos_fijos)) {
+      $pagos_fijos = [];
+    }
+
+    // --- 2. Consulta para empleados con COMISIÓN VARIABLE (desglosada por producto) ---
+    $sql_variable = "SELECT DISTINCT
+                        a._id AS id_pago,
+                        d.id_woo AS cod,
+                        b._id AS id_lotes_detalles,
+                        b.id_orden AS orden,
+                        d.name AS producto,
+                        d.cantidad,
+                        d.talla,
+                        c.id_usuario AS id_empleado,
+                        c.nombre,
+                        a.monto_pago AS pago,
+                        a.comision,
+                        c.comision_tipo,
+                        c.salario_tipo,
+                        a.detalle AS departamento,
+                        DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
+                        DATE_FORMAT(b.fecha_terminado, '%v') AS semana,
+                        DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
+                        a.fecha_pago,
+                        TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido
+                    FROM
+                        pagos a
+                    JOIN
+                        lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+                    JOIN
+                        api_empresas.empresas_usuarios c ON b.id_empleado = c.id_usuario
+                    LEFT JOIN
+                        ordenes_productos d ON b.id_orden = d.id_orden
+                    WHERE
+                        a.fecha_pago IS NULL
+                        AND c.comision_tipo = 'variable'";
+
+    $pagos_variables = $localConnection->goQuery($sql_variable);
+    if (!is_array($pagos_variables)) {
+      $pagos_variables = [];
+    }
+
+    // --- 3. Consulta para empleados con COMISIÓN PORCENTAJE ---
+    $sql_porcentaje = "SELECT DISTINCT
+                        a._id AS id_pago,
+                        d.id_woo AS cod,
+                        b._id AS id_lotes_detalles,
+                        b.id_orden AS orden,
+                        d.name AS producto,
+                        d.cantidad,
+                        d.talla,
+                        c.id_usuario AS id_empleado,
+                        c.nombre,
+                        a.monto_pago AS pago,
+                        c.comision_porcentaje AS comision,
+                        c.comision_tipo,
+                        c.salario_tipo,
+                        a.detalle AS departamento,
+                        DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
+                        DATE_FORMAT(b.fecha_terminado, '%v') AS semana,
+                        DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
+                        a.fecha_pago,
+                        TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
+                        d.precio_unitario AS precio_producto
+                    FROM
+                        pagos a
+                    JOIN
+                        lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+                    JOIN
+                        api_empresas.empresas_usuarios c ON b.id_empleado = c.id_usuario
+                    LEFT JOIN
+                        ordenes_productos d ON b.id_orden = d.id_orden
+                    WHERE
+                        a.fecha_pago IS NULL
+                        AND c.comision_tipo = 'porcentaje'";
+
+    $pagos_porcentaje = $localConnection->goQuery($sql_porcentaje);
+    if (!is_array($pagos_porcentaje)) {
+      $pagos_porcentaje = [];
+    }
+
+    // --- 4. Unir y ordenar los resultados ---
+    $todos_los_pagos = array_merge($pagos_fijos, $pagos_variables, $pagos_porcentaje);
+
+    // Opcional: re-ordenar el array combinado por nombre y luego por orden
+    usort($todos_los_pagos, function ($a, $b) {
+      if ($a['nombre'] == $b['nombre']) {
+        return $a['orden'] <=> $b['orden'];
+      }
+      return $a['nombre'] <=> $b['nombre'];
+    });
+
+    $object['data']['empleados'] = $todos_los_pagos;
+    $object['sql_debug']['fija'] = $sql_fija;
+    $object['sql_debug']['variable'] = $sql_variable;
+    $object['sql_debug']['porcentaje'] = $sql_porcentaje;
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->get('/pagos/semana/vendedores', function (Request $request, Response $response, array $args) {
+    // OBTERER PAGOS DE VENDEDORES
+    $localConnection = new LocalDB();
+
+    $sql = "SELECT
+                a._id AS id_pago,
+                a.id_orden,
+                a.id_empleado,
+                a.detalle,
+                a.cantidad,
+                a.monto_pago AS pago,
+                -- (a.comision * a.cantidad) pago,
+                a.comision,
+                a.comision_tipo,
+                c.salario_tipo,
+                c.nombre,
+                d.pago_abono monto_abonado,
+                e.monto monto_abonado_abono,
+                d.status,
+                e.tipo_de_pago,
+                a.fecha_pago,
+                (SELECT numero_semana FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+                DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago
+            FROM
+                pagos a
+            JOIN abonos b ON
+                b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado
+            JOIN api_empresas.empresas_usuarios c
+            ON
+                a.id_empleado = c.id_usuario
+            JOIN ordenes d ON
+                a.id_orden = d._id
+            LEFT JOIN metodos_de_pago e ON
+                e._id = a.id_metodos_de_pago
+            WHERE
+                a.fecha_pago IS NULL
+            GROUP BY
+                a._id
+            ORDER BY
+                d._id ASC,
+                a._id
+            DESC
+    ;
+        ";
+
+    // $object['sql'] = $sql;
+    $object['data']['vendedores'] = $localConnection->goQuery($sql);
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->get('/pagos/vendedor/{id_vendedoor}', function (Request $request, Response $response, array $args) {
+    // OBTERER PAGOS DE VENDEDORES
+    $localConnection = new LocalDB();
+
+    $sql = "SELECT
+                a._id AS id_pago,
+                a.id_orden,
+                a.id_empleado,
+                a.detalle,
+                a.cantidad,
+                a.monto_pago AS pago,
+                -- (a.comision * a.cantidad) pago,
+                a.comision,
+                a.comision_tipo,
+                c.nombre,
+                d.pago_abono monto_abonado,
+                e.monto monto_abonado_abono,
+                d.status,
+                e.tipo_de_pago,
+                a.fecha_pago,
+                DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago
+            FROM
+                pagos a
+            JOIN abonos b ON
+                b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado
+            JOIN api_empresas.empresas_usuarios c
+            ON
+                a.id_empleado = c.id_usuario
+            JOIN ordenes d ON
+                a.id_orden = d._id
+            LEFT JOIN metodos_de_pago e ON
+                e._id = a.id_metodos_de_pago OR a.id_metodos_de_pago IS NULL
+            WHERE
+                a.id_empleado = {$args['id_vendedoor']} AND 
+                a.fecha_pago IS NULL
+            GROUP BY
+                a._id
+            ORDER BY
+                d._id ASC,
+                a._id
+            DESC
+    ;
+        ";
+
+    // $object['sql'] = $sql;
+    $object['data']['vendedores'] = $localConnection->goQuery($sql);
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->get('/pagos/historico/{semana}', function (Request $request, Response $response, array $args) {
+    // $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    // PAGOS VENDEDORES
+    $sql = "SELECT
+        a._id AS id_pago,
+        a.id_orden,
+        a.id_empleado,
+        a.detalle,
+        a.cantidad,
+        a.monto_pago AS pago,
+        a.comision,
+        a.comision_tipo,
+        c.nombre,
+        d.pago_abono monto_abonado,
+        e.monto monto_abonado_abono,
+        d.status,
+        e.tipo_de_pago,
+        a.fecha_pago,
+        DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago
+        FROM
+        pagos a
+        JOIN
+        abonos b ON b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado
+        JOIN
+        api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
+        JOIN
+        ordenes d ON a.id_orden = d._id
+        LEFT JOIN
+        metodos_de_pago e ON e._id = a.id_metodos_de_pago
+        WHERE WEEK(a.fecha_pago, 1) = {$args['semana']} AND a.fecha_pago IS NOT NULL
+        GROUP BY
+        a._id
+        ORDER BY
+        d._id ASC, a._id DESC;
+        ";
+    $object['sql_pagos_vendedores'] = $sql;
+    $object['data']['vendedores'] = $localConnection->goQuery($sql);
+
+    // PAGOS ESPLEADOS
+    $sql = 'SELECT
+            a._id id_pago,
+            b.id_woo cod,
+            b._id id_lotes_detalles,
+            b.id_orden orden,
+            b.id_woo id_woo,
+            d.name producto,
+            a.cantidad cantidad,
+            d.talla,
+            c.id_usuario id_empleado,
+            c.nombre,
+            a.monto_pago pago,
+            a.comision,
+            a.comision_tipo,
+            c.departamento,
+            DATE_FORMAT(b.fecha_terminado, "%a") dia,
+            DATE_FORMAT(b.fecha_terminado, "%v") semana,
+            DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
+            a.fecha_pago,
+            TIMEDIFF(fecha_terminado, fecha_inicio) tiempo_transcurrido
+            FROM
+            pagos a
+            JOIN lotes_detalles b ON
+            a.id_lotes_detalles = b._id
+            JOIN api_empresas.empresas_usuarios c ON
+            a.id_empleado = c.id_usuario
+            JOIN ordenes_productos d ON
+            b.id_ordenes_productos = d._id
+            WHERE WEEK(a.fecha_pago, 1) = ' . $args['semana'] . ' AND a.fecha_pago IS NOT NULL
+            ORDER BY
+            c.nombre ASC,
+            b.id_orden ASC,
+            a._id ASC;';
+    $object['data']['empleados'] = $localConnection->goQuery($sql);
+    $object['sql_pagos_empleados'] = $sql;
+
+    // DISENADORES
+    $sql = 'SELECT
+            p.id_orden,
+            r._id id_revision,
+            p.monto_pago,
+            p.id_empleado,
+            p.fecha_pago,
+            (SELECT departamento FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado) departamento,
+            (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado) nombre,
+            (SELECT product producto FROM products WHERE _id = r.id_product) producto
+
+        FROM
+            pagos p
+        JOIN revisiones r ON p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado
+        WHERE WEEK(p.fecha_pago, 1) = ' . $args['semana'] . ' AND p.fecha_pago IS NOT NULL
+        GROUP BY p._id
+        ';
+    $object['sql_disenos'] = $sql;
+    $object['data']['diseno'] = $localConnection->goQuery($sql);
+
+    /* if (!empty($object['data']['diseno'])) {
+        foreach ($object['data']['diseno'] as $key => $value) {
+            // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
+            $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ' . $value['id_orden'];
+            $tmpResp = $localConnection->goQuery($sqlTMP);
+
+            if (!empty($tmpResp)) {
+                foreach ($tmpResp as $key2 => $value2) {
+                    $object['data']['trabajos_adicionales'][] = $value2;
+                }
+            }
+        }
+    } else {
+        $object['data']['trabajos_adicionales'] = [];
+    } */
+
+    $trabajos_adicionales_nuevos = [];
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  // Lista de pagos semanales con filtro de fechas
+  $app->post('/pagos/semana', function (Request $request, Response $response, array $args) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    if (isset($data['numero_semana'])) {
+      //
+      $where = 'WEEK(e.moment) = ' . $data['numero_semana'] . "%' AND e.fecha_pago IS NULL";
+      // $where = "e.moment LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL";
+      $whereEmpleados = "b.fecha_terminado LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL ";
+    } else {
+    }
+
+    if ($data['fecha_inicio'] === $data['fecha_fin']) {
+      $where = "e.moment LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL";
+      $whereEmpleados = "b.fecha_terminado LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL ";
+      // $where = "e.moment LIKE '" . $data["fecha_inicio"] . "%' ";
+    } else {
+      $where = "(DATE(e.moment) BETWEEN '" . $data['fecha_inicio'] . "'AND '" . $data['fecha_fin'] . "') ";
+      $whereEmpleados = "b.fecha_inicio >= '" . $data['fecha_inicio'] . "' AND DATE_ADD(b.fecha_terminado, INTERVAL -1 DAY) <= '" . $data['fecha_fin'] . "' ";
+    }
+
+    $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN abonos b ON b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
+    $object['data']['vendedores'] = $localConnection->goQuery($sql);
+    // FIN BUSCAR PAGOS DE VENDEDORES
+
+    // OBTENER PAGOS DE EMPLEADOS
+    $sql = 'SELECT
+            a._id id_pago,
+            b._id id_lotes_detalles,
+            b.id_orden orden,
+            b.id_woo id_woo,
+            d.name producto,
+            d.talla,
+            c.id_usuario id_empleado,
+            c.nombre,
+            c.comision,
+            b.id_departamento,
+            b.departamento,
+            DATE_FORMAT(b.fecha_terminado, "%a") dia,
+            DATE_FORMAT(b.fecha_terminado, "%v") semana,
+            DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
+            b.unidades_solicitadas cantidad,
+            a.monto_pago pago,
+            a.fecha_pago,
+            a.cantidad,
+            TIMEDIFF(fecha_terminado, fecha_inicio) tiempo_transcurrido
+            FROM
+            pagos a
+            JOIN lotes_detalles b ON
+            a.id_lotes_detalles = b._id
+            JOIN api_empresas.empresas_usuarios c ON
+            b.id_empleado = c.id_usuario
+            JOIN ordenes_productos d ON
+            b.id_ordenes_productos = d._id
+            WHERE ' . $whereEmpleados . ' AND a.fecha_pago IS NULL 
+            ORDER BY
+            c.nombre ASC,
+            b.id_orden ASC,
+            a._id ASC;
+        ';
+
+    $object['sql']['empleados'] = $sql;
+    $object['data']['empleados'] = $localConnection->goQuery($sql);
+    // FIN PAGOS EMPLEADOS
+
+    // OBTENER INFORMACION DE DISEÑADORES
+    $sql = "SELECT 
+        e._id id_pago,
+        e.id_orden, 
+        e.id_empleado,
+        e.detalle detalle_pago,
+        a._id id_diseno, 
+        b.nombre nombre, 
+        b.departamento, 
+        e.monto_pago pago,
+        e.cantidad,
+        c.name producto 
+        FROM pagos e   
+        JOIN disenos a ON a.id_empleado = e.id_empleado AND a.id_orden = e.id_orden
+        JOIN api_empresas.empresas_usuarios b 
+        ON b.id_usuario = e.id_empleado 
+        JOIN ordenes_productos c 
+        ON e.id_orden = c.id_orden AND c.category_name = 'Diseños'
+        WHERE " . $where . ' AND e.monto_pago > 0 AND e.fecha_pago IS NULL';
+    $object['sql']['diseno'] = $sql;
+    $object['data']['diseno'] = $localConnection->goQuery($sql);
+
+    foreach ($object['data']['diseno'] as $key => $value) {
+      // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
+      $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ' . $value['id_orden'];
+      $tmpResp = $localConnection->goQuery($sqlTMP);
+      if (!empty($tmpResp)) {
+        foreach ($tmpResp as $key2 => $value2) {
+          $object['data']['trabajos_adicionales'][] = $value2;
+        }
+      }
+    }
+
+    $trabajos_adicionales_nuevos = [];
+
+    if (!empty($object['data']['trabajos_adicionales'])) {
+      foreach ($object['data']['trabajos_adicionales'] as $trabajo_adicional) {
+        $existe = false;
+        foreach ($trabajos_adicionales_nuevos as $trabajo_adicional_nuevo) {
+          if ($trabajo_adicional['_id'] == $trabajo_adicional_nuevo['_id']) {
+            $existe = true;
+            break;
+          }
+        }
+        if (!$existe) {
+          $trabajos_adicionales_nuevos[] = $trabajo_adicional;
+        }
+      }
+      $object['data']['trabajos_adicionales'] = $trabajos_adicionales_nuevos;
+    } else {
+      $object['data']['trabajos_adicionales'] = [];
+    }
+    // FIN PAGOS DISEÑADORES
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->post('/pagos/semana/OLD', function (Request $request, Response $response, array $args) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    if ($data['fecha_inicio'] === $data['fecha_fin']) {
+      $where = "e.moment LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL";
+      $whereEmpleados = "b.fecha_terminado LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL ";
+      // $where = "e.moment LIKE '" . $data["fecha_inicio"] . "%' ";
+    } else {
+      $where = "(DATE(e.moment) BETWEEN '" . $data['fecha_inicio'] . "'AND '" . $data['fecha_fin'] . "') ";
+      $whereEmpleados = "b.fecha_terminado BETWEEN '" . $data['fecha_inicio'] . "%' AND '" . $data['fecha_fin'] . "' AND e.fecha_pago IS NULL ";
+
+      // $where = "(DATE(e.moment) BETWEEN '" . $data["fecha_inicio"] . "' AND '" . $data["fecha_fin"] . "') ";
+    }
+
+    $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN abonos b ON b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
+    $object['data']['vendedores'] = $localConnection->goQuery($sql);
+    // FIN BUSCAR PAGOS DE VENDEDORES
+
+    // OBTENER PAGOS DE EMPLEADOS
+    $sql = 'SELECT
+    a._id id_pago,
+    b._id id_lotes_detalles,
+    b.id_orden orden,
+    b.id_woo id_woo,
+    d.name producto,
+    d.talla,
+    c._id id_empleado,
+    c.nombre,
+    c.comision,
+    c.departamento,
+    DATE_FORMAT(b.fecha_terminado, "%a") dia,
+    DATE_FORMAT(b.fecha_terminado, "%v") semana,
+    DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
+    b.unidades_solicitadas cantidad,
+    a.monto_pago pago,
+    a.fecha_pago,
+    a.cantidad,
+    TIMEDIFF(fecha_terminado, fecha_inicio) tiempo_transcurrido
+    FROM
+    pagos a
+    JOIN lotes_detalles b ON
+    a.id_lotes_detalles = b._id
+    JOIN empleados c ON
+    b.id_empleado = c._id
+    JOIN ordenes_productos d ON
+    b.id_ordenes_productos = d._id
+    WHERE ' . $whereEmpleados . ' AND e.fecha_pago IS NULL 
+    ORDER BY
+    c.nombre ASC,
+    b.id_orden ASC,
+    a._id ASC;
+    ';
+
+    $object['sql']['empleados'] = $sql;
+    $object['data']['empleados'] = $localConnection->goQuery($sql);
+    // FIN PAGOS EMPLEADOS
+
+    // OBTENER INFORMACION DE DISEÑADORES
+    $sql = "SELECT 
+    e._id id_pago,
+    e.id_orden, 
+    e.id_empleado,
+    e.detalle detalle_pago,
+    a._id id_diseno, 
+    b.nombre nombre, 
+    b.departamento, 
+    e.monto_pago pago,
+    e.cantidad,
+    c.name producto 
+    FROM pagos e   
+    JOIN disenos a ON a.id_empleado = e.id_empleado AND a.id_orden = e.id_orden
+    JOIN empleados b 
+    ON b._id = e.id_empleado 
+    JOIN ordenes_productos c 
+    ON e.id_orden = c.id_orden AND c.category_name = 'Diseños'
+    WHERE " . $where . ' AND e.monto_pago > 0 AND e.fecha_pago IS NULL';
+    $object['sql']['diseno'] = $sql;
+    $object['data']['diseno'] = $localConnection->goQuery($sql);
+
+    foreach ($object['data']['diseno'] as $key => $value) {
+      // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
+      $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ' . $value['id_orden'];
+      $tmpResp = $localConnection->goQuery($sqlTMP);
+      if (!empty($tmpResp)) {
+        foreach ($tmpResp as $key2 => $value2) {
+          $object['data']['trabajos_adicionales'][] = $value2;
+        }
+      }
+    }
+
+    $trabajos_adicionales_nuevos = [];
+
+    if (!empty($object['data']['trabajos_adicionales'])) {
+      foreach ($object['data']['trabajos_adicionales'] as $trabajo_adicional) {
+        $existe = false;
+        foreach ($trabajos_adicionales_nuevos as $trabajo_adicional_nuevo) {
+          if ($trabajo_adicional['_id'] == $trabajo_adicional_nuevo['_id']) {
+            $existe = true;
+            break;
+          }
+        }
+        if (!$existe) {
+          $trabajos_adicionales_nuevos[] = $trabajo_adicional;
+        }
+      }
+      $object['data']['trabajos_adicionales'] = $trabajos_adicionales_nuevos;
+    } else {
+      $object['data']['trabajos_adicionales'] = [];
+    }
+    // FIN PAGOS DISEÑADORES
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  /** FIN PAGOS */
+
+}; // Fin de la función que envuelve las rutas

@@ -129,60 +129,60 @@ return function (App $app) {
   /** INICIO CONFIGURACION DEL SISTEMA */
 
   // RUTAS DE CONFIGURACIÓN
-  (require __DIR__ . '/routes/config.php')($app);
+  require __DIR__ . '/routes/config.php';
 
   // RUTAS DE NÓMINA (PRUEBAS)
-  (require __DIR__ . '/routes/payroll.php')($app);
+  require __DIR__ . '/routes/payroll.php';
 
   /** FIN CONFIGURACION DEL SISTEMA */
 
   // RUTAS DE AUTENTICACIÓN
-  (require __DIR__ . '/routes/auth.php')($app);
+  require __DIR__ . '/routes/auth.php';
 
   // RUTAS DE INVENTARIO Y PRODUCTOS
-  (require __DIR__ . '/routes/inventory.php')($app);
+  require __DIR__ . '/routes/inventory.php';
 
   // RUTAS DE LOTES DE FABRICACIÓN
-  (require __DIR__ . '/routes/manufacturing.php')($app);
+  require __DIR__ . '/routes/manufacturing.php';
 
   // RUTAS DE EMPLEADOS
-  (require __DIR__ . '/routes/employees.php')($app);
+  require __DIR__ . '/routes/employees.php';
 
   // RUTAS DE REPORTES
-  (require __DIR__ . '/routes/reports.php')($app);
+  require __DIR__ . '/routes/reports.php';
 
   // RUTAS DE PAGOS
-  (require __DIR__ . '/routes/payments.php')($app);
+  require __DIR__ . '/routes/payments.php';
 
   // RUTAS DE ÓRDENES
-  (require __DIR__ . '/routes/orders.php')($app);
+  require __DIR__ . '/routes/orders.php';
 
   // RUTAS DE PRODUCTOS
-  (require __DIR__ . '/routes/products.php')($app);
+  require __DIR__ . '/routes/products.php';
 
   // RUTAS DE PRODUCCIÓN
-  (require __DIR__ . '/routes/production.php')($app);
+  require __DIR__ . '/routes/production.php';
 
   // RUTAS DE DISEÑOS
-  (require __DIR__ . '/routes/designs.php')($app);
+  require __DIR__ . '/routes/designs.php';
 
   // RUTAS DE FINANZAS
-  (require __DIR__ . '/routes/finance.php')($app);
+  require __DIR__ . '/routes/finance.php';
 
   // RUTAS DE CATÁLOGOS
-  (require __DIR__ . '/routes/catalogs.php')($app);
+  require __DIR__ . '/routes/catalogs.php';
 
   // RUTAS DE TABLAS
-  (require __DIR__ . '/routes/tables.php')($app);
+  require __DIR__ . '/routes/tables.php';
 
   // RUTAS DE COMUNICACIONES
-  (require __DIR__ . '/routes/communications.php')($app);
+  require __DIR__ . '/routes/communications.php';
 
   // RUTAS DE ASIGNACIONES
-  (require __DIR__ . '/routes/assignments.php')($app);
+  require __DIR__ . '/routes/assignments.php';
 
   // RUTAS DE IMPRESORAS
-  (require __DIR__ . '/routes/printers.php')($app);
+  require __DIR__ . '/routes/printers.php';
 
 
   /** ENVIAR EMAILS */

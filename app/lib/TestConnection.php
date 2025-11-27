@@ -1,4 +1,6 @@
 <?php
+// namespace App\Lib;
+
 /** Run TestMe Function to get result */
 class TestConnection
 {

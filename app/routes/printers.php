@@ -1,0 +1,365 @@
+<?php
+
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\App;
+
+return function (App $app) {
+
+
+  $app->post('/impresoras', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    try {
+      // Validación básica: el codigo_interno es obligatorio
+      if (empty($data['codigo_interno'])) {
+        $response->getBody()->write(json_encode(['error' => 'El campo codigo_interno es obligatorio.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
+
+      $sql = 'INSERT INTO catalogo_impresoras (codigo_interno, marca, modelo, ubicacion, tipo_tecnologia, estado, notas) VALUES (?, ?, ?, ?, ?, ?, ?)';
+
+      $params = [
+        $data['codigo_interno'],
+        $data['marca'] ?? null,
+        $data['modelo'] ?? null,
+        $data['ubicacion'] ?? null,
+        $data['tipo_tecnologia'] ?? null,
+        $data['estado'] ?? 'activa',  // Valor por defecto 'activa'
+        $data['notas'] ?? null
+      ];
+
+      $localConnection->goQuery($sql, $params);
+      $new_id = $localConnection->getLastID();
+
+      $response->getBody()->write(json_encode(['message' => 'Impresora creada exitosamente.', 'id' => $new_id]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(201);  // 201 Created
+    } catch (Exception $e) {
+      // Manejo de error, por ejemplo, si el codigo_interno ya existe (duplicado)
+      if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+        $response->getBody()->write(json_encode(['error' => 'Error: El codigo_interno ya existe.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(409);  // 409 Conflict
+      }
+
+      error_log('Error al crear impresora: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al crear la impresora.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
+  $app->get('/impresoras', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    try {
+      $sql = "SELECT 
+                    ci._id, 
+                    ci.codigo_interno, 
+                    ci.marca, 
+                    ci.modelo, 
+                    ci.ubicacion, 
+                    ci.tipo_tecnologia, 
+                    ci.estado, 
+                    ci.notas, 
+                    ci.moment,
+                    CONCAT(
+                        '[',
+                        GROUP_CONCAT(
+                            JSON_OBJECT(
+                                'id', tr._id,
+                                'id_catalogo_impresora', tr.id_catalogo_impresora,
+                                'id_insumo', tr.id_insumo,
+                                'color', tr.color,
+                                'cantidad', tr.cantidad,
+                                'fecha_recarga', tr.fecha_recarga
+                            )
+                        ),
+                        ']'
+                    ) AS tintas_recargas
+                FROM 
+                    catalogo_impresoras ci
+                LEFT JOIN 
+                    tintas_recargas tr ON ci._id = tr.id_catalogo_impresora
+                GROUP BY 
+                    ci._id, ci.codigo_interno, ci.marca, ci.modelo, ci.ubicacion, ci.tipo_tecnologia, ci.estado, ci.notas, ci.moment
+                ORDER BY 
+                    ci._id DESC";
+      $data = $localConnection->goQuery($sql);
+
+      // Decodificar el JSON de tintas_recargas para cada fila
+      foreach ($data as &$row) {
+        $row['tintas_recargas'] = json_decode($row['tintas_recargas'], true);
+        // Si no hay recargas, json_decode puede devolver null o un array con un solo null. Aseguramos un array vacío.
+        if ($row['tintas_recargas'] === null || (is_array($row['tintas_recargas']) && count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0] === null)) {
+          $row['tintas_recargas'] = [];
+        }
+      }
+
+      $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      error_log('Error al obtener impresoras: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al obtener las impresoras.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+  $app->get('/impresoras-tintas-actual', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    try {
+      $sql = <<<SQL
+        -- Usamos Common Table Expressions (CTEs) para organizar la lógica en pasos.
+
+        WITH 
+        -- =======================================================================================
+        -- PASO 1: "Desglosar" el consumo. La tabla `tintas` tiene una columna por color.
+        -- La convertimos a un formato largo (una fila por consumo de color) para facilitar los cálculos.
+        -- =======================================================================================
+        consumo_desglosado AS (
+            SELECT id_catalogo_impresoras, 'C' AS color, c AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE c > 0
+            UNION ALL
+            SELECT id_catalogo_impresoras, 'M' AS color, m AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE m > 0
+            UNION ALL
+            SELECT id_catalogo_impresoras, 'Y' AS color, y AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE y > 0
+            UNION ALL
+            SELECT id_catalogo_impresoras, 'K' AS color, k AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE k > 0
+            UNION ALL
+            SELECT id_catalogo_impresoras, 'W' AS color, w AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE w > 0
+        ),
+
+        -- =======================================================================================
+        -- PASO 2: Encontrar la fecha de la ÚLTIMA CONSUMO para cada tanque (impresora + color).
+        -- Esto nos ayudará a saber desde cuándo debemos sumar las recargas.
+        -- =======================================================================================
+        last_consumption_per_tank AS (
+            SELECT
+                id_catalogo_impresoras,
+                color,
+                MAX(fecha_orden) AS last_consumption_date
+            FROM
+                consumo_desglosado
+            GROUP BY
+                id_catalogo_impresoras,
+                color
+        ),
+
+        -- =======================================================================================
+        -- PASO 3: Calcular la CANTIDAD TOTAL recargada para cada tanque desde la última vez que hubo consumo.
+        -- Si nunca hubo consumo, se suman todas las recargas.
+        -- =======================================================================================
+        total_recargas_desde_ultimo_consumo AS (
+            SELECT
+                tr.id_catalogo_impresora,
+                tr.color,
+                SUM(tr.cantidad) AS total_cantidad_recargada,
+                MAX(tr.fecha_recarga) AS fecha_ultima_recarga -- La fecha de la última recarga sigue siendo útil
+            FROM
+                tintas_recargas tr
+            GROUP BY
+                tr.id_catalogo_impresora,
+                tr.color
+        )
+
+        -- =======================================================================================
+        -- PASO 4: Unir todo y calcular el resultado final.
+        -- =======================================================================================
+        SELECT
+            ci.codigo_interno AS impresora,
+            trslc.color,
+            ci.capacidad_contenedor AS capacidad_tanque_ml,
+            trslc.fecha_ultima_recarga AS fecha_ultima_recarga,
+            trslc.total_cantidad_recargada AS total_recargado_ml,
+            -- Sumamos todo el consumo que ocurrió DESPUÉS de la última recarga.
+            COALESCE(SUM(cd.consumo), 0) AS consumo_desde_ultima_recarga_ml,
+            -- El cálculo final: Tinta recargada MENOS tinta consumida.
+            (COALESCE(trslc.total_cantidad_recargada, 0) - COALESCE(SUM(cd.consumo), 0)) AS tinta_restante_estimada_ml
+        FROM
+            -- Empezamos con el total de recargas desde el último consumo
+            total_recargas_desde_ultimo_consumo trslc
+            
+        -- Unimos con el catálogo de impresoras para obtener sus nombres
+        JOIN
+            catalogo_impresoras ci ON ci._id = trslc.id_catalogo_impresora
+            
+        -- Hacemos un LEFT JOIN con el consumo. Usamos LEFT por si no ha habido consumo desde la última recarga.
+        LEFT JOIN
+            consumo_desglosado cd 
+            ON trslc.id_catalogo_impresora = cd.id_catalogo_impresoras 
+            AND trslc.color = cd.color
+            -- ¡ESTA ES LA LÓGICA CLAVE! Solo contamos el consumo cuya fecha de orden es POSTERIOR a la fecha de la última recarga.
+            AND cd.fecha_orden > trslc.fecha_ultima_recarga
+            
+        GROUP BY
+            ci.codigo_interno,
+            trslc.color,
+            ci.capacidad_contenedor,
+            trslc.fecha_ultima_recarga,
+            trslc.total_cantidad_recargada
+        ORDER BY
+            impresora,
+            color;
+        SQL;
+      $data = $localConnection->goQuery($sql);
+
+      // Decodificar el JSON de tintas_recargas para cada fila
+      /* foreach ($data as &$row) {
+          $row['tintas_recargas'] = json_decode($row['tintas_recargas'], true);
+          // Si no hay recargas, json_decode puede devolver null o un array con un solo null. Aseguramos un array vacío.
+          if ($row['tintas_recargas'] === null || (is_array($row['tintas_recargas']) && count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0] === null)) {
+              $row['tintas_recargas'] = [];
+          }
+      } */
+
+      $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      error_log('Error al obtener las tintas de las impresoras: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al obtener las tintas de las impresoras.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
+  $app->put('/impresoras/{id}', function (Request $request, Response $response, array $args) {
+    $id_impresora = $args['id'];
+
+    // Parsear manualmente el cuerpo de la solicitud PUT
+    $raw_body = (string) $request->getBody();
+    parse_str($raw_body, $data);
+
+    $localConnection = new LocalDB();
+
+    try {
+      // Verificar si la impresora existe
+      $check_sql = 'SELECT _id FROM catalogo_impresoras WHERE _id = ?';
+      $existing = $localConnection->goQuery($check_sql, [$id_impresora]);
+      if (!$existing) {
+        $response->getBody()->write(json_encode(['error' => 'La impresora con el ID proporcionado no existe.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(404);  // Not Found
+      }
+
+      // Construir la consulta de actualización dinámicamente
+      $fields = [];
+      $params = [];
+      $allowed_fields = ['codigo_interno', 'marca', 'modelo', 'ubicacion', 'tipo_tecnologia', 'estado', 'notas'];
+
+      foreach ($data as $key => $value) {
+        if (in_array($key, $allowed_fields)) {
+          $fields[] = "`{$key}` = ?";
+          $params[] = $value;
+        }
+      }
+
+      if (empty($fields)) {
+        $response->getBody()->write(json_encode(['error' => 'No se proporcionaron campos para actualizar.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
+
+      $sql = 'UPDATE catalogo_impresoras SET ' . implode(', ', $fields) . ' WHERE _id = ?';
+      $params[] = $id_impresora;
+
+      $localConnection->goQuery($sql, $params);
+
+      $response->getBody()->write(json_encode(['message' => 'Impresora actualizada exitosamente.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+        $response->getBody()->write(json_encode(['error' => 'Error: El codigo_interno ya existe.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(409);  // Conflict
+      }
+
+      error_log('Error al actualizar impresora: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al actualizar la impresora.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
+  $app->post('/inventario-tintas', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    try {
+      // Validación básica
+      if (empty($data['id_impresora']) || empty($data['id_insumo']) || empty($data['color']) || empty($data['mililitros'])) {
+        $response->getBody()->write(json_encode(['error' => 'Faltan campos obligatorios.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
+
+      // PREPARAR FECHA
+      $myDate = new CustomTime();
+      $now = $myDate->today();
+
+      $sql = 'INSERT INTO tintas_recargas (id_catalogo_impresora, id_insumo, color, cantidad, fecha_recarga) VALUES (?, ?, ?, ?, ?)';
+
+      $params = [
+        $data['id_impresora'],
+        $data['id_insumo'],
+        $data['color'],
+        $data['mililitros'],
+        $now
+      ];
+
+      $localConnection->goQuery($sql, $params);
+      $new_id = $localConnection->getLastID();
+
+      // Obtener la cantidad actual del insumo en inventario
+      $sql_get_cantidad = 'SELECT cantidad FROM inventario WHERE _id = ?';
+      $current_cantidad_result = $localConnection->goQuery($sql_get_cantidad, [$data['id_insumo']]);
+
+      if (is_array($current_cantidad_result) && !empty($current_cantidad_result) && isset($current_cantidad_result[0]['cantidad'])) {
+        $current_cantidad = (float) $current_cantidad_result[0]['cantidad'];
+        $mililitros_a_restar = (float) $data['mililitros'];
+        $new_cantidad = $current_cantidad - $mililitros_a_restar;
+
+        // Actualizar la cantidad en la tabla inventario
+        $sql_update_inventario = 'UPDATE inventario SET cantidad = ? WHERE _id = ?';
+        $localConnection->goQuery($sql_update_inventario, [$new_cantidad, $data['id_insumo']]);
+      } else {
+        // Manejar el caso donde el insumo no se encuentra o no tiene cantidad
+        throw new Exception('Insumo no encontrado o cantidad no disponible en inventario.');
+      }
+
+      $response->getBody()->write(json_encode(['message' => 'Recarga de tinta registrada exitosamente y cantidad de insumo actualizada.', 'id' => $new_id]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
+    } catch (Exception $e) {
+      error_log('Error al registrar recarga de tinta: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al registrar la recarga.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
+  $app->delete('/impresoras/{id}', function (Request $request, Response $response, array $args) {
+    $id_impresora = $args['id'];
+    $localConnection = new LocalDB();
+
+    try {
+      // Opcional: Verificar si la impresora existe antes de intentar eliminarla
+      $check_sql = 'SELECT _id FROM catalogo_impresoras WHERE _id = ?';
+      $existing = $localConnection->goQuery($check_sql, [$id_impresora]);
+      if (!$existing) {
+        $response->getBody()->write(json_encode(['error' => 'La impresora con el ID proporcionado no existe.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(404);  // Not Found
+      }
+
+      $sql = 'DELETE FROM catalogo_impresoras WHERE _id = ?';
+      $localConnection->goQuery($sql, [$id_impresora]);
+
+      $response->getBody()->write(json_encode(['message' => 'Impresora eliminada exitosamente.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      error_log('Error al eliminar impresora: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al eliminar la impresora.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
+}; // Fin de la función que envuelve las rutas
