@@ -68,10 +68,11 @@ return function (App $app) {
     DATE_FORMAT(met.moment, '%h:%i %p') AS hora
     FROM
         metodos_de_pago met
-    JOIN ordenes ord ON met.id_orden = ord._id
+    JOIN ordenes ord ON met.id_orden = ord._id 
     JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
     WHERE
-        met.moment >= DATE_SUB(CURDATE(), INTERVAL 2 MONTH)
+    (ord.status = 'activa' OR ord.status = 'En espera' OR ord.status = 'terminada' OR ord.status = 'pausada')
+        -- met.moment >= DATE_SUB(CURDATE(), INTERVAL 1 WEEK)
         -- AND MONTH(met.moment) = MONTH(CURDATE()) -- Comentar esta línea
         {$searchVendedor}
     ORDER BY
