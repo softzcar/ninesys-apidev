@@ -71,7 +71,7 @@ return function (App $app) {
     JOIN ordenes ord ON met.id_orden = ord._id
     JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
     WHERE
-        YEAR(met.moment) = YEAR(CURDATE())
+        met.moment >= DATE_SUB(CURDATE(), INTERVAL 2 MONTH)
         -- AND MONTH(met.moment) = MONTH(CURDATE()) -- Comentar esta línea
         {$searchVendedor}
     ORDER BY
@@ -161,7 +161,7 @@ return function (App $app) {
         api_empresas.empresas_usuarios a 
     JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado
     WHERE
-        b.id_departamento = 5 AND a.id_empresa = " . ID_EMPRESA;
+        (b.id_departamento = 7 OR b.id_departamento = 8)  AND a.id_empresa = " . ID_EMPRESA;
     $object['vendedores'] = $localConnection->goQuery($sqlv);
     $object['SQL'] = $sqlv;
 

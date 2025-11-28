@@ -345,16 +345,15 @@ return function (App $app) {
             JOIN customers cus ON ord.id_wp = cus._id
             LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
             WHERE
-                ord.status
+                (ord.status
                     = 'activa' OR
                 ord.status
                     = 'En espera' OR
                 ord.status
                     = 'terminada' OR
                 ord.status
-                    = 'pausada' OR 
-                (ord.status 
-                    = 'entregada' AND ord.pago_comision = 'pendiente')             
+                    = 'pausada')
+                AND ord.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 2 MONTH)
             ORDER BY
                 ord._id
             DESC;";
@@ -402,10 +401,9 @@ return function (App $app) {
                 ord.status
                     = 'terminada' OR
                 ord.status
-                    = 'pausada'  /*OR 
-               (ord.status 
-                   = 'entregada' AND ord.pago_comision = 'pendiente') */
+                    = 'pausada'
             ) AND ord.pago_comision = 'pendiente'
+              AND ord.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 2 MONTH)
             ORDER BY
                 ord._id
             DESC;";
