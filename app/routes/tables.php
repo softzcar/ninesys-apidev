@@ -353,7 +353,7 @@ return function (App $app) {
                     = 'terminada' OR
                 ord.status
                     = 'pausada')
-                AND ord.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 1 WEEK)
+
             ORDER BY
                 ord._id
             DESC;";
@@ -404,7 +404,7 @@ return function (App $app) {
                 ord.status
                     = 'pausada'
             ) AND ord.pago_comision = 'pendiente'
-              AND ord.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 1 WEEK)
+
             ORDER BY
                 ord._id
             DESC;";
