@@ -280,7 +280,7 @@ class LocalDB
     $res->execute(['id_empresa' => $id_empresa]);
     return $res->fetch(PDO::FETCH_ASSOC);
   }
-  
+
   public function getEmpresaPaisId($id_empresa)
   {
     // Conectar a la base de datos api_empresas para obtener los detalles de conexión

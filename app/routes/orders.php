@@ -331,13 +331,16 @@ return function (App $app) {
     $myDate = new CustomTime();
     $now = $myDate->today();
 
+    $detalleAbono = isset($datosAbono['tipoAbono']) ? $datosAbono['tipoAbono'] : '';
+
     $values = "'" . $now . "',";
     $values .= "'" . $datosAbono['id'] . "',";
     $values .= "'" . $totalAbono . "',";
     $values .= "'" . $datosAbono['descuento'] . "',";
-    $values .= "'" . $datosAbono['empleado'] . "'";
+    $values .= "'" . $datosAbono['empleado'] . "',";
+    $values .= "'" . $detalleAbono . "'";
 
-    $sql = 'INSERT INTO abonos(moment, id_orden, abono, descuento, id_empleado) VALUES (' . $values . ')';
+    $sql = 'INSERT INTO abonos(moment, id_orden, abono, descuento, id_empleado, detalle) VALUES (' . $values . ')';
     $data = $localConnection->goQuery($sql);
 
     // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
@@ -382,7 +385,22 @@ return function (App $app) {
       $sql_metodos_pago .= "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['detalleBolivaresTransferencia'] . "', '" . $datosAbono['id'] . "', 'Bolívares', 'Transferencia', '" . $datosAbono['montoBolivaresTransferencia'] . "', '" . $datosAbono['tasa_dolar'] . "');";
     }
 
-    $object['metodos_pago'] = $localConnection->goQuery($sql_metodos_pago);
+    if (!empty($sql_metodos_pago)) {
+      $object['metodos_pago'] = $localConnection->goQuery($sql_metodos_pago);
+    }
+
+    // ACTUALIZAR TOTALES EN ORDENES
+    $abono_val = floatval($datosAbono['abono']);
+    $descuento_val = floatval($datosAbono['descuento']);
+
+    if ($abono_val > 0 || $descuento_val > 0) {
+      $sql_update_totales = "UPDATE ordenes SET 
+            pago_abono = pago_abono + {$abono_val},
+            pago_descuento = pago_descuento + {$descuento_val}
+            WHERE _id = " . $datosAbono['id'];
+      $localConnection->goQuery($sql_update_totales);
+      $object['sql_update_totales'] = $sql_update_totales;
+    }
 
     // OBTENER ULTIMO DE LA TABLA metodos_de_pago
     $sql_max_id = 'SELECT MAX(_id) last_id FROM metodos_de_pago';
@@ -1477,8 +1495,8 @@ return function (App $app) {
                                 $object["pago a vendedor"] = "NO hubo comisión, cliente excento";
                             } */
     }  /*  else {
-      $object['sales_commission_ISSET'][] = false;
-      } */
+$object['sales_commission_ISSET'][] = false;
+} */
 
     // GUARDAR DATOS DE DISEÑO
     $sql_diseno = '';
@@ -2031,7 +2049,7 @@ return function (App $app) {
     $sql_update_orden = 'UPDATE ordenes SET
         pago_total = ' . $arr['total'] . ',
         pago_abono = ' . $nuevo_abono_total . ',
-        pago_descuento = ' . $arr['descuento'] . ",
+        pago_descuento = pago_descuento + ' . $arr['descuento'] . ",
         fecha_entrega = '" . $arr['fechaEntrega'] . "'
         WHERE _id = {$id_orden_a_editar}";
     $localConnection->goQuery($sql_update_orden);
@@ -2049,10 +2067,24 @@ return function (App $app) {
     $localConnection->goQuery($sql_obs);
     $object['sql_observaciones'] = $sql_obs;
 
-    // 5. REGISTRAR NUEVOS ABONOS Y COMISIONES (Solo sobre el nuevo pago)
+    // DEFINIR FECHA ACTUAL
     $myDate = new CustomTime();
     $now = $myDate->today();
 
+    // 5.1. REGISTRAR CAMBIOS EN DESCUENTO (Lógica simplificada: Incremental)
+    $nuevo_descuento = floatval($arr['descuento']);
+
+    if (abs($nuevo_descuento) > 0.001) {
+      $detalle_descuento = isset($arr['descuentoDetalle']) ? $arr['descuentoDetalle'] : 'Ajuste de descuento en edición';
+
+      // Insertar directamente el incremento
+      $sql_insert_desc = "INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento, detalle) VALUES ('" . $now . "', '" . $id_orden_a_editar . "', '" . $arr['responsable'] . "', 0, '" . $nuevo_descuento . "', '" . addslashes($detalle_descuento) . "')";
+
+      $localConnection->goQuery($sql_insert_desc);
+      $object['sql_nuevo_descuento'] = $sql_insert_desc;
+    }
+
+    // 5. REGISTRAR NUEVOS ABONOS Y COMISIONES (Solo sobre el nuevo pago)
     if (floatval($arr['abono']) > 0) {
       // Crear registro del nuevo abono
       $sql_abono = "INSERT INTO abonos (moment, id_orden, id_empleado, abono) VALUES ('" . $now . "', '" . $id_orden_a_editar . "',  '" . $arr['responsable'] . "', '"
@@ -2277,8 +2309,8 @@ return function (App $app) {
                       $object["pago a vendedor"] = "NO hubo comisión, cliente excento";
                   } */
       }  /*  else {
-            $object['sales_commission_ISSET'][] = false;
-        } */
+      $object['sales_commission_ISSET'][] = false;
+  } */
 
       /* // GUARDAR DATOS DE DISEÑO
       $sql_diseno = '';

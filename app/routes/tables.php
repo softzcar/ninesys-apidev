@@ -329,16 +329,21 @@ return function (App $app) {
                             GROUP_CONCAT(
                                 DISTINCT JSON_OBJECT(
                                     'category_name',
-                                    op.category_name
+                                    c.nombre,
+                                    'category_total',
+                                    (op.cantidad * op.precio_unitario)
                                 )
                             ),
                             ']'
                         )
                     FROM
                         ordenes_productos op
+                    JOIN products p ON op.id_woo = p._id
+                    JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
                     WHERE
                         op.id_orden = ord._id
                 ) AS product_categories,
+                (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
                 ord.status estatus
             FROM
                 ordenes ord
@@ -378,16 +383,21 @@ return function (App $app) {
                             GROUP_CONCAT(
                                 DISTINCT JSON_OBJECT(
                                     'category_name',
-                                    op.category_name
+                                    c.nombre,
+                                    'category_total',
+                                    (op.cantidad * op.precio_unitario)
                                 )
                             ),
                             ']'
                         )
                     FROM
                         ordenes_productos op
+                    JOIN products p ON op.id_woo = p._id
+                    JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
                     WHERE
                         op.id_orden = ord._id
                 ) AS product_categories,
+                (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
                 ord.status estaus
             FROM
                 ordenes ord
@@ -480,16 +490,21 @@ return function (App $app) {
                 GROUP_CONCAT(
                     DISTINCT JSON_OBJECT(
                         'category_name',
-                        op.category_name
+                        c.nombre,
+                        'category_total',
+                        (op.cantidad * op.precio_unitario)
                     )
                 ),
                 ']'
             )
         FROM
             ordenes_productos op
+        JOIN products p ON op.id_woo = p._id
+        JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
         WHERE
             op.id_orden = ord._id
     ) AS product_categories,
+    (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
     ord.status estatus
 FROM
     ordenes ord

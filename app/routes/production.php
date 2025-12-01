@@ -258,7 +258,7 @@ return function (App $app) {
         b.id_woo,
         p.fisico,
         b.id_category,
-        b.category_name,
+        cat.nombre as category_name,
         b.name,        
         b.cantidad, 
         c.piezas_actuales,
@@ -271,12 +271,13 @@ return function (App $app) {
         FROM 
             ordenes_productos b
         LEFT JOIN products p ON p._id = b.id_woo
+        LEFT JOIN categories cat ON FIND_IN_SET(cat._id, p.category_ids)
         LEFT JOIN lotes_fisicos c ON c.id_orden = b._id
         LEFT JOIN ordenes a ON
             b.id_orden = a._id
         LEFT JOIN products_comisiones pc ON pc.id_product = b.id_woo
         WHERE
-            a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' AND b.category_name != 'Diseños' -- AND p.fisico = 1
+            (a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera') AND b.category_name != 'Diseños' -- AND p.fisico = 1
         ORDER BY b._id DESC, c.piezas_actuales DESC";
 
     $obj['orden_productos'] = $localConnection->goQuery($sql);

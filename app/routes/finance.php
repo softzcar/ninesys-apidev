@@ -13,6 +13,7 @@ return function (App $app) {
   $app->get('/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}]', function (Request $request, Response $response, array $args) {
     /** FONDO */
     $localConnection = new LocalDB();
+    $localConnection->goQuery('SET group_concat_max_len = 1000000;');
     $inicio = isset($args['inicio']) ? $args['inicio'] : null;
     $fin = isset($args['fin']) ? $args['fin'] : null;
     $vendedor = isset($args['id_vendedor']) ? $args['id_vendedor'] : null;
@@ -54,13 +55,17 @@ return function (App $app) {
                 GROUP_CONCAT(
                     DISTINCT JSON_OBJECT(
                         'category_name',
-                        op.category_name
+                        c.nombre,
+                        'category_total',
+                        (op.cantidad * op.precio_unitario)
                     )
                 ),
                 ']'
             )
         FROM
             ordenes_productos op
+        JOIN products p ON op.id_woo = p._id
+        JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
         WHERE
             op.id_orden = ord._id
     ) AS product_categories,
@@ -118,13 +123,17 @@ return function (App $app) {
                             GROUP_CONCAT(
                                 DISTINCT JSON_OBJECT(
                                     'category_name',
-                                    op.category_name
+                                    c.nombre,
+                                    'category_total',
+                                    (op.cantidad * op.precio_unitario)
                                 )
                             ),
                             ']'
                         )
                     FROM
                         ordenes_productos op
+                    JOIN products p ON op.id_woo = p._id
+                    JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
                     WHERE
                         op.id_orden = ord._id
                 ) AS product_categories,
