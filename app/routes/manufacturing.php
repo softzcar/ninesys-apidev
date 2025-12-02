@@ -1184,10 +1184,10 @@ return function (App $app) {
   });
 
   /** LOCAL LOTES ACTIVOS */
- /*  $app->get('/lotes/activos', function (Request $request, Response $response, array $args) {
+  $app->get('/lotes/activos', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
     $sql = "SELECT a.lote, a.fecha, a.id_orden, a.paso, b.cliente_nombre FROM lotes a JOIN ordenes b ON a.id_orden = b._id WHERE b.status != 'pre-order' ORDER BY a.lote DESC";
-    
+
     $sql = "SELECT * FROM ordenes";
     $object['lotes'] = $localConnection->goQuery($sql);
 
@@ -1199,7 +1199,7 @@ return function (App $app) {
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
-  }); */
+  });
 
   $app->get('/lotes/fisicos', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
