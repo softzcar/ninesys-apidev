@@ -2395,7 +2395,7 @@ return function (App $app) {
                 lotes_detalles_empleados_asignados_pausas a 
             JOIN lotes_detalles_empleados_asignados b ON b._id = a.id_lotes_detalles_empleados_asignados
             LEFT JOIN ordenes c ON c._id = b.id_orden
-            WHERE /* b.id_empleado = {$args['id_empleado']} AND b.id_departamento = {$args['id_departamento']} AND */(c.status LIKE 'pausada') AND a.pausa_fin IS NULL
+            WHERE /* b.id_empleado = {$args['id_empleado']} AND b.id_departamento = {$args['id_departamento']} AND */(c.status LIKE 'pausada')
             ORDER BY a._id ASC
         ";
     $object['pausas'] = $localConnection->goQuery($sql);
