@@ -343,6 +343,21 @@ return function (App $app) {
     $sql = 'INSERT INTO abonos(moment, id_orden, abono, descuento, id_empleado, detalle) VALUES (' . $values . ')';
     $data = $localConnection->goQuery($sql);
 
+    // INSERTAR EN PAGOS_DESCUENTOS SI HAY DESCUENTO
+    if (floatval($datosAbono['descuento']) > 0) {
+      $sql_last_abono = "SELECT MAX(_id) as last_id FROM abonos WHERE id_orden = {$datosAbono['id']}";
+      $res_last_abono = $localConnection->goQuery($sql_last_abono);
+      $id_abono_creado = $res_last_abono[0]['last_id'];
+
+      $detalleDescuento = isset($datosAbono['descuentoDetalle']) ? $datosAbono['descuentoDetalle'] : 'Descuento en abono';
+
+      if ($id_abono_creado) {
+        $sql_pagos_descuentos = "INSERT INTO pagos_descuentos (id_pago, monto, descripcion) VALUES ({$id_abono_creado}, {$datosAbono['descuento']}, '" . addslashes($detalleDescuento) . "')";
+        $localConnection->goQuery($sql_pagos_descuentos);
+        $object['sql_pagos_descuentos'] = $sql_pagos_descuentos;
+      }
+    }
+
     // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
     $sql_metodos_pago = '';
     if (intval($datosAbono['montoDolaresEfectivo']) > 0) {
@@ -2082,6 +2097,18 @@ $object['sales_commission_ISSET'][] = false;
 
       $localConnection->goQuery($sql_insert_desc);
       $object['sql_nuevo_descuento'] = $sql_insert_desc;
+
+      // 5.2. REGISTRAR EN PAGOS_DESCUENTOS (Vinculado al abono)
+      // Obtener el ID del abono recién insertado
+      $sql_last_abono = "SELECT MAX(_id) as last_id FROM abonos WHERE id_orden = {$id_orden_a_editar}";
+      $res_last_abono = $localConnection->goQuery($sql_last_abono);
+      $id_abono_creado = $res_last_abono[0]['last_id'];
+
+      if ($id_abono_creado) {
+        $sql_pagos_descuentos = "INSERT INTO pagos_descuentos (id_pago, monto, descripcion) VALUES ({$id_abono_creado}, {$nuevo_descuento}, '" . addslashes($detalle_descuento) . "')";
+        $localConnection->goQuery($sql_pagos_descuentos);
+        $object['sql_pagos_descuentos'] = $sql_pagos_descuentos;
+      }
     }
 
     // 5. REGISTRAR NUEVOS ABONOS Y COMISIONES (Solo sobre el nuevo pago)
@@ -2309,8 +2336,8 @@ $object['sales_commission_ISSET'][] = false;
                       $object["pago a vendedor"] = "NO hubo comisión, cliente excento";
                   } */
       }  /*  else {
-      $object['sales_commission_ISSET'][] = false;
-  } */
+    $object['sales_commission_ISSET'][] = false;
+} */
 
       /* // GUARDAR DATOS DE DISEÑO
       $sql_diseno = '';
