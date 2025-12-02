@@ -184,6 +184,9 @@ return function (App $app) {
   // RUTAS DE IMPRESORAS
   (require __DIR__ . '/routes/printers.php')($app);
 
+  // RUTAS DE SUBIDA DE IMÁGENES
+  (require __DIR__ . '/routes/upload.php')($app);
+
 
   /** ENVIAR EMAILS */
   $app->get('/send-email', function (Request $request, Response $response) {
