@@ -196,7 +196,128 @@ return function (App $app) {
 
     // ORDENES ACTIVAS
 
+    $app->get('/table/ordenes-activas/{id_empleado}', function (Request $request, Response $response, array $args) {
 
+        $sql = "SELECT departamento FROM empleados WHERE _id = " . $args["id_empleado"];
+        $localConnection = new LocalDB($sql);
+        $departamento = $localConnection->goQuery()[0]["departamento"];
+
+        if ($departamento === "Administración") {
+            $sql = "SELECT 
+        responsable,
+        _id orden, 
+        _id id_father, 
+        _id acc, 
+        cliente_nombre, 
+        fecha_inicio, 
+        fecha_entrega, 
+        observaciones obs, 
+        status estatus 
+        FROM ordenes 
+        WHERE 
+            (status = 'activa' 
+            OR status = 'En espera' 
+            OR status = 'terminada' 
+            OR status = 'pausada')
+        ORDER BY _id DESC
+        ";
+        } else {
+            $sql = "SELECT 
+            responsable,
+            _id orden, 
+            _id id_father, 
+            _id acc, 
+            cliente_nombre, 
+            fecha_inicio, 
+            fecha_entrega, 
+            observaciones obs, 
+            status estatus 
+            FROM ordenes 
+            WHERE 
+            responsable = '" . $args["id_empleado"] . "'  
+            AND (status = 'activa' 
+            OR status = 'En espera' 
+            OR status = 'terminada' 
+            OR status = 'pausada')
+            AND pago_comision = 'pendiente'
+            ORDER BY _id DESC
+            ";
+        }
+
+
+        $object["sql"] = $sql;
+
+        // Cabeceras de la tabla
+
+        $object['fields'][0]['key'] = "orden";
+
+        $object['fields'][0]['label'] = "Orden";
+
+        $object['fields'][0]['sortable'] = true;
+
+
+
+        $object['fields'][1]['key'] = "estatus";
+
+        $object['fields'][1]['label'] = "Estatus";
+
+        $object['fields'][1]['sortable'] = true;
+
+
+
+        $object['fields'][2]['key'] = "fecha_inicio";
+
+        $object['fields'][2]['label'] = "Inicio";
+
+        $object['fields'][2]['sortable'] = true;
+
+
+
+        $object['fields'][3]['key'] = "fecha_entrega";
+
+        $object['fields'][3]['label'] = "Entrega";
+
+        $object['fields'][3]['sortable'] = true;
+
+
+
+        $object['fields'][4]['key'] = "cliente_nombre";
+
+        $object['fields'][4]['label'] = "Cliente";
+
+        $object['fields'][4]['sortable'] = true;
+
+
+        $object['fields'][5]['key'] = "id_father";
+
+        $object['fields'][5]['label'] = "Vinculadas";
+
+        $object['fields'][5]['sortable'] = false;
+
+
+        $object['fields'][6]['key'] = "acc";
+
+        $object['fields'][6]['label'] = "Acciones";
+
+        $object['fields'][6]['sortable'] = false;
+
+
+
+
+        $localConnection = new LocalDB($sql);
+
+        $object['items'] = $localConnection->goQuery();
+
+
+
+        $response->getBody()->write(json_encode($object));
+
+        return $response
+
+            ->withHeader('Content-Type', 'application/json')
+
+            ->withStatus(200);
+    });
 
 
 
@@ -4009,7 +4130,165 @@ return function (App $app) {
 
 
 
+    $app->get('/lotes/activos', function (Request $request, Response $response, array $args) {
 
+        $sql = "SELECT a.lote, a.fecha, a.id_orden, a.paso, b.cliente_nombre FROM lotes a JOIN ordenes b ON a.id_orden = b._id WHERE b.status != 'pre-order' ORDER BY a.lote DESC";
+
+        $localConnection = new LocalDB($sql);
+
+        $object['lotes'] = $localConnection->goQuery();
+
+
+
+        $sql = "SELECT a.id_orden, b.departamento, c.username empleado, b.producto, b.unidades_restantes, b.unidades_solicitadas, b.detalles, a.lote FROM lotes a JOIN lotes_detalles b ON a.id_orden = b.id_orden JOIN empleados c ON b.id_empleado = c._id";
+
+        $localConnection = new LocalDB($sql);
+
+        $object['lotes_detalles'] = $localConnection->goQuery();
+
+
+
+        $response->getBody()->write(json_encode($object));
+
+
+
+        return $response
+
+            ->withHeader('Content-Type', 'application/json')
+
+            ->withStatus(200);
+
+
+
+        // ****************************************************************************************************************
+
+
+
+        $sql = "SELECT * FROM lotes ORDER BY lote DESC";
+
+        $localConnection = new LocalDB($sql);
+
+        $lotes = $localConnection->goQuery();
+
+
+
+        foreach ($lotes as $key => $value) {
+
+            // Formatear Fecha
+
+            $exp = explode("-", $value['fecha']);
+
+            $tmpFecha = $exp[2] . '/' . $exp[1] . '/' . $exp[0];
+
+
+
+            // Nombres de Empleados
+
+            $sql2 = "SELECT _id, dep_responsable, dep_diseno, dep_corte, dep_impresion, dep_estampado, dep_confeccion, dep_revision FROM ordenes WHERE _id = " . $value['id_orden'];
+
+            $localConnection2 = new LocalDB($sql2);
+
+            $empleados_id = $localConnection2->goQuery();
+
+
+
+            $resp[$key]['_id'] = $value['_id'];
+
+            $resp[$key]['lote'] = $value['lote'];
+
+            $resp[$key]['id_orden'] = $value['_id'];
+
+            $resp[$key]['fecha'] = $tmpFecha;
+
+            $resp[$key]['piezas'] = $value['piezas_actuales'];
+
+            // $resp[$key]['SQLprod'] = $sqlp;
+
+            // $resp[$key]['prod'] = $productos;
+
+
+
+            foreach ($empleados_id as $key2 => $empleado) {
+
+                $sql3 = "SELECT username FROM empleados WHERE _id = " . $empleado['dep_responsable'];
+
+                $localConnection3 = new LocalDB($sql3);
+
+                $resp[$key]['empleados']->responsable = $localConnection3->goQuery()[0]['username'];
+
+
+
+                $sql3 = "SELECT username FROM empleados WHERE _id = " . $empleado['dep_diseno'];
+
+                $localConnection3 = new LocalDB($sql3);
+
+                $resp[$key]['empleados']->responsable = $localConnection3->goQuery()[0]['username'];
+
+
+
+                $sql4 = "SELECT username FROM empleados WHERE _id = " . $empleado['dep_corte'];
+
+                $localConnection4 = new LocalDB($sql4);
+
+                $resp[$key]['empleados']->corte = $localConnection4->goQuery()[0]['username'];
+
+
+
+                $sql4 = "SELECT username FROM empleados WHERE _id = " . $empleado['dep_impresion'];
+
+                $localConnection4 = new LocalDB($sql4);
+
+                $resp[$key]['empleados']->impresion = $localConnection4->goQuery()[0]['username'];
+
+
+
+                $sql4 = "SELECT username FROM empleados WHERE _id = " . $empleado['dep_estampado'];
+
+                $localConnection4 = new LocalDB($sql4);
+
+                $resp[$key]['empleados']->estampado = $localConnection4->goQuery()[0]['username'];
+
+
+
+                $sql4 = "SELECT username FROM empleados WHERE _id = " . $empleado['dep_confeccion'];
+
+                $localConnection4 = new LocalDB($sql4);
+
+                $resp[$key]['empleados']->confeccion = $localConnection4->goQuery()[0]['username'];
+
+
+
+                $sql4 = "SELECT username FROM empleados WHERE _id = " . $empleado['dep_revision'];
+
+                $localConnection4 = new LocalDB($sql4);
+
+                $resp[$key]['empleados']->revision = $localConnection4->goQuery()[0]['username'];
+            }
+
+
+
+            // Productos del lote
+
+            $sqlp = "SELECT name as nombre FROM ordenes_productos WHERE id_orden = " . $value['id_orden'];
+
+            $localConnectionp = new LocalDB($sqlp);
+
+            $productos = $localConnectionp->goQuery();
+
+
+
+            foreach ($productos as $keyp => $producto) {
+
+                $resp[$key]['productos'][$keyp] = $producto['nombre'];
+            }
+        }
+
+        $response->getBody()->write(json_encode($object));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200);
+    });
 
     $app->get('/lotes/fisicos', function (Request $request, Response $response, array $args) {
 
