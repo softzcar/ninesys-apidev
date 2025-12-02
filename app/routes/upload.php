@@ -23,21 +23,59 @@ return function (App $app) {
         $uploadedFile = $uploadedFiles['image'];
 
         if ($uploadedFile->getError() === UPLOAD_ERR_OK) {
-            $filename = moveUploadedFile($directory, $uploadedFile);
+            try {
+                $filename = moveUploadedFile($directory, $uploadedFile);
 
-            // Get base URL from request or config
-            // Assuming the API is served from the root or a known base
-            // We'll construct the URL relative to the public directory
-            $url = '/images-orders-details/' . $filename;
+                // Get base URL from request or config
+                // Assuming the API is served from the root or a known base
+                // We'll construct the URL relative to the public directory
+                $url = '/images-orders-details/' . $filename;
 
-            $response->getBody()->write(json_encode([
-                'success' => true,
-                'url' => $url
-            ]));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+                $response->getBody()->write(json_encode([
+                    'success' => true,
+                    'url' => $url
+                ]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+            } catch (Exception $e) {
+                error_log('Error moving/optimizing uploaded file: ' . $e->getMessage());
+                $response->getBody()->write(json_encode(['error' => 'Error processing file: ' . $e->getMessage()]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+            }
         }
 
-        $response->getBody()->write(json_encode(['error' => 'Error uploading file']));
+        $errorCode = $uploadedFile->getError();
+        $errorMessage = 'Unknown error';
+
+        switch ($errorCode) {
+            case UPLOAD_ERR_INI_SIZE:
+                $errorMessage = 'The uploaded file exceeds the upload_max_filesize directive in php.ini';
+                break;
+            case UPLOAD_ERR_FORM_SIZE:
+                $errorMessage = 'The uploaded file exceeds the MAX_FILE_SIZE directive that was specified in the HTML form';
+                break;
+            case UPLOAD_ERR_PARTIAL:
+                $errorMessage = 'The uploaded file was only partially uploaded';
+                break;
+            case UPLOAD_ERR_NO_FILE:
+                $errorMessage = 'No file was uploaded';
+                break;
+            case UPLOAD_ERR_NO_TMP_DIR:
+                $errorMessage = 'Missing a temporary folder';
+                break;
+            case UPLOAD_ERR_CANT_WRITE:
+                $errorMessage = 'Failed to write file to disk';
+                break;
+            case UPLOAD_ERR_EXTENSION:
+                $errorMessage = 'File upload stopped by extension';
+                break;
+        }
+
+        error_log("Upload failed with error code: $errorCode ($errorMessage)");
+        $response->getBody()->write(json_encode([
+            'error' => 'Error uploading file',
+            'code' => $errorCode,
+            'message' => $errorMessage
+        ]));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     });
 };
