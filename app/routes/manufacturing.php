@@ -2742,6 +2742,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     $id_orden = isset($params['id_orden']) ? intval($params['id_orden']) : null;
+    $id_ordenes = isset($params['id_ordenes']) ? $params['id_ordenes'] : null; // Expecting comma separated string
     $fecha_inicio = isset($params['fecha_inicio']) ? $params['fecha_inicio'] : null;
     $fecha_fin = isset($params['fecha_fin']) ? $params['fecha_fin'] : null;
     $limit = isset($params['limit']) ? intval($params['limit']) : 50;
@@ -2750,6 +2751,13 @@ return function (App $app) {
 
     if ($id_orden) {
       $whereConditions[] = "o._id = $id_orden";
+    }
+
+    if ($id_ordenes) {
+      // Validate that it's a list of integers
+      $ids = array_map('intval', explode(',', $id_ordenes));
+      $idsStr = implode(',', $ids);
+      $whereConditions[] = "o._id IN ($idsStr)";
     }
 
     if ($fecha_inicio && $fecha_fin) {
