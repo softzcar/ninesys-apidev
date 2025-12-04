@@ -2823,7 +2823,7 @@ return function (App $app) {
             FROM 
                 ordenes o
             LEFT JOIN 
-                customers c ON c.id_wp = o.id_wp
+                customers c ON c._id = o.id_wp
             JOIN 
                 ordenes_productos op ON op.id_orden = o._id
             JOIN 
