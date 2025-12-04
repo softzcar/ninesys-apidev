@@ -1862,112 +1862,129 @@ return function (App $app) {
   $app->get('/produccion/progressbar/{id_orden}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT id_empleado, id_departamento FROM lotes_detalles_empleados_asignados WHERE id_orden =' . $args['id_orden'];
-    $data['data']['empleados_asignados'] = $localConnection->goQuery($sql);
+    try {
+      $sql = 'SELECT id_empleado, id_departamento FROM lotes_detalles_empleados_asignados WHERE id_orden =' . $args['id_orden'];
+      $data['data']['empleados_asignados'] = $localConnection->goQuery($sql);
 
-    // VERIFCAR STATUS DE LA ORDEN
-    $sql = 'SELECT status from ordenes WHERE _id = ' . $args['id_orden'];
-    $tmpStatus = $localConnection->goQuery($sql);
+      // VERIFCAR STATUS DE LA ORDEN
+      $sql = 'SELECT status from ordenes WHERE _id = ' . $args['id_orden'];
+      $tmpStatus = $localConnection->goQuery($sql);
 
-    if (!empty($tmpStatus)) {
-      $object['status'] = $tmpStatus[0]['status'];
-    }
+      if (!empty($tmpStatus)) {
+        $object['status'] = $tmpStatus[0]['status'];
+      }
 
-    // BUSCAR PASO ACTUAL EN EL LOTE
-    $sql = 'SELECT paso from lotes WHERE id_orden = ' . $args['id_orden'];
-    $tmpPaso = $localConnection->goQuery($sql);
+      // BUSCAR PASO ACTUAL EN EL LOTE
+      $sql = 'SELECT paso from lotes WHERE id_orden = ' . $args['id_orden'];
+      $tmpPaso = $localConnection->goQuery($sql);
 
-    if (!empty($tmpPaso)) {
-      $object['paso'] = $tmpPaso[0]['paso'];
+      if (!empty($tmpPaso)) {
+        $object['paso'] = $tmpPaso[0]['paso'];
 
-      // BUSCAR TIPO DE DISEÑO
-      $sql = 'SELECT a.tipo, a.id_empleado, b.nombre FROM disenos a JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado WHERE id_orden = ' . $args['id_orden'];
-      $d = $localConnection->goQuery($sql);
+        // BUSCAR TIPO DE DISEÑO
+        $sql = 'SELECT a.tipo, a.id_empleado, b.nombre FROM disenos a JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado WHERE id_orden = ' . $args['id_orden'];
+        $d = $localConnection->goQuery($sql);
 
-      if (empty($d)) {
-        $diseno = 'no';
-      } else {
-        if (isset($d[0]['tipo'])) {
-          $diseno = $d[0]['tipo'];
-        } else {
+        if (empty($d)) {
           $diseno = 'no';
+        } else {
+          if (isset($d[0]['tipo'])) {
+            $diseno = $d[0]['tipo'];
+          } else {
+            $diseno = 'no';
+          }
         }
-      }
 
-      if ($diseno === 'no') {
-        $cuentaDisenos = 0;
+        if ($diseno === 'no') {
+          $cuentaDisenos = 0;
+        } else {
+          $cuentaDisenos = 2;
+        }
+        $object['data']['cuentaDisenos'] = $cuentaDisenos;
+
+        // IDENTIFICAR QUE DEPARTAMENTOS ESTAN ASIGNADOS
+        $sql = 'SELECT `departamento` FROM lotes_detalles WHERE id_orden = ' . $args['id_orden'] . ' GROUP BY departamento';
+        $pActivos = $localConnection->goQuery($sql);
+        $object['data']['pActivos'] = $pActivos;
+
+        switch ($object['paso']) {
+          case 'producción':
+            $x[] = 0.6;
+            break;
+
+          case 'Corte':
+            $x[] = 1;
+            break;
+
+          case 'Estampado':
+            $x[] = 2;
+            break;
+
+          case 'Impresión':
+            $x[] = 3;
+            break;
+
+          case 'Costura':
+            $x[] = 4;
+            break;
+
+          case 'Limpieza':
+            $x[] = 5;
+            break;
+
+          case 'Revisión':
+            $x[] = 5.88;
+            break;
+
+          /*  case 'Diseno':
+              $x[] = 0;
+              break; */
+
+          default:
+            $x[] = 1;
+            break;
+        }
+
+        $pasoActual = max($x);
+        $object['data']['pasoActual'] = $pasoActual;
+        $totalPasos = count($pActivos);
+        $object['data']['totalPasos'] = count($pActivos);
+
+        if (!$totalPasos) {
+          $totalPasos = 1;
+        }
+
+        $object['porcentaje'] = round($pasoActual * 100 / $totalPasos);
       } else {
-        $cuentaDisenos = 2;
-      }
-      $object['data']['cuentaDisenos'] = $cuentaDisenos;
-
-      // IDENTIFICAR QUE DEPARTAMENTOS ESTAN ASIGNADOS
-      $sql = 'SELECT `departamento` FROM lotes_detalles WHERE id_orden = ' . $args['id_orden'] . ' GROUP BY departamento';
-      $pActivos = $localConnection->goQuery($sql);
-      $object['data']['pActivos'] = $pActivos;
-
-      switch ($object['paso']) {
-        case 'producción':
-          $x[] = 0.6;
-          break;
-
-        case 'Corte':
-          $x[] = 1;
-          break;
-
-        case 'Estampado':
-          $x[] = 2;
-          break;
-
-        case 'Impresión':
-          $x[] = 3;
-          break;
-
-        case 'Costura':
-          $x[] = 4;
-          break;
-
-        case 'Limpieza':
-          $x[] = 5;
-          break;
-
-        case 'Revisión':
-          $x[] = 5.88;
-          break;
-
-        /*  case 'Diseno':
-            $x[] = 0;
-            break; */
-
-        default:
-          $x[] = 1;
-          break;
+        $pasoActual = 0;
+        $object['data']['pasoActual'] = $pasoActual;
+        $totalPasos = 0;
+        $object['data']['totalPasos'] = 0;
       }
 
-      $pasoActual = max($x);
-      $object['data']['pasoActual'] = $pasoActual;
-      $totalPasos = count($pActivos);
-      $object['data']['totalPasos'] = count($pActivos);
+      $localConnection->disconnect();
 
-      if (!$totalPasos) {
-        $totalPasos = 1;
-      }
+      $response->getBody()->write(json_encode($object));
 
-      $object['porcentaje'] = round($pasoActual * 100 / $totalPasos);
-    } else {
-      $pasoActual = 0;
-      $object['data']['pasoActual'] = $pasoActual;
-      $totalPasos = 0;
-      $object['data']['totalPasos'] = 0;
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+
+    } catch (PDOException $e) {
+      $localConnection->disconnect();
+      $errorMsg = ['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()];
+      $response->getBody()->write(json_encode($errorMsg));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(500);
+    } catch (Exception $e) {
+      $localConnection->disconnect();
+      $errorMsg = ['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()];
+      $response->getBody()->write(json_encode($errorMsg));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(500);
     }
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
   });
 
   // Detalles para la asignacion de personal V2

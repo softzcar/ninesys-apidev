@@ -2741,105 +2741,118 @@ return function (App $app) {
     $params = $request->getQueryParams();
     $localConnection = new LocalDB();
 
-    $id_orden = isset($params['id_orden']) ? intval($params['id_orden']) : null;
-    $id_ordenes = isset($params['id_ordenes']) ? $params['id_ordenes'] : null; // Expecting comma separated string
-    $fecha_inicio = isset($params['fecha_inicio']) ? $params['fecha_inicio'] : null;
-    $fecha_fin = isset($params['fecha_fin']) ? $params['fecha_fin'] : null;
-    $limit = isset($params['limit']) ? intval($params['limit']) : 50;
+    try {
+      $id_orden = isset($params['id_orden']) ? intval($params['id_orden']) : null;
+      $id_ordenes = isset($params['id_ordenes']) ? $params['id_ordenes'] : null; // Expecting comma separated string
+      $fecha_inicio = isset($params['fecha_inicio']) ? $params['fecha_inicio'] : null;
+      $fecha_fin = isset($params['fecha_fin']) ? $params['fecha_fin'] : null;
+      $limit = isset($params['limit']) ? intval($params['limit']) : 50;
 
-    $whereConditions = [];
+      $whereConditions = [];
 
-    if ($id_orden) {
-      $whereConditions[] = "o._id = $id_orden";
+      if ($id_orden) {
+        $whereConditions[] = "o._id = $id_orden";
+      }
+
+      if ($id_ordenes) {
+        // Validate that it's a list of integers
+        $ids = array_map('intval', explode(',', $id_ordenes));
+        $idsStr = implode(',', $ids);
+        $whereConditions[] = "o._id IN ($idsStr)";
+      }
+
+      if ($fecha_inicio && $fecha_fin) {
+        $whereConditions[] = "DATE(o.moment) BETWEEN '$fecha_inicio' AND '$fecha_fin'";
+      }
+
+      $whereClause = "";
+      if (count($whereConditions) > 0) {
+        $whereClause = "WHERE " . implode(" AND ", $whereConditions);
+      }
+
+      $sql = "SELECT 
+                  o._id AS id_orden,
+                  o.id_wp AS id_woocommerce,
+                  c.first_name AS cliente_nombre,
+                  c.cedula AS cliente_cedula,
+                  op.name AS producto,
+                  op.cantidad,
+                  
+                  -- Tiempo Real (Prioridad Lote, luego Empleados)
+                  SUM(
+                      CASE 
+                          WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
+                              TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
+                          ELSE 
+                              COALESCE(
+                                  (SELECT SUM(TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado))
+                                   FROM lotes_detalles_empleados_asignados sub_ldea 
+                                   WHERE sub_ldea.id_lotes_detalles = ld._id), 
+                                  0
+                              )
+                      END
+                  ) AS tiempo_total_segundos,
+                  
+                  -- Tiempo Promedio Real
+                  (SUM(
+                      CASE 
+                          WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
+                              TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
+                          ELSE 
+                              COALESCE(
+                                  (SELECT SUM(TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado))
+                                   FROM lotes_detalles_empleados_asignados sub_ldea 
+                                   WHERE sub_ldea.id_lotes_detalles = ld._id), 
+                                  0
+                              )
+                      END
+                  ) / op.cantidad) AS tiempo_promedio_por_unidad,
+  
+                  -- Tiempo Proyectado (Estimado)
+                  -- Se calcula sumando el tiempo estimado de los departamentos ASIGNADOS (presentes en lotes_detalles)
+                  (
+                      SELECT COALESCE(SUM(ptp.tiempo * op.cantidad), 0)
+                      FROM products_tiempos_de_produccion ptp
+                      WHERE ptp.id_product = op.id_woo
+                      AND ptp.id_departamento IN (
+                          SELECT DISTINCT ld_sub.id_departamento
+                          FROM lotes_detalles ld_sub
+                          WHERE ld_sub.id_ordenes_productos = op._id
+                      )
+                  ) AS tiempo_proyectado_segundos
+  
+              FROM 
+                  ordenes o
+              LEFT JOIN 
+                  customers c ON c._id = o.id_wp
+              JOIN 
+                  ordenes_productos op ON op.id_orden = o._id
+              JOIN 
+                  lotes_detalles ld ON ld.id_ordenes_productos = op._id
+              $whereClause
+              GROUP BY 
+                  op._id
+              ORDER BY 
+                  o._id DESC
+              LIMIT $limit";
+
+      $data = $localConnection->goQuery($sql);
+      $localConnection->disconnect();
+
+      $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (PDOException $e) {
+      $localConnection->disconnect();
+      $errorMsg = ['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()];
+      $response->getBody()->write(json_encode($errorMsg));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } catch (Exception $e) {
+      $localConnection->disconnect();
+      $errorMsg = ['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()];
+      $response->getBody()->write(json_encode($errorMsg));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     }
-
-    if ($id_ordenes) {
-      // Validate that it's a list of integers
-      $ids = array_map('intval', explode(',', $id_ordenes));
-      $idsStr = implode(',', $ids);
-      $whereConditions[] = "o._id IN ($idsStr)";
-    }
-
-    if ($fecha_inicio && $fecha_fin) {
-      $whereConditions[] = "DATE(o.moment) BETWEEN '$fecha_inicio' AND '$fecha_fin'";
-    }
-
-    $whereClause = "";
-    if (count($whereConditions) > 0) {
-      $whereClause = "WHERE " . implode(" AND ", $whereConditions);
-    }
-
-    $sql = "SELECT 
-                o._id AS id_orden,
-                o.id_wp AS id_woocommerce,
-                c.first_name AS cliente_nombre,
-                c.cedula AS cliente_cedula,
-                op.name AS producto,
-                op.cantidad,
-                
-                -- Tiempo Real (Prioridad Lote, luego Empleados)
-                SUM(
-                    CASE 
-                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
-                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
-                        ELSE 
-                            COALESCE(
-                                (SELECT SUM(TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado))
-                                 FROM lotes_detalles_empleados_asignados sub_ldea 
-                                 WHERE sub_ldea.id_lotes_detalles = ld._id), 
-                                0
-                            )
-                    END
-                ) AS tiempo_total_segundos,
-                
-                -- Tiempo Promedio Real
-                (SUM(
-                    CASE 
-                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
-                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
-                        ELSE 
-                            COALESCE(
-                                (SELECT SUM(TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado))
-                                 FROM lotes_detalles_empleados_asignados sub_ldea 
-                                 WHERE sub_ldea.id_lotes_detalles = ld._id), 
-                                0
-                            )
-                    END
-                ) / op.cantidad) AS tiempo_promedio_por_unidad,
-
-                -- Tiempo Proyectado (Estimado)
-                -- Se calcula sumando el tiempo estimado de los departamentos ASIGNADOS (presentes en lotes_detalles)
-                (
-                    SELECT COALESCE(SUM(ptp.tiempo * op.cantidad), 0)
-                    FROM products_tiempos_de_produccion ptp
-                    WHERE ptp.id_product = op.id_woo
-                    AND ptp.id_departamento IN (
-                        SELECT DISTINCT ld_sub.id_departamento
-                        FROM lotes_detalles ld_sub
-                        WHERE ld_sub.id_ordenes_productos = op._id
-                    )
-                ) AS tiempo_proyectado_segundos
-
-            FROM 
-                ordenes o
-            LEFT JOIN 
-                customers c ON c._id = o.id_wp
-            JOIN 
-                ordenes_productos op ON op.id_orden = o._id
-            JOIN 
-                lotes_detalles ld ON ld.id_ordenes_productos = op._id
-            $whereClause
-            GROUP BY 
-                op._id
-            ORDER BY 
-                o._id DESC
-            LIMIT $limit";
-
-    $data = $localConnection->goQuery($sql);
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
-    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 
 }; // Fin de la función que envuelve las rutas
