@@ -30,3 +30,11 @@
     - Al final del reporte, se debe incluir una sección de resumen con:
         - Un listado de los logros generales de la jornada.
         - Un listado de las tareas que quedaron pendientes o que requieren acciones futuras.
+
+## Despliegue en Producción
+
+Para actualizar la aplicación en el servidor de producción (VPS), utiliza el siguiente comando:
+
+```bash
+git fetch origin && git checkout refactor/modular-routes && git pull origin refactor/modular-routes
+```
