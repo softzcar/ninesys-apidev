@@ -2736,6 +2736,46 @@ return function (App $app) {
           }
     }); */
 
+  // --- NUEVO ENDPOINT: Eficiencia de Insumos ---
+  $app->get('/reports/input-efficiency/{id_orden}', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+    $id_orden = $args['id_orden'];
+
+    $sql = "
+            SELECT
+                cip._id AS id_insumo_catalogo,
+                cip.nombre AS nombre_insumo,
+                
+                -- Consumo Estándar (Meta): (Cantidad por producto * Cantidad de productos en la orden)
+                SUM(pia.cantidad * op.cantidad) AS cantidad_estandar,
+                MAX(pia.unidad) AS unidad,
+
+                -- Consumo Real: Suma de movimientos de inventario para esta orden y este tipo de insumo
+                COALESCE((
+                    SELECT SUM(im.valor_inicial - im.valor_final)
+                    FROM inventario_movimientos im
+                    JOIN inventario inv ON inv._id = im.id_insumo
+                    WHERE im.id_orden = o._id
+                    AND inv.id_catalogo = cip._id
+                ), 0) AS cantidad_real
+
+            FROM ordenes o
+            JOIN ordenes_productos op ON op.id_orden = o._id
+            JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo
+            JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
+            WHERE o._id = $id_orden
+            GROUP BY cip._id, cip.nombre
+        ";
+
+    $data = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   // REPORTE DE TIEMPOS DE FABRICACIÓN
   $app->get('/reports/manufacturing-time', function (Request $request, Response $response) {
     $params = $request->getQueryParams();
