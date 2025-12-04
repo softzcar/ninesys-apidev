@@ -2779,34 +2779,57 @@ return function (App $app) {
                   op.cantidad,
                   
                   -- Tiempo Real (Prioridad Lote, luego Empleados)
-                  SUM(
-                      CASE 
-                          WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
-                              TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
-                          ELSE 
-                              COALESCE(
-                                  (SELECT SUM(TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado))
-                                   FROM lotes_detalles_empleados_asignados sub_ldea 
-                                   WHERE sub_ldea.id_lotes_detalles = ld._id), 
-                                  0
-                              )
-                      END
-                  ) AS tiempo_total_segundos,
-                  
-                  -- Tiempo Promedio Real
-                  (SUM(
-                      CASE 
-                          WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
-                              TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
-                          ELSE 
-                              COALESCE(
-                                  (SELECT SUM(TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado))
-                                   FROM lotes_detalles_empleados_asignados sub_ldea 
-                                   WHERE sub_ldea.id_lotes_detalles = ld._id), 
-                                  0
-                              )
-                      END
-                  ) / op.cantidad) AS tiempo_promedio_por_unidad,
+                SUM(
+                    CASE 
+                        -- Caso 1: Lote terminado
+                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
+                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
+                        -- Caso 2: Lote en curso (activo)
+                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
+                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, NOW())
+                        -- Caso 3: Sumar tiempos de empleados (si no hay tiempo de lote directo)
+                        ELSE 
+                            COALESCE(
+                                (SELECT SUM(
+                                    CASE 
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
+                                        ELSE 0 
+                                    END
+                                 )
+                                 FROM lotes_detalles_empleados_asignados sub_ldea 
+                                 WHERE sub_ldea.id_lotes_detalles = ld._id), 
+                                0
+                            )
+                    END
+                ) AS tiempo_total_segundos,
+                
+                -- Tiempo Promedio Real
+                (SUM(
+                    CASE 
+                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
+                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
+                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
+                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, NOW())
+                        ELSE 
+                            COALESCE(
+                                (SELECT SUM(
+                                    CASE 
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
+                                        ELSE 0 
+                                    END
+                                 )
+                                 FROM lotes_detalles_empleados_asignados sub_ldea 
+                                 WHERE sub_ldea.id_lotes_detalles = ld._id), 
+                                0
+                            )
+                    END
+                ) / op.cantidad) AS tiempo_promedio_por_unidad,
   
                   -- Tiempo Proyectado (Estimado)
                   -- Se calcula sumando el tiempo estimado de los departamentos ASIGNADOS (presentes en lotes_detalles)
