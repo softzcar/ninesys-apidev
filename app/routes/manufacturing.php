@@ -2790,7 +2790,7 @@ return function (App $app) {
                         -- Caso 3: Sumar tiempos de empleados (si no hay tiempo de lote directo)
                         ELSE 
                             COALESCE(
-                                (SELECT SUM(
+                                 (SELECT SUM(
                                     CASE 
                                         WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
                                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
@@ -2800,7 +2800,8 @@ return function (App $app) {
                                     END
                                  )
                                  FROM lotes_detalles_empleados_asignados sub_ldea 
-                                 WHERE sub_ldea.id_lotes_detalles = ld._id), 
+                                 WHERE sub_ldea.id_lotes_detalles = ld._id 
+                                    OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
                                 0
                             )
                     END
@@ -2825,7 +2826,8 @@ return function (App $app) {
                                     END
                                  )
                                  FROM lotes_detalles_empleados_asignados sub_ldea 
-                                 WHERE sub_ldea.id_lotes_detalles = ld._id), 
+                                 WHERE sub_ldea.id_lotes_detalles = ld._id
+                                    OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
                                 0
                             )
                     END
