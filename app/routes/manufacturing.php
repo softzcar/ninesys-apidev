@@ -2844,7 +2844,14 @@ return function (App $app) {
                           FROM lotes_detalles ld_sub
                           WHERE ld_sub.id_ordenes_productos = op._id
                       )
-                  ) AS tiempo_proyectado_segundos
+                  ) AS tiempo_proyectado_segundos,
+
+                  -- Fecha Inicio Primer Proceso (para calculo de tiempo muerto)
+                  (
+                    SELECT MIN(fecha_inicio)
+                    FROM lotes_detalles_empleados_asignados ldea_start
+                    WHERE ldea_start.id_orden = o._id
+                  ) AS fecha_inicio_primer_proceso
   
               FROM 
                   ordenes o
