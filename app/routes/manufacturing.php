@@ -2736,4 +2736,72 @@ return function (App $app) {
           }
     }); */
 
+  // REPORTE DE TIEMPOS DE FABRICACIÓN
+  $app->get('/reports/manufacturing-time', function (Request $request, Response $response) {
+    $params = $request->getQueryParams();
+    $localConnection = new LocalDB();
+
+    $id_orden = isset($params['id_orden']) ? intval($params['id_orden']) : null;
+    $limit = isset($params['limit']) ? intval($params['limit']) : 50;
+
+    $whereClause = "";
+    if ($id_orden) {
+      $whereClause = "WHERE o._id = $id_orden";
+    }
+
+    $sql = "SELECT 
+                o._id AS id_orden,
+                o.id_wp AS id_woocommerce,
+                c.first_name AS cliente_nombre,
+                c.cedula AS cliente_cedula,
+                op.name AS producto,
+                op.cantidad,
+                SUM(
+                    CASE 
+                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
+                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
+                        ELSE 
+                            COALESCE(
+                                (SELECT SUM(TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado))
+                                 FROM lotes_detalles_empleados_asignados sub_ldea 
+                                 WHERE sub_ldea.id_lotes_detalles = ld._id), 
+                                0
+                            )
+                    END
+                ) AS tiempo_total_segundos,
+                (SUM(
+                    CASE 
+                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
+                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
+                        ELSE 
+                            COALESCE(
+                                (SELECT SUM(TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado))
+                                 FROM lotes_detalles_empleados_asignados sub_ldea 
+                                 WHERE sub_ldea.id_lotes_detalles = ld._id), 
+                                0
+                            )
+                    END
+                ) / op.cantidad) AS tiempo_promedio_por_unidad
+            FROM 
+                ordenes o
+            LEFT JOIN 
+                customers c ON c.cedula = o.cliente_cedula
+            JOIN 
+                ordenes_productos op ON op.id_orden = o._id
+            JOIN 
+                lotes_detalles ld ON ld.id_ordenes_productos = op._id
+            $whereClause
+            GROUP BY 
+                op._id
+            ORDER BY 
+                o._id DESC
+            LIMIT $limit";
+
+    $data = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
 }; // Fin de la función que envuelve las rutas
