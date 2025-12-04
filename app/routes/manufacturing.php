@@ -2742,11 +2742,23 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     $id_orden = isset($params['id_orden']) ? intval($params['id_orden']) : null;
+    $fecha_inicio = isset($params['fecha_inicio']) ? $params['fecha_inicio'] : null;
+    $fecha_fin = isset($params['fecha_fin']) ? $params['fecha_fin'] : null;
     $limit = isset($params['limit']) ? intval($params['limit']) : 50;
 
-    $whereClause = "";
+    $whereConditions = [];
+
     if ($id_orden) {
-      $whereClause = "WHERE o._id = $id_orden";
+      $whereConditions[] = "o._id = $id_orden";
+    }
+
+    if ($fecha_inicio && $fecha_fin) {
+      $whereConditions[] = "DATE(o.moment) BETWEEN '$fecha_inicio' AND '$fecha_fin'";
+    }
+
+    $whereClause = "";
+    if (count($whereConditions) > 0) {
+      $whereClause = "WHERE " . implode(" AND ", $whereConditions);
     }
 
     $sql = "SELECT 
@@ -2756,6 +2768,8 @@ return function (App $app) {
                 c.cedula AS cliente_cedula,
                 op.name AS producto,
                 op.cantidad,
+                
+                -- Tiempo Real (Prioridad Lote, luego Empleados)
                 SUM(
                     CASE 
                         WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
@@ -2769,6 +2783,8 @@ return function (App $app) {
                             )
                     END
                 ) AS tiempo_total_segundos,
+                
+                -- Tiempo Promedio Real
                 (SUM(
                     CASE 
                         WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
@@ -2781,11 +2797,25 @@ return function (App $app) {
                                 0
                             )
                     END
-                ) / op.cantidad) AS tiempo_promedio_por_unidad
+                ) / op.cantidad) AS tiempo_promedio_por_unidad,
+
+                -- Tiempo Proyectado (Estimado)
+                -- Se calcula sumando el tiempo estimado de los departamentos ASIGNADOS (presentes en lotes_detalles)
+                (
+                    SELECT COALESCE(SUM(ptp.tiempo * op.cantidad), 0)
+                    FROM products_tiempos_de_produccion ptp
+                    WHERE ptp.id_product = op.id_woo
+                    AND ptp.id_departamento IN (
+                        SELECT DISTINCT ld_sub.id_departamento
+                        FROM lotes_detalles ld_sub
+                        WHERE ld_sub.id_ordenes_productos = op._id
+                    )
+                ) AS tiempo_proyectado_segundos
+
             FROM 
                 ordenes o
             LEFT JOIN 
-                customers c ON c.cedula = o.cliente_cedula
+                customers c ON c.id_wp = o.id_wp
             JOIN 
                 ordenes_productos op ON op.id_orden = o._id
             JOIN 
