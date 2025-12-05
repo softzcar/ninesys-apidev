@@ -206,7 +206,7 @@ VALUES (
     'V12345678',
     'Dirección de prueba',
     'Caracas',
-    '58424000000',
+    '584240000000',
     'clientepruebas@email.com',
     '2025-09-25 16:25:44'
   );
