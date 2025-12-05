@@ -876,6 +876,20 @@ CREATE TABLE `product_insumos_asignados` (
   `tiempo` int(11) NOT NULL DEFAULT 0 COMMENT 'tiempo estimadop de fabricación en segundos',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+
+INSERT INTO `product_insumos_asignados` (`_id`, `id_product`, `id_catalogo_insumos_productos`, `id_departamento`, `id_talla`, `cantidad`, `unidad`) VALUES
+(1, 1, 1, 1, 1, 1.00, 'Mt'),
+(2, 1, 1, 1, 2, 1.00, 'Mt'),
+(3, 1, 1, 1, 3, 1.00, 'Mt'),
+(4, 1, 1, 1, 4, 1.00, 'Mt'),
+(5, 1, 6, 2, 1, 1.00, 'Kg'),
+(6, 1, 6, 2, 2, 1.00, 'Kg'),
+(7, 1, 6, 2, 3, 1.00, 'Kg'),
+(8, 1, 6, 2, 4, 1.00, 'Kg'),
+(9, 1, 6, 3, 1, 1.00, 'Kg'),
+(10, 1, 6, 3, 2, 1.00, 'Kg'),
+(11, 1, 6, 3, 3, 1.00, 'Kg'),
+(12, 1, 6, 3, 4, 1.00, 'Kg');
 CREATE TABLE `rendimiento` (
   `_id` int(11) NOT NULL,
   `id_empleado_impresion` int(11) DEFAULT NULL,

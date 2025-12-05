@@ -1,0 +1,8 @@
+- Solicitud del Usuario: en el archivo @[../../Antigravity/ninesys-apidev/public/model/create_new_company_api_emp_N.sql] No estamos creando datos dummy para la tabla `product_insumos_asignados` vamos a insertar los datos que te muestro en la imágen para esta tabla
+- Archivos Involucrados: public/model/create_new_company_api_emp_N.sql
+- Acción Realizada: Se insertaron 12 registros de prueba en la tabla `product_insumos_asignados` siguiendo los datos proporcionados en la imagen (IDs 1-12, producto 1, insumos 1 y 6, departamentos 1, 2 y 3, tallas 1-4, cantidad 1.00, unidades Mt y Kg).
+- Herramienta(s) Utilizada(s): `default_api.replace_file_content`
+- Resultado: Éxito
+- Verificación: Se verificó visualmente que la sentencia INSERT se colocara correctamente después de la definición de la tabla y antes de la siguiente tabla.
+- Observaciones de Gemini: Los datos se insertaron tal cual se mostraron en la imagen.
+- Respuesta de Gemini: He insertado los datos de prueba en la tabla `product_insumos_asignados`.
