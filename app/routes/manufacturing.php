@@ -2736,6 +2736,39 @@ return function (App $app) {
           }
     }); */
 
+  // --- DEBUG ENDPOINT ---
+  $app->get('/debug-efficiency', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    $params = $request->getQueryParams();
+    $id_orden = isset($params['id_orden']) ? intval($params['id_orden']) : 1;
+    $id_empleado = isset($params['id_empleado']) ? intval($params['id_empleado']) : 479;
+
+    $debugData = [];
+
+    // 1. Check Assignments
+    $sql = "SELECT * FROM lotes_detalles_empleados_asignados WHERE id_orden = $id_orden AND id_empleado = $id_empleado";
+    $debugData['assignments'] = $localConnection->goQuery($sql);
+
+    // 2. Check Departments linked to these assignments
+    $sql = "SELECT DISTINCT id_departamento FROM lotes_detalles_empleados_asignados WHERE id_orden = $id_orden AND id_empleado = $id_empleado";
+    $debugData['assigned_departments'] = $localConnection->goQuery($sql);
+
+    // 3. Check Standards for this order's products
+    $sql = "SELECT ptp.*, op.name as product_name 
+              FROM products_tiempos_de_produccion ptp
+              JOIN ordenes_productos op ON op.id_woo = ptp.id_product
+              WHERE op.id_orden = $id_orden";
+    $debugData['standards'] = $localConnection->goQuery($sql);
+
+    // 4. Check Lotes Detalles
+    $sql = "SELECT * FROM lotes_detalles WHERE id_ordenes_productos IN (SELECT _id FROM ordenes_productos WHERE id_orden = $id_orden)";
+    $debugData['lotes_detalles'] = $localConnection->goQuery($sql);
+
+    $localConnection->disconnect();
+    $response->getBody()->write(json_encode($debugData));
+    return $response->withHeader('Content-Type', 'application/json');
+  });
+
   // --- NUEVO ENDPOINT: Eficiencia de Insumos (Bulk & Cost-based) ---
   $app->get('/reports/input-efficiency/{id_ordenes}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
@@ -2912,9 +2945,14 @@ return function (App $app) {
                       AND ptp.id_departamento IN (
                           SELECT DISTINCT ld_sub.id_departamento
                           FROM lotes_detalles ld_sub
-                          " . ($id_empleado ? "JOIN lotes_detalles_empleados_asignados ldea_sub ON ldea_sub.id_lotes_detalles = ld_sub._id" : "") . "
+                          " . ($id_empleado ? "
+                            JOIN lotes_detalles_empleados_asignados ldea_sub ON 
+                                ldea_sub.id_empleado = $id_empleado AND (
+                                    ldea_sub.id_lotes_detalles = ld_sub._id 
+                                    OR (ldea_sub.id_lotes_detalles IS NULL AND ldea_sub.id_orden = o._id AND ldea_sub.id_departamento = ld_sub.id_departamento)
+                                )
+                          " : "") . "
                           WHERE ld_sub.id_ordenes_productos = op._id
-                          " . ($id_empleado ? "AND ldea_sub.id_empleado = $id_empleado" : "") . "
                       )
                   ) AS tiempo_proyectado_segundos,
 
