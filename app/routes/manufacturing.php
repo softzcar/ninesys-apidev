@@ -2872,6 +2872,8 @@ return function (App $app) {
       // Define Real Time Calculation Logic
       if ($id_empleado) {
         // If filtering by employee, ONLY count that employee's time from assignments
+        // FIX: Handle "Orphan" assignments (linked only by Order/Dept) by dividing their time
+        // across the number of products in that department to avoid duplication in the final sum.
         $realTimeCalculation = "
             COALESCE(
                  (SELECT SUM(
@@ -2881,6 +2883,12 @@ return function (App $app) {
                         WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
                         ELSE 0 
+                    END
+                    / 
+                    CASE 
+                        WHEN sub_ldea.id_lotes_detalles IS NULL THEN 
+                            (SELECT COUNT(*) FROM lotes_detalles ld_count WHERE ld_count.id_orden = sub_ldea.id_orden AND ld_count.id_departamento = sub_ldea.id_departamento)
+                        ELSE 1
                     END
                  )
                  FROM lotes_detalles_empleados_asignados sub_ldea 
