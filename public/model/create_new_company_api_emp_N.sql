@@ -462,24 +462,25 @@ CREATE TABLE `metodos_de_pago` (
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
 CREATE TABLE `ordenes` (
-  `_id` int(11) NOT NULL,
-  `id_wp` int(11) DEFAULT NULL COMMENT 'ID del cliente de Woocommerce',
-  `id_wp_order` int(11) DEFAULT NULL COMMENT 'ID de la orden generada en Wocommerce',
-  `status` varchar(45) DEFAULT NULL COMMENT 'Status de la orden: activa, pausada, cancelada, terminada, entregada',
-  `tipo` varchar(6) NOT NULL DEFAULT 'custom' COMMENT 'Identificar si la orden pertence a custom o a sport',
-  `responsable` int(11) DEFAULT NULL COMMENT 'ID del Vendedor',
-  `cliente_nombre` varchar(256) DEFAULT NULL COMMENT 'Nombre del cliente',
-  `cliente_cedula` varchar(45) DEFAULT NULL COMMENT 'Cedula del cliente',
-  `lote_id` varchar(33) DEFAULT NULL COMMENT 'ID del Lote',
-  `fecha_inicio` varchar(45) DEFAULT NULL COMMENT 'Fecha de inicio de la orden',
-  `fecha_entrega` varchar(45) DEFAULT NULL COMMENT 'Fecha de entrega de la orden',
+  `_id` int(11) NOT NULL AUTO_INCREMENT,
+  `id_wp` int(11) DEFAULT NULL,
+  `id_wp_order` int(11) DEFAULT NULL,
+  `status` varchar(45) DEFAULT NULL,
+  `tipo` varchar(6) NOT NULL DEFAULT 'custom',
+  `responsable` int(11) DEFAULT NULL,
+  `cliente_nombre` varchar(256) DEFAULT NULL,
+  `cliente_cedula` varchar(45) DEFAULT NULL,
+  `lote_id` varchar(33) DEFAULT NULL,
+  `fecha_inicio` varchar(45) DEFAULT NULL,
+  `fecha_entrega` varchar(45) DEFAULT NULL,
   `fecha_creacion` date DEFAULT NULL,
-  `token` varchar(45) DEFAULT NULL COMMENT 'Token random',
-  `pago_descuento` decimal(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Descuento sobre le monto de la orden',
-  `pago_total` decimal(12, 2) DEFAULT 0.00 COMMENT 'Montototal de la orden',
-  `pago_abono` decimal(12, 2) DEFAULT 0.00 COMMENT 'Monto abonado',
-  `pago_comision` varchar(9) NOT NULL DEFAULT 'pendiente' COMMENT 'Los valores puedes ser pendiente: cuando aun no se ha pagado el total de la orden al vendedor, pagado, cuando se ha  terminado de pagar la totalidad de comisiones al vendedor, anulado, cuando por algun motivo no se terminará de pagar el vanededor y el administrador decide anular los pagos de esta orden',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Creación del registro'
+  `token` varchar(45) DEFAULT NULL,
+  `pago_descuento` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `pago_total` decimal(12,2) DEFAULT 0.00,
+  `pago_abono` decimal(12,2) DEFAULT 0.00,
+  `pago_comision` varchar(9) NOT NULL DEFAULT 'pendiente',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
 CREATE TABLE `ordenes_borrador_empleado` (
   `_id` int(11) NOT NULL,
@@ -1049,8 +1050,7 @@ ADD PRIMARY KEY (`_id`),
 ALTER TABLE `metodos_de_pago`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`);
-ALTER TABLE `ordenes`
-ADD PRIMARY KEY (`_id`);
+
 ALTER TABLE `ordenes_borrador_empleado`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `ordenes_fila_orden`
@@ -1198,8 +1198,7 @@ ALTER TABLE `lotes_movimientos`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `metodos_de_pago`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID unico de la tabla';
-ALTER TABLE `ordenes`
-MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
+
 ALTER TABLE `ordenes_borrador_empleado`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `ordenes_fila_orden`
