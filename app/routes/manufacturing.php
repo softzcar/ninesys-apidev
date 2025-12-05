@@ -2794,6 +2794,7 @@ return function (App $app) {
             SELECT
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
+                pia.id_departamento,
                 
                 -- Consumo Estándar (Meta)
                 -- Suma de (Cantidad de Producto en Orden * Cantidad de Insumo Asignado)
@@ -2817,7 +2818,7 @@ return function (App $app) {
             JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
             JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
             WHERE o._id IN ($idsString)
-            GROUP BY cip._id, cip.nombre
+            GROUP BY cip._id, cip.nombre, pia.id_departamento
         ";
 
     file_put_contents('debug_sql_error.log', "SQL Query:\n" . $sql . "\n", FILE_APPEND);
