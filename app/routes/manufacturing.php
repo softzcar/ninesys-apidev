@@ -3003,21 +3003,4 @@ return function (App $app) {
     }
   });
 
-  // TEMPORARY DEBUG ENDPOINT
-  $app->get('/debug/timestamps/{id_orden}', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB();
-    $id_orden = $args['id_orden'];
-
-    $sql = "SELECT _id, id_empleado, id_departamento, fecha_inicio, fecha_terminado 
-              FROM lotes_detalles_empleados_asignados 
-              WHERE id_orden = $id_orden 
-              ORDER BY fecha_inicio ASC";
-
-    $data = $localConnection->goQuery($sql);
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($data));
-    return $response->withHeader('Content-Type', 'application/json');
-  });
-
 }; // Fin de la función que envuelve las rutas
