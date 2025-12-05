@@ -2812,6 +2812,7 @@ return function (App $app) {
       $fecha_inicio = isset($params['fecha_inicio']) ? $params['fecha_inicio'] : null;
       $fecha_fin = isset($params['fecha_fin']) ? $params['fecha_fin'] : null;
       $limit = isset($params['limit']) ? intval($params['limit']) : 50;
+      $id_empleado = isset($params['id_empleado']) ? intval($params['id_empleado']) : null;
 
       $whereConditions = [];
 
@@ -2835,6 +2836,59 @@ return function (App $app) {
         $whereClause = "WHERE " . implode(" AND ", $whereConditions);
       }
 
+      // Define Real Time Calculation Logic
+      if ($id_empleado) {
+        // If filtering by employee, ONLY count that employee's time from assignments
+        $realTimeCalculation = "
+            COALESCE(
+                 (SELECT SUM(
+                    CASE 
+                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
+                        ELSE 0 
+                    END
+                 )
+                 FROM lotes_detalles_empleados_asignados sub_ldea 
+                 WHERE (sub_ldea.id_lotes_detalles = ld._id 
+                    OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento))
+                 AND sub_ldea.id_empleado = $id_empleado
+                 ), 
+                0
+            )
+          ";
+      } else {
+        // Default logic: Priority to Lote (Department) time, fallback to sum of all employees
+        $realTimeCalculation = "
+            CASE 
+                -- Caso 1: Lote terminado
+                WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
+                    TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
+                -- Caso 2: Lote en curso (activo)
+                WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
+                    TIMESTAMPDIFF(SECOND, ld.fecha_inicio, NOW())
+                -- Caso 3: Sumar tiempos de empleados (si no hay tiempo de lote directo)
+                ELSE 
+                    COALESCE(
+                         (SELECT SUM(
+                            CASE 
+                                WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                                    TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                                WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                                    TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
+                                ELSE 0 
+                            END
+                         )
+                         FROM lotes_detalles_empleados_asignados sub_ldea 
+                         WHERE sub_ldea.id_lotes_detalles = ld._id 
+                            OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
+                        0
+                    )
+            END
+          ";
+      }
+
       $sql = "SELECT 
                   o._id AS id_orden,
                   o.id_wp AS id_woocommerce,
@@ -2843,63 +2897,14 @@ return function (App $app) {
                   op.name AS producto,
                   op.cantidad,
                   
-                  -- Tiempo Real (Prioridad Lote, luego Empleados)
-                SUM(
-                    CASE 
-                        -- Caso 1: Lote terminado
-                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
-                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
-                        -- Caso 2: Lote en curso (activo)
-                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
-                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, NOW())
-                        -- Caso 3: Sumar tiempos de empleados (si no hay tiempo de lote directo)
-                        ELSE 
-                            COALESCE(
-                                 (SELECT SUM(
-                                    CASE 
-                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
-                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
-                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
-                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
-                                        ELSE 0 
-                                    END
-                                 )
-                                 FROM lotes_detalles_empleados_asignados sub_ldea 
-                                 WHERE sub_ldea.id_lotes_detalles = ld._id 
-                                    OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
-                                0
-                            )
-                    END
-                ) AS tiempo_total_segundos,
+                  -- Tiempo Real
+                SUM($realTimeCalculation) AS tiempo_total_segundos,
                 
                 -- Tiempo Promedio Real
-                (SUM(
-                    CASE 
-                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
-                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
-                        WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
-                            TIMESTAMPDIFF(SECOND, ld.fecha_inicio, NOW())
-                        ELSE 
-                            COALESCE(
-                                (SELECT SUM(
-                                    CASE 
-                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
-                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
-                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
-                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
-                                        ELSE 0 
-                                    END
-                                 )
-                                 FROM lotes_detalles_empleados_asignados sub_ldea 
-                                 WHERE sub_ldea.id_lotes_detalles = ld._id
-                                    OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
-                                0
-                            )
-                    END
-                ) / op.cantidad) AS tiempo_promedio_por_unidad,
+                (SUM($realTimeCalculation) / op.cantidad) AS tiempo_promedio_por_unidad,
   
                   -- Tiempo Proyectado (Estimado)
-                  -- Se calcula sumando el tiempo estimado de los departamentos ASIGNADOS (presentes en lotes_detalles)
+                  -- Se calcula sumando el tiempo estimado de los departamentos ASIGNADOS
                   (
                       SELECT COALESCE(SUM(ptp.tiempo * op.cantidad), 0)
                       FROM products_tiempos_de_produccion ptp
@@ -2907,7 +2912,9 @@ return function (App $app) {
                       AND ptp.id_departamento IN (
                           SELECT DISTINCT ld_sub.id_departamento
                           FROM lotes_detalles ld_sub
+                          " . ($id_empleado ? "JOIN lotes_detalles_empleados_asignados ldea_sub ON ldea_sub.id_lotes_detalles = ld_sub._id" : "") . "
                           WHERE ld_sub.id_ordenes_productos = op._id
+                          " . ($id_empleado ? "AND ldea_sub.id_empleado = $id_empleado" : "") . "
                       )
                   ) AS tiempo_proyectado_segundos,
 
