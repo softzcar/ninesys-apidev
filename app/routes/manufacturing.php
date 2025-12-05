@@ -2796,17 +2796,12 @@ return function (App $app) {
                 cip.nombre AS nombre_insumo,
                 
                 -- Consumo Estándar (Meta)
-                SUM(pia.cantidad * op.cantidad) AS cantidad_estandar,
+                -- Suma de (Cantidad de Producto en Orden * Cantidad de Insumo Asignado)
+                SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
                 MAX(pia.unidad) AS unidad,
 
-                -- Costo Promedio (estimado desde inventario actual)
-                COALESCE((
-                    SELECT AVG(costo / NULLIF(cantidad_inicial, 0)) 
-                    FROM inventario 
-                    WHERE id_catalogo = cip._id AND cantidad_inicial > 0
-                ), 0) AS costo_unitario_promedio,
-
                 -- Consumo Real
+                -- Suma de (Valor Inicial - Valor Final) de los movimientos de inventario
                 COALESCE((
                     SELECT SUM(im.valor_inicial - im.valor_final)
                     FROM inventario_movimientos im
@@ -2817,7 +2812,9 @@ return function (App $app) {
 
             FROM ordenes o
             JOIN ordenes_productos op ON op.id_orden = o._id
-            JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo
+            -- Unir insumos asignados por Producto y Talla
+            -- Se asume que id_size en ordenes_productos corresponde a id_talla en product_insumos_asignados
+            JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
             JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
             WHERE o._id IN ($idsString)
             GROUP BY cip._id, cip.nombre
