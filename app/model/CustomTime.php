@@ -15,7 +15,7 @@ class CustomTime
 
     public function __construct($days = "-32 days")
     {
-        $this->newDate = new DateTime();
+        $this->newDate = new DateTime("now", new DateTimeZone("UTC"));
         $this->days = $days;
     }
 
@@ -25,7 +25,7 @@ class CustomTime
         $today = $this->newDate->format('Y-m-d H:i:s');
         return $today;
     }
-    
+
     public function before()
     {
         // $before = $this->newDate->format('Y-m-d H:i:s');
