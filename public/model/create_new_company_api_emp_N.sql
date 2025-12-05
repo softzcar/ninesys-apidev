@@ -354,12 +354,12 @@ CREATE TABLE `inventario` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
 
 INSERT INTO `inventario` (`_id`, `sku`, `id_catalogo`, `insumo`, `unidad`, `costo`, `rendimiento`, `cantidad`, `cantidad_inicial`, `color`, `ancho`, `elongacion`, `detalles`, `departamento`, `moment`) VALUES
-(1, 'PAP_001', NULL, 'Papel de pruebas', 'Mts', 20.00, 1.0, 12.00, 12.00, 'BLANCO', 0.90, NULL, 'Papel para pruebas de impresión', 'Impresión', CURRENT_TIMESTAMP),
-(2, 'TEL_001', NULL, 'Tela de pruebas', 'Kg', 80.00, 8.0, 12.00, 12.00, 'BLANCO', 1.50, 'HORIZONTAL', 'Tela para pruebas de estampado', 'Estampado', CURRENT_TIMESTAMP),
-(3, 'TIN_C_001', NULL, 'Tinta Cyan', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'CYAN', NULL, NULL, 'Tinta cyan para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(4, 'TIN_M_001', NULL, 'Tinta Magenta', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'MAGENTA', NULL, NULL, 'Tinta magenta para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(5, 'TIN_Y_001', NULL, 'Tinta Yellow', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'YELLOW', NULL, NULL, 'Tinta yellow para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(6, 'TIN_K_001', NULL, 'Tinta Black', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'BLACK', NULL, NULL, 'Tinta negra para impresoras', 'Impresión', CURRENT_TIMESTAMP);
+(1, 'PAP_001', 1, 'Papel de pruebas', 'Mts', 20.00, 1.0, 12.00, 12.00, 'BLANCO', 0.90, NULL, 'Papel para pruebas de impresión', 'Impresión', CURRENT_TIMESTAMP),
+(2, 'TEL_001', 6, 'Tela de pruebas', 'Kg', 80.00, 8.0, 12.00, 12.00, 'BLANCO', 1.50, 'HORIZONTAL', 'Tela para pruebas de estampado', 'Estampado', CURRENT_TIMESTAMP),
+(3, 'TIN_C_001', 4, 'Tinta Cyan', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'CYAN', NULL, NULL, 'Tinta cyan para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(4, 'TIN_M_001', 4, 'Tinta Magenta', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'MAGENTA', NULL, NULL, 'Tinta magenta para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(5, 'TIN_Y_001', 4, 'Tinta Yellow', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'YELLOW', NULL, NULL, 'Tinta yellow para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(6, 'TIN_K_001', 4, 'Tinta Black', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'BLACK', NULL, NULL, 'Tinta negra para impresoras', 'Impresión', CURRENT_TIMESTAMP);
 CREATE TABLE `inventario_movimientos` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la  orden - lote',
