@@ -2736,26 +2736,49 @@ return function (App $app) {
           }
     }); */
 
-  // --- NUEVO ENDPOINT: Eficiencia de Insumos ---
-  $app->get('/reports/input-efficiency/{id_orden}', function (Request $request, Response $response, array $args) {
+  // --- NUEVO ENDPOINT: Eficiencia de Insumos (Bulk & Cost-based) ---
+  $app->get('/reports/input-efficiency/{id_ordenes}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
-    $id_orden = $args['id_orden'];
+    $ids_ordenes = $args['id_ordenes']; // Comma separated IDs
+
+    // Validate IDs to prevent SQL injection
+    $idsArray = explode(',', $ids_ordenes);
+    $cleanIds = [];
+    foreach ($idsArray as $id) {
+      if (is_numeric($id)) {
+        $cleanIds[] = intval($id);
+      }
+    }
+
+    if (empty($cleanIds)) {
+      $response->getBody()->write(json_encode([]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    }
+
+    $idsString = implode(',', $cleanIds);
 
     $sql = "
             SELECT
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
                 
-                -- Consumo Estándar (Meta): (Cantidad por producto * Cantidad de productos en la orden)
+                -- Consumo Estándar (Meta)
                 SUM(pia.cantidad * op.cantidad) AS cantidad_estandar,
                 MAX(pia.unidad) AS unidad,
 
-                -- Consumo Real: Suma de movimientos de inventario para esta orden y este tipo de insumo
+                -- Costo Promedio (estimado desde inventario actual)
+                COALESCE((
+                    SELECT AVG(costo / NULLIF(cantidad_inicial, 0)) 
+                    FROM inventario 
+                    WHERE id_catalogo = cip._id AND cantidad_inicial > 0
+                ), 0) AS costo_unitario_promedio,
+
+                -- Consumo Real
                 COALESCE((
                     SELECT SUM(im.valor_inicial - im.valor_final)
                     FROM inventario_movimientos im
                     JOIN inventario inv ON inv._id = im.id_insumo
-                    WHERE im.id_orden = o._id
+                    WHERE im.id_orden IN ($idsString)
                     AND inv.id_catalogo = cip._id
                 ), 0) AS cantidad_real
 
@@ -2763,9 +2786,11 @@ return function (App $app) {
             JOIN ordenes_productos op ON op.id_orden = o._id
             JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo
             JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
-            WHERE o._id = $id_orden
+            WHERE o._id IN ($idsString)
             GROUP BY cip._id, cip.nombre
         ";
+
+    file_put_contents('debug_sql_error.log', "SQL Query:\n" . $sql . "\n", FILE_APPEND);
 
     $data = $localConnection->goQuery($sql);
     $localConnection->disconnect();
