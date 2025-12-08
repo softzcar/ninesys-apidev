@@ -2797,17 +2797,17 @@ return function (App $app) {
                 pia.id_departamento,
                 
                 -- Consumo Estándar (Meta)
-                -- Solo suma de órdenes que tienen registro en inventario_movimientos para este catálogo Y departamento
+                -- Solo suma de órdenes que tienen CONSUMO REAL POSITIVO (no solo registro) para este catálogo Y departamento
                 SUM(
                     CASE 
-                        WHEN EXISTS (
-                            SELECT 1 
+                        WHEN (
+                            SELECT COALESCE(SUM(im_check.valor_inicial - im_check.valor_final), 0)
                             FROM inventario_movimientos im_check
                             JOIN inventario inv_check ON inv_check._id = im_check.id_insumo
                             WHERE im_check.id_orden = o._id 
                             AND inv_check.id_catalogo = cip._id
                             AND im_check.id_departamento = pia.id_departamento
-                        ) 
+                        ) > 0
                         THEN op.cantidad * pia.cantidad 
                         ELSE 0 
                     END
