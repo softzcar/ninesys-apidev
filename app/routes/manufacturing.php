@@ -2815,9 +2815,9 @@ return function (App $app) {
                 MAX(pia.unidad) AS unidad,
 
                 -- Consumo Real
-                -- Suma de (Valor Inicial - Valor Final) × Rendimiento para convertir a unidad de trabajo (ej: metros → Kg)
+                -- Suma de (Valor Inicial - Valor Final) - ya está en la unidad correcta (metros para papel, Kg para tela)
                 COALESCE((
-                    SELECT SUM((im.valor_inicial - im.valor_final) * inv.rendimiento)
+                    SELECT SUM(im.valor_inicial - im.valor_final)
                     FROM inventario_movimientos im
                     JOIN inventario inv ON inv._id = im.id_insumo
                     WHERE im.id_orden IN ($idsString)
