@@ -1031,18 +1031,18 @@ return function (App $app) {
             $object['sql'] = $sql;
             $object['insert'] = json_encode($localConnection->goQuery($sql));
         }  /*else {
-  $arrayOrdenes = explode(',', $miInsumo['ordenes'])
-  $sql = "";
-  foreach ($arrayOrdenes as $key => $orden) {
-  $sal .= "UPDATE inventario_movimientos SET id_orden = " $orden . " WHERE id_empleado = " . $miInsumo['id_empleado'];
-  }
+ $arrayOrdenes = explode(',', $miInsumo['ordenes'])
+ $sql = "";
+ foreach ($arrayOrdenes as $key => $orden) {
+ $sal .= "UPDATE inventario_movimientos SET id_orden = " $orden . " WHERE id_empleado = " . $miInsumo['id_empleado'];
+ }
 
-  // UPDATE
-  // $sql = "INSERT INTO inventario_movimientos (moment, departamento, id_empleado, id_insumo, id_orden, valor_inicial, id_producto) VALUES (" . $values . ")";
-  $ql = "UPDATE inventario_movimientos SET ";
-  $object["sql"] = $sql;
-  $object['insert'] = json_encode($localConnection->goQuery($sql));
-  }*/
+ // UPDATE
+ // $sql = "INSERT INTO inventario_movimientos (moment, departamento, id_empleado, id_insumo, id_orden, valor_inicial, id_producto) VALUES (" . $values . ")";
+ $ql = "UPDATE inventario_movimientos SET ";
+ $object["sql"] = $sql;
+ $object['insert'] = json_encode($localConnection->goQuery($sql));
+ }*/
 
         $localConnection->disconnect();
 
@@ -1093,25 +1093,13 @@ return function (App $app) {
         $object['cantidad_inicial'] = $cantidad_inicial;
 
         if ($miInsumo['departamento'] === 'Estampado' || $miInsumo['departamento'] === 'Corte') {
-            // 1.- Busar rendimiento de la tela
-            $sql = 'SELECT rendimiento, sku FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
-            $tmpRendimiento = $localConnection->goQuery($sql);
-            $rendimiento = floatval($tmpRendimiento[0]['rendimiento']);
-
-            // 2.- Dividir la cantidad que me llega en metros entre el rendimiento para obtener el resultado en Kilos
-            if ($rendimiento != 0) {
-                $kilos = floatval($miInsumo['cantidad_consumida']) / $rendimiento;
-            } else {
-                $kilos = 0;  // O cualquier otro valor que consideres apropiado
-            }
-            // #.- una vez tengo los kilos se los resto al rollo
-            $cantidad_consumida = floatval($cantidad_inicial) - floatval($kilos);  // Cantidad final se refiere a la cantidad del insumo consumido
+            // Para Estampado y Corte, el empleado ingresa Kg directamente (la tela se pesa en Kg)
+            // No se necesita conversión porque el inventario de tela ya está en Kg
+            $cantidad_consumida_kg = floatval($miInsumo['cantidad_consumida']);
+            $cantidad_consumida = floatval($cantidad_inicial) - $cantidad_consumida_kg;
 
             $object['cantidad_inicial'] = $cantidad_inicial;
-            $object['cantidad_consumida_kilos'] = $kilos;
-            // $object["cantidad_consumida"] = $cantidad_consumida;
-
-            // $object["cantidad_previa_del_insumo"] = $miInsumo["cantidad_inicial"];
+            $object['cantidad_consumida_kilos'] = $cantidad_consumida_kg;
 
             $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             $sql .= 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
