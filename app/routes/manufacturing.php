@@ -2797,8 +2797,20 @@ return function (App $app) {
                 pia.id_departamento,
                 
                 -- Consumo Estándar (Meta)
-                -- Suma de (Cantidad de Producto en Orden * Cantidad de Insumo Asignado)
-                SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
+                -- Solo suma de órdenes que tienen registro en inventario_movimientos para este catálogo
+                SUM(
+                    CASE 
+                        WHEN EXISTS (
+                            SELECT 1 
+                            FROM inventario_movimientos im_check
+                            JOIN inventario inv_check ON inv_check._id = im_check.id_insumo
+                            WHERE im_check.id_orden = o._id 
+                            AND inv_check.id_catalogo = cip._id
+                        ) 
+                        THEN op.cantidad * pia.cantidad 
+                        ELSE 0 
+                    END
+                ) AS cantidad_estandar,
                 MAX(pia.unidad) AS unidad,
 
                 -- Consumo Real
@@ -2819,6 +2831,7 @@ return function (App $app) {
             JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
             WHERE o._id IN ($idsString)
             GROUP BY cip._id, cip.nombre, pia.id_departamento
+            HAVING cantidad_estandar > 0 OR cantidad_real > 0
         ";
 
     file_put_contents('debug_sql_error.log', "SQL Query:\n" . $sql . "\n", FILE_APPEND);
@@ -2931,6 +2944,7 @@ return function (App $app) {
       $sql = "SELECT 
                   o._id AS id_orden,
                   o.id_wp AS id_woocommerce,
+                  o.status,
                   c.first_name AS cliente_nombre,
                   c.cedula AS cliente_cedula,
                   op.name AS producto,
