@@ -2815,9 +2815,9 @@ return function (App $app) {
                 MAX(pia.unidad) AS unidad,
 
                 -- Consumo Real
-                -- Suma de (Valor Inicial - Valor Final) de los movimientos de inventario FILTRADO POR DEPARTAMENTO
+                -- Suma de (Valor Inicial - Valor Final) × Rendimiento para convertir a unidad de trabajo (ej: metros → Kg)
                 COALESCE((
-                    SELECT SUM(im.valor_inicial - im.valor_final)
+                    SELECT SUM((im.valor_inicial - im.valor_final) * inv.rendimiento)
                     FROM inventario_movimientos im
                     JOIN inventario inv ON inv._id = im.id_insumo
                     WHERE im.id_orden IN ($idsString)
