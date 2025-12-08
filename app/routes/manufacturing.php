@@ -2797,7 +2797,7 @@ return function (App $app) {
                 pia.id_departamento,
                 
                 -- Consumo Estándar (Meta)
-                -- Solo suma de órdenes que tienen registro en inventario_movimientos para este catálogo
+                -- Solo suma de órdenes que tienen registro en inventario_movimientos para este catálogo Y departamento
                 SUM(
                     CASE 
                         WHEN EXISTS (
@@ -2806,6 +2806,7 @@ return function (App $app) {
                             JOIN inventario inv_check ON inv_check._id = im_check.id_insumo
                             WHERE im_check.id_orden = o._id 
                             AND inv_check.id_catalogo = cip._id
+                            AND im_check.id_departamento = pia.id_departamento
                         ) 
                         THEN op.cantidad * pia.cantidad 
                         ELSE 0 
@@ -2814,13 +2815,14 @@ return function (App $app) {
                 MAX(pia.unidad) AS unidad,
 
                 -- Consumo Real
-                -- Suma de (Valor Inicial - Valor Final) de los movimientos de inventario
+                -- Suma de (Valor Inicial - Valor Final) de los movimientos de inventario FILTRADO POR DEPARTAMENTO
                 COALESCE((
                     SELECT SUM(im.valor_inicial - im.valor_final)
                     FROM inventario_movimientos im
                     JOIN inventario inv ON inv._id = im.id_insumo
                     WHERE im.id_orden IN ($idsString)
                     AND inv.id_catalogo = cip._id
+                    AND im.id_departamento = pia.id_departamento
                 ), 0) AS cantidad_real
 
             FROM ordenes o
