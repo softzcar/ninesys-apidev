@@ -3021,9 +3021,9 @@ return function (App $app) {
 
   // Obtener IDs de órdenes completadas pero no pagadas del empleado
   $app->get('/empleados/unpaid-orders/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
-    try {
-      $localConnection = new LocalDB();
+    $localConnection = new LocalDB();
 
+    try {
       $sql = "SELECT DISTINCT
                   o._id as id_orden
               FROM ordenes o
@@ -3035,17 +3035,20 @@ return function (App $app) {
               ORDER BY o._id DESC";
 
       $result = $localConnection->goQuery($sql);
-      $localConnection->disconnect();
 
       // Asegurar que siempre devolvemos un array
       $unpaid_orders = is_array($result) ? $result : [];
+
+      $localConnection->disconnect();
 
       $response->getBody()->write(json_encode($unpaid_orders, JSON_NUMERIC_CHECK));
       return $response
         ->withHeader('Content-Type', 'application/json')
         ->withStatus(200);
     } catch (Exception $e) {
-      $localConnection->disconnect();
+      if (isset($localConnection)) {
+        $localConnection->disconnect();
+      }
       $errorMsg = ['status' => 'error', 'message' => $e->getMessage()];
       $response->getBody()->write(json_encode($errorMsg));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
