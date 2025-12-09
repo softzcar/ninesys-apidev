@@ -3024,6 +3024,18 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
+      // DEBUG: Ver todos los lotes_detalles del empleado
+      $debugSql = "SELECT ld._id, ld.id_orden, ld.fecha_terminado, p.fecha_pago 
+                   FROM lotes_detalles ld
+                   LEFT JOIN pagos p ON p.id_orden = ld.id_orden 
+                     AND p.id_empleado = {$args['id_empleado']}
+                     AND p.id_departamento = {$args['id_departamento']}
+                   WHERE ld.id_empleado = {$args['id_empleado']}
+                     AND ld.id_departamento = {$args['id_departamento']}
+                   LIMIT 10";
+
+      $debug = $localConnection->goQuery($debugSql);
+
       // Una orden NO está pagada si:
       // 1. No existe registro en pagos, O
       // 2. Existe registro en pagos pero fecha_pago IS NULL
@@ -3047,7 +3059,12 @@ return function (App $app) {
 
       $localConnection->disconnect();
 
-      $response->getBody()->write(json_encode($unpaid_orders, JSON_NUMERIC_CHECK));
+      $responseData = [
+        'debug' => $debug,
+        'unpaid_orders' => $unpaid_orders
+      ];
+
+      $response->getBody()->write(json_encode($responseData, JSON_NUMERIC_CHECK));
       return $response
         ->withHeader('Content-Type', 'application/json')
         ->withStatus(200);
