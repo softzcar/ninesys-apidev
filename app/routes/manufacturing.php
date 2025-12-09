@@ -3024,33 +3024,18 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
-      // DEBUG: Ver todos los lotes_detalles del empleado
-      $debugSql = "SELECT ld._id, ld.id_orden, ld.fecha_terminado, p.fecha_pago 
-                   FROM lotes_detalles ld
-                   LEFT JOIN pagos p ON p.id_orden = ld.id_orden 
-                     AND p.id_empleado = {$args['id_empleado']}
-                     AND p.id_departamento = {$args['id_departamento']}
-                   WHERE ld.id_empleado = {$args['id_empleado']}
-                     AND ld.id_departamento = {$args['id_departamento']}
-                   LIMIT 10";
-
-      $debug = $localConnection->goQuery($debugSql);
-
-      // Una orden NO está pagada si:
-      // 1. No existe registro en pagos, O
-      // 2. Existe registro en pagos pero fecha_pago IS NULL
+      // Buscar en lotes_detalles_empleados_asignados órdenes terminadas pero no pagadas
       $sql = "SELECT DISTINCT
-                  o._id as id_orden
-              FROM ordenes o
-              JOIN lotes_detalles ld ON ld.id_orden = o._id
-              LEFT JOIN pagos p ON p.id_orden = o._id 
+                  ldea.id_orden
+              FROM lotes_detalles_empleados_asignados ldea
+              LEFT JOIN pagos p ON p.id_orden = ldea.id_orden
                 AND p.id_empleado = {$args['id_empleado']}
                 AND p.id_departamento = {$args['id_departamento']}
-              WHERE ld.id_empleado = {$args['id_empleado']}
-                AND ld.id_departamento = {$args['id_departamento']}
-                AND ld.fecha_terminado IS NOT NULL
+              WHERE ldea.id_empleado = {$args['id_empleado']}
+                AND ldea.id_departamento = {$args['id_departamento']}
+                AND ldea.fecha_terminado IS NOT NULL
                 AND (p._id IS NULL OR p.fecha_pago IS NULL)
-              ORDER BY o._id DESC";
+              ORDER BY ldea.id_orden DESC";
 
       $result = $localConnection->goQuery($sql);
 
@@ -3059,12 +3044,7 @@ return function (App $app) {
 
       $localConnection->disconnect();
 
-      $responseData = [
-        'debug' => $debug,
-        'unpaid_orders' => $unpaid_orders
-      ];
-
-      $response->getBody()->write(json_encode($responseData, JSON_NUMERIC_CHECK));
+      $response->getBody()->write(json_encode($unpaid_orders, JSON_NUMERIC_CHECK));
       return $response
         ->withHeader('Content-Type', 'application/json')
         ->withStatus(200);
