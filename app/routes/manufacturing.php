@@ -2797,11 +2797,11 @@ return function (App $app) {
                 pia.id_departamento,
                 
                 -- Consumo Estándar: Solo de órdenes que tienen movimientos registrados
-                SUM(DISTINCT op.cantidad * pia.cantidad) AS cantidad_estandar,
+                SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
                 MAX(pia.unidad) AS unidad,
 
                 -- Consumo Real
-                SUM(DISTINCT im.valor_inicial - im.valor_final) AS cantidad_real
+                SUM(im.valor_inicial - im.valor_final) AS cantidad_real
 
             FROM inventario_movimientos im
             JOIN inventario inv ON inv._id = im.id_insumo
