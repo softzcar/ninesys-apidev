@@ -2796,44 +2796,25 @@ return function (App $app) {
                 cip.nombre AS nombre_insumo,
                 pia.id_departamento,
                 
-                -- Consumo Estándar (Meta)
-                -- Solo suma de órdenes que tienen CONSUMO REAL POSITIVO (no solo registro) para este catálogo Y departamento
-                SUM(
-                    CASE 
-                        WHEN (
-                            SELECT COALESCE(SUM(im_check.valor_inicial - im_check.valor_final), 0)
-                            FROM inventario_movimientos im_check
-                            JOIN inventario inv_check ON inv_check._id = im_check.id_insumo
-                            WHERE im_check.id_orden = o._id 
-                            AND inv_check.id_catalogo = cip._id
-                            AND im_check.id_departamento = pia.id_departamento
-                        ) > 0
-                        THEN op.cantidad * pia.cantidad 
-                        ELSE 0 
-                    END
-                ) AS cantidad_estandar,
+                -- Consumo Estándar: Solo de órdenes que tienen movimientos registrados
+                SUM(DISTINCT op.cantidad * pia.cantidad) AS cantidad_estandar,
                 MAX(pia.unidad) AS unidad,
 
                 -- Consumo Real
-                -- Suma de (Valor Inicial - Valor Final) - ya está en la unidad correcta (metros para papel, Kg para tela)
-                COALESCE((
-                    SELECT SUM(im.valor_inicial - im.valor_final)
-                    FROM inventario_movimientos im
-                    JOIN inventario inv ON inv._id = im.id_insumo
-                    WHERE im.id_orden IN ($idsString)
-                    AND inv.id_catalogo = cip._id
-                    AND im.id_departamento = pia.id_departamento
-                ), 0) AS cantidad_real
+                SUM(DISTINCT im.valor_inicial - im.valor_final) AS cantidad_real
 
-            FROM ordenes o
+            FROM inventario_movimientos im
+            JOIN inventario inv ON inv._id = im.id_insumo
+            JOIN catalogo_insumos_productos cip ON cip._id = inv.id_catalogo
+            JOIN ordenes o ON o._id = im.id_orden
             JOIN ordenes_productos op ON op.id_orden = o._id
-            -- Unir insumos asignados por Producto y Talla
-            -- Se asume que id_size en ordenes_productos corresponde a id_talla en product_insumos_asignados
-            JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
-            JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
-            WHERE o._id IN ($idsString)
+            JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo 
+                AND pia.id_talla = op.id_size
+                AND pia.id_catalogo_insumos_productos = cip._id
+                AND pia.id_departamento = im.id_departamento
+            WHERE im.id_orden IN ($idsString)
+              AND (im.valor_inicial - im.valor_final) > 0
             GROUP BY cip._id, cip.nombre, pia.id_departamento
-            HAVING cantidad_estandar > 0 OR cantidad_real > 0
         ";
 
     file_put_contents('debug_sql_error.log', "SQL Query:\n" . $sql . "\n", FILE_APPEND);
