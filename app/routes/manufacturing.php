@@ -3024,20 +3024,20 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
+      // Una orden NO está pagada si:
+      // 1. No existe registro en pagos, O
+      // 2. Existe registro en pagos pero fecha_pago IS NULL
       $sql = "SELECT DISTINCT
                   o._id as id_orden
               FROM ordenes o
               JOIN lotes_detalles ld ON ld.id_orden = o._id
+              LEFT JOIN pagos p ON p.id_orden = o._id 
+                AND p.id_empleado = {$args['id_empleado']}
+                AND p.id_departamento = {$args['id_departamento']}
               WHERE ld.id_empleado = {$args['id_empleado']}
                 AND ld.id_departamento = {$args['id_departamento']}
                 AND ld.fecha_terminado IS NOT NULL
-                AND NOT EXISTS (
-                  SELECT 1 FROM pagos p
-                  WHERE p.id_orden = o._id
-                    AND p.id_empleado = {$args['id_empleado']}
-                    AND p.id_departamento = {$args['id_departamento']}
-                    AND p.fecha_pago IS NOT NULL
-                )
+                AND (p._id IS NULL OR p.fecha_pago IS NULL)
               ORDER BY o._id DESC";
 
       $result = $localConnection->goQuery($sql);
