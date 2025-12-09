@@ -2800,8 +2800,16 @@ return function (App $app) {
                 SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
                 MAX(pia.unidad) AS unidad,
 
-                -- Consumo Real
-                SUM(im.valor_inicial - im.valor_final) AS cantidad_real
+                -- Consumo Real (subconsulta para evitar duplicación)
+                (
+                    SELECT SUM(im2.valor_inicial - im2.valor_final)
+                    FROM inventario_movimientos im2
+                    JOIN inventario inv2 ON inv2._id = im2.id_insumo
+                    WHERE im2.id_orden IN ($idsString)
+                      AND inv2.id_catalogo = cip._id
+                      AND im2.id_departamento = pia.id_departamento
+                      AND (im2.valor_inicial - im2.valor_final) > 0
+                ) AS cantidad_real
 
             FROM inventario_movimientos im
             JOIN inventario inv ON inv._id = im.id_insumo
