@@ -3019,23 +3019,19 @@ return function (App $app) {
     }
   });
 
-  // Obtener IDs de órdenes completadas pero no pagadas del empleado
+  // Obtener IDs de órdenes completadas pero no pagadas del empleado  
   $app->get('/empleados/unpaid-orders/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
     try {
-      // Buscar en lotes_detalles_empleados_asignados órdenes terminadas pero no pagadas
+      // Si existe un registro en pagos con fecha_pago NULL, el trabajo está terminado pero no pagado
       $sql = "SELECT DISTINCT
-                  ldea.id_orden
-              FROM lotes_detalles_empleados_asignados ldea
-              LEFT JOIN pagos p ON p.id_orden = ldea.id_orden
-                AND p.id_empleado = {$args['id_empleado']}
+                  p.id_orden
+              FROM pagos p
+              WHERE p.id_empleado = {$args['id_empleado']}
                 AND p.id_departamento = {$args['id_departamento']}
-              WHERE ldea.id_empleado = {$args['id_empleado']}
-                AND ldea.id_departamento = {$args['id_departamento']}
-                AND ldea.fecha_terminado IS NOT NULL
-                AND (p._id IS NULL OR p.fecha_pago IS NULL)
-              ORDER BY ldea.id_orden DESC";
+                AND p.fecha_pago IS NULL
+              ORDER BY p.id_orden DESC";
 
       $result = $localConnection->goQuery($sql);
 
