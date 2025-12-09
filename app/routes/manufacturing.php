@@ -1367,6 +1367,10 @@ return function (App $app) {
 
       $now = date('Y-m-d H:i:s');
 
+      // DESHABILITADO: Creación automática de movimientos de inventario
+      // Ahora los empleados deben registrar manualmente los insumos consumidos
+      // a través del nuevo flujo de trabajo de asignación de insumos
+      /*
       if (!empty($consumos_lote)) {
         foreach ($consumos_lote as $consumo) {
           if (empty($consumo['id_insumo']) || !isset($consumo['cantidad_total']))
@@ -1390,6 +1394,7 @@ return function (App $app) {
           }
         }
       }
+      */
 
       $sql_dep_info = 'SELECT orden_proceso, departamento FROM departamentos WHERE _id = ?';
       $dep_info = $localConnection->goQuery($sql_dep_info, [$id_departamento]);
