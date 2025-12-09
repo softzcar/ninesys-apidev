@@ -3019,4 +3019,27 @@ return function (App $app) {
     }
   });
 
+  // Obtener IDs de órdenes completadas pero no pagadas del empleado
+  $app->get('/empleados/unpaid-orders/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+
+    $sql = "SELECT DISTINCT
+                o._id as id_orden
+            FROM ordenes o
+            JOIN lotes_detalles ld ON ld.id_orden = o._id
+            WHERE ld.id_empleado = {$args['id_empleado']}
+              AND ld.id_departamento = {$args['id_departamento']}
+              AND ld.fecha_terminado IS NOT NULL
+              AND o.fecha_pago IS NULL
+            ORDER BY o._id DESC";
+
+    $object['unpaid_orders'] = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object['unpaid_orders'], JSON_NUMERIC_CHECK));
+    return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+  });
+
 }; // Fin de la función que envuelve las rutas
