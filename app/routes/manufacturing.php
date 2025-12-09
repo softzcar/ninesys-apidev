@@ -3031,7 +3031,13 @@ return function (App $app) {
               WHERE ld.id_empleado = {$args['id_empleado']}
                 AND ld.id_departamento = {$args['id_departamento']}
                 AND ld.fecha_terminado IS NOT NULL
-                AND o.fecha_pago IS NULL
+                AND NOT EXISTS (
+                  SELECT 1 FROM pagos p
+                  WHERE p.id_orden = o._id
+                    AND p.id_empleado = {$args['id_empleado']}
+                    AND p.id_departamento = {$args['id_departamento']}
+                    AND p.fecha_pago IS NOT NULL
+                )
               ORDER BY o._id DESC";
 
       $result = $localConnection->goQuery($sql);
