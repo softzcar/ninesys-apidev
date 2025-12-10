@@ -1870,10 +1870,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
-      $sql = 'SELECT id_empleado, id_departamento FROM lotes_detalles_empleados_asignados WHERE id_orden =' . $args['id_orden'];
-      $data['data']['empleados_asignados'] = $localConnection->goQuery($sql);
-
-      // VERIFCAR STATUS DE LA ORDEN
+      // VERIFICAR STATUS DE LA ORDEN
       $sql = 'SELECT status from ordenes WHERE _id = ' . $args['id_orden'];
       $tmpStatus = $localConnection->goQuery($sql);
 
@@ -1881,93 +1878,54 @@ return function (App $app) {
         $object['status'] = $tmpStatus[0]['status'];
       }
 
-      // BUSCAR PASO ACTUAL EN EL LOTE
-      $sql = 'SELECT paso from lotes WHERE id_orden = ' . $args['id_orden'];
-      $tmpPaso = $localConnection->goQuery($sql);
+      // CALCULAR PROGRESO DESDE lotes_detalles_empleados_asignados
+      $sql = "SELECT 
+                ldea.id_departamento,
+                dep.departamento,
+                dep.orden_proceso,
+                ldea.fecha_inicio,
+                ldea.fecha_terminado
+              FROM lotes_detalles_empleados_asignados ldea
+              JOIN departamentos dep ON dep._id = ldea.id_departamento
+              WHERE ldea.id_orden = " . $args['id_orden'] . "
+              GROUP BY ldea.id_departamento
+              ORDER BY dep.orden_proceso ASC";
+      $departamentos = $localConnection->goQuery($sql);
 
-      if (!empty($tmpPaso)) {
-        $object['paso'] = $tmpPaso[0]['paso'];
+      $totalDepartamentos = count($departamentos);
+      $departamentosTerminados = 0;
+      $pasoActual = null;
 
-        // BUSCAR TIPO DE DISEÑO
-        $sql = 'SELECT a.tipo, a.id_empleado, b.nombre FROM disenos a JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado WHERE id_orden = ' . $args['id_orden'];
-        $d = $localConnection->goQuery($sql);
-
-        if (empty($d)) {
-          $diseno = 'no';
-        } else {
-          if (isset($d[0]['tipo'])) {
-            $diseno = $d[0]['tipo'];
-          } else {
-            $diseno = 'no';
-          }
+      foreach ($departamentos as $dep) {
+        if ($dep['fecha_terminado'] !== null) {
+          $departamentosTerminados++;
+        } elseif ($pasoActual === null) {
+          // El primer departamento sin fecha_terminado es el paso actual
+          $pasoActual = $dep['departamento'];
         }
-
-        if ($diseno === 'no') {
-          $cuentaDisenos = 0;
-        } else {
-          $cuentaDisenos = 2;
-        }
-        $object['data']['cuentaDisenos'] = $cuentaDisenos;
-
-        // IDENTIFICAR QUE DEPARTAMENTOS ESTAN ASIGNADOS
-        $sql = 'SELECT `departamento` FROM lotes_detalles WHERE id_orden = ' . $args['id_orden'] . ' GROUP BY departamento';
-        $pActivos = $localConnection->goQuery($sql);
-        $object['data']['pActivos'] = $pActivos;
-
-        switch ($object['paso']) {
-          case 'producción':
-            $x[] = 0.6;
-            break;
-
-          case 'Corte':
-            $x[] = 1;
-            break;
-
-          case 'Estampado':
-            $x[] = 2;
-            break;
-
-          case 'Impresión':
-            $x[] = 3;
-            break;
-
-          case 'Costura':
-            $x[] = 4;
-            break;
-
-          case 'Limpieza':
-            $x[] = 5;
-            break;
-
-          case 'Revisión':
-            $x[] = 5.88;
-            break;
-
-          /*  case 'Diseno':
-              $x[] = 0;
-              break; */
-
-          default:
-            $x[] = 1;
-            break;
-        }
-
-        $pasoActual = max($x);
-        $object['data']['pasoActual'] = $pasoActual;
-        $totalPasos = count($pActivos);
-        $object['data']['totalPasos'] = count($pActivos);
-
-        if (!$totalPasos) {
-          $totalPasos = 1;
-        }
-
-        $object['porcentaje'] = round($pasoActual * 100 / $totalPasos);
-      } else {
-        $pasoActual = 0;
-        $object['data']['pasoActual'] = $pasoActual;
-        $totalPasos = 0;
-        $object['data']['totalPasos'] = 0;
       }
+
+      // Determinar paso y departamento a mostrar
+      if ($totalDepartamentos === 0) {
+        $object['paso'] = 'Por asignar';
+        $object['departamento'] = 'Por asignar';
+        $object['porcentaje'] = 0;
+      } elseif ($pasoActual === null) {
+        // Todos los departamentos están terminados
+        $object['paso'] = 'Terminado';
+        $object['departamento'] = 'Terminado';
+        $object['porcentaje'] = 100;
+      } else {
+        $object['paso'] = $pasoActual;
+        $object['departamento'] = $pasoActual;
+        $object['porcentaje'] = $totalDepartamentos > 0
+          ? round(($departamentosTerminados * 100) / $totalDepartamentos)
+          : 0;
+      }
+
+      $object['data']['totalPasos'] = $totalDepartamentos;
+      $object['data']['departamentosTerminados'] = $departamentosTerminados;
+      $object['data']['departamentos'] = $departamentos;
 
       $localConnection->disconnect();
 
