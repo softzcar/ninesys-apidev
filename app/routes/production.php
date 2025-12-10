@@ -138,7 +138,13 @@ return function (App $app) {
             ) AS cliente,
             b.prioridad,
             -- Paso calculado desde lotes_detalles_empleados_asignados
-            COALESCE(prog_info.paso_actual, 'Por asignar') AS paso,
+            -- Si paso_actual es NULL (todos terminados), mostrar 'Terminado'
+            -- Si no hay departamentos asignados, mostrar 'Por asignar'
+            CASE 
+                WHEN prog_info.total_departamentos = 0 OR prog_info.total_departamentos IS NULL THEN 'Por asignar'
+                WHEN prog_info.paso_actual IS NULL THEN 'Terminado'
+                ELSE prog_info.paso_actual
+            END AS paso,
             d.estatus AS estatus_revision,
             a.fecha_inicio AS inicio,
             a.fecha_entrega AS entrega,
@@ -191,6 +197,7 @@ return function (App $app) {
                 COUNT(DISTINCT ldea.id_departamento) AS total_departamentos,
                 COUNT(DISTINCT CASE WHEN ldea.fecha_terminado IS NOT NULL THEN ldea.id_departamento END) AS departamentos_terminados,
                 -- Departamento actual: el primero (por orden_proceso) que no tiene fecha_terminado
+                -- Si todos están terminados, retorna NULL (se maneja arriba con CASE)
                 (
                     SELECT dep.departamento
                     FROM lotes_detalles_empleados_asignados ldea2

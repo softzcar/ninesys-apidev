@@ -1,0 +1,17 @@
+- Solicitud del Usuario: Sincronizar los datos del componente progressBar con los del semáforo para que muestren información consistente. Ambos deben usar los datos de lotes_detalles_empleados_asignados.
+- Archivos Involucrados:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/production.php
+- Acción Realizada: 
+  - Modificada la consulta SQL del endpoint `/sse/produccion` (líneas 128-214)
+  - Se cambió la fuente de datos de `lotes.paso` y `lotes_detalles` a `lotes_detalles_empleados_asignados`
+  - Nuevo cálculo de `paso`: primer departamento (por orden_proceso) donde fecha_terminado es NULL
+  - Nuevo cálculo de `progreso_porcentaje`: (departamentos_terminados / total_departamentos) * 100
+  - Commit: "fix: calcular paso y progreso desde lotes_detalles_empleados_asignados en /sse/produccion"
+- Herramienta(s) Utilizada(s): replace_file_content, run_command (git commit, git push, ssh deploy)
+- Resultado: Éxito
+- Verificación: Pendiente de verificación por el usuario en la página /test
+- Observaciones de Gemini: 
+  - Se identificó que el problema de "Producción 9%" venía de usar datos de la tabla `lotes` en lugar de `lotes_detalles_empleados_asignados`
+  - También se insertaron tiempos de producción para 22 productos que no los tenían
+  - El producto 145 (Franela Sublimada Tasa BCV) era el que causaba que la orden 3417 no apareciera en el semáforo
+- Respuesta de Gemini: Cambios aplicados al backend y desplegados en VPS. Pendiente verificación visual.
