@@ -910,9 +910,55 @@ return function (App $app) {
   });
 
   $app->get('/lotes/en-proceso', function (Request $request, Response $response, array $args) {
-    // BUSCAR ORENES EN CURSO EXCLUYENDO LOS DISEÑOS FILTADOS POR ID DE WOOCOMMERCE
+    // BUSCAR ORDENES EN CURSO - Modificado para usar lotes_detalles_empleados_asignados
     $localConnection = new LocalDB();
-    $sql = "SELECT a._id orden, a._id vinculada, a.cliente_nombre cliente, b.prioridad, b.paso, a.fecha_inicio inicio, a.fecha_entrega entrega, 'TRAER DEL `ENDPOINT` DEDICADO' observaciones detalles, a._id acciones, a.status estatus FROM ordenes a JOIN lotes b ON a._id = b.id_orden  WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' ORDER BY a._id DESC";
+    $sql = "SELECT 
+            a._id AS orden, 
+            a._id AS vinculada, 
+            a.cliente_nombre AS cliente, 
+            b.prioridad, 
+            -- Paso calculado desde lotes_detalles_empleados_asignados
+            CASE 
+                WHEN prog_info.total_departamentos = 0 OR prog_info.total_departamentos IS NULL THEN 'Por asignar'
+                WHEN prog_info.paso_actual IS NULL THEN 'Terminado'
+                ELSE prog_info.paso_actual
+            END AS paso,
+            a.fecha_inicio AS inicio, 
+            a.fecha_entrega AS entrega, 
+            'TRAER DEL ENDPOINT DEDICADO' AS detalles, 
+            a._id AS acciones, 
+            a.status AS estatus,
+            -- Datos de progreso
+            COALESCE(prog_info.departamentos_terminados, 0) AS progreso_paso_valor,
+            COALESCE(prog_info.total_departamentos, 0) AS progreso_total_pasos,
+            COALESCE(
+                ROUND(
+                    (prog_info.departamentos_terminados * 100) / NULLIF(prog_info.total_departamentos, 0)
+                ), 0
+            ) AS progreso_porcentaje
+        FROM ordenes a 
+        JOIN lotes b ON a._id = b.id_orden
+        LEFT JOIN (
+            SELECT
+                ldea.id_orden,
+                COUNT(DISTINCT ldea.id_departamento) AS total_departamentos,
+                COUNT(DISTINCT CASE WHEN ldea.fecha_terminado IS NOT NULL THEN ldea.id_departamento END) AS departamentos_terminados,
+                (
+                    SELECT dep.departamento
+                    FROM lotes_detalles_empleados_asignados ldea2
+                    JOIN departamentos dep ON dep._id = ldea2.id_departamento
+                    WHERE ldea2.id_orden = ldea.id_orden
+                      AND ldea2.fecha_terminado IS NULL
+                    ORDER BY dep.orden_proceso ASC
+                    LIMIT 1
+                ) AS paso_actual
+            FROM
+                lotes_detalles_empleados_asignados ldea
+            GROUP BY
+                ldea.id_orden
+        ) AS prog_info ON a._id = prog_info.id_orden
+        WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' 
+        ORDER BY a._id DESC";
     $object['items'] = $localConnection->goQuery($sql);
 
     // CREAR CAMPOS DE LA TABLA
