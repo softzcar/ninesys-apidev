@@ -3013,6 +3013,129 @@ return function (App $app) {
     }
   });
 
+  // REPORTE DE TIEMPOS DE FABRICACIÓN (POST version para muchos IDs)
+  $app->post('/reports/manufacturing-time', function (Request $request, Response $response) {
+    $body = json_decode($request->getBody()->getContents(), true);
+    $localConnection = new LocalDB();
+
+    try {
+      $id_ordenes = isset($body['id_ordenes']) ? $body['id_ordenes'] : null; // Array of IDs
+      $id_empleado = isset($body['id_empleado']) ? intval($body['id_empleado']) : null;
+      $limit = isset($body['limit']) ? intval($body['limit']) : 100;
+
+      // Limit max IDs to prevent heavy queries
+      $maxIds = 100;
+
+      if (!$id_ordenes || !is_array($id_ordenes) || count($id_ordenes) === 0) {
+        $response->getBody()->write(json_encode(['error' => 'id_ordenes array is required']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
+
+      // Sanitize and limit IDs
+      $ids = array_map('intval', array_slice($id_ordenes, 0, $maxIds));
+      $idsStr = implode(',', $ids);
+
+      $whereClause = "WHERE o._id IN ($idsStr)";
+
+      // Simplified query for bulk requests - less expensive
+      if ($id_empleado) {
+        $realTimeCalculation = "
+            COALESCE(
+                 (SELECT SUM(
+                    CASE 
+                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
+                        ELSE 0 
+                    END
+                    / 
+                    CASE 
+                        WHEN sub_ldea.id_lotes_detalles IS NULL THEN 
+                            GREATEST((SELECT COUNT(*) FROM lotes_detalles ld_count WHERE ld_count.id_orden = sub_ldea.id_orden AND ld_count.id_departamento = sub_ldea.id_departamento), 1)
+                        ELSE 1
+                    END
+                 )
+                 FROM lotes_detalles_empleados_asignados sub_ldea 
+                 WHERE (sub_ldea.id_lotes_detalles = ld._id 
+                    OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento))
+                 AND sub_ldea.id_empleado = $id_empleado
+                 ), 
+                0
+            )
+          ";
+      } else {
+        $realTimeCalculation = "
+            CASE 
+                WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
+                    TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
+                WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
+                    TIMESTAMPDIFF(SECOND, ld.fecha_inicio, NOW())
+                ELSE 0
+            END
+          ";
+      }
+
+      $sql = "SELECT 
+                  o._id AS id_orden,
+                  o.status,
+                  op.name AS producto,
+                  op.cantidad,
+                  SUM($realTimeCalculation) AS tiempo_total_segundos,
+                  (
+                      SELECT COALESCE(SUM(ptp.tiempo * op.cantidad), 0)
+                      FROM products_tiempos_de_produccion ptp
+                      WHERE ptp.id_product = op.id_woo
+                      " . ($id_empleado ? "
+                      AND ptp.id_departamento IN (
+                          SELECT DISTINCT ld_sub.id_departamento
+                          FROM lotes_detalles ld_sub
+                          JOIN lotes_detalles_empleados_asignados ldea_sub ON 
+                              ldea_sub.id_empleado = $id_empleado AND (
+                                  ldea_sub.id_lotes_detalles = ld_sub._id 
+                                  OR (ldea_sub.id_lotes_detalles IS NULL AND ldea_sub.id_orden = o._id AND ldea_sub.id_departamento = ld_sub.id_departamento)
+                              )
+                          WHERE ld_sub.id_ordenes_productos = op._id
+                      )
+                      " : "") . "
+                  ) AS tiempo_proyectado_segundos,
+                  (
+                    SELECT MIN(fecha_inicio)
+                    FROM lotes_detalles_empleados_asignados ldea_start
+                    WHERE ldea_start.id_orden = o._id
+                  ) AS fecha_inicio_primer_proceso
+              FROM 
+                  ordenes o
+              JOIN 
+                  ordenes_productos op ON op.id_orden = o._id
+              JOIN 
+                  lotes_detalles ld ON ld.id_ordenes_productos = op._id
+              $whereClause
+              GROUP BY 
+                  op._id
+              ORDER BY 
+                  o._id DESC
+              LIMIT $limit";
+
+      $data = $localConnection->goQuery($sql);
+      $localConnection->disconnect();
+
+      $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (PDOException $e) {
+      $localConnection->disconnect();
+      $errorMsg = ['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()];
+      $response->getBody()->write(json_encode($errorMsg));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } catch (Exception $e) {
+      $localConnection->disconnect();
+      $errorMsg = ['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()];
+      $response->getBody()->write(json_encode($errorMsg));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    }
+  });
+
   // Obtener IDs de órdenes completadas pero no pagadas del empleado  
   $app->get('/empleados/unpaid-orders/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();

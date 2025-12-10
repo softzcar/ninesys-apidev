@@ -1,0 +1,23 @@
+- Solicitud del Usuario: Diagnosticar por qué la orden 3417 muestra "POR ASIGNAR" y sincronizar datos entre progressBar y semáforo. Optimizar llamadas API.
+
+- Archivos Involucrados:
+  Backend:
+  - app/routes/production.php
+  - app/routes/products.php
+  Frontend:
+  - components/produccion/progressBar.vue
+  - components/ordenes/vinculadasV2.vue
+
+- Acción Realizada:
+  1. Insertados tiempos de producción para 22 productos
+  2. Modificado /sse/produccion para usar lotes_detalles_empleados_asignados
+  3. Modificado /lotes/en-proceso con misma lógica
+  4. Modificado /produccion/progressbar para usar lotes_detalles_empleados_asignados
+  5. Simplificado progressBar.vue para usar datos del item
+  6. Corregido vinculadasV2.vue para evitar /ordenes/vinculadas/undefined
+
+- Resultado: Éxito
+
+- Verificación: Usuario confirmó datos correctos en /test y /empleados/dashboard
+
+- Observaciones: Se sincronizaron todos los endpoints para usar lotes_detalles_empleados_asignados como fuente única.
