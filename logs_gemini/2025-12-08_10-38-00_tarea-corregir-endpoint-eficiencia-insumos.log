@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Corregir el cálculo de eficiencia de insumos en el endpoint /reports/input-efficiency para que solo considere el estimado de órdenes que tienen datos de consumo real.
+- Archivos Involucrados:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+- Acción Realizada: 
+  1. Se modificó el cálculo de `cantidad_estandar` para usar un CASE con EXISTS.
+  2. Ahora solo suma el estimado de órdenes que tienen registro en `inventario_movimientos` para ese catálogo de insumo.
+  3. Se agregó HAVING para filtrar resultados donde ambos valores son 0.
+  4. El SQL usa: CASE WHEN EXISTS (subquery que verifica inventario_movimientos) THEN op.cantidad * pia.cantidad ELSE 0 END
+- Herramienta(s) Utilizada(s): `replace_file_content`
+- Resultado: Éxito
+- Verificación: El SQL ahora compara manzanas con manzanas - solo el estimado de órdenes con consumo real contra el consumo real de esas mismas órdenes.
+- Observaciones de Gemini: Antes el cálculo era incorrecto porque cantidad_estandar incluía todas las órdenes (27 Mt para órdenes 1,2,3) pero cantidad_real solo tenía datos de la orden 1 (9.05 Mt). Esto daba 298% artificialmente. Ahora debería dar cerca de 100% (9/9.05 × 100 = 99.45%).
+- Respuesta de Gemini: Se corrigió el endpoint para que solo calcule el estimado de órdenes que tienen datos de consumo real en inventario_movimientos. El cálculo ahora es correcto.

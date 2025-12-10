@@ -1,0 +1,8 @@
+- Solicitud del Usuario: en el endpoint `GET /buscar` de la api como estamos vinculando los datos del cliente para rtelacionarlo con el número de orden quee stamso solicitando?
+- Archivos Involucrados: `app/routes/orders.php`, `app/lib/woome.php`
+- Acción Realizada: Análisis del código fuente del endpoint `/buscar` y la función `obtenerRespuestaBuscar` en `orders.php`, y la clase `WooMe` en `woome.php`.
+- Herramienta(s) Utilizada(s): `grep_search`, `view_file`
+- Resultado: Éxito
+- Verificación: Se verificó el flujo de datos desde la recepción del ID de la orden hasta la obtención de los datos del cliente en la base de datos local.
+- Observaciones de Gemini: El nombre del método `getCustomerByIdWP` y la columna `id_wp` sugieren una integración previa con WordPress/WooCommerce directa, pero actualmente se consulta una tabla local `customers`.
+- Respuesta de Gemini: El endpoint `GET /buscar/{id}` utiliza el parámetro `{id}` (que corresponde al `_id` de la orden) para consultar la tabla `ordenes`. De esta tabla se obtiene el campo `id_wp`. Este `id_wp` se utiliza luego para buscar los datos del cliente en la tabla local `customers`, relacionando `ordenes.id_wp` con `customers._id`. Aunque el método se llama `getCustomerByIdWP` y reside en la clase `WooMe`, actualmente realiza una consulta SQL a la base de datos local y no a la API de WooCommerce.

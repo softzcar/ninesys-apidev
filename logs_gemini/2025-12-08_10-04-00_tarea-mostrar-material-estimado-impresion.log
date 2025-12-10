@@ -1,0 +1,10 @@
+- Solicitud del Usuario: Mostrar la cantidad de material estimado en el modal "Datos Extra Impresión" del departamento de Impresión, utilizando los datos de la tabla `product_insumos_asignados`.
+- Archivos Involucrados:
+  - /home/developer/Escritorio/niesys/app_multi/components/empleados/SseOrdenesAsignadasModalExtra.vue
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/inventory.php (solo lectura)
+- Acción Realizada: Se agregó 'Impresión' a la condición v-if (línea 177) que controla la visualización de la sección de Material Estimado. Originalmente solo mostraba esta sección para 'Estampado' y 'Corte papel'. El endpoint `/eficiencia-orden/{id_orden}` ya proporcionaba los datos necesarios desde `product_insumos_asignados`, por lo que no fue necesario modificar la API.
+- Herramienta(s) Utilizada(s): `replace_file_content`
+- Resultado: Éxito
+- Verificación: Cambio aplicado correctamente en el archivo Vue. La lógica de la API fue verificada y ya trae la información de `product_insumos_asignados` mediante un LEFT JOIN con el campo `cantidad_estimada_de_consumo`.
+- Observaciones de Gemini: La solución fue muy simple gracias a que la infraestructura de datos ya existía. El único ajuste necesario fue en la condición de renderizado del frontend. Esto demuestra una buena arquitectura previa donde los datos se cargan de forma genérica pero la visualización es controlada por condiciones específicas.
+- Respuesta de Gemini: Se implementó la funcionalidad con un cambio mínimo. Se agregó 'Impresión' a la condición de visualización del material estimado en el modal. No fueron necesarios cambios en la API ya que el endpoint `/eficiencia-orden/{id_orden}` ya trae los datos de `product_insumos_asignados`.

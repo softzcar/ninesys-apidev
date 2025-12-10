@@ -1,0 +1,9 @@
+- Solicitud del Usuario: Simplificar la interfaz eliminando el componente materialesLista que mostraba una tabla redundante con porcentaje de eficiencia incorrecto.
+- Archivos Involucrados:
+  - /home/developer/Escritorio/niesys/app_multi/components/empleados/SseOrdenesAsignadasModalExtra.vue
+- Acción Realizada: Se eliminó el componente `empleados-materialesLista` (líneas 200-208) que mostraba una tabla con columnas "Producto", "Insumo", "Talla", "Unidades", "Estimado" y un porcentaje de eficiencia que se calculaba de forma diferente e inconsistente. Se mantiene únicamente la sección superior que muestra: Material Estimado (Sistema), Material Utilizado, y Eficiencia (%).
+- Herramienta(s) Utilizada(s): `replace_file_content`
+- Resultado: Éxito
+- Verificación: El código compila sin errores. La interfaz ahora muestra solo los datos esenciales sin redundancia.
+- Observaciones de Gemini: El componente materialesLista calculaba la eficiencia de forma diferente (consumoReal / totalConsumoEstimado * 100) y tenía problemas con la asignación de idCatalogo, lo que resultaba en porcentajes incorrectos como 19.78% o 25.33%. La sección superior que se mantiene calcula correctamente (Estimado / Utilizado * 100).
+- Respuesta de Gemini: Se eliminó el componente redundante. La interfaz ahora solo muestra la sección con Material Estimado (Sistema), Material Utilizado y Eficiencia que calcula correctamente los valores.

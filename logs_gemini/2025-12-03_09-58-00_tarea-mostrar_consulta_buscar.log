@@ -1,0 +1,8 @@
+- Solicitud del Usuario: muestrame la consulta
+- Archivos Involucrados: `app/routes/orders.php`, `app/lib/woome.php`
+- Acción Realizada: Extracción y presentación de las consultas SQL que vinculan órdenes y clientes.
+- Herramienta(s) Utilizada(s): Ninguna (análisis de contexto previo)
+- Resultado: Éxito
+- Verificación: Se confirmaron las consultas en el código previamente leído.
+- Observaciones de Gemini: Se identificaron dos métodos de vinculación: uno por código (lookup) y otro por SQL JOIN.
+- Respuesta de Gemini: Se mostraron las dos consultas principales: la del método `getCustomerByIdWP` y el `JOIN` explícito en la consulta de la orden.

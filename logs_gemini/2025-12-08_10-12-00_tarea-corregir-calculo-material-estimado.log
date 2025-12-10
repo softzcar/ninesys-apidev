@@ -1,0 +1,16 @@
+- Solicitud del Usuario: Corregir el cálculo del material estimado que mostraba NULL porque usaba la tabla equivocada (products_sizes_eficiencia en lugar de product_insumos_asignados).
+- Archivos Involucrados:
+  - /home/developer/Escritorio/niesys/app_multi/components/empleados/SseOrdenesAsignadasModalExtra.vue
+- Acción Realizada: 
+  1. Se agregó la computed property `materialEstimadoDepartamento` que calcula el estimado desde `dataInsumos` (que viene del endpoint `/eficiencia-orden` con datos de `product_insumos_asignados`).
+  2. El cálculo filtra por `id_departamento` del departamento actual.
+  3. Se usa un Map para evitar contar duplicados de `id_ordenes_productos`.
+  4. Se calcula: SUM(cantidad_estimada_de_consumo * unidades) para productos únicos.
+  5. Se agregó `eficienciaPorcentaje` que calcula (Estimado / Utilizado) * 100.
+  6. Se actualizó el template para mostrar: Material Estimado (Sistema), Material Utilizado, y Eficiencia (%).
+  7. Se eliminó "Papel Utilizado" que era redundante y usaba datos incorrectos.
+- Herramienta(s) Utilizada(s): `multi_replace_file_content`
+- Resultado: Éxito
+- Verificación: El código compila sin errores. La lógica ahora usa correctamente los datos de `insumos_asignados` que vienen del endpoint y contienen la información de `product_insumos_asignados`.
+- Observaciones de Gemini: El problema principal era que `eficienciaEstimada` venía de `total_eficiencia` que usaba `products_sizes_eficiencia` (tabla diferente) con un LEFT JOIN por talla que fallaba cuando talla era NULL. La solución fue calcular directamente desde `dataInsumos` en el frontend.
+- Respuesta de Gemini: Se corrigió el cálculo del material estimado. Ahora usa correctamente los datos de `product_insumos_asignados` que vienen en `insumos_asignados`. Se muestra el Material Estimado, Material Utilizado y el porcentaje de Eficiencia.

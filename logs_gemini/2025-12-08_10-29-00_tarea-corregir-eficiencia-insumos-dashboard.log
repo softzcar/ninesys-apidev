@@ -1,0 +1,14 @@
+- Solicitud del Usuario: Verificar y corregir el cálculo de "Eficiencia Insumos" en la página principal para que sea consistente con el modal "Datos Extra Impresión" y solo incluya órdenes que tengan datos de material utilizado.
+- Archivos Involucrados:
+  - /home/developer/Escritorio/niesys/app_multi/components/empleados/RendimientoGeneral.vue
+- Acción Realizada: 
+  1. Se modificó la condición de cálculo de eficiencia (líneas 204-212).
+  2. Antes: si real === 0, asignaba 100% de eficiencia artificialmente.
+  3. Ahora: solo calcula eficiencia cuando AMBOS standard > 0 Y real > 0.
+  4. Si no hay datos de consumo real (real === 0), el item no se incluye en el cálculo.
+  5. La fórmula es: (standard / real) * 100, que es equivalente a (Estimado / Utilizado) * 100 del modal.
+- Herramienta(s) Utilizada(s): `replace_file_content`
+- Resultado: Éxito
+- Verificación: El código es consistente con la fórmula usada en el modal. Solo se calculan eficiencias para items con datos completos.
+- Observaciones de Gemini: El 771% alto probablemente era porque se inflaba el cálculo con eficiencias de 100% para items sin datos de consumo. Ahora el cálculo solo incluye items con datos reales de inventario_movimientos.
+- Respuesta de Gemini: Se corrigió el cálculo de Eficiencia Insumos. Ahora solo incluye en el cálculo las órdenes/items que tienen datos de material utilizado (cantidad_real > 0). La fórmula es la misma: (Estimado / Utilizado) × 100.

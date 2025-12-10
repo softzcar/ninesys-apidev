@@ -1,0 +1,36 @@
+- Solicitud del Usuario: Solucionar problema con "Open Browser (preview)" de Antigravity que no funcionaba en Manjaro Linux con Google Chrome.
+
+- Archivos Involucrados:
+  - /etc/sysctl.d/99-disable-ipv6.conf (NUEVO - configuración permanente IPv6)
+  - /etc/gai.conf (modificado - preferencia IPv4)
+  - Configuración de lanzador de Brave (corregida por usuario)
+
+- Acción Realizada:
+  1. Diagnóstico inicial: Puerto 9222 ocupado por Brave browser (--remote-debugging-port=9222)
+  2. Se identificó que Antigravity no podía descargar drivers de Playwright debido a timeout de red
+  3. Se identificó que ProtonVPN estaba corriendo en segundo plano y causando interferencias
+  4. Se desinstaló ProtonVPN completamente (7 paquetes)
+  5. Se identificó causa raíz: El sistema prefería IPv6 sobre IPv4, y la conectividad IPv6 a Azure CDN (playwright.azureedge.net) fallaba
+  6. Se deshabilitó IPv6 temporalmente con sysctl para prueba
+  7. Se creó configuración permanente en /etc/sysctl.d/99-disable-ipv6.conf
+
+- Herramienta(s) Utilizada(s):
+  - run_command (diagnóstico de red, ss, curl, ps, pacman)
+  - browser_subagent (verificación del browser)
+  - write_to_file (crear configuración sysctl)
+
+- Resultado: Éxito
+
+- Verificación:
+  - Conectividad a https://playwright.azureedge.net verificada con curl (HTTP/2 307)
+  - browser_subagent abrió exitosamente https://www.google.com
+  - Configuración permanente aplicada con `sudo sysctl --system`
+
+- Observaciones de Gemini:
+  - El problema principal era la preferencia de IPv6 en el sistema
+  - La conectividad IPv6 a Azure CDN no funciona correctamente en esta red
+  - ProtonVPN dejaba configuraciones residuales aunque estuviera "desconectado"
+  - Se recomienda considerar habilitar IPv6 solo cuando se resuelva el problema de conectividad con el ISP o revisar configuración de router
+
+- Respuesta de Gemini:
+  Se diagnosticó y resolvió el problema de "Open Browser (preview)" de Antigravity. La causa raíz era que el sistema prefería IPv6 y las conexiones a Azure CDN fallaban. Se creó configuración permanente en /etc/sysctl.d/99-disable-ipv6.conf para deshabilitar IPv6 y la funcionalidad ahora opera correctamente.

@@ -126,6 +126,7 @@ return function (App $app) {
     $obj['items_old'] = $localConnection->goQuery($sql);
 
     // ITEMS DE LISTA DE PRODUCCIÓN
+    // Modificado para calcular paso y progreso desde lotes_detalles_empleados_asignados
     $sql = "SELECT
             a._id AS orden,
             f.orden_fila,
@@ -136,7 +137,8 @@ return function (App $app) {
                 cus.last_name
             ) AS cliente,
             b.prioridad,
-            b.paso,
+            -- Paso calculado desde lotes_detalles_empleados_asignados
+            COALESCE(prog_info.paso_actual, 'Por asignar') AS paso,
             d.estatus AS estatus_revision,
             a.fecha_inicio AS inicio,
             a.fecha_entrega AS entrega,
@@ -158,33 +160,19 @@ return function (App $app) {
             COALESCE(e.nombre, 'Sin asignar') AS disenador,
 
             /* ================================================================== */
-            /* INICIO: NUEVAS COLUMNAS DE PROGRESO                                  */
+            /* INICIO: COLUMNAS DE PROGRESO DESDE lotes_detalles_empleados_asignados */
             /* ================================================================== */
 
-            (
-                CASE b.paso
-                    WHEN 'producción' THEN 0.6 WHEN 'Corte' THEN 1 WHEN 'Estampado' THEN 2
-                    WHEN 'Impresión' THEN 3 WHEN 'Costura' THEN 4 WHEN 'Limpieza' THEN 5
-                    WHEN 'Revisión' THEN 5.88 ELSE 1
-                END
-            ) AS progreso_paso_valor,
-
-            COALESCE(pasos_info.total_pasos, 0) AS progreso_total_pasos,
-
+            COALESCE(prog_info.departamentos_terminados, 0) AS progreso_paso_valor,
+            COALESCE(prog_info.total_departamentos, 0) AS progreso_total_pasos,
             COALESCE(
                 ROUND(
-                    (
-                        CASE b.paso
-                            WHEN 'producción' THEN 0.6 WHEN 'Corte' THEN 1 WHEN 'Estampado' THEN 2
-                            WHEN 'Impresión' THEN 3 WHEN 'Costura' THEN 4 WHEN 'Limpieza' THEN 5
-                            WHEN 'Revisión' THEN 5.88 ELSE 1
-                        END * 100
-                    ) / NULLIF(pasos_info.total_pasos, 0)
+                    (prog_info.departamentos_terminados * 100) / NULLIF(prog_info.total_departamentos, 0)
                 ), 0
             ) AS progreso_porcentaje
 
             /* ================================================================== */
-            /* FIN: NUEVAS COLUMNAS DE PROGRESO                                     */
+            /* FIN: COLUMNAS DE PROGRESO                                          */
             /* ================================================================== */
 
         FROM
@@ -197,14 +185,26 @@ return function (App $app) {
         LEFT JOIN api_empresas.empresas_usuarios e ON e.id_usuario = c.id_empleado
         LEFT JOIN ordenes_fila_orden f ON f.id_orden = a._id
         LEFT JOIN (
+            -- Subconsulta para calcular progreso real desde lotes_detalles_empleados_asignados
             SELECT
-                id_orden,
-                COUNT(DISTINCT departamento) AS total_pasos
+                ldea.id_orden,
+                COUNT(DISTINCT ldea.id_departamento) AS total_departamentos,
+                COUNT(DISTINCT CASE WHEN ldea.fecha_terminado IS NOT NULL THEN ldea.id_departamento END) AS departamentos_terminados,
+                -- Departamento actual: el primero (por orden_proceso) que no tiene fecha_terminado
+                (
+                    SELECT dep.departamento
+                    FROM lotes_detalles_empleados_asignados ldea2
+                    JOIN departamentos dep ON dep._id = ldea2.id_departamento
+                    WHERE ldea2.id_orden = ldea.id_orden
+                      AND ldea2.fecha_terminado IS NULL
+                    ORDER BY dep.orden_proceso ASC
+                    LIMIT 1
+                ) AS paso_actual
             FROM
-                lotes_detalles
+                lotes_detalles_empleados_asignados ldea
             GROUP BY
-                id_orden
-        ) AS pasos_info ON a._id = pasos_info.id_orden
+                ldea.id_orden
+        ) AS prog_info ON a._id = prog_info.id_orden
         WHERE
             a.status IN ('activa', 'pausada', 'En espera')
         GROUP BY
