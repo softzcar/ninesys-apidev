@@ -1840,6 +1840,28 @@ return function (App $app) {
         $miComision = number_format($floatValue, 2);
       }
 
+      // FIX: Recalcular unidades para excluir no físicos (diseños)
+      $sql_orden_id = 'SELECT id_orden FROM lotes_detalles WHERE _id = ' . $args['id_lotes_detalles'];
+      $resOrden = $localConnection->goQuery($sql_orden_id);
+      $idOrdenActual = $resOrden[0]['id_orden'] ?? 0;
+
+      if ($idOrdenActual > 0) {
+        $sql_clean_units = "SELECT SUM(op.cantidad) as total 
+                              FROM ordenes_productos op
+                              JOIN products p ON op.id_woo = p._id
+                              WHERE op.id_orden = $idOrdenActual
+                              AND (p.fisico = 1 OR p.fisico IS NULL)
+                              AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+        $resClean = $localConnection->goQuery($sql_clean_units);
+        $cleanUnits = floatval($resClean[0]['total'] ?? 0);
+
+        // Si el total limpio es menor que lo reportado, usamos el total limpio
+        // Esto evita pagar por diseños si el frontend envía el total incluyendo diseños
+        if ($cleanUnits > 0 && $cleanUnits < floatval($args['unidades'])) {
+          $args['unidades'] = $cleanUnits;
+        }
+      }
+
       $monto_pago = floatval($miComision) * floatval($args['unidades']);
 
       /* if ($args['departamento'] === 'Costura') {
