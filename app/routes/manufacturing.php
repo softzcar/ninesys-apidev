@@ -1861,6 +1861,15 @@ return function (App $app) {
         if ($cleanUnits > 0 && $cleanUnits < floatval($args['unidades'])) {
           $args['unidades'] = $cleanUnits;
         }
+
+        $object['debug_fix'] = [
+          'step' => 'check_fisico',
+          'id_lotes_detalles_arg' => $args['id_lotes_detalles'],
+          'idOrdenFound' => $idOrdenActual,
+          'cleanUnitsCalculated' => $cleanUnits,
+          'originalUnidades' => $args['unidades'], // Valor posiblemente modificado si entró al IF
+          'sql_clean' => $sql_clean_units
+        ];
       }
 
       $monto_pago = floatval($miComision) * floatval($args['unidades']);
