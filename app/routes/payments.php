@@ -311,15 +311,15 @@ return function (App $app) {
                     lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
                 JOIN
                     api_empresas.empresas_usuarios c ON b.id_empleado = c.id_usuario
-                JOIN 
+                LEFT JOIN 
                     lotes_detalles ld ON b.id_lotes_detalles = ld._id
-                JOIN 
+                LEFT JOIN 
                     products p ON ld.id_woo = p._id
                 WHERE
                     a.fecha_pago IS NULL
                     AND c.comision_tipo = 'fija'
-                    AND p.fisico = 1 
-                    AND p.es_diseno = 0";
+                    AND (p.fisico = 1 OR p.fisico IS NULL)
+                    AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
 
     $pagos_fijos = $localConnection->goQuery($sql_fija);
     if (!is_array($pagos_fijos)) {
@@ -357,13 +357,13 @@ return function (App $app) {
                         lotes_detalles ld ON b.id_lotes_detalles = ld._id
                     LEFT JOIN
                         ordenes_productos d ON ld.id_ordenes_productos = d._id
-                    JOIN 
+                    LEFT JOIN 
                         products p ON d.id_woo = p._id
                     WHERE
                         a.fecha_pago IS NULL
                         AND c.comision_tipo = 'variable'
-                        AND p.fisico = 1 
-                        AND p.es_diseno = 0";
+                        AND (p.fisico = 1 OR p.fisico IS NULL)
+                        AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
 
     $pagos_variables = $localConnection->goQuery($sql_variable);
     if (!is_array($pagos_variables)) {
@@ -402,13 +402,13 @@ return function (App $app) {
                         lotes_detalles ld ON b.id_lotes_detalles = ld._id
                     LEFT JOIN
                         ordenes_productos d ON ld.id_ordenes_productos = d._id
-                    JOIN 
+                    LEFT JOIN 
                         products p ON d.id_woo = p._id
                     WHERE
                         a.fecha_pago IS NULL
                         AND c.comision_tipo = 'porcentaje'
-                        AND p.fisico = 1 
-                        AND p.es_diseno = 0";
+                        AND (p.fisico = 1 OR p.fisico IS NULL)
+                        AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
 
     $pagos_porcentaje = $localConnection->goQuery($sql_porcentaje);
     if (!is_array($pagos_porcentaje)) {
