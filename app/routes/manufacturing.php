@@ -771,6 +771,7 @@ return function (App $app) {
           ;
         ";
         $object['sql_comision_fija'] = $sql;
+        file_put_contents('/tmp/debug_gemini_sql.log', date('Y-m-d H:i:s') . " - SQL FIJA: " . $sql . "\n", FILE_APPEND);
         $respComision = $localConnection->goQuery($sql);
 
         $piezas = $respComision[0]['total_productos_empleado'];
