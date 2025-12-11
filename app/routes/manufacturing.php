@@ -1841,7 +1841,8 @@ return function (App $app) {
       }
 
       // FIX: Recalcular unidades para excluir no físicos (diseños)
-      $sql_orden_id = 'SELECT id_orden FROM lotes_detalles WHERE _id = ' . $args['id_lotes_detalles'];
+      // Nota: args['id_lotes_detalles'] es el ID de la ASIGNACIÓN (tabla lotes_detalles_empleados_asignados)
+      $sql_orden_id = 'SELECT id_orden FROM lotes_detalles_empleados_asignados WHERE _id = ' . $args['id_lotes_detalles'];
       $resOrden = $localConnection->goQuery($sql_orden_id);
       $idOrdenActual = $resOrden[0]['id_orden'] ?? 0;
 
