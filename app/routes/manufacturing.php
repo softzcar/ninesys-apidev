@@ -755,8 +755,14 @@ return function (App $app) {
               api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado
           JOIN
               ordenes_productos c ON c.id_orden = a.id_orden
+          JOIN
+              products p ON c.id_woo = p._id
           WHERE
-              a.id_empleado = {$miEmpleado['id_empleado']} AND a.id_orden = {$miEmpleado['id_orden']} AND a.id_departamento = {$miEmpleado['id_departamento']}
+              a.id_empleado = {$miEmpleado['id_empleado']} 
+              AND a.id_orden = {$miEmpleado['id_orden']} 
+              AND a.id_departamento = {$miEmpleado['id_departamento']}
+              AND (p.fisico = 1 OR p.fisico IS NULL)
+              AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
           GROUP BY
               a._id,
               a.procentaje_comision,
@@ -778,7 +784,8 @@ return function (App $app) {
           $piezas = $localConnection->goQuery($sqlUnidades)[0]['unidades'];
         }
 
-        $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $miEmpleado['id_reposicion'] . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
+        $id_reposicion_val = isset($miEmpleado['id_reposicion']) ? $miEmpleado['id_reposicion'] : 'NULL';
+        $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
         $object['sql_pagos'][] = $sql;
         $object['resp_pagos'] = $localConnection->goQuery($sql);
       } else {
@@ -796,10 +803,16 @@ return function (App $app) {
               api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado
           JOIN
               ordenes_productos c ON c.id_orden = a.id_orden
+          JOIN
+              products p ON c.id_woo = p._id
           LEFT JOIN
               products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = a.id_departamento
           WHERE
-              a.id_empleado = {$miEmpleado['id_empleado']} AND a.id_orden = {$miEmpleado['id_orden']} AND a.id_departamento = {$miEmpleado['id_departamento']}
+              a.id_empleado = {$miEmpleado['id_empleado']} 
+              AND a.id_orden = {$miEmpleado['id_orden']} 
+              AND a.id_departamento = {$miEmpleado['id_departamento']}
+              AND (p.fisico = 1 OR p.fisico IS NULL)
+              AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
           ;
         ";
         $object['sql_comision_variable'] = $sql;
