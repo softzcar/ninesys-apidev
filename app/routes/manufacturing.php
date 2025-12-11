@@ -782,13 +782,13 @@ return function (App $app) {
         $object['sql_pagos'][] = $sql;
         $object['resp_pagos'] = $localConnection->goQuery($sql);
       } else {
-        // Para comisión variable: consulta por producto individual para aplicar comisión correcta a cada uno
+        // Para comisión variable: consulta por producto individual usando comisión por departamento
         $sql = "SELECT
               a._id AS id_lotes_detalles,
               c.cantidad,
-              d.comision AS comision_producto,
-              b.comision AS factor_empleado, -- Factor de porcentaje del empleado
-              (c.cantidad * d.comision * b.comision) AS monto_comision_por_producto, -- Aplicar factor del empleado
+              IFNULL(pc.comision, 0) AS comision_producto,
+              1 AS factor_empleado, -- Factor fijo 1 para variable
+              (c.cantidad * IFNULL(pc.comision, 0)) AS monto_comision_por_producto, -- Sin factor de empleado
               c.id_woo AS id_producto
           FROM
               lotes_detalles_empleados_asignados a
@@ -796,8 +796,8 @@ return function (App $app) {
               api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado
           JOIN
               ordenes_productos c ON c.id_orden = a.id_orden
-          JOIN
-              products d ON d._id = c.id_woo
+          LEFT JOIN
+              products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = a.id_departamento
           WHERE
               a.id_empleado = {$miEmpleado['id_empleado']} AND a.id_orden = {$miEmpleado['id_orden']} AND a.id_departamento = {$miEmpleado['id_departamento']}
           ;
@@ -1815,8 +1815,16 @@ return function (App $app) {
 
       // DETERMINAR TIPO DE COMISION
       if ($comisionTipo === 'variable') {
-        // Buscar comision en el producto
-        $sqlc = 'SELECT b.comision FROM lotes_detalles a JOIN products b ON b._id = a.id_woo WHERE a._id = ' . $args['id_lotes_detalles'];
+        // Obtener ID del departamento
+        $sqlDep = "SELECT _id FROM departamentos WHERE departamento = '" . $args['departamento'] . "'";
+        $resDep = $localConnection->goQuery($sqlDep);
+        $id_dep_actual = $resDep[0]['_id'] ?? 0;
+
+        // Buscar comision en el producto (por departamento)
+        $sqlc = "SELECT IFNULL(pc.comision, 0) AS comision 
+                 FROM lotes_detalles a 
+                 LEFT JOIN products_comisiones pc ON pc.id_product = a.id_woo AND pc.id_departamento = $id_dep_actual
+                 WHERE a._id = " . $args['id_lotes_detalles'];
         $object['sql_comision_variable'] = $sqlc;
         $comisionEmpleado = $localConnection->goQuery($sqlc);
         $miComision = $comisionEmpleado[0]['comision'];
