@@ -484,7 +484,7 @@ return function (App $app) {
             LEFT JOIN metodos_de_pago e ON
                 e._id = a.id_metodos_de_pago
             WHERE
-                a.fecha_pago IS NULL
+                a.fecha_pago IS NULL AND d.status != 'cancelada'
             GROUP BY
                 a._id
             ORDER BY
