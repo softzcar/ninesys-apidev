@@ -718,8 +718,14 @@ return function (App $app) {
               lotes_detalles_empleados_asignados a
           JOIN
               ordenes_productos c ON c.id_orden = a.id_orden
+          JOIN
+              products p ON c.id_woo = p._id
           WHERE
-              a.id_empleado = {$miEmpleado['id_empleado']} AND a.id_orden = {$miEmpleado['id_orden']} AND a.id_departamento = {$miEmpleado['id_departamento']}
+              a.id_empleado = {$miEmpleado['id_empleado']} 
+              AND a.id_orden = {$miEmpleado['id_orden']} 
+              AND a.id_departamento = {$miEmpleado['id_departamento']}
+              AND (p.fisico = 1 OR p.fisico IS NULL)
+              AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
           GROUP BY
               a._id
           ;
