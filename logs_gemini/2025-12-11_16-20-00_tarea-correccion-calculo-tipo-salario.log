@@ -1,0 +1,47 @@
+- Solicitud del Usuario: Arreglar inconsistencias en la página /empleados/planilla-de-pagos. El problema era que el empleado "Impresión" de la empresa 159 tiene configurado `Salario` como forma de pago, pero el total a pagar mostraba salario + comisiones. Se requería que el cálculo respete el tipo de salario configurado: 'Salario' = solo salario, 'Comisión' = solo comisiones, 'Salario más Comisión' = ambos.
+
+- Archivos Involucrados:
+  - /home/developer/Escritorio/niesys/app_multi/components/admin/PagosEmpleados.vue
+
+- Acción Realizada:
+  Se corrigieron las 3 computed properties que calculan los totales a pagar:
+  
+  1. `pagosResumen` (empleados):
+     - Antes: Siempre sumaba comisión si existía, sin verificar salario_tipo
+     - Después: Solo suma salario si tipoSalario === 'Salario' o 'Salario más Comisión'
+                Solo suma comisión si tipoSalario === 'Comisión' o 'Salario más Comisión'
+  
+  2. `pagosResumenVendedores` (vendedores):
+     - Misma corrección aplicada
+  
+  3. `pagosResumenDiseno` (diseñadores):
+     - Misma corrección aplicada
+  
+  Lógica implementada:
+  ```javascript
+  // Incluir salario solo si el tipo lo permite
+  if (tipoSalario === 'Salario' || tipoSalario === 'Salario más Comisión') {
+    totalPago += salarioPago;
+  }
+  
+  // Incluir comisión solo si el tipo lo permite
+  if ((tipoSalario === 'Comisión' || tipoSalario === 'Salario más Comisión') && comisionPago > 0) {
+    totalPago += comisionPago;
+  }
+  ```
+
+- Herramienta(s) Utilizada(s): multi_replace_file_content, replace_file_content, run_command
+
+- Resultado: Éxito
+
+- Verificación: Se ejecutó `npm run build` y compiló correctamente sin errores.
+
+- Observaciones de Gemini: 
+  - El código anterior tenía comentarios que decían "Siempre incluir comisión si existe" lo cual era incongruente con la lógica de negocio de tipos de salario.
+  - Existen console.log de DEBUG en pagosResumenVendedores que podrían limpiarse en el futuro.
+  - Esta corrección se aplicó a las 3 categorías de empleados (empleados, vendedores, diseñadores) para mantener consistencia.
+
+- Respuesta de Gemini: Se corrigió la lógica de cálculo de pagos en el componente PagosEmpleados.vue. Ahora el sistema respeta correctamente el tipo de salario configurado para cada empleado:
+  - Si salario_tipo = "Salario": Solo muestra el salario, sin comisiones
+  - Si salario_tipo = "Comisión": Solo muestra comisiones, sin salario
+  - Si salario_tipo = "Salario más Comisión": Muestra ambos montos sumados

@@ -1,0 +1,55 @@
+- Solicitud del Usuario: Investigar a fondo el consumo de CPU en el VPS, terminar consultas atascadas, crear índices para optimizar la base de datos, y actualizar el archivo SQL de creación de empresas.
+
+- Archivos Involucrados:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/public/model/create_new_company_api_emp_N.sql (modificado - agregados índices)
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php (endpoint identificado como causante)
+  - Base de datos api_emp_152, tabla lotes_detalles_empleados_asignados (índices creados)
+
+- Acción Realizada:
+  1. Diagnóstico del problema:
+     - Identificadas 6 consultas SQL atascadas ejecutándose por 47+ minutos
+     - Consultas provenientes del endpoint `/reports/manufacturing-time` con parámetro `id_empleado`
+     - La consulta procesaba 533 órdenes en una sola petición con múltiples subconsultas correlacionadas
+     - La tabla `lotes_detalles_empleados_asignados` solo tenía índice PRIMARY (5,148 registros)
+     - Load average era 12.21 para un servidor de 1 CPU
+  
+  2. Acciones ejecutadas:
+     - Terminación de consultas atascadas: `KILL 42284; KILL 42338; KILL 42565; KILL 42569; KILL 42571; KILL 42573;`
+     - Creación de índices en `lotes_detalles_empleados_asignados`:
+       * idx_id_empleado (id_empleado)
+       * idx_id_lotes_detalles (id_lotes_detalles)
+       * idx_id_orden (id_orden)
+       * idx_id_departamento (id_departamento)
+       * idx_empleado_orden_depto (id_empleado, id_orden, id_departamento) - índice compuesto
+     - Actualización del archivo SQL `create_new_company_api_emp_N.sql` para incluir los nuevos índices
+
+- Herramienta(s) Utilizada(s): run_command (ssh vps-ninesys), command_status, view_file, grep_search, replace_file_content
+
+- Resultado: Éxito
+
+- Verificación:
+  - Load average bajó de 12.21 a 0.65 (reducción del 95%)
+  - CPU idle pasó de 0% a ~32%
+  - Consultas atascadas terminadas exitosamente
+  - Índices verificados con `SHOW INDEX FROM lotes_detalles_empleados_asignados`
+  - Archivo SQL actualizado correctamente (líneas 1056-1061)
+
+- Observaciones de Gemini:
+  - El endpoint `/reports/manufacturing-time` en `manufacturing.php` (líneas 2845-3014) contiene consultas muy complejas con múltiples subconsultas correlacionadas
+  - La consulta principal hace JOINs entre ordenes, ordenes_productos, lotes_detalles y busca en lotes_detalles_empleados_asignados
+  - Se recomienda:
+    1. Limitar el número de órdenes que se pueden consultar de una vez (ya existe límite de 100 en POST, pero GET puede traer muchas)
+    2. Considerar cachear resultados frecuentes
+    3. Evaluar simplificar las subconsultas correlacionadas
+  - Los nuevos índices deberían mejorar significativamente el rendimiento de estas consultas
+
+- Respuesta de Gemini:
+  **Tareas completadas:**
+  1. ✅ Consultas atascadas terminadas - Load average bajó de 12.21 a 0.65
+  2. ✅ Índices creados en la tabla `lotes_detalles_empleados_asignados`
+  3. ✅ Archivo SQL actualizado para nuevas empresas
+  4. ✅ Endpoint problemático identificado: `/reports/manufacturing-time` en `manufacturing.php`
+
+  **Endpoint causante:** GET/POST `/reports/manufacturing-time`
+  - Ubicación: `app/routes/manufacturing.php` líneas 2845-3137
+  - Problema: Consulta con subconsultas correlacionadas sobre `lotes_detalles_empleados_asignados` sin índices apropiados

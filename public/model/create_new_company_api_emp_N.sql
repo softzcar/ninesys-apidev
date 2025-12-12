@@ -1054,7 +1054,12 @@ ADD PRIMARY KEY (`_id`),
   ADD KEY `id_empleado` (`id_empleado`),
   ADD KEY `id_orden` (`id_orden`, `id_ordenes_productos`);
 ALTER TABLE `lotes_detalles_empleados_asignados`
-ADD PRIMARY KEY (`_id`);
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `idx_id_empleado` (`id_empleado`),
+  ADD KEY `idx_id_lotes_detalles` (`id_lotes_detalles`),
+  ADD KEY `idx_id_orden` (`id_orden`),
+  ADD KEY `idx_id_departamento` (`id_departamento`),
+  ADD KEY `idx_empleado_orden_depto` (`id_empleado`, `id_orden`, `id_departamento`);
 ALTER TABLE `lotes_detalles_empleados_asignados_pausas`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `lotes_fisicos`

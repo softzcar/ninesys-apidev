@@ -1,0 +1,26 @@
+- Solicitud del Usuario: Migrar imágenes base64 incrustadas en la tabla ordenes_observaciones a imágenes físicas optimizadas en el servidor
+- Archivos Involucrados: 
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/scripts/migrate_base64_images.php (nuevo)
+  - Tabla: api_emp_152.ordenes_observaciones
+  - Backup: api_emp_152.ordenes_observaciones_backup_base64
+  - Directorio: /home/apidev.nineteengreen.com/public_html/public/images-orders-details/
+- Acción Realizada: 
+  1. Análisis de la tabla: 3,449 registros, 837 con base64 (453.90 MB)
+  2. Creación del script migrate_base64_images.php con:
+     - Procesamiento en lotes de 20 registros
+     - Extracción de base64 con regex
+     - Decodificación y guardado de imágenes
+     - Optimización (max 1280px, compresión 80%)
+     - Actualización de registros con URLs
+  3. Ejecución del script vía SSH
+- Herramienta(s) Utilizada(s): write_to_file, run_command (git, ssh, mysql)
+- Resultado: Éxito
+- Verificación:
+  - Tamaño tabla: 453.90 MB → 0.74 MB (-99.8%)
+  - Registros con base64: 837 → 0
+  - Imágenes generadas: 1,536 archivos (211 MB)
+  - Backup creado: 3,449 registros
+  - Tiempo de ejecución: 349 segundos
+  - Errores: 0
+- Observaciones de Gemini: La migración se completó exitosamente sin errores. El ahorro de espacio en la base de datos es significativo. Las imágenes optimizadas ocupan menos espacio en disco que el base64 original debido a la compresión y redimensionamiento.
+- Respuesta de Gemini: Migración completada exitosamente. La tabla ordenes_observaciones se redujo de 453.90 MB a 0.74 MB (99.8% de reducción). Se migraron 1,532 imágenes a archivos físicos optimizados (211 MB). El backup de la tabla original está disponible en ordenes_observaciones_backup_base64.

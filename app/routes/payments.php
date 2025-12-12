@@ -297,9 +297,11 @@ return function (App $app) {
                     c.nombre,
                     a.monto_pago AS pago,
                     c.comision,
-                    c.comision_tipo,
+                    a.comision AS comision,
+                    a.comision_tipo,
                     c.salario_tipo,
                     a.detalle AS departamento,
+                    o.pago_total AS monto_orden,
                     DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
                     DATE_FORMAT(b.fecha_terminado, '%v') AS semana,
                     DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
@@ -309,6 +311,8 @@ return function (App $app) {
                     pagos a
                 JOIN
                     lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+                LEFT JOIN
+                    ordenes o ON b.id_orden = o._id
                 JOIN
                     api_empresas.empresas_usuarios c ON b.id_empleado = c.id_usuario
                 LEFT JOIN 
@@ -338,10 +342,11 @@ return function (App $app) {
                         c.id_usuario AS id_empleado,
                         c.nombre,
                         a.monto_pago AS pago,
-                        a.comision,
-                        c.comision_tipo,
+                        a.comision AS comision,
+                        a.comision_tipo,
                         c.salario_tipo,
                         a.detalle AS departamento,
+                        o.pago_total AS monto_orden,
                         DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
                         DATE_FORMAT(b.fecha_terminado, '%v') AS semana,
                         DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
@@ -351,6 +356,8 @@ return function (App $app) {
                         pagos a
                     JOIN
                         lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+                    LEFT JOIN
+                        ordenes o ON b.id_orden = o._id
                     JOIN
                         api_empresas.empresas_usuarios c ON b.id_empleado = c.id_usuario
                     LEFT JOIN 
@@ -382,10 +389,11 @@ return function (App $app) {
                         c.id_usuario AS id_empleado,
                         c.nombre,
                         a.monto_pago AS pago,
-                        c.comision_porcentaje AS comision,
-                        c.comision_tipo,
+                        a.comision AS comision,
+                        a.comision_tipo,
                         c.salario_tipo,
                         a.detalle AS departamento,
+                        o.pago_total AS monto_orden,
                         DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
                         DATE_FORMAT(b.fecha_terminado, '%v') AS semana,
                         DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
@@ -396,6 +404,8 @@ return function (App $app) {
                         pagos a
                     JOIN
                         lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+                    LEFT JOIN
+                        ordenes o ON b.id_orden = o._id
                     JOIN
                         api_empresas.empresas_usuarios c ON b.id_empleado = c.id_usuario
                     LEFT JOIN 

@@ -1,0 +1,49 @@
+- Solicitud del Usuario: Instalar herramientas de monitoreo histórico en el VPS para determinar qué procesos consumen recursos en momentos específicos. El gráfico de Hostinger muestra picos de CPU al 100% entre las 7pm y 10pm sin que nadie estuviera usando el sistema.
+
+- Archivos Involucrados:
+  - /etc/systemd/system/sysstat-collect.timer (creado - override para recolección cada 1 minuto)
+  - /etc/sysconfig/atop (modificado - LOGINTERVAL cambiado de 600 a 60 segundos)
+  - /var/log/sa/ (directorio donde sysstat guarda datos históricos)
+  - /var/log/atop/ (directorio donde atop guarda datos históricos)
+
+- Acción Realizada:
+  1. Instalación de paquetes: `dnf install -y sysstat atop`
+     - sysstat-11.7.3-13.el8_10.x86_64
+     - atop-2.7.1-1.el8.x86_64
+     - lm_sensors-libs (dependencia)
+  2. Habilitación de servicios:
+     - `systemctl enable sysstat && systemctl start sysstat`
+     - `systemctl enable atop && systemctl start atop`
+     - `systemctl enable sysstat-collect.timer && systemctl start sysstat-collect.timer`
+     - `systemctl enable sysstat-summary.timer && systemctl start sysstat-summary.timer`
+  3. Configuración de intervalos de recolección:
+     - sysstat: cambiado de cada 10 minutos a cada 1 minuto (creando override en /etc/systemd/system/sysstat-collect.timer)
+     - atop: cambiado LOGINTERVAL de 600 a 60 segundos en /etc/sysconfig/atop
+  4. Reinicio de servicios para aplicar configuración
+
+- Herramienta(s) Utilizada(s): run_command (ssh vps-ninesys), command_status
+
+- Resultado: Éxito
+
+- Verificación:
+  - `sar -u 1 3` ejecutado exitosamente mostrando uso de CPU en tiempo real
+  - `systemctl status atop` muestra servicio activo corriendo con intervalo de 60 segundos
+  - `systemctl list-timers | grep sysstat` muestra timer ejecutándose cada minuto
+  - Archivos de log creados: /var/log/atop/atop_20251211 y /var/log/sa/sa11
+  - CPU actual detectado al 98-100% (MySQL 25.9%, lsphp, find de sesiones PHP)
+
+- Observaciones de Gemini:
+  - El VPS tiene solo 1 CPU virtual, lo cual limita la capacidad de procesamiento
+  - MariaDB (MySQL) está consumiendo 25.9% de CPU y 8.8% de memoria (356MB)
+  - Hay un proceso `find` buscando y eliminando sesiones PHP antiguas que está en estado D (uninterruptible sleep)
+  - El proceso de WhatsApp (msg-ninesys) con múltiples instancias de Chrome/Puppeteer sigue siendo un consumidor significativo
+  - Los datos históricos comenzarán a acumularse desde ahora. Después de 24-48 horas tendremos suficiente información para analizar patrones
+
+- Respuesta de Gemini: Las herramientas sysstat (sar) y atop fueron instaladas y configuradas exitosamente en el VPS. Ahora recopilan datos cada 60 segundos, permitiendo análisis histórico detallado de consumo de recursos por proceso.
+
+COMANDOS ÚTILES PARA ANÁLISIS:
+- Ver CPU histórico de hoy: `sar -u`
+- Ver procesos que más consumieron: `atop -r /var/log/atop/atop_20251211`
+- Ver memoria histórica: `sar -r`
+- Ver I/O de disco: `sar -d`
+- Ver un rango de tiempo específico: `sar -u -s 19:00:00 -e 22:00:00`

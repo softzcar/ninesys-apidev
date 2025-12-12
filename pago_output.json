@@ -1,0 +1,7 @@
+{
+    "statusCode": 500,
+    "error": {
+        "type": "SERVER_ERROR",
+        "description": "ERROR: Trying to access array offset on null on line 780 in file \/home\/apidev.nineteengreen.com\/public_html\/app\/routes\/manufacturing.php."
+    }
+}
