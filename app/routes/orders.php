@@ -2336,7 +2336,7 @@ $object['sales_commission_ISSET'][] = false;
                       $object["pago a vendedor"] = "NO hubo comisión, cliente excento";
                   } */
       }  /*  else {
-    $object['sales_commission_ISSET'][] = false;
+   $object['sales_commission_ISSET'][] = false;
 } */
 
       /* // GUARDAR DATOS DE DISEÑO
@@ -2406,7 +2406,9 @@ $object['sales_commission_ISSET'][] = false;
           if (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '') {
             $id_talla = intval($decodedObj['talla']);
             $values .= $id_talla . ',';  // Para la columna id_size
-            $values .= "'" . addslashes((string) $localConnection->goQuery("SELECT nombre FROM sizes WHERE _id = {$id_talla}")[0]['nombre']) . "',";  // Para la columna talla
+            $resultTalla = $localConnection->goQuery("SELECT nombre FROM sizes WHERE _id = {$id_talla}");
+            $nombreTalla = (isset($resultTalla[0]['nombre'])) ? $resultTalla[0]['nombre'] : '';
+            $values .= "'" . addslashes($nombreTalla) . "',";  // Para la columna talla
           } else {
             $values .= 'NULL, NULL,';  // Para id_size y talla
           }
