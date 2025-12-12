@@ -91,17 +91,29 @@ return function (App $app) {
 
     // Procesar salario si existe
     if ($salario > 0) {
-      // Buscar frecuencia de salario
-      $sql = "SELECT salario_periodo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?";
-      $data = $localConnection->goQuery($sql, [$data['id_empleado']]);
-      $periodo = $data[0]['salario_periodo'];
+      $idEmpleado = $data['id_empleado'] ?? null;
 
+      // Si no viene el id_empleado, lo buscamos en el primer pago de la lista
+      if (!$idEmpleado && count($listaDeIdPagos) > 0) {
+        $sqlEmp = "SELECT id_empleado FROM pagos WHERE _id = ?";
+        $resEmp = $localConnection->goQuery($sqlEmp, [$listaDeIdPagos[0]]);
+        if (isset($resEmp[0]['id_empleado'])) {
+          $idEmpleado = $resEmp[0]['id_empleado'];
+        }
+      }
 
-      // Dividir el salario entre la cantidad de pagos
-      $salarioPorPago = $salario / $cantidadDePagos;
-      foreach ($listaDeIdPagos as $idPago) {
-        $sql = "INSERT INTO pagos_salarios (id_pago, tipo_salario, numero_semana, monto) VALUES (?, ?, ?, ?)";
-        $localConnection->goQuery($sql, [$idPago, $periodo, date('W'), $salarioPorPago]);
+      if ($idEmpleado) {
+        // Buscar frecuencia de salario
+        $sql = "SELECT salario_periodo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?";
+        $resultUsuario = $localConnection->goQuery($sql, [$idEmpleado]);
+        $periodo = isset($resultUsuario[0]['salario_periodo']) ? $resultUsuario[0]['salario_periodo'] : 'semanal'; // Default fallback
+
+        // Dividir el salario entre la cantidad de pagos
+        $salarioPorPago = $salario / $cantidadDePagos;
+        foreach ($listaDeIdPagos as $idPago) {
+          $sql = "INSERT INTO pagos_salarios (id_pago, tipo_salario, numero_semana, monto) VALUES (?, ?, ?, ?)";
+          $localConnection->goQuery($sql, [$idPago, $periodo, date('W'), $salarioPorPago]);
+        }
       }
     }
 
