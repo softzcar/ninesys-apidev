@@ -612,6 +612,46 @@ return function (App $app) {
     $object['sql_pagos_vendedores'] = $sql;
     $object['data']['vendedores'] = $localConnection->goQuery($sql);
 
+    // CONSULTAS ADICIONALES PARA DETALLES DE RECIBO (Salarios, Bonos, Descuentos)
+    
+    // 1. Salarios
+    $sqlSalarios = "SELECT 
+        ps.monto, 
+        ps.tipo_salario, 
+        p.id_empleado 
+        FROM pagos_salarios ps 
+        JOIN pagos p ON ps.id_pago = p._id 
+        WHERE WEEK(p.fecha_pago, 1) = {$args['semana']} AND p.fecha_pago IS NOT NULL
+        GROUP BY p.id_empleado"; // Agrupamos por empleado porque el salario es por periodo, no por orden individual necesariamente para el recibo global
+    
+    $salariosData = $localConnection->goQuery($sqlSalarios);
+    $object['data']['salarios_detalles'] = $salariosData ?: [];
+
+    // 2. Bonos (Abonos extra)
+    $sqlBonos = "SELECT 
+        pa.monto, 
+        pa.descripcion, 
+        p.id_empleado 
+        FROM pagos_abonos pa 
+        JOIN pagos p ON pa.id_pago = p._id 
+        WHERE WEEK(p.fecha_pago, 1) = {$args['semana']} AND p.fecha_pago IS NOT NULL";
+    
+    $bonosData = $localConnection->goQuery($sqlBonos);
+    $object['data']['bonos_detalles'] = $bonosData ?: [];
+
+    // 3. Descuentos
+    $sqlDescuentos = "SELECT 
+        pd.monto, 
+        pd.descripcion, 
+        p.id_empleado 
+        FROM pagos_descuentos pd 
+        JOIN pagos p ON pd.id_pago = p._id 
+        WHERE WEEK(p.fecha_pago, 1) = {$args['semana']} AND p.fecha_pago IS NOT NULL";
+    
+    $descuentosData = $localConnection->goQuery($sqlDescuentos);
+    $object['data']['descuentos_detalles'] = $descuentosData ?: [];
+
+
     // PAGOS ESPLEADOS
     $sql = 'SELECT
             a._id id_pago,
