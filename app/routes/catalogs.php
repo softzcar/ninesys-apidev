@@ -33,6 +33,34 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  $app->post('/catalogo-insumos-productos', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    $nombre = $data['insumo']; // The payload uses 'insumo' for the name
+    $id_product = isset($data['id_product']) ? intval($data['id_product']) : 0;
+    $id_departamento = isset($data['id_departamento']) ? intval($data['id_departamento']) : 0;
+
+    $sql = "INSERT INTO catalogo_insumos_productos (nombre, id_product, id_departamento) VALUES ('$nombre', $id_product, $id_departamento)";
+
+    $result = $localConnection->goQuery($sql);
+    $lastId = $localConnection->getLastID();
+
+    // Fetch the newly created item to return it
+    $sqlNew = "SELECT * FROM catalogo_insumos_productos WHERE _id = $lastId";
+    $newItem = $localConnection->goQuery($sqlNew);
+
+    $object['response'] = $result;
+    $object['data'] = $newItem;
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   $app->post('/telas', function (Request $request, Response $response) {
     $miTela = $request->getParsedBody();
     $object['miTela'] = $miTela;
