@@ -1031,18 +1031,18 @@ return function (App $app) {
             $object['sql'] = $sql;
             $object['insert'] = json_encode($localConnection->goQuery($sql));
         }  /*else {
- $arrayOrdenes = explode(',', $miInsumo['ordenes'])
- $sql = "";
- foreach ($arrayOrdenes as $key => $orden) {
- $sal .= "UPDATE inventario_movimientos SET id_orden = " $orden . " WHERE id_empleado = " . $miInsumo['id_empleado'];
- }
+$arrayOrdenes = explode(',', $miInsumo['ordenes'])
+$sql = "";
+foreach ($arrayOrdenes as $key => $orden) {
+$sal .= "UPDATE inventario_movimientos SET id_orden = " $orden . " WHERE id_empleado = " . $miInsumo['id_empleado'];
+}
 
- // UPDATE
- // $sql = "INSERT INTO inventario_movimientos (moment, departamento, id_empleado, id_insumo, id_orden, valor_inicial, id_producto) VALUES (" . $values . ")";
- $ql = "UPDATE inventario_movimientos SET ";
- $object["sql"] = $sql;
- $object['insert'] = json_encode($localConnection->goQuery($sql));
- }*/
+// UPDATE
+// $sql = "INSERT INTO inventario_movimientos (moment, departamento, id_empleado, id_insumo, id_orden, valor_inicial, id_producto) VALUES (" . $values . ")";
+$ql = "UPDATE inventario_movimientos SET ";
+$object["sql"] = $sql;
+$object['insert'] = json_encode($localConnection->goQuery($sql));
+}*/
 
         $localConnection->disconnect();
 
@@ -1513,6 +1513,7 @@ return function (App $app) {
         $sql = 'SELECT
         a._id id_insumo,
         a.sku,
+        a.insumo,
         b.color,
         a.costo,
         a.cantidad
