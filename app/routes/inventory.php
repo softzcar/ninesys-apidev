@@ -847,7 +847,12 @@ return function (App $app) {
             if (isset($miInsumo['es_tinta']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN) && isset($miInsumo['cantidad']) && intval($miInsumo['cantidad']) > 1) {
                 for ($i = 0; $i < intval($miInsumo['cantidad']); $i++) {
                     $currentCantidad = (isset($miInsumo['mililitros']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN)) ? $miInsumo['mililitros'] : 1;
-                    $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$currentCantidad}, '{$miInsumo['sku']}', '{$miInsumo['id_catalogo_producto']}')";
+
+                    $id_catalogo = (isset($miInsumo['id_catalogo_producto']) && $miInsumo['id_catalogo_producto'] !== 'null' && $miInsumo['id_catalogo_producto'] !== '')
+                        ? "'" . $miInsumo['id_catalogo_producto'] . "'"
+                        : "NULL";
+
+                    $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$currentCantidad}, '{$miInsumo['sku']}', {$id_catalogo})";
                     $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo) VALUES ' . $values;
                     $result = $localConnection->goQuery($sql);
                     $lastId = $localConnection->getLastID();
@@ -866,7 +871,12 @@ return function (App $app) {
                 if (isset($miInsumo['mililitros']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN)) {
                     $cantidad = $miInsumo['mililitros'];
                 }
-                $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$cantidad}, '{$miInsumo['sku']}', '{$miInsumo['id_catalogo_producto']}')";
+
+                $id_catalogo = (isset($miInsumo['id_catalogo_producto']) && $miInsumo['id_catalogo_producto'] !== 'null' && $miInsumo['id_catalogo_producto'] !== '')
+                    ? "'" . $miInsumo['id_catalogo_producto'] . "'"
+                    : "NULL";
+
+                $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$cantidad}, '{$miInsumo['sku']}', {$id_catalogo})";
                 $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo) VALUES ' . $values;
                 $result = $localConnection->goQuery($sql);
                 $lastId = $localConnection->getLastID();
@@ -917,8 +927,12 @@ return function (App $app) {
         $values .= "costo='" . $miInsumo['costo'] . "',";
         $values .= "departamento='" . $miInsumo['departamento'] . "',";
         $values .= "sku='" . $miInsumo['sku'] . "',";
-        $id_catalogo = isset($miInsumo['id_catalogo_producto']) ? $miInsumo['id_catalogo_producto'] : (isset($miInsumo['id_catalogo']) ? $miInsumo['id_catalogo'] : 'NULL');
-        $values .= "id_catalogo='" . $id_catalogo . "'";
+
+        $id_catalogo = (isset($miInsumo['id_catalogo_producto']) && $miInsumo['id_catalogo_producto'] !== 'null' && $miInsumo['id_catalogo_producto'] !== '')
+            ? "'" . $miInsumo['id_catalogo_producto'] . "'"
+            : ((isset($miInsumo['id_catalogo']) && $miInsumo['id_catalogo'] !== 'null' && $miInsumo['id_catalogo'] !== '') ? "'" . $miInsumo['id_catalogo'] . "'" : 'NULL');
+
+        $values .= "id_catalogo=" . $id_catalogo;
 
         $sql = 'UPDATE inventario SET ' . $values . ' WHERE _id = ' . $miInsumo['_id'];
         $object['sql'] = $sql;
@@ -1433,6 +1447,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 _id rollo,
                 sku,
                 insumo,
+                id_catalogo AS id_catalogo_producto,
                 cantidad cantidad_inicial,
                 cantidad cantidad_final,
                 cantidad,
@@ -1452,6 +1467,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 _id rollo,
                 sku,
                 insumo,
+                id_catalogo AS id_catalogo_producto,
                 cantidad cantidad_inicial,
                 cantidad cantidad_final,
                 cantidad,
