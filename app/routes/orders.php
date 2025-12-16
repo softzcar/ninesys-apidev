@@ -2336,7 +2336,7 @@ $object['sales_commission_ISSET'][] = false;
                       $object["pago a vendedor"] = "NO hubo comisión, cliente excento";
                   } */
       }  /*  else {
- $object['sales_commission_ISSET'][] = false;
+$object['sales_commission_ISSET'][] = false;
 } */
 
       /* // GUARDAR DATOS DE DISEÑO
@@ -3177,17 +3177,19 @@ $object['sales_commission_ISSET'][] = false;
       $ids_string = implode(',', array_map('intval', $id_ordenes));
 
       // Consulta para obtener los materiales estimados de todas las órdenes
-      $sql = "SELECT 
-                pia.catalogo,
-                pia.cantidad_estimada_de_consumo,
+      $sql = "SELECT
+                cip.nombre as catalogo,
+                pia.cantidad as cantidad_estimada_de_consumo,
                 op.cantidad as unidades,
-                pia.unidad_de_medida,
+                pia.unidad as unidad_de_medida,
                 op.id_orden
-              FROM 
+              FROM
                 product_insumos_asignados pia
-              JOIN 
+              JOIN
                 ordenes_productos op ON op.id_woo = pia.id_product
-              WHERE 
+              LEFT JOIN
+                catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
+              WHERE
                 op.id_orden IN ({$ids_string})
                 AND pia.id_departamento = (SELECT _id FROM departamentos WHERE departamento = 'Impresión' LIMIT 1)";
 
