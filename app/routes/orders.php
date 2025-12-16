@@ -2336,7 +2336,7 @@ $object['sales_commission_ISSET'][] = false;
                       $object["pago a vendedor"] = "NO hubo comisión, cliente excento";
                   } */
       }  /*  else {
-  $object['sales_commission_ISSET'][] = false;
+ $object['sales_commission_ISSET'][] = false;
 } */
 
       /* // GUARDAR DATOS DE DISEÑO
@@ -3161,7 +3161,8 @@ $object['sales_commission_ISSET'][] = false;
    * Obtiene los materiales estimados para un conjunto de órdenes de un lote
    */
   $app->post('/ordenes/materiales-lote', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
+    $json_body = $request->getBody()->getContents();
+    $data = json_decode($json_body, true);
     $id_ordenes = $data['id_ordenes'] ?? null;
 
     if (empty($id_ordenes) || !is_array($id_ordenes)) {
