@@ -1542,10 +1542,10 @@ return function (App $app) {
     $id_departamento = $data['id_departamento'] ?? null;
     $id_empleado = $data['id_empleado'] ?? null;
     $consumo_papel = $data['consumo_papel'] ?? null;
-    $consumo_tinta = $data['consumo_tinta'] ?? null;
+    $consumo_tintas = $data['consumo_tintas'] ?? null;
 
-    if (empty($id_empleado) || empty($id_departamento) || !is_array($consumo_papel) || empty($consumo_papel) || !is_array($consumo_tinta) || empty($consumo_tinta['id_impresora'])) {
-      $error_response = json_encode(['error' => 'Payload inválido. Se requieren id_empleado, id_departamento, consumo_papel y consumo_tinta.']);
+    if (empty($id_empleado) || empty($id_departamento) || !is_array($consumo_papel) || empty($consumo_papel) || !is_array($consumo_tintas) || empty($consumo_tintas)) {
+      $error_response = json_encode(['error' => 'Payload inválido. Se requieren id_empleado, id_departamento, consumo_papel y consumo_tintas (array).']);
       $response->getBody()->write($error_response);
       return $response
         ->withHeader('Content-Type', 'application/json')
@@ -1586,18 +1586,31 @@ return function (App $app) {
         }
       }
 
-      $id_impresora = intval($consumo_tinta['id_impresora']);
-      $tinta_c = floatval($consumo_tinta['c'] ?? 0);
-      $tinta_m = floatval($consumo_tinta['m'] ?? 0);
-      $tinta_y = floatval($consumo_tinta['y'] ?? 0);
-      $tinta_k = floatval($consumo_tinta['k'] ?? 0);
-      $tinta_w = floatval($consumo_tinta['w'] ?? 0);
+      // Procesar cada impresora del array
+      foreach ($consumo_tintas as $tinta) {
+        $id_impresora = intval($tinta['id_impresora']);
+        $tinta_c = floatval($tinta['c'] ?? 0);
+        $tinta_m = floatval($tinta['m'] ?? 0);
+        $tinta_y = floatval($tinta['y'] ?? 0);
+        $tinta_k = floatval($tinta['k'] ?? 0);
+        $tinta_w = floatval($tinta['w'] ?? 0);
 
-      foreach ($ordenes_del_lote as $order) {
-        $proporcion = intval($order['unidades_orden']) / $gran_total_unidades_lote;
-        $sql_tinta = 'INSERT INTO tintas (c, m, y, k, w, id_orden, id_empleado, id_catalogo_impresoras, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
-        $params_tinta = [$tinta_c * $proporcion, $tinta_m * $proporcion, $tinta_y * $proporcion, $tinta_k * $proporcion, $tinta_w * $proporcion, $order['id_orden'], $id_empleado, $id_impresora, $now];
-        $localConnection->goQuery($sql_tinta, $params_tinta);
+        foreach ($ordenes_del_lote as $order) {
+          $proporcion = intval($order['unidades_orden']) / $gran_total_unidades_lote;
+          $sql_tinta = 'INSERT INTO tintas (c, m, y, k, w, id_orden, id_empleado, id_catalogo_impresoras, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          $params_tinta = [
+            $tinta_c * $proporcion,
+            $tinta_m * $proporcion,
+            $tinta_y * $proporcion,
+            $tinta_k * $proporcion,
+            $tinta_w * $proporcion,
+            $order['id_orden'],
+            $id_empleado,
+            $id_impresora,
+            $now
+          ];
+          $localConnection->goQuery($sql_tinta, $params_tinta);
+        }
       }
 
       $orden_proceso_actual = $localConnection->goQuery('SELECT orden_proceso FROM departamentos WHERE _id = ?', [$id_departamento])[0]['orden_proceso'];
