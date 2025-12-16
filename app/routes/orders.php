@@ -2336,7 +2336,7 @@ $object['sales_commission_ISSET'][] = false;
                       $object["pago a vendedor"] = "NO hubo comisión, cliente excento";
                   } */
       }  /*  else {
-   $object['sales_commission_ISSET'][] = false;
+  $object['sales_commission_ISSET'][] = false;
 } */
 
       /* // GUARDAR DATOS DE DISEÑO
@@ -3154,6 +3154,53 @@ $object['sales_commission_ISSET'][] = false;
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
+  });
+
+  /**
+   * POST /ordenes/materiales-lote
+   * Obtiene los materiales estimados para un conjunto de órdenes de un lote
+   */
+  $app->post('/ordenes/materiales-lote', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $id_ordenes = $data['id_ordenes'] ?? null;
+
+    if (empty($id_ordenes) || !is_array($id_ordenes)) {
+      $response->getBody()->write(json_encode(['error' => 'Se requiere un array de id_ordenes.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection = new LocalDB();
+
+    try {
+      // Crear lista de IDs para la consulta SQL
+      $ids_string = implode(',', array_map('intval', $id_ordenes));
+
+      // Consulta para obtener los materiales estimados de todas las órdenes
+      $sql = "SELECT 
+                pia.catalogo,
+                pia.cantidad_estimada_de_consumo,
+                op.cantidad as unidades,
+                pia.unidad_de_medida,
+                op.id_orden
+              FROM 
+                product_insumos_asignados pia
+              JOIN 
+                ordenes_productos op ON op.id_woo = pia.id_product
+              WHERE 
+                op.id_orden IN ({$ids_string})
+                AND pia.id_departamento = (SELECT _id FROM departamentos WHERE departamento = 'Impresión' LIMIT 1)";
+
+      $result = $localConnection->goQuery($sql);
+
+      $response->getBody()->write(json_encode($result));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      error_log('Error al obtener materiales del lote: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['error' => 'Error interno del servidor.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
+    }
   });
 
   /** FIN ORDENES */
