@@ -1150,6 +1150,34 @@ return function (App $app) {
     $object['sql'] = $sql;
     $object['result'] = $afectarEmpleado;
 
+    // ACTUALIZAR id_departamento_actual EN LOTES si es necesario
+    // Esto permite que el botón "Iniciar Todo" funcione correctamente
+    $sql_check = "SELECT id_departamento_actual FROM lotes WHERE id_orden = {$miEmpleado['id_orden']}";
+    $current_dept = $localConnection->goQuery($sql_check);
+
+    if (!empty($current_dept)) {
+      $current_dept_id = $current_dept[0]['id_departamento_actual'];
+
+      // Si id_departamento_actual es NULL o 0, actualizarlo con el departamento asignado
+      if ($current_dept_id === null || $current_dept_id === 0 || $current_dept_id === '0') {
+        $sql_update_lote = "UPDATE lotes SET id_departamento_actual = {$miEmpleado['id_departamento']} WHERE id_orden = {$miEmpleado['id_orden']}";
+        $localConnection->goQuery($sql_update_lote);
+        $object['lote_actualizado'] = true;
+      } else {
+        // Verificar si el nuevo departamento tiene menor orden_proceso (primera etapa del flujo)
+        $sql_orden = "SELECT 
+            (SELECT orden_proceso FROM departamentos WHERE _id = {$miEmpleado['id_departamento']}) AS nuevo_orden,
+            (SELECT orden_proceso FROM departamentos WHERE _id = {$current_dept_id}) AS actual_orden";
+        $ordenes = $localConnection->goQuery($sql_orden);
+
+        if (!empty($ordenes) && $ordenes[0]['nuevo_orden'] < $ordenes[0]['actual_orden']) {
+          $sql_update_lote = "UPDATE lotes SET id_departamento_actual = {$miEmpleado['id_departamento']} WHERE id_orden = {$miEmpleado['id_orden']}";
+          $localConnection->goQuery($sql_update_lote);
+          $object['lote_actualizado'] = true;
+        }
+      }
+    }
+
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
