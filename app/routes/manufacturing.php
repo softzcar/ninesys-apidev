@@ -651,11 +651,10 @@ return function (App $app) {
       if ($miEmpleado['es_reposicion']) {
         // Procesar el termino de la reposición aquí
         // Terminar reposicion
-        // $sqlRepo = "UPDATE reposiciones SET terminada = 1 WHERE _id = {$miEmpleado['id_reposicion']};";
-        // $sqlRepo .= "UPDATE reposiciones SET terminada = 1 WHERE _id = {$miEmpleado['id_reposicion']}";
-        // $sqlRepo .= "DELETE FROM `ordenes_fila_reposiciones` WHERE _id = {$miInsumo['id_orden']};";
+        $sqlRepo = "UPDATE reposiciones SET terminada = 1 WHERE _id = {$miEmpleado['id_reposicion']};";
+        $sqlRepo .= "DELETE FROM `ordenes_fila_reposiciones` WHERE id_reposicion = {$miEmpleado['id_reposicion']};";
 
-        // $response_update_reposicion = $localConnection->goQuery($sqlRepo);
+        $response_update_reposicion = $localConnection->goQuery($sqlRepo);
 
         // Emininar reposcion de orden_reposiciones
         // Verificar si existe el departamento para actualziarlo
