@@ -2246,16 +2246,19 @@ return function (App $app) {
         WITH AssignmentData AS (
             -- Primero, consolidamos todo lo de la tabla de asignaciones en una sola fila por tarea
             SELECT
-                id_orden,
-                id_departamento,
-                COUNT(DISTINCT id_empleado) AS numero_de_empleados,
-                MIN(fecha_inicio) AS fecha_inicio_agregada,
-                MAX(fecha_terminado) AS fecha_terminado_agregada
+                ldea.id_orden,
+                ldea.id_departamento,
+                COUNT(DISTINCT ldea.id_empleado) AS numero_de_empleados,
+                MIN(ldea.fecha_inicio) AS fecha_inicio_agregada,
+                MAX(ldea.fecha_terminado) AS fecha_terminado_agregada
             FROM
-                lotes_detalles_empleados_asignados
+                lotes_detalles_empleados_asignados ldea
+            JOIN ordenes o ON o._id = ldea.id_orden
+            WHERE
+                (o.status LIKE 'En espera' OR o.status LIKE 'activa' OR o.status LIKE 'pausada')
             GROUP BY
-                id_orden,
-                id_departamento
+                ldea.id_orden,
+                ldea.id_departamento
         )
         -- Consulta principal que ahora une los datos pre-agregados
         SELECT
@@ -3095,11 +3098,19 @@ return function (App $app) {
 
       $whereClause = "WHERE o._id IN ($idsStr)";
 
-      // Simplified query for bulk requests - less expensive
+      // --- OPTIMIZACIÓN: Usar CTE y evitar subconsultas correlacionadas ---
+
+      // Filtro de empleado para el cálculo de tiempo real
+      $empleadoCondition = "";
       if ($id_empleado) {
-        $realTimeCalculation = "
-            COALESCE(
-                 (SELECT SUM(
+        $empleadoCondition = "AND sub_ldea.id_empleado = $id_empleado";
+      }
+
+      $sql = "
+        WITH TiemposCalculados AS (
+            SELECT 
+                sub_ldea.id_orden,
+                SUM(
                     CASE 
                         WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
@@ -3107,73 +3118,51 @@ return function (App $app) {
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
                         ELSE 0 
                     END
-                    / 
-                    CASE 
-                        WHEN sub_ldea.id_lotes_detalles IS NULL THEN 
-                            GREATEST((SELECT COUNT(*) FROM lotes_detalles ld_count WHERE ld_count.id_orden = sub_ldea.id_orden AND ld_count.id_departamento = sub_ldea.id_departamento), 1)
-                        ELSE 1
-                    END
-                 )
-                 FROM lotes_detalles_empleados_asignados sub_ldea 
-                 WHERE (sub_ldea.id_lotes_detalles = ld._id 
-                    OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento))
-                 AND sub_ldea.id_empleado = $id_empleado
-                 ), 
-                0
-            )
-          ";
-      } else {
-        $realTimeCalculation = "
-            CASE 
-                WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
-                    TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
-                WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
-                    TIMESTAMPDIFF(SECOND, ld.fecha_inicio, NOW())
-                ELSE 0
-            END
-          ";
-      }
-
-      $sql = "SELECT 
-                  o._id AS id_orden,
-                  o.status,
-                  op.name AS producto,
-                  op.cantidad,
-                  SUM($realTimeCalculation) AS tiempo_total_segundos,
-                  (
-                      SELECT COALESCE(SUM(ptp.tiempo * op.cantidad), 0)
-                      FROM products_tiempos_de_produccion ptp
-                      WHERE ptp.id_product = op.id_woo
-                      " . ($id_empleado ? "
-                      AND ptp.id_departamento IN (
-                          SELECT DISTINCT ld_sub.id_departamento
-                          FROM lotes_detalles ld_sub
-                          JOIN lotes_detalles_empleados_asignados ldea_sub ON 
-                              ldea_sub.id_empleado = $id_empleado AND (
-                                  ldea_sub.id_lotes_detalles = ld_sub._id 
-                                  OR (ldea_sub.id_lotes_detalles IS NULL AND ldea_sub.id_orden = o._id AND ldea_sub.id_departamento = ld_sub.id_departamento)
-                              )
-                          WHERE ld_sub.id_ordenes_productos = op._id
-                      )
-                      " : "") . "
-                  ) AS tiempo_proyectado_segundos,
-                  (
-                    SELECT MIN(fecha_inicio)
-                    FROM lotes_detalles_empleados_asignados ldea_start
-                    WHERE ldea_start.id_orden = o._id
-                  ) AS fecha_inicio_primer_proceso
-              FROM 
-                  ordenes o
-              JOIN 
-                  ordenes_productos op ON op.id_orden = o._id
-              JOIN 
-                  lotes_detalles ld ON ld.id_ordenes_productos = op._id
-              $whereClause
-              GROUP BY 
-                  op._id
-              ORDER BY 
-                  o._id DESC
-              LIMIT $limit";
+                ) AS tiempo_total_calculado
+            FROM lotes_detalles_empleados_asignados sub_ldea
+            WHERE sub_ldea.id_orden IN ($idsStr)
+            $empleadoCondition
+            GROUP BY sub_ldea.id_orden
+        ),
+        ProyeccionFiltrada AS (
+             SELECT 
+                ptp.id_product,
+                SUM(ptp.tiempo) as tiempo_unitario_total
+             FROM products_tiempos_de_produccion ptp
+             WHERE 1=1 " . ($id_empleado ? "
+                AND ptp.id_departamento IN (
+                    SELECT DISTINCT ldea_emp.id_departamento 
+                    FROM lotes_detalles_empleados_asignados ldea_emp
+                    WHERE ldea_emp.id_empleado = $id_empleado
+                )
+             " : "") . "
+             GROUP BY ptp.id_product
+        )
+        SELECT 
+            o._id AS id_orden,
+            o.status,
+            op.name AS producto,
+            op.cantidad,
+            COALESCE(tc.tiempo_total_calculado, 0) AS tiempo_total_segundos,
+            COALESCE(pf.tiempo_unitario_total * op.cantidad, 0) AS tiempo_proyectado_segundos,
+            (
+                SELECT MIN(fecha_inicio)
+                FROM lotes_detalles_empleados_asignados ldea_start
+                WHERE ldea_start.id_orden = o._id
+            ) AS fecha_inicio_primer_proceso
+        FROM 
+            ordenes o
+        JOIN 
+            ordenes_productos op ON op.id_orden = o._id
+        LEFT JOIN 
+            TiemposCalculados tc ON tc.id_orden = o._id
+        LEFT JOIN
+            ProyeccionFiltrada pf ON pf.id_product = op.id_woo
+        $whereClause
+        ORDER BY 
+            o._id DESC
+        LIMIT $limit
+      ";
 
       $data = $localConnection->goQuery($sql);
       $localConnection->disconnect();
