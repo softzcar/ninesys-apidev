@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Analizar en detalle el flujo de borrado en el endpoint `/empleados/eliminar` antes de eliminar la funcionalidad de borrado físico.
+- Archivos Involucrados: app/routes/employees.php
+- Acción Realizada: Análisis del código del endpoint.
+- Herramienta(s) Utilizada(s): `view_file` (previamente) + revisión manual.
+- Resultado: Flujo detallado preparado.
+- Verificación: No aplica código ejecutado aún.
+- Observaciones de Gemini: El usuario busca reemplazar el borrado físico (DELETE) por un borrado lógico (UPDATE activo=0) en todos los caos, o simplemente impedir el borrado físico.
+- Respuesta de Gemini: Presentación del flujo condicional actual.

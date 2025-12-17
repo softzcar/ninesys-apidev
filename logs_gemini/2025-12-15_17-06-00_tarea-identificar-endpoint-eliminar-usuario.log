@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Identificar si existe un endpoint para borrar registros de la tabla empresas_usuarios.
+- Archivos Involucrados: app/routes/employees.php
+- Acción Realizada: Se buscó en el código fuente del API (backend) rutas relacionadas con "delete" y "usuarios/empleados".
+- Herramienta(s) Utilizada(s): `list_dir`, `grep_search`, `view_file`
+- Resultado: Éxito. Se encontró el endpoint POST `/empleados/eliminar`.
+- Verificación:
+    - Se revisó `app/routes/employees.php`.
+    - En la línea 294 se define `$app->post('/empleados/eliminar', ...`.
+    - La lógica (líneas 313-316) ejecuta un `DELETE FROM empresas_usuarios WHERE id_usuario = ...` si el usuario no tiene pagos registrados.
+    - Si tiene pagos, realiza un "soft delete" (desactivación) actualizando el campo `activo` a 0.
+- Observaciones de Gemini: El endpoint utiliza el método HTTP POST en lugar de DELETE, y maneja lógica condicional para preservar la integridad referencial (pagos).
+- Respuesta de Gemini: Confirmación de la existencia del endpoint `/empleados/eliminar` con detalle de su comportamiento (eliminación física o lógica según historial de pagos).

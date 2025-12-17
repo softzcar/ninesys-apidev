@@ -1,0 +1,10 @@
+- Solicitud del Usuario: Optimizar endpoints lentos (`proyeccion-entrega` >30s, `manufacturing-time` >50s) en Empresa 152.
+- Archivos Involucrados: `app/routes/manufacturing.php`
+- Acción Realizada: 
+    1. Se reescribió la consulta de `proyeccion-entrega` para filtrar por estado de orden (`activa`, `en espera`, `pausada`) DENTRO del CTE, evitando escanear millones de registros históricos.
+    2. Se reescribió `manufacturing-time` reemplazando subconsultas correlacionadas (N+1) con `JOIN` a un CTE (`TiemposCalculados`) pre-filtrado por los IDs solicitados.
+- Herramienta(s) Utilizada(s): `multi_replace_file_content`, `run_command` (git, ssh).
+- Resultado: Éxito en despliegue.
+- Verificación: Se requiere que el usuario cargue nuevamente el dashboard y verifique los tiempos en la pestaña Network. Se esperan tiempos < 2s.
+- Observaciones de Gemini: La lógica anterior escalaba linealmente con el historial total de la base de datos, lo que explicaba la degradación progresiva.
+- Respuesta de Gemini: Optimizaciones desplegadas. Por favor verificar.

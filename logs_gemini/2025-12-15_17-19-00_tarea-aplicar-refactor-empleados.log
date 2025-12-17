@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Eliminación de lógica de borrado y modificación de usuarios en el endpoint `/empleados/eliminar`.
+- Archivos Involucrados: `app/routes/employees.php` (Líneas 301-333)
+- Acción Realizada: Se reemplazó el bloque condicional que ejecutaba `DELETE` o `UPDATE activo=0` por un bloque lineal simple.
+- Herramienta(s) Utilizada(s): `replace_file_content`
+- Resultado: Éxito.
+- Verificación: 
+    - El nuevo código ejecuta `UPDATE lotes... SET id_empleado = NULL`.
+    - Ejecuta `DELETE FROM empresas_usuarios_departamentos`.
+    - No ejecuta ninguna consulta contra `empresas_usuarios`.
+    - Devuelve un mensaje claro indicando solo desvinculación.
+- Observaciones de Gemini: El ID de la tarea permanece como "borrado" aunque funcionalmente es "desvincular", para mantener compatibilidad con el frontend que llama a este endpoint.
+- Respuesta de Gemini: Confirmación de que el refactor ha sido aplicado exitosamente según los criterios estrictos del usuario.

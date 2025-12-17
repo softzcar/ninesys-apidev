@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Optimizar despliegue frontend para evitar solicitud múltiple de contraseñas.
+- Archivos Involucrados: `deploy.sh`
+- Acción Realizada: Se modificó la variable `REMOTE_HOST` en `deploy.sh` de la IP `194.195.86.253` al alias `vps-ninesys`. Esto permite que `ssh` y `rsync` utilicen la configuración de `~/.ssh/config` que incluye la clave SSH (`IdentityFile`), evitando la autenticación por password.
+- Herramienta(s) Utilizada(s): `run_command` (sed).
+- Resultado: Configuración actualizada.
+- Verificación: Pendiente ejecución por el usuario.
+- Observaciones de Gemini: El usuario sugirió ejecutar desde el VPS, pero se le explica que la ejecución local con claves es la práctica estándar y evita la complejidad de configurar un entorno de build en el servidor.
+- Respuesta de Gemini: Script optimizado. Intenta desplegar nuevamente.

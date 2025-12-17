@@ -1,0 +1,12 @@
+- Solicitud del Usuario: vamos a revisar la página `/inventario/recarga-tintas/inventario/recarga-tintas` en ella tenemos un SELECT llamado `Seleccionar Insumo (Tinta):` donde vemos la información de la tinta, necesitamos incuir en la informacion de cada opción el nombre de la tinta, vamos a revisar si esa información nos está lllegando par aincluirla
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/inventory.php
+    - /home/developer/Escritorio/niesys/app_multi/components/admin/RecargaTintas.vue
+- Acción Realizada: 
+    - Se modificó la consulta SQL en `app/routes/inventory.php` dentro del endpoint `/inventario-tintas` para incluir la columna `insumo`.
+    - Se modificó `components/admin/RecargaTintas.vue` para que la propiedad computada `suppliesOptions` muestre el nombre del insumo (`${supply.insumo}`) en el texto de las opciones del select.
+- Herramienta(s) Utilizada(s): `view_file`, `replace_file_content`
+- Resultado: Éxito
+- Verificación: Se verificó mediante revisión de código que la consulta devuelve el campo esperado y que el componente Vue lo utiliza correctamente en la interpolación del string.
+- Observaciones de Gemini: La modificación fue directa y no requirió cambios estructurales mayores.
+- Respuesta de Gemini: He completado la tarea. Se modificó el backend para enviar el nombre del insumo y el frontend para mostrarlo en el selector.

@@ -1,6 +1,6 @@
 # Instrucciones para Gemini
 
-- La comunicación debe ser siempre en español.
+- **La comunicación debe ser siempre en español.**
 - **Gestión de Bitácora (CRÍTICO):**
     - **Estrategia de Logging:** Se utilizarán archivos `.log` individuales para registrar cada tarea completada. Estos archivos se almacenarán en la carpeta `/logs_gemini`.
     - **Nomenclatura de Archivos:** Cada archivo de log se nombrará siguiendo el formato `YYYY-MM-DD_HH-MM-SS_tarea-[descripcion_corta].log` para asegurar la unicidad y la cronología.

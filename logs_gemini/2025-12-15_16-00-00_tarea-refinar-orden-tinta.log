@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Ok, en el orden como mostramos los datos en las opciones del SELECT vamos a dejar ell ID de primero como está, pero vamos a interctambiar los otros datos, vmaos a poner despues del ID el COLOR y por ÚLtimo el nombre de la tinta
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/niesys/app_multi/components/admin/RecargaTintas.vue
+- Acción Realizada: 
+    - Se modificó el formato del texto en `suppliesOptions` en `components/admin/RecargaTintas.vue`.
+    - Orden anterior: `ID - Nombre - Color`
+    - Nuevo orden: `ID - Color - Nombre`
+- Herramienta(s) Utilizada(s): `replace_file_content`
+- Resultado: Éxito
+- Verificación: Revisión del código modificado.
+- Observaciones de Gemini: Cambio cosmético simple solicitado por el usuario.
+- Respuesta de Gemini: He actualizado el orden de la información en el selector: ID - Color - Nombre.

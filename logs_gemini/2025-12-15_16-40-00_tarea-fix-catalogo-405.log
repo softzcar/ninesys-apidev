@@ -1,0 +1,8 @@
+- Solicitud del Usuario: `405 Method Not Allowed` al crear insumo de catálogo.
+- Archivos Involucrados: app/routes/catalogs.php
+- Acción Realizada: Se agregó el endpoint `POST /catalogo-insumos-productos` para permitir la creación de nuevos items en el catálogo.
+- Herramienta(s) Utilizada(s): multi_replace_file_content, run_command (git)
+- Resultado: Éxito
+- Verificación: Revisión de código y commit. Despliegue pendiente.
+- Observaciones de Gemini: El endpoint no existía, se implementó según el schema de la DB.
+- Respuesta de Gemini: Confirmación de la implementación del endpoint.

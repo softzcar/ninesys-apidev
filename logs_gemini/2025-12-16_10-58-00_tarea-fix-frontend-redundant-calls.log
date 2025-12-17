@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Eliminar llamadas repetidas al finalizar una reposición en el frontend.
+- Archivos Involucrados: `/home/developer/Escritorio/niesys/app_multi/components/empleados/SseOrdenesAsignadasModalExtra.vue`
+- Acción Realizada: Se eliminaron 3 llamadas `$emit('reload')` redundantes en los métodos `validateForm`, `terminarTodo` y `postImp`. Se mantuvo la llamada en `registrarEstado` (y se añadirá lógica de limpieza en `terminarTodo` para cerrar el modal correctamente).
+- Herramienta(s) Utilizada(s): `multi_replace_file_content`.
+- Resultado: Éxito.
+- Verificación: Se verificó el código fuente modificado. Se requiere despliegue del frontend para verificar en vivo.
+- Observaciones de Gemini: El flujo original lanzaba eventos múltiples causando ráfagas de 4-5 peticiones idénticas al backend.
+- Respuesta de Gemini: Corrección aplicada. Procediendo a solicitar despliegue.

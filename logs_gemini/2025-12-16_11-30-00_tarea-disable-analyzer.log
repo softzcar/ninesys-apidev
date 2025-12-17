@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Desactivar la apertura automática del navegador con `Webpack Bundle Analyzer` al ejecutar el script de despliegue.
+- Archivos Involucrados: `nuxt.config.js`
+- Acción Realizada: Se comentó la línea `analyze: true` en la configuración de `build` de `nuxt.config.js`. Esto desactiva el analizador globalmente para el comando `generate`.
+- Herramienta(s) Utilizada(s): `replace_file_content`.
+- Resultado: Configuración desactivada.
+- Verificación: En el próximo despliegue no debería abrirse ninguna pestaña del navegador.
+- Observaciones de Gemini: El usuario creía que la configuración estaba en `deploy.sh`, pero era una directiva de Nuxt en su archivo de configuración.
+- Respuesta de Gemini: Analyzer desactivado en `nuxt.config.js`.

@@ -1,0 +1,14 @@
+- Solicitud del Usuario: el usuario solicitó optimizar las llamadas al endpoint `/ordenes/vinculadas/[ID_ORDEN]` en la página `/test` para evitar sobrecarga del servidor. Posteriormente sugirió implementar un endpoint batch.
+- Archivos Involucrados: 
+    - `/home/developer/Escritorio/niesys/app_multi/components/produccionsse/controlDeProduccionPro.vue`
+    - `/home/developer/Escritorio/niesys/app_multi/components/ordenes/vinculadasV2.vue`
+    - `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/production.php`
+- Acción Realizada: 
+    - Se analizó el código backend y se descubrió que el endpoint `/sse/produccion` ya devolvía la información vinculada (`vinculadas`) necesaria.
+    - Se identificó un error en `controlDeProduccionPro.vue` donde se pasaba la prop incorrecta (`:vinculadas` en lugar de `:ordenes_vinculadas`) al componente hijo.
+    - Se corrigió el nombre de la prop en `controlDeProduccionPro.vue`.
+- Herramienta(s) Utilizada(s): `default_api.task_boundary`, `default_api.view_file`, `default_api.grep_search`, `default_api.replace_file_content`.
+- Resultado: Éxito.
+- Verificación: Se verificó mediante análisis de código estático que la corrección del nombre de la propiedad permitirá que `vinculadasV2.vue` reciba los datos precargados y evite realizar la llamada API individual `getOrdenesVinculadas()`.
+- Observaciones de Gemini: La solución fue mucho más simple de lo esperado, ya que la optimización backend ya existía pero no se estaba utilizando por un error tipográfico en el frontend.
+- Respuesta de Gemini: Se ha corregido el error en el frontend que impedía el uso de la carga por lotes. No fue necesario realizar cambios en el backend.

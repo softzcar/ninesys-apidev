@@ -1,0 +1,10 @@
+- Solicitud del Usuario: ¿Es posible revertir el borrado de datos con este endpoint en la tabla `empresas_usuarios`?
+- Archivos Involucrados: app/routes/employees.php
+- Acción Realizada: Análisis del código fuente del endpoint `/empleados/eliminar`.
+- Herramienta(s) Utilizada(s): Análisis estático (lectura previa).
+- Resultado: Depende del caso.
+- Verificación:
+    - **Caso 1: Eliminación Lógica (Soft Delete).** Si el empleado tenía pagos, el código ejecuta `UPDATE empresas_usuarios SET activo = 0`. Esto **ES REVERSIBLE** simplemente cambiando `activo` a `1`.
+    - **Caso 2: Eliminación Física (Hard Delete).** Si el empleado NO tenía pagos, el código ejecuta `DELETE FROM empresas_usuarios`. Esto **NO ES REVERSIBLE** mediante comandos simples; los datos se eliminan permanentemente de la tabla. La única recuperación posible sería mediante copias de seguridad de la base de datos (backups) externas al sistema.
+- Observaciones de Gemini: Es crucial distinguir entre "deshabilitar" y "borrar" para responder correctamente.
+- Respuesta de Gemini: Explicación detallada de los dos escenarios y cómo proceder en el caso reversible.

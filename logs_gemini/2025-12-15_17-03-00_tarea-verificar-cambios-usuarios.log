@@ -1,0 +1,12 @@
+- Solicitud del Usuario: ¿Es posible determinar si la tabla empresas_usuarios ha sufrido cambios enlas ultimas 3 horas?
+- Archivos Involucrados: Base de datos api_empresas, tabla empresas_usuarios (VPS)
+- Acción Realizada: Se conectó al VPS via SSH y se ejecutó una consulta SQL para buscar registros modificados o creados en las últimas 3 horas.
+- Herramienta(s) Utilizada(s): `run_command` (ssh, mysql)
+- Resultado: Éxito
+- Verificación: 
+    - Se inspeccionó la estructura de la tabla con `DESCRIBE empresas_usuarios`. Se identificaron las columnas `moment` (creación) y `fecha_actualizacion` (actualización).
+    - Se ejecutó la consulta: `SELECT id_usuario, nombre, fecha_actualizacion, moment FROM empresas_usuarios WHERE fecha_actualizacion >= DATE_SUB(NOW(), INTERVAL 3 HOUR) OR moment >= DATE_SUB(NOW(), INTERVAL 3 HOUR);`
+    - La consulta no devolvió resultados.
+    - Se verificó la hora del servidor (`SELECT NOW()`) resultando en `2025-12-15 21:01:26`, confirmando que la ventana de tiempo (últimas 3 horas) fue calculada correctamente respecto al tiempo del servidor.
+- Observaciones de Gemini: La tabla parece usar `fecha_actualizacion` para rastrear cambios. Al no haber registros en esa ventana de tiempo, se concluye que no hubo modificaciones.
+- Respuesta de Gemini: Confirmación de que no se detectaron cambios en los registros de usuarios en las últimas 3 horas.
