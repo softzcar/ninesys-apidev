@@ -293,6 +293,21 @@ return function (App $app) {
             $insumosResumenDataDetalles = $db->goQuery($sqlInsumosResumenDetalles, [$inicio, $fin]);
             $finalResponse['insumos_detalles'] = $insumosResumenDataDetalles;
 
+            // Consulta de tareas de empleados (debe ir ANTES del disconnect)
+            $sqlHorarioEmpleados = "SELECT
+            a.id_orden,
+            a.id_empleado,
+            a.fecha_inicio,
+            a.fecha_terminado,
+            TIME_TO_SEC(TIMEDIFF(a.fecha_terminado, a.fecha_inicio)) / 60 AS minutos_transcurridos
+        FROM
+            lotes_detalles_empleados_asignados a
+        WHERE
+            a.fecha_inicio IS NOT NULL AND a.fecha_terminado IS NOT NULL;
+      ";
+            $horarioEmpleadosResult = $db->goQuery($sqlHorarioEmpleados);
+            $finalResponse['tareas_data'] = $horarioEmpleadosResult;
+
             $db->disconnect();
 
             // --- 2. Consulta de Gastos Fijos (Base de datos de empresas) ---
@@ -334,20 +349,6 @@ return function (App $app) {
             // $horarioResult = $dbEmpresas->goQuery($sqlHorario, [$id_empresa]);
             $horarioResult = $dbEmpresas->goQuery($sqlHorario);
             $finalResponse['costo_hora_empleado'] = $horarioResult;
-
-            $sqlHorarioEmpleados = "SELECT
-            a.id_orden,
-            a.id_empleado,
-            a.fecha_inicio,
-            a.fecha_terminado,
-            TIME_TO_SEC(TIMEDIFF(a.fecha_terminado, a.fecha_inicio)) / 60 AS minutos_transcurridos
-        FROM
-            lotes_detalles_empleados_asignados a
-        WHERE
-            a.fecha_inicio IS NOT NULL AND a.fecha_terminado IS NOT NULL;
-      ";
-            $horarioEmpleadosResult = $db->goQuery($sqlHorarioEmpleados);
-            $finalResponse['tareas_data'] = $horarioEmpleadosResult;
 
 
             if (isset($gastosResult['status']) && $gastosResult['status'] === 'error') {
