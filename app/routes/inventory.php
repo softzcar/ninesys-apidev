@@ -730,15 +730,13 @@ return function (App $app) {
 
         // $sql = 'SELECT imo.id_orden, imo.c cyan, imo.m magenta, imo.y yellow, imo.k black, (imo.c + imo.m + imo.y + imo.k) total_tinta FROM tintas imo ' . $where . ' ORDER BY imo.id_orden ASC';
         $sql = <<<SQL
-      -- Usamos dos CTEs: uno para encontrar el costo por ml, y otro para calcular el costo total por orden.
+      -- Usamos tres CTEs: uno para recargas, otro para fallback desde inventario, y otro para calcular el costo total.
       WITH 
       -- CTE 1: Encuentra el costo por ml de la última recarga para cada tanque.
       last_ink_refill_cost AS (
           SELECT
               tr.id_catalogo_impresora,
               tr.color,
-              -- Calculamos el costo por ml dividiendo el costo total de la botella por su cantidad inicial.
-              -- CORRECCIÓN: Verificamos cantidad_inicial > 0 para evitar división por cero
               CASE 
                   WHEN inv.cantidad_inicial > 0 THEN (inv.costo / inv.cantidad_inicial)
                   ELSE 0 
@@ -749,43 +747,56 @@ return function (App $app) {
           JOIN
               inventario inv ON tr.id_insumo = inv._id
       ),
-      -- CTE 2: Usa el CTE anterior para calcular el costo total de la tinta para cada orden.
+      -- CTE 2: Fallback - Obtiene el costo por ml desde inventario usando tinta_filtro
+      fallback_ink_cost AS (
+          SELECT
+              tf.color AS color_code,
+              CASE
+                  WHEN inv.cantidad_inicial > 0 THEN (inv.costo / inv.cantidad_inicial)
+                  ELSE 0
+              END AS ink_cost_per_ml
+          FROM tinta_filtro tf
+          JOIN inventario inv ON tf.id_inventario = inv._id
+      ),
+      -- CTE 3: Usa los CTEs anteriores para calcular el costo total de la tinta para cada orden.
       costos_por_orden AS (
           SELECT
               tin.id_orden,
               ROUND(
-                  (COALESCE(tin.c, 0) * COALESCE(lic_c.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.m, 0) * COALESCE(lic_m.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.y, 0) * COALESCE(lic_y.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.k, 0) * COALESCE(lic_k.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.w, 0) * COALESCE(lic_w.ink_cost_per_ml, 0))
+                  (COALESCE(tin.c, 0) * COALESCE(lic_c.ink_cost_per_ml, fic_c.ink_cost_per_ml, 0)) +
+                  (COALESCE(tin.m, 0) * COALESCE(lic_m.ink_cost_per_ml, fic_m.ink_cost_per_ml, 0)) +
+                  (COALESCE(tin.y, 0) * COALESCE(lic_y.ink_cost_per_ml, fic_y.ink_cost_per_ml, 0)) +
+                  (COALESCE(tin.k, 0) * COALESCE(lic_k.ink_cost_per_ml, fic_k.ink_cost_per_ml, 0)) +
+                  (COALESCE(tin.w, 0) * COALESCE(lic_w.ink_cost_per_ml, fic_w.ink_cost_per_ml, 0))
               , 2) AS total_tinta_costo
           FROM
               tintas tin
-          -- NOTA: Asumiendo que id_catalogo_impresora (singular) en tintas_recargas corresponde a id_catalogo_impresoras (plural) en tintas
           LEFT JOIN last_ink_refill_cost lic_c ON lic_c.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_c.color = 'C' AND lic_c.rn = 1
           LEFT JOIN last_ink_refill_cost lic_m ON lic_m.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_m.color = 'M' AND lic_m.rn = 1
           LEFT JOIN last_ink_refill_cost lic_y ON lic_y.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_y.color = 'Y' AND lic_y.rn = 1
           LEFT JOIN last_ink_refill_cost lic_k ON lic_k.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_k.color = 'K' AND lic_k.rn = 1
           LEFT JOIN last_ink_refill_cost lic_w ON lic_w.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_w.color = 'W' AND lic_w.rn = 1
+          -- Fallback desde inventario
+          LEFT JOIN fallback_ink_cost fic_c ON fic_c.color_code = 'C'
+          LEFT JOIN fallback_ink_cost fic_m ON fic_m.color_code = 'M'
+          LEFT JOIN fallback_ink_cost fic_y ON fic_y.color_code = 'Y'
+          LEFT JOIN fallback_ink_cost fic_k ON fic_k.color_code = 'K'
+          LEFT JOIN fallback_ink_cost fic_w ON fic_w.color_code = 'W'
           GROUP BY tin.id_orden
       )
 
       -- Consulta Final: Unimos tu consulta original con nuestros costos calculados.
-      -- LOGGING: Si necesitas debug, puedes agregar aquí un SELECT * FROM last_ink_refill_cost WHERE rn = 1 para verificar costos
       SELECT 
           imo.id_orden, 
           imo.c AS cyan, 
           imo.m AS magenta, 
           imo.y AS yellow, 
           imo.k AS black,
-          -- Nota: He añadido la tinta blanca (w) al total para que sea consistente con el cálculo de costos.
+          imo.w AS white,
           (COALESCE(imo.c, 0) + COALESCE(imo.m, 0) + COALESCE(imo.y, 0) + COALESCE(imo.k, 0) + COALESCE(imo.w, 0)) AS total_tinta_consumo_ml,
-          -- La nueva columna con el costo total
           cpo.total_tinta_costo
       FROM 
           tintas imo
-      -- Unimos con los resultados de nuestro CTE de costos
       LEFT JOIN 
           costos_por_orden cpo ON imo.id_orden = cpo.id_orden
       {$where}
