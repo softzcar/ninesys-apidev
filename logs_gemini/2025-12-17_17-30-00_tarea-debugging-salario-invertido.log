@@ -1,0 +1,35 @@
+- Solicitud del Usuario: Investigar por qué la columna "Salario Invertido" muestra $0.00 en el reporte de costos de producción
+
+- Archivos Involucrados:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/reports.php
+  - /home/developer/Escritorio/niesys/app_multi/mixins/mixin-time.js
+  - /home/developer/Escritorio/niesys/app_multi/components/admin/ReporteCostosProduccion.vue
+
+- Acción Realizada:
+  1. Investigado el flujo de datos desde el backend hasta el frontend
+  2. Descubierto que la consulta de tareas_data se ejecutaba DESPUÉS del disconnect de la base de datos, resultando en un array vacío
+  3. Movida la consulta de sqlHorarioEmpleados ANTES del db->disconnect() en reports.php
+  4. Descubierto que empleados_asignados puede venir como número (un solo empleado) o como string separado por comas
+  5. Modificada la función calcularCostoSalariosOrden en mixin-time.js para manejar ambos casos
+  6. Agregada validación para evitar errores cuando los datos vienen vacíos
+
+- Herramientas Utilizadas: 
+  - view_file, grep_search, replace_file_content, run_command (curl, ssh, mysql)
+
+- Resultado: Éxito
+
+- Verificación:
+  - Backend: curl confirmó que costo_hora_empleado tiene 7 empleados y tareas_data tiene 16 registros
+  - Frontend: pendiente verificación visual por el usuario
+
+- Observaciones de Gemini:
+  - El problema principal era que db->disconnect() se ejecutaba antes de la consulta de tareas_data
+  - El segundo problema era que el frontend no manejaba el caso cuando empleados_asignados es un número en lugar de un string
+  - Los datos del backend ahora llegan correctamente: empleados 500 y 501 tienen costo_por_hora de ~$2.31/hora
+
+- Respuesta de Gemini:
+  Se corrigieron dos problemas:
+  1. Backend: La consulta de tareas_data se movió antes del disconnect
+  2. Frontend: Se modificó la función calcularCostoSalariosOrden para manejar empleados_asignados tanto como número como string
+  
+  Por favor recarga la página /reporte-costos-produccion para verificar que ahora el salario invertido se muestra correctamente.

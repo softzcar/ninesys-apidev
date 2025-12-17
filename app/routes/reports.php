@@ -29,6 +29,9 @@ return function (App $app) {
                 $params[] = $fin;
             }
 
+            // Filtrar solo órdenes terminadas o entregadas (con datos completos de producción)
+            $whereConditions[] = "a.status IN ('terminada', 'entregada')";
+
             $sqlSalarios = "SELECT id_usuario id_empleado, salario_monto, salario_periodo, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_empresa = $id_empresa";
             $salariosData = $db->goQuery($sqlSalarios);
             $finalResponse['salarios_data'] = $salariosData;
@@ -85,7 +88,7 @@ return function (App $app) {
             SELECT id_orden, COUNT(_id) AS total_reposiciones
             FROM reposiciones
             GROUP BY id_orden
-        ) repo ON a._id = repo.id_orden;
+        ) repo ON a._id = repo.id_orden
       ";
 
             if (!empty($whereConditions)) {
