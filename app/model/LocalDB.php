@@ -174,7 +174,7 @@ class LocalDB
 
   public function disconnect()
   {
-    unset($this->pdo);  // Desconectar cerrando la conexión PDO
+    $this->pdo = null;  // Desconectar cerrando la conexión PDO
   }
 
   public function setSql($sql)
