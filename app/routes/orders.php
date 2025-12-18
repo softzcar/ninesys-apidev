@@ -292,147 +292,192 @@ return function (App $app) {
   $app->post('/orden/abono', function (Request $request, Response $response, $args) {
     $datosAbono = $request->getParsedBody();
     $localConnection = new LocalDB();
+    $object = [];
 
-    // OBTENER ID DEL EMPLEADO PARA GENERAR EL PAGO
-    $sql = 'SELECT responsable FROM ordenes WHERE _id = ' . $datosAbono['id'];
-    $id_vendedor = $localConnection->goQuery($sql)[0]['responsable'];
-
-    // BUSCAR COMISION DEL VENDEDOR
-    $sql = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $id_vendedor;
-    $respComision = $localConnection->goQuery($sql)[0];
-
-    if ($respComision['comision_tipo'] === 'porcentaje') {
-      $comision = floatval($respComision['comision_porcentaje']);
-    } else {
-      $comisionFloat = floatval($respComision['comision']);
-      $comision = number_format($comisionFloat, 2);
+    // ========== VALIDACIÓN DE DATOS DE ENTRADA ==========
+    if (empty($datosAbono['id']) || !is_numeric($datosAbono['id'])) {
+      return ApiResponse::validationError($response, 'Error: ID de orden inválido');
     }
-    $object['sql'] = $sql;
-    $object['comision'] = $comision;
 
-    /*  $localConnection->disconnect();
+    $abono_val = floatval($datosAbono['abono'] ?? 0);
+    $descuento_val = floatval($datosAbono['descuento'] ?? 0);
 
-     $response->getBody()->write(json_encode($floatValue), JSON_NUMERIC_CHECK);
-     return $response
-         ->withHeader('Content-Type', 'application/json')
-         ->withStatus(200); */
+    if ($abono_val <= 0 && $descuento_val <= 0) {
+      return ApiResponse::validationError($response, 'Error: Debe especificar un monto de abono o descuento mayor a 0');
+    }
 
-    // ******************************************
+    if (empty($datosAbono['empleado']) || !is_numeric($datosAbono['empleado'])) {
+      return ApiResponse::validationError($response, 'Error: ID de empleado inválido');
+    }
 
-    // OBTENER ID DEL EMPLEADO PARA GENERAR EL PAGO
-    $sql = 'SELECT responsable FROM ordenes WHERE _id = ' . $datosAbono['id'];
-    $id_vendedor = $localConnection->goQuery($sql)[0]['responsable'];
+    // ========== INICIAR TRANSACCIÓN ==========
+    $localConnection->beginTransaction();
 
-    $sql = 'SELECT pago_abono FROM ordenes WHERE _id = ' . $datosAbono['id'];
-    $primerAbono = $localConnection->goQuery($sql);
-    $totalAbono = floatval($datosAbono['abono']);
+    try {
+      // OBTENER ID DEL EMPLEADO PARA GENERAR EL PAGO
+      $sql = 'SELECT responsable FROM ordenes WHERE _id = ' . intval($datosAbono['id']);
+      $resultVendedor = $localConnection->goQuery($sql);
 
-    // PREPARAR FECHAS
-    $myDate = new CustomTime();
-    $now = $myDate->today();
-
-    $detalleAbono = isset($datosAbono['tipoAbono']) ? $datosAbono['tipoAbono'] : '';
-
-    $values = "'" . $now . "',";
-    $values .= "'" . $datosAbono['id'] . "',";
-    $values .= "'" . $totalAbono . "',";
-    $values .= "'" . $datosAbono['descuento'] . "',";
-    $values .= "'" . $datosAbono['empleado'] . "',";
-    $values .= "'" . $detalleAbono . "'";
-
-    $sql = 'INSERT INTO abonos(moment, id_orden, abono, descuento, id_empleado, detalle) VALUES (' . $values . ')';
-    $data = $localConnection->goQuery($sql);
-
-    // INSERTAR EN PAGOS_DESCUENTOS SI HAY DESCUENTO
-    if (floatval($datosAbono['descuento']) > 0) {
-      $sql_last_abono = "SELECT MAX(_id) as last_id FROM abonos WHERE id_orden = {$datosAbono['id']}";
-      $res_last_abono = $localConnection->goQuery($sql_last_abono);
-      $id_abono_creado = $res_last_abono[0]['last_id'];
-
-      $detalleDescuento = isset($datosAbono['descuentoDetalle']) ? $datosAbono['descuentoDetalle'] : 'Descuento en abono';
-
-      if ($id_abono_creado) {
-        $sql_pagos_descuentos = "INSERT INTO pagos_descuentos (id_pago, monto, descripcion) VALUES ({$id_abono_creado}, {$datosAbono['descuento']}, '" . addslashes($detalleDescuento) . "')";
-        $localConnection->goQuery($sql_pagos_descuentos);
-        $object['sql_pagos_descuentos'] = $sql_pagos_descuentos;
+      if (empty($resultVendedor) || !isset($resultVendedor[0]['responsable'])) {
+        throw new Exception('Orden no encontrada');
       }
+      $id_vendedor = $resultVendedor[0]['responsable'];
+
+      // BUSCAR COMISION DEL VENDEDOR
+      $sql = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . intval($id_vendedor);
+      $respComision = $localConnection->goQuery($sql);
+
+      if (empty($respComision)) {
+        throw new Exception('No se encontró información del vendedor');
+      }
+      $respComision = $respComision[0];
+
+      if ($respComision['comision_tipo'] === 'porcentaje') {
+        $comision = floatval($respComision['comision_porcentaje']);
+      } else {
+        $comisionFloat = floatval($respComision['comision']);
+        $comision = number_format($comisionFloat, 2, '.', '');
+      }
+
+      // PREPARAR FECHAS
+      $myDate = new CustomTime();
+      $now = $myDate->today();
+
+      $detalleAbono = isset($datosAbono['tipoAbono']) ? $datosAbono['tipoAbono'] : '';
+
+      // INSERT EN ABONOS (operación principal)
+      $values = "'" . $now . "',";
+      $values .= "'" . intval($datosAbono['id']) . "',";
+      $values .= "'" . $abono_val . "',";
+      $values .= "'" . $descuento_val . "',";
+      $values .= "'" . intval($datosAbono['empleado']) . "',";
+      $values .= "'" . addslashes($detalleAbono) . "'";
+
+      $sql = 'INSERT INTO abonos(moment, id_orden, abono, descuento, id_empleado, detalle) VALUES (' . $values . ')';
+      $resultAbono = $localConnection->goQuery($sql);
+
+      if (isset($resultAbono['status']) && $resultAbono['status'] === 'error') {
+        throw new Exception('Error al insertar abono: ' . ($resultAbono['message'] ?? 'desconocido'));
+      }
+
+      // INSERTAR EN PAGOS_DESCUENTOS SI HAY DESCUENTO
+      if ($descuento_val > 0) {
+        $sql_last_abono = "SELECT MAX(_id) as last_id FROM abonos WHERE id_orden = " . intval($datosAbono['id']);
+        $res_last_abono = $localConnection->goQuery($sql_last_abono);
+        $id_abono_creado = $res_last_abono[0]['last_id'] ?? null;
+
+        $detalleDescuento = isset($datosAbono['descuentoDetalle']) ? $datosAbono['descuentoDetalle'] : 'Descuento en abono';
+
+        if ($id_abono_creado) {
+          $sql_pagos_descuentos = "INSERT INTO pagos_descuentos (id_pago, monto, descripcion) VALUES ({$id_abono_creado}, {$descuento_val}, '" . addslashes($detalleDescuento) . "')";
+          $localConnection->goQuery($sql_pagos_descuentos);
+        }
+      }
+
+      // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
+      $tasa_peso = isset($datosAbono['tasa_peso']) && is_numeric($datosAbono['tasa_peso']) ? floatval($datosAbono['tasa_peso']) : 1;
+      $tasa_dolar = isset($datosAbono['tasa_dolar']) && is_numeric($datosAbono['tasa_dolar']) ? floatval($datosAbono['tasa_dolar']) : 1;
+      $responsable = isset($datosAbono['responsable']) ? intval($datosAbono['responsable']) : intval($datosAbono['empleado']);
+
+      if (intval($datosAbono['montoDolaresEfectivo'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Dólares', 'Efectivo', '" . floatval($datosAbono['montoDolaresEfectivo']) . "', '1')";
+        $localConnection->goQuery($sql);
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES ('" . floatval($datosAbono['montoDolaresEfectivo']) . "', 'Dólares', 1, '" . addslashes($datosAbono['tipoAbono']) . "', '" . $responsable . "')";
+        $localConnection->goQuery($sql);
+      }
+
+      if (intval($datosAbono['montoDolaresZelle'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detalleZelle'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Dólares', 'Zelle', '" . floatval($datosAbono['montoDolaresZelle']) . "', '1')";
+        $localConnection->goQuery($sql);
+      }
+
+      if (intval($datosAbono['montoDolaresPanama'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (detalle, tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['detallePanama'] ?? '') . "', '" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Dólares', 'Panamá', '" . floatval($datosAbono['montoDolaresPanama']) . "', '1')";
+        $localConnection->goQuery($sql);
+      }
+
+      if (intval($datosAbono['montoPesosEfectivo'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Pesos', 'Efectivo', '" . floatval($datosAbono['montoPesosEfectivo']) . "', '" . $tasa_peso . "')";
+        $localConnection->goQuery($sql);
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES ('" . floatval($datosAbono['montoPesosEfectivo']) . "', 'Pesos', '" . $tasa_peso . "', '" . addslashes($datosAbono['tipoAbono']) . "', '" . $responsable . "')";
+        $localConnection->goQuery($sql);
+      }
+
+      if (intval($datosAbono['montoPesosTransferencia'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detallePesosTransferencia'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Pesos', 'Transferencia', '" . floatval($datosAbono['montoPesosTransferencia']) . "', '" . $tasa_peso . "')";
+        $localConnection->goQuery($sql);
+      }
+
+      if (intval($datosAbono['montoBolivaresEfectivo'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Efectivo', '" . floatval($datosAbono['montoBolivaresEfectivo']) . "', '" . $tasa_dolar . "')";
+        $localConnection->goQuery($sql);
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES ('" . floatval($datosAbono['montoBolivaresEfectivo']) . "', 'Bolívares', '" . $tasa_dolar . "', '" . addslashes($datosAbono['tipoAbono']) . "', '" . $responsable . "')";
+        $localConnection->goQuery($sql);
+      }
+
+      if (intval($datosAbono['montoBolivaresPunto'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Punto', '" . floatval($datosAbono['montoBolivaresPunto']) . "', '" . $tasa_dolar . "')";
+        $localConnection->goQuery($sql);
+      }
+
+      if (intval($datosAbono['montoBolivaresPagomovil'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detallePagomovil'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Pagomovil', '" . floatval($datosAbono['montoBolivaresPagomovil']) . "', '" . $tasa_dolar . "')";
+        $localConnection->goQuery($sql);
+      }
+
+      if (intval($datosAbono['montoBolivaresTransferencia'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detalleBolivaresTransferencia'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Transferencia', '" . floatval($datosAbono['montoBolivaresTransferencia']) . "', '" . $tasa_dolar . "')";
+        $localConnection->goQuery($sql);
+      }
+
+      // ACTUALIZAR TOTALES EN ORDENES
+      if ($abono_val > 0 || $descuento_val > 0) {
+        $sql_update_totales = "UPDATE ordenes SET 
+              pago_abono = pago_abono + {$abono_val},
+              pago_descuento = pago_descuento + {$descuento_val}
+              WHERE _id = " . intval($datosAbono['id']);
+        $resultUpdate = $localConnection->goQuery($sql_update_totales);
+
+        if (isset($resultUpdate['status']) && $resultUpdate['status'] === 'error') {
+          throw new Exception('Error al actualizar totales de la orden');
+        }
+      }
+
+      // OBTENER ULTIMO DE LA TABLA metodos_de_pago
+      $sql_max_id = 'SELECT MAX(_id) last_id FROM metodos_de_pago';
+      $last_id_pago = $localConnection->goQuery($sql_max_id)[0]['last_id'];
+
+      // GUARDAR PAGO DEL VENDEDOR
+      $comision_vendedor = number_format((floatval($datosAbono['abono']) * floatval($comision) / 100), 2, '.', '');
+      $sql = "INSERT INTO pagos (detalle, estatus, monto_pago, id_empleado, id_orden, id_metodos_de_pago) VALUES ('Comercialización', 'aprobado', " . $comision_vendedor . ', ' . intval($id_vendedor) . ', ' . intval($datosAbono['id']) . ', ' . intval($last_id_pago) . ')';
+      $localConnection->goQuery($sql);
+
+      // ========== CONFIRMAR TRANSACCIÓN ==========
+      $localConnection->commit();
+      $localConnection->disconnect();
+
+      // Preparar mensaje de éxito
+      $tipoOperacion = $abono_val > 0 ? 'Abono' : 'Descuento';
+      $montoOperacion = $abono_val > 0 ? $abono_val : $descuento_val;
+      $mensaje = $tipoOperacion . ' de $' . number_format($montoOperacion, 2) . ' registrado correctamente para la orden #' . $datosAbono['id'];
+
+      return ApiResponse::success($response, $mensaje, [
+        'id_orden' => intval($datosAbono['id']),
+        'abono' => $abono_val,
+        'descuento' => $descuento_val
+      ]);
+
+    } catch (Exception $e) {
+      // ========== REVERTIR TRANSACCIÓN EN CASO DE ERROR ==========
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
+      $localConnection->disconnect();
+
+      error_log('Error en /orden/abono: ' . $e->getMessage());
+
+      return ApiResponse::serverError($response, 'Error al registrar el abono. Por favor intente nuevamente.', $e);
     }
-
-    // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
-    $sql_metodos_pago = '';
-    if (intval($datosAbono['montoDolaresEfectivo']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['id'] . "', 'Dólares', 'Efectivo', '" . $datosAbono['montoDolaresEfectivo'] . "', '1');";
-      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES ('" . $datosAbono['montoDolaresEfectivo'] . "', 'Dólares', 1, '" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['responsable'] . "');";
-    }
-
-    if (intval($datosAbono['montoDolaresZelle']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['detalleZelle'] . "',  '" . $datosAbono['id'] . "', 'Dólares', 'Zelle', '" . $datosAbono['montoDolaresZelle'] . "', '1');";
-    }
-
-    if (intval($datosAbono['montoDolaresPanama']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (detalle, tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['detallePanama'] . "', '" . $datosAbono['id'] . "', 'Dólares', 'Panamá', '" . $datosAbono['montoDolaresPanama'] . "', '1');";
-    }
-
-    if (intval($datosAbono['montoPesosEfectivo']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['id'] . "', 'Pesos', 'Efectivo', '" . $datosAbono['montoPesosEfectivo'] . "', '" . $datosAbono['tasa_peso'] . "');";
-      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES ('" . $datosAbono['montoPesosEfectivo'] . "', 'Pesos', '" . $datosAbono['tasa_peso'] . "', '" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['responsable'] . "');";
-    }
-
-    if (intval($datosAbono['montoPesosTransferencia']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['detallePesosTransferencia'] . "', '" . $datosAbono['id'] . "', 'Pesos', 'Transferencia', '" . $datosAbono['montoPesosTransferencia'] . "', '" . $datosAbono['tasa_peso'] . "');";
-    }
-
-    if (intval($datosAbono['montoBolivaresEfectivo']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['id'] . "', 'Bolívares', 'Efectivo', '" . $datosAbono['montoBolivaresEfectivo'] . "', '" . $datosAbono['tasa_dolar'] . "');";
-
-      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES ('" . $datosAbono['montoBolivaresEfectivo'] . "', 'Bolívares', '" . $datosAbono['tasa_dolar'] . "', '" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['responsable'] . "');";
-    }
-
-    if (intval($datosAbono['montoBolivaresPunto']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['id'] . "', 'Bolívares', 'Punto', '" . $datosAbono['montoBolivaresPunto'] . "', '" . $datosAbono['tasa_dolar'] . "');";
-    }
-
-    if (intval($datosAbono['montoBolivaresPagomovil']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['detallePagomovil'] . "', '" . $datosAbono['id'] . "', 'Bolívares', 'Pagomovil', '" . $datosAbono['montoBolivaresPagomovil'] . "', '" . $datosAbono['tasa_dolar'] . "');";
-    }
-
-    if (intval($datosAbono['montoBolivaresTransferencia']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . $datosAbono['tipoAbono'] . "', '" . $datosAbono['detalleBolivaresTransferencia'] . "', '" . $datosAbono['id'] . "', 'Bolívares', 'Transferencia', '" . $datosAbono['montoBolivaresTransferencia'] . "', '" . $datosAbono['tasa_dolar'] . "');";
-    }
-
-    if (!empty($sql_metodos_pago)) {
-      $object['metodos_pago'] = $localConnection->goQuery($sql_metodos_pago);
-    }
-
-    // ACTUALIZAR TOTALES EN ORDENES
-    $abono_val = floatval($datosAbono['abono']);
-    $descuento_val = floatval($datosAbono['descuento']);
-
-    if ($abono_val > 0 || $descuento_val > 0) {
-      $sql_update_totales = "UPDATE ordenes SET 
-            pago_abono = pago_abono + {$abono_val},
-            pago_descuento = pago_descuento + {$descuento_val}
-            WHERE _id = " . $datosAbono['id'];
-      $localConnection->goQuery($sql_update_totales);
-      $object['sql_update_totales'] = $sql_update_totales;
-    }
-
-    // OBTENER ULTIMO DE LA TABLA metodos_de_pago
-    $sql_max_id = 'SELECT MAX(_id) last_id FROM metodos_de_pago';
-    $last_id_pago = $localConnection->goQuery($sql_max_id)[0]['last_id'];
-
-    // GUARDAR PAGO
-    $comision_vendedor = number_format((floatval($datosAbono['abono']) * $comision / 100), 2);
-    $sql = "INSERT INTO pagos (detalle, estatus, monto_pago, id_empleado, id_orden, id_metodos_de_pago) VALUES ('Comercialización', 'aprobado', " . $comision_vendedor . ', ' . $id_vendedor . ', ' . $datosAbono['id'] . ', ' . $last_id_pago . ')';
-
-    $object['response_SET_pago'] = $localConnection->goQuery($sql);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
   });
 
   // GUARDAR OBSERVACIONES DESDE EDITAR EN COMERCIALIZACION

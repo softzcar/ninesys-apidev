@@ -291,4 +291,48 @@ class LocalDB
     $res->execute(['id_empresa' => $id_empresa]);
     return $res->fetch(PDO::FETCH_ASSOC);
   }
+
+  /**
+   * Inicia una transacción de base de datos
+   * Todas las operaciones siguientes se ejecutarán como una unidad atómica
+   * 
+   * @return bool
+   */
+  public function beginTransaction()
+  {
+    $this->connectToDatabase();
+    return $this->pdo->beginTransaction();
+  }
+
+  /**
+   * Confirma la transacción actual
+   * Guarda permanentemente todos los cambios realizados desde beginTransaction()
+   * 
+   * @return bool
+   */
+  public function commit()
+  {
+    return $this->pdo->commit();
+  }
+
+  /**
+   * Revierte la transacción actual
+   * Deshace todos los cambios realizados desde beginTransaction()
+   * 
+   * @return bool
+   */
+  public function rollback()
+  {
+    return $this->pdo->rollBack();
+  }
+
+  /**
+   * Verifica si hay una transacción activa
+   * 
+   * @return bool
+   */
+  public function inTransaction()
+  {
+    return $this->pdo !== null && $this->pdo->inTransaction();
+  }
 }
