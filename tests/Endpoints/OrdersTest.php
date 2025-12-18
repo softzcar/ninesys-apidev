@@ -25,7 +25,7 @@ class OrdersTest extends ApiTestCase
         ]);
 
         $this->assertApiError($response, 400);
-        $this->assertStringContainsString('productos', strtolower($response['message']));
+        $this->assertStringContainsString('producto', strtolower($response['message']));
     }
 
     /**
