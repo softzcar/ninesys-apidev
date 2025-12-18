@@ -22,6 +22,11 @@ class LocalDB
 
   private function connectToDatabase()
   {
+    // Si ya existe una conexión, no crear una nueva (preserva transacciones)
+    if ($this->pdo !== null) {
+      return;
+    }
+
     try {
       $this->pdo = new PDO(
         $this->dsn,
