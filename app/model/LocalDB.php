@@ -2,7 +2,7 @@
 class LocalDB
 {
   protected $sql;
-  private $pdo;
+  private $pdo = null;
   private $dsn;
   private $user;
   private $pass;
