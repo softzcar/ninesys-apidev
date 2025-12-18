@@ -2294,30 +2294,44 @@ $object['sales_commission_ISSET'][] = false;
     /* DEBuG */
     // $object['newJson'] = $newJson;
 
-    /* Craer orden en nunesys */
+    /* ========== VALIDACIONES DE ENTRADA ========== */
+    if (empty($misProductos) || count($misProductos) === 0) {
+      return ApiResponse::validationError($response, 'Debe agregar al menos un producto a la orden');
+    }
+
+    if (empty($newJson['responsable']) || !is_numeric($newJson['responsable'])) {
+      return ApiResponse::validationError($response, 'Debe seleccionar un responsable para la orden');
+    }
+
+    if (empty($newJson['fechaEntrega'])) {
+      return ApiResponse::validationError($response, 'Debe seleccionar una fecha de entrega');
+    }
+
+    /* Crear orden en ninesys */
     // Corregir valores NaN o vacíos
-    $abono_value = (is_numeric($arr['abono']) && $arr['abono'] !== '') ? $arr['abono'] : 0;
-    $descuento_value = (is_numeric($arr['descuento']) && $arr['descuento'] !== '') ? $arr['descuento'] : 0;
+    $abono_value = (is_numeric($arr['abono']) && $arr['abono'] !== '') ? floatval($arr['abono']) : 0;
+    $descuento_value = (is_numeric($arr['descuento']) && $arr['descuento'] !== '') ? floatval($arr['descuento']) : 0;
 
-    $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, `status` ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $descuento_value . ', ' . $abono_value . ",  '" . $arr['id_wp'] . "', '" . $arr['cedula'] . "', " . $newJson['total'] . ",'" . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
-    $nueva_oreden_response = $localConnection->goQuery($sql);
-    $object['nueva_oreden_sql'] = $sql;
+    // ========== INICIAR TRANSACCIÓN ==========
+    $localConnection->beginTransaction();
 
-    // $object['nueva_oreden_response'] = $nueva_oreden_response['message'];
+    try {
+      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, `status` ) VALUES (' . intval($newJson['responsable']) . ", '" . $now . "', " . $descuento_value . ', ' . $abono_value . ",  '" . $arr['id_wp'] . "', '" . addslashes($arr['cedula']) . "', " . floatval($newJson['total']) . ",'" . addslashes($cliente) . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
+      $nueva_oreden_response = $localConnection->goQuery($sql);
+      $object['nueva_oreden_sql'] = $sql;
 
-    if (isset($nueva_oreden_response['status'])) {
-      if ($nueva_oreden_response['status'] === 'error') {
-        $object['orden_creada'] = false;
-        $object['response'] = $nueva_oreden_response;
-        $object['response']['status'] = 'error';
-      } else {
-        $object['response']['status'] = 'success';
-        $object['response']['message'] = 'Vrifique la creación de la orden';
+      // $object['nueva_oreden_response'] = $nueva_oreden_response['message'];
+
+      if (isset($nueva_oreden_response['status']) && $nueva_oreden_response['status'] === 'error') {
+        throw new Exception('Error al crear la orden: ' . ($nueva_oreden_response['message'] ?? 'desconocido'));
       }
-    } else {
+
+      if (!isset($nueva_oreden_response['insert_id'])) {
+        throw new Exception('No se pudo obtener el ID de la orden creada');
+      }
+
       $object['orden_creada'] = true;
-      // Obtenr id de la orden creada
-      // $last = $localConnection->goQuery('SELECT MAX(_id) id FROM ordenes');
+      // Obtener id de la orden creada
       $last = $nueva_oreden_response['insert_id'];
       $last_id = intval($last);
 
@@ -2664,9 +2678,13 @@ $object['sales_commission_ISSET'][] = false;
       $object['sql_metodos_pago'] = $sql_metodos_pago;
 
       if ($sql_metodos_pago != '') {
-        $object['metodos_pago'] = $localConnection->goQuery($sql_metodos_pago);  // Corregido: removí el [$i]
+        $object['metodos_pago'] = $localConnection->goQuery($sql_metodos_pago);
       }
 
+      // ========== CONFIRMAR TRANSACCIÓN ==========
+      $localConnection->commit();
+
+      // WhatsApp se envía DESPUÉS del commit (no es crítico si falla)
       if ($sendWhatsApp) {
         $infoSql = 'SELECT b.phone FROM ordenes a LEFT JOIN customers b ON b._id = a.id_wp WHERE a._id = ' . $last_id;
         $contactInfo = $localConnection->goQuery($infoSql)[0] ?? [];
@@ -2712,16 +2730,26 @@ $object['sales_commission_ISSET'][] = false;
         $object['ws_response'] = 'Envío de WhatsApp omitido por el usuario.';
       }
 
-      $object['response']['status'] = 'success';
-      $object['response']['message'] = 'La orden número ' . $last_id . ' ha sido creada correctamente';
+      $localConnection->disconnect();
+
+      // Respuesta estandarizada de éxito
+      return ApiResponse::success($response, 'La orden número ' . $last_id . ' ha sido creada correctamente', [
+        'orden_creada' => true,
+        'id_orden' => $last_id,
+        'response' => ['status' => 'success', 'message' => 'La orden número ' . $last_id . ' ha sido creada correctamente']
+      ]);
+
+    } catch (Exception $e) {
+      // ========== REVERTIR TRANSACCIÓN EN CASO DE ERROR ==========
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
+      $localConnection->disconnect();
+
+      error_log('Error en /ordenes/nueva/custom: ' . $e->getMessage());
+
+      return ApiResponse::serverError($response, 'Error al crear la orden: ' . $e->getMessage(), $e);
     }
-
-    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));  // Usar JSON_NUMERIC_CHECK para manejar números
-    $localConnection->disconnect();
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
   });
 
   // CREAR NUEVA ORDEN ANTES DE SPORT
