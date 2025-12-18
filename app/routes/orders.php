@@ -467,7 +467,7 @@ return function (App $app) {
         'descuento' => $descuento_val
       ]);
 
-    } catch (Exception $e) {
+    } catch (\Throwable $e) {
       // ========== REVERTIR TRANSACCIÓN EN CASO DE ERROR ==========
       if ($localConnection->inTransaction()) {
         $localConnection->rollback();
@@ -2739,7 +2739,7 @@ $object['sales_commission_ISSET'][] = false;
         'response' => ['status' => 'success', 'message' => 'La orden número ' . $last_id . ' ha sido creada correctamente']
       ]);
 
-    } catch (Exception $e) {
+    } catch (\Throwable $e) {
       // ========== REVERTIR TRANSACCIÓN EN CASO DE ERROR ==========
       if ($localConnection->inTransaction()) {
         $localConnection->rollback();
@@ -3270,7 +3270,7 @@ $object['sales_commission_ISSET'][] = false;
 
       $response->getBody()->write(json_encode($result));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-    } catch (Exception $e) {
+    } catch (\Throwable $e) {
       error_log('Error al obtener materiales del lote: ' . $e->getMessage());
       $response->getBody()->write(json_encode(['error' => 'Error interno del servidor.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
