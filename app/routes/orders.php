@@ -2316,7 +2316,7 @@ $object['sales_commission_ISSET'][] = false;
     $localConnection->beginTransaction();
 
     try {
-      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, `status` ) VALUES (' . intval($newJson['responsable']) . ", '" . $now . "', " . $descuento_value . ', ' . $abono_value . ",  '" . $arr['id_wp'] . "', '" . addslashes($arr['cedula']) . "', " . floatval($newJson['total']) . ",'" . addslashes($cliente) . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
+      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, `status` ) VALUES (' . intval($newJson['responsable']) . ", '" . $now . "', " . $descuento_value . ', ' . $abono_value . ",  '" . $arr['id_wp'] . "', '" . addslashes($arr['cedula'] ?? '') . "', " . floatval($newJson['total']) . ",'" . addslashes($cliente ?? '') . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
       $nueva_oreden_response = $localConnection->goQuery($sql);
       $object['nueva_oreden_sql'] = $sql;
 
