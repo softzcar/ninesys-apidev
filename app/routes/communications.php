@@ -836,10 +836,14 @@ return function (App $app) {
 
     $localConnection = new LocalDB();
 
+    // Inicializar variables para evitar errores de undefined
+    $testResp = null;
+    $msg = ['mensaje' => ''];
+
     // Buscar estado de enviar_mensaje
     $sql = "SELECT enviar_mensaje FROM departamentos WHERE _id = $id_dep";
     $response_departamentos = $localConnection->goQuery($sql);
-    $enviar_mensaje = intval($response_departamentos[0]['enviar_mensaje']);
+    $enviar_mensaje = intval($response_departamentos[0]['enviar_mensaje'] ?? 0);
 
     // Buscamos el nombre del cliente
     $sql = 'SELECT
@@ -851,10 +855,15 @@ return function (App $app) {
                 WHERE
                     a._id = ' . $dataMensaje['id_orden'];
     $response_client = $localConnection->goQuery($sql);
-    $cliente = $response_client[0]['first_name'];
+    $cliente = $response_client[0]['first_name'] ?? 'Cliente';
 
     if ($dataMensaje['tipo'] == 'terminar') {
       $msg['mensaje'] = 'Hola ' . $cliente . ', *su orden número ' . $dataMensaje['id_orden'] . ' está lista, puede pasar a retir su pedido.*';
+
+      // Enviar mensaje de orden terminada
+      $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $dataMensaje['id_orden']);
+      $testResp = $msgApi->sendMessage(ID_EMPRESA, $dataMensaje['id_orden'], 'terminar-produccion', $msg);
+
     } else if ($dataMensaje['tipo'] == 'paso') {
       $msg['mensaje'] = 'Hola ' . $cliente . ', en este momento su orden número ' . $dataMensaje['id_orden'] . ' se encuentra en el departamento de ' . $dataMensaje['departamento'] . ', ';
 
@@ -890,35 +899,23 @@ return function (App $app) {
         }
       } else {
         $msg['mensaje'] = '';
+        $testResp = ['status' => 'skipped', 'message' => 'Envío de mensaje deshabilitado para este departamento'];
       }
     } elseif ($dataMensaje['tipo'] == 'cobrar') {
       $msg['mensaje'] = 'Hola ' . $cliente . ' le recordamos que tiene una deuda pendiente de *' . $dataMensaje['monto'] . ' USD* de su Orden número *' . $dataMensaje['id_orden'] . '*';
 
       $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $dataMensaje['id_orden']);
       $testResp = $msgApi->sendMessage(ID_EMPRESA, $dataMensaje['id_orden'], 'paso-produccion', $msg);
+    } else {
+      $testResp = ['status' => 'error', 'message' => 'Tipo de mensaje no reconocido: ' . ($dataMensaje['tipo'] ?? 'null')];
     }
 
-    // Enviar WhatsApp Aqui
-
-    /*
-     * $sql = "SELECT _id, username, departamento, nombre, email FROM empleados WHERE username = '" . $datosAcceso['username'] . "' AND password = '" . $datosAcceso['password'] . "' AND activo = 1 AND acceso = 1";
-     * $object['sql'] = $sql;
-     * $resp = $localConnection->goQuery($sql);
-     *
-     * if (empty($resp)) {
-     *     $object['access'] = false;
-     *     $object['user_data'] = null;
-     * } else {
-     *     $object['access'] = true;
-     *     $object['user_data'] = $resp;
-     * }
-     */
     $localConnection->disconnect();
 
     $response = $response
       ->withHeader('Access-Control-Allow-Origin', '*')
       ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-      ->withHeader('Access-Control-Allow-Headers', 'Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
+      ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
 
