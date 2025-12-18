@@ -10,20 +10,42 @@ return function (App $app) {
   /** PAGOS */
   // Terminar planilla de pago
   $app->post('/pagos/terminar-planilla', function (Request $request, Response $response, $args) {
-    // $order = $request->getParsedBody();
     $localConnection = new LocalDB();
     $myDate = new CustomTime();
     $now = $myDate->today();
 
-    $sql = "UPDATE pagos SET fecha_pago = '" . $now . "' WHERE fecha_pago IS NULL";
-    $data = $localConnection->goQuery($sql);
+    // ========== INICIAR TRANSACCIÓN ==========
+    $localConnection->beginTransaction();
 
-    $localConnection->disconnect();
+    try {
+      $sql = "UPDATE pagos SET fecha_pago = ? WHERE fecha_pago IS NULL";
+      $result = $localConnection->goQuery($sql, [$now]);
 
-    $response->getBody()->write(json_encode($data));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
+      // Verificar cuántos registros fueron actualizados
+      $sqlCount = "SELECT COUNT(*) as total FROM pagos WHERE fecha_pago = ?";
+      $countResult = $localConnection->goQuery($sqlCount, [$now]);
+      $totalActualizados = isset($countResult[0]['total']) ? intval($countResult[0]['total']) : 0;
+
+      // ========== CONFIRMAR TRANSACCIÓN ==========
+      $localConnection->commit();
+      $localConnection->disconnect();
+
+      return ApiResponse::success($response, 'Planilla terminada correctamente', [
+        'fecha_pago' => $now,
+        'registros_actualizados' => $totalActualizados
+      ]);
+
+    } catch (\Throwable $e) {
+      // ========== REVERTIR TRANSACCIÓN ==========
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
+      $localConnection->disconnect();
+
+      error_log('Error en /pagos/terminar-planilla: ' . $e->getMessage());
+
+      return ApiResponse::serverError($response, 'Error al terminar la planilla: ' . $e->getMessage(), $e);
+    }
   });
 
   // REALIZAR PAGO A EMPLEADOS
@@ -36,116 +58,128 @@ return function (App $app) {
 
     // Sanitizar y convertir los IDs de pago a un array de enteros.
     $listaDeIdPagos = array_map('intval', explode(',', $data['id_pagos'] ?? ''));
+    // Filtrar valores vacíos o cero
+    $listaDeIdPagos = array_filter($listaDeIdPagos, function ($id) {
+      return $id > 0;
+    });
     $cantidadDePagos = count($listaDeIdPagos);
 
+    // ========== VALIDACIONES ==========
     if ($cantidadDePagos === 0) {
-      $response->getBody()->write(json_encode(['error' => 'No se proporcionaron IDs de pago válidos.']));
-      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      return ApiResponse::validationError($response, 'No se proporcionaron IDs de pago válidos');
     }
 
-    // Procesar bonos, descuentos, salario y comisión
-    $totalBonos = 0;
-    $totalDescuentos = 0;
-    $salario = floatval($data['salario'] ?? 0);
-    $comision = floatval($data['comision'] ?? 0);
+    // ========== INICIAR TRANSACCIÓN ==========
+    $localConnection->beginTransaction();
 
-    // Procesar bonos
-    if (isset($data['bonos']) && $data['bonos'] !== '0') {
-      $bonosArray = json_decode($data['bonos'], true);
-      if (is_array($bonosArray)) {
-        foreach ($bonosArray as $bono) {
-          $monto = floatval($bono['monto'] ?? 0);
-          $descripcion = $bono['descripcion'] ?? '';
-          $totalBonos += $monto;
+    try {
+      // Procesar bonos, descuentos, salario y comisión
+      $totalBonos = 0;
+      $totalDescuentos = 0;
+      $salario = floatval($data['salario'] ?? 0);
+      $comision = floatval($data['comision'] ?? 0);
 
-          // Dividir el monto del bono entre la cantidad de pagos
-          $montoPorPago = $monto / $cantidadDePagos;
+      // Procesar bonos
+      if (isset($data['bonos']) && $data['bonos'] !== '0') {
+        $bonosArray = json_decode($data['bonos'], true);
+        if (is_array($bonosArray)) {
+          foreach ($bonosArray as $bono) {
+            $monto = floatval($bono['monto'] ?? 0);
+            $descripcion = $bono['descripcion'] ?? '';
+            $totalBonos += $monto;
 
-          foreach ($listaDeIdPagos as $idPago) {
-            $sql = "INSERT INTO pagos_abonos (id_pago, monto, descripcion) VALUES (?, ?, ?)";
-            $localConnection->goQuery($sql, [$idPago, $montoPorPago, $descripcion]);
+            // Dividir el monto del bono entre la cantidad de pagos
+            $montoPorPago = $monto / $cantidadDePagos;
+
+            foreach ($listaDeIdPagos as $idPago) {
+              $sql = "INSERT INTO pagos_abonos (id_pago, monto, descripcion) VALUES (?, ?, ?)";
+              $localConnection->goQuery($sql, [$idPago, $montoPorPago, $descripcion]);
+            }
           }
         }
       }
-    }
 
-    // Procesar descuentos
-    if (isset($data['descuentos']) && $data['descuentos'] !== '0') {
-      $descuentosArray = json_decode($data['descuentos'], true);
-      if (is_array($descuentosArray)) {
-        foreach ($descuentosArray as $descuento) {
-          $monto = floatval($descuento['monto'] ?? 0);
-          $descripcion = $descuento['descripcion'] ?? '';
-          $totalDescuentos += $monto;
+      // Procesar descuentos
+      if (isset($data['descuentos']) && $data['descuentos'] !== '0') {
+        $descuentosArray = json_decode($data['descuentos'], true);
+        if (is_array($descuentosArray)) {
+          foreach ($descuentosArray as $descuento) {
+            $monto = floatval($descuento['monto'] ?? 0);
+            $descripcion = $descuento['descripcion'] ?? '';
+            $totalDescuentos += $monto;
 
-          // Dividir el monto del descuento entre la cantidad de pagos
-          $montoPorPago = $monto / $cantidadDePagos;
+            // Dividir el monto del descuento entre la cantidad de pagos
+            $montoPorPago = $monto / $cantidadDePagos;
 
-          foreach ($listaDeIdPagos as $idPago) {
-            $sql = "INSERT INTO pagos_descuentos (id_pago, monto, descripcion) VALUES (?, ?, ?)";
-            $localConnection->goQuery($sql, [$idPago, $montoPorPago, $descripcion]);
+            foreach ($listaDeIdPagos as $idPago) {
+              $sql = "INSERT INTO pagos_descuentos (id_pago, monto, descripcion) VALUES (?, ?, ?)";
+              $localConnection->goQuery($sql, [$idPago, $montoPorPago, $descripcion]);
+            }
           }
         }
       }
-    }
 
-    // Procesar salario si existe
-    if ($salario > 0) {
-      $idEmpleado = $data['id_empleado'] ?? null;
+      // Procesar salario si existe
+      if ($salario > 0) {
+        $idEmpleado = $data['id_empleado'] ?? null;
 
-      // Si no viene el id_empleado, lo buscamos en el primer pago de la lista
-      if (!$idEmpleado && count($listaDeIdPagos) > 0) {
-        $sqlEmp = "SELECT id_empleado FROM pagos WHERE _id = ?";
-        $resEmp = $localConnection->goQuery($sqlEmp, [$listaDeIdPagos[0]]);
-        if (isset($resEmp[0]['id_empleado'])) {
-          $idEmpleado = $resEmp[0]['id_empleado'];
+        // Si no viene el id_empleado, lo buscamos en el primer pago de la lista
+        if (!$idEmpleado && count($listaDeIdPagos) > 0) {
+          $sqlEmp = "SELECT id_empleado FROM pagos WHERE _id = ?";
+          $resEmp = $localConnection->goQuery($sqlEmp, [$listaDeIdPagos[0]]);
+          if (isset($resEmp[0]['id_empleado'])) {
+            $idEmpleado = $resEmp[0]['id_empleado'];
+          }
+        }
+
+        if ($idEmpleado) {
+          // Buscar frecuencia de salario
+          $sql = "SELECT salario_periodo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?";
+          $resultUsuario = $localConnection->goQuery($sql, [$idEmpleado]);
+          $periodo = isset($resultUsuario[0]['salario_periodo']) ? $resultUsuario[0]['salario_periodo'] : 'semanal';
+
+          // Dividir el salario entre la cantidad de pagos
+          $salarioPorPago = $salario / $cantidadDePagos;
+          foreach ($listaDeIdPagos as $idPago) {
+            $sql = "INSERT INTO pagos_salarios (id_pago, tipo_salario, numero_semana, monto) VALUES (?, ?, ?, ?)";
+            $localConnection->goQuery($sql, [$idPago, $periodo, date('W'), $salarioPorPago]);
+          }
         }
       }
 
-      if ($idEmpleado) {
-        // Buscar frecuencia de salario
-        $sql = "SELECT salario_periodo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?";
-        $resultUsuario = $localConnection->goQuery($sql, [$idEmpleado]);
-        $periodo = isset($resultUsuario[0]['salario_periodo']) ? $resultUsuario[0]['salario_periodo'] : 'semanal'; // Default fallback
+      // Calcular el monto total del pago y el monto por cada registro de pago
+      $montoTotalPago = ($salario + $comision + $totalBonos) - $totalDescuentos;
+      $montoPorRegistroDePago = $montoTotalPago / $cantidadDePagos;
 
-        // Dividir el salario entre la cantidad de pagos
-        $salarioPorPago = $salario / $cantidadDePagos;
-        foreach ($listaDeIdPagos as $idPago) {
-          $sql = "INSERT INTO pagos_salarios (id_pago, tipo_salario, numero_semana, monto) VALUES (?, ?, ?, ?)";
-          $localConnection->goQuery($sql, [$idPago, $periodo, date('W'), $salarioPorPago]);
-        }
+      // Crear placeholders (?) para la cláusula IN
+      $placeholders = implode(',', array_fill(0, count($listaDeIdPagos), '?'));
+
+      // Actualizar pagos con fecha_pago y el monto_pago DIVIDIDO
+      $sql = "UPDATE pagos SET fecha_pago = ?, monto_pago = ? WHERE _id IN ({$placeholders})";
+      $params = array_merge([$now, $montoPorRegistroDePago], $listaDeIdPagos);
+      $localConnection->goQuery($sql, $params);
+
+      // ========== CONFIRMAR TRANSACCIÓN ==========
+      $localConnection->commit();
+      $localConnection->disconnect();
+
+      return ApiResponse::success($response, 'Pago procesado correctamente', [
+        'cantidad_pagos' => $cantidadDePagos,
+        'monto_total_pagado' => $montoTotalPago,
+        'monto_por_registro' => $montoPorRegistroDePago
+      ]);
+
+    } catch (\Throwable $e) {
+      // ========== REVERTIR TRANSACCIÓN ==========
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
       }
+      $localConnection->disconnect();
+
+      error_log('Error en /pagos/pagar-a-empleados: ' . $e->getMessage());
+
+      return ApiResponse::serverError($response, 'Error al procesar el pago: ' . $e->getMessage(), $e);
     }
-
-    // Calcular el monto total del pago y el monto por cada registro de pago
-    $montoTotalPago = ($salario + $comision + $totalBonos) - $totalDescuentos;
-    $montoPorRegistroDePago = $montoTotalPago / $cantidadDePagos;
-
-
-    // Crear placeholders (?) para la cláusula IN
-    $placeholders = implode(',', array_fill(0, count($listaDeIdPagos), '?'));
-
-    // Actualizar pagos con fecha_pago y el monto_pago DIVIDIDO
-    $sql = "UPDATE pagos SET fecha_pago = ?, monto_pago = ? WHERE _id IN ({$placeholders})";
-    $params = array_merge([$now, $montoPorRegistroDePago], $listaDeIdPagos);
-    $data['resp_update'] = $localConnection->goQuery($sql, $params);
-
-    // Opcional: Volver a consultar los registros actualizados
-    $sqlSelect = "SELECT * FROM pagos WHERE _id IN ({$placeholders})";
-    $registrosParaProcesar = $localConnection->goQuery($sqlSelect, $listaDeIdPagos);
-
-    $localConnection->disconnect();
-
-    $data['resumen_pago'] = [
-      'cantidad_pagos' => $cantidadDePagos,
-      'monto_total_pagado' => $montoTotalPago,
-      'monto_por_registro' => $montoPorRegistroDePago
-    ];
-
-    $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
   });
 
   // Lista de pagos semanales
@@ -613,7 +647,7 @@ return function (App $app) {
     $object['data']['vendedores'] = $localConnection->goQuery($sql);
 
     // CONSULTAS ADICIONALES PARA DETALLES DE RECIBO (Salarios, Bonos, Descuentos)
-    
+
     // 1. Salarios
     $sqlSalarios = "SELECT 
         ps.monto, 
@@ -623,7 +657,7 @@ return function (App $app) {
         JOIN pagos p ON ps.id_pago = p._id 
         WHERE WEEK(p.fecha_pago, 1) = {$args['semana']} AND p.fecha_pago IS NOT NULL
         GROUP BY p.id_empleado"; // Agrupamos por empleado porque el salario es por periodo, no por orden individual necesariamente para el recibo global
-    
+
     $salariosData = $localConnection->goQuery($sqlSalarios);
     $object['data']['salarios_detalles'] = $salariosData ?: [];
 
@@ -635,7 +669,7 @@ return function (App $app) {
         FROM pagos_abonos pa 
         JOIN pagos p ON pa.id_pago = p._id 
         WHERE WEEK(p.fecha_pago, 1) = {$args['semana']} AND p.fecha_pago IS NOT NULL";
-    
+
     $bonosData = $localConnection->goQuery($sqlBonos);
     $object['data']['bonos_detalles'] = $bonosData ?: [];
 
@@ -647,7 +681,7 @@ return function (App $app) {
         FROM pagos_descuentos pd 
         JOIN pagos p ON pd.id_pago = p._id 
         WHERE WEEK(p.fecha_pago, 1) = {$args['semana']} AND p.fecha_pago IS NOT NULL";
-    
+
     $descuentosData = $localConnection->goQuery($sqlDescuentos);
     $object['data']['descuentos_detalles'] = $descuentosData ?: [];
 

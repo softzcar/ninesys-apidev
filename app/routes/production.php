@@ -1768,19 +1768,51 @@ return function (App $app) {
 
   // TERMINAR CICLO DE PRODUCCION
   $app->post('/produccion/terminar/{id}', function (Request $request, Response $response, array $args) {
-    $id = $args['id'];
+    $id = intval($args['id']);
+
+    // ========== VALIDACIONES ==========
+    if ($id <= 0) {
+      return ApiResponse::validationError($response, 'ID de orden inválido');
+    }
+
     $localConnection = new LocalDB();
 
-    $sql = "UPDATE `ordenes` SET `status`='terminado' WHERE `_id` = " . $id;
-    $object['response'] = $localConnection->goQuery($sql);
+    // ========== INICIAR TRANSACCIÓN ==========
+    $localConnection->beginTransaction();
 
-    $localConnection->disconnect();
+    try {
+      // Verificar que la orden existe
+      $sqlCheck = "SELECT _id, status FROM ordenes WHERE _id = ?";
+      $orden = $localConnection->goQuery($sqlCheck, [$id]);
 
-    $response->getBody()->write(json_encode($object));
+      if (empty($orden)) {
+        throw new \Exception('La orden no existe');
+      }
 
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
+      // Actualizar estado
+      $sql = "UPDATE ordenes SET status = 'terminado' WHERE _id = ?";
+      $localConnection->goQuery($sql, [$id]);
+
+      // ========== CONFIRMAR TRANSACCIÓN ==========
+      $localConnection->commit();
+      $localConnection->disconnect();
+
+      return ApiResponse::success($response, 'Orden #' . $id . ' terminada correctamente', [
+        'id_orden' => $id,
+        'nuevo_status' => 'terminado'
+      ]);
+
+    } catch (\Throwable $e) {
+      // ========== REVERTIR TRANSACCIÓN ==========
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
+      $localConnection->disconnect();
+
+      error_log('Error en /produccion/terminar/' . $id . ': ' . $e->getMessage());
+
+      return ApiResponse::serverError($response, 'Error al terminar la orden: ' . $e->getMessage(), $e);
+    }
   });
 
   // ASIGNAR VARIAS ORDENES A CORTE A LA VEZ

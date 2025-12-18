@@ -468,68 +468,119 @@ return function (App $app) {
     $arr = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    // Validar si se ha enviado un id_orden y asignarlo. De lo contrario, usar 0.
-    $id_orden_abono = isset($arr['id_orden']) ? $arr['id_orden'] : 0;
-
-    $sql = '';
-
-    // Si es un abono a una orden específica, registrarlo también en la tabla `abonos`
-    if ($id_orden_abono > 0) {
-      $now = date('Y-m-d H:i:s');
-      $abono = isset($arr['abono']) ? floatval($arr['abono']) : 0;
-      $descuento = 0;  // Este formulario no maneja descuentos, se asume 0.
-      $id_empleado = isset($arr['id_empleado']) ? intval($arr['id_empleado']) : 0;
-
-      $sql .= "INSERT INTO abonos (moment, id_orden, abono, descuento, id_empleado) VALUES ('{$now}', {$id_orden_abono}, {$abono}, {$descuento}, {$id_empleado});";
+    // ========== VALIDACIONES ==========
+    $totalAbono = floatval($arr['abono'] ?? 0);
+    if ($totalAbono <= 0) {
+      return ApiResponse::validationError($response, 'El monto del abono debe ser mayor a cero');
     }
 
-    // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
-    if (intval($arr['montoDolaresEfectivo']) > 0) {
-      $sql .= "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ({$id_orden_abono}, '{$arr['tipoAbono']}', 'Dólares', 'Efectivo', '{$arr['montoDolaresEfectivo']}', '{$arr['detalle']}', '1');";
-      $sql .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES ('{$arr['montoDolaresEfectivo']}', 'Dólares', 1, 'abono', '{$arr['id_empleado']}');";
+    // ========== INICIAR TRANSACCIÓN ==========
+    $localConnection->beginTransaction();
+
+    try {
+      // Validar si se ha enviado un id_orden y asignarlo. De lo contrario, usar 0.
+      $id_orden_abono = isset($arr['id_orden']) ? intval($arr['id_orden']) : 0;
+
+      $sql = '';
+
+      // Si es un abono a una orden específica, registrarlo también en la tabla `abonos`
+      if ($id_orden_abono > 0) {
+        $now = date('Y-m-d H:i:s');
+        $abono = floatval($arr['abono'] ?? 0);
+        $descuento = 0;
+        $id_empleado = isset($arr['id_empleado']) ? intval($arr['id_empleado']) : 0;
+
+        $sqlAbono = "INSERT INTO abonos (moment, id_orden, abono, descuento, id_empleado) VALUES (?, ?, ?, ?, ?)";
+        $localConnection->goQuery($sqlAbono, [$now, $id_orden_abono, $abono, $descuento, $id_empleado]);
+      }
+
+      // GUARDAR METODOS DE PAGO UTILIZADOS
+      $metodosRegistrados = 0;
+
+      if (floatval($arr['montoDolaresEfectivo'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Dólares', 'Efectivo', ?, ?, '1')";
+        $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoDolaresEfectivo'], $arr['detalle'] ?? '']);
+
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES (?, 'Dólares', 1, 'abono', ?)";
+        $localConnection->goQuery($sql, [$arr['montoDolaresEfectivo'], $arr['id_empleado'] ?? 0]);
+        $metodosRegistrados++;
+      }
+
+      if (floatval($arr['montoDolaresZelle'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Dólares', 'Zelle', ?, ?, '1')";
+        $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoDolaresZelle'], $arr['detalle'] ?? '']);
+        $metodosRegistrados++;
+      }
+
+      if (floatval($arr['montoDolaresPanama'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Dólares', 'Panamá', ?, ?, '1')";
+        $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoDolaresPanama'], $arr['detalle'] ?? '']);
+        $metodosRegistrados++;
+      }
+
+      if (floatval($arr['montoPesosEfectivo'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Pesos', 'Efectivo', ?, ?, ?)";
+        $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoPesosEfectivo'], $arr['detalle'] ?? '', $arr['tasa_peso'] ?? 1]);
+
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES (?, 'Pesos', ?, 'abono', ?)";
+        $localConnection->goQuery($sql, [$arr['montoPesosEfectivo'], $arr['tasa_peso'] ?? 1, $arr['id_empleado'] ?? 0]);
+        $metodosRegistrados++;
+      }
+
+      if (floatval($arr['montoPesosTransferencia'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Pesos', 'Transferencia', ?, ?, ?)";
+        $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoPesosTransferencia'], $arr['detalle'] ?? '', $arr['tasa_peso'] ?? 1]);
+        $metodosRegistrados++;
+      }
+
+      if (floatval($arr['montoBolivaresEfectivo'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Bolívares', 'Efectivo', ?, ?, ?)";
+        $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoBolivaresEfectivo'], $arr['detalle'] ?? '', $arr['tasa_dolar'] ?? 1]);
+
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES (?, 'Bolívares', ?, 'abono', ?)";
+        $localConnection->goQuery($sql, [$arr['montoBolivaresEfectivo'], $arr['tasa_dolar'] ?? 1, $arr['id_empleado'] ?? 0]);
+        $metodosRegistrados++;
+      }
+
+      if (floatval($arr['montoBolivaresPunto'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Bolívares', 'Punto', ?, ?, ?)";
+        $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoBolivaresPunto'], $arr['detalle'] ?? '', $arr['tasa_dolar'] ?? 1]);
+        $metodosRegistrados++;
+      }
+
+      if (floatval($arr['montoBolivaresPagomovil'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Bolívares', 'Pagomovil', ?, ?, ?)";
+        $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoBolivaresPagomovil'], $arr['detalle'] ?? '', $arr['tasa_dolar'] ?? 1]);
+        $metodosRegistrados++;
+      }
+
+      if (floatval($arr['montoBolivaresTransferencia'] ?? 0) > 0) {
+        $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Bolívares', 'Transferencia', ?, ?, ?)";
+        $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoBolivaresTransferencia'], $arr['detalle'] ?? '', $arr['tasa_dolar'] ?? 1]);
+        $metodosRegistrados++;
+      }
+
+      // ========== CONFIRMAR TRANSACCIÓN ==========
+      $localConnection->commit();
+      $localConnection->disconnect();
+
+      return ApiResponse::success($response, 'Abono registrado correctamente', [
+        'id_orden' => $id_orden_abono,
+        'monto_abono' => $totalAbono,
+        'metodos_registrados' => $metodosRegistrados
+      ]);
+
+    } catch (\Throwable $e) {
+      // ========== REVERTIR TRANSACCIÓN ==========
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
+      $localConnection->disconnect();
+
+      error_log('Error en /otro-abono: ' . $e->getMessage());
+
+      return ApiResponse::serverError($response, 'Error al registrar el abono: ' . $e->getMessage(), $e);
     }
-
-    if (intval($arr['montoDolaresZelle']) > 0) {
-      $sql .= "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ({$id_orden_abono}, '{$arr['tipoAbono']}', 'Dólares', 'Zelle', '{$arr['montoDolaresZelle']}', '{$arr['detalle']}', '1');";
-    }
-
-    if (intval($arr['montoDolaresPanama']) > 0) {
-      $sql .= "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ({$id_orden_abono}, '{$arr['tipoAbono']}', 'Dólares', 'Panamá', '{$arr['montoDolaresPanama']}', '{$arr['detalle']}', '1');";
-    }
-
-    if (intval($arr['montoPesosEfectivo']) > 0) {
-      $sql .= "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ({$id_orden_abono}, '{$arr['tipoAbono']}', 'Pesos', 'Efectivo', '{$arr['montoPesosEfectivo']}', '{$arr['detalle']}', '{$arr['tasa_peso']}');";
-      $sql .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES  ('{$arr['montoPesosEfectivo']}', 'Pesos', '{$arr['tasa_peso']}', 'abono', '{$arr['id_empleado']}');";
-    }
-
-    if (intval($arr['montoPesosTransferencia']) > 0) {
-      $sql .= "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ({$id_orden_abono}, '{$arr['tipoAbono']}', 'Pesos', 'Transferencia', '{$arr['montoPesosTransferencia']}', '{$arr['detalle']}', '{$arr['tasa_peso']}');";
-    }
-
-    if (intval($arr['montoBolivaresEfectivo']) > 0) {
-      $sql .= "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ({$id_orden_abono}, '{$arr['tipoAbono']}', 'Bolívares', 'Efectivo', '{$arr['montoBolivaresEfectivo']}', '{$arr['detalle']}', '{$arr['tasa_dolar']}');";
-      $sql .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado) VALUES ('{$arr['montoBolivaresEfectivo']}', 'Bolívares', '{$arr['tasa_dolar']}', 'abono', '{$arr['id_empleado']}');";
-    }
-
-    if (intval($arr['montoBolivaresPunto']) > 0) {
-      $sql .= "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ({$id_orden_abono}, '{$arr['tipoAbono']}', 'Bolívares', 'Punto', '{$arr['montoBolivaresPunto']}', '{$arr['detalle']}', '{$arr['tasa_dolar']}');";
-    }
-
-    if (intval($arr['montoBolivaresPagomovil']) > 0) {
-      $sql .= "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ({$id_orden_abono}, '{$arr['tipoAbono']}', 'Bolívares', 'Pagomovil', '{$arr['montoBolivaresPagomovil']}', '{$arr['detalle']}', '{$arr['tasa_dolar']}');";
-    }
-
-    if (intval($arr['montoBolivaresTransferencia']) > 0) {
-      $sql .= "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES ({$id_orden_abono}, '{$arr['tipoAbono']}', 'Bolívares', 'Transferencia', '{$arr['montoBolivaresTransferencia']}', '{$arr['detalle']}', '{$arr['tasa_dolar']}');";
-    }
-
-    $data = $localConnection->goQuery($sql);
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($data));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
   });
 
   // Obteber Retiros
