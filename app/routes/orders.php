@@ -2214,7 +2214,23 @@ $object['sales_commission_ISSET'][] = false;
   // CREAR NUEVA ORDEN ANTES DE CUSTOM CON VALIDACIONES
   $app->post('/ordenes/nueva/custom', function (Request $request, Response $response, $arg) {
     $newJson = $request->getParsedBody();
-    $misProductos = json_decode($newJson['productos'], true);
+
+    // ========== VALIDACIONES TEMPRANAS (antes de procesar datos) ==========
+    $productosRaw = $newJson['productos'] ?? '';
+    $misProductos = json_decode($productosRaw, true);
+
+    if (empty($misProductos) || !is_array($misProductos) || count($misProductos) === 0) {
+      return ApiResponse::validationError($response, 'Debe agregar al menos un producto a la orden');
+    }
+
+    if (empty($newJson['responsable']) || !is_numeric($newJson['responsable'])) {
+      return ApiResponse::validationError($response, 'Debe seleccionar un responsable para la orden');
+    }
+
+    if (empty($newJson['fechaEntrega'])) {
+      return ApiResponse::validationError($response, 'Debe seleccionar una fecha de entrega');
+    }
+
     $localConnection = new LocalDB();
 
     $count = count($misProductos);
@@ -2294,18 +2310,7 @@ $object['sales_commission_ISSET'][] = false;
     /* DEBuG */
     // $object['newJson'] = $newJson;
 
-    /* ========== VALIDACIONES DE ENTRADA ========== */
-    if (empty($misProductos) || count($misProductos) === 0) {
-      return ApiResponse::validationError($response, 'Debe agregar al menos un producto a la orden');
-    }
-
-    if (empty($newJson['responsable']) || !is_numeric($newJson['responsable'])) {
-      return ApiResponse::validationError($response, 'Debe seleccionar un responsable para la orden');
-    }
-
-    if (empty($newJson['fechaEntrega'])) {
-      return ApiResponse::validationError($response, 'Debe seleccionar una fecha de entrega');
-    }
+    // NOTA: Las validaciones de entrada se movieron al inicio del endpoint
 
     /* Crear orden en ninesys */
     // Corregir valores NaN o vacíos
