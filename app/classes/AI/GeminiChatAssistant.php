@@ -109,10 +109,17 @@ class GeminiChatAssistant extends GeminiAssistant
             // Respuesta para un solo registro
             $row = $results[0];
             $response = "Encontré 1 resultado:\n\n";
-            foreach ($row as $key => $value) {
-                $label = $this->formatFieldLabel($key);
-                $displayValue = is_array($value) ? json_encode($value) : (string) $value;
-                $response .= "• **{$label}**: {$displayValue}\n";
+
+            // Validar que $row sea array/objeto
+            if (is_array($row) || is_object($row)) {
+                foreach ($row as $key => $value) {
+                    $label = $this->formatFieldLabel((string) $key);
+                    $displayValue = is_array($value) ? json_encode($value) : (string) ($value ?? '');
+                    $response .= "• **{$label}**: {$displayValue}\n";
+                }
+            } else {
+                // Si es un valor escalar
+                $response .= "• **Resultado**: " . (string) $row . "\n";
             }
         } else {
             // Respuesta para múltiples registros
@@ -125,14 +132,21 @@ class GeminiChatAssistant extends GeminiAssistant
             foreach ($displayResults as $row) {
                 $response .= $itemNumber . ". ";
                 $parts = [];
-                foreach ($row as $key => $value) {
-                    if ($value !== null && $value !== '') {
-                        $label = $this->formatFieldLabel($key);
-                        $displayValue = is_array($value) ? json_encode($value) : (string) $value;
-                        $parts[] = "{$label}: {$displayValue}";
+
+                // Validar que $row sea array/objeto
+                if (is_array($row) || is_object($row)) {
+                    foreach ($row as $key => $value) {
+                        if ($value !== null && $value !== '') {
+                            $label = $this->formatFieldLabel((string) $key);
+                            $displayValue = is_array($value) ? json_encode($value) : (string) ($value ?? '');
+                            $parts[] = "{$label}: {$displayValue}";
+                        }
                     }
+                    $response .= implode(" | ", $parts) . "\n";
+                } else {
+                    // Si es un valor escalar
+                    $response .= (string) $row . "\n";
                 }
-                $response .= implode(" | ", $parts) . "\n";
                 $itemNumber++;
             }
 
