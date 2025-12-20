@@ -29,6 +29,7 @@ Los datos de empleados están en una base de datos diferente llamada 'api_empres
 La tabla se llama 'empresas_usuarios' y debes referenciarla como 'api_empresas.empresas_usuarios'.
 Los campos id_empleado, responsable, id_empleado_emisor, etc. en las tablas de la empresa hacen referencia a 'api_empresas.empresas_usuarios.id_usuario'.
 Para obtener el nombre del empleado, haz JOIN con: api_empresas.empresas_usuarios eu ON campo_id_empleado = eu.id_usuario
+IMPORTANTE: Cuando consultes empleados SIEMPRE filtra por id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " para obtener solo los empleados de esta empresa.
 
 NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
@@ -39,6 +40,7 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
             'description' => 'Empleados/usuarios de la empresa (TABLA EN BD EXTERNA: api_empresas)',
             'fields' => [
                 'id_usuario' => 'ID del empleado (PK) - Este es el ID que se usa en id_empleado, responsable, etc.',
+                'id_empresa' => 'ID de la empresa a la que pertenece el empleado - SIEMPRE filtrar por este campo',
                 'nombre' => 'Nombre completo del empleado',
                 'email' => 'Email/username del empleado',
                 'telefono' => 'Teléfono del empleado',
