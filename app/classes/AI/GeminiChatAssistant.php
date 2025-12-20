@@ -121,8 +121,9 @@ class GeminiChatAssistant extends GeminiAssistant
             // Limitar a 10 resultados para la respuesta de chat
             $displayResults = array_slice($results, 0, 10);
 
-            foreach ($displayResults as $index => $row) {
-                $response .= ($index + 1) . ". ";
+            $itemNumber = 1;
+            foreach ($displayResults as $row) {
+                $response .= $itemNumber . ". ";
                 $parts = [];
                 foreach ($row as $key => $value) {
                     if ($value !== null && $value !== '') {
@@ -132,10 +133,12 @@ class GeminiChatAssistant extends GeminiAssistant
                     }
                 }
                 $response .= implode(" | ", $parts) . "\n";
+                $itemNumber++;
             }
 
             if ($count > 10) {
-                $response .= "\n... y " . ($count - 10) . " resultados más.";
+                $remaining = (int) $count - 10;
+                $response .= "\n... y " . $remaining . " resultados más.";
             }
         }
 
