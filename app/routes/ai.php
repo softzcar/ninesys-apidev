@@ -34,7 +34,13 @@ return function (App $app) {
         require_once __DIR__ . '/../schemas/db-schema-gemini.php';
         require_once __DIR__ . '/../config.php';
 
-        $data = $request->getParsedBody();
+        // Parsear body JSON
+        $body = $request->getBody()->getContents();
+        $data = json_decode($body, true);
+
+        if ($data === null) {
+            $data = $request->getParsedBody() ?? [];
+        }
 
         // Validar que se envió una consulta
         if (empty($data['query'])) {
@@ -113,7 +119,13 @@ return function (App $app) {
         require_once __DIR__ . '/../schemas/db-schema-gemini.php';
         require_once __DIR__ . '/../config.php';
 
-        $data = $request->getParsedBody();
+        // Parsear body JSON
+        $body = $request->getBody()->getContents();
+        $data = json_decode($body, true);
+
+        if ($data === null) {
+            $data = $request->getParsedBody() ?? [];
+        }
 
         // Validar que se envió una consulta
         if (empty($data['query'])) {
