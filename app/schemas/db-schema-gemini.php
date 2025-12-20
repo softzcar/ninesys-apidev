@@ -24,9 +24,37 @@ Para fechas usa las funciones de MySQL:
 - Para filtrar por mes y año: WHERE MONTH(fecha_inicio) = 12 AND YEAR(fecha_inicio) = 2025
 - Para rango de fechas: WHERE fecha_inicio BETWEEN '2025-12-01' AND '2025-12-31'
 
+IMPORTANTE SOBRE EMPLEADOS:
+Los datos de empleados están en una base de datos diferente llamada 'api_empresas'.
+La tabla se llama 'empresas_usuarios' y debes referenciarla como 'api_empresas.empresas_usuarios'.
+Los campos id_empleado, responsable, id_empleado_emisor, etc. en las tablas de la empresa hacen referencia a 'api_empresas.empresas_usuarios.id_usuario'.
+Para obtener el nombre del empleado, haz JOIN con: api_empresas.empresas_usuarios eu ON campo_id_empleado = eu.id_usuario
+
 NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
+
     'tables' => [
+        // ==================== EMPLEADOS (Base de datos externa: api_empresas) ====================
+        'api_empresas.empresas_usuarios' => [
+            'description' => 'Empleados/usuarios de la empresa (TABLA EN BD EXTERNA: api_empresas)',
+            'fields' => [
+                'id_usuario' => 'ID del empleado (PK) - Este es el ID que se usa en id_empleado, responsable, etc.',
+                'nombre' => 'Nombre completo del empleado',
+                'email' => 'Email/username del empleado',
+                'telefono' => 'Teléfono del empleado',
+                'departamento' => 'Nombre del departamento asignado',
+                'activo' => '1 si está activo, 0 si no',
+                'acceso' => '0 = empleado, 1 = administrador',
+                'salario_monto' => 'Monto del salario',
+                'salario_periodo' => "'semanal', 'quincenal', 'mensual'",
+                'salario_tipo' => "'Salario', 'Comisión', 'Salario más Comisión'",
+                'comision' => 'Porcentaje de comisión',
+                'comision_tipo' => "'fija' o 'variable'",
+                'dni' => 'Documento de identidad',
+                'fecha_ingreso' => 'Fecha de ingreso a la empresa',
+            ]
+        ],
+
         // ==================== ÓRDENES ====================
         'ordenes' => [
             'description' => 'Órdenes de producción de la empresa',
@@ -621,6 +649,7 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
     'relations' => [
         'ordenes.id_wp → customers._id (cliente de la orden)',
+        'ordenes.responsable → api_empresas.empresas_usuarios.id_usuario (vendedor responsable)',
         'ordenes_productos.id_orden → ordenes._id (productos de cada orden)',
         'ordenes_productos.id_woo → products._id (referencia al catálogo)',
         'ordenes_productos.id_tela → catalogo_telas._id (tela asignada)',
@@ -628,14 +657,20 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
         'lotes.id_departamento_actual → departamentos._id (departamento actual)',
         'lotes_detalles.id_orden → ordenes._id (tareas por orden)',
         'lotes_detalles.id_ordenes_productos → ordenes_productos._id (producto de la tarea)',
+        'lotes_detalles.id_empleado → api_empresas.empresas_usuarios.id_usuario (empleado asignado)',
         'lotes_detalles_empleados_asignados.id_lotes_detalles → lotes_detalles._id',
+        'lotes_detalles_empleados_asignados.id_empleado → api_empresas.empresas_usuarios.id_usuario',
         'inventario.id_catalogo → catalogo_insumos_productos._id',
         'inventario_movimientos.id_insumo → inventario._id',
+        'inventario_movimientos.id_empleado → api_empresas.empresas_usuarios.id_usuario',
         'pagos.id_orden → ordenes._id',
         'metodos_de_pago.id_orden → ordenes._id',
         'disenos.id_orden → ordenes._id',
+        'disenos.id_empleado → api_empresas.empresas_usuarios.id_usuario (diseñador)',
         'reposiciones.id_orden → ordenes._id',
+        'reposiciones.id_empleado → api_empresas.empresas_usuarios.id_usuario',
         'tintas.id_orden → ordenes._id',
+        'tintas.id_empleado → api_empresas.empresas_usuarios.id_usuario (impresor)',
     ],
 
     'examples' => [
@@ -645,5 +680,9 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
         'Ventas del mes' => "SELECT SUM(pago_total) as total_ventas FROM ordenes WHERE MONTH(moment) = MONTH(CURDATE()) AND YEAR(moment) = YEAR(CURDATE())",
         'Stock bajo' => "SELECT insumo, cantidad, unidad FROM inventario WHERE cantidad < 10",
         'Tareas pendientes de empleado' => "SELECT ld.* FROM lotes_detalles ld WHERE ld.id_empleado = X AND ld.terminado = 0",
+        'Lista de empleados activos' => "SELECT id_usuario, nombre, departamento, salario_tipo FROM api_empresas.empresas_usuarios WHERE activo = 1",
+        'Órdenes con nombre del vendedor' => "SELECT o._id, o.cliente_nombre, o.pago_total, eu.nombre as vendedor FROM ordenes o JOIN api_empresas.empresas_usuarios eu ON o.responsable = eu.id_usuario",
+        'Empleados con comisión variable' => "SELECT id_usuario, nombre, comision, comision_tipo FROM api_empresas.empresas_usuarios WHERE comision_tipo = 'variable' AND activo = 1",
+        'Tareas con nombre del empleado asignado' => "SELECT ld.id_orden, ld.departamento, eu.nombre as empleado FROM lotes_detalles ld JOIN api_empresas.empresas_usuarios eu ON ld.id_empleado = eu.id_usuario WHERE ld.terminado = 0",
     ]
 ];
