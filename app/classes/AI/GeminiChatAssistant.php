@@ -45,7 +45,19 @@ class GeminiChatAssistant extends GeminiAssistant
                 }
 
                 // 3. Formatear respuesta en lenguaje natural
-                $naturalResponse = $this->formatNaturalResponse($results, $query, $geminiResponse['data']);
+                try {
+                    $naturalResponse = $this->formatNaturalResponse($results, $query, $geminiResponse['data']);
+                } catch (\Throwable $e) {
+                    return [
+                        'success' => false,
+                        'response' => 'Error formateando respuesta en línea ' . $e->getLine() . ': ' . $e->getMessage(),
+                        'debug' => [
+                            'file' => $e->getFile(),
+                            'results_count' => count($results),
+                            'gemini_data' => $geminiResponse['data']
+                        ]
+                    ];
+                }
 
                 return [
                     'success' => true,
@@ -61,10 +73,14 @@ class GeminiChatAssistant extends GeminiAssistant
                 'response' => $geminiResponse['text'] ?? 'No pude procesar tu consulta.'
             ];
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return [
                 'success' => false,
-                'response' => 'Error inesperado: ' . $e->getMessage()
+                'response' => 'Error inesperado en línea ' . $e->getLine() . ': ' . $e->getMessage(),
+                'debug' => [
+                    'file' => $e->getFile(),
+                    'trace' => $e->getTraceAsString()
+                ]
             ];
         }
     }
