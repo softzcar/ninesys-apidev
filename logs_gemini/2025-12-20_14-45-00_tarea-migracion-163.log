@@ -1,0 +1,26 @@
+- Solicitud del Usuario: Repetir migración a empresa 163 con estructura actualizada
+- Archivos Involucrados: api_emp_152, api_emp_163, api_empresas
+- Acción Realizada: Migración completa de datos en 5 niveles
+- Herramienta(s) Utilizada(s): SSH + MySQL INSERT INTO SELECT
+- Resultado: Éxito
+- Verificación: 
+  - ordenes: 152=3,527, 163=3,527 ✓
+  - usuarios: 26 en empresa 163
+  - Datos de empresa actualizados
+
+## Resumen
+- Empresa 163 creada con estructura actualizada (comentarios de campos y tablas)
+- Datos de empresa 152 migrados (SOLO LECTURA, 152 intacta)
+- Usuarios movidos de 162 a 163
+- Datos de empresa actualizados (nombre, dirección, monedas)
+
+## Conteos Finales
+| Tabla | 152 | 163 |
+|-------|-----|-----|
+| ordenes | 3,527 | 3,527 ✓ |
+| ordenes_productos | 7,778 | 7,778 ✓ |
+| lotes_detalles | 24,367 | 24,367 ✓ |
+| pagos | 3,892 | 3,892 ✓ |
+
+- Observaciones de Gemini: Migración exitosa a empresa 163 con estructura actualizada.
+- Respuesta de Gemini: ¡Migración completada! Empresa 163 lista para pruebas.

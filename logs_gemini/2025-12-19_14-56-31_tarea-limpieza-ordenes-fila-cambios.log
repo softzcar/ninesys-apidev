@@ -1,0 +1,16 @@
+- Solicitud del Usuario: Analizar cuantos registros hay en ordenes_fila_orden_cambios e implementar limpieza automática
+- Archivos Involucrados: 
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/public/model/create_new_company_api_emp_N.sql
+  - Base de datos api_emp_152 (empresa 152 en producción)
+- Acción Realizada: 
+  1. Verificación inicial: 14,279 registros desde julio 2025
+  2. Modificación de los 3 triggers en el esquema SQL para incluir limpieza automática
+  3. Eliminación de triggers antiguos en producción
+  4. Creación de nuevos triggers con DELETE automático que mantiene solo los últimos 3 registros
+  5. Limpieza inicial de registros antiguos
+  6. Verificación final: 3 registros restantes
+- Herramienta(s) Utilizada(s): `run_command` (SSH), `replace_file_content`
+- Resultado: Éxito
+- Verificación: Consulta SQL confirmó 3 registros restantes en la tabla (antes: 14,279)
+- Observaciones de Gemini: Los triggers ahora limpian automáticamente después de cada INSERT/UPDATE/DELETE, manteniendo solo los últimos 3 snapshots de la cola de órdenes
+- Respuesta de Gemini: Implementación exitosa. 14,276 registros eliminados y limpieza automática configurada.

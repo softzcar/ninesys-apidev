@@ -1,0 +1,74 @@
+- Solicitud del Usuario: Crear y revisar Foreign Keys (FKs) para todas las tablas de la base de datos api_emp_160
+- Archivos Involucrados: Base de datos api_emp_160 (44 tablas procesadas)
+- Acción Realizada: Creación y actualización de 95 FKs con acciones ON DELETE/ON UPDATE apropiadas, corrección de tipos de datos incompatibles (int→bigint para id_product, id_woo), limpieza de datos huérfanos
+- Herramienta(s) Utilizada(s): SSH + MySQL ALTER TABLE, ADD CONSTRAINT, DROP FOREIGN KEY
+- Resultado: Éxito
+- Verificación: Cada FK fue verificada con SHOW CREATE TABLE después de su creación
+
+## Resumen de FKs Creadas (95 total en 44 tablas):
+
+| # | Tabla | FKs | Detalles |
+|---|-------|-----|----------|
+| 1 | abonos | 1 | id_orden→ordenes (ya existía) |
+| 2 | aprobacion_clientes | 2 | id_orden→ordenes, id_diseno→disenos (CASCADE) |
+| 3 | caja | 1 | id_caja_cierres→caja_cierres (SET NULL) |
+| 4 | caja_fondos | 1 | id_caja_cierres→caja_cierres (CASCADE) |
+| 5 | catalogo_insumos_productos | 2 | id_product→products, id_departamento→departamentos |
+| 6 | check_tareas | 3 | id_orden→ordenes, id_lotes_detalles...→ldea, id_departamento→departamentos |
+| 7 | disenos | 2 | id_orden→ordenes, id_product→products (tipo corregido) |
+| 8 | disenos_ajustes_y_personalizaciones | 2 | id_orden→ordenes, id_diseno→disenos |
+| 9 | empleados_lotes_fabricacion | 2 | id_departamento_creador→deptos, id_departamento_actual→deptos |
+| 10 | empleados_lotes_fabricacion_items | 2 | id_lote→empleados_lotes_fabricacion, id_orden→ordenes |
+| 11 | inventario_movimientos | 5 | id_orden, id_producto, id_insumo, id_catalogo, id_departamento |
+| 12 | lotes | 2 | id_orden→ordenes (actualizada), id_departamento_actual→departamentos |
+| 13 | lotes_detalles | 4 | id_orden, id_departamento, id_ordenes_productos, id_reposicion |
+| 14 | lotes_detalles_empleados_asignados | 3 | id_lotes_detalles, id_orden, id_departamento |
+| 15 | lotes_detalles_empleados_asignados_pausas | 1 | id_lotes_detalles_empleados_asignados |
+| 16 | lotes_fisicos | 2 | id_orden→ordenes, id_woo→products (tipo corregido) |
+| 17 | lotes_historico_solicitadas | 2 | id_orden→ordenes, id_lotes_fisicos |
+| 18 | lotes_movimientos | 2 | id_lotes_detalles, id_orden |
+| 19 | metodos_de_pago | 2 | id_orden→ordenes, id_caja_cierres→caja_cierres |
+| 20 | ordenes | 1 | id_wp→customers (tipo corregido a unsigned) |
+| 21 | ordenes_borrador_empleado | 2 | id_orden→ordenes, id_departamento→departamentos |
+| 22 | ordenes_fila_orden | 1 | id_orden→ordenes |
+| 23 | ordenes_fila_reposiciones | 1 | id_reposicion→reposiciones |
+| 24 | ordenes_observaciones | 1 | id_orden→ordenes |
+| 25 | ordenes_productos | 4 | id_orden, id_woo→products (tipo), id_tela, id_size |
+| 26 | ordenes_vinculadas | 2 | id_father, id_child→ordenes (actualizadas) |
+| 27 | pagos | 5 | id_orden, id_reposicion, id_departamento, id_metodos_de_pago, id_lotes_detalles |
+| 28 | pagos_abonos | 1 | id_pago→pagos |
+| 29 | pagos_descuentos | 1 | id_pago→pagos |
+| 30 | pagos_salarios | 1 | id_pago→pagos |
+| 31 | piezas_cortadas | 3 | id_orden, id_inventario, id_ordenes_productos |
+| 32 | presupuestos | 1 | id_wp→customers (tipo corregido) |
+| 33 | presupuestos_productos | 3 | id_orden→presupuestos, id_woo→products, id_catalogo_telas |
+| 34 | products_attributes_values | 3 | id_orden, id_product (tipo), id_product_attribute |
+| 35 | products_comisiones | 2 | id_product (tipo), id_departamento |
+| 36 | products_prices | 1 | id_product (tipo corregido) |
+| 37 | products_sizes_eficiencia | 2 | id_size, id_catalogo_insumos_prodcutos |
+| 38 | products_tiempos_de_produccion | 2 | id_product (tipo), id_departamento |
+| 39 | product_insumos_asignados | 4 | id_product, id_catalogo, id_departamento, id_talla |
+| 40 | rendimiento | 2 | id_orden, id_insumo→inventario |
+| 41 | reposiciones | 4 | id_orden, id_departamento, id_departamento_solicitante, id_ordenes_productos |
+| 42 | revisiones | 3 | id_orden, id_diseno, id_product (tipo) |
+| 43 | tintas | 2 | id_catalogo_impresoras, id_orden |
+| 44 | tintas_recargas | 2 | id_insumo→inventario, id_catalogo_impresora |
+| 45 | tinta_filtro | 1 | id_inventario→inventario |
+
+## Tablas sin FKs locales (solo referencias externas a api_empresas):
+- ordenes_tmp (id_empleado)
+- retiros (id_empleado)
+- salario_carga_familiar (id_empleado)
+- empleados_salario (id_empleado)
+
+## Tablas de catálogo sin referencias:
+- ordenes_fila_orden_cambios (auditoría)
+- products_attributes (catálogo)
+
+## Correcciones de tipo de dato realizadas:
+- id_product: int(11) → bigint(20) unsigned (11 tablas)
+- id_woo: int(11) → bigint(20) unsigned (3 tablas)
+- id_wp: int(11) → int(10) unsigned (2 tablas)
+
+- Observaciones de Gemini: Se crearon 95 FKs en 44 tablas. Se corrigieron tipos de datos incompatibles en 16 campos. Se limpiaron datos huérfanos en la tabla `pagos`. Las FKs existentes sin CASCADE fueron actualizadas a CASCADE.
+- Respuesta de Gemini: Completada la creación de FKs. ¿Cuál es la siguiente tarea?

@@ -187,7 +187,8 @@ return function (App $app) {
   // RUTAS DE SUBIDA DE IMÁGENES
   (require __DIR__ . '/routes/upload.php')($app);
 
-
+  // RUTAS DEL ASISTENTE DE IA (Gemini)
+  (require __DIR__ . '/routes/ai.php')($app);
   /** ENVIAR EMAILS */
   $app->get('/send-email', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
