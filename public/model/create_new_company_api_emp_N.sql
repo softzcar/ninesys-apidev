@@ -16,9 +16,9 @@ CREATE TABLE `abonos` (
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del empleado',
   `abono` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT 'monto del abono',
   `descuento` decimal(10, 2) DEFAULT 0.00 COMMENT 'Descuento del abono',
-  `detalle` varchar(60) DEFAULT NULL,
-  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'fecha del abono'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `detalle` varchar(60) DEFAULT NULL COMMENT 'Descripción del abono',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha del abono'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Abonos realizados a órdenes. Registra pagos parciales efectuados por clientes para reducir el saldo pendiente de una orden.';
 CREATE TABLE `aprobacion_clientes` (
   `_id` int(11) NOT NULL,
   `id_orden` int(11) DEFAULT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE `asistencias` (
   `registro` varchar(14) DEFAULT NULL COMMENT 'Entrada Mañana, Salida Mañana, Entrada Tarde, Salida Tarde',
   `detalle` mediumtext DEFAULT NULL COMMENT 'Detalle de el registro si se requiere',
   `moment` datetime DEFAULT current_timestamp() COMMENT 'Momento de la acción'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de control de asistencia de empleados. Almacena entradas y salidas con timestamp para reportes semanales y cálculo de horas trabajadas.';
 CREATE TABLE `caja` (
   `_id` int(11) NOT NULL,
   `id_caja_cierres` int(11) DEFAULT NULL COMMENT 'ID del cierre de la caja',
@@ -45,22 +45,22 @@ CREATE TABLE `caja` (
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registros de los movimientos del efectivo en la caja antes del cierre, luego se reinicia, el histroico de ingresos queda en la tabla metodos_de_pago';
 CREATE TABLE `caja_cierres` (
-  `_id` int(11) NOT NULL,
-  `dolares` decimal(10, 0) NOT NULL DEFAULT 0,
-  `pesos` decimal(10, 0) NOT NULL DEFAULT 0,
-  `bolivares` decimal(10, 0) NOT NULL DEFAULT 0,
-  `moment` timestamp NOT NULL DEFAULT current_timestamp(),
-  `id_empleado` int(11) DEFAULT NULL
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de cierres de caja';
+  `_id` int(11) NOT NULL COMMENT 'ID único del cierre',
+  `dolares` decimal(10, 0) NOT NULL DEFAULT 0 COMMENT 'Total recaudado en dólares',
+  `pesos` decimal(10, 0) NOT NULL DEFAULT 0 COMMENT 'Total recaudado en pesos',
+  `bolivares` decimal(10, 0) NOT NULL DEFAULT 0 COMMENT 'Total recaudado en bolívares',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha del cierre',
+  `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del empleado que realizó el cierre'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Historial de cierres de caja. Almacena totales por moneda, empleado responsable del cierre y fecha de corte para conciliación contable.';
 CREATE TABLE `caja_fondos` (
-  `_id` int(11) NOT NULL,
+  `_id` int(11) NOT NULL COMMENT 'ID único del registro',
   `id_caja_cierres` int(11) DEFAULT NULL COMMENT 'ID del cierre de la caja',
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del Vendedor',
-  `dolares` decimal(12, 0) NOT NULL DEFAULT 0,
-  `pesos` decimal(12, 0) NOT NULL DEFAULT 0,
-  `bolivares` decimal(12, 0) NOT NULL DEFAULT 0,
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Fondo en efectivo que queda en caja';
+  `dolares` decimal(12, 0) NOT NULL DEFAULT 0 COMMENT 'Fondo en dólares',
+  `pesos` decimal(12, 0) NOT NULL DEFAULT 0 COMMENT 'Fondo en pesos',
+  `bolivares` decimal(12, 0) NOT NULL DEFAULT 0 COMMENT 'Fondo en bolívares',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha del registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Fondo de caja chica. Registra el efectivo base que permanece en caja después de cada cierre para operaciones del siguiente período.';
 CREATE TABLE `catalogo_impresoras` (
   `_id` int(11) NOT NULL,
   `codigo_interno` varchar(50) NOT NULL COMMENT 'Identificador único y fácil de leer para el empleado. Ej: SUBLIMACION-01, EPSON-F570-A',
@@ -71,18 +71,18 @@ CREATE TABLE `catalogo_impresoras` (
   `tipo_tecnologia` varchar(50) DEFAULT NULL COMMENT 'Tecnología para agrupar o filtrar. Ej: Sublimación, DTG, DTF',
   `estado` varchar(20) NOT NULL DEFAULT 'activa' COMMENT 'Estado actual. Ej: activa, inactiva, en_mantenimiento',
   `notas` text DEFAULT NULL COMMENT 'Cualquier información adicional relevante.',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de las impresoras físicas de la empresa.';
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de impresoras de la empresa. Almacena información de equipos de impresión para asignación de trabajos y control de producción.';
 INSERT INTO `catalogo_impresoras` (`_id`, `codigo_interno`, `marca`, `modelo`, `capacidad_contenedor`, `ubicacion`, `tipo_tecnologia`, `estado`, `notas`, `moment`) VALUES
 (1, 'IMPRESORA PRINCIPAL', 'EPSON', 'EPS_9902', 1000.00, 'PISO 1', 'CMYK', 'activa', 'Impresora con cabezales originales', CURRENT_TIMESTAMP),
 (2, 'IMPRESORA SECUNDARIA', 'Mimaki', 'MK_09890', 750.00, 'PISO 2', 'CMYKW', 'activa', 'Impresora para usar solo con tintas originales', CURRENT_TIMESTAMP);
 CREATE TABLE `catalogo_insumos_productos` (
-  `_id` int(11) NOT NULL,
-  `nombre` varchar(128) NOT NULL,
-  `id_product` int(11) NOT NULL COMMENT 'ID del producto',
+  `_id` int(11) NOT NULL COMMENT 'ID único del catálogo',
+  `nombre` varchar(128) NOT NULL COMMENT 'Nombre del tipo de insumo',
+  `id_product` int(11) NOT NULL COMMENT 'ID del producto (FK a products._id)',
   `id_departamento` int(11) NOT NULL COMMENT 'ID del departamento',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo maestro de tipos de insumos para producción. Define categorías de materiales (telas, tintas, botones, etc.) que se asignan a productos.';
 
 INSERT INTO `catalogo_insumos_productos` (`_id`, `nombre`, `id_product`, `id_departamento`) VALUES
 (1, 'Papel para sublimación', 1, 1),
@@ -96,24 +96,24 @@ CREATE TABLE `catalogo_telas` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico de la tabla',
   `tela` varchar(45) DEFAULT NULL COMMENT 'Nombre de la tela',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de telas disponibles. Almacena tipos de tela con características para selección en órdenes de producción.';
 INSERT INTO `catalogo_telas` (`_id`, `tela`, `moment`)
 VALUES (1, 'Tela de Prueba', '2025-09-25 16:51:19');
 CREATE TABLE `categories` (
-  `_id` int(11) NOT NULL,
-  `nombre` varchar(100) DEFAULT NULL
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `_id` int(11) NOT NULL COMMENT 'ID único de la categoría',
+  `nombre` varchar(100) DEFAULT NULL COMMENT 'Nombre de la categoría'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Categorías de productos del catálogo. Organiza productos en grupos para clasificación, filtrado y reportes de ventas.';
 INSERT INTO `categories` (`_id`, `nombre`)
 VALUES (1, 'Categoría de Pruebas');
 CREATE TABLE `check_tareas` (
   `_id` int(11) NOT NULL COMMENT 'ID unico',
-  `id_orden` int(11) DEFAULT NULL,
-  `id_lotes_detalles_empleados_asigandos` int(11) DEFAULT NULL,
-  `id_ordenes_productos` int(11) DEFAULT NULL,
-  `id_empleado` int(11) DEFAULT NULL,
-  `id_departamento` int(11) DEFAULT NULL,
+  `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
+  `id_lotes_detalles_empleados_asigandos` int(11) DEFAULT NULL COMMENT 'ID del empleado asignado en lotes_detalles',
+  `id_ordenes_productos` int(11) DEFAULT NULL COMMENT 'ID del producto de la orden',
+  `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del empleado',
+  `id_departamento` int(11) DEFAULT NULL COMMENT 'ID del departamento',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fin de tarea'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Control de el check de tareas para empleados';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Lista de verificación de tareas por empleado. Controla el checklist de actividades completadas durante el proceso de producción de cada orden.';
 CREATE TABLE `config` (
   `_id` int(11) NOT NULL,
   `app_key` text DEFAULT NULL,
@@ -133,7 +133,7 @@ CREATE TABLE `config` (
   `sys_mostrar_insumo_en_empleado_limpieza` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'empleados',
   `sys_mostrar_insumo_en_empleado_revision` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'empleados',
   `sys_comision_de_costura` varchar(8) NOT NULL DEFAULT 'producto' COMMENT 'Define si a costura se le calclua comision por el porcentaje en la tabla empleados o el porcentaje ne la tabla productos'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Configuración general de la empresa. Almacena parámetros del sistema como datos fiscales, mensajes de WhatsApp, opciones de visualización en módulos y tipo de comisión.';
 INSERT INTO `config` (
     `_id`,
     `app_key`,
@@ -184,8 +184,8 @@ CREATE TABLE `customers` (
   `billing_city` varchar(60) DEFAULT NULL,
   `phone` varchar(20) DEFAULT NULL,
   `email` varchar(120) DEFAULT NULL,
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de clientes. Almacena datos de contacto (nombre, cédula, teléfono, email, dirección) para facturación y comunicación.';
 INSERT INTO `customers` (
     `_id`,
     `first_name`,
@@ -218,8 +218,8 @@ CREATE TABLE `departamentos` (
   `asignar_numero_de_paso` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Interviene en proceso Es un paso de proceso de fabricación',
   `enviar_mensaje` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Enviar mensaje al cliente al iniciar el paso',
   `mensaje` text DEFAULT NULL COMMENT 'Mensaje para el cliente máximo 255 caracters',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de creación'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Departamentos de la empresa con su orden en el flujo de producción. Define la secuencia de pasos de manufactura y configuración de mensajes al cliente.';
 INSERT INTO `departamentos` (
     `_id`,
     `id_modulo`,
@@ -310,16 +310,16 @@ CREATE TABLE `disenos` (
   `tipo` varchar(128) DEFAULT NULL COMMENT 'Tipo de diseÑo modas ó gráfico',
   `terminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Indica si el diseño ya ha sido terminado',
   `linkdrive` text DEFAULT NULL COMMENT 'Link a google drive',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de creación'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de diseños gráficos asociados a órdenes. Almacena tipo de diseño, diseñador asignado, código interno, estado de terminación y enlace a archivos en Drive.';
 CREATE TABLE `disenos_ajustes_y_personalizaciones` (
   `_id` int(11) NOT NULL,
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
   `id_diseno` int(11) DEFAULT NULL COMMENT 'ID de la tabla disenos',
   `tipo` varchar(15) DEFAULT NULL COMMENT 'Si es ajuste o personalizacion',
   `cantidad` int(11) NOT NULL DEFAULT 0 COMMENT 'Cantidad de piezas trabajadas',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Guarda Datos ajustes y las personalizaciones';
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de creación'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de ajustes y personalizaciones de prendas. Almacena modificaciones solicitadas por el cliente con cantidad de piezas afectadas por cada ajuste.';
 CREATE TABLE `empleados_lotes_fabricacion` (
   `_id` int(11) NOT NULL,
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID emleado que ejecuta la tarea',
@@ -331,10 +331,10 @@ CREATE TABLE `empleados_lotes_fabricacion` (
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'FEcha de creación del registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'ordenes que se procesan el lotes en el modulo de Empleados';
 CREATE TABLE `empleados_lotes_fabricacion_items` (
-  `_id` int(11) NOT NULL,
-  `id_lote` int(11) DEFAULT NULL,
-  `id_orden` int(11) DEFAULT NULL
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Informacion general de los lotes de fabricación';
+  `_id` int(11) NOT NULL COMMENT 'ID único',
+  `id_lote` int(11) DEFAULT NULL COMMENT 'ID del lote de fabricación',
+  `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Órdenes incluidas en cada lote de fabricación. Vincula las órdenes individuales con su lote padre para procesamiento en grupo.';
 CREATE TABLE `inventario` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico',
   `sku` varchar(128) DEFAULT NULL COMMENT 'SKU del Item de inventario',
@@ -350,8 +350,8 @@ CREATE TABLE `inventario` (
   `elongacion` varchar(32) DEFAULT NULL COMMENT 'Elongación del material',
   `detalles` text DEFAULT NULL COMMENT 'Detalles del insumo',
   `departamento` varchar(14) DEFAULT NULL COMMENT 'Departamento al que pertence el insumo',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de insumos disponibles en inventario. Almacena materiales de producción con SKU, cantidad actual e inicial, costo, unidad de medida y departamento asignado.';
 
 INSERT INTO `inventario` (`_id`, `sku`, `id_catalogo`, `insumo`, `unidad`, `costo`, `rendimiento`, `cantidad`, `cantidad_inicial`, `color`, `ancho`, `elongacion`, `detalles`, `departamento`, `moment`) VALUES
 (1, 'PAP_001', 1, 'Papel de pruebas', 'Mts', 20.00, 1.0, 250.00, 250.00, 'BLANCO', 0.90, NULL, 'Papel para pruebas de impresión', 'Impresión', CURRENT_TIMESTAMP),
@@ -373,8 +373,8 @@ CREATE TABLE `inventario_movimientos` (
   `valor_inicial` decimal(7, 2) DEFAULT NULL COMMENT 'Valor inicial del insumo',
   `valor_final` decimal(7, 2) DEFAULT NULL COMMENT 'Valor Final del insumo ',
   `fecha` datetime NOT NULL DEFAULT current_timestamp() COMMENT 'fecha del registro',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de movimientos de inventario de insumos. Almacena cada consumo de material vinculado a orden, producto, empleado y departamento.';
 CREATE TABLE `lotes` (
   `_id` int(11) NOT NULL COMMENT 'ID Autonumérico',
   `lote` mediumtext DEFAULT NULL COMMENT 'Código del Lote',
@@ -460,8 +460,8 @@ CREATE TABLE `metodos_de_pago` (
   `tipo_de_pago` varchar(13) NOT NULL DEFAULT 'Orden nueva' COMMENT 'Procedencia del pago para identificar el tipo de ingreso',
   `monto` decimal(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Monto cancelado en cada metodo de pago',
   `tasa` decimal(12, 0) DEFAULT NULL COMMENT 'Tasa de conversion con relacion al dolar',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de transacciones de pago asociadas a órdenes. Almacena método, moneda, monto, tasa de conversión y referencia al cierre de caja.';
 CREATE TABLE `ordenes` (
   `_id` int(11) NOT NULL AUTO_INCREMENT,
   `id_wp` int(11) DEFAULT NULL,
@@ -480,22 +480,22 @@ CREATE TABLE `ordenes` (
   `pago_total` decimal(12,2) DEFAULT 0.00,
   `pago_abono` decimal(12,2) DEFAULT 0.00,
   `pago_comision` varchar(9) NOT NULL DEFAULT 'pendiente',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp(),
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de creación',
   PRIMARY KEY (`_id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Tabla principal de órdenes de trabajo. Almacena información del pedido: cliente, vendedor, fechas, montos, estado del proceso y comisión.';
 CREATE TABLE `ordenes_borrador_empleado` (
   `_id` int(11) NOT NULL,
   `id_orden` int(11) DEFAULT NULL,
   `id_empleado` int(11) DEFAULT NULL,
   `id_departamento` int(11) NOT NULL COMMENT 'ID del departamento',
   `borrador` mediumtext DEFAULT NULL COMMENT 'El detalle de la orden editado por el empleado',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Notas personales de empleados sobre órdenes. Permite guardar observaciones privadas por empleado y departamento.';
 CREATE TABLE `ordenes_fila_orden` (
-  `_id` int(11) NOT NULL,
+  `_id` int(11) NOT NULL COMMENT 'ID único',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
   `orden_fila` int(6) DEFAULT NULL COMMENT 'Orden en la fila de producción'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Cola de prioridad de órdenes de producción. Define el orden de fabricación mediante posición numérica, configurable por drag and drop.';
 DELIMITER ##
 CREATE TRIGGER `ordenes_fila_orden_cambios_trigger_delete`
 AFTER DELETE ON `ordenes_fila_orden` FOR EACH ROW BEGIN
@@ -608,15 +608,15 @@ END ##
 DELIMITER ;
 
 CREATE TABLE `ordenes_fila_orden_cambios` (
-  `id` int(11) NOT NULL,
-  `cambio` mediumtext NOT NULL,
-  `fecha_cambio` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `id` int(11) NOT NULL COMMENT 'ID único',
+  `cambio` mediumtext NOT NULL COMMENT 'Snapshot JSON del estado de la fila',
+  `fecha_cambio` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha del cambio'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Historial de cambios en la cola de prioridad. Almacena snapshots JSON del estado de la fila. Mantiene solo los últimos 3 registros mediante triggers.';
 CREATE TABLE `ordenes_fila_reposiciones` (
-  `_id` int(11) NOT NULL,
-  `id_reposicion` int(11) DEFAULT NULL COMMENT 'ID de la orden',
+  `_id` int(11) NOT NULL COMMENT 'ID único',
+  `id_reposicion` int(11) DEFAULT NULL COMMENT 'ID de la reposición',
   `orden_fila` smallint(6) DEFAULT NULL COMMENT 'Orden en la fila de producción'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Cola de prioridad de reposiciones de producción. Define el orden de fabricación de reposiciones mediante posición numérica.';
 CREATE TABLE `ordenes_observaciones` (
   `_id` int(11) NOT NULL,
   `id_orden` int(11) NOT NULL,
@@ -641,8 +641,8 @@ CREATE TABLE `ordenes_productos` (
   `tela` varchar(128) DEFAULT NULL COMMENT 'Tela principal seleccionada desde Comercialización',
   `precio_unitario` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio del producto',
   `precio_woo` decimal(10, 2) DEFAULT NULL COMMENT 'Precio de Woocommerce',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Productos incluidos en cada orden. Detalla cada ítem con cantidad, talla, corte, tela, precio unitario y categoría.';
 CREATE TABLE `ordenes_tmp` (
   `_id` int(11) NOT NULL COMMENT 'Clave primaria',
   `form` longtext DEFAULT NULL COMMENT 'Datos del formulario',
@@ -654,8 +654,8 @@ CREATE TABLE `ordenes_vinculadas` (
   `_id` int(11) NOT NULL COMMENT 'id de la tabla',
   `id_father` int(11) DEFAULT NULL COMMENT 'ID de la orden principal',
   `id_child` int(11) DEFAULT NULL COMMENT 'ID de la orden secundaria',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Relación padre-hijo entre órdenes. Permite vincular órdenes relacionadas para procesamiento y facturación conjunta.';
 CREATE TABLE `pagos` (
   `_id` int(11) NOT NULL COMMENT 'ID unico',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
@@ -671,8 +671,8 @@ CREATE TABLE `pagos` (
   `detalle` varchar(16) DEFAULT NULL COMMENT 'Detalle de el pago, en el caso de diseño pra diferenciar si el pago es por ajuste, personalizacion etc, en el caso de los empleados no es relevante pues es un pago unico por item trabajado registrado en la tabla id_lotes_detalles',
   `estatus` varchar(9) DEFAULT NULL COMMENT '`aprobado` es el estado por defecto, se crea al terminar la tarea desde el modulo del empleado y `rechazado` se asigna cuando hay una revision y se vuelve a asignar cuando el empleado repite la tarea',
   `fecha_pago` timestamp NULL DEFAULT NULL COMMENT 'Fecha en que se raliza el pago si es NULL no se ha realizado el pago',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'id_lotes_detalles se usa para pagos de empleados y id_orden para vendedores y disenadores';
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de pagos a empleados, vendedores y diseñadores. Almacena monto, comisión, estado y fecha de pago.';
 CREATE TABLE `piezas_cortadas` (
   `_id` int(11) NOT NULL COMMENT 'ID unico',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
@@ -730,8 +730,8 @@ CREATE TABLE `products` (
   `stock_quantity` int(11) DEFAULT 0 COMMENT 'Existencia en inventario\r\n',
   `product_description` text DEFAULT NULL COMMENT 'Descripción para mostrar e el sistema y la teienda',
   `category_ids` varchar(255) DEFAULT NULL,
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo maestro de productos. Almacena productos con SKU, precio base, comisión, stock y si es producto físico o digital.';
 INSERT INTO `products` (
     `_id`,
     `product`,
@@ -848,13 +848,13 @@ CREATE TABLE `products_prices` (
  `descripcion` varchar(128) DEFAULT NULL COMMENT 'Descripción del precio'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Precios de productos';
 CREATE TABLE `comisiones_pagados` (
- `_id` int(11) NOT NULL,
- `id_empleado` int(11) DEFAULT NULL,
- `tipo_comision` varchar(12) DEFAULT NULL,
- `numero_semana` int(2) DEFAULT NULL,
- `monto` decimal(10,2) DEFAULT NULL,
- `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+ `_id` int(11) NOT NULL COMMENT 'ID único',
+ `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del empleado',
+ `tipo_comision` varchar(12) DEFAULT NULL COMMENT 'Tipo de comisión',
+ `numero_semana` int(2) DEFAULT NULL COMMENT 'Número de semana',
+ `monto` decimal(10,2) DEFAULT NULL COMMENT 'Monto de la comisión',
+ `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de comisiones pagadas a empleados. Almacena pagos de comisiones por semana y tipo.';
 CREATE TABLE `pagos_abonos` (
  `_id` INT NOT NULL AUTO_INCREMENT ,
  `id_pago` INT NULL COMMENT 'ID de la tabla pagos' ,
@@ -878,19 +878,19 @@ INSERT INTO `products_prices` (`_id`, `id_product`, `price`, `descripcion`) VALU
 (2, 1, 22.00, 'Mayor'),
 (3, 2, 15.00, 'Unitario');
 CREATE TABLE `products_sizes_eficiencia` (
-  `_id` int(11) NOT NULL,
+  `_id` int(11) NOT NULL COMMENT 'ID único',
   `id_size` int(11) DEFAULT NULL COMMENT 'ID de la talla',
-  `id_catalogo_insumos_prodcutos` int(11) DEFAULT NULL COMMENT 'ID de la tabla catalogo_ibsumos_productos',
+  `id_catalogo_insumos_prodcutos` int(11) DEFAULT NULL COMMENT 'ID de la tabla catalogo_insumos_productos',
   `cantidad` decimal(3, 2) NOT NULL DEFAULT 0.00 COMMENT 'Cantidad de insumo',
   `unidad` varchar(64) DEFAULT NULL COMMENT 'Unidad de medida del insumo'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Valores de la eficiencia de productos por tallas';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Eficiencia de insumos por talla. Define la cantidad de material requerido para cada talla de producto.';
 CREATE TABLE `products_tiempos_de_produccion` (
-  `_id` int(11) NOT NULL,
+  `_id` int(11) NOT NULL COMMENT 'ID único',
   `id_product` int(11) DEFAULT NULL COMMENT 'ID del producto',
   `id_departamento` int(11) DEFAULT NULL COMMENT 'ID del departamento',
-  `tiempo` int(11) NOT NULL DEFAULT 1 COMMENT 'Tiempo de producción e segundos',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `tiempo` int(11) NOT NULL DEFAULT 1 COMMENT 'Tiempo de producción en segundos',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Tiempos estándar de producción. Define minutos estimados por producto y departamento para proyección de entregas.';
 
 INSERT INTO `products_tiempos_de_produccion` (`_id`, `id_product`, `id_departamento`, `tiempo`, `moment`) VALUES
 (1, 1, 1, 1800, CURRENT_TIMESTAMP),
@@ -905,9 +905,9 @@ CREATE TABLE `product_insumos_asignados` (
   `id_talla` int(11) DEFAULT NULL COMMENT 'ID de la talla',
   `cantidad` decimal(6, 2) NOT NULL DEFAULT 0.00 COMMENT 'cantidad del insumo',
   `unidad` varchar(64) DEFAULT NULL COMMENT 'Unidad de medida del insumo',
-  `tiempo` int(11) NOT NULL DEFAULT 0 COMMENT 'tiempo estimadop de fabricación en segundos',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `tiempo` int(11) NOT NULL DEFAULT 0 COMMENT 'Tiempo estimado de fabricación en segundos',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Insumos requeridos por producto. Define qué materiales y cantidades necesita cada producto por departamento y talla.';
 
 INSERT INTO `product_insumos_asignados` (`_id`, `id_product`, `id_catalogo_insumos_productos`, `id_departamento`, `id_talla`, `cantidad`, `unidad`) VALUES
 (1, 1, 1, 1, 1, 1.00, 'Mt'),
@@ -974,12 +974,12 @@ CREATE TABLE `revisiones` (
   `estatus` varchar(19) NOT NULL DEFAULT 'Esperando Respuesta' COMMENT 'Los estados son ''Esperando Respuesta'', ''Rechazado'', ''Aprobado''',
   `url_image` varchar(255) DEFAULT NULL COMMENT 'URL de la imagen de la revisión',
   `detalles` text DEFAULT NULL COMMENT 'Detalles de la revision',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'timestamp'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Control de revisiones de diseño. Registra cada iteración de revisión solicitada al diseñador con límite máximo de dos.';
 CREATE TABLE `sizes` (
-  `_id` int(11) NOT NULL,
-  `nombre` varchar(100) DEFAULT NULL
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+  `_id` int(11) NOT NULL COMMENT 'ID único de la talla',
+  `nombre` varchar(100) DEFAULT NULL COMMENT 'Nombre de la talla'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de tallas disponibles. Define las tallas manejadas por la empresa para asignación en productos y órdenes.';
 INSERT INTO `sizes` (`_id`, `nombre`) VALUES
 (1, 'S'),
 (2, 'M'),
