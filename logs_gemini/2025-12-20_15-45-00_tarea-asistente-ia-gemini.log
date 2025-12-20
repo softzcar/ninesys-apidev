@@ -1,0 +1,32 @@
+- Solicitud del Usuario: Implementar asistente de IA con Gemini para consultas a la base de datos
+- Archivos Involucrados:
+  - app/classes/AI/GeminiAssistant.php (NUEVO)
+  - app/classes/AI/GeminiChatAssistant.php (NUEVO)
+  - app/classes/AI/GeminiReportAssistant.php (NUEVO)
+  - app/schemas/db-schema-gemini.php (NUEVO)
+  - app/routes/ai.php (NUEVO)
+  - app/config.php (MODIFICADO - agregada GEMINI_API_KEY)
+  - app/routes.php (MODIFICADO - registradas rutas de IA)
+- Acción Realizada:
+  - Creación de arquitectura de clases con clase base abstracta GeminiAssistant
+  - Implementación de GeminiChatAssistant para respuestas en lenguaje natural
+  - Implementación de GeminiReportAssistant para reportes con formato bootstrap-vue (fields + items)
+  - Creación de schema de BD con 8 tablas documentadas (ordenes, ordenes_productos, lotes, inventario, customers, departamentos, products, catalogo_telas)
+  - Creación de endpoints POST /ai/chat, POST /ai/report, GET /ai/status
+  - Configuración de API Key de Gemini proporcionada por el usuario
+  - Corrección de parseo de JSON body en endpoints
+- Herramienta(s) Utilizada(s): write_to_file, replace_file_content, run_command (git, curl, ssh)
+- Resultado: Éxito
+- Verificación:
+  - Sintaxis PHP verificada con php -l (sin errores)
+  - Despliegue en VPS exitoso
+  - Prueba /ai/chat con "¿Cuántas órdenes hay?" → Respuesta: 3527 órdenes
+  - Prueba /ai/chat con "¿Cuáles órdenes están listas?" → Respuesta: 35 órdenes terminadas
+  - Prueba /ai/report con consulta de tabla → Respuesta con fields + items correctamente formateados
+  - SQL generado por Gemini es válido y ejecutado correctamente
+- Observaciones de Gemini:
+  - El header para autenticar la empresa es "Authorization" (no "X-ID-Empresa")
+  - Gemini 2.0 Flash genera SQL preciso basándose en el schema proporcionado
+  - La validación de SQL previene consultas peligrosas (INSERT, UPDATE, DELETE)
+  - Rate limit inicial resuelto al agregar método de pago en Google Cloud
+- Respuesta de Gemini: Implementación completa del asistente de IA con Gemini. Endpoints /ai/chat y /ai/report funcionando correctamente.

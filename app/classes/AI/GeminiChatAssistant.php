@@ -95,7 +95,8 @@ class GeminiChatAssistant extends GeminiAssistant
             $response = "Encontré 1 resultado:\n\n";
             foreach ($row as $key => $value) {
                 $label = $this->formatFieldLabel($key);
-                $response .= "• **{$label}**: {$value}\n";
+                $displayValue = is_array($value) ? json_encode($value) : (string) $value;
+                $response .= "• **{$label}**: {$displayValue}\n";
             }
         } else {
             // Respuesta para múltiples registros
@@ -110,7 +111,8 @@ class GeminiChatAssistant extends GeminiAssistant
                 foreach ($row as $key => $value) {
                     if ($value !== null && $value !== '') {
                         $label = $this->formatFieldLabel($key);
-                        $parts[] = "{$label}: {$value}";
+                        $displayValue = is_array($value) ? json_encode($value) : (string) $value;
+                        $parts[] = "{$label}: {$displayValue}";
                     }
                 }
                 $response .= implode(" | ", $parts) . "\n";
