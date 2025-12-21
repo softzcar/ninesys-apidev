@@ -125,6 +125,11 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
         // ==================== IMPRESORAS ====================
         'Lista de impresoras' => "SELECT _id, codigo_interno, marca, modelo, tipo_tecnologia, estado FROM catalogo_impresoras ORDER BY codigo_interno",
+
+        // ==================== TINTAS (en inventario) ====================
+        'Stock de tintas' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' ORDER BY insumo",
+        'Tinta amarilla en inventario' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%amarill%' OR insumo LIKE '%yellow%'",
+        'Tintas con stock bajo' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND cantidad < 100",
         'Impresoras activas' => "SELECT _id, codigo_interno, marca, modelo, tipo_tecnologia FROM catalogo_impresoras WHERE estado = 'activa'",
         'Buscar impresora por nombre' => "SELECT _id, codigo_interno, marca, modelo, tipo_tecnologia, estado FROM catalogo_impresoras WHERE codigo_interno LIKE '%{NOMBRE}%' OR marca LIKE '%{NOMBRE}%'",
     ],
@@ -522,7 +527,7 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
         // ==================== TINTAS ====================
         'tintas' => [
-            'description' => 'Consumo de tintas por impresión',
+            'description' => 'REGISTRO DE CONSUMO de tintas por impresión (NO es el stock). Guarda cuánta tinta CMYK usó cada orden. Para ver stock de tintas, buscar en tabla inventario.',
             'fields' => [
                 '_id' => 'ID (PK)',
                 'c' => 'Consumo Cyan (ml)',
