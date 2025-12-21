@@ -40,6 +40,20 @@ DEFINICIÓN DE ESTADOS DE ÓRDENES:
 
 IMPORTANTE: Cuando el usuario pregunte por 'órdenes en curso', 'órdenes activas', 'órdenes en proceso' o similares, se refiere a órdenes que NO están 'cancelada' ni 'entregada'. Es decir: status IN ('En espera', 'terminada', 'activa') o también: status NOT IN ('cancelada', 'entregada').
 
+PATRONES DE BÚSQUEDA GENÉRICOS:
+Cuando el usuario pregunte por stock, inventario o cantidad de algún insumo/material, usa la tabla 'inventario' con LIKE para buscar por nombre o características:
+
+1. Para buscar insumos por tipo: WHERE insumo LIKE '%tinta%' o WHERE insumo LIKE '%tela%' o WHERE insumo LIKE '%hilo%'
+2. Para filtrar por característica adicional (color, tipo, tamaño): AND insumo LIKE '%{caracteristica}%'
+   Ejemplo: WHERE insumo LIKE '%tinta%' AND insumo LIKE '%magenta%'
+   Ejemplo: WHERE insumo LIKE '%tela%' AND insumo LIKE '%blanca%'
+3. Campos útiles de inventario: insumo (nombre), cantidad, unidad, color, costo, departamento
+
+IMPORTANTE SOBRE TINTAS:
+- Las tintas DISPONIBLES (stock) están en la tabla 'inventario' (campo insumo contiene 'tinta')
+- La tabla 'tintas' es SOLO para registrar CONSUMO de tintas CMYK cuando se imprime una orden
+- Si preguntan '¿cuánta tinta X tenemos?' → buscar en inventario: WHERE insumo LIKE '%tinta%' AND insumo LIKE '%X%'
+
 NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
     // ===================================================================================
@@ -128,17 +142,15 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
         'Impresoras activas' => "SELECT _id, codigo_interno, marca, modelo, tipo_tecnologia FROM catalogo_impresoras WHERE estado = 'activa'",
         'Buscar impresora por nombre' => "SELECT _id, codigo_interno, marca, modelo, tipo_tecnologia, estado FROM catalogo_impresoras WHERE codigo_interno LIKE '%{NOMBRE}%' OR marca LIKE '%{NOMBRE}%'",
 
-        // ==================== TINTAS EN INVENTARIO ====================
-        // IMPORTANTE: Las tintas se almacenan en la tabla INVENTARIO, NO en la tabla 'tintas'.
-        // La tabla 'tintas' es solo para registrar el CONSUMO de tinta por orden impresa.
-        'Stock de tintas (todas)' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' ORDER BY insumo",
-        'Cuánta tinta amarilla tenemos' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND (insumo LIKE '%amarill%' OR insumo LIKE '%yellow%')",
-        'Cuánta tinta magenta tenemos' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND insumo LIKE '%magenta%'",
-        'Cuánta tinta cyan tenemos' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND insumo LIKE '%cyan%'",
-        'Cuánta tinta negra tenemos' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND (insumo LIKE '%negro%' OR insumo LIKE '%black%')",
-        'Cuánta tinta blanca tenemos' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND (insumo LIKE '%blanc%' OR insumo LIKE '%white%')",
-        'Tintas con stock bajo' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND cantidad < 100 ORDER BY cantidad ASC",
+        // ==================== BÚSQUEDA GENÉRICA EN INVENTARIO ====================
+        // Estos son PATRONES genéricos. La IA debe adaptar el valor de búsqueda según lo que pregunte el usuario.
+        'Stock de un tipo de insumo (patrón)' => "SELECT _id, insumo, cantidad, unidad, color FROM inventario WHERE insumo LIKE '%{TIPO_INSUMO}%' ORDER BY insumo",
+        'Buscar insumo por tipo y característica' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%{TIPO}%' AND insumo LIKE '%{CARACTERISTICA}%'",
+        'Stock de tintas' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' ORDER BY insumo",
         'Buscar tinta por color' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND insumo LIKE '%{COLOR}%'",
+        'Stock de telas' => "SELECT _id, insumo, cantidad, unidad, color FROM inventario WHERE insumo LIKE '%tela%' ORDER BY insumo",
+        'Buscar tela por color' => "SELECT _id, insumo, cantidad, unidad, color FROM inventario WHERE insumo LIKE '%tela%' AND (insumo LIKE '%{COLOR}%' OR color LIKE '%{COLOR}%')",
+        'Insumos con stock bajo' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE cantidad < 10 ORDER BY cantidad ASC",
     ],
 
     'tables' => [
