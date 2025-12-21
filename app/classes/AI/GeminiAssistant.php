@@ -67,6 +67,27 @@ abstract class GeminiAssistant
     }
 
     /**
+     * Obtiene contexto de queries relevantes según la pregunta del usuario
+     * 
+     * @param string $userQuery Pregunta del usuario
+     * @return string Contexto de queries para agregar al prompt
+     */
+    protected function getRelevantQueriesContext(string $userQuery): string
+    {
+        try {
+            require_once __DIR__ . '/QueryExtractor.php';
+
+            $extractor = new QueryExtractor();
+            $categories = $extractor->detectCategories($userQuery);
+
+            return $extractor->generatePromptContext($categories);
+        } catch (\Throwable $e) {
+            // Si hay error, continuar sin contexto adicional
+            return '';
+        }
+    }
+
+    /**
      * Llama a la API de Gemini
      * 
      * @param string $userQuery Pregunta del usuario
@@ -79,6 +100,9 @@ abstract class GeminiAssistant
         $url = $this->apiUrl . $this->model . ':generateContent?key=' . $this->apiKey;
 
         $systemInstruction = $this->basePrompt;
+
+        // Agregar contexto de queries relevantes según la pregunta
+        $systemInstruction .= $this->getRelevantQueriesContext($userQuery);
 
         if ($requestSQL) {
             $systemInstruction .= "\n\nCuando el usuario haga una pregunta sobre datos, genera la consulta SQL necesaria.";
