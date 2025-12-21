@@ -31,6 +31,12 @@ Los campos id_empleado, responsable, id_empleado_emisor, etc. en las tablas de l
 Para obtener el nombre del empleado, haz JOIN con: api_empresas.empresas_usuarios eu ON campo_id_empleado = eu.id_usuario
 IMPORTANTE: Cuando consultes empleados SIEMPRE filtra por id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " para obtener solo los empleados de esta empresa.
 
+BÚSQUEDA DE EMPLEADOS POR NOMBRE:
+- NUNCA pidas el nombre completo. SIEMPRE intenta buscar con el nombre proporcionado usando LIKE '%nombre%'
+- Los empleados pueden tener nombres cortos (ej: 'Maru', 'Jesus') - busca con: WHERE nombre LIKE '%Maru%'
+- Si el usuario dice 'empleado X' o 'empleada X', genera la consulta directamente con: eu.nombre LIKE '%X%'
+- NO solicites más información sobre el nombre, INTENTA SIEMPRE generar la consulta SQL
+
 DEFINICIÓN DE ESTADOS DE ÓRDENES:
 - 'cancelada': Orden cancelada, no se procesará.
 - 'entregada': Orden ya entregada al cliente, proceso terminado.
