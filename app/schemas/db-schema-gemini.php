@@ -529,12 +529,17 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
         ],
 
         'caja' => [
-            'description' => 'Movimientos de caja',
+            'description' => 'Movimientos de caja - Registro de ingresos y egresos',
             'fields' => [
                 '_id' => 'ID (PK)',
-                'tipo' => "'ingreso', 'egreso'",
-                'monto' => 'Monto del movimiento',
-                'concepto' => 'Concepto del movimiento',
+                'id_caja_cierres' => 'FK → caja_cierres._id (cierre al que pertenece)',
+                'monto' => 'Monto del movimiento en la moneda indicada',
+                'moneda' => "'USD' (dólares), 'VES' (bolívares)",
+                'tasa' => 'Tasa de cambio usada',
+                'detalle' => 'Descripción del movimiento',
+                'tipo' => "'ingreso' o 'egreso'",
+                'id_empleado' => 'FK → empleado que registró el movimiento',
+                'moment' => 'Fecha y hora del movimiento',
             ]
         ],
 
