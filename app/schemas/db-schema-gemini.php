@@ -31,6 +31,15 @@ Los campos id_empleado, responsable, id_empleado_emisor, etc. en las tablas de l
 Para obtener el nombre del empleado, haz JOIN con: api_empresas.empresas_usuarios eu ON campo_id_empleado = eu.id_usuario
 IMPORTANTE: Cuando consultes empleados SIEMPRE filtra por id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " para obtener solo los empleados de esta empresa.
 
+DEFINICIÓN DE ESTADOS DE ÓRDENES:
+- 'cancelada': Orden cancelada, no se procesará.
+- 'entregada': Orden ya entregada al cliente, proceso terminado.
+- 'terminada': Orden lista para entregar, producción finalizada.
+- 'activa': Orden en proceso de producción.
+- 'En espera': Orden pendiente de iniciar producción.
+
+IMPORTANTE: Cuando el usuario pregunte por 'órdenes en curso', 'órdenes activas', 'órdenes en proceso' o similares, se refiere a órdenes que NO están 'cancelada' ni 'entregada'. Es decir: status IN ('En espera', 'terminada', 'activa') o también: status NOT IN ('cancelada', 'entregada').
+
 NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
 
