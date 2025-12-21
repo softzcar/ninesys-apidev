@@ -122,6 +122,11 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
         'Última tasa de cambio registrada' => "SELECT tasa, metodo_pago, moment FROM metodos_de_pago WHERE moneda = 'Bolívares' ORDER BY moment DESC LIMIT 1",
         'Clientes con más órdenes' => "SELECT cliente_nombre, COUNT(*) as ordenes, SUM(pago_total) as total_compras FROM ordenes WHERE status != 'cancelada' GROUP BY cliente_nombre ORDER BY ordenes DESC LIMIT 10",
         'Ventas por mes (últimos 6 meses)' => "SELECT DATE_FORMAT(moment, '%Y-%m') as mes, SUM(pago_total) as ventas, COUNT(*) as ordenes FROM ordenes WHERE moment >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH) AND status != 'cancelada' GROUP BY mes ORDER BY mes DESC",
+
+        // ==================== IMPRESORAS ====================
+        'Lista de impresoras' => "SELECT _id, codigo_interno, marca, modelo, tipo_tecnologia, estado FROM catalogo_impresoras ORDER BY codigo_interno",
+        'Impresoras activas' => "SELECT _id, codigo_interno, marca, modelo, tipo_tecnologia FROM catalogo_impresoras WHERE estado = 'activa'",
+        'Buscar impresora por nombre' => "SELECT _id, codigo_interno, marca, modelo, tipo_tecnologia, estado FROM catalogo_impresoras WHERE codigo_interno LIKE '%{NOMBRE}%' OR marca LIKE '%{NOMBRE}%'",
     ],
 
     'tables' => [
@@ -481,10 +486,17 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
         ],
 
         'catalogo_impresoras' => [
-            'description' => 'Catálogo de impresoras',
+            'description' => 'Catálogo de impresoras de la empresa',
             'fields' => [
                 '_id' => 'ID (PK)',
-                'nombre' => 'Nombre de la impresora',
+                'codigo_interno' => 'Código/nombre interno de la impresora (ej: IMPRESORA_MARU, DTF)',
+                'marca' => 'Marca de la impresora (ej: AUDLEY, YinStar)',
+                'modelo' => 'Modelo de la impresora',
+                'capacidad_contenedor' => 'Capacidad del contenedor de tinta en ml',
+                'ubicacion' => 'Ubicación física de la impresora',
+                'tipo_tecnologia' => 'Tecnología de impresión (ej: CMYK, DTF)',
+                'estado' => "'activa' o 'inactiva'",
+                'notas' => 'Notas adicionales',
             ]
         ],
 
