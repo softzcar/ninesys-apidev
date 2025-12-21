@@ -244,13 +244,13 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
         // ==================== DEPARTAMENTOS ====================
         'departamentos' => [
-            'description' => 'Departamentos de la empresa',
+            'description' => 'Departamentos de producción. Nombres: Administración, Montar Tallas, Impresión, Estampado, Corte, Costura, Limpieza, Comercialización, Revisión, Diseño, revision 2, Producción',
             'fields' => [
                 '_id' => 'ID (PK)',
-                'departamento' => 'Nombre del departamento',
+                'departamento' => 'Nombre del departamento (ver lista en description)',
                 'orden_proceso' => 'Orden en el proceso de fabricación (1=primero)',
-                'asignar_numero_de_paso' => 'Si es paso de proceso',
-                'enviar_mensaje' => 'Enviar mensaje al cliente al iniciar',
+                'asignar_numero_de_paso' => '1 si es paso de producción, 0 si no',
+                'enviar_mensaje' => '1 si envía mensaje al cliente al iniciar',
             ]
         ],
 
@@ -507,14 +507,18 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
         ],
 
         'metodos_de_pago' => [
-            'description' => 'Métodos de pago utilizados',
+            'description' => 'Registro de todos los pagos recibidos de clientes. Cada pago tiene método y moneda.',
             'fields' => [
                 '_id' => 'ID (PK)',
                 'id_orden' => 'FK → ordenes._id',
-                'metodo' => 'Método de pago',
-                'monto' => 'Monto',
-                'tasa' => 'Tasa de cambio',
-                'moneda' => 'Moneda',
+                'id_caja_cierres' => 'FK → caja_cierres._id (cierre al que pertenece)',
+                'metodo_pago' => "'Pagomovil', 'Efectivo', 'Zelle', 'Transferencia', 'Punto'",
+                'moneda' => "'Bolívares', 'Dólares', 'Pesos'",
+                'tipo_de_pago' => "'Abono a orden' (pago parcial), 'Orden nueva' (pago inicial)",
+                'monto' => 'Monto del pago',
+                'tasa' => 'Tasa de cambio usada',
+                'detalle' => 'Descripción o referencia del pago',
+                'moment' => 'Fecha y hora del pago',
             ]
         ],
 
