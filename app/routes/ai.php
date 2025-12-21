@@ -72,10 +72,13 @@ return function (App $app) {
         // Crear conexión a la BD
         $localConnection = new LocalDB();
 
+        // Obtener historial de conversación (si se envió)
+        $history = $data['history'] ?? [];
+
         try {
-            // Crear asistente y procesar consulta
+            // Crear asistente y procesar consulta (con historial)
             $assistant = new GeminiChatAssistant(GEMINI_API_KEY, $schema, $localConnection);
-            $result = $assistant->processUserQuery($data['query']);
+            $result = $assistant->processUserQuery($data['query'], $history);
 
             $localConnection->disconnect();
 

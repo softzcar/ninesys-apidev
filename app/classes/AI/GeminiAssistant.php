@@ -71,9 +71,10 @@ abstract class GeminiAssistant
      * 
      * @param string $userQuery Pregunta del usuario
      * @param bool $requestSQL Si debe solicitar SQL como function call
+     * @param array $history Historial de conversación [['role' => 'user'|'model', 'text' => '...'], ...]
      * @return array Respuesta de Gemini
      */
-    protected function callGeminiAPI(string $userQuery, bool $requestSQL = true): array
+    protected function callGeminiAPI(string $userQuery, bool $requestSQL = true, array $history = []): array
     {
         $url = $this->apiUrl . $this->model . ':generateContent?key=' . $this->apiKey;
 
@@ -85,14 +86,30 @@ abstract class GeminiAssistant
             $systemInstruction .= "\n{\"sql\": \"SELECT ...\", \"description\": \"Descripción de lo que hace la consulta\", \"columns\": [{\"key\": \"campo\", \"label\": \"Etiqueta\", \"sortable\": true}]}";
         }
 
-        $payload = [
-            'contents' => [
-                [
-                    'parts' => [
-                        ['text' => $userQuery]
-                    ]
+        // Construir contents con historial de conversación
+        $contents = [];
+
+        // Agregar mensajes del historial
+        foreach ($history as $msg) {
+            $role = $msg['role'] === 'user' ? 'user' : 'model';
+            $contents[] = [
+                'role' => $role,
+                'parts' => [
+                    ['text' => $msg['text']]
                 ]
-            ],
+            ];
+        }
+
+        // Agregar mensaje actual del usuario
+        $contents[] = [
+            'role' => 'user',
+            'parts' => [
+                ['text' => $userQuery]
+            ]
+        ];
+
+        $payload = [
+            'contents' => $contents,
             'systemInstruction' => [
                 'parts' => [
                     ['text' => $systemInstruction]

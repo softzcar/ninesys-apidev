@@ -16,13 +16,14 @@ class GeminiChatAssistant extends GeminiAssistant
      * Procesa la consulta del usuario y devuelve respuesta en lenguaje natural
      * 
      * @param string $query Pregunta del usuario
+     * @param array $history Historial de conversación [['role' => 'user'|'model', 'text' => '...'], ...]
      * @return array ['success' => bool, 'response' => string, 'data' => array|null]
      */
-    public function processUserQuery(string $query): array
+    public function processUserQuery(string $query, array $history = []): array
     {
         try {
-            // 1. Llamar a Gemini para obtener SQL
-            $geminiResponse = $this->callGeminiAPI($query, true);
+            // 1. Llamar a Gemini para obtener SQL (con historial)
+            $geminiResponse = $this->callGeminiAPI($query, true, $history);
 
             if (isset($geminiResponse['error'])) {
                 return [
