@@ -529,15 +529,15 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
         ],
 
         'caja' => [
-            'description' => 'Movimientos de caja - Registro de ingresos y egresos',
+            'description' => 'Movimientos de EFECTIVO (dinero físico) en caja. El campo moneda indica la divisa (USD, VES, etc.)',
             'fields' => [
                 '_id' => 'ID (PK)',
                 'id_caja_cierres' => 'FK → caja_cierres._id (cierre al que pertenece)',
-                'monto' => 'Monto del movimiento en la moneda indicada',
-                'moneda' => "'USD' (dólares), 'VES' (bolívares)",
+                'monto' => 'Monto del movimiento en efectivo',
+                'moneda' => "'USD' (dólares), 'VES' (bolívares), etc. Esta es la divisa del efectivo",
                 'tasa' => 'Tasa de cambio usada',
                 'detalle' => 'Descripción del movimiento',
-                'tipo' => "'ingreso' o 'egreso'",
+                'tipo' => "'ingreso' (entrada de efectivo) o 'egreso' (salida de efectivo)",
                 'id_empleado' => 'FK → empleado que registró el movimiento',
                 'moment' => 'Fecha y hora del movimiento',
             ]
