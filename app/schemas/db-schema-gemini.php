@@ -130,6 +130,12 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
         'Lista de empleados activos' => "SELECT id_usuario, nombre, departamento, comision, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND activo = 1 ORDER BY nombre",
         'Pagos realizados a empleados este mes' => "SELECT eu.nombre, SUM(p.monto_pago) as total_pagado FROM pagos p JOIN api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario WHERE eu.id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND p.fecha_pago IS NOT NULL AND MONTH(p.fecha_pago) = MONTH(CURDATE()) GROUP BY eu.id_usuario, eu.nombre ORDER BY total_pagado DESC",
 
+        // ==================== DEPARTAMENTOS DE EMPLEADOS ====================
+        // Un empleado puede tener MÚLTIPLES departamentos asignados (relación 1:N)
+        'Departamentos asignados a un empleado' => "SELECT d.departamento FROM api_empresas.empresas_usuarios_departamentos eud JOIN departamentos d ON eud.id_departamento = d._id JOIN api_empresas.empresas_usuarios eu ON eud.id_empleado = eu.id_usuario WHERE eu.nombre LIKE '%{NOMBRE}%' AND eu.id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163),
+        'Cuántos departamentos tiene un empleado' => "SELECT COUNT(*) as cantidad_departamentos FROM api_empresas.empresas_usuarios_departamentos eud JOIN api_empresas.empresas_usuarios eu ON eud.id_empleado = eu.id_usuario WHERE eu.nombre LIKE '%{NOMBRE}%' AND eu.id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163),
+        'Empleados de un departamento' => "SELECT eu.nombre FROM api_empresas.empresas_usuarios_departamentos eud JOIN departamentos d ON eud.id_departamento = d._id JOIN api_empresas.empresas_usuarios eu ON eud.id_empleado = eu.id_usuario WHERE d.departamento LIKE '%{DEPARTAMENTO}%' AND eu.id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163),
+
         // ==================== ABONOS Y SALDOS ====================
         'Abonos recibidos hoy' => "SELECT a.id_orden, o.cliente_nombre, a.abono, a.moment FROM abonos a JOIN ordenes o ON a.id_orden = o._id WHERE DATE(a.moment) = CURDATE() ORDER BY a.moment DESC",
         'Total abonado hoy' => "SELECT SUM(abono) as total FROM abonos WHERE DATE(moment) = CURDATE()",
@@ -187,6 +193,15 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
                 'comision_tipo' => "'fija' o 'variable'",
                 'dni' => 'Documento de identidad',
                 'fecha_ingreso' => 'Fecha de ingreso a la empresa',
+            ]
+        ],
+
+        'api_empresas.empresas_usuarios_departamentos' => [
+            'description' => 'TABLA DE RELACIÓN: Departamentos asignados a cada empleado (UN empleado puede tener MÚLTIPLES departamentos). Usar esta tabla para saber en qué departamentos puede trabajar un empleado.',
+            'fields' => [
+                '_id' => 'ID (PK)',
+                'id_empleado' => 'FK → api_empresas.empresas_usuarios.id_usuario',
+                'id_departamento' => 'FK → departamentos._id (de la BD de la empresa)',
             ]
         ],
 
