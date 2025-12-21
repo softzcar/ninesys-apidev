@@ -42,6 +42,45 @@ IMPORTANTE: Cuando el usuario pregunte por 'órdenes en curso', 'órdenes activa
 
 NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
+    // ===================================================================================
+    // RECETAS SQL - EJEMPLOS CURADOS PARA QUE LA IA GENERE CONSULTAS CORRECTAS
+    // Usa estos ejemplos como base para generar consultas similares
+    // ===================================================================================
+    'sql_recipes' => [
+        // ==================== CAJA Y EFECTIVO ====================
+        'Dólares en caja (efectivo)' => "SELECT SUM(monto) as total FROM caja WHERE moneda = 'Dólares' AND tipo = 'ingreso'",
+        'Bolívares en caja (efectivo)' => "SELECT SUM(monto) as total FROM caja WHERE moneda = 'Bolívares' AND tipo = 'ingreso'",
+        'Balance de caja por moneda' => "SELECT moneda, SUM(CASE WHEN tipo='ingreso' THEN monto ELSE -monto END) as balance FROM caja GROUP BY moneda",
+        'Movimientos de caja de hoy' => "SELECT moneda, monto, tipo, detalle, moment FROM caja WHERE DATE(moment) = CURDATE()",
+
+        // ==================== PAGOS RECIBIDOS (metodos_de_pago) ====================
+        'Total recibido por Zelle este mes' => "SELECT SUM(monto) as total FROM metodos_de_pago WHERE metodo_pago = 'Zelle' AND MONTH(moment) = MONTH(CURDATE()) AND YEAR(moment) = YEAR(CURDATE())",
+        'Total recibido por Pagomovil este mes' => "SELECT SUM(monto) as total FROM metodos_de_pago WHERE metodo_pago = 'Pagomovil' AND MONTH(moment) = MONTH(CURDATE()) AND YEAR(moment) = YEAR(CURDATE())",
+        'Pagos en efectivo de hoy' => "SELECT SUM(monto) as total FROM metodos_de_pago WHERE metodo_pago = 'Efectivo' AND DATE(moment) = CURDATE()",
+        'Resumen de pagos por método' => "SELECT metodo_pago, SUM(monto) as total, COUNT(*) as cantidad FROM metodos_de_pago GROUP BY metodo_pago ORDER BY total DESC",
+        'Pagos recibidos de una orden' => "SELECT metodo_pago, moneda, monto, tasa, moment FROM metodos_de_pago WHERE id_orden = {ID_ORDEN}",
+
+        // ==================== ÓRDENES ====================
+        'Órdenes en curso (no canceladas ni entregadas)' => "SELECT _id, cliente_nombre, status, fecha_entrega, pago_total, pago_abono FROM ordenes WHERE status IN ('En espera', 'terminada', 'activa') ORDER BY fecha_entrega ASC",
+        'Órdenes pendientes de entrega (terminadas pero no entregadas)' => "SELECT _id, cliente_nombre, fecha_entrega, (pago_total - pago_abono) as saldo FROM ordenes WHERE status = 'terminada' ORDER BY fecha_entrega ASC",
+        'Órdenes con saldo pendiente' => "SELECT _id, cliente_nombre, pago_total, pago_abono, (pago_total - pago_abono) as saldo_pendiente FROM ordenes WHERE (pago_total - pago_abono) > 0 AND status NOT IN ('cancelada') ORDER BY saldo_pendiente DESC",
+        'Total de ventas del mes' => "SELECT SUM(pago_total) as total_ventas, COUNT(*) as ordenes FROM ordenes WHERE MONTH(moment) = MONTH(CURDATE()) AND YEAR(moment) = YEAR(CURDATE()) AND status != 'cancelada'",
+        'Buscar orden por cliente' => "SELECT _id, cliente_nombre, status, pago_total, pago_abono, fecha_entrega FROM ordenes WHERE cliente_nombre LIKE '%{NOMBRE}%' ORDER BY _id DESC",
+
+        // ==================== PRODUCCIÓN Y DEPARTAMENTOS ====================
+        'Órdenes en un departamento' => "SELECT DISTINCT l.id_orden, o.cliente_nombre, o.status, o.fecha_entrega FROM lotes l JOIN ordenes o ON l.id_orden = o._id JOIN departamentos d ON l.id_departamento_actual = d._id WHERE d.departamento = '{DEPARTAMENTO}'",
+        'Órdenes en Costura' => "SELECT DISTINCT l.id_orden, o.cliente_nombre FROM lotes l JOIN ordenes o ON l.id_orden = o._id JOIN departamentos d ON l.id_departamento_actual = d._id WHERE d.departamento = 'Costura'",
+        'Órdenes en Impresión' => "SELECT DISTINCT l.id_orden, o.cliente_nombre FROM lotes l JOIN ordenes o ON l.id_orden = o._id JOIN departamentos d ON l.id_departamento_actual = d._id WHERE d.departamento = 'Impresión'",
+        'Resumen de carga por departamento' => "SELECT d.departamento, COUNT(DISTINCT l.id_orden) as ordenes FROM departamentos d LEFT JOIN lotes l ON d._id = l.id_departamento_actual WHERE d.asignar_numero_de_paso = 1 GROUP BY d._id ORDER BY d.orden_proceso",
+
+        // ==================== COMISIONES Y PAGOS A EMPLEADOS ====================
+        'Comisiones pendientes de un empleado por nombre' => "SELECT SUM(p.monto_pago) as total FROM pagos p JOIN api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario WHERE eu.nombre LIKE '%{NOMBRE}%' AND eu.id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND p.estatus = 'aprobado' AND (p.pago_comision IS NULL OR p.pago_comision = 'pendiente')",
+        'Empleados con comisiones pendientes' => "SELECT eu.nombre, SUM(p.monto_pago) as total_pendiente FROM pagos p JOIN api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario WHERE eu.id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND p.estatus = 'aprobado' AND (p.pago_comision IS NULL OR p.pago_comision = 'pendiente') GROUP BY eu.id_usuario, eu.nombre HAVING total_pendiente > 0 ORDER BY total_pendiente DESC",
+        'Buscar empleado por nombre' => "SELECT id_usuario, nombre, departamento, comision FROM api_empresas.empresas_usuarios WHERE nombre LIKE '%{NOMBRE}%' AND id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND activo = 1",
+
+        // ==================== MÉTRICAS GENERALES ====================
+        'Tasa de cambio promedio del día (Bolívares)' => "SELECT AVG(tasa) as tasa_promedio FROM metodos_de_pago WHERE moneda = 'Bolívares' AND metodo_pago IN ('Pagomovil', 'Transferencia') AND DATE(moment) = CURDATE()",
+    ],
 
     'tables' => [
         // ==================== EMPLEADOS (Base de datos externa: api_empresas) ====================

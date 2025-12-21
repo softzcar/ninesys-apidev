@@ -40,6 +40,16 @@ abstract class GeminiAssistant
     protected function buildBasePrompt(): string
     {
         $prompt = $this->dbSchema['prompt_base'] ?? '';
+
+        // Agregar recetas SQL curadas como ejemplos
+        if (!empty($this->dbSchema['sql_recipes'])) {
+            $prompt .= "\n\nEJEMPLOS DE CONSULTAS SQL:\n";
+            $prompt .= "IMPORTANTE: Usa estos ejemplos como base para generar consultas similares. Son consultas probadas que funcionan correctamente.\n\n";
+            foreach ($this->dbSchema['sql_recipes'] as $descripcion => $sql) {
+                $prompt .= "• {$descripcion}:\n  {$sql}\n\n";
+            }
+        }
+
         $prompt .= "\n\nTABLAS DISPONIBLES:\n\n";
 
         foreach ($this->dbSchema['tables'] as $tableName => $tableInfo) {
