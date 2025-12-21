@@ -125,13 +125,20 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
         // ==================== IMPRESORAS ====================
         'Lista de impresoras' => "SELECT _id, codigo_interno, marca, modelo, tipo_tecnologia, estado FROM catalogo_impresoras ORDER BY codigo_interno",
-
-        // ==================== TINTAS (en inventario) ====================
-        'Stock de tintas' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' ORDER BY insumo",
-        'Tinta amarilla en inventario' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%amarill%' OR insumo LIKE '%yellow%'",
-        'Tintas con stock bajo' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND cantidad < 100",
         'Impresoras activas' => "SELECT _id, codigo_interno, marca, modelo, tipo_tecnologia FROM catalogo_impresoras WHERE estado = 'activa'",
         'Buscar impresora por nombre' => "SELECT _id, codigo_interno, marca, modelo, tipo_tecnologia, estado FROM catalogo_impresoras WHERE codigo_interno LIKE '%{NOMBRE}%' OR marca LIKE '%{NOMBRE}%'",
+
+        // ==================== TINTAS EN INVENTARIO ====================
+        // IMPORTANTE: Las tintas se almacenan en la tabla INVENTARIO, NO en la tabla 'tintas'.
+        // La tabla 'tintas' es solo para registrar el CONSUMO de tinta por orden impresa.
+        'Stock de tintas (todas)' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' ORDER BY insumo",
+        'Cuánta tinta amarilla tenemos' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND (insumo LIKE '%amarill%' OR insumo LIKE '%yellow%')",
+        'Cuánta tinta magenta tenemos' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND insumo LIKE '%magenta%'",
+        'Cuánta tinta cyan tenemos' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND insumo LIKE '%cyan%'",
+        'Cuánta tinta negra tenemos' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND (insumo LIKE '%negro%' OR insumo LIKE '%black%')",
+        'Cuánta tinta blanca tenemos' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND (insumo LIKE '%blanc%' OR insumo LIKE '%white%')",
+        'Tintas con stock bajo' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND cantidad < 100 ORDER BY cantidad ASC",
+        'Buscar tinta por color' => "SELECT _id, insumo, cantidad, unidad FROM inventario WHERE insumo LIKE '%tinta%' AND insumo LIKE '%{COLOR}%'",
     ],
 
     'tables' => [
