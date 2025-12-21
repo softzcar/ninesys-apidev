@@ -54,6 +54,12 @@ IMPORTANTE SOBRE TINTAS:
 - La tabla 'tintas' es SOLO para registrar CONSUMO de tintas CMYK cuando se imprime una orden
 - Si preguntan '¿cuánta tinta X tenemos?' → buscar en inventario: WHERE insumo LIKE '%tinta%' AND insumo LIKE '%X%'
 
+IMPORTANTE SOBRE PRODUCCIÓN Y ASIGNACIONES:
+- La tabla 'lotes_detalles' es SOLO para ver el PROGRESO general de la orden (no tiene info de empleados ni tiempos)
+- Para preguntas sobre: quién trabajó en qué, tiempos de producción, asignaciones, usar 'lotes_detalles_empleados_asignados'
+- Campos clave de lotes_detalles_empleados_asignados: id_orden, id_empleado, id_departamento, fecha_inicio, fecha_terminado, progreso, terminado
+- Para calcular tiempo de producción: TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) FROM lotes_detalles_empleados_asignados
+
 NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
     // ===================================================================================
@@ -103,11 +109,13 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
         'Resumen de carga por departamento' => "SELECT d.departamento, COUNT(DISTINCT l.id_orden) as ordenes FROM departamentos d LEFT JOIN lotes l ON d._id = l.id_departamento_actual WHERE d.asignar_numero_de_paso = 1 GROUP BY d._id ORDER BY d.orden_proceso",
         'Lista de departamentos' => "SELECT _id, departamento, orden_proceso FROM departamentos WHERE asignar_numero_de_paso = 1 ORDER BY orden_proceso",
 
-        // ==================== TAREAS DE PRODUCCIÓN (lotes_detalles) ====================
-        'Tareas pendientes de un empleado' => "SELECT ld.id_orden, o.cliente_nombre, ld.departamento, ld.unidades_solicitadas, ld.progreso FROM lotes_detalles ld JOIN ordenes o ON ld.id_orden = o._id WHERE ld.id_empleado = {ID_EMPLEADO} AND ld.terminado = 0 ORDER BY ld.moment DESC",
-        'Tareas completadas hoy' => "SELECT ld.id_orden, ld.departamento, ld.unidades_solicitadas, ld.comision, eu.nombre as empleado FROM lotes_detalles ld LEFT JOIN api_empresas.empresas_usuarios eu ON ld.id_empleado = eu.id_usuario WHERE DATE(ld.fecha_terminado) = CURDATE() AND ld.terminado = 1",
-        'Resumen de tareas por progreso' => "SELECT progreso, COUNT(*) as cantidad FROM lotes_detalles GROUP BY progreso",
-        'Tareas en curso' => "SELECT ld.id_orden, o.cliente_nombre, ld.departamento, eu.nombre as empleado FROM lotes_detalles ld JOIN ordenes o ON ld.id_orden = o._id LEFT JOIN api_empresas.empresas_usuarios eu ON ld.id_empleado = eu.id_usuario WHERE ld.progreso = 'en curso'",
+        // ==================== ASIGNACIONES Y TIEMPOS DE PRODUCCIÓN (lotes_detalles_empleados_asignados) ====================
+        // IMPORTANTE: Usar esta tabla para todo lo relacionado con empleados, asignaciones y tiempos de trabajo
+        'Tareas asignadas a un empleado' => "SELECT ldea.id_orden, o.cliente_nombre, d.departamento, ldea.progreso, ldea.fecha_inicio FROM lotes_detalles_empleados_asignados ldea JOIN ordenes o ON ldea.id_orden = o._id JOIN departamentos d ON ldea.id_departamento = d._id WHERE ldea.id_empleado = {ID_EMPLEADO} AND ldea.terminado = 0 ORDER BY ldea.fecha_inicio DESC",
+        'Tareas completadas hoy por empleados' => "SELECT ldea.id_orden, d.departamento, eu.nombre as empleado, ldea.fecha_inicio, ldea.fecha_terminado FROM lotes_detalles_empleados_asignados ldea LEFT JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario LEFT JOIN departamentos d ON ldea.id_departamento = d._id WHERE DATE(ldea.fecha_terminado) = CURDATE() AND ldea.terminado = 1",
+        'Tiempo de producción de una orden' => "SELECT ldea.id_orden, d.departamento, eu.nombre as empleado, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, ldea.fecha_terminado) as tiempo_segundos FROM lotes_detalles_empleados_asignados ldea LEFT JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario LEFT JOIN departamentos d ON ldea.id_departamento = d._id WHERE ldea.id_orden = {ID_ORDEN} AND ldea.terminado = 1",
+        'Empleados trabajando ahora' => "SELECT ldea.id_orden, o.cliente_nombre, d.departamento, eu.nombre as empleado, ldea.fecha_inicio FROM lotes_detalles_empleados_asignados ldea JOIN ordenes o ON ldea.id_orden = o._id LEFT JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario LEFT JOIN departamentos d ON ldea.id_departamento = d._id WHERE ldea.progreso = 'en curso' AND ldea.terminado = 0",
+        'Resumen de progreso de lotes' => "SELECT progreso, COUNT(*) as cantidad FROM lotes_detalles GROUP BY progreso",
 
         // ==================== COMISIONES Y PAGOS A EMPLEADOS ====================
         'Comisiones pendientes de un empleado por nombre' => "SELECT SUM(p.monto_pago) as total FROM pagos p JOIN api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario WHERE eu.nombre LIKE '%{NOMBRE}%' AND eu.id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND p.estatus = 'aprobado' AND p.fecha_pago IS NULL",
@@ -270,34 +278,32 @@ NOTA: La fecha actual es " . date('Y-m-d') . ".",
         ],
 
         'lotes_detalles' => [
-            'description' => 'Detalles de tareas por producto en cada lote',
+            'description' => 'SOLO PARA PROGRESO de la orden. NO usar para buscar asignaciones ni tiempos. Para tareas asignadas a empleados y tiempos de producción usar lotes_detalles_empleados_asignados.',
             'fields' => [
                 '_id' => 'ID (PK)',
                 'id_orden' => 'FK → ordenes._id',
                 'id_ordenes_productos' => 'FK → ordenes_productos._id',
-                'id_empleado' => 'Empleado responsable',
                 'id_departamento' => 'FK → departamentos._id',
                 'departamento' => 'Nombre del departamento (histórico)',
                 'unidades_solicitadas' => 'Unidades a producir',
-                'comision' => 'Porcentaje de comisión',
-                'progreso' => "'por iniciar', 'en curso', 'terminada'",
-                'terminado' => '1 si tarea terminada',
-                'fecha_inicio' => 'Inicio del trabajo',
-                'fecha_terminado' => 'Fin del trabajo',
+                'progreso' => "'por iniciar', 'en curso', 'terminada' - Estado del lote",
+                'terminado' => '1 si la tarea del lote está terminada',
             ]
         ],
 
         'lotes_detalles_empleados_asignados' => [
-            'description' => 'Empleados asignados a tareas específicas',
+            'description' => 'TABLA PRINCIPAL para asignaciones, tareas de empleados y tiempos de producción. Usar esta tabla para preguntas sobre: quién trabajó en qué orden, cuánto tiempo tardó, fechas de inicio/fin de trabajo.',
             'fields' => [
                 '_id' => 'ID (PK)',
                 'id_lotes_detalles' => 'FK → lotes_detalles._id',
                 'id_orden' => 'FK → ordenes._id',
-                'id_empleado' => 'ID del empleado asignado',
-                'porcentaje' => 'Porcentaje de trabajo asignado',
-                'fecha_inicio' => 'Inicio del trabajo',
-                'fecha_fin' => 'Fin del trabajo',
-                'tiempo_total' => 'Tiempo trabajado en segundos',
+                'id_empleado' => 'ID del empleado asignado (FK → api_empresas.empresas_usuarios.id_usuario)',
+                'id_departamento' => 'FK → departamentos._id - Departamento donde trabajó',
+                'procentaje_comision' => 'Porcentaje de comisión asignado al empleado',
+                'progreso' => "'por iniciar', 'en curso', 'terminada' - Estado de la asignación",
+                'terminado' => '1 si el empleado terminó su trabajo',
+                'fecha_inicio' => 'Cuándo el empleado comenzó a trabajar',
+                'fecha_terminado' => 'Cuándo el empleado terminó de trabajar',
             ]
         ],
 
