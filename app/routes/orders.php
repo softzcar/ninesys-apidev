@@ -3484,14 +3484,15 @@ $object['sales_commission_ISSET'][] = false;
 
       $sql_orden = "INSERT INTO ordenes 
                     (responsable, moment, pago_descuento, pago_abono, pago_total, 
-                     cliente_nombre, cliente_cedula, fecha_inicio, fecha_entrega, 
+                     id_wp, cliente_nombre, cliente_cedula, fecha_inicio, fecha_entrega, 
                      fecha_creacion, status) 
-                    VALUES (?, ?, 0, 0, ?, ?, ?, ?, ?, ?, 'En espera')";
+                    VALUES (?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, 'En espera')";
 
       $orden_result = $localConnection->goQuery($sql_orden, [
         $responsable_id,
         $now,
         $total_orden,
+        $cliente['_id'],  // id_wp = ID del cliente
         $cliente_nombre_completo,
         $cliente['cedula'] ?? '',
         date('Y-m-d'),
