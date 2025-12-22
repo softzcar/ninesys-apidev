@@ -3306,6 +3306,16 @@ $object['sales_commission_ISSET'][] = false;
 
     try {
       $data = $request->getParsedBody();
+
+      // Debug: Si data es null, intentar parsear el body manualmente
+      if ($data === null) {
+        $rawBody = (string) $request->getBody();
+        $data = json_decode($rawBody, true);
+        error_log('/ordenes/nueva/simple - Raw body: ' . $rawBody);
+      }
+
+      error_log('/ordenes/nueva/simple - Data received: ' . json_encode($data));
+
       $id_empresa = defined('ID_EMPRESA') ? ID_EMPRESA : 163;
 
       // Validar campos requeridos
