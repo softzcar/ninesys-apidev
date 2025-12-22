@@ -3427,7 +3427,12 @@ $object['sales_commission_ISSET'][] = false;
         $sql_precio = "SELECT precio FROM products_prices 
                        WHERE id_product = ? ORDER BY _id DESC LIMIT 1";
         $precio_result = $localConnection->goQuery($sql_precio, [$producto_info['producto_id']]);
-        $producto_info['precio'] = !empty($precio_result) ? floatval($precio_result[0]['precio']) : 0;
+        // Verificar que no sea un error y que tenga resultados
+        if (!empty($precio_result) && !isset($precio_result['status']) && isset($precio_result[0]['precio'])) {
+          $producto_info['precio'] = floatval($precio_result[0]['precio']);
+        } else {
+          $producto_info['precio'] = 0;
+        }
 
         // Buscar talla (si se especificó)
         if (!empty($prod['talla'])) {
