@@ -64,7 +64,8 @@ class GeminiChatAssistant extends GeminiAssistant
                     'success' => true,
                     'response' => $naturalResponse,
                     'data' => $results,
-                    'sql_generated' => $sql
+                    'sql_generated' => $sql,
+                    'debug_info' => $this->getDebugInfo()
                 ];
             }
 

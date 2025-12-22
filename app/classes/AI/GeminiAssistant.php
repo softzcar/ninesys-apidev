@@ -18,6 +18,7 @@ abstract class GeminiAssistant
     protected array $dbSchema;
     protected $dbConnection;
     protected string $basePrompt;
+    protected string $lastSystemInstruction = '';  // Para debug: guarda el último prompt completo
 
     /**
      * Constructor
@@ -77,6 +78,21 @@ abstract class GeminiAssistant
     }
 
     /**
+     * Obtiene información de debug del último prompt enviado
+     * 
+     * @return array Debug info con prompt_length y un extracto del prompt
+     */
+    public function getDebugInfo(): array
+    {
+        return [
+            'prompt_length' => strlen($this->lastSystemInstruction),
+            'prompt_preview' => substr($this->lastSystemInstruction, 0, 500) . '...',
+            'tables_count' => count($this->dbSchema['tables'] ?? []),
+            'recipes_count' => count($this->dbSchema['sql_recipes'] ?? []),
+        ];
+    }
+
+    /**
      * Obtiene contexto de queries relevantes según la pregunta del usuario
      * 
      * @param string $userQuery Pregunta del usuario
@@ -119,6 +135,9 @@ abstract class GeminiAssistant
             $systemInstruction .= "\nResponde con un JSON en este formato exacto:";
             $systemInstruction .= "\n{\"sql\": \"SELECT ...\", \"description\": \"Descripción de lo que hace la consulta\", \"columns\": [{\"key\": \"campo\", \"label\": \"Etiqueta\", \"sortable\": true}]}";
         }
+
+        // Guardar para debug
+        $this->lastSystemInstruction = $systemInstruction;
 
         // Construir contents con historial de conversación
         $contents = [];
