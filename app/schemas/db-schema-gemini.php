@@ -66,6 +66,40 @@ IMPORTANTE SOBRE PRODUCCIÓN Y ASIGNACIONES:
 - Campos clave de lotes_detalles_empleados_asignados: id_orden, id_empleado, id_departamento, fecha_inicio, fecha_terminado, progreso, terminado
 - Para calcular tiempo de producción: TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) FROM lotes_detalles_empleados_asignados
 
+CREACIÓN DE ÓRDENES:
+Puedes ayudar a crear órdenes de producción. Cuando el usuario te pida crear una orden, extrae los datos y responde con un JSON estructurado.
+
+IMPORTANTE: Solo usuarios de los departamentos 'Administración' o 'Comercialización' pueden crear órdenes.
+
+Formato de respuesta para crear órdenes:
+{
+  \"action\": \"create_order\",
+  \"data\": {
+    \"cliente_nombre\": \"Nombre del cliente (buscar en base de datos)\",
+    \"productos\": [
+      {\"nombre\": \"nombre del producto\", \"cantidad\": 5, \"talla\": \"S Dama\", \"tela\": \"dryfit\"}
+    ],
+    \"observaciones\": \"Cualquier detalle adicional mencionado por el usuario\"
+  }
+}
+
+Ejemplos de parsing:
+1. Usuario: \"Crea una orden para Sayerlin Quintero, 3 franelas talla S dama, 2 talla XL caballero, todas con tela dryfit\"
+   Respuesta: {\"action\":\"create_order\",\"data\":{\"cliente_nombre\":\"Sayerlin Quintero\",\"productos\":[{\"nombre\":\"franela\",\"cantidad\":3,\"talla\":\"S Dama\",\"tela\":\"dryfit\"},{\"nombre\":\"franela\",\"cantidad\":2,\"talla\":\"XL Caballero\",\"tela\":\"dryfit\"}],\"observaciones\":\"\"}}
+
+2. Usuario: \"Haz una orden para Juan Pérez con 10 camisas polo con logo bordado\"
+   Respuesta: {\"action\":\"create_order\",\"data\":{\"cliente_nombre\":\"Juan Pérez\",\"productos\":[{\"nombre\":\"camisa polo\",\"cantidad\":10,\"talla\":null,\"tela\":null}],\"observaciones\":\"logo bordado\"}}
+
+3. Usuario: \"Genera orden: cliente María López, 5 franelas M con algodón, detalle: entrega urgente\"
+   Respuesta: {\"action\":\"create_order\",\"data\":{\"cliente_nombre\":\"María López\",\"productos\":[{\"nombre\":\"franela\",\"cantidad\":5,\"talla\":\"M\",\"tela\":\"algodón\"}],\"observaciones\":\"entrega urgente\"}}
+
+REGLAS para crear órdenes:
+- Si el usuario NO menciona talla o tela, usa null para esos campos
+- Si menciona varios productos con diferentes tallas, crea un elemento separado por cada combinación
+- Captura CUALQUIER detalle adicional en el campo 'observaciones' (ej: 'logo bordado', 'entrega urgente', 'color rojo')
+- NO es necesario que el cliente exista exactamente, el sistema buscará por nombre similar
+- Al responder con el JSON, NO incluyas texto adicional, SOLO el JSON
+
 NOTA: La fecha actual es " . date('Y-m-d') . ".",
 
     // ===================================================================================
