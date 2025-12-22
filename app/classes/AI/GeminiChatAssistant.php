@@ -69,10 +69,24 @@ class GeminiChatAssistant extends GeminiAssistant
                 ];
             }
 
-            // Si no hay SQL, simplemente devolver el texto de Gemini
+            // 2b. Si Gemini devolvió una acción especial (como create_order), retornar el JSON
+            if (isset($geminiResponse['data']['action'])) {
+                // Devolver el JSON como texto para que el frontend lo procese
+                $jsonResponse = json_encode($geminiResponse['data'], JSON_UNESCAPED_UNICODE);
+                return [
+                    'success' => true,
+                    'response' => $jsonResponse,
+                    'is_action' => true,
+                    'action' => $geminiResponse['data']['action']
+                ];
+            }
+
+            // Si no hay SQL ni action, simplemente devolver el texto de Gemini
+            // Usar raw_text si text no está disponible
+            $responseText = $geminiResponse['text'] ?? $geminiResponse['raw_text'] ?? 'No pude procesar tu consulta.';
             return [
                 'success' => true,
-                'response' => $geminiResponse['text'] ?? 'No pude procesar tu consulta.'
+                'response' => $responseText
             ];
 
         } catch (\Throwable $e) {
