@@ -157,6 +157,20 @@ abstract class GeminiAssistant
             ]
         ];
 
+        // Logging del prompt para debugging
+        $logDir = __DIR__ . '/../../logs';
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0755, true);
+        }
+        $logFile = $logDir . '/gemini_prompts_' . date('Y-m-d') . '.log';
+        $logEntry = [
+            'timestamp' => date('Y-m-d H:i:s'),
+            'user_query' => $userQuery,
+            'prompt_length' => strlen($systemInstruction),
+            'system_instruction' => $systemInstruction
+        ];
+        file_put_contents($logFile, json_encode($logEntry, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n---\n\n", FILE_APPEND);
+
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
