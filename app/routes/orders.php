@@ -3284,6 +3284,320 @@ $object['sales_commission_ISSET'][] = false;
     }
   });
 
+  /**
+   * CREAR ORDEN SIMPLIFICADA (desde Chat IA)
+   * 
+   * Permite crear órdenes básicas sin procesar pagos.
+   * Solo usuarios de Administración o Comercialización pueden usar este endpoint.
+   * 
+   * Payload:
+   * {
+   *   "cliente_nombre": "Nombre del cliente",
+   *   "productos": [
+   *     {"nombre": "franela", "cantidad": 3, "talla": "S Dama", "tela": "dryfit"}
+   *   ],
+   *   "observaciones": "Texto libre",
+   *   "responsable_id": 3
+   * }
+   */
+  $app->post('/ordenes/nueva/simple', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    $object = [];
+
+    try {
+      $data = $request->getParsedBody();
+      $id_empresa = defined('ID_EMPRESA') ? ID_EMPRESA : 163;
+
+      // Validar campos requeridos
+      if (empty($data['cliente_nombre'])) {
+        return ApiResponse::validationError($response, 'Debe especificar el nombre del cliente');
+      }
+      if (empty($data['productos']) || !is_array($data['productos'])) {
+        return ApiResponse::validationError($response, 'Debe especificar al menos un producto');
+      }
+      if (empty($data['responsable_id'])) {
+        return ApiResponse::validationError($response, 'Debe especificar el ID del responsable');
+      }
+
+      $responsable_id = intval($data['responsable_id']);
+
+      // ==========================================================
+      // VALIDAR PERMISOS: Solo Administración o Comercialización
+      // ==========================================================
+      $departamentos_autorizados = ['Administración', 'Comercialización'];
+
+      $sql_dept = "SELECT departamento FROM api_empresas.empresas_usuarios 
+                   WHERE id_usuario = ? AND id_empresa = ?";
+      $user_result = $localConnection->goQuery($sql_dept, [$responsable_id, $id_empresa]);
+
+      if (empty($user_result)) {
+        return ApiResponse::error($response, 'Usuario no encontrado', 404);
+      }
+
+      $user_dept = $user_result[0]['departamento'];
+
+      if (!in_array($user_dept, $departamentos_autorizados)) {
+        return ApiResponse::error(
+          $response,
+          "No estás autorizado para crear órdenes. Tu departamento actual es: {$user_dept}. " .
+          "Solo personal de Administración o Comercialización puede crear órdenes.",
+          403
+        );
+      }
+
+      // ==========================================================
+      // BUSCAR CLIENTE
+      // ==========================================================
+      $cliente_nombre = trim($data['cliente_nombre']);
+      $sql_cliente = "SELECT _id, nombre, telefono, cedula, email 
+                      FROM customers 
+                      WHERE CONCAT(nombre, ' ', IFNULL(apellido, '')) LIKE ?
+                      LIMIT 5";
+      $clientes = $localConnection->goQuery($sql_cliente, ["%{$cliente_nombre}%"]);
+
+      if (empty($clientes)) {
+        return ApiResponse::error(
+          $response,
+          "No se encontró ningún cliente con el nombre '{$cliente_nombre}'. " .
+          "Verifica el nombre o crea el cliente primero.",
+          404
+        );
+      }
+
+      // Si hay múltiples coincidencias, usar el primero pero avisar
+      $cliente = $clientes[0];
+      $multiples_clientes = count($clientes) > 1;
+
+      // ==========================================================
+      // CALCULAR FECHA DE ENTREGA AUTOMÁTICA
+      // ==========================================================
+      // Calcular días de producción basado en órdenes activas
+      $sql_ordenes_activas = "SELECT COUNT(*) as total FROM ordenes 
+                              WHERE status IN ('En espera', 'En proceso')";
+      $ordenes_activas = $localConnection->goQuery($sql_ordenes_activas);
+      $total_ordenes = $ordenes_activas[0]['total'] ?? 0;
+
+      // Estimación: 2 días base + 0.5 días por cada orden activa (máximo 14 días)
+      $dias_estimados = min(2 + ceil($total_ordenes * 0.5), 14);
+      $fecha_entrega = date('Y-m-d', strtotime("+{$dias_estimados} days"));
+
+      // ==========================================================
+      // PROCESAR PRODUCTOS
+      // ==========================================================
+      $productos_procesados = [];
+      $total_orden = 0;
+      $errores_productos = [];
+
+      foreach ($data['productos'] as $index => $prod) {
+        $producto_info = [
+          'index' => $index + 1,
+          'nombre_buscado' => $prod['nombre'] ?? '',
+          'cantidad' => intval($prod['cantidad'] ?? 1),
+          'talla_buscada' => $prod['talla'] ?? null,
+          'tela_buscada' => $prod['tela'] ?? null
+        ];
+
+        // Buscar producto
+        $sql_prod = "SELECT _id, title, category_name FROM products 
+                     WHERE title LIKE ? AND activo = 1 LIMIT 1";
+        $producto_result = $localConnection->goQuery($sql_prod, ["%{$prod['nombre']}%"]);
+
+        if (empty($producto_result)) {
+          $errores_productos[] = "Producto '{$prod['nombre']}' no encontrado";
+          continue;
+        }
+
+        $producto_info['producto_id'] = $producto_result[0]['_id'];
+        $producto_info['producto_nombre'] = $producto_result[0]['title'];
+        $producto_info['categoria'] = $producto_result[0]['category_name'];
+
+        // Buscar precio del producto
+        $sql_precio = "SELECT precio FROM products_prices 
+                       WHERE id_product = ? ORDER BY _id DESC LIMIT 1";
+        $precio_result = $localConnection->goQuery($sql_precio, [$producto_info['producto_id']]);
+        $producto_info['precio'] = !empty($precio_result) ? floatval($precio_result[0]['precio']) : 0;
+
+        // Buscar talla (si se especificó)
+        if (!empty($prod['talla'])) {
+          $sql_talla = "SELECT _id, nombre FROM sizes WHERE nombre LIKE ? LIMIT 1";
+          $talla_result = $localConnection->goQuery($sql_talla, ["%{$prod['talla']}%"]);
+          if (!empty($talla_result)) {
+            $producto_info['talla_id'] = $talla_result[0]['_id'];
+            $producto_info['talla_nombre'] = $talla_result[0]['nombre'];
+          }
+        }
+
+        // Buscar tela (si se especificó)
+        if (!empty($prod['tela'])) {
+          $sql_tela = "SELECT _id, tela FROM catalogo_telas WHERE tela LIKE ? LIMIT 1";
+          $tela_result = $localConnection->goQuery($sql_tela, ["%{$prod['tela']}%"]);
+          if (!empty($tela_result)) {
+            $producto_info['tela_id'] = $tela_result[0]['_id'];
+            $producto_info['tela_nombre'] = $tela_result[0]['tela'];
+          }
+        }
+
+        $producto_info['subtotal'] = $producto_info['precio'] * $producto_info['cantidad'];
+        $total_orden += $producto_info['subtotal'];
+        $productos_procesados[] = $producto_info;
+      }
+
+      if (empty($productos_procesados)) {
+        return ApiResponse::error(
+          $response,
+          "No se pudo procesar ningún producto. Errores: " . implode(', ', $errores_productos),
+          400
+        );
+      }
+
+      // ==========================================================
+      // CREAR LA ORDEN
+      // ==========================================================
+      $myDate = new CustomTime();
+      $now = $myDate->today();
+      $observaciones = addslashes($data['observaciones'] ?? '');
+      $cliente_nombre_completo = addslashes($cliente['nombre']);
+
+      $sql_orden = "INSERT INTO ordenes 
+                    (responsable, moment, pago_descuento, pago_abono, pago_total, 
+                     cliente_nombre, cliente_cedula, fecha_inicio, fecha_entrega, 
+                     fecha_creacion, status) 
+                    VALUES (?, ?, 0, 0, ?, ?, ?, ?, ?, ?, 'En espera')";
+
+      $orden_result = $localConnection->goQuery($sql_orden, [
+        $responsable_id,
+        $now,
+        $total_orden,
+        $cliente_nombre_completo,
+        $cliente['cedula'] ?? '',
+        date('Y-m-d'),
+        $fecha_entrega,
+        date('Y-m-d')
+      ]);
+
+      if (!isset($orden_result['insert_id'])) {
+        throw new Exception('Error al crear la orden');
+      }
+
+      $orden_id = $orden_result['insert_id'];
+      $object['orden_id'] = $orden_id;
+
+      // Guardar observaciones si existen
+      if (!empty($observaciones)) {
+        $sql_obs = "INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)";
+        $localConnection->goQuery($sql_obs, [$orden_id, $observaciones]);
+      }
+
+      // Crear registro en fila de producción
+      $lastOrdenFila = $localConnection->goQuery('SELECT MAX(orden_fila) AS max FROM ordenes_fila_orden');
+      $nuevaFila = ($lastOrdenFila[0]['max'] ?? 0) + 1;
+      $localConnection->goQuery(
+        "INSERT INTO ordenes_fila_orden (id_orden, orden_fila) VALUES (?, ?)",
+        [$orden_id, $nuevaFila]
+      );
+
+      // Crear abono inicial (con monto 0)
+      $localConnection->goQuery(
+        "INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento) VALUES (?, ?, ?, 0, 0)",
+        [$now, $orden_id, $responsable_id]
+      );
+
+      // ==========================================================
+      // CREAR PRODUCTOS DE LA ORDEN
+      // ==========================================================
+      foreach ($productos_procesados as $prod) {
+        $sql_producto = "INSERT INTO ordenes_productos 
+                         (moment, precio_unitario, precio_woo, name, id_orden, id_woo, 
+                          cantidad, id_category, category_name, id_size, talla, 
+                          corte, id_tela, tela) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, '', ?, ?)";
+
+        $prod_result = $localConnection->goQuery($sql_producto, [
+          $now,
+          $prod['precio'],
+          $prod['precio'],
+          $prod['producto_nombre'],
+          $orden_id,
+          $prod['producto_id'],
+          $prod['cantidad'],
+          $prod['categoria'] ?? 'Sin categoría',
+          $prod['talla_id'] ?? null,
+          $prod['talla_nombre'] ?? null,
+          $prod['tela_id'] ?? null,
+          $prod['tela_nombre'] ?? null
+        ]);
+
+        $id_ordenes_productos = $prod_result['insert_id'] ?? null;
+
+        // Crear lotes_detalles para cada departamento de producción
+        if ($id_ordenes_productos) {
+          $sql_deptos = "SELECT _id, departamento FROM departamentos 
+                         WHERE asignar_numero_de_paso = 1 ORDER BY _id ASC";
+          $departamentos = $localConnection->goQuery($sql_deptos);
+
+          foreach ($departamentos as $depto) {
+            $sql_lote = "INSERT INTO lotes_detalles 
+                         (moment, id_orden, id_ordenes_productos, id_woo, id_departamento, departamento) 
+                         VALUES (?, ?, ?, ?, ?, ?)";
+            $localConnection->goQuery($sql_lote, [
+              $now,
+              $orden_id,
+              $id_ordenes_productos,
+              $prod['producto_id'],
+              $depto['_id'],
+              $depto['departamento']
+            ]);
+          }
+        }
+      }
+
+      // Crear lote
+      $sql_lote_main = "INSERT INTO lotes (moment, fecha, id_orden, lote, paso) 
+                        VALUES (?, ?, ?, ?, 'producción')";
+      $localConnection->goQuery($sql_lote_main, [$now, date('Y-m-d'), $orden_id, $orden_id]);
+
+      // ==========================================================
+      // PREPARAR RESPUESTA
+      // ==========================================================
+      $object['success'] = true;
+      $object['orden_id'] = $orden_id;
+      $object['total'] = number_format($total_orden, 2);
+      $object['fecha_entrega'] = $fecha_entrega;
+      $object['cliente'] = [
+        'id' => $cliente['_id'],
+        'nombre' => $cliente['nombre'],
+        'telefono' => $cliente['telefono'] ?? null
+      ];
+      $object['productos_creados'] = count($productos_procesados);
+      $object['productos'] = array_map(function ($p) {
+        return [
+          'nombre' => $p['producto_nombre'],
+          'cantidad' => $p['cantidad'],
+          'talla' => $p['talla_nombre'] ?? 'N/A',
+          'tela' => $p['tela_nombre'] ?? 'N/A',
+          'precio' => $p['precio'],
+          'subtotal' => $p['subtotal']
+        ];
+      }, $productos_procesados);
+
+      if (!empty($errores_productos)) {
+        $object['advertencias'] = $errores_productos;
+      }
+      if ($multiples_clientes) {
+        $object['nota'] = "Se encontraron múltiples clientes. Se usó: " . $cliente['nombre'];
+      }
+
+      $response->getBody()->write(json_encode($object));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
+
+    } catch (\Throwable $e) {
+      error_log('Error en /ordenes/nueva/simple: ' . $e->getMessage());
+      return ApiResponse::error($response, 'Error al crear la orden: ' . $e->getMessage(), 500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
   /** FIN ORDENES */
 
 }; // Fin de la función que envuelve las rutas
