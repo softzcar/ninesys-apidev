@@ -3405,59 +3405,71 @@ $object['sales_commission_ISSET'][] = false;
           'index' => $index + 1,
           'nombre_buscado' => $prod['nombre'] ?? '',
           'cantidad' => intval($prod['cantidad'] ?? 1),
-          'talla_buscada' => $prod['talla'] ?? null,
-          'tela_buscada' => $prod['tela'] ?? null
+          'corte' => $prod['corte'] ?? ''
         ];
 
-        // Buscar producto
-        $sql_prod = "SELECT _id, product, category_ids, price FROM products 
-                     WHERE product LIKE ? LIMIT 1";
-        $producto_result = $localConnection->goQuery($sql_prod, ["%{$prod['nombre']}%"]);
-
-        // Verificar que no sea un error y que tenga resultados válidos
-        if (empty($producto_result) || isset($producto_result['status']) || !isset($producto_result[0])) {
-          $errores_productos[] = "Producto '{$prod['nombre']}' no encontrado";
-          continue;
-        }
-
-        $producto_info['producto_id'] = $producto_result[0]['_id'] ?? null;
-        $producto_info['producto_nombre'] = $producto_result[0]['product'] ?? 'Sin nombre';
-        $producto_info['categoria'] = $producto_result[0]['category_ids'] ?? 'Sin categoría';
-        $producto_info['precio'] = floatval($producto_result[0]['price'] ?? 0);
-
-        if ($producto_info['producto_id'] === null) {
-          $errores_productos[] = "Producto '{$prod['nombre']}' sin ID válido";
-          continue;
-        }
-
-        // Buscar precio del producto
-        $sql_precio = "SELECT precio FROM products_prices 
-                       WHERE id_product = ? ORDER BY _id DESC LIMIT 1";
-        $precio_result = $localConnection->goQuery($sql_precio, [$producto_info['producto_id']]);
-        // Verificar que no sea un error y que tenga resultados
-        if (!empty($precio_result) && !isset($precio_result['status']) && isset($precio_result[0]['precio'])) {
-          $producto_info['precio'] = floatval($precio_result[0]['precio']);
+        // ============================================================
+        // Si vienen campos directos del modal de confirmación, usarlos
+        // ============================================================
+        if (!empty($prod['producto_id'])) {
+          // Campos directos del modal
+          $producto_info['producto_id'] = intval($prod['producto_id']);
+          $producto_info['producto_nombre'] = $prod['producto_nombre'] ?? $prod['nombre'];
+          $producto_info['categoria'] = $prod['categoria'] ?? 'Sin categoría';
+          $producto_info['precio'] = floatval($prod['precio'] ?? 0);
+          $producto_info['talla_id'] = $prod['talla_id'] ?? null;
+          $producto_info['talla_nombre'] = $prod['talla_nombre'] ?? $prod['talla'] ?? null;
+          $producto_info['tela_id'] = $prod['tela_id'] ?? null;
+          $producto_info['tela_nombre'] = $prod['tela_nombre'] ?? $prod['tela'] ?? null;
         } else {
-          $producto_info['precio'] = 0;
-        }
+          // ============================================================
+          // Buscar producto por nombre (flujo antiguo sin modal)
+          // ============================================================
+          $sql_prod = "SELECT _id, product, category_ids, price FROM products 
+                       WHERE product LIKE ? LIMIT 1";
+          $producto_result = $localConnection->goQuery($sql_prod, ["%{$prod['nombre']}%"]);
 
-        // Buscar talla (si se especificó)
-        if (!empty($prod['talla'])) {
-          $sql_talla = "SELECT _id, nombre FROM sizes WHERE nombre LIKE ? LIMIT 1";
-          $talla_result = $localConnection->goQuery($sql_talla, ["%{$prod['talla']}%"]);
-          if (!empty($talla_result)) {
-            $producto_info['talla_id'] = $talla_result[0]['_id'];
-            $producto_info['talla_nombre'] = $talla_result[0]['nombre'];
+          if (empty($producto_result) || isset($producto_result['status']) || !isset($producto_result[0])) {
+            $errores_productos[] = "Producto '{$prod['nombre']}' no encontrado";
+            continue;
           }
-        }
 
-        // Buscar tela (si se especificó)
-        if (!empty($prod['tela'])) {
-          $sql_tela = "SELECT _id, tela FROM catalogo_telas WHERE tela LIKE ? LIMIT 1";
-          $tela_result = $localConnection->goQuery($sql_tela, ["%{$prod['tela']}%"]);
-          if (!empty($tela_result)) {
-            $producto_info['tela_id'] = $tela_result[0]['_id'];
-            $producto_info['tela_nombre'] = $tela_result[0]['tela'];
+          $producto_info['producto_id'] = $producto_result[0]['_id'] ?? null;
+          $producto_info['producto_nombre'] = $producto_result[0]['product'] ?? 'Sin nombre';
+          $producto_info['categoria'] = $producto_result[0]['category_ids'] ?? 'Sin categoría';
+          $producto_info['precio'] = floatval($producto_result[0]['price'] ?? 0);
+
+          if ($producto_info['producto_id'] === null) {
+            $errores_productos[] = "Producto '{$prod['nombre']}' sin ID válido";
+            continue;
+          }
+
+          // Buscar precio del producto (usar el primero disponible)
+          $sql_precio = "SELECT price FROM products_prices 
+                         WHERE id_product = ? ORDER BY _id ASC LIMIT 1";
+          $precio_result = $localConnection->goQuery($sql_precio, [$producto_info['producto_id']]);
+          if (!empty($precio_result) && !isset($precio_result['status']) && isset($precio_result[0]['price'])) {
+            $producto_info['precio'] = floatval($precio_result[0]['price']);
+          }
+
+          // Buscar talla (si se especificó)
+          if (!empty($prod['talla'])) {
+            $sql_talla = "SELECT _id, nombre FROM sizes WHERE nombre LIKE ? LIMIT 1";
+            $talla_result = $localConnection->goQuery($sql_talla, ["%{$prod['talla']}%"]);
+            if (!empty($talla_result) && !isset($talla_result['status'])) {
+              $producto_info['talla_id'] = $talla_result[0]['_id'];
+              $producto_info['talla_nombre'] = $talla_result[0]['nombre'];
+            }
+          }
+
+          // Buscar tela (si se especificó)
+          if (!empty($prod['tela'])) {
+            $sql_tela = "SELECT _id, tela FROM catalogo_telas WHERE tela LIKE ? LIMIT 1";
+            $tela_result = $localConnection->goQuery($sql_tela, ["%{$prod['tela']}%"]);
+            if (!empty($tela_result) && !isset($tela_result['status'])) {
+              $producto_info['tela_id'] = $tela_result[0]['_id'];
+              $producto_info['tela_nombre'] = $tela_result[0]['tela'];
+            }
           }
         }
 
@@ -3535,7 +3547,7 @@ $object['sales_commission_ISSET'][] = false;
                          (moment, precio_unitario, precio_woo, name, id_orden, id_woo, 
                           cantidad, id_category, category_name, id_size, talla, 
                           corte, id_tela, tela) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, '', ?, ?)";
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)";
 
         $prod_result = $localConnection->goQuery($sql_producto, [
           $now,
@@ -3548,6 +3560,7 @@ $object['sales_commission_ISSET'][] = false;
           $prod['categoria'] ?? 'Sin categoría',
           $prod['talla_id'] ?? null,
           $prod['talla_nombre'] ?? null,
+          $prod['corte'] ?? '',
           $prod['tela_id'] ?? null,
           $prod['tela_nombre'] ?? null
         ]);
