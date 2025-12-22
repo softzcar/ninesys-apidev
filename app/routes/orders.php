@@ -3414,14 +3414,20 @@ $object['sales_commission_ISSET'][] = false;
                      WHERE title LIKE ? AND activo = 1 LIMIT 1";
         $producto_result = $localConnection->goQuery($sql_prod, ["%{$prod['nombre']}%"]);
 
-        if (empty($producto_result)) {
+        // Verificar que no sea un error y que tenga resultados válidos
+        if (empty($producto_result) || isset($producto_result['status']) || !isset($producto_result[0])) {
           $errores_productos[] = "Producto '{$prod['nombre']}' no encontrado";
           continue;
         }
 
-        $producto_info['producto_id'] = $producto_result[0]['_id'];
-        $producto_info['producto_nombre'] = $producto_result[0]['title'];
-        $producto_info['categoria'] = $producto_result[0]['category_name'];
+        $producto_info['producto_id'] = $producto_result[0]['_id'] ?? null;
+        $producto_info['producto_nombre'] = $producto_result[0]['title'] ?? 'Sin nombre';
+        $producto_info['categoria'] = $producto_result[0]['category_name'] ?? 'Sin categoría';
+
+        if ($producto_info['producto_id'] === null) {
+          $errores_productos[] = "Producto '{$prod['nombre']}' sin ID válido";
+          continue;
+        }
 
         // Buscar precio del producto
         $sql_precio = "SELECT precio FROM products_prices 
