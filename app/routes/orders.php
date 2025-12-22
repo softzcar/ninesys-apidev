@@ -3623,6 +3623,270 @@ $object['sales_commission_ISSET'][] = false;
     }
   });
 
+  /**
+   * PREVALIDAR ORDEN (desde Chat IA)
+   * 
+   * Valida los datos de una orden sin crearla.
+   * Retorna cliente, productos con precios disponibles, tallas y telas.
+   * El frontend muestra estos datos para que el usuario seleccione opciones.
+   * 
+   * Payload:
+   * {
+   *   "cliente_nombre": "Nombre del cliente",
+   *   "productos": [
+   *     {"nombre": "franela", "cantidad": 3, "talla": "S", "tela": "dryfit"}
+   *   ],
+   *   "responsable_id": 3
+   * }
+   */
+  $app->post('/ordenes/prevalidar', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    $object = [];
+
+    try {
+      $data = $request->getParsedBody();
+
+      // Debug: Si data es null, intentar parsear el body manualmente
+      if ($data === null) {
+        $rawBody = (string) $request->getBody();
+        $data = json_decode($rawBody, true);
+      }
+
+      $id_empresa = defined('ID_EMPRESA') ? ID_EMPRESA : 163;
+
+      // Validar campos requeridos
+      if (empty($data['cliente_nombre'])) {
+        return ApiResponse::validationError($response, 'Debe especificar el nombre del cliente');
+      }
+      if (empty($data['productos']) || !is_array($data['productos'])) {
+        return ApiResponse::validationError($response, 'Debe especificar al menos un producto');
+      }
+      if (empty($data['responsable_id'])) {
+        return ApiResponse::validationError($response, 'Debe especificar el ID del responsable');
+      }
+
+      $responsable_id = intval($data['responsable_id']);
+
+      // Validar permisos
+      $departamentos_autorizados = ['Administración', 'Comercialización'];
+      $sql_dept = "SELECT departamento FROM api_empresas.empresas_usuarios 
+                   WHERE id_usuario = ? AND id_empresa = ?";
+      $user_result = $localConnection->goQuery($sql_dept, [$responsable_id, $id_empresa]);
+
+      if (empty($user_result) || isset($user_result['status'])) {
+        return ApiResponse::error($response, 'Usuario no encontrado', 404);
+      }
+
+      $user_dept = $user_result[0]['departamento'];
+
+      if (!in_array($user_dept, $departamentos_autorizados)) {
+        return ApiResponse::error(
+          $response,
+          "No estás autorizado para crear órdenes. Tu departamento actual es: {$user_dept}. " .
+          "Solo personal de Administración o Comercialización puede crear órdenes.",
+          403
+        );
+      }
+
+      // ==========================================================
+      // BUSCAR CLIENTE
+      // ==========================================================
+      $cliente_nombre = trim($data['cliente_nombre']);
+      $sql_cliente = "SELECT _id, first_name, last_name, phone, cedula, email, address
+                      FROM customers 
+                      WHERE CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+                      LIMIT 5";
+      $clientes = $localConnection->goQuery($sql_cliente, ["%{$cliente_nombre}%"]);
+
+      if (empty($clientes) || isset($clientes['status'])) {
+        return ApiResponse::error(
+          $response,
+          "No se encontró ningún cliente con el nombre '{$cliente_nombre}'.",
+          404
+        );
+      }
+
+      // Formatear clientes encontrados
+      $clientes_formateados = [];
+      foreach ($clientes as $c) {
+        $clientes_formateados[] = [
+          'id' => $c['_id'],
+          'nombre' => trim($c['first_name'] . ' ' . ($c['last_name'] ?? '')),
+          'telefono' => $c['phone'] ?? null,
+          'cedula' => $c['cedula'] ?? null,
+          'email' => $c['email'] ?? null,
+          'direccion' => $c['address'] ?? null
+        ];
+      }
+
+      // ==========================================================
+      // OBTENER TELAS DISPONIBLES
+      // ==========================================================
+      $sql_telas = "SELECT _id, tela FROM catalogo_telas ORDER BY tela ASC";
+      $telas_result = $localConnection->goQuery($sql_telas);
+      $telas_disponibles = [];
+      if (!empty($telas_result) && !isset($telas_result['status'])) {
+        foreach ($telas_result as $t) {
+          $telas_disponibles[] = ['id' => $t['_id'], 'nombre' => $t['tela']];
+        }
+      }
+
+      // ==========================================================
+      // OBTENER TALLAS DISPONIBLES
+      // ==========================================================
+      $sql_tallas = "SELECT _id, nombre FROM sizes ORDER BY _id ASC";
+      $tallas_result = $localConnection->goQuery($sql_tallas);
+      $tallas_disponibles = [];
+      if (!empty($tallas_result) && !isset($tallas_result['status'])) {
+        foreach ($tallas_result as $t) {
+          $tallas_disponibles[] = ['id' => $t['_id'], 'nombre' => $t['nombre']];
+        }
+      }
+
+      // ==========================================================
+      // CORTES DISPONIBLES (fijos)
+      // ==========================================================
+      $cortes_disponibles = [
+        ['id' => 'V', 'nombre' => 'Cuello V'],
+        ['id' => 'redondo', 'nombre' => 'Cuello Redondo'],
+        ['id' => '', 'nombre' => 'Sin especificar']
+      ];
+
+      // ==========================================================
+      // PROCESAR PRODUCTOS
+      // ==========================================================
+      $productos_validados = [];
+      $errores_productos = [];
+
+      foreach ($data['productos'] as $index => $prod) {
+        $producto_item = [
+          'index' => $index,
+          'nombre_buscado' => $prod['nombre'] ?? '',
+          'cantidad' => intval($prod['cantidad'] ?? 1),
+          'talla_buscada' => $prod['talla'] ?? null,
+          'tela_buscada' => $prod['tela'] ?? null,
+          'encontrado' => false
+        ];
+
+        // Buscar producto
+        $sql_prod = "SELECT _id, product, category_ids, price FROM products 
+                     WHERE product LIKE ? LIMIT 5";
+        $producto_result = $localConnection->goQuery($sql_prod, ["%{$prod['nombre']}%"]);
+
+        if (empty($producto_result) || isset($producto_result['status']) || !isset($producto_result[0])) {
+          $errores_productos[] = "Producto '{$prod['nombre']}' no encontrado";
+          $productos_validados[] = $producto_item;
+          continue;
+        }
+
+        // Si encontramos múltiples productos, los listamos
+        $productos_encontrados = [];
+        foreach ($producto_result as $pr) {
+          // Obtener precios del producto
+          $sql_precios = "SELECT _id, price, descripcion FROM products_prices 
+                          WHERE id_product = ? ORDER BY _id ASC";
+          $precios = $localConnection->goQuery($sql_precios, [$pr['_id']]);
+
+          $precios_lista = [];
+          if (!empty($precios) && !isset($precios['status'])) {
+            foreach ($precios as $p) {
+              $precios_lista[] = [
+                'id' => $p['_id'],
+                'precio' => floatval($p['price']),
+                'descripcion' => $p['descripcion']
+              ];
+            }
+          }
+
+          // Si no hay precios en products_prices, usar el precio base
+          if (empty($precios_lista) && !empty($pr['price'])) {
+            $precios_lista[] = [
+              'id' => null,
+              'precio' => floatval($pr['price']),
+              'descripcion' => 'Precio base'
+            ];
+          }
+
+          $productos_encontrados[] = [
+            'id' => $pr['_id'],
+            'nombre' => $pr['product'],
+            'categoria' => $pr['category_ids'],
+            'precios' => $precios_lista
+          ];
+        }
+
+        $producto_item['encontrado'] = true;
+        $producto_item['opciones'] = $productos_encontrados;
+
+        // Buscar talla si se especificó
+        if (!empty($prod['talla'])) {
+          $sql_talla = "SELECT _id, nombre FROM sizes WHERE nombre LIKE ? LIMIT 1";
+          $talla_result = $localConnection->goQuery($sql_talla, ["%{$prod['talla']}%"]);
+          if (!empty($talla_result) && !isset($talla_result['status'])) {
+            $producto_item['talla_encontrada'] = [
+              'id' => $talla_result[0]['_id'],
+              'nombre' => $talla_result[0]['nombre']
+            ];
+          }
+        }
+
+        // Buscar tela si se especificó
+        if (!empty($prod['tela'])) {
+          $sql_tela = "SELECT _id, tela FROM catalogo_telas WHERE tela LIKE ? LIMIT 1";
+          $tela_result = $localConnection->goQuery($sql_tela, ["%{$prod['tela']}%"]);
+          if (!empty($tela_result) && !isset($tela_result['status'])) {
+            $producto_item['tela_encontrada'] = [
+              'id' => $tela_result[0]['_id'],
+              'nombre' => $tela_result[0]['tela']
+            ];
+          }
+        }
+
+        $productos_validados[] = $producto_item;
+      }
+
+      // ==========================================================
+      // CALCULAR FECHA DE ENTREGA ESTIMADA
+      // ==========================================================
+      $sql_ordenes_activas = "SELECT COUNT(*) as total FROM ordenes 
+                              WHERE status IN ('En espera', 'En proceso')";
+      $ordenes_activas = $localConnection->goQuery($sql_ordenes_activas);
+      $total_ordenes = $ordenes_activas[0]['total'] ?? 0;
+      $dias_estimados = min(2 + ceil($total_ordenes * 0.5), 14);
+      $fecha_entrega = date('Y-m-d', strtotime("+{$dias_estimados} days"));
+
+      // ==========================================================
+      // PREPARAR RESPUESTA
+      // ==========================================================
+      $object['success'] = true;
+      $object['validacion'] = 'pendiente_confirmacion';
+      $object['clientes'] = $clientes_formateados;
+      $object['cliente_seleccionado'] = $clientes_formateados[0] ?? null;
+      $object['productos'] = $productos_validados;
+      $object['fecha_entrega_estimada'] = $fecha_entrega;
+      $object['opciones'] = [
+        'tallas' => $tallas_disponibles,
+        'telas' => $telas_disponibles,
+        'cortes' => $cortes_disponibles
+      ];
+
+      if (!empty($errores_productos)) {
+        $object['advertencias'] = $errores_productos;
+      }
+
+      $object['mensaje'] = 'Por favor selecciona el precio para cada producto y confirma para crear la orden.';
+
+      $response->getBody()->write(json_encode($object));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (\Throwable $e) {
+      error_log('Error en /ordenes/prevalidar: ' . $e->getMessage());
+      return ApiResponse::error($response, 'Error al prevalidar la orden: ' . $e->getMessage(), 500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
   /** FIN ORDENES */
 
 }; // Fin de la función que envuelve las rutas
