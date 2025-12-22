@@ -3359,9 +3359,9 @@ $object['sales_commission_ISSET'][] = false;
       // BUSCAR CLIENTE
       // ==========================================================
       $cliente_nombre = trim($data['cliente_nombre']);
-      $sql_cliente = "SELECT _id, nombre, telefono, cedula, email 
+      $sql_cliente = "SELECT _id, first_name, last_name, phone, cedula, email 
                       FROM customers 
-                      WHERE CONCAT(nombre, ' ', IFNULL(apellido, '')) LIKE ?
+                      WHERE CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
                       LIMIT 5";
       $clientes = $localConnection->goQuery($sql_cliente, ["%{$cliente_nombre}%"]);
 
@@ -3376,6 +3376,8 @@ $object['sales_commission_ISSET'][] = false;
 
       // Si hay múltiples coincidencias, usar el primero pero avisar
       $cliente = $clientes[0];
+      $cliente['nombre'] = trim($cliente['first_name'] . ' ' . ($cliente['last_name'] ?? ''));
+      $cliente['telefono'] = $cliente['phone'] ?? null;
       $multiples_clientes = count($clientes) > 1;
 
       // ==========================================================
