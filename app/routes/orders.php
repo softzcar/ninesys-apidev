@@ -3410,8 +3410,8 @@ $object['sales_commission_ISSET'][] = false;
         ];
 
         // Buscar producto
-        $sql_prod = "SELECT _id, title, category_name FROM products 
-                     WHERE title LIKE ? AND activo = 1 LIMIT 1";
+        $sql_prod = "SELECT _id, product, category_ids, price FROM products 
+                     WHERE product LIKE ? LIMIT 1";
         $producto_result = $localConnection->goQuery($sql_prod, ["%{$prod['nombre']}%"]);
 
         // Verificar que no sea un error y que tenga resultados válidos
@@ -3421,8 +3421,9 @@ $object['sales_commission_ISSET'][] = false;
         }
 
         $producto_info['producto_id'] = $producto_result[0]['_id'] ?? null;
-        $producto_info['producto_nombre'] = $producto_result[0]['title'] ?? 'Sin nombre';
-        $producto_info['categoria'] = $producto_result[0]['category_name'] ?? 'Sin categoría';
+        $producto_info['producto_nombre'] = $producto_result[0]['product'] ?? 'Sin nombre';
+        $producto_info['categoria'] = $producto_result[0]['category_ids'] ?? 'Sin categoría';
+        $producto_info['precio'] = floatval($producto_result[0]['price'] ?? 0);
 
         if ($producto_info['producto_id'] === null) {
           $errores_productos[] = "Producto '{$prod['nombre']}' sin ID válido";
