@@ -4012,7 +4012,7 @@ $object['sales_commission_ISSET'][] = false;
    */
   $app->post('/ordenes/contexto-ia', function (Request $request, Response $response) {
     $empresaId = $request->getHeader('Authorization')[0] ?? null;
-    $localConnection = new LocalConnection($empresaId);
+    $localConnection = new LocalDB($empresaId);
 
     try {
       $body = json_decode($request->getBody()->getContents(), true);
