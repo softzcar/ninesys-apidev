@@ -3968,23 +3968,23 @@ $object['sales_commission_ISSET'][] = false;
 
       switch ($paso) {
         case 'cliente':
-          $result = self::validarPasoCliente($localConnection, $datos, $contexto);
+          $result = validarPasoCliente($localConnection, $datos, $contexto);
           break;
 
         case 'productos':
-          $result = self::validarPasoProductos($localConnection, $datos, $contexto);
+          $result = validarPasoProductos($localConnection, $datos, $contexto);
           break;
 
         case 'tallas':
-          $result = self::validarPasoTallas($localConnection, $datos, $contexto);
+          $result = validarPasoTallas($localConnection, $datos, $contexto);
           break;
 
         case 'telas':
-          $result = self::validarPasoTelas($localConnection, $datos, $contexto);
+          $result = validarPasoTelas($localConnection, $datos, $contexto);
           break;
 
         case 'confirmar':
-          $result = self::confirmarOrden($localConnection, $contexto, $responsable_id);
+          $result = confirmarOrden($localConnection, $contexto, $responsable_id);
           break;
 
         default:
