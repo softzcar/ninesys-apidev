@@ -1,0 +1,41 @@
+- Solicitud del Usuario: Implementar confirmación de órdenes con selección de precios, corte y tela
+
+- Archivos Involucrados:
+  - app/routes/orders.php (MODIFICADO - endpoint /ordenes/prevalidar y /ordenes/nueva/simple actualizado)
+  - task.md (MODIFICADO - actualizado plan con nuevas fases)
+
+- Acción Realizada:
+  1. Creado endpoint POST /ordenes/prevalidar que:
+     - Valida permisos por departamento
+     - Busca cliente y retorna coincidencias
+     - Busca productos y retorna lista de precios disponibles por producto
+     - Retorna tallas, telas y cortes disponibles
+     - NO crea la orden, solo valida y retorna opciones
+  
+  2. Actualizado endpoint POST /ordenes/nueva/simple para:
+     - Aceptar campos directos del modal: producto_id, precio, talla_id, tela_id, corte
+     - Guardar corte en ordenes_productos
+     - Calcular total con precio seleccionado por usuario
+
+- Herramienta(s) Utilizada(s): view_file, replace_file_content, run_command
+
+- Resultado: Éxito
+
+- Verificación:
+  - Endpoint /ordenes/prevalidar probado: retorna productos con lista de precios
+  - Orden #3533 creada con campos directos:
+    * Producto: Franela Estampado Carta
+    * Precio: $6.00 (Precio X3 seleccionado)
+    * Cantidad: 3
+    * Total: $18.00
+    * Talla: S (id 71)
+    * Tela: ALGODON (id 1)
+    * Corte: V
+  - Verificado en BD: todos los campos guardados correctamente
+
+- Observaciones de Gemini:
+  - El flujo ahora es: 1) prevalidar → 2) modal frontend → 3) crear orden
+  - El frontend puede mostrar los precios y permitir al usuario seleccionar
+  - Pendiente: implementar modal de confirmación en el frontend
+
+- Respuesta de Gemini: Backend completo para flujo de confirmación con precios. Endpoints /ordenes/prevalidar y /ordenes/nueva/simple funcionando. Orden #3533 creada exitosamente con precio, corte y tela seleccionados.

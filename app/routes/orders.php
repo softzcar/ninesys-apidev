@@ -3900,6 +3900,634 @@ $object['sales_commission_ISSET'][] = false;
     }
   });
 
+  /**
+   * VALIDAR PASO DE ORDEN (Flujo Conversacional)
+   * 
+   * Endpoint para validar cada paso del proceso de creación de órdenes
+   * a través del chat de IA (flujo conversacional).
+   * 
+   * Payload:
+   * {
+   *   "paso": "cliente|productos|tallas|telas|confirmar",
+   *   "datos": { ... },
+   *   "contexto": { ... },
+   *   "responsable_id": 123
+   * }
+   */
+  $app->post('/ordenes/validar-paso', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+
+    try {
+      $data = $request->getParsedBody();
+      if ($data === null) {
+        $rawBody = (string) $request->getBody();
+        $data = json_decode($rawBody, true);
+      }
+
+      $id_empresa = defined('ID_EMPRESA') ? ID_EMPRESA : 163;
+      $paso = $data['paso'] ?? '';
+      $datos = $data['datos'] ?? [];
+      $contexto = $data['contexto'] ?? [];
+      $responsable_id = intval($data['responsable_id'] ?? 0);
+
+      // Validar campos requeridos
+      if (empty($paso)) {
+        return ApiResponse::validationError($response, 'Debe especificar el paso a validar');
+      }
+      if (empty($responsable_id)) {
+        return ApiResponse::validationError($response, 'Debe especificar el ID del responsable');
+      }
+
+      // ==========================================================
+      // VALIDAR PERMISOS
+      // ==========================================================
+      $departamentos_autorizados = ['Administración', 'Comercialización'];
+      $sql_dept = "SELECT departamento FROM api_empresas.empresas_usuarios 
+                   WHERE id_usuario = ? AND id_empresa = ?";
+      $user_result = $localConnection->goQuery($sql_dept, [$responsable_id, $id_empresa]);
+
+      if (empty($user_result) || isset($user_result['status'])) {
+        return ApiResponse::error($response, 'Usuario no encontrado', 404);
+      }
+
+      $user_dept = $user_result[0]['departamento'];
+
+      if (!in_array($user_dept, $departamentos_autorizados)) {
+        return ApiResponse::error(
+          $response,
+          "No estás autorizado para crear órdenes. Tu departamento actual es: {$user_dept}. " .
+          "Solo personal de Administración o Comercialización puede crear órdenes.",
+          403
+        );
+      }
+
+      // ==========================================================
+      // PROCESAR SEGÚN EL PASO
+      // ==========================================================
+      $result = [];
+
+      switch ($paso) {
+        case 'cliente':
+          $result = self::validarPasoCliente($localConnection, $datos, $contexto);
+          break;
+
+        case 'productos':
+          $result = self::validarPasoProductos($localConnection, $datos, $contexto);
+          break;
+
+        case 'tallas':
+          $result = self::validarPasoTallas($localConnection, $datos, $contexto);
+          break;
+
+        case 'telas':
+          $result = self::validarPasoTelas($localConnection, $datos, $contexto);
+          break;
+
+        case 'confirmar':
+          $result = self::confirmarOrden($localConnection, $contexto, $responsable_id);
+          break;
+
+        default:
+          return ApiResponse::validationError($response, "Paso '{$paso}' no reconocido");
+      }
+
+      $response->getBody()->write(json_encode($result));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (\Throwable $e) {
+      error_log('Error en /ordenes/validar-paso: ' . $e->getMessage());
+      return ApiResponse::error($response, 'Error al validar paso: ' . $e->getMessage(), 500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
+  // ==========================================================
+  // FUNCIONES AUXILIARES PARA VALIDAR PASOS
+  // ==========================================================
+
+  /**
+   * Validar paso: Cliente
+   */
+  function validarPasoCliente($db, $datos, $contexto)
+  {
+    $nombre = trim($datos['nombre'] ?? '');
+    $seleccion_id = $datos['seleccion_id'] ?? null;
+
+    // Si viene un ID de selección, el usuario eligió de una lista
+    if ($seleccion_id) {
+      $sql = "SELECT _id, first_name, last_name, phone, cedula, email, address FROM customers WHERE _id = ?";
+      $cliente = $db->goQuery($sql, [$seleccion_id]);
+
+      if (!empty($cliente) && !isset($cliente['status'])) {
+        $c = $cliente[0];
+        return [
+          'ok' => true,
+          'cliente' => [
+            'id' => $c['_id'],
+            'nombre' => trim($c['first_name'] . ' ' . ($c['last_name'] ?? '')),
+            'telefono' => $c['phone'] ?? null,
+            'cedula' => $c['cedula'] ?? null,
+            'email' => $c['email'] ?? null,
+            'direccion' => $c['address'] ?? null
+          ],
+          'siguiente_paso' => 'productos',
+          'mensaje' => '✅ Cliente seleccionado. ¿Qué productos deseas agregar al pedido?'
+        ];
+      }
+      return ['ok' => false, 'mensaje' => 'Cliente no encontrado con ese ID'];
+    }
+
+    // Buscar cliente por nombre
+    if (empty($nombre)) {
+      return [
+        'ok' => false,
+        'paso_requerido' => 'cliente',
+        'mensaje' => '¿Cuál es el nombre del cliente para este pedido?'
+      ];
+    }
+
+    $sql = "SELECT _id, first_name, last_name, phone, cedula, email, address 
+            FROM customers 
+            WHERE CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+            LIMIT 5";
+    $clientes = $db->goQuery($sql, ["%{$nombre}%"]);
+
+    if (empty($clientes) || isset($clientes['status'])) {
+      return [
+        'ok' => false,
+        'mensaje' => "❌ No encontré ningún cliente con el nombre '{$nombre}'. Por favor, verifica el nombre o créalo primero."
+      ];
+    }
+
+    // Formatear clientes
+    $clientes_formateados = [];
+    foreach ($clientes as $c) {
+      $clientes_formateados[] = [
+        'id' => $c['_id'],
+        'nombre' => trim($c['first_name'] . ' ' . ($c['last_name'] ?? '')),
+        'telefono' => $c['phone'] ?? null,
+        'cedula' => $c['cedula'] ?? null
+      ];
+    }
+
+    if (count($clientes_formateados) === 1) {
+      // Solo un resultado, lo seleccionamos automáticamente
+      return [
+        'ok' => true,
+        'cliente' => $clientes_formateados[0],
+        'siguiente_paso' => 'productos',
+        'mensaje' => "✅ Cliente encontrado: {$clientes_formateados[0]['nombre']}. ¿Qué productos deseas agregar?"
+      ];
+    }
+
+    // Múltiples resultados, pedir selección
+    return [
+      'ok' => false,
+      'paso_pendiente' => 'seleccionar_cliente',
+      'opciones' => $clientes_formateados,
+      'mensaje' => "Encontré varios clientes. ¿Cuál es el correcto?\n" . implode("\n", array_map(function ($c, $i) {
+        $tel = $c['telefono'] ? " (Tel: {$c['telefono']})" : '';
+        return ($i + 1) . ". {$c['nombre']}{$tel}";
+      }, $clientes_formateados, array_keys($clientes_formateados)))
+    ];
+  }
+
+  /**
+   * Validar paso: Productos
+   */
+  function validarPasoProductos($db, $datos, $contexto)
+  {
+    $items = $datos['items'] ?? [];
+
+    if (empty($items)) {
+      return [
+        'ok' => false,
+        'paso_requerido' => 'productos',
+        'mensaje' => 'Por favor, indica los productos y cantidades que deseas agregar al pedido.'
+      ];
+    }
+
+    $productos_validados = [];
+    $productos_no_encontrados = [];
+    $productos_multiples = [];
+
+    foreach ($items as $idx => $item) {
+      $nombre = trim($item['nombre'] ?? '');
+      $cantidad = intval($item['cantidad'] ?? 1);
+      $producto_id = $item['producto_id'] ?? null;
+
+      // Si ya viene con ID (selección previa)
+      if ($producto_id) {
+        $sql = "SELECT _id, product, price FROM products WHERE _id = ?";
+        $prod = $db->goQuery($sql, [$producto_id]);
+        if (!empty($prod) && !isset($prod['status'])) {
+          // Obtener precios del producto
+          $sql_precios = "SELECT _id, price, descripcion FROM products_prices WHERE id_product = ? ORDER BY _id ASC";
+          $precios = $db->goQuery($sql_precios, [$producto_id]);
+          $precio_base = !empty($precios) && !isset($precios['status']) ? floatval($precios[0]['price']) : floatval($prod[0]['price']);
+
+          $productos_validados[] = [
+            'index' => $idx,
+            'producto_id' => $prod[0]['_id'],
+            'nombre' => $prod[0]['product'],
+            'cantidad' => $cantidad,
+            'precio' => $precio_base,
+            'talla_id' => $item['talla_id'] ?? null,
+            'talla_nombre' => $item['talla_nombre'] ?? null,
+            'tela_id' => $item['tela_id'] ?? null,
+            'tela_nombre' => $item['tela_nombre'] ?? null
+          ];
+          continue;
+        }
+      }
+
+      // Buscar producto por nombre
+      $sql = "SELECT _id, product, price FROM products WHERE product LIKE ? LIMIT 5";
+      $productos = $db->goQuery($sql, ["%{$nombre}%"]);
+
+      if (empty($productos) || isset($productos['status'])) {
+        $productos_no_encontrados[] = $nombre;
+        continue;
+      }
+
+      if (count($productos) === 1) {
+        $p = $productos[0];
+        // Obtener precio
+        $sql_precios = "SELECT price FROM products_prices WHERE id_product = ? ORDER BY _id ASC LIMIT 1";
+        $precios = $db->goQuery($sql_precios, [$p['_id']]);
+        $precio = !empty($precios) && !isset($precios['status']) ? floatval($precios[0]['price']) : floatval($p['price']);
+
+        $productos_validados[] = [
+          'index' => $idx,
+          'producto_id' => $p['_id'],
+          'nombre' => $p['product'],
+          'cantidad' => $cantidad,
+          'precio' => $precio,
+          'talla_id' => null,
+          'talla_nombre' => null,
+          'tela_id' => null,
+          'tela_nombre' => null
+        ];
+      } else {
+        // Múltiples coincidencias
+        $productos_multiples[$idx] = [
+          'buscado' => $nombre,
+          'cantidad' => $cantidad,
+          'opciones' => array_map(function ($p) {
+            return ['id' => $p['_id'], 'nombre' => $p['product']];
+          }, $productos)
+        ];
+      }
+    }
+
+    // Si hay productos no encontrados
+    if (!empty($productos_no_encontrados)) {
+      return [
+        'ok' => false,
+        'productos_validados' => $productos_validados,
+        'no_encontrados' => $productos_no_encontrados,
+        'mensaje' => "❌ No encontré estos productos: " . implode(', ', $productos_no_encontrados) . ". Verifica los nombres."
+      ];
+    }
+
+    // Si hay múltiples coincidencias
+    if (!empty($productos_multiples)) {
+      $msg = "Encontré varios resultados para algunos productos:\n";
+      foreach ($productos_multiples as $idx => $pm) {
+        $msg .= "\n**{$pm['buscado']}:**\n";
+        foreach ($pm['opciones'] as $i => $op) {
+          $msg .= ($i + 1) . ". {$op['nombre']}\n";
+        }
+      }
+      return [
+        'ok' => false,
+        'paso_pendiente' => 'seleccionar_productos',
+        'productos_validados' => $productos_validados,
+        'productos_pendientes' => $productos_multiples,
+        'mensaje' => $msg
+      ];
+    }
+
+    // Todos los productos validados
+    return [
+      'ok' => true,
+      'productos' => $productos_validados,
+      'siguiente_paso' => 'tallas',
+      'mensaje' => "✅ Productos agregados:\n" . implode("\n", array_map(function ($p) {
+        return "• {$p['cantidad']}x {$p['nombre']}";
+      }, $productos_validados))
+    ];
+  }
+
+  /**
+   * Validar paso: Tallas
+   */
+  function validarPasoTallas($db, $datos, $contexto)
+  {
+    $asignaciones = $datos['asignaciones'] ?? [];
+    $productos = $contexto['productos'] ?? [];
+
+    // Obtener tallas disponibles
+    $sql_tallas = "SELECT _id, nombre FROM sizes ORDER BY _id ASC";
+    $tallas_result = $db->goQuery($sql_tallas);
+    $tallas_disponibles = [];
+    if (!empty($tallas_result) && !isset($tallas_result['status'])) {
+      foreach ($tallas_result as $t) {
+        $tallas_disponibles[] = ['id' => $t['_id'], 'nombre' => $t['nombre']];
+      }
+    }
+
+    // Si no hay asignaciones y hay productos sin talla
+    $productos_sin_talla = array_filter($productos, function ($p) {
+      return empty($p['talla_id']);
+    });
+
+    if (!empty($productos_sin_talla) && empty($asignaciones)) {
+      $tallas_nombres = array_column($tallas_disponibles, 'nombre');
+      return [
+        'ok' => false,
+        'paso_requerido' => 'tallas',
+        'productos_pendientes' => array_values($productos_sin_talla),
+        'tallas_disponibles' => $tallas_disponibles,
+        'mensaje' => "Ahora necesito las tallas para cada producto. Opciones disponibles:\n" .
+          implode(', ', $tallas_nombres) . "\n\n¿Qué tallas asigno a cada producto?"
+      ];
+    }
+
+    // Procesar asignaciones
+    $productos_actualizados = $productos;
+    foreach ($asignaciones as $asig) {
+      $idx = $asig['producto_idx'] ?? null;
+      $talla_nombre = $asig['talla'] ?? null;
+      $talla_id = $asig['talla_id'] ?? null;
+
+      if ($idx === null)
+        continue;
+
+      // Buscar talla por nombre si no viene ID
+      if (!$talla_id && $talla_nombre) {
+        $sql = "SELECT _id, nombre FROM sizes WHERE nombre LIKE ? LIMIT 1";
+        $talla = $db->goQuery($sql, ["%{$talla_nombre}%"]);
+        if (!empty($talla) && !isset($talla['status'])) {
+          $talla_id = $talla[0]['_id'];
+          $talla_nombre = $talla[0]['nombre'];
+        }
+      }
+
+      if (isset($productos_actualizados[$idx])) {
+        $productos_actualizados[$idx]['talla_id'] = $talla_id;
+        $productos_actualizados[$idx]['talla_nombre'] = $talla_nombre;
+      }
+    }
+
+    // Verificar que todos tienen talla
+    $faltantes = [];
+    foreach ($productos_actualizados as $idx => $p) {
+      if (empty($p['talla_id'])) {
+        $faltantes[] = $p['nombre'];
+      }
+    }
+
+    if (!empty($faltantes)) {
+      return [
+        'ok' => false,
+        'productos' => $productos_actualizados,
+        'tallas_disponibles' => $tallas_disponibles,
+        'mensaje' => "⚠️ Aún faltan tallas para: " . implode(', ', $faltantes)
+      ];
+    }
+
+    return [
+      'ok' => true,
+      'productos' => $productos_actualizados,
+      'siguiente_paso' => 'telas',
+      'mensaje' => "✅ Tallas asignadas. Ahora indica el tipo de tela para cada producto."
+    ];
+  }
+
+  /**
+   * Validar paso: Telas
+   */
+  function validarPasoTelas($db, $datos, $contexto)
+  {
+    $asignaciones = $datos['asignaciones'] ?? [];
+    $productos = $contexto['productos'] ?? [];
+
+    // Obtener telas disponibles
+    $sql_telas = "SELECT _id, tela FROM catalogo_telas ORDER BY tela ASC";
+    $telas_result = $db->goQuery($sql_telas);
+    $telas_disponibles = [];
+    if (!empty($telas_result) && !isset($telas_result['status'])) {
+      foreach ($telas_result as $t) {
+        $telas_disponibles[] = ['id' => $t['_id'], 'nombre' => $t['tela']];
+      }
+    }
+
+    // Si no hay asignaciones y hay productos sin tela
+    $productos_sin_tela = array_filter($productos, function ($p) {
+      return empty($p['tela_id']);
+    });
+
+    if (!empty($productos_sin_tela) && empty($asignaciones)) {
+      $telas_nombres = array_column($telas_disponibles, 'nombre');
+      return [
+        'ok' => false,
+        'paso_requerido' => 'telas',
+        'productos_pendientes' => array_values($productos_sin_tela),
+        'telas_disponibles' => $telas_disponibles,
+        'mensaje' => "Ahora indica el tipo de tela. Opciones disponibles:\n" .
+          implode(', ', $telas_nombres) . "\n\n¿Qué tipo de tela para cada producto?"
+      ];
+    }
+
+    // Procesar asignaciones
+    $productos_actualizados = $productos;
+    foreach ($asignaciones as $asig) {
+      $idx = $asig['producto_idx'] ?? null;
+      $tela_nombre = $asig['tela'] ?? null;
+      $tela_id = $asig['tela_id'] ?? null;
+      $aplicar_a_todos = $asig['aplicar_a_todos'] ?? false;
+
+      // Buscar tela por nombre si no viene ID
+      if (!$tela_id && $tela_nombre) {
+        $sql = "SELECT _id, tela FROM catalogo_telas WHERE tela LIKE ? LIMIT 1";
+        $tela = $db->goQuery($sql, ["%{$tela_nombre}%"]);
+        if (!empty($tela) && !isset($tela['status'])) {
+          $tela_id = $tela[0]['_id'];
+          $tela_nombre = $tela[0]['tela'];
+        }
+      }
+
+      if ($aplicar_a_todos) {
+        // Aplicar a todos los productos
+        foreach ($productos_actualizados as &$p) {
+          $p['tela_id'] = $tela_id;
+          $p['tela_nombre'] = $tela_nombre;
+        }
+      } else if ($idx !== null && isset($productos_actualizados[$idx])) {
+        $productos_actualizados[$idx]['tela_id'] = $tela_id;
+        $productos_actualizados[$idx]['tela_nombre'] = $tela_nombre;
+      }
+    }
+
+    // Verificar que todos tienen tela
+    $faltantes = [];
+    foreach ($productos_actualizados as $idx => $p) {
+      if (empty($p['tela_id'])) {
+        $faltantes[] = $p['nombre'];
+      }
+    }
+
+    if (!empty($faltantes)) {
+      return [
+        'ok' => false,
+        'productos' => $productos_actualizados,
+        'telas_disponibles' => $telas_disponibles,
+        'mensaje' => "⚠️ Aún faltan telas para: " . implode(', ', $faltantes)
+      ];
+    }
+
+    // Calcular fecha de entrega
+    $sql_ordenes = "SELECT COUNT(*) as total FROM ordenes WHERE status IN ('En espera', 'En proceso')";
+    $ordenes = $db->goQuery($sql_ordenes);
+    $total = $ordenes[0]['total'] ?? 0;
+    $dias = min(2 + ceil($total * 0.5), 14);
+    $fecha_entrega = date('Y-m-d', strtotime("+{$dias} days"));
+
+    // Calcular total
+    $total_orden = 0;
+    foreach ($productos_actualizados as $p) {
+      $total_orden += ($p['precio'] ?? 0) * ($p['cantidad'] ?? 1);
+    }
+
+    return [
+      'ok' => true,
+      'productos' => $productos_actualizados,
+      'fecha_entrega' => $fecha_entrega,
+      'total' => $total_orden,
+      'siguiente_paso' => 'confirmar',
+      'mensaje' => "✅ Todo listo. Fecha de entrega estimada: {$fecha_entrega}. Total: $" . number_format($total_orden, 2) . "\n\n¿Confirmas el pedido?"
+    ];
+  }
+
+  /**
+   * Confirmar y crear orden
+   */
+  function confirmarOrden($db, $contexto, $responsable_id)
+  {
+    $cliente = $contexto['cliente'] ?? null;
+    $productos = $contexto['productos'] ?? [];
+    $fecha_entrega = $contexto['fecha_entrega'] ?? date('Y-m-d', strtotime('+7 days'));
+
+    if (!$cliente || empty($productos)) {
+      return [
+        'ok' => false,
+        'mensaje' => '❌ Faltan datos. Necesito cliente y productos para crear la orden.'
+      ];
+    }
+
+    // Calcular totales
+    $total_prendas = 0;
+    $total_monto = 0;
+    foreach ($productos as $p) {
+      $total_prendas += $p['cantidad'] ?? 1;
+      $total_monto += ($p['precio'] ?? 0) * ($p['cantidad'] ?? 1);
+    }
+
+    // ==========================================================
+    // CREAR ORDEN
+    // ==========================================================
+    $sql_orden = "INSERT INTO ordenes (
+      id_wp, nombre, apellido, telefono, correo_electronico,
+      fecha_entrega, total_prendas, total, status, forma_pago,
+      total_dolar, abono_dolar, restante_dolar,
+      id_responsable, created_at
+    ) VALUES (
+      ?, ?, '', ?, ?,
+      ?, ?, ?, 'En espera', 'Por definir',
+      ?, 0, ?,
+      ?, NOW()
+    )";
+
+    $cliente_nombre_parts = explode(' ', $cliente['nombre'], 2);
+    $first_name = $cliente_nombre_parts[0] ?? '';
+    $last_name = $cliente_nombre_parts[1] ?? '';
+
+    $db->goQuery($sql_orden, [
+      $cliente['id'],
+      $first_name,
+      $cliente['telefono'] ?? '',
+      $cliente['email'] ?? '',
+      $fecha_entrega,
+      $total_prendas,
+      $total_monto,
+      $total_monto,
+      $total_monto,
+      $responsable_id
+    ]);
+
+    $orden_id = $db->lastInsertId();
+
+    if (!$orden_id) {
+      return ['ok' => false, 'mensaje' => '❌ Error al crear la orden. Intenta de nuevo.'];
+    }
+
+    // ==========================================================
+    // CREAR PRODUCTOS DE LA ORDEN
+    // ==========================================================
+    foreach ($productos as $p) {
+      $sql_prod = "INSERT INTO ordenes_productos (
+        id_order, id_product, product, qty, price, talla, id_talla, tela, id_tela, corte
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+      $db->goQuery($sql_prod, [
+        $orden_id,
+        $p['producto_id'],
+        $p['nombre'],
+        $p['cantidad'],
+        $p['precio'] ?? 0,
+        $p['talla_nombre'] ?? '',
+        $p['talla_id'],
+        $p['tela_nombre'] ?? '',
+        $p['tela_id'],
+        ''
+      ]);
+    }
+
+    // ==========================================================
+    // CREAR LOTES DE PRODUCCIÓN
+    // ==========================================================
+    foreach ($productos as $p) {
+      for ($i = 0; $i < ($p['cantidad'] ?? 1); $i++) {
+        $sql_lote = "INSERT INTO lotes (
+          id_orden, producto, cantidad, talla, tela, status, created_at
+        ) VALUES (?, ?, 1, ?, ?, 'pendiente', NOW())";
+
+        $db->goQuery($sql_lote, [
+          $orden_id,
+          $p['nombre'],
+          $p['talla_nombre'] ?? '',
+          $p['tela_nombre'] ?? ''
+        ]);
+      }
+    }
+
+    return [
+      'ok' => true,
+      'orden_id' => $orden_id,
+      'cliente' => $cliente,
+      'total' => $total_monto,
+      'fecha_entrega' => $fecha_entrega,
+      'total_prendas' => $total_prendas,
+      'mensaje' => "✅ **¡Orden #{$orden_id} creada exitosamente!**\n\n" .
+        "• Cliente: {$cliente['nombre']}\n" .
+        "• Prendas: {$total_prendas}\n" .
+        "• Total: $" . number_format($total_monto, 2) . "\n" .
+        "• Entrega: {$fecha_entrega}"
+    ];
+  }
+
   /** FIN ORDENES */
 
 }; // Fin de la función que envuelve las rutas
