@@ -164,6 +164,20 @@ class GeminiChatAssistant extends GeminiAssistant
 
             // Respuesta en texto natural
             $responseText = $geminiResponse['text'] ?? $geminiResponse['raw_text'] ?? 'No pude procesar tu consulta.';
+
+            // Filtrar SQL de la respuesta (no debe mostrarse al usuario)
+            if (preg_match('/```sql/i', $responseText) || preg_match('/\bSELECT\b.*\bFROM\b/i', $responseText)) {
+                // Si la respuesta contiene SQL, limpiarla
+                $responseText = preg_replace('/```sql[\s\S]*?```/i', '', $responseText);
+                $responseText = preg_replace('/SELECT\s+[\s\S]*?;/i', '', $responseText);
+                $responseText = trim($responseText);
+
+                // Si quedó vacío, dar una respuesta genérica
+                if (empty($responseText)) {
+                    $responseText = 'Estoy procesando tu solicitud. ¿Podrías darme más detalles sobre lo que necesitas?';
+                }
+            }
+
             return [
                 'success' => true,
                 'response' => $responseText
