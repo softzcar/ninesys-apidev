@@ -4047,11 +4047,16 @@ $object['sales_commission_ISSET'][] = false;
       ];
     }
 
+    // Buscar cliente por nombre - buscar en first_name y last_name por separado
+    // ya que el nombre puede estar en cualquiera de los dos campos
     $sql = "SELECT _id, first_name, last_name, phone, cedula, email, address 
             FROM customers 
-            WHERE CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
-            LIMIT 5";
-    $clientes = $db->goQuery($sql, ["%{$nombre}%"]);
+            WHERE first_name LIKE ? 
+               OR last_name LIKE ? 
+               OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+            ORDER BY first_name ASC
+            LIMIT 10";
+    $clientes = $db->goQuery($sql, ["%{$nombre}%", "%{$nombre}%", "%{$nombre}%"]);
 
     if (empty($clientes) || isset($clientes['status'])) {
       return [
