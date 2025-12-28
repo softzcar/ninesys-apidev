@@ -102,6 +102,82 @@ class GeminiChatAssistant extends GeminiAssistant
     }
 
     /**
+     * Procesa consultas de órdenes con contexto de BD
+     * 
+     * @param string $query Mensaje del usuario
+     * @param array $history Historial de conversación
+     * @param array $contextoBD Contexto de BD (clientes, productos, tallas, telas encontrados)
+     * @param array|null $ordenEnProgreso Estado actual de la orden en progreso
+     * @return array Respuesta de Gemini
+     */
+    public function processOrderQuery(string $query, array $history = [], array $contextoBD = [], ?array $ordenEnProgreso = null): array
+    {
+        try {
+            // Enriquecer el query con contexto de BD
+            $queryEnriquecido = $query;
+
+            if (!empty($contextoBD)) {
+                $contextoTexto = "\n\n[CONTEXTO DE BASE DE DATOS - USA ESTA INFORMACIÓN PARA TOMAR DECISIONES]\n";
+
+                if (!empty($contextoBD['clientes'])) {
+                    $contextoTexto .= "clientes_encontrados: " . json_encode($contextoBD['clientes'], JSON_UNESCAPED_UNICODE) . "\n";
+                }
+                if (!empty($contextoBD['productos'])) {
+                    $contextoTexto .= "productos_encontrados: " . json_encode($contextoBD['productos'], JSON_UNESCAPED_UNICODE) . "\n";
+                }
+                if (!empty($contextoBD['tallas'])) {
+                    $contextoTexto .= "tallas_disponibles: " . json_encode(array_column($contextoBD['tallas'], 'nombre'), JSON_UNESCAPED_UNICODE) . "\n";
+                }
+                if (!empty($contextoBD['telas'])) {
+                    $contextoTexto .= "telas_disponibles: " . json_encode(array_column($contextoBD['telas'], 'nombre'), JSON_UNESCAPED_UNICODE) . "\n";
+                }
+
+                $queryEnriquecido = $query . $contextoTexto;
+            }
+
+            // Si hay orden en progreso, incluirla
+            if (!empty($ordenEnProgreso)) {
+                $queryEnriquecido .= "\n[ORDEN EN PROGRESO]: " . json_encode($ordenEnProgreso, JSON_UNESCAPED_UNICODE);
+            }
+
+            // Llamar a Gemini con el query enriquecido
+            $geminiResponse = $this->callGeminiAPI($queryEnriquecido, false, $history);
+
+            if (isset($geminiResponse['error'])) {
+                return [
+                    'success' => false,
+                    'response' => 'Error al procesar: ' . $geminiResponse['error']
+                ];
+            }
+
+            // Si Gemini devolvió un JSON de crear orden
+            if (isset($geminiResponse['data']['action']) && $geminiResponse['data']['action'] === 'create_order') {
+                return [
+                    'success' => true,
+                    'response' => json_encode($geminiResponse['data'], JSON_UNESCAPED_UNICODE),
+                    'is_action' => true,
+                    'action' => 'create_order',
+                    'ready' => $geminiResponse['data']['ready'] ?? false,
+                    'order_data' => $geminiResponse['data']['data'] ?? null
+                ];
+            }
+
+            // Respuesta en texto natural
+            $responseText = $geminiResponse['text'] ?? $geminiResponse['raw_text'] ?? 'No pude procesar tu consulta.';
+            return [
+                'success' => true,
+                'response' => $responseText
+            ];
+
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'response' => 'Error inesperado: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
      * Formatea los resultados en una respuesta natural
      * 
      * @param array $results Resultados de la consulta SQL

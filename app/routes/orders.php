@@ -4002,6 +4002,107 @@ $object['sales_commission_ISSET'][] = false;
     }
   });
 
+  /**
+   * CONTEXTO PARA IA - Proporciona datos de BD para enriquecer prompts de Gemini
+   * 
+   * POST /ordenes/contexto-ia
+   * 
+   * Busca información relevante en la BD para que Gemini pueda tomar decisiones
+   * inteligentes durante la creación conversacional de órdenes.
+   */
+  $app->post('/ordenes/contexto-ia', function (Request $request, Response $response) {
+    $empresaId = $request->getHeader('Authorization')[0] ?? null;
+    $localConnection = new LocalConnection($empresaId);
+
+    try {
+      $body = json_decode($request->getBody()->getContents(), true);
+
+      $buscarClientes = $body['buscar_clientes'] ?? null;
+      $buscarProductos = $body['buscar_productos'] ?? null;
+      $incluirTallas = $body['incluir_tallas'] ?? false;
+      $incluirTelas = $body['incluir_telas'] ?? false;
+
+      $resultado = [
+        'clientes' => [],
+        'productos' => [],
+        'tallas' => [],
+        'telas' => []
+      ];
+
+      // Buscar clientes si se proporciona nombre
+      if (!empty($buscarClientes)) {
+        $nombre = trim($buscarClientes);
+        $sql = "SELECT _id as id, 
+                       CONCAT(first_name, ' ', IFNULL(last_name, '')) as nombre_completo,
+                       phone as telefono
+                FROM customers 
+                WHERE first_name LIKE ? 
+                   OR last_name LIKE ? 
+                   OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+                ORDER BY first_name ASC
+                LIMIT 10";
+        $clientes = $localConnection->goQuery($sql, ["%{$nombre}%", "%{$nombre}%", "%{$nombre}%"]);
+
+        if (!empty($clientes) && !isset($clientes['status'])) {
+          $resultado['clientes'] = $clientes;
+        }
+      }
+
+      // Buscar productos si se proporciona nombre
+      if (!empty($buscarProductos)) {
+        $nombre = trim($buscarProductos);
+        // Normalizar plurales
+        $nombreSingular = preg_replace('/(es|s)$/i', '', $nombre);
+
+        $sql = "SELECT p._id as id, p.product as nombre, 
+                       COALESCE(pp.price, p.price) as precio
+                FROM products p
+                LEFT JOIN products_prices pp ON pp.id_product = p._id
+                WHERE p.product LIKE ? OR p.product LIKE ?
+                GROUP BY p._id
+                ORDER BY p.product ASC
+                LIMIT 15";
+        $productos = $localConnection->goQuery($sql, ["%{$nombre}%", "%{$nombreSingular}%"]);
+
+        if (!empty($productos) && !isset($productos['status'])) {
+          $resultado['productos'] = $productos;
+        }
+      }
+
+      // Obtener tallas disponibles
+      if ($incluirTallas) {
+        $sql = "SELECT _id as id, size as nombre FROM sizes ORDER BY _id ASC LIMIT 20";
+        $tallas = $localConnection->goQuery($sql, []);
+
+        if (!empty($tallas) && !isset($tallas['status'])) {
+          $resultado['tallas'] = $tallas;
+        }
+      }
+
+      // Obtener telas del catálogo
+      if ($incluirTelas) {
+        $sql = "SELECT _id as id, tela as nombre FROM catalogo_telas ORDER BY tela ASC LIMIT 20";
+        $telas = $localConnection->goQuery($sql, []);
+
+        if (!empty($telas) && !isset($telas['status'])) {
+          $resultado['telas'] = $telas;
+        }
+      }
+
+      $response->getBody()->write(json_encode([
+        'success' => true,
+        'contexto' => $resultado
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (\Throwable $e) {
+      error_log('Error en /ordenes/contexto-ia: ' . $e->getMessage());
+      return ApiResponse::error($response, 'Error obteniendo contexto: ' . $e->getMessage(), 500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
   // ==========================================================
   // FUNCIONES AUXILIARES PARA VALIDAR PASOS
   // ==========================================================

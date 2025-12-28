@@ -102,6 +102,79 @@ return function (App $app) {
     });
 
     /**
+     * POST /ai/chat-orden
+     * 
+     * Procesa consultas relacionadas con órdenes con contexto enriquecido de BD.
+     * Este endpoint pasa información relevante de la BD a Gemini para que tome
+     * decisiones inteligentes (selección de clientes, productos, tallas, etc.)
+     * 
+     * Body:
+     *   - query: string (mensaje del usuario)
+     *   - history: array (historial de conversación)
+     *   - contexto_bd: object (datos de BD: clientes, productos, tallas, telas)
+     *   - orden_en_progreso: object|null (estado actual de la orden)
+     */
+    $app->post('/ai/chat-orden', function (Request $request, Response $response) {
+        require_once __DIR__ . '/../classes/AI/GeminiChatAssistant.php';
+        require_once __DIR__ . '/../schemas/db-schema-gemini.php';
+        require_once __DIR__ . '/../config.php';
+
+        $body = $request->getBody()->getContents();
+        $data = json_decode($body, true);
+
+        if ($data === null) {
+            $data = $request->getParsedBody() ?? [];
+        }
+
+        if (empty($data['query'])) {
+            $result = [
+                'success' => false,
+                'error' => 'Se requiere el parámetro "query"'
+            ];
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        if (empty(GEMINI_API_KEY)) {
+            $result = [
+                'success' => false,
+                'error' => 'La API Key de Gemini no está configurada'
+            ];
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
+        $schema = require __DIR__ . '/../schemas/db-schema-gemini.php';
+        $localConnection = new LocalDB();
+
+        $history = $data['history'] ?? [];
+        $contextoBD = $data['contexto_bd'] ?? [];
+        $ordenEnProgreso = $data['orden_en_progreso'] ?? null;
+
+        try {
+            $assistant = new GeminiChatAssistant(GEMINI_API_KEY, $schema, $localConnection);
+            $result = $assistant->processOrderQuery($data['query'], $history, $contextoBD, $ordenEnProgreso);
+
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode($result, JSON_UNESCAPED_UNICODE));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus($result['success'] ? 200 : 400);
+
+        } catch (Exception $e) {
+            $localConnection->disconnect();
+
+            $result = [
+                'success' => false,
+                'error' => 'Error interno: ' . $e->getMessage()
+            ];
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    /**
      * POST /ai/report
      * 
      * Procesa una pregunta y devuelve datos estructurados para una tabla.
