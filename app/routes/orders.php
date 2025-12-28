@@ -4089,6 +4089,13 @@ $object['sales_commission_ISSET'][] = false;
         }
       }
 
+      // Obtener atributos del catálogo (siempre incluir)
+      $sql = "SELECT _id as id, attribute_name as nombre, precio FROM products_attributes ORDER BY attribute_name ASC LIMIT 20";
+      $atributos = $localConnection->goQuery($sql, []);
+      if (!empty($atributos) && !isset($atributos['status'])) {
+        $resultado['atributos'] = $atributos;
+      }
+
       $response->getBody()->write(json_encode([
         'success' => true,
         'contexto' => $resultado
