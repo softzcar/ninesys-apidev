@@ -4142,9 +4142,20 @@ $object['sales_commission_ISSET'][] = false;
         }
       }
 
-      // Buscar producto por nombre
-      $sql = "SELECT _id, product, price FROM products WHERE product LIKE ? LIMIT 10";
-      $productos = $db->goQuery($sql, ["%{$nombre}%"]);
+      // Buscar producto por nombre - normalizar quitando plurales comunes
+      $nombreNormalizado = $nombre;
+      // Quitar 's' o 'es' del final si es plural (español)
+      if (preg_match('/(es|s)$/i', $nombreNormalizado) && strlen($nombreNormalizado) > 3) {
+        $nombreSingular = preg_replace('/(es|s)$/i', '', $nombreNormalizado);
+      } else {
+        $nombreSingular = $nombreNormalizado;
+      }
+
+      // Buscar con el nombre original y con el singular
+      $sql = "SELECT _id, product, price FROM products 
+              WHERE product LIKE ? OR product LIKE ? 
+              ORDER BY product ASC LIMIT 10";
+      $productos = $db->goQuery($sql, ["%{$nombre}%", "%{$nombreSingular}%"]);
 
       if (empty($productos) || isset($productos['status'])) {
         $productos_no_encontrados[] = $nombre;
