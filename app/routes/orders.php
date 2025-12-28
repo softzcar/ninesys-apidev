@@ -4143,7 +4143,7 @@ $object['sales_commission_ISSET'][] = false;
       }
 
       // Buscar producto por nombre
-      $sql = "SELECT _id, product, price FROM products WHERE product LIKE ? LIMIT 5";
+      $sql = "SELECT _id, product, price FROM products WHERE product LIKE ? LIMIT 10";
       $productos = $db->goQuery($sql, ["%{$nombre}%"]);
 
       if (empty($productos) || isset($productos['status'])) {
@@ -4151,34 +4151,15 @@ $object['sales_commission_ISSET'][] = false;
         continue;
       }
 
-      if (count($productos) === 1) {
-        $p = $productos[0];
-        // Obtener precio
-        $sql_precios = "SELECT price FROM products_prices WHERE id_product = ? ORDER BY _id ASC LIMIT 1";
-        $precios = $db->goQuery($sql_precios, [$p['_id']]);
-        $precio = !empty($precios) && !isset($precios['status']) ? floatval($precios[0]['price']) : floatval($p['price']);
-
-        $productos_validados[] = [
-          'index' => $idx,
-          'producto_id' => $p['_id'],
-          'nombre' => $p['product'],
-          'cantidad' => $cantidad,
-          'precio' => $precio,
-          'talla_id' => null,
-          'talla_nombre' => null,
-          'tela_id' => null,
-          'tela_nombre' => null
-        ];
-      } else {
-        // Múltiples coincidencias
-        $productos_multiples[$idx] = [
-          'buscado' => $nombre,
-          'cantidad' => $cantidad,
-          'opciones' => array_map(function ($p) {
-            return ['id' => $p['_id'], 'nombre' => $p['product']];
-          }, $productos)
-        ];
-      }
+      // Siempre mostrar opciones para que el usuario elija (incluso si es 1 solo producto)
+      // Esto permite al usuario ver qué productos hay disponibles que coinciden
+      $productos_multiples[$idx] = [
+        'buscado' => $nombre,
+        'cantidad' => $cantidad,
+        'opciones' => array_map(function ($p) {
+          return ['id' => $p['_id'], 'nombre' => $p['product']];
+        }, $productos)
+      ];
     }
 
     // Si hay productos no encontrados
