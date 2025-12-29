@@ -1016,7 +1016,7 @@ return function (App $app) {
     ];
 
     foreach ($estadosData as $row) {
-      $statusKey = str_replace(' ', '_', $row['status']);
+      $statusKey = str_replace(' ', '_', strtolower($row['status']));
       if (isset($estados[$statusKey])) {
         $estados[$statusKey] = (int) $row['cantidad'];
       }
@@ -1060,7 +1060,7 @@ return function (App $app) {
                          FROM ordenes o 
                          JOIN lotes l ON o.lote_id = l.lote 
                          JOIN departamentos d ON l.id_departamento_actual = d._id 
-                         WHERE o.status = 'activa' 
+                         WHERE o.status IN ('activa', 'en espera') 
                          GROUP BY d.departamento, d.orden_proceso 
                          ORDER BY d.orden_proceso ASC";
 
