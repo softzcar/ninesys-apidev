@@ -1054,6 +1054,31 @@ return function (App $app) {
 
     $object['pagos_semana'] = $pagosOrdenados;
 
+    // 4. Distribución por Departamento (Bar Chart - Procesos)
+    // Contar órdenes activas agrupadas por departamento actual
+    $sqlDepartamentos = "SELECT d.departamento, COUNT(o._id) as cantidad 
+                         FROM ordenes o 
+                         JOIN lotes l ON o.lote_id = l.lote 
+                         JOIN departamentos d ON l.id_departamento_actual = d._id 
+                         WHERE o.status = 'activa' 
+                         GROUP BY d.departamento, d.orden_proceso 
+                         ORDER BY d.orden_proceso ASC";
+
+    $deptData = $localConnection->goQuery($sqlDepartamentos);
+
+    $deptNombres = [];
+    $deptCantidades = [];
+
+    foreach ($deptData as $row) {
+      $deptNombres[] = $row['departamento'];
+      $deptCantidades[] = (int) $row['cantidad'];
+    }
+
+    $object['ordenes_por_departamento'] = [
+      'labels' => $deptNombres,
+      'valores' => $deptCantidades
+    ];
+
     $localConnection->disconnect();
     $response->getBody()->write(json_encode($object));
     return $response
