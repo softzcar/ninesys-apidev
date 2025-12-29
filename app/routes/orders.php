@@ -974,8 +974,91 @@ return function (App $app) {
     } */
   });
 
-  // REPORTE SEMANAL DE PAGOS Y ABONOS
-  $app->get('/comercializacion/reportes/pagos-abonos', function (Request $request, Response $response, array $args) {
+  // DASHBOARD COMERCIALIZACIÓN
+  $app->get('/comercializacion/dashboard/{id_empleado}', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+    $id_empleado = $args['id_empleado'];
+    $object = [];
+
+    // 1. Resumen de Órdenes (Semanal/Total)
+    // Creadas esta semana
+    $sqlCreadas = "SELECT COUNT(*) as total FROM ordenes WHERE YEARWEEK(fecha_creacion, 1) = YEARWEEK(NOW(), 1)";
+    // Si se quiere filtrar por vendedor: AND responsable = $id_empleado
+
+    // Terminadas (Estado actual)
+    $sqlTerminadas = "SELECT COUNT(*) as total FROM ordenes WHERE status = 'terminada'";
+
+    // Entregadas (Estado actual o históricas)
+    $sqlEntregadas = "SELECT COUNT(*) as total FROM ordenes WHERE status = 'entregada'";
+
+    $creadas = $localConnection->goQuery($sqlCreadas)[0]['total'];
+    $terminadas = $localConnection->goQuery($sqlTerminadas)[0]['total'];
+    $entregadas = $localConnection->goQuery($sqlEntregadas)[0]['total'];
+
+    $object['resumen_ordenes'] = [
+      'creadas' => (int) $creadas,
+      'terminadas' => (int) $terminadas,
+      'entregadas' => (int) $entregadas
+    ];
+
+    // 2. Estado de Órdenes (Donut Chart)
+    $sqlEstados = "SELECT status, COUNT(*) as cantidad 
+                       FROM ordenes 
+                       WHERE status IN ('en espera', 'activa', 'pausada', 'terminada') 
+                       GROUP BY status";
+    $estadosData = $localConnection->goQuery($sqlEstados);
+
+    $estados = [
+      'en_espera' => 0,
+      'activa' => 0,
+      'pausada' => 0,
+      'terminada' => 0
+    ];
+
+    foreach ($estadosData as $row) {
+      $statusKey = str_replace(' ', '_', $row['status']);
+      if (isset($estados[$statusKey])) {
+        $estados[$statusKey] = (int) $row['cantidad'];
+      }
+    }
+    $object['estado_ordenes'] = $estados;
+
+    // 3. Pagos de la Semana (Bar Chart)
+    // Agrupar por día de la semana (Lunes, Martes...)
+    $sqlPagos = "SELECT DATE_FORMAT(moment, '%w') as dia_num, SUM(abono) as total 
+                     FROM abonos 
+                     WHERE YEARWEEK(moment, 1) = YEARWEEK(NOW(), 1) 
+                     GROUP BY dia_num 
+                     ORDER BY dia_num ASC";
+
+    $pagosData = $localConnection->goQuery($sqlPagos);
+
+    // Inicializar array de la semana (0=Domingo, 1=Lunes, ..., 6=Sábado)
+    $pagosSemana = array_fill(0, 7, 0);
+
+    foreach ($pagosData as $row) {
+      $pagosSemana[(int) $row['dia_num']] = (float) $row['total'];
+    }
+
+    // Reordenar para que empiece en Lunes (1) y termine en Domingo (0)
+    // ApexCharts espera arrays, nosotros enviaremos [Lun, Mar, Mie, Jue, Vie, Sab, Dom]
+    $pagosOrdenados = [
+      $pagosSemana[1], // Lunes
+      $pagosSemana[2], // Martes
+      $pagosSemana[3], // Miércoles
+      $pagosSemana[4], // Jueves
+      $pagosSemana[5], // Viernes
+      $pagosSemana[6], // Sábado
+      $pagosSemana[0]  // Domingo
+    ];
+
+    $object['pagos_semana'] = $pagosOrdenados;
+
+    $localConnection->disconnect();
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json');
+
     $localConnection = new LocalDB();
 
     $object['fields'][0]['key'] = 'id_orden';
