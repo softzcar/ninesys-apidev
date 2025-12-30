@@ -574,17 +574,14 @@ return function (App $app) {
 
         try {
             // 1. ESTADO DE ÓRDENES
-            $sqlTerminadas = "SELECT COUNT(DISTINCT a.id_orden) as count
-                FROM lotes_detalles_empleados_asignados a
-                WHERE a.id_empleado = $id_empleado 
             // 1. ESTADO DE ÓRDENES
             // Terminadas: Fecha terminado no es nula
             $sqlTerminadas = "SELECT COUNT(DISTINCT a.id_orden) as count
                 FROM lotes_detalles_empleados_asignados a
                 WHERE a.id_empleado = $id_empleado 
                 AND a.id_departamento = $id_departamento 
-                AND a.fecha_terminado IS NOT NULL"; 
-            
+                AND a.fecha_terminado IS NOT NULL";
+
             $terminadasResult = $localConnection->goQuery($sqlTerminadas);
             $terminadas = !empty($terminadasResult) ? $terminadasResult[0]['count'] : 0;
 
@@ -596,7 +593,7 @@ return function (App $app) {
                 AND a.id_departamento = $id_departamento 
                 AND a.fecha_terminado IS NULL
                 AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada')";
-            
+
             $pendientesResult = $localConnection->goQuery($sqlPendientes);
             $pendientes = !empty($pendientesResult) ? $pendientesResult[0]['count'] : 0;
 
