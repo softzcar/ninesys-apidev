@@ -580,11 +580,13 @@ return function (App $app) {
                 // 1. STATUS DISEÑOS
                 $sqlTerminadas = "SELECT COUNT(*) as count FROM disenos WHERE id_empleado = $id_empleado AND terminado = 1";
                 $terminadasResult = $localConnection->goQuery($sqlTerminadas);
-                $terminadas = !empty($terminadasResult) ? $terminadasResult[0]['count'] : 0;
+                file_put_contents(__DIR__ . '/debug_dashboard.log', date('Y-m-d H:i:s') . " - DEBUG SQL Term Result: " . json_encode($terminadasResult) . "\n", FILE_APPEND);
+                $terminadas = !empty($terminadasResult) && !isset($terminadasResult['status']) ? $terminadasResult[0]['count'] : 0;
 
                 $sqlPendientes = "SELECT COUNT(*) as count FROM disenos WHERE id_empleado = $id_empleado AND terminado = 0";
                 $pendientesResult = $localConnection->goQuery($sqlPendientes);
-                $pendientes = !empty($pendientesResult) ? $pendientesResult[0]['count'] : 0;
+                file_put_contents(__DIR__ . '/debug_dashboard.log', date('Y-m-d H:i:s') . " - DEBUG SQL Pend Result: " . json_encode($pendientesResult) . "\n", FILE_APPEND);
+                $pendientes = !empty($pendientesResult) && !isset($pendientesResult['status']) ? $pendientesResult[0]['count'] : 0;
 
                 $finalResponse['status'] = [
                     'terminadas' => $terminadas,
