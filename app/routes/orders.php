@@ -990,9 +990,35 @@ return function (App $app) {
     // Entregadas (Estado actual o históricas)
     $sqlEntregadas = "SELECT COUNT(*) as total FROM ordenes WHERE status = 'entregada' AND responsable = $id_empleado";
 
-    $creadas = $localConnection->goQuery($sqlCreadas)[0]['total'];
-    $terminadas = $localConnection->goQuery($sqlTerminadas)[0]['total'];
-    $entregadas = $localConnection->goQuery($sqlEntregadas)[0]['total'];
+    $resCreadas = $localConnection->goQuery($sqlCreadas);
+    if (isset($resCreadas['status']) && $resCreadas['status'] === 'error') {
+      return $response->withStatus(500)->withJson([
+        'error' => 'Error SQL Creadas',
+        'details' => $resCreadas,
+        'sql' => $sqlCreadas
+      ]);
+    }
+    $creadas = $resCreadas[0]['total'];
+
+    $resTerminadas = $localConnection->goQuery($sqlTerminadas);
+    if (isset($resTerminadas['status']) && $resTerminadas['status'] === 'error') {
+      return $response->withStatus(500)->withJson([
+        'error' => 'Error SQL Terminadas',
+        'details' => $resTerminadas,
+        'sql' => $sqlTerminadas
+      ]);
+    }
+    $terminadas = $resTerminadas[0]['total'];
+
+    $resEntregadas = $localConnection->goQuery($sqlEntregadas);
+    if (isset($resEntregadas['status']) && $resEntregadas['status'] === 'error') {
+      return $response->withStatus(500)->withJson([
+        'error' => 'Error SQL Entregadas',
+        'details' => $resEntregadas,
+        'sql' => $sqlEntregadas
+      ]);
+    }
+    $entregadas = $resEntregadas[0]['total'];
 
     $object['resumen_ordenes'] = [
       'creadas' => (int) $creadas,
@@ -1007,6 +1033,13 @@ return function (App $app) {
                        AND responsable = $id_empleado 
                        GROUP BY status";
     $estadosData = $localConnection->goQuery($sqlEstados);
+    if (isset($estadosData['status']) && $estadosData['status'] === 'error') {
+      return $response->withStatus(500)->withJson([
+        'error' => 'Error SQL Estados',
+        'details' => $estadosData,
+        'sql' => $sqlEstados
+      ]);
+    }
 
     $estados = [
       'en_espera' => 0,
@@ -1034,6 +1067,13 @@ return function (App $app) {
                      ORDER BY dia_num ASC";
 
     $pagosData = $localConnection->goQuery($sqlPagos);
+    if (isset($pagosData['status']) && $pagosData['status'] === 'error') {
+      return $response->withStatus(500)->withJson([
+        'error' => 'Error SQL Pagos',
+        'details' => $pagosData,
+        'sql' => $sqlPagos
+      ]);
+    }
 
     // Inicializar array de la semana (0=Domingo, 1=Lunes, ..., 6=Sábado)
     $pagosSemana = array_fill(0, 7, 0);
@@ -1068,6 +1108,13 @@ return function (App $app) {
                          ORDER BY d.orden_proceso ASC";
 
     $deptData = $localConnection->goQuery($sqlDepartamentos);
+    if (isset($deptData['status']) && $deptData['status'] === 'error') {
+      return $response->withStatus(500)->withJson([
+        'error' => 'Error SQL Departamentos',
+        'details' => $deptData,
+        'sql' => $sqlDepartamentos
+      ]);
+    }
 
     $deptNombres = [];
     $deptCantidades = [];
