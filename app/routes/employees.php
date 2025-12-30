@@ -574,9 +574,9 @@ return function (App $app) {
 
         try {
             // =================================================================
-            // LÓGICA ESPECÍFICA PARA DISEÑO (ID 9)
+            // LÓGICA ESPECÍFICA PARA DISEÑO (ID 7)
             // =================================================================
-            if ($id_departamento == 9) {
+            if ($id_departamento == 7) {
                 // 1. STATUS DISEÑOS
                 $sqlTerminadas = "SELECT COUNT(*) as count FROM disenos WHERE id_empleado = $id_empleado AND terminado = 1";
                 $terminadasResult = $localConnection->goQuery($sqlTerminadas);
