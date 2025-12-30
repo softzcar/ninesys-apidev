@@ -1054,7 +1054,7 @@ return function (App $app) {
     ];
 
     // 4. Progreso de Órdenes (Detallado)
-    $sqlProgreso = "SELECT o._id as id_orden, o.cliente_nombre, d.departamento, d.orden_proceso, l.fecha_inicio
+    $sqlProgreso = "SELECT o._id as id_orden, o.cliente_nombre, d.departamento, d.orden_proceso, o.fecha_inicio
                          FROM ordenes o 
                          JOIN lotes l ON o._id = l.id_orden 
                          JOIN departamentos d ON l.id_departamento_actual = d._id 
