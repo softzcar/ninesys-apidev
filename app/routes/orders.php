@@ -977,19 +977,18 @@ return function (App $app) {
   // DASHBOARD COMERCIALIZACIÓN
   $app->get('/comercializacion/dashboard/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
-    $id_empleado = $args['id_empleado'];
+    $id_empleado = (int) $args['id_empleado'];
     $object = [];
 
     // 1. Resumen de Órdenes (Semanal/Total)
     // Creadas esta semana
-    $sqlCreadas = "SELECT COUNT(*) as total FROM ordenes WHERE YEARWEEK(fecha_creacion, 1) = YEARWEEK(NOW(), 1)";
-    // Si se quiere filtrar por vendedor: AND responsable = $id_empleado
+    $sqlCreadas = "SELECT COUNT(*) as total FROM ordenes WHERE YEARWEEK(fecha_creacion, 1) = YEARWEEK(NOW(), 1) AND responsable = $id_empleado";
 
     // Terminadas (Estado actual)
-    $sqlTerminadas = "SELECT COUNT(*) as total FROM ordenes WHERE status = 'terminada'";
+    $sqlTerminadas = "SELECT COUNT(*) as total FROM ordenes WHERE status = 'terminada' AND responsable = $id_empleado";
 
     // Entregadas (Estado actual o históricas)
-    $sqlEntregadas = "SELECT COUNT(*) as total FROM ordenes WHERE status = 'entregada'";
+    $sqlEntregadas = "SELECT COUNT(*) as total FROM ordenes WHERE status = 'entregada' AND responsable = $id_empleado";
 
     $creadas = $localConnection->goQuery($sqlCreadas)[0]['total'];
     $terminadas = $localConnection->goQuery($sqlTerminadas)[0]['total'];
@@ -1005,6 +1004,7 @@ return function (App $app) {
     $sqlEstados = "SELECT status, COUNT(*) as cantidad 
                        FROM ordenes 
                        WHERE status IN ('en espera', 'activa', 'pausada', 'terminada') 
+                       AND responsable = $id_empleado 
                        GROUP BY status";
     $estadosData = $localConnection->goQuery($sqlEstados);
 
@@ -1025,9 +1025,11 @@ return function (App $app) {
 
     // 3. Pagos de la Semana (Bar Chart)
     // Agrupar por día de la semana (Lunes, Martes...)
-    $sqlPagos = "SELECT DATE_FORMAT(moment, '%w') as dia_num, SUM(abono) as total 
-                     FROM abonos 
-                     WHERE YEARWEEK(moment, 1) = YEARWEEK(NOW(), 1) 
+    $sqlPagos = "SELECT DATE_FORMAT(a.moment, '%w') as dia_num, SUM(a.abono) as total 
+                     FROM abonos a
+                     JOIN ordenes o ON a.id_orden = o.id_orden
+                     WHERE YEARWEEK(a.moment, 1) = YEARWEEK(NOW(), 1)
+                     AND o.responsable = $id_empleado
                      GROUP BY dia_num 
                      ORDER BY dia_num ASC";
 
@@ -1061,6 +1063,7 @@ return function (App $app) {
                          JOIN lotes l ON o.lote_id = l.lote 
                          JOIN departamentos d ON l.id_departamento_actual = d._id 
                          WHERE o.status IN ('activa', 'en espera') 
+                         AND o.responsable = $id_empleado
                          GROUP BY d.departamento, d.orden_proceso 
                          ORDER BY d.orden_proceso ASC";
 
