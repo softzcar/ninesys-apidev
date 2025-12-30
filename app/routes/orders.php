@@ -1082,6 +1082,33 @@ return function (App $app) {
 
     $object['ordenes_progreso'] = $ordenesProgreso;
 
+    // 5. Finanzas (Cuentas por Cobrar)
+    // Se consideran ordenes activas, en espera, terminadas y pausadas (cartera activa)
+    $sqlFinanzas = "SELECT 
+                      SUM(o.pago_total - o.pago_descuento) as total_vendido_neto,
+                      SUM(COALESCE((SELECT SUM(ab.abono) FROM abonos ab WHERE ab.id_orden = o._id), 0)) as total_cobrado
+                    FROM ordenes o
+                    WHERE o.responsable = $id_empleado
+                    AND o.status IN ('activa', 'En espera', 'terminada', 'pausada')";
+
+    $finanzasData = $localConnection->goQuery($sqlFinanzas);
+
+    $totalVendido = 0;
+    $totalCobrado = 0;
+
+    if (!isset($finanzasData['status']) || $finanzasData['status'] !== 'error') {
+      if (!empty($finanzasData)) {
+        $totalVendido = (float) ($finanzasData[0]['total_vendido_neto'] ?? 0);
+        $totalCobrado = (float) ($finanzasData[0]['total_cobrado'] ?? 0);
+      }
+    }
+
+    $object['finanzas'] = [
+      'total_vendido' => $totalVendido,
+      'total_cobrado' => $totalCobrado,
+      'saldo_pendiente' => $totalVendido - $totalCobrado
+    ];
+
     // Mantener estructura anterior vacía por compatibilidad si es necesario, o eliminarla.
     // Se elimina ordenes_por_departamento ya que se reemplaza por esta visualización.
     $object['ordenes_por_departamento'] = [
