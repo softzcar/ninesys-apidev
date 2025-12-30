@@ -1056,7 +1056,7 @@ return function (App $app) {
     // 4. Deptos (Procesos)
     $sqlDepartamentos = "SELECT d.departamento, COUNT(o._id) as cantidad 
                          FROM ordenes o 
-                         JOIN lotes l ON o.lote_id = l._id 
+                         JOIN lotes l ON o._id = l.id_orden 
                          JOIN departamentos d ON l.id_departamento_actual = d._id 
                          WHERE o.status IN ('activa', 'en espera') 
                          AND o.responsable = $id_empleado
