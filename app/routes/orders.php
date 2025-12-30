@@ -1053,29 +1053,40 @@ return function (App $app) {
       $pagosSemana[0]
     ];
 
-    // 4. Deptos (Procesos)
-    $sqlDepartamentos = "SELECT d.departamento, COUNT(o._id) as cantidad 
+    // 4. Progreso de Órdenes (Detallado)
+    $sqlProgreso = "SELECT o._id as id_orden, o.cliente_nombre, d.departamento, d.orden_proceso, l.fecha_inicio
                          FROM ordenes o 
                          JOIN lotes l ON o._id = l.id_orden 
                          JOIN departamentos d ON l.id_departamento_actual = d._id 
                          WHERE o.status IN ('activa', 'en espera') 
                          AND o.responsable = $id_empleado
-                         GROUP BY d.departamento, d.orden_proceso 
-                         ORDER BY d.orden_proceso ASC";
-    $deptData = $localConnection->goQuery($sqlDepartamentos);
-    if (isset($deptData['status']) && $deptData['status'] === 'error') {
-      return $sendJson(['error' => 'Error SQL Departamentos', 'details' => $deptData], 500);
+                         ORDER BY d.orden_proceso DESC, o._id DESC";
+
+    $progresoData = $localConnection->goQuery($sqlProgreso);
+    if (isset($progresoData['status']) && $progresoData['status'] === 'error') {
+      return $sendJson(['error' => 'Error SQL Progreso', 'details' => $progresoData], 500);
     }
 
-    $deptNombres = [];
-    $deptCantidades = [];
-    foreach ($deptData as $row) {
-      $deptNombres[] = $row['departamento'];
-      $deptCantidades[] = (int) $row['cantidad'];
+    $ordenesProgreso = [];
+    foreach ($progresoData as $row) {
+      // Calcular porcentaje basado en orden_proceso (asumiendo max 6 pasos aprox, o solo usar el paso raw)
+      // Ajustar esto según la lógica de negocio real. Por ahora pasamos el paso crudo.
+      $ordenesProgreso[] = [
+        'id_orden' => (int) $row['id_orden'],
+        'cliente' => $row['cliente_nombre'],
+        'departamento' => $row['departamento'],
+        'paso' => (int) $row['orden_proceso'],
+        'fecha_inicio' => $row['fecha_inicio']
+      ];
     }
+
+    $object['ordenes_progreso'] = $ordenesProgreso;
+
+    // Mantener estructura anterior vacía por compatibilidad si es necesario, o eliminarla.
+    // Se elimina ordenes_por_departamento ya que se reemplaza por esta visualización.
     $object['ordenes_por_departamento'] = [
-      'labels' => $deptNombres,
-      'valores' => $deptCantidades
+      'labels' => [],
+      'valores' => []
     ];
 
     return $sendJson($object);
