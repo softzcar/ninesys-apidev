@@ -1028,7 +1028,7 @@ return function (App $app) {
     // 3. Pagos de la Semana
     $sqlPagos = "SELECT DATE_FORMAT(a.moment, '%w') as dia_num, SUM(a.abono) as total 
                  FROM abonos a
-                 JOIN ordenes o ON a.id_orden = o.id_orden
+                 JOIN ordenes o ON a.id_orden = o._id
                  WHERE YEARWEEK(a.moment, 1) = YEARWEEK(NOW(), 1)
                  AND o.responsable = $id_empleado
                  GROUP BY dia_num 
