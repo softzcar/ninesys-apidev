@@ -975,79 +975,48 @@ return function (App $app) {
   });
 
   // DASHBOARD COMERCIALIZACIÓN
-  $app->get('/comercializacion/dashboard/{id_empleado}', function (Request $request, Response $response, array $args) {
+  $app->get('/comercializacion/dashboard/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
     $id_empleado = (int) $args['id_empleado'];
+    $id_departamento = (int) $args['id_departamento']; // Disponible para lógica futura de validación
     $object = [];
 
-    // 1. Resumen de Órdenes (Semanal/Total)
-    // Creadas esta semana
-    $sqlCreadas = "SELECT COUNT(*) as total FROM ordenes WHERE YEARWEEK(fecha_creacion, 1) = YEARWEEK(NOW(), 1) AND responsable = $id_empleado";
+    // Helper para respuesta JSON segura
+    $sendJson = function ($data, $status = 200) use ($response) {
+      $payload = json_encode($data);
+      $response->getBody()->write($payload);
+      return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+    };
 
-    // Terminadas (Estado actual)
-    $sqlTerminadas = "SELECT COUNT(*) as total FROM ordenes WHERE status = 'terminada' AND responsable = $id_empleado";
-
-    // Entregadas (Estado actual o históricas)
-    $sqlEntregadas = "SELECT COUNT(*) as total FROM ordenes WHERE status = 'entregada' AND responsable = $id_empleado";
-
-    $resCreadas = $localConnection->goQuery($sqlCreadas);
-    if (isset($resCreadas['status']) && $resCreadas['status'] === 'error') {
-      return $response->withStatus(500)->withJson([
-        'error' => 'Error SQL Creadas',
-        'details' => $resCreadas,
-        'sql' => $sqlCreadas
-      ]);
-    }
-    $creadas = $resCreadas[0]['total'];
-
-    $resTerminadas = $localConnection->goQuery($sqlTerminadas);
-    if (isset($resTerminadas['status']) && $resTerminadas['status'] === 'error') {
-      return $response->withStatus(500)->withJson([
-        'error' => 'Error SQL Terminadas',
-        'details' => $resTerminadas,
-        'sql' => $sqlTerminadas
-      ]);
-    }
-    $terminadas = $resTerminadas[0]['total'];
-
-    $resEntregadas = $localConnection->goQuery($sqlEntregadas);
-    if (isset($resEntregadas['status']) && $resEntregadas['status'] === 'error') {
-      return $response->withStatus(500)->withJson([
-        'error' => 'Error SQL Entregadas',
-        'details' => $resEntregadas,
-        'sql' => $sqlEntregadas
-      ]);
-    }
-    $entregadas = $resEntregadas[0]['total'];
-
-    $object['resumen_ordenes'] = [
-      'creadas' => (int) $creadas,
-      'terminadas' => (int) $terminadas,
-      'entregadas' => (int) $entregadas
+    // 1. Resumen de Órdenes
+    $queries = [
+      'creadas' => "SELECT COUNT(*) as total FROM ordenes WHERE YEARWEEK(fecha_creacion, 1) = YEARWEEK(NOW(), 1) AND responsable = $id_empleado",
+      'terminadas' => "SELECT COUNT(*) as total FROM ordenes WHERE status = 'terminada' AND responsable = $id_empleado",
+      'entregadas' => "SELECT COUNT(*) as total FROM ordenes WHERE status = 'entregada' AND responsable = $id_empleado"
     ];
 
-    // 2. Estado de Órdenes (Donut Chart)
+    $resumen = [];
+    foreach ($queries as $key => $sql) {
+      $res = $localConnection->goQuery($sql);
+      if (isset($res['status']) && $res['status'] === 'error') {
+        return $sendJson(['error' => "Error SQL $key", 'details' => $res], 500);
+      }
+      $resumen[$key] = (int) $res[0]['total'];
+    }
+    $object['resumen_ordenes'] = $resumen;
+
+    // 2. Estado de Órdenes (Donut)
     $sqlEstados = "SELECT status, COUNT(*) as cantidad 
-                       FROM ordenes 
-                       WHERE status IN ('en espera', 'activa', 'pausada', 'terminada') 
-                       AND responsable = $id_empleado 
-                       GROUP BY status";
+                   FROM ordenes 
+                   WHERE status IN ('en espera', 'activa', 'pausada', 'terminada') 
+                   AND responsable = $id_empleado 
+                   GROUP BY status";
     $estadosData = $localConnection->goQuery($sqlEstados);
     if (isset($estadosData['status']) && $estadosData['status'] === 'error') {
-      return $response->withStatus(500)->withJson([
-        'error' => 'Error SQL Estados',
-        'details' => $estadosData,
-        'sql' => $sqlEstados
-      ]);
+      return $sendJson(['error' => 'Error SQL Estados', 'details' => $estadosData], 500);
     }
 
-    $estados = [
-      'en_espera' => 0,
-      'activa' => 0,
-      'pausada' => 0,
-      'terminada' => 0
-    ];
-
+    $estados = ['en_espera' => 0, 'activa' => 0, 'pausada' => 0, 'terminada' => 0];
     foreach ($estadosData as $row) {
       $statusKey = str_replace(' ', '_', strtolower($row['status']));
       if (isset($estados[$statusKey])) {
@@ -1056,48 +1025,35 @@ return function (App $app) {
     }
     $object['estado_ordenes'] = $estados;
 
-    // 3. Pagos de la Semana (Bar Chart)
-    // Agrupar por día de la semana (Lunes, Martes...)
+    // 3. Pagos de la Semana
     $sqlPagos = "SELECT DATE_FORMAT(a.moment, '%w') as dia_num, SUM(a.abono) as total 
-                     FROM abonos a
-                     JOIN ordenes o ON a.id_orden = o.id_orden
-                     WHERE YEARWEEK(a.moment, 1) = YEARWEEK(NOW(), 1)
-                     AND o.responsable = $id_empleado
-                     GROUP BY dia_num 
-                     ORDER BY dia_num ASC";
-
+                 FROM abonos a
+                 JOIN ordenes o ON a.id_orden = o.id_orden
+                 WHERE YEARWEEK(a.moment, 1) = YEARWEEK(NOW(), 1)
+                 AND o.responsable = $id_empleado
+                 GROUP BY dia_num 
+                 ORDER BY dia_num ASC";
     $pagosData = $localConnection->goQuery($sqlPagos);
     if (isset($pagosData['status']) && $pagosData['status'] === 'error') {
-      return $response->withStatus(500)->withJson([
-        'error' => 'Error SQL Pagos',
-        'details' => $pagosData,
-        'sql' => $sqlPagos
-      ]);
+      return $sendJson(['error' => 'Error SQL Pagos', 'details' => $pagosData], 500);
     }
 
-    // Inicializar array de la semana (0=Domingo, 1=Lunes, ..., 6=Sábado)
     $pagosSemana = array_fill(0, 7, 0);
-
     foreach ($pagosData as $row) {
       $pagosSemana[(int) $row['dia_num']] = (float) $row['total'];
     }
-
-    // Reordenar para que empiece en Lunes (1) y termine en Domingo (0)
-    // ApexCharts espera arrays, nosotros enviaremos [Lun, Mar, Mie, Jue, Vie, Sab, Dom]
-    $pagosOrdenados = [
-      $pagosSemana[1], // Lunes
-      $pagosSemana[2], // Martes
-      $pagosSemana[3], // Miércoles
-      $pagosSemana[4], // Jueves
-      $pagosSemana[5], // Viernes
-      $pagosSemana[6], // Sábado
-      $pagosSemana[0]  // Domingo
+    // Reordenar: Lunes(1) a Domingo(0)
+    $object['pagos_semana'] = [
+      $pagosSemana[1],
+      $pagosSemana[2],
+      $pagosSemana[3],
+      $pagosSemana[4],
+      $pagosSemana[5],
+      $pagosSemana[6],
+      $pagosSemana[0]
     ];
 
-    $object['pagos_semana'] = $pagosOrdenados;
-
-    // 4. Distribución por Departamento (Bar Chart - Procesos)
-    // Contar órdenes activas agrupadas por departamento actual
+    // 4. Deptos (Procesos)
     $sqlDepartamentos = "SELECT d.departamento, COUNT(o._id) as cantidad 
                          FROM ordenes o 
                          JOIN lotes l ON o.lote_id = l.lote 
@@ -1106,29 +1062,33 @@ return function (App $app) {
                          AND o.responsable = $id_empleado
                          GROUP BY d.departamento, d.orden_proceso 
                          ORDER BY d.orden_proceso ASC";
-
     $deptData = $localConnection->goQuery($sqlDepartamentos);
     if (isset($deptData['status']) && $deptData['status'] === 'error') {
-      return $response->withStatus(500)->withJson([
-        'error' => 'Error SQL Departamentos',
-        'details' => $deptData,
-        'sql' => $sqlDepartamentos
-      ]);
+      return $sendJson(['error' => 'Error SQL Departamentos', 'details' => $deptData], 500);
     }
 
     $deptNombres = [];
     $deptCantidades = [];
-
     foreach ($deptData as $row) {
       $deptNombres[] = $row['departamento'];
       $deptCantidades[] = (int) $row['cantidad'];
     }
-
     $object['ordenes_por_departamento'] = [
       'labels' => $deptNombres,
       'valores' => $deptCantidades
     ];
 
+    return $sendJson($object);
+  });
+  // This block was part of the old code and is now outside the new route definition.
+  // It seems to be a remnant or an error in the original structure.
+  // Based on the instruction, the entire old route should be replaced.
+  // The new route ends with `return $sendJson($object);` and `});`.
+  // The lines below were part of the old route's execution flow after the initial `return $response->withHeader('Content-Type', 'application/json');`
+  // but before the `localConnection = new LocalDB();` for the next section.
+  // Since the new route has its own `return`, these lines are now orphaned.
+  // I will remove them as they are part of the replaced logic.
+  /*
     $localConnection->disconnect();
     $response->getBody()->write(json_encode($object));
     return $response
