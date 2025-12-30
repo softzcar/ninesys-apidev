@@ -562,4 +562,126 @@ return function (App $app) {
     });
     /* FIN ASISTENCIAS */
 
+    // =================================================================
+    // DASHBOARD EMPLEADOS (ESTADÍSTICAS UNIFICADAS)
+    // =================================================================
+    $app->get('/empleados/dashboard-stats/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
+        $id_empleado = intval($args['id_empleado']);
+        $id_departamento = intval($args['id_departamento']);
+
+        $localConnection = new LocalDB();
+        $finalResponse = [];
+
+        try {
+            // 1. ESTADO DE ÓRDENES
+            $sqlTerminadas = "SELECT COUNT(DISTINCT a.id_orden) as count
+                FROM lotes_detalles_empleados_asignados a
+                WHERE a.id_empleado = $id_empleado 
+            // 1. ESTADO DE ÓRDENES
+            // Terminadas: Fecha terminado no es nula
+            $sqlTerminadas = "SELECT COUNT(DISTINCT a.id_orden) as count
+                FROM lotes_detalles_empleados_asignados a
+                WHERE a.id_empleado = $id_empleado 
+                AND a.id_departamento = $id_departamento 
+                AND a.fecha_terminado IS NOT NULL"; 
+            
+            $terminadasResult = $localConnection->goQuery($sqlTerminadas);
+            $terminadas = !empty($terminadasResult) ? $terminadasResult[0]['count'] : 0;
+
+            // Pendientes: Fecha terminado es nula (incluye en curso y espera)
+            $sqlPendientes = "SELECT COUNT(DISTINCT a.id_orden) as count
+                FROM lotes_detalles_empleados_asignados a
+                JOIN ordenes ord ON ord._id = a.id_orden
+                WHERE a.id_empleado = $id_empleado 
+                AND a.id_departamento = $id_departamento 
+                AND a.fecha_terminado IS NULL
+                AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada')";
+            
+            $pendientesResult = $localConnection->goQuery($sqlPendientes);
+            $pendientes = !empty($pendientesResult) ? $pendientesResult[0]['count'] : 0;
+
+            // Logger
+            file_put_contents(__DIR__ . '/debug_dashboard.log', date('Y-m-d H:i:s') . " - Req: Emp=$id_empleado, Dept=$id_departamento | Term:$terminadas, Pend:$pendientes\n", FILE_APPEND);
+
+            $finalResponse['status'] = [
+                'terminadas' => $terminadas,
+                'pendientes' => $pendientes
+            ];
+
+            // 2. EFICIENCIA DE TIEMPO
+            $sqlEficiencia = "
+                WITH TiemposCalculados AS (
+                    SELECT 
+                        sub_ldea.id_orden,
+                        SUM(
+                            CASE 
+                                WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                                    TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                                WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                                    TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
+                                ELSE 0 
+                            END
+                        ) AS tiempo_total_calculado
+                    FROM lotes_detalles_empleados_asignados sub_ldea
+                    WHERE sub_ldea.id_empleado = $id_empleado AND sub_ldea.id_departamento = $id_departamento
+                    GROUP BY sub_ldea.id_orden
+                ),
+                ProyeccionFiltrada AS (
+                     SELECT 
+                        ptp.id_product,
+                        SUM(ptp.tiempo) as tiempo_unitario_total
+                     FROM products_tiempos_de_produccion ptp
+                     WHERE ptp.id_departamento = $id_departamento
+                     GROUP BY ptp.id_product
+                )
+                SELECT 
+                    SUM(COALESCE(tc.tiempo_total_calculado, 0)) AS total_tiempo_real,
+                    SUM(COALESCE(pf.tiempo_unitario_total * op.cantidad, 0)) AS total_tiempo_estimado
+                FROM 
+                    lotes_detalles_empleados_asignados ldea
+                JOIN 
+                    ordenes_productos op ON op.id_orden = ldea.id_orden
+                LEFT JOIN 
+                    TiemposCalculados tc ON tc.id_orden = ldea.id_orden
+                LEFT JOIN
+                    ProyeccionFiltrada pf ON pf.id_product = op.id_woo
+                WHERE 
+                    ldea.id_empleado = $id_empleado 
+                    AND ldea.id_departamento = $id_departamento
+                    AND ldea.fecha_inicio IS NOT NULL
+            ";
+
+            $eficienciaResult = $localConnection->goQuery($sqlEficiencia);
+            $finalResponse['eficiencia'] = [
+                'tiempo_real' => !empty($eficienciaResult) ? (float) $eficienciaResult[0]['total_tiempo_real'] : 0,
+                'tiempo_estimado' => !empty($eficienciaResult) ? (float) $eficienciaResult[0]['total_tiempo_estimado'] : 0,
+            ];
+
+            // 3. PAGOS DE LA SEMANA
+            $sqlPagos = "SELECT 
+                    SUM(p.monto_pago) as total_pagado,
+                    DATE_FORMAT(ldea.fecha_terminado, '%W') as dia,
+                    DATE(ldea.fecha_terminado) as fecha
+                FROM pagos p
+                JOIN lotes_detalles_empleados_asignados ldea ON p.id_lotes_detalles = ldea._id
+                WHERE p.id_empleado = $id_empleado
+                AND p.estatus = 'aprobado'
+                AND YEARWEEK(ldea.fecha_terminado, 1) = YEARWEEK(NOW(), 1)
+                GROUP BY DATE(ldea.fecha_terminado)";
+
+            $pagosResult = $localConnection->goQuery($sqlPagos);
+            $finalResponse['pagos_semana'] = $pagosResult;
+
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode($finalResponse, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+        } catch (Exception $e) {
+            if ($localConnection)
+                $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
 }; // Fin de la función que envuelve las rutas
