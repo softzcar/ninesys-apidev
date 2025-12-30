@@ -76,15 +76,8 @@ return function (App $app) {
     return $statements;
   }
 
-  $app->options('/{routes:.*}', function (Request $request, Response $response, array $args) {
-    // CORS Pre-Flight OPTIONS Request Handler
-    return $response
-      ->withHeader('Access-Control-Allow-Origin', '*')
-      ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
-      ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
+  // NOTA: El handler OPTIONS se movió al final del archivo para que no capture rutas específicas
+  // Ver línea ~192
 
   // ROOT
   $app->get('/', function (Request $request, Response $response) {
@@ -189,6 +182,18 @@ return function (App $app) {
 
   // RUTAS DEL ASISTENTE DE IA (Gemini)
   (require __DIR__ . '/routes/ai.php')($app);
+
+  // CORS Pre-Flight OPTIONS Request Handler - DEBE IR AL FINAL
+  // Se coloca aquí después de todas las rutas específicas para que el patrón comodín
+  // no capture las peticiones antes de que lleguen a los handlers específicos
+  $app->options('/{routes:.*}', function (Request $request, Response $response, array $args) {
+    return $response
+      ->withHeader('Access-Control-Allow-Origin', '*')
+      ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
+      ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
   /** ENVIAR EMAILS */
   $app->get('/send-email', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
