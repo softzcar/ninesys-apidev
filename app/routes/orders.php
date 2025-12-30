@@ -1387,7 +1387,7 @@ return function (App $app) {
     return array('object' => $object, 'contentType' => $contentType);
   }
 
-  $app->get('/buscar/{id}[/{email}]', function (Request $request, Response $response, array $args) {
+  $app->get('/buscar/{id}', function (Request $request, Response $response, array $args) {
     $id = $args['id'];
     $email = isset($args['email']) ? $args['email'] : null;
 
