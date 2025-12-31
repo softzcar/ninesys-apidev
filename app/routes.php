@@ -189,6 +189,9 @@ return function (App $app) {
 
   // RUTAS DEL ASISTENTE DE IA (Gemini)
   (require __DIR__ . '/routes/ai.php')($app);
+
+  // RUTA DE BÚSQUEDA DE ÓRDENES
+  (require __DIR__ . '/routes/buscar.php')($app);
   /** ENVIAR EMAILS */
   $app->get('/send-email', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
