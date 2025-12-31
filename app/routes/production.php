@@ -2153,16 +2153,36 @@ return function (App $app) {
       }
 
       // =====================================================================
-      // GRÁFICO 2: TIEMPOS DE ENTREGA (SEMÁFORO)
+      // GRÁFICO 2: TIEMPOS DE ENTREGA (SEMÁFORO SIMPLIFICADO)
       // =====================================================================
-      // TODO: Implementar lógica completa del semáforo (Opción B)
-      // Por ahora retornamos valores vacíos
+      // Categoriza órdenes comparando fecha_entrega con HOY
+      $sqlSemaforo = "SELECT 
+          SUM(CASE WHEN status = 'En espera' THEN 1 ELSE 0 END) as por_iniciar,
+          SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) < CURDATE() THEN 1 ELSE 0 END) as retrasado,
+          SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) = CURDATE() THEN 1 ELSE 0 END) as en_el_dia,
+          SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) > CURDATE() THEN 1 ELSE 0 END) as a_tiempo,
+          SUM(CASE WHEN status = 'pausada' THEN 1 ELSE 0 END) as pausadas
+        FROM ordenes
+        WHERE status IN ('En espera', 'activa', 'pausada')";
+
+      $semaforoResult = $localConnection->goQuery($sqlSemaforo);
+
+      // Estructurar respuesta
       $finalResponse['tiempos_entrega'] = [
         'por_iniciar' => 0,
         'retrasado' => 0,
         'en_el_dia' => 0,
-        'a_tiempo' => 0
+        'a_tiempo' => 0,
+        'pausadas' => 0
       ];
+
+      if (!empty($semaforoResult) && isset($semaforoResult[0])) {
+        $finalResponse['tiempos_entrega']['por_iniciar'] = (int) ($semaforoResult[0]['por_iniciar'] ?? 0);
+        $finalResponse['tiempos_entrega']['retrasado'] = (int) ($semaforoResult[0]['retrasado'] ?? 0);
+        $finalResponse['tiempos_entrega']['en_el_dia'] = (int) ($semaforoResult[0]['en_el_dia'] ?? 0);
+        $finalResponse['tiempos_entrega']['a_tiempo'] = (int) ($semaforoResult[0]['a_tiempo'] ?? 0);
+        $finalResponse['tiempos_entrega']['pausadas'] = (int) ($semaforoResult[0]['pausadas'] ?? 0);
+      }
 
       // =====================================================================
       // GRÁFICO 3: ÓRDENES POR DEPARTAMENTO
