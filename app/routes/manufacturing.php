@@ -641,6 +641,8 @@ return function (App $app) {
 
       $sqln = "UPDATE lotes SET paso = '{$miEmpleado['departamento']}', id_departamento_actual = {$miEmpleado['id_departamento']}  WHERE id_orden = " . $miEmpleado['id_orden'] . ";";
       $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . ";";
+      // Actualizar status de la orden a 'activa' al iniciar primer paso
+      $sqln .= "UPDATE ordenes SET `status` = 'activa' WHERE _id = " . $miEmpleado['id_orden'] . " AND `status` = 'En espera';";
       $object['sql_update_lotes'] = $sqln;
       $response_update = $localConnection->goQuery($sqln);
       $object['response_update_lotes'] = $response_update;
