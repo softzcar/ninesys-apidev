@@ -299,6 +299,16 @@ VALUES (
     0,
     NULL,
     '2025-09-24 19:50:20'
+  ),
+  (
+    8,
+    4,
+    0,
+    'Producción',
+    0,
+    0,
+    NULL,
+    '2025-09-24 19:50:20'
   );
 CREATE TABLE `disenos` (
   `_id` int(11) NOT NULL COMMENT 'ID de la tabla',

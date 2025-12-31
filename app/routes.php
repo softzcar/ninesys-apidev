@@ -862,6 +862,19 @@ return function (App $app) {
           'salario_monto' => 400.00,
           'id_seguridad_social' => '132234778653',
           'dni' => '20874445'
+        ],
+        [
+          'nombre' => 'Empleado Producción',
+          'email' => 'produccion@empresa' . $id_empresa . '.com',
+          'telefono' => '5841298745630',
+          'password' => bin2hex(random_bytes(8)),
+          'departamento' => 'Producción',
+          'id_departamento' => 8,
+          'comision' => 1.00,
+          'comision_tipo' => 'fija',
+          'salario_monto' => 400.00,
+          'id_seguridad_social' => '998877665544',
+          'dni' => '15678234'
         ]
       ];
 
