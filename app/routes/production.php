@@ -2106,4 +2106,114 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  /**
+   * Dashboard de Producción - Estadísticas
+   * 
+   * Endpoint para obtener métricas del dashboard de producción:
+   * 1. Estatus de Órdenes (En espera, Pausadas, Activas)
+   * 2. Tiempos de Entrega según semáforo (Por iniciar, Retrasado, En el día, A tiempo) - TODO
+   * 3. Órdenes por Departamento (según lotes.paso)
+   */
+  $app->get('/produccion/dashboard-stats', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+
+    try {
+      $finalResponse = [];
+
+      // =====================================================================
+      // GRÁFICO 1: ESTATUS DE ÓRDENES
+      // =====================================================================
+      // Contar órdenes por status (En espera, Pausadas, Activas)
+      $sqlEstatus = "SELECT 
+          status,
+          COUNT(*) as cantidad
+        FROM ordenes
+        WHERE status IN ('En espera', 'pausada', 'activa')
+        GROUP BY status";
+
+      $estatusResult = $localConnection->goQuery($sqlEstatus);
+
+      // Estructurar respuesta
+      $finalResponse['estatus_ordenes'] = [
+        'en_espera' => 0,
+        'pausadas' => 0,
+        'activas' => 0
+      ];
+
+      if (!empty($estatusResult)) {
+        foreach ($estatusResult as $row) {
+          if ($row['status'] === 'En espera') {
+            $finalResponse['estatus_ordenes']['en_espera'] = (int) $row['cantidad'];
+          } elseif ($row['status'] === 'pausada') {
+            $finalResponse['estatus_ordenes']['pausadas'] = (int) $row['cantidad'];
+          } elseif ($row['status'] === 'activa') {
+            $finalResponse['estatus_ordenes']['activas'] = (int) $row['cantidad'];
+          }
+        }
+      }
+
+      // =====================================================================
+      // GRÁFICO 2: TIEMPOS DE ENTREGA (SEMÁFORO)
+      // =====================================================================
+      // TODO: Implementar lógica completa del semáforo (Opción B)
+      // Por ahora retornamos valores vacíos
+      $finalResponse['tiempos_entrega'] = [
+        'por_iniciar' => 0,
+        'retrasado' => 0,
+        'en_el_dia' => 0,
+        'a_tiempo' => 0
+      ];
+
+      // =====================================================================
+      // GRÁFICO 3: ÓRDENES POR DEPARTAMENTO
+      // =====================================================================
+      // Usar campo lotes.paso para contar órdenes por departamento
+      $sqlDepartamentos = "SELECT 
+          l.paso as departamento,
+          COUNT(DISTINCT l.id_orden) as cantidad
+        FROM lotes l
+        JOIN ordenes o ON o._id = l.id_orden
+        WHERE o.status IN ('En espera', 'pausada', 'activa')
+          AND l.paso IS NOT NULL
+          AND l.paso != ''
+          AND l.paso != 'Terminado'
+          AND l.paso != 'Por asignar'
+        GROUP BY l.paso
+        ORDER BY cantidad DESC";
+
+      $departamentosResult = $localConnection->goQuery($sqlDepartamentos);
+
+      $finalResponse['ordenes_por_departamento'] = [];
+      if (!empty($departamentosResult)) {
+        foreach ($departamentosResult as $row) {
+          $finalResponse['ordenes_por_departamento'][] = [
+            'departamento' => $row['departamento'],
+            'cantidad' => (int) $row['cantidad']
+          ];
+        }
+      }
+
+      $localConnection->disconnect();
+
+      $response->getBody()->write(json_encode($finalResponse, JSON_NUMERIC_CHECK));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+
+    } catch (Exception $e) {
+      $localConnection->disconnect();
+
+      $errorResponse = [
+        'error' => 'Error al obtener estadísticas del dashboard',
+        'message' => $e->getMessage()
+      ];
+
+      $response->getBody()->write(json_encode($errorResponse));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(500);
+    }
+  });
+
 }; // Fin de la función que envuelve las rutas
+
