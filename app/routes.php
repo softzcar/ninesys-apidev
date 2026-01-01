@@ -163,6 +163,9 @@ return function (App $app) {
   // RUTAS DE PRODUCCIÓN
   (require __DIR__ . '/routes/production.php')($app);
 
+  // RUTAS DE ADMINISTRACIÓN
+  (require __DIR__ . '/routes/administration.php')($app);
+
   // RUTAS DE DISEÑOS
   (require __DIR__ . '/routes/designs.php')($app);
 
