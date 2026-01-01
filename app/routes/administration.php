@@ -20,8 +20,7 @@ return function ($app) {
         }
 
         // Conectar a la base de datos de la empresa
-        $db = new db("api_emp_$id_empresa");
-        $localConnection = $db->conectar();
+        $localConnection = new LocalDB();
 
         $finalResponse = [];
 
