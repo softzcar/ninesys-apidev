@@ -574,26 +574,49 @@ return function (App $app) {
 
         try {
             // =================================================================
-            // LÓGICA ESPECÍFICA PARA DISEÑO (ID 7)
+            // LÓGICA ESPECÍFICA PARA DISEÑO (ID 7) E IMPRESIÓN (ID 1)
             // =================================================================
-            if ($id_departamento == 7) {
-                // 1. STATUS DISEÑOS
-                $sqlTerminadas = "SELECT COUNT(*) as count FROM disenos WHERE id_empleado = $id_empleado AND terminado = 1";
-                $terminadasResult = $localConnection->goQuery($sqlTerminadas);
-                file_put_contents(__DIR__ . '/debug_dashboard.log', date('Y-m-d H:i:s') . " - DEBUG SQL Term Result: " . json_encode($terminadasResult) . "\n", FILE_APPEND);
-                $terminadas = !empty($terminadasResult) && !isset($terminadasResult['status']) ? $terminadasResult[0]['count'] : 0;
+            if ($id_departamento == 7 || $id_departamento == 1) {
+                // Departamento de Diseño
+                if ($id_departamento == 7) {
+                    // 1. STATUS DISEÑOS
+                    $sqlTerminadas = "SELECT COUNT(*) as count FROM disenos WHERE id_empleado = $id_empleado AND terminado = 1";
+                    $terminadasResult = $localConnection->goQuery($sqlTerminadas);
+                    $terminadas = !empty($terminadasResult) && !isset($terminadasResult['status']) ? $terminadasResult[0]['count'] : 0;
 
-                $sqlPendientes = "SELECT COUNT(*) as count FROM disenos WHERE id_empleado = $id_empleado AND terminado = 0";
-                $pendientesResult = $localConnection->goQuery($sqlPendientes);
-                file_put_contents(__DIR__ . '/debug_dashboard.log', date('Y-m-d H:i:s') . " - DEBUG SQL Pend Result: " . json_encode($pendientesResult) . "\n", FILE_APPEND);
-                $pendientes = !empty($pendientesResult) && !isset($pendientesResult['status']) ? $pendientesResult[0]['count'] : 0;
+                    $sqlPendientes = "SELECT COUNT(*) as count FROM disenos WHERE id_empleado = $id_empleado AND terminado = 0";
+                    $pendientesResult = $localConnection->goQuery($sqlPendientes);
+                    $pendientes = !empty($pendientesResult) && !isset($pendientesResult['status']) ? $pendientesResult[0]['count'] : 0;
+                } else {
+                    // Departamento de Impresión (ID: 1) - Usar lógica estándar de órdenes
+                    $sqlTerminadas = "SELECT COUNT(DISTINCT a.id_orden) as count
+                        FROM lotes_detalles_empleados_asignados a
+                        WHERE a.id_empleado = $id_empleado 
+                        AND a.id_departamento = $id_departamento 
+                        AND a.fecha_terminado IS NOT NULL";
+
+                    $terminadasResult = $localConnection->goQuery($sqlTerminadas);
+                    $terminadas = !empty($terminadasResult) ? $terminadasResult[0]['count'] : 0;
+
+                    $sqlPendientes = "SELECT COUNT(DISTINCT a.id_orden) as count
+                        FROM lotes_detalles_empleados_asignados a
+                        JOIN ordenes ord ON ord._id = a.id_orden
+                        WHERE a.id_empleado = $id_empleado 
+                        AND a.id_departamento = $id_departamento 
+                        AND a.fecha_terminado IS NULL
+                        AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada')";
+
+                    $pendientesResult = $localConnection->goQuery($sqlPendientes);
+                    $pendientes = !empty($pendientesResult) ? $pendientesResult[0]['count'] : 0;
+                }
 
                 $finalResponse['status'] = [
                     'terminadas' => $terminadas,
+                    'activas' => 0,  // Diseño e Impresión no diferencian activas de pendientes
                     'pendientes' => $pendientes
                 ];
 
-                // 2. EFICIENCIA (No aplica para diseño, retornamos 0 para ocultar o mostrar vacío)
+                // 2. EFICIENCIA (No aplica para diseño ni impresión, retornamos 0)
                 $finalResponse['eficiencia'] = [
                     'tiempo_real' => 0,
                     'tiempo_estimado' => 0
@@ -629,14 +652,28 @@ return function (App $app) {
                 $terminadasResult = $localConnection->goQuery($sqlTerminadas);
                 $terminadas = !empty($terminadasResult) ? $terminadasResult[0]['count'] : 0;
 
-                // Pendientes: Fecha terminado es nula (incluye en curso y espera)
+                // Activas: Tienen fecha_inicio pero no fecha_terminado (en curso)
+                $sqlActivas = "SELECT COUNT(DISTINCT a.id_orden) as count
+                    FROM lotes_detalles_empleados_asignados a
+                    JOIN ordenes ord ON ord._id = a.id_orden
+                    WHERE a.id_empleado = $id_empleado 
+                    AND a.id_departamento = $id_departamento 
+                    AND a.fecha_inicio IS NOT NULL
+                    AND a.fecha_terminado IS NULL
+                    AND (ord.status LIKE 'activa' OR ord.status LIKE 'pausada')";
+
+                $activasResult = $localConnection->goQuery($sqlActivas);
+                $activas = !empty($activasResult) ? $activasResult[0]['count'] : 0;
+
+                // Pendientes: No tienen fecha_inicio (no han empezado)
                 $sqlPendientes = "SELECT COUNT(DISTINCT a.id_orden) as count
                     FROM lotes_detalles_empleados_asignados a
                     JOIN ordenes ord ON ord._id = a.id_orden
                     WHERE a.id_empleado = $id_empleado 
                     AND a.id_departamento = $id_departamento 
+                    AND a.fecha_inicio IS NULL
                     AND a.fecha_terminado IS NULL
-                    AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada')";
+                    AND ord.status LIKE 'En espera'";
 
                 $pendientesResult = $localConnection->goQuery($sqlPendientes);
                 $pendientes = !empty($pendientesResult) ? $pendientesResult[0]['count'] : 0;
@@ -644,6 +681,7 @@ return function (App $app) {
 
                 $finalResponse['status'] = [
                     'terminadas' => $terminadas,
+                    'activas' => $activas,
                     'pendientes' => $pendientes
                 ];
 
@@ -711,9 +749,6 @@ return function (App $app) {
                 $pagosResult = $localConnection->goQuery($sqlPagos);
                 $finalResponse['pagos_semana'] = $pagosResult;
             }
-
-            // Logger
-            file_put_contents(__DIR__ . '/debug_dashboard.log', date('Y-m-d H:i:s') . " - Req: Emp=$id_empleado, Dept=$id_departamento | Term:$terminadas, Pend:$pendientes\n", FILE_APPEND);
 
             $localConnection->disconnect();
             $response->getBody()->write(json_encode($finalResponse, JSON_NUMERIC_CHECK));
