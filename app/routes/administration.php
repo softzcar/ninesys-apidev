@@ -93,13 +93,15 @@ return function ($app) {
                 o.cliente_nombre,
                 COALESCE(
                     ROUND(
-                        (SELECT COUNT(*) FROM lotes WHERE id_orden = o._id AND estatus_lote = 'terminado') * 100.0 /
-                        NULLIF((SELECT COUNT(*) FROM lotes WHERE id_orden = o._id), 0),
+                        COUNT(CASE WHEN l.estatus_lote = 'terminado' THEN 1 END) * 100.0 /
+                        NULLIF(COUNT(l._id), 0),
                         1
                     ), 0
                 ) as porcentaje_completado
             FROM ordenes o
+            LEFT JOIN lotes l ON l.id_orden = o._id
             WHERE o.status = 'activa'
+            GROUP BY o._id, o.cliente_nombre
             ORDER BY porcentaje_completado ASC, o.fecha_creacion DESC
             LIMIT 10";
 
