@@ -24,11 +24,12 @@ return function ($app) {
             // =====================================================================
             // Últimas órdenes agrupadas por día
             $sqlResumenSemanal = "SELECT 
-                DATE_FORMAT(fecha_alta, '%W') as dia,
-                DATE(fecha_alta) as fecha,
+                DATE_FORMAT(fecha_creacion, '%W') as dia,
+                DATE(fecha_creacion) as fecha,
                 COUNT(*) as total_ordenes
             FROM ordenes
-            GROUP BY DATE(fecha_alta)
+            WHERE fecha_creacion IS NOT NULL
+            GROUP BY DATE(fecha_creacion)
             ORDER BY fecha DESC
             LIMIT 7";
 
@@ -91,8 +92,8 @@ return function ($app) {
             // Top 10 órdenes activas con su porcentaje de completitud basado en lotes
             $sqlProgresoActivas = "SELECT 
                 o._id,
-                o.nombre_cliente,
-                o.numero_orden,
+                o._id as numero_orden,
+                o.cliente_nombre,
                 COALESCE(
                     ROUND(
                         (SELECT COUNT(*) FROM lotes WHERE id_orden = o._id AND estatus_lote = 'terminado') * 100.0 /
@@ -102,7 +103,7 @@ return function ($app) {
                 ) as porcentaje_completado
             FROM ordenes o
             WHERE o.status = 'activa'
-            ORDER BY porcentaje_completado ASC, o.fecha_alta DESC
+            ORDER BY porcentaje_completado ASC, o.fecha_creacion DESC
             LIMIT 10";
 
             $progresoActivasResult = $localConnection->goQuery($sqlProgresoActivas);
