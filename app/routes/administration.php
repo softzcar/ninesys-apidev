@@ -35,9 +35,6 @@ return function ($app) {
 
             $resumenSemanalResult = $localConnection->goQuery($sqlResumenSemanal);
 
-            // DEBUG: Log para ver qué retorna la query
-            error_log('[ADMIN DASHBOARD] resumenSemanalResult: ' . json_encode($resumenSemanalResult));
-
             // Formatear respuesta (invertir para mostrar más antiguo primero)
             $finalResponse['resumen_semanal'] = [];
             if (!empty($resumenSemanalResult) && !isset($resumenSemanalResult['status'])) {
@@ -156,11 +153,7 @@ return function ($app) {
                 ];
             }
 
-            $response->getBody()->write(json_encode([
-                ...$finalResponse,
-                '_debug_resumen_raw' => $resumenSemanalResult,
-                '_debug_progreso_raw' => $progresoActivasResult
-            ]));
+            $response->getBody()->write(json_encode($finalResponse));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
         } catch (Exception $e) {
