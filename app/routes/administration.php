@@ -13,14 +13,7 @@ return function ($app) {
     // DASHBOARD DE ADMINISTRACIÓN - ESTADÍSTICAS GLOBALES
     // =====================================================================
     $app->get('/administracion/dashboard-stats', function (Request $request, Response $response) {
-        $id_empresa = $request->getHeader('empresa')[0] ?? null;
-
-        if (!$id_empresa) {
-            $response->getBody()->write(json_encode(['error' => 'ID de empresa requerido']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
-        }
-
-        // Conectar a la base de datos de la empresa
+        // Conectar a la base de datos de la empresa (configurado por IdEmpresaMiddleware)
         $localConnection = new LocalDB();
 
         $finalResponse = [];
