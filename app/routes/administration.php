@@ -22,15 +22,18 @@ return function ($app) {
             // =====================================================================
             // GRÁFICO 1: RESUMEN SEMANAL DE ÓRDENES (GLOBAL)
             // =====================================================================
-            // Órdenes creadas en los últimos 7 días, agrupadas por día
+            // Últimas 10 órdenes agrupadas por día (o últimos 7 días si hay más)
             $sqlResumenSemanal = "SELECT 
                 DATE_FORMAT(fecha_alta, '%W') as dia,
                 DATE(fecha_alta) as fecha,
                 COUNT(*) as total_ordenes
             FROM ordenes
-            WHERE fecha_alta >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+            WHERE fecha_alta >= (
+                SELECT DATE_SUB(MAX(fecha_alta), INTERVAL 7 DAY) FROM ordenes
+            )
             GROUP BY DATE(fecha_alta)
-            ORDER BY fecha";
+            ORDER BY fecha DESC
+            LIMIT 7";
 
             $resumenSemanalResult = $localConnection->goQuery($sqlResumenSemanal);
 
@@ -84,7 +87,7 @@ return function ($app) {
             // =====================================================================
             // GRÁFICO 3: PROGRESO DE ÓRDENES ACTIVAS (GLOBAL)
             // =====================================================================
-            // Top 10 órdenes activas con su porcentaje de completitud
+            // Top 10 órdenes activas con su porcentaje de completitud basado en lotes
             $sqlProgresoActivas = "SELECT 
                 o._id,
                 o.nombre_cliente,
@@ -98,8 +101,7 @@ return function ($app) {
                 ) as porcentaje_completado
             FROM ordenes o
             WHERE o.status = 'activa'
-            HAVING (SELECT COUNT(*) FROM lotes WHERE id_orden = o._id) > 0
-            ORDER BY porcentaje_completado ASC
+            ORDER BY porcentaje_completado ASC, o.fecha_alta DESC
             LIMIT 10";
 
             $progresoActivasResult = $localConnection->goQuery($sqlProgresoActivas);
