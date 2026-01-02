@@ -169,30 +169,31 @@ return function ($app) {
                  WHERE id_empleado IS NOT NULL AND id_empleado > 0
                 ) as asignados,
                 
-                (SELECT COUNT(*) 
-                 FROM disenos 
-                 WHERE terminado = 1
-                ) as terminados,
+                (SELECT COUNT(DISTINCT r.id_diseno) 
+                 FROM revisiones r
+                 WHERE r.url_image IS NOT NULL
+                ) as propuestas_enviadas,
                 
-                (SELECT COUNT(DISTINCT id_diseno) 
-                 FROM revisiones 
-                 WHERE estatus = 'Aprobado'
-                ) as aprobados";
+                (SELECT COUNT(DISTINCT d._id)
+                 FROM disenos d
+                 INNER JOIN pagos p ON p.id_orden = d.id_orden AND p.id_empleado = d.id_empleado
+                 WHERE p.id_orden IS NOT NULL
+                ) as aprobados_pagados";
 
             $estadoDisenosResult = $localConnection->goQuery($sqlEstadoDisenos);
 
             $finalResponse['estado_disenos'] = [
                 'asignados' => 0,
-                'terminados' => 0,
-                'aprobados' => 0
+                'propuestas_enviadas' => 0,
+                'aprobados_pagados' => 0
             ];
 
             if (!empty($estadoDisenosResult) && !isset($estadoDisenosResult['status'])) {
                 $row = $estadoDisenosResult[0];
                 $finalResponse['estado_disenos'] = [
                     'asignados' => (int) $row['asignados'],
-                    'terminados' => (int) $row['terminados'],
-                    'aprobados' => (int) $row['aprobados']
+                    'propuestas_enviadas' => (int) $row['propuestas_enviadas'],
+                    'aprobados_pagados' => (int) $row['aprobados_pagados']
                 ];
             }
 
