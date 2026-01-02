@@ -197,6 +197,64 @@ return function ($app) {
                 ];
             }
 
+            // =====================================================================
+            // GRÁFICO 6: TIEMPOS DE ENTREGA (SEMÁFORO)
+            // =====================================================================
+            $sqlSemaforo = "SELECT 
+                SUM(CASE WHEN status = 'En espera' THEN 1 ELSE 0 END) as por_iniciar,
+                SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) < CURDATE() THEN 1 ELSE 0 END) as retrasado,
+                SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) = CURDATE() THEN 1 ELSE 0 END) as en_el_dia,
+                SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) > CURDATE() THEN 1 ELSE 0 END) as a_tiempo,
+                SUM(CASE WHEN status = 'pausada' THEN 1 ELSE 0 END) as pausadas
+              FROM ordenes
+              WHERE status IN ('En espera', 'activa', 'pausada')";
+
+            $semaforoResult = $localConnection->goQuery($sqlSemaforo);
+
+            $finalResponse['tiempos_entrega'] = [
+                'por_iniciar' => 0,
+                'retrasado' => 0,
+                'en_el_dia' => 0,
+                'a_tiempo' => 0,
+                'pausadas' => 0
+            ];
+
+            if (!empty($semaforoResult) && isset($semaforoResult[0])) {
+                $finalResponse['tiempos_entrega']['por_iniciar'] = (int) ($semaforoResult[0]['por_iniciar'] ?? 0);
+                $finalResponse['tiempos_entrega']['retrasado'] = (int) ($semaforoResult[0]['retrasado'] ?? 0);
+                $finalResponse['tiempos_entrega']['en_el_dia'] = (int) ($semaforoResult[0]['en_el_dia'] ?? 0);
+                $finalResponse['tiempos_entrega']['a_tiempo'] = (int) ($semaforoResult[0]['a_tiempo'] ?? 0);
+                $finalResponse['tiempos_entrega']['pausadas'] = (int) ($semaforoResult[0]['pausadas'] ?? 0);
+            }
+
+            // =====================================================================
+            // GRÁFICO 7: ÓRDENES POR DEPARTAMENTO
+            // =====================================================================
+            $sqlDepartamentos = "SELECT 
+                l.paso as departamento,
+                COUNT(DISTINCT l.id_orden) as cantidad
+              FROM lotes l
+              JOIN ordenes o ON o._id = l.id_orden
+              WHERE o.status IN ('En espera', 'pausada', 'activa')
+                AND l.paso IS NOT NULL
+                AND l.paso != ''
+                AND l.paso != 'Terminado'
+                AND l.paso != 'Por asignar'
+              GROUP BY l.paso
+              ORDER BY cantidad DESC";
+
+            $departamentosResult = $localConnection->goQuery($sqlDepartamentos);
+
+            $finalResponse['ordenes_por_departamento'] = [];
+            if (!empty($departamentosResult)) {
+                foreach ($departamentosResult as $row) {
+                    $finalResponse['ordenes_por_departamento'][] = [
+                        'departamento' => $row['departamento'],
+                        'cantidad' => (int) $row['cantidad']
+                    ];
+                }
+            }
+
             $response->getBody()->write(json_encode($finalResponse));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
