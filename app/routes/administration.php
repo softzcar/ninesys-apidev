@@ -34,6 +34,9 @@ return function ($app) {
 
             $resumenSemanalResult = $localConnection->goQuery($sqlResumenSemanal);
 
+            // DEBUG: Log para ver qué retorna la query
+            error_log('[ADMIN DASHBOARD] resumenSemanalResult: ' . json_encode($resumenSemanalResult));
+
             // Formatear respuesta (invertir para mostrar más antiguo primero)
             $finalResponse['resumen_semanal'] = [];
             if (!empty($resumenSemanalResult) && !isset($resumenSemanalResult['status'])) {
