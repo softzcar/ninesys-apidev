@@ -111,7 +111,7 @@ return function ($app) {
                 foreach ($progresoActivasResult as $row) {
                     $finalResponse['progreso_activas'][] = [
                         'id_orden' => (int) $row['_id'],
-                        'nombre_cliente' => $row['nombre_cliente'],
+                        'cliente_nombre' => $row['cliente_nombre'],
                         'numero_orden' => $row['numero_orden'],
                         'porcentaje' => round((float) $row['porcentaje_completado'], 1)
                     ];
