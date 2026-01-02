@@ -155,7 +155,11 @@ return function ($app) {
                 ];
             }
 
-            $response->getBody()->write(json_encode($finalResponse));
+            $response->getBody()->write(json_encode([
+                ...$finalResponse,
+                '_debug_resumen_raw' => $resumenSemanalResult,
+                '_debug_progreso_raw' => $progresoActivasResult
+            ]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
         } catch (Exception $e) {
