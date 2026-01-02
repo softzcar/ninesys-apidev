@@ -131,26 +131,23 @@ return function ($app) {
                  WHERE YEAR(fecha_creacion) = YEAR(CURDATE()) 
                    AND MONTH(fecha_creacion) = MONTH(CURDATE())
                 ) as ventas_mes,
-                 LEFT JOIN (
-                     SELECT id_orden, SUM(monto_pago) as total_pagado
-                     FROM pagos
-                     WHERE estatus = 'aprobado'
-                     GROUP BY id_orden
-                 ) p ON p.id_orden = o._id
-                 WHERE o.total > COALESCE(p.total_pagado, 0)
+                (SELECT COALESCE(SUM(pago_total - pago_abono), 0) 
+                 FROM ordenes 
+                 WHERE (pago_total - pago_abono) > 0
                 ) as saldo_por_cobrar";
 
-            $ventasSaldoResult = $localConnection->goQuery($sqlVentasSaldo);
+            $ventasVsSaldoResult = $localConnection->goQuery($sqlVentasVsSaldo);
 
             $finalResponse['ventas_vs_saldo'] = [
                 'ventas_mes' => 0,
                 'saldo_por_cobrar' => 0
             ];
 
-            if (!empty($ventasSaldoResult) && !isset($ventasSaldoResult['status'])) {
+            if (!empty($ventasVsSaldoResult) && !isset($ventasVsSaldoResult['status'])) {
+                $row = $ventasVsSaldoResult[0];
                 $finalResponse['ventas_vs_saldo'] = [
-                    'ventas_mes' => round((float) $ventasSaldoResult[0]['ventas_mes'], 2),
-                    'saldo_por_cobrar' => round((float) $ventasSaldoResult[0]['saldo_por_cobrar'], 2)
+                    'ventas_mes' => round((float) $row['ventas_mes'], 2),
+                    'saldo_por_cobrar' => round((float) $row['saldo_por_cobrar'], 2)
                 ];
             }
 
