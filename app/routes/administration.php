@@ -86,15 +86,15 @@ return function ($app) {
             // =====================================================================
             // GRÁFICO 3: PROGRESO DE ÓRDENES ACTIVAS (GLOBAL)
             // =====================================================================
-            // Top 10 órdenes activas con su porcentaje basado en lotes
+            // Top 10 órdenes activas con porcentaje basado en tareas terminadas de lotes_detalles
             $sqlProgresoActivas = "SELECT 
                 o._id,
                 o._id as numero_orden,
                 COALESCE(o.cliente_nombre, 'Sin nombre') as cliente_nombre,
                 COALESCE(
                     ROUND(
-                        (SELECT COUNT(*) FROM lotes WHERE id_orden = o._id AND paso = 'terminado') * 100.0 /
-                        NULLIF((SELECT COUNT(*) FROM lotes WHERE id_orden = o._id), 0),
+                        (SELECT COUNT(*) FROM lotes_detalles WHERE id_orden = o._id AND terminado = 1) * 100.0 /
+                        NULLIF((SELECT COUNT(*) FROM lotes_detalles WHERE id_orden = o._id), 0),
                         1
                     ),
                     0
