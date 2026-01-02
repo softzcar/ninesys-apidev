@@ -16,7 +16,8 @@ return function ($app) {
         $id_empresa = $request->getHeader('empresa')[0] ?? null;
 
         if (!$id_empresa) {
-            return $response->withJson(['error' => 'ID de empresa requerido'], 400);
+            $response->getBody()->write(json_encode(['error' => 'ID de empresa requerido']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
         // Conectar a la base de datos de la empresa
@@ -158,16 +159,15 @@ return function ($app) {
                 ];
             }
 
-            $db->desconectar();
-
-            return $response->withJson($finalResponse);
+            $response->getBody()->write(json_encode($finalResponse));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
         } catch (Exception $e) {
-            $db->desconectar();
-            return $response->withJson([
+            $response->getBody()->write(json_encode([
                 'error' => 'Error al obtener estadísticas del dashboard de administración',
                 'message' => $e->getMessage()
-            ], 500);
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
     });
 };
