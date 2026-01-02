@@ -90,19 +90,16 @@ return function ($app) {
             $sqlProgresoActivas = "SELECT 
                 o._id,
                 o._id as numero_orden,
-                o.cliente_nombre,
+                COALESCE(o.cliente_nombre, 'Sin nombre') as cliente_nombre,
                 COALESCE(
-                    ROUND(
-                        COUNT(CASE WHEN l.estatus_lote = 'terminado' THEN 1 END) * 100.0 /
-                        NULLIF(COUNT(l._id), 0),
-                        1
-                    ), 0
+                    (SELECT ROUND(
+                        COUNT(CASE WHEN estatus_lote = 'terminado' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0), 1
+                    ) FROM lotes WHERE id_orden = o._id), 
+                    0
                 ) as porcentaje_completado
             FROM ordenes o
-            LEFT JOIN lotes l ON l.id_orden = o._id
-            WHERE o.status IN ('En proceso', 'activa', 'pausada')
-            GROUP BY o._id, o.cliente_nombre
-            ORDER BY porcentaje_completado ASC, o.fecha_creacion DESC
+            WHERE o.status = 'activa'
+            ORDER BY porcentaje_completado ASC
             LIMIT 10";
 
             $progresoActivasResult = $localConnection->goQuery($sqlProgresoActivas);
