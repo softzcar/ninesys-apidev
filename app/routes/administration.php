@@ -22,13 +22,13 @@ return function ($app) {
             // =====================================================================
             // GRÁFICO 1: RESUMEN SEMANAL DE ÓRDENES (GLOBAL)
             // =====================================================================
-            // Todas las órdenes creadas en la semana actual, agrupadas por día
+            // Órdenes creadas en los últimos 7 días, agrupadas por día
             $sqlResumenSemanal = "SELECT 
                 DATE_FORMAT(fecha_alta, '%W') as dia,
                 DATE(fecha_alta) as fecha,
                 COUNT(*) as total_ordenes
             FROM ordenes
-            WHERE YEARWEEK(fecha_alta, 1) = YEARWEEK(NOW(), 1)
+            WHERE fecha_alta >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
             GROUP BY DATE(fecha_alta)
             ORDER BY fecha";
 
@@ -90,15 +90,15 @@ return function ($app) {
                 o.nombre_cliente,
                 o.numero_orden,
                 COALESCE(
-                    (SELECT 
-                        (COUNT(DISTINCT CASE WHEN ldea.fecha_terminado IS NOT NULL THEN ldea._id END) * 100.0) / 
-                        NULLIF(COUNT(DISTINCT ldea._id), 0)
-                     FROM lotes_detalles_empleados_asignados ldea
-                     WHERE ldea.id_orden = o._id
+                    ROUND(
+                        (SELECT COUNT(*) FROM lotes WHERE id_orden = o._id AND estatus_lote = 'terminado') * 100.0 /
+                        NULLIF((SELECT COUNT(*) FROM lotes WHERE id_orden = o._id), 0),
+                        1
                     ), 0
                 ) as porcentaje_completado
             FROM ordenes o
             WHERE o.status = 'activa'
+            HAVING (SELECT COUNT(*) FROM lotes WHERE id_orden = o._id) > 0
             ORDER BY porcentaje_completado ASC
             LIMIT 10";
 
