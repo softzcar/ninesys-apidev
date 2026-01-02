@@ -86,17 +86,17 @@ return function ($app) {
             // =====================================================================
             // GRÁFICO 3: PROGRESO DE ÓRDENES ACTIVAS (GLOBAL)
             // =====================================================================
-            // Top 10 órdenes activas con porcentaje basado en tareas terminadas de lotes_detalles
+            // Progreso basado en asignaciones de empleados terminadas
             $sqlProgresoActivas = "SELECT 
                 o._id,
                 o._id as numero_orden,
                 COALESCE(o.cliente_nombre, 'Sin nombre') as cliente_nombre,
-                (SELECT COUNT(*) FROM lotes_detalles WHERE id_orden = o._id AND terminado = 1) as tareas_terminadas,
-                (SELECT COUNT(*) FROM lotes_detalles WHERE id_orden = o._id) as tareas_totales,
+                (SELECT COUNT(*) FROM lotes_detalles_empleados_asignados WHERE id_orden = o._id AND terminado = 1) as tareas_terminadas,
+                (SELECT COUNT(*) FROM lotes_detalles_empleados_asignados WHERE id_orden = o._id) as tareas_totales,
                 COALESCE(
                     ROUND(
-                        (SELECT COUNT(*) FROM lotes_detalles WHERE id_orden = o._id AND terminado = 1) * 100.0 /
-                        NULLIF((SELECT COUNT(*) FROM lotes_detalles WHERE id_orden = o._id), 0),
+                        (SELECT COUNT(*) FROM lotes_detalles_empleados_asignados WHERE id_orden = o._id AND terminado = 1) * 100.0 /
+                        NULLIF((SELECT COUNT(*) FROM lotes_detalles_empleados_asignados WHERE id_orden = o._id), 0),
                         1
                     ),
                     0
@@ -115,6 +115,8 @@ return function ($app) {
                         'id_orden' => (int) $row['_id'],
                         'cliente_nombre' => $row['cliente_nombre'],
                         'numero_orden' => $row['numero_orden'],
+                        'tareas_terminadas' => (int) $row['tareas_terminadas'],
+                        'tareas_totales' => (int) $row['tareas_totales'],
                         'porcentaje' => round((float) $row['porcentaje_completado'], 1)
                     ];
                 }
