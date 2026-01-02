@@ -125,16 +125,12 @@ return function ($app) {
             // =====================================================================
             // GRÁFICO 4: VENTAS DEL MES VS SALDO POR COBRAR (GLOBAL)
             // =====================================================================
-            // Ventas del mes actual vs saldo pendiente de cobro
-            $sqlVentasSaldo = "SELECT 
-                (SELECT COALESCE(SUM(total), 0) 
+            $sqlVentasVsSaldo = "SELECT 
+                (SELECT COALESCE(SUM(pago_total), 0) 
                  FROM ordenes 
-                 WHERE MONTH(fecha_alta) = MONTH(NOW()) 
-                 AND YEAR(fecha_alta) = YEAR(NOW())
+                 WHERE YEAR(fecha_creacion) = YEAR(CURDATE()) 
+                   AND MONTH(fecha_creacion) = MONTH(CURDATE())
                 ) as ventas_mes,
-                
-                (SELECT COALESCE(SUM(o.total - COALESCE(p.total_pagado, 0)), 0)
-                 FROM ordenes o
                  LEFT JOIN (
                      SELECT id_orden, SUM(monto_pago) as total_pagado
                      FROM pagos
