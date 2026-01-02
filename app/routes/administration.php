@@ -160,6 +160,42 @@ return function ($app) {
                 ];
             }
 
+            // =====================================================================
+            // GRÁFICO 5: ESTADO DE DISEÑOS (GLOBAL)
+            // =====================================================================
+            $sqlEstadoDisenos = "SELECT 
+                (SELECT COUNT(*) 
+                 FROM disenos 
+                 WHERE id_empleado IS NOT NULL AND id_empleado > 0
+                ) as asignados,
+                
+                (SELECT COUNT(*) 
+                 FROM disenos 
+                 WHERE terminado = 1
+                ) as terminados,
+                
+                (SELECT COUNT(DISTINCT id_diseno) 
+                 FROM revisiones 
+                 WHERE estatus = 'Aprobado'
+                ) as aprobados";
+
+            $estadoDisenosResult = $localConnection->goQuery($sqlEstadoDisenos);
+
+            $finalResponse['estado_disenos'] = [
+                'asignados' => 0,
+                'terminados' => 0,
+                'aprobados' => 0
+            ];
+
+            if (!empty($estadoDisenosResult) && !isset($estadoDisenosResult['status'])) {
+                $row = $estadoDisenosResult[0];
+                $finalResponse['estado_disenos'] = [
+                    'asignados' => (int) $row['asignados'],
+                    'terminados' => (int) $row['terminados'],
+                    'aprobados' => (int) $row['aprobados']
+                ];
+            }
+
             $response->getBody()->write(json_encode($finalResponse));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
