@@ -100,7 +100,7 @@ return function ($app) {
                 ) as porcentaje_completado
             FROM ordenes o
             LEFT JOIN lotes l ON l.id_orden = o._id
-            WHERE o.status = 'activa'
+            WHERE o.status IN ('En proceso', 'activa', 'pausada')
             GROUP BY o._id, o.cliente_nombre
             ORDER BY porcentaje_completado ASC, o.fecha_creacion DESC
             LIMIT 10";
