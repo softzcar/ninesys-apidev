@@ -86,16 +86,16 @@ return function ($app) {
             // =====================================================================
             // GRÁFICO 3: PROGRESO DE ÓRDENES ACTIVAS (GLOBAL)
             // =====================================================================
-            // Progreso basado en asignaciones de empleados terminadas
+            // Progreso basado en asignaciones con fecha_terminado (tareas completadas)
             $sqlProgresoActivas = "SELECT 
                 o._id,
                 o._id as numero_orden,
                 COALESCE(o.cliente_nombre, 'Sin nombre') as cliente_nombre,
-                (SELECT COUNT(*) FROM lotes_detalles_empleados_asignados WHERE id_orden = o._id AND terminado = 1) as tareas_terminadas,
+                (SELECT COUNT(*) FROM lotes_detalles_empleados_asignados WHERE id_orden = o._id AND fecha_terminado IS NOT NULL) as tareas_terminadas,
                 (SELECT COUNT(*) FROM lotes_detalles_empleados_asignados WHERE id_orden = o._id) as tareas_totales,
                 COALESCE(
                     ROUND(
-                        (SELECT COUNT(*) FROM lotes_detalles_empleados_asignados WHERE id_orden = o._id AND terminado = 1) * 100.0 /
+                        (SELECT COUNT(*) FROM lotes_detalles_empleados_asignados WHERE id_orden = o._id AND fecha_terminado IS NOT NULL) * 100.0 /
                         NULLIF((SELECT COUNT(*) FROM lotes_detalles_empleados_asignados WHERE id_orden = o._id), 0),
                         1
                     ),
