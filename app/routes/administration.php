@@ -91,6 +91,8 @@ return function ($app) {
                 o._id,
                 o._id as numero_orden,
                 COALESCE(o.cliente_nombre, 'Sin nombre') as cliente_nombre,
+                (SELECT COUNT(*) FROM lotes_detalles WHERE id_orden = o._id AND terminado = 1) as tareas_terminadas,
+                (SELECT COUNT(*) FROM lotes_detalles WHERE id_orden = o._id) as tareas_totales,
                 COALESCE(
                     ROUND(
                         (SELECT COUNT(*) FROM lotes_detalles WHERE id_orden = o._id AND terminado = 1) * 100.0 /
