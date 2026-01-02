@@ -22,25 +22,23 @@ return function ($app) {
             // =====================================================================
             // GRÁFICO 1: RESUMEN SEMANAL DE ÓRDENES (GLOBAL)
             // =====================================================================
-            // Últimas 10 órdenes agrupadas por día (o últimos 7 días si hay más)
+            // Últimas órdenes agrupadas por día
             $sqlResumenSemanal = "SELECT 
                 DATE_FORMAT(fecha_alta, '%W') as dia,
                 DATE(fecha_alta) as fecha,
                 COUNT(*) as total_ordenes
             FROM ordenes
-            WHERE fecha_alta >= (
-                SELECT DATE_SUB(MAX(fecha_alta), INTERVAL 7 DAY) FROM ordenes
-            )
             GROUP BY DATE(fecha_alta)
             ORDER BY fecha DESC
             LIMIT 7";
 
             $resumenSemanalResult = $localConnection->goQuery($sqlResumenSemanal);
 
-            // Formatear respuesta
+            // Formatear respuesta (invertir para mostrar más antiguo primero)
             $finalResponse['resumen_semanal'] = [];
             if (!empty($resumenSemanalResult) && !isset($resumenSemanalResult['status'])) {
-                foreach ($resumenSemanalResult as $row) {
+                $reversed = array_reverse($resumenSemanalResult);
+                foreach ($reversed as $row) {
                     $finalResponse['resumen_semanal'][] = [
                         'dia' => $row['dia'],
                         'fecha' => $row['fecha'],
