@@ -131,15 +131,23 @@ return function ($app) {
                  WHERE YEAR(fecha_creacion) = YEAR(CURDATE()) 
                    AND MONTH(fecha_creacion) = MONTH(CURDATE())
                 ) as ventas_mes,
+                (SELECT COALESCE(SUM(pago_abono), 0) 
+                 FROM ordenes 
+                 WHERE YEAR(fecha_creacion) = YEAR(CURDATE()) 
+                   AND MONTH(fecha_creacion) = MONTH(CURDATE())
+                ) as cobrado_mes,
                 (SELECT COALESCE(SUM(pago_total - pago_abono), 0) 
                  FROM ordenes 
-                 WHERE (pago_total - pago_abono) > 0
+                 WHERE YEAR(fecha_creacion) = YEAR(CURDATE()) 
+                   AND MONTH(fecha_creacion) = MONTH(CURDATE())
+                   AND (pago_total - pago_abono) > 0
                 ) as saldo_por_cobrar";
 
             $ventasVsSaldoResult = $localConnection->goQuery($sqlVentasVsSaldo);
 
             $finalResponse['ventas_vs_saldo'] = [
                 'ventas_mes' => 0,
+                'cobrado_mes' => 0,
                 'saldo_por_cobrar' => 0
             ];
 
@@ -147,6 +155,7 @@ return function ($app) {
                 $row = $ventasVsSaldoResult[0];
                 $finalResponse['ventas_vs_saldo'] = [
                     'ventas_mes' => round((float) $row['ventas_mes'], 2),
+                    'cobrado_mes' => round((float) $row['cobrado_mes'], 2),
                     'saldo_por_cobrar' => round((float) $row['saldo_por_cobrar'], 2)
                 ];
             }
