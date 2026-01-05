@@ -160,7 +160,15 @@ class GeminiChatAssistant extends GeminiAssistant
 
                     // 0. Si es la primera iteración, agregar el mensaje del usuario al historial
                     // para mantener la secuencia lógica User -> Model -> Function
-                    if ($iteration === 1 && !empty($userQuery)) {
+                    // PERO verificar que no esté ya en el historial (si el frontend lo envió)
+                    $lastMsg = !empty($currentHistory) ? end($currentHistory) : null;
+                    $lastText = $lastMsg['parts'][0]['text'] ?? '';
+                    // Limpieza básica para comparación
+                    $isAlreadyInHistory = $lastMsg &&
+                        ($lastMsg['role'] === 'user') &&
+                        (trim($lastText) === trim($userQuery));
+
+                    if ($iteration === 1 && !empty($userQuery) && !$isAlreadyInHistory) {
                         $currentHistory[] = [
                             'role' => 'user',
                             'parts' => [['text' => $userQuery]]
