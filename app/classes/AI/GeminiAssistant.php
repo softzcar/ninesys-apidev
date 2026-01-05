@@ -180,8 +180,20 @@ abstract class GeminiAssistant
             $lastText = $lastMsg['parts'][0]['text'];
         }
 
+        // Comparación y LOGGING profundo
+        $areDifferent = ($lastRole !== 'user' || trim($lastText) !== trim($userQuery));
+
+        // DEBUG: Registrar comparación si son sospechosamente parecidos pero "diferentes"
+        if (!empty($userQuery) && $lastRole === 'user') {
+            $debugLog = "--- Duplication Check ---\n";
+            $debugLog .= "Query: '$userQuery' (" . bin2hex($userQuery) . ")\n";
+            $debugLog .= "Last : '$lastText' (" . bin2hex($lastText) . ")\n";
+            $debugLog .= "Are Different? " . ($areDifferent ? "YES (ADD)" : "NO (SKIP)") . "\n";
+            file_put_contents('/tmp/gemini_debug_duplication.log', $debugLog, FILE_APPEND);
+        }
+
         // Agregar mensaje actual del usuario (solo si no está vacío Y no es duplicado del último)
-        if (!empty($userQuery) && ($lastRole !== 'user' || trim($lastText) !== trim($userQuery))) {
+        if (!empty($userQuery) && $areDifferent) {
             $contents[] = [
                 'role' => 'user',
                 'parts' => [
