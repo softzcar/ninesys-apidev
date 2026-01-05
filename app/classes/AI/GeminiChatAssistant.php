@@ -69,13 +69,13 @@ class GeminiChatAssistant extends GeminiAssistant
                 ];
             }
 
-            // 2b. Si Gemini devolvió una acción especial (como create_order), retornar el JSON
+            // 2b. Si Gemini devolvió una acción especial (como create_order), retornar el objeto
             if (isset($geminiResponse['data']['action'])) {
-                // Devolver el JSON como texto para que el frontend lo procese
-                $jsonResponse = json_encode($geminiResponse['data'], JSON_UNESCAPED_UNICODE);
+                // ✅ Devolver el OBJETO, no el JSON string
+                // El endpoint que llama se encargará de hacer json_encode final
                 return [
                     'success' => true,
-                    'response' => $jsonResponse,
+                    'response' => $geminiResponse['data'],  // ✅ Objeto, NO string
                     'is_action' => true,
                     'action' => $geminiResponse['data']['action']
                 ];
