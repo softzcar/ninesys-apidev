@@ -633,11 +633,25 @@ class GeminiChatAssistant extends GeminiAssistant
      */
     private function handleObtenerTelas($db): array
     {
+        // DEBUG: Loguear conexión y ejecución
+        try {
+            $dbNameQuery = $db->goQuery("SELECT DATABASE() as db", []);
+            $currentDb = $dbNameQuery[0]['db'] ?? 'unknown';
+            $logMsg = date('[Y-m-d H:i:s] ') . "handleObtenerTelas called using DB: $currentDb\n";
+            file_put_contents(__DIR__ . '/../../../gemini_debug.log', $logMsg, FILE_APPEND);
+        } catch (\Throwable $e) {
+            file_put_contents(__DIR__ . '/../../../gemini_debug.log', "Error logging DB: " . $e->getMessage() . "\n", FILE_APPEND);
+        }
+
         $sql = "SELECT tela as nombre 
                 FROM catalogo_telas 
                 ORDER BY tela ASC";
 
         $telas = $db->goQuery($sql, []);
+
+        // DEBUG RESULTS
+        $count = count($telas);
+        file_put_contents(__DIR__ . '/../../../gemini_debug.log', date('[Y-m-d H:i:s] ') . "Query result count: $count\n", FILE_APPEND);
 
         if (!empty($telas) && !isset($telas['status'])) {
             // Extraer solo los nombres en array simple
