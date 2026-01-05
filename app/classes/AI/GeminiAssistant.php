@@ -264,7 +264,8 @@ abstract class GeminiAssistant
             'timestamp' => date('Y-m-d H:i:s'),
             'user_query' => $userQuery,
             'prompt_length' => strlen($systemInstruction),
-            'system_instruction' => $systemInstruction
+            'system_instruction' => $systemInstruction,
+            'payload' => $payload
         ];
 
         // Realizar petición HTTP
