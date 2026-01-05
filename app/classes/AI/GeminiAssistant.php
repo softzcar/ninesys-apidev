@@ -151,11 +151,8 @@ abstract class GeminiAssistant
         // Agregar mensajes del historial
         // Agregar mensajes del historial
         foreach ($history as $msg) {
-            // Gemini exige alternancia estricta entre 'user' y 'model'.
-            // Los resultados de funciones (role: function) deben enviarse como 'user' para mantener la alternancia.
-            $role = ($msg['role'] === 'user' || $msg['role'] === 'function') ? 'user' : 'model';
+            $role = $msg['role'] ?? 'user';
 
-            // Si el mensaje ya tiene 'parts' (ej: Function Calling), usarlo tal cual
             if (isset($msg['parts'])) {
                 $contents[] = [
                     'role' => $role,
