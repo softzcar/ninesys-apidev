@@ -176,40 +176,41 @@ abstract class GeminiAssistant
         $lastRole = $lastMsg['role'] ?? '';
         $lastText = '';
 
-        if (isset($lastMsg['parts'][0]['text'])) {
-            $lastText = $lastMsg['parts'][0]['text'];
-        }
-
         // Comparación y LOGGING profundo
         // 1. Limpiar metadatos conocidos para comparación (query vs historial)
         $cleanUserQuery = preg_replace('/\n\[(ORDEN EN PROGRESO|CONTEXTO BD)\]:.*$/s', '', $userQuery);
-        $cleanLastText = preg_replace('/\n\[(ORDEN EN PROGRESO|CONTEXTO BD)\]:.*$/s', '', $lastText);
 
-        $areBasicallyEqual = ($lastRole === 'user' && trim($cleanLastText) === trim($cleanUserQuery));
-
-        // DEBUG: Registrar comparación y estado del array
-        if (!empty($userQuery) && $lastRole === 'user') {
-            $debugLog = "--- Duplication Check (Smart Replace) ---\n";
-            $debugLog .= "Clean Query: '$cleanUserQuery'\n";
-            $debugLog .= "Clean Last : '$cleanLastText'\n";
-            $debugLog .= "Are Equal? " . ($areBasicallyEqual ? "YES (REPLACE)" : "NO (ADD)") . "\n";
-            $debugLog .= "Contents Count Before: " . count($contents) . "\n";
-            $debugLog .= "Contents Dump Before: " . json_encode($contents) . "\n";
-            file_put_contents('/tmp/gemini_debug_duplication.log', $debugLog, FILE_APPEND);
+        // DEBUG: Registrar inicio de limpieza
+        if (!empty($userQuery)) {
+            file_put_contents('/tmp/gemini_debug_duplication.log', "--- Aggressive Deduv Start ---\nQuery: $cleanUserQuery\nContents Count: " . count($contents) . "\n", FILE_APPEND);
         }
 
-        if ($areBasicallyEqual) {
-            // REEMPLAZAR el último mensaje del historial con la versión actual (enriquecida con contexto)
-            array_pop($contents);
-            $contents[] = [
-                'role' => 'user',
-                'parts' => [['text' => $userQuery]]
-            ];
-            // Log after replace
-            file_put_contents('/tmp/gemini_debug_duplication.log', "Contents Dump After Replace: " . json_encode($contents) . "\n", FILE_APPEND);
+        // Deduplicación agresiva recursiva (hacia atrás)
+        // Eliminar del final del historial mientras coincida con el query actual (limpio)
+        $removedCount = 0;
+        while (!empty($contents)) {
+            $lastMsg = end($contents);
+            $lastRole = $lastMsg['role'] ?? '';
+            $lastText = $lastMsg['parts'][0]['text'] ?? '';
 
-        } elseif (!empty($userQuery)) {
-            // AGREGAR como mensaje nuevo si no es duplicado
+            $cleanLast = preg_replace('/\n\[(ORDEN EN PROGRESO|CONTEXTO BD)\]:.*$/s', '', $lastText);
+
+            // Verificar si es duplicado del usuario
+            if ($lastRole === 'user' && trim($cleanLast) === trim($cleanUserQuery)) {
+                array_pop($contents); // Eliminar duplicado
+                $removedCount++;
+            } else {
+                break; // Parar al encontrar mensaje diferente o de otro rol
+            }
+        }
+
+        // DEBUG: Resultado limpieza
+        if (!empty($userQuery)) {
+            file_put_contents('/tmp/gemini_debug_duplication.log', "Removed: $removedCount items. Final Count: " . count($contents) . "\n", FILE_APPEND);
+        }
+
+        // Agregar mensaje actual (siempre, ahora que está limpio el historial final)
+        if (!empty($userQuery)) {
             $contents[] = [
                 'role' => 'user',
                 'parts' => [['text' => $userQuery]]
