@@ -366,4 +366,142 @@ class GeminiChatAssistant extends GeminiAssistant
 
         return $labels[$fieldName] ?? ucfirst(str_replace('_', ' ', $fieldName));
     }
+
+    /**
+     * Ejecuta funciones llamadas por Gemini (Function Calling)
+     * 
+     * @param string $functionName Nombre de la función a ejecutar
+     * @param array $args Argumentos de la función
+     * @param int $empresaId ID de la empresa para consultas de BD
+     * @return array Resultado de la función ejecutada
+     */
+    public function callFunctionHandler(string $functionName, array $args, int $empresaId): array
+    {
+        require_once __DIR__ . '/FunctionDefinitions.php';
+        require_once __DIR__ . '/../LocalDB.php';
+
+        // Validar argumentos
+        if (!FunctionDefinitions::validateFunctionArgs($functionName, $args)) {
+            return [
+                'error' => "Argumentos inválidos para función {$functionName}"
+            ];
+        }
+
+        $db = new \LocalDB($empresaId);
+
+        try {
+            switch ($functionName) {
+                case 'buscarClientes':
+                    return $this->handleBuscarClientes($db, $args['query']);
+
+                case 'buscarProductos':
+                    return $this->handleBuscarProductos($db, $args['query']);
+
+                case 'obtenerTallas':
+                    return $this->handleObtenerTallas($db);
+
+                case 'obtenerTelas':
+                    return $this->handleObtenerTelas($db);
+
+                default:
+                    return ['error' => "Función desconocida: {$functionName}"];
+            }
+        } catch (\Throwable $e) {
+            error_log("Error en callFunctionHandler ({$functionName}): " . $e->getMessage());
+            return ['error' => $e->getMessage()];
+        } finally {
+            $db->disconnect();
+        }
+    }
+
+    /**
+     * Handler: Buscar clientes por nombre
+     */
+    private function handleBuscarClientes($db, string $query): array
+    {
+        $nombre = trim($query);
+        $sql = "SELECT _id as id, 
+                       CONCAT(first_name, ' ', IFNULL(last_name, '')) as nombre_completo,
+                       phone as telefono
+                FROM customers 
+                WHERE first_name LIKE ? 
+                   OR last_name LIKE ? 
+                   OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+                ORDER BY first_name ASC
+                LIMIT 10";
+
+        $clientes = $db->goQuery($sql, ["%{$nombre}%", "%{$nombre}%", "%{$nombre}%"]);
+
+        if (!empty($clientes) && !isset($clientes['status'])) {
+            return ['clientes' => $clientes];
+        }
+
+        return ['clientes' => []];
+    }
+
+    /**
+     * Handler: Buscar productos por nombre
+     */
+    private function handleBuscarProductos($db, string $query): array
+    {
+        $nombre = trim($query);
+        // Normalizar plurales
+        $nombreSingular = preg_replace('/(es|s)$/i', '', $nombre);
+
+        $sql = "SELECT p._id as id, p.product as nombre, 
+                       COALESCE(pp.price, p.price) as precio
+                FROM products p
+                LEFT JOIN products_prices pp ON pp.id_product = p._id
+                WHERE p.product LIKE ? OR p.product LIKE ?
+                GROUP BY p._id
+                ORDER BY p.product ASC
+                LIMIT 15";
+
+        $productos = $db->goQuery($sql, ["%{$nombre}%", "%{$nombreSingular}%"]);
+
+        if (!empty($productos) && !isset($productos['status'])) {
+            return ['productos' => $productos];
+        }
+
+        return ['productos' => []];
+    }
+
+    /**
+     * Handler: Obtener todas las tallas
+     */
+    private function handleObtenerTallas($db): array
+    {
+        $sql = "SELECT _id as id, size as nombre 
+                FROM sizes 
+                WHERE status = 1 
+                ORDER BY _id ASC";
+
+        $tallas = $db->goQuery($sql, []);
+
+        if (!empty($tallas) && !isset($tallas['status'])) {
+            return ['tallas' => $tallas];
+        }
+
+        return ['tallas' => []];
+    }
+
+    /**
+     * Handler: Obtener todas las telas
+     */
+    private function handleObtenerTelas($db): array
+    {
+        $sql = "SELECT nombre 
+                FROM catalogo_telas 
+                WHERE activo = 1 
+                ORDER BY nombre ASC";
+
+        $telas = $db->goQuery($sql, []);
+
+        if (!empty($telas) && !isset($telas['status'])) {
+            // Extraer solo los nombres en array simple
+            return ['telas' => array_column($telas, 'nombre')];
+        }
+
+        return ['telas' => []];
+    }
 }
