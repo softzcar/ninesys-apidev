@@ -56,7 +56,7 @@ class FunctionDefinitions
                 'description' => 'Obtiene la lista completa de tallas disponibles en el sistema. Usa esta función cuando necesites mostrar opciones de tallas al usuario o validar una talla mencionada.',
                 'parameters' => [
                     'type' => 'object',
-                    'properties' => []
+                    'properties' => (object) [] // Force JSON object {}
                 ]
             ],
 
@@ -66,7 +66,7 @@ class FunctionDefinitions
                 'description' => 'Obtiene la lista completa de telas/materiales disponibles en el catálogo. Usa esta función cuando el usuario necesite elegir el tipo de tela para un producto.',
                 'parameters' => [
                     'type' => 'object',
-                    'properties' => []
+                    'properties' => (object) [] // Force JSON object {}
                 ]
             ]
         ];
