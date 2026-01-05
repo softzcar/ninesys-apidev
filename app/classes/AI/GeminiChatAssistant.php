@@ -154,7 +154,7 @@ class GeminiChatAssistant extends GeminiAssistant
             if (isset($geminiResponse['data']['action']) && $geminiResponse['data']['action'] === 'create_order') {
                 return [
                     'success' => true,
-                    'response' => json_encode($geminiResponse['data'], JSON_UNESCAPED_UNICODE),
+                    'response' => $geminiResponse['data'],  // ✅ Devolver objeto, NO string JSON
                     'is_action' => true,
                     'action' => 'create_order',
                     'ready' => $geminiResponse['data']['ready'] ?? false,
