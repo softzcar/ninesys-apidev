@@ -213,6 +213,7 @@ class GeminiChatAssistant extends GeminiAssistant
                     // Por ahora, pasaremos un string vacío y modificaremos callGeminiAPI si es necesario, 
                     // o pasaremos una instrucción de sistema oculta.
                     $userQuery = ""; // Ya no enviamos el query original repetido
+                    $augmentedQuery = ""; // CRÍTICO: También limpiar la query aumentada para evitar duplicación
 
                     continue; // Siguiente iteración del bucle
                 }
