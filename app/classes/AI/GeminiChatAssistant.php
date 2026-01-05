@@ -163,10 +163,14 @@ class GeminiChatAssistant extends GeminiAssistant
                     // PERO verificar que no esté ya en el historial (si el frontend lo envió)
                     $lastMsg = !empty($currentHistory) ? end($currentHistory) : null;
                     $lastText = $lastMsg['parts'][0]['text'] ?? '';
-                    // Limpieza básica para comparación
+
+                    // Normalización profunda para comparación (quitar espacios, lower case, saltos de línea)
+                    $normLast = preg_replace('/\s+/', ' ', strtolower(trim($lastText)));
+                    $normQuery = preg_replace('/\s+/', ' ', strtolower(trim($userQuery)));
+
                     $isAlreadyInHistory = $lastMsg &&
                         ($lastMsg['role'] === 'user') &&
-                        (trim($lastText) === trim($userQuery));
+                        ($normLast === $normQuery);
 
                     if ($iteration === 1 && !empty($userQuery) && !$isAlreadyInHistory) {
                         $currentHistory[] = [
