@@ -633,10 +633,9 @@ class GeminiChatAssistant extends GeminiAssistant
      */
     private function handleObtenerTelas($db): array
     {
-        $sql = "SELECT nombre 
+        $sql = "SELECT tela as nombre 
                 FROM catalogo_telas 
-                WHERE activo = 1 
-                ORDER BY nombre ASC";
+                ORDER BY tela ASC";
 
         $telas = $db->goQuery($sql, []);
 
