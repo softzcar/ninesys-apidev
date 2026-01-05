@@ -165,53 +165,79 @@ class GeminiChatAssistant extends GeminiAssistant
             // Respuesta en texto natural
             $responseText = $geminiResponse['text'] ?? $geminiResponse['raw_text'] ?? 'No pude procesar tu consulta.';
 
-            // Filtrar CUALQUIER bloque de código de la respuesta (no debe mostrarse al usuario)
-            // Detecta bloques markdown ```lenguaje ... ``` y código plano
-            $tieneCodigoBloque = preg_match('/```[\w]*[\s\S]*?```/i', $responseText);
-            $tieneSQLPlano = preg_match('/\b(SELECT|INSERT|UPDATE|DELETE)\b.*\b(FROM|INTO|SET|WHERE)\b/i', $responseText);
-            $tieneJSONPlano = preg_match('/\{\s*"[\w_]+"\s*:\s*[\[\{"]/', $responseText);
+            // ============================================================
+            // FILTRAR CÓDIGO DE LA RESPUESTA (SEGURIDAD + UX)
+            // ============================================================
+            // Gemini a veces devuelve código SQL, JSON o ejemplos que no deben mostrarse al usuario
 
-            if ($tieneCodigoBloque || $tieneSQLPlano || $tieneJSONPlano) {
+            // 1. Detectar bloques de código markdown ```lenguaje...```
+            $tieneCodigoMarkdown = preg_match('/```/s', $responseText);
+
+            // 2. Detectar SQL plano
+            $tieneSQLPlano = preg_match('/\b(SELECT|INSERT|UPDATE|DELETE)\s+(FROM|INTO|SET)\b/is', $responseText);
+
+            // 3. Detectar JSON estructurado (objetos grandes con múltiples campos)
+            $tieneJSONEstructurado = preg_match('/\{\s*"[\w_]+"\s*:.*"[\w_]+"\s*:/s', $responseText);
+
+            if ($tieneCodigoMarkdown || $tieneSQLPlano || $tieneJSONEstructurado) {
                 $textoOriginal = $responseText;
 
-                // Limpiar bloques de código markdown (```sql, ```json, ```php, etc.)
-                $responseText = preg_replace('/```[\w]*[\s\S]*?```/i', '', $responseText);
+                // ESTRATEGIA 1: Limpiar bloques markdown completos (```...```)
+                // Usa modificador 's' para DOTALL (. incluye \n)
+                $responseText = preg_replace('/```[a-z]*.*?```/s', '', $responseText);
 
-                // Limpiar SQL plano (sin markdown)
-                $responseText = preg_replace('/(SELECT|INSERT|UPDATE|DELETE)\s+[\s\S]*?;/i', '', $responseText);
+                // ESTRATEGIA 2: Limpiar SQL plano  
+                $responseText = preg_replace('/(SELECT|INSERT|UPDATE|DELETE)\s+.+?;/is', '', $responseText);
 
-                // Limpiar JSON grande (sin markdown) - solo si es un bloque grande
-                if (preg_match('/\{[\s\S]{100,}\}/i', $responseText)) {
-                    $responseText = preg_replace('/\{[\s\S]*?\}/i', '', $responseText);
-                }
+                // ESTRATEGIA 3: Limpiar objetos JSON grandes
+                // Solo si tiene estructura compleja (múltiples líneas con campos)
+                $responseText = preg_replace('/\{[^}]{150,}\}/s', '', $responseText);
+
+                // ESTRATEGIA 4: Limpiar líneas que empiezan con estructura de objeto
+                $lineas = explode("\n", $responseText);
+                $lineasLimpias = array_filter($lineas, function ($linea) {
+                    // Eliminar líneas que parecen definiciones de objetos/arrays
+                    return !preg_match('/^\s*[\{\}\[\]]?\s*$/', $linea) &&
+                        !preg_match('/^\s*"[\w_]+"\s*:\s*/', $linea);
+                });
+                $responseText = implode("\n", $lineasLimpias);
 
                 $responseText = trim($responseText);
 
-                // Si quedó vacío o muy corto después de limpiar, extraer SOLO texto natural del original
-                if (empty($responseText) || strlen($responseText) < 20) {
-                    // Intentar extraer solo las líneas que NO son código
+                // Si quedó vacío o muy corto, extraer solo texto conversacional del original
+                if (empty($responseText) || strlen($responseText) < 30) {
+                    // Extracción manual línea por línea
                     $lineas = explode("\n", $textoOriginal);
-                    $lineasTexto = [];
+                    $textoNatural = [];
                     $dentroBloque = false;
 
                     foreach ($lineas as $linea) {
-                        if (preg_match('/```/', $linea)) {
+                        // Detectar inicio/fin de bloque markdown
+                        if (strpos($linea, '```') !== false) {
                             $dentroBloque = !$dentroBloque;
                             continue;
                         }
-                        if (!$dentroBloque && !preg_match('/^\s*(SELECT|INSERT|UPDATE|\{|\}|"[\w_]+":)/i', $linea)) {
-                            $lineasTexto[] = $linea;
+
+                        // Si NO está dentro de un bloque Y la línea parece texto natural
+                        if (!$dentroBloque) {
+                            $esTextoNatural = !preg_match('/^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|\{|\}|\[|\]|"[\w_]+":)/i', trim($linea));
+                            $noEsVacia = strlen(trim($linea)) > 0;
+
+                            if ($esTextoNatural && $noEsVacia) {
+                                $textoNatural[] = $linea;
+                            }
                         }
                     }
 
-                    $responseText = trim(implode("\n", $lineasTexto));
+                    $responseText = trim(implode("\n", $textoNatural));
 
-                    // Si todavía está vacío, dar respuesta genérica
+                    // Si TODAVÍA está vacío, dar mensaje genérico
                     if (empty($responseText) || strlen($responseText) < 10) {
-                        $responseText = 'Entendido. ¿Qué tipo de tela necesita para esta orden?';
+                        $responseText = 'He procesado tu solicitud. ¿Podrías confirmarme algunos detalles para continuar?';
                     }
                 }
             }
+
 
             return [
                 'success' => true,
