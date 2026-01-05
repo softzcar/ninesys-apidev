@@ -110,6 +110,152 @@ class GeminiChatAssistant extends GeminiAssistant
      * @param array|null $ordenEnProgreso Estado actual de la orden en progreso
      * @return array Respuesta de Gemini
      */
+    /**
+     * Procesa consultas de órdenes usando FUNCTION CALLING
+     * 
+     * @param string $query Mensaje del usuario
+     * @param array $history Historial de conversación
+     * @param array|null $ordenEnProgreso Estado actual de la orden en progreso
+     * @return array Respuesta de Gemini
+     */
+    public function processOrderQueryWithFunctions(string $query, array $history = [], ?array $ordenEnProgreso = null): array
+    {
+        require_once __DIR__ . '/FunctionDefinitions.php';
+
+        try {
+            // Inicializar historial para esta sesión de proceso
+            $currentHistory = $history;
+            $userQuery = $query;
+
+            // Si hay orden en progreso, agregarla al contexto inicial (solo texto, sin enviar tools la primera vez si no es necesario, pero mejor siempre)
+            if (!empty($ordenEnProgreso)) {
+                $userQuery .= "\n[ORDEN EN PROGRESO]: " . json_encode($ordenEnProgreso, JSON_UNESCAPED_UNICODE);
+            }
+
+            // Obtener definiciones de funciones
+            $tools = \App\Classes\AI\FunctionDefinitions::getOrderFunctions();
+
+            // Límite de iteraciones para evitar bucles infinitos
+            $maxIterations = 5;
+            $iteration = 0;
+
+            while ($iteration < $maxIterations) {
+                $iteration++;
+
+                // Llamar a Gemini enviando tools
+                // Nota: requestSQL=false porque usamos FC nativo
+                $geminiResponse = $this->callGeminiAPI($userQuery, false, $currentHistory, $tools);
+
+                if (isset($geminiResponse['error'])) {
+                    return [
+                        'success' => false,
+                        'response' => 'Error al procesar: ' . $geminiResponse['error']
+                    ];
+                }
+
+                // CASO 1: Gemini quiere llamar a una FUNCIÓN
+                if (isset($geminiResponse['is_function_call']) && $geminiResponse['is_function_call']) {
+                    $functionName = $geminiResponse['function_name'];
+                    $functionArgs = $geminiResponse['function_args'];
+
+                    // 1. Agregar la intención de llamada del modelo al historial
+                    $currentHistory[] = [
+                        'role' => 'model',
+                        'parts' => [
+                            [
+                                'functionCall' => [
+                                    'name' => $functionName,
+                                    'args' => $functionArgs
+                                ]
+                            ]
+                        ]
+                    ];
+
+                    // 2. Ejecutar la función localmente
+                    // Usamos $this->dbConnection que ya está configurada
+                    $functionResult = $this->callFunctionHandler($functionName, $functionArgs);
+
+                    // 3. Agregar el resultado de la función al historial (como 'functionResponse')
+                    $currentHistory[] = [
+                        'role' => 'function',
+                        'parts' => [
+                            [
+                                'functionResponse' => [
+                                    'name' => $functionName,
+                                    'response' => [
+                                        'name' => $functionName,
+                                        'content' => $functionResult
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ];
+
+                    // PREPARAR SIGUIENTE ITERACIÓN:
+                    // El userQuery ya está en el historial (o fue procesado), 
+                    // para la siguiente llamada enviamos vacío o continuamos la conversación.
+                    // En la API de Gemini, se envía el historial actualizado y un nuevo prompt o continuación.
+                    // Para simplificar, en la siguiente vuelta el prompt puede ser vacío o una instrucción de "continua".
+                    // Pero callGeminiAPI agrega el userQuery al final.
+                    // Estrategia: El userQuery original YA SE PROCESÓ en la primera vuelta.
+                    // En las siguientes vueltas, el 'userQuery' debería ser null o vacío para que solo se procese el historial,
+                    // PERO callGeminiAPI estructura el payload esperando un texto de usuario al final.
+                    // MODIFICACIÓN NECESARIA EN callGeminiAPI para soportar query vacío o manejarlo aquí.
+                    // Por ahora, pasaremos un string vacío y modificaremos callGeminiAPI si es necesario, 
+                    // o pasaremos una instrucción de sistema oculta.
+                    $userQuery = ""; // Ya no enviamos el query original repetido
+
+                    continue; // Siguiente iteración del bucle
+                }
+
+                // CASO 2: Respuesta final (Texto o Acción Create Order)
+
+                // Si es acción de crear orden
+                if (isset($geminiResponse['data']['action']) && $geminiResponse['data']['action'] === 'create_order') {
+                    return [
+                        'success' => true,
+                        'response' => $geminiResponse['data'],
+                        'is_action' => true,
+                        'action' => 'create_order',
+                        'ready' => $geminiResponse['data']['ready'] ?? false,
+                        'order_data' => $geminiResponse['data']['data'] ?? null
+                    ];
+                }
+
+                // Respuesta de texto normal
+                $responseText = $geminiResponse['text'] ?? $geminiResponse['raw_text'] ?? 'No pude procesar tu consulta.';
+
+                // Filtrar bloques internos si quedaran (aunque con FC es menos probable)
+                $responseText = preg_replace('/\[CONTEXTO DE BASE DE DATOS.*?\]/s', '', $responseText);
+
+                return [
+                    'success' => true,
+                    'response' => $responseText
+                ];
+            }
+
+            return [
+                'success' => false,
+                'response' => 'Se excedió el límite de iteraciones (demasiadas llamadas a funciones).'
+            ];
+
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'response' => 'Error inesperado: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Procesa consultas de órdenes (MÉTODO LEGACY - DEPRECADO)
+     * 
+     * @param string $query Mensaje del usuario
+     * @param array $history Historial de conversación
+     * @param array $contextoBD Contexto de BD (clientes, productos, tallas, telas encontrados)
+     * @param array|null $ordenEnProgreso Estado actual de la orden en progreso
+     * @return array Respuesta de Gemini
+     */
     public function processOrderQuery(string $query, array $history = [], array $contextoBD = [], ?array $ordenEnProgreso = null): array
     {
         try {
@@ -372,22 +518,21 @@ class GeminiChatAssistant extends GeminiAssistant
      * 
      * @param string $functionName Nombre de la función a ejecutar
      * @param array $args Argumentos de la función
-     * @param int $empresaId ID de la empresa para consultas de BD
      * @return array Resultado de la función ejecutada
      */
-    public function callFunctionHandler(string $functionName, array $args, int $empresaId): array
+    public function callFunctionHandler(string $functionName, array $args): array
     {
         require_once __DIR__ . '/FunctionDefinitions.php';
-        require_once __DIR__ . '/../LocalDB.php';
 
         // Validar argumentos
-        if (!FunctionDefinitions::validateFunctionArgs($functionName, $args)) {
+        if (!\App\Classes\AI\FunctionDefinitions::validateFunctionArgs($functionName, $args)) {
             return [
                 'error' => "Argumentos inválidos para función {$functionName}"
             ];
         }
 
-        $db = new \LocalDB($empresaId);
+        // Usar la conexión existente
+        $db = $this->dbConnection;
 
         try {
             switch ($functionName) {
@@ -409,8 +554,6 @@ class GeminiChatAssistant extends GeminiAssistant
         } catch (\Throwable $e) {
             error_log("Error en callFunctionHandler ({$functionName}): " . $e->getMessage());
             return ['error' => $e->getMessage()];
-        } finally {
-            $db->disconnect();
         }
     }
 

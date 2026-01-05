@@ -119,9 +119,10 @@ abstract class GeminiAssistant
      * @param string $userQuery Pregunta del usuario
      * @param bool $requestSQL Si debe solicitar SQL como function call
      * @param array $history Historial de conversación [['role' => 'user'|'model', 'text' => '...'], ...]
+     * @param array|null $tools Definiciones de funciones para Function Calling
      * @return array Respuesta de Gemini
      */
-    protected function callGeminiAPI(string $userQuery, bool $requestSQL = true, array $history = []): array
+    protected function callGeminiAPI(string $userQuery, bool $requestSQL = true, array $history = [], ?array $tools = null): array
     {
         $url = $this->apiUrl . $this->model . ':generateContent?key=' . $this->apiKey;
 
@@ -176,6 +177,17 @@ abstract class GeminiAssistant
             ]
         ];
 
+        // ============================================================
+        // FUNCTION CALLING: Agregar tools si se proporcionan
+        // ============================================================
+        if ($tools !== null && !empty($tools)) {
+            $payload['tools'] = [
+                [
+                    'functionDeclarations' => $tools
+                ]
+            ];
+        }
+
         // Logging del prompt para debugging
         $logDir = __DIR__ . '/../../logs';
         if (!is_dir($logDir)) {
@@ -214,6 +226,22 @@ abstract class GeminiAssistant
 
         $data = json_decode($response, true);
 
+        // ============================================================
+        // FUNCTION CALLING: Detectar si Gemini quiere llamar una función
+        // ============================================================
+        if (isset($data['candidates'][0]['content']['parts'][0]['functionCall'])) {
+            $functionCall = $data['candidates'][0]['content']['parts'][0]['functionCall'];
+
+            return [
+                'success' => true,
+                'is_function_call' => true,
+                'function_name' => $functionCall['name'],
+                'function_args' => $functionCall['args'] ?? [],
+                'raw' => $data
+            ];
+        }
+
+        // Respuesta de texto normal
         if (!isset($data['candidates'][0]['content']['parts'][0]['text'])) {
             return ['error' => 'Respuesta inválida de Gemini', 'raw' => $data];
         }

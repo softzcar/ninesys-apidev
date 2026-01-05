@@ -153,7 +153,10 @@ return function (App $app) {
 
         try {
             $assistant = new GeminiChatAssistant(GEMINI_API_KEY, $schema, $localConnection);
-            $result = $assistant->processOrderQuery($data['query'], $history, $contextoBD, $ordenEnProgreso);
+
+            // USAR NUEVO MÉTODO CON FUNCTION CALLING
+            // Ya no pasamos contexto_bd porque Gemini lo obtendrá bajo demanda
+            $result = $assistant->processOrderQueryWithFunctions($data['query'], $history, $ordenEnProgreso);
 
             $localConnection->disconnect();
 
