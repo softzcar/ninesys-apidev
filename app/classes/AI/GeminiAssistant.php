@@ -187,25 +187,29 @@ abstract class GeminiAssistant
 
         $areBasicallyEqual = ($lastRole === 'user' && trim($cleanLastText) === trim($cleanUserQuery));
 
-        // DEBUG: Registrar comparación
+        // DEBUG: Registrar comparación y estado del array
         if (!empty($userQuery) && $lastRole === 'user') {
             $debugLog = "--- Duplication Check (Smart Replace) ---\n";
             $debugLog .= "Clean Query: '$cleanUserQuery'\n";
             $debugLog .= "Clean Last : '$cleanLastText'\n";
             $debugLog .= "Are Equal? " . ($areBasicallyEqual ? "YES (REPLACE)" : "NO (ADD)") . "\n";
+            $debugLog .= "Contents Count Before: " . count($contents) . "\n";
+            $debugLog .= "Contents Dump Before: " . json_encode($contents) . "\n";
             file_put_contents('/tmp/gemini_debug_duplication.log', $debugLog, FILE_APPEND);
         }
 
         if ($areBasicallyEqual) {
             // REEMPLAZAR el último mensaje del historial con la versión actual (enriquecida con contexto)
-            // Esto evita duplicados visuales para el modelo pero mantiene los metadatos necesarios
             array_pop($contents);
             $contents[] = [
                 'role' => 'user',
                 'parts' => [['text' => $userQuery]]
             ];
+            // Log after replace
+            file_put_contents('/tmp/gemini_debug_duplication.log', "Contents Dump After Replace: " . json_encode($contents) . "\n", FILE_APPEND);
+
         } elseif (!empty($userQuery)) {
-            // Si son diferentes, agregar como mensaje nuevo
+            // AGREGAR como mensaje nuevo si no es duplicado
             $contents[] = [
                 'role' => 'user',
                 'parts' => [['text' => $userQuery]]
