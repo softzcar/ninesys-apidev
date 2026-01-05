@@ -1,0 +1,5 @@
+- Solicitud del Usuario: Persistencia de "Doble Inserción" pese a validación previa.
+- Diagnóstico: La validación `if ($lastText === $userQuery)` estaba fallando y retornando `false`, permitiendo la inserción duplicada.
+- Causa Sospechosa: Diferencias invisibles de codificación o espaciado (ej. `\r\n` vs `\n` o espacios NBSP) entre el mensaje proveniente de la DB/Frontend y el query actual.
+- Solución: Normalización Agresiva. Antes de comparar, ambos textos se pasan a minúsculas, se hace trim, y se reemplaza cualquier secuencia de espacios/saltos por un único espacio simple (`preg_replace('/\s+/', ' ')`).
+- Resultado: Comparación robusta que detecta la duplicación semántica independientemente del formato.
