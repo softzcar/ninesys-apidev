@@ -181,24 +181,34 @@ abstract class GeminiAssistant
         }
 
         // Comparación y LOGGING profundo
-        $areDifferent = ($lastRole !== 'user' || trim($lastText) !== trim($userQuery));
+        // 1. Limpiar metadatos conocidos para comparación (query vs historial)
+        $cleanUserQuery = preg_replace('/\n\[(ORDEN EN PROGRESO|CONTEXTO BD)\]:.*$/s', '', $userQuery);
+        $cleanLastText = preg_replace('/\n\[(ORDEN EN PROGRESO|CONTEXTO BD)\]:.*$/s', '', $lastText);
 
-        // DEBUG: Registrar comparación si son sospechosamente parecidos pero "diferentes"
+        $areBasicallyEqual = ($lastRole === 'user' && trim($cleanLastText) === trim($cleanUserQuery));
+
+        // DEBUG: Registrar comparación
         if (!empty($userQuery) && $lastRole === 'user') {
-            $debugLog = "--- Duplication Check ---\n";
-            $debugLog .= "Query: '$userQuery' (" . bin2hex($userQuery) . ")\n";
-            $debugLog .= "Last : '$lastText' (" . bin2hex($lastText) . ")\n";
-            $debugLog .= "Are Different? " . ($areDifferent ? "YES (ADD)" : "NO (SKIP)") . "\n";
+            $debugLog = "--- Duplication Check (Smart Replace) ---\n";
+            $debugLog .= "Clean Query: '$cleanUserQuery'\n";
+            $debugLog .= "Clean Last : '$cleanLastText'\n";
+            $debugLog .= "Are Equal? " . ($areBasicallyEqual ? "YES (REPLACE)" : "NO (ADD)") . "\n";
             file_put_contents('/tmp/gemini_debug_duplication.log', $debugLog, FILE_APPEND);
         }
 
-        // Agregar mensaje actual del usuario (solo si no está vacío Y no es duplicado del último)
-        if (!empty($userQuery) && $areDifferent) {
+        if ($areBasicallyEqual) {
+            // REEMPLAZAR el último mensaje del historial con la versión actual (enriquecida con contexto)
+            // Esto evita duplicados visuales para el modelo pero mantiene los metadatos necesarios
+            array_pop($contents);
             $contents[] = [
                 'role' => 'user',
-                'parts' => [
-                    ['text' => $userQuery]
-                ]
+                'parts' => [['text' => $userQuery]]
+            ];
+        } elseif (!empty($userQuery)) {
+            // Si son diferentes, agregar como mensaje nuevo
+            $contents[] = [
+                'role' => 'user',
+                'parts' => [['text' => $userQuery]]
             ];
         }
 
