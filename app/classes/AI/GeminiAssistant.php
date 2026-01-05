@@ -219,7 +219,10 @@ abstract class GeminiAssistant
             'system_instruction' => $systemInstruction
         ];
         file_put_contents($logFile, json_encode($logEntry, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n---\n\n", FILE_APPEND);
+        // DEBUG: Guardar payload para inspección
+        file_put_contents('/tmp/gemini_payload.json', json_encode($payload, JSON_PRETTY_PRINT));
 
+        // Realizar petición HTTP
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
