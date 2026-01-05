@@ -144,14 +144,30 @@ abstract class GeminiAssistant
         $contents = [];
 
         // Agregar mensajes del historial
+        // Agregar mensajes del historial
         foreach ($history as $msg) {
             $role = $msg['role'] === 'user' ? 'user' : 'model';
-            $contents[] = [
-                'role' => $role,
-                'parts' => [
-                    ['text' => $msg['text']]
-                ]
-            ];
+
+            // Si el mensaje ya tiene 'parts' (ej: Function Calling), usarlo tal cual
+            if (isset($msg['parts'])) {
+                $contents[] = [
+                    'role' => $role,
+                    'parts' => $msg['parts']
+                ];
+            }
+            // Si tiene 'text' (legacy/simple), envolverlo en parts
+            elseif (isset($msg['text'])) {
+                $contents[] = [
+                    'role' => $role,
+                    'parts' => [
+                        ['text' => $msg['text']]
+                    ]
+                ];
+            } else {
+                // Skip invalid messages
+                error_log("Mensaje de historial inválido en callGeminiAPI: " . json_encode($msg));
+                continue;
+            }
         }
 
         // Agregar mensaje actual del usuario
