@@ -170,13 +170,15 @@ abstract class GeminiAssistant
             }
         }
 
-        // Agregar mensaje actual del usuario
-        $contents[] = [
-            'role' => 'user',
-            'parts' => [
-                ['text' => $userQuery]
-            ]
-        ];
+        // Agregar mensaje actual del usuario (solo si no está vacío)
+        if (!empty($userQuery)) {
+            $contents[] = [
+                'role' => 'user',
+                'parts' => [
+                    ['text' => $userQuery]
+                ]
+            ];
+        }
 
         $payload = [
             'contents' => $contents,

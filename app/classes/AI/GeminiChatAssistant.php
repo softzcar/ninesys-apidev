@@ -158,6 +158,15 @@ class GeminiChatAssistant extends GeminiAssistant
                     $functionName = $geminiResponse['function_name'];
                     $functionArgs = $geminiResponse['function_args'];
 
+                    // 0. Si es la primera iteración, agregar el mensaje del usuario al historial
+                    // para mantener la secuencia lógica User -> Model -> Function
+                    if ($iteration === 1 && !empty($userQuery)) {
+                        $currentHistory[] = [
+                            'role' => 'user',
+                            'parts' => [['text' => $userQuery]]
+                        ];
+                    }
+
                     // 1. Agregar la intención de llamada del modelo al historial
                     $currentHistory[] = [
                         'role' => 'model',
