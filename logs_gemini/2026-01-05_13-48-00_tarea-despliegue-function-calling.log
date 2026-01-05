@@ -1,0 +1,8 @@
+- Solicitud del Usuario: si haz el despliegue de la nueva implementacion
+- Archivos Involucrados: app/classes/AI/GeminiChatAssistant.php, app/classes/AI/FunctionDefinitions.php, app/schemas/db-schema-gemini.php, app/routes/ai.php
+- Acción Realizada: Ejecución de comando SSH para actualizar repositorio en VPS y marcación de tareas completadas.
+- Herramienta(s) Utilizada(s): run_command (SSH)
+- Resultado: Éxito
+- Verificación: Output de git pull muestra actualización de archivos (Fast-forward).
+- Observaciones de Gemini: El despliegue fue limpio. Se requiere prueba funcional en el chat.
+- Respuesta de Gemini: He completado el despliegue en el VPS correctamente. La nueva implementación de Function Calling ya está activa en el servidor de desarrollo (apidev).

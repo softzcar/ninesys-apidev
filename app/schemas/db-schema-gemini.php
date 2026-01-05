@@ -171,18 +171,17 @@ Pregunta:
 
 🧵 PASO 4 - TIPO DE TELA (OBLIGATORIO):
 
-Tu objetivo: Seleccionar el material.
-ACCIÓN: Si no sabes qué telas hay, llama a `obtenerTelas()`.
+Tu objetivo: Seleccionar el material del catálogo oficial.
+ACCIÓN: ANTES de dar opciones, ¡LLAMA a `obtenerTelas()`!
 
 Pregunta:
-\"¿Qué tipo de tela prefieres? Tenemos disponibles:
-- ALGODÓN
-- DRY FIT 1.60
-- ATLÉTICA 1.60
-(etc... usa los datos de la función)\"
+\"¿Qué tipo de tela prefieres? Las opciones disponibles hoy son:
+[LISTA EXACTA DEVUELTA POR LA FUNCIÓN]\"
 
-Si la tela no existe en la lista devuelta por la función:
-\"Esa tela no está disponible. Te sugiero estas opciones: [lista devuelta]\"
+⚠️ IMPORTANTE:
+- NO escribas nombres de telas en este prompt.
+- SI la función devuelve vacío, di que no hay telas cargadas.
+- SI el usuario pide una tela que no está en la lista de la función, dile que NO está disponible.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Reporte de error 500 "Undefined array key "text"" al procesar historial con Function Calls.
+- Archivos Involucrados: app/classes/AI/GeminiAssistant.php
+- Acción Realizada: Se modificó el bucle de procesamiento del historial (`callGeminiAPI`) para verificar si cada mensaje tiene la clave `parts` (formato nuevo/Function Calling) antes de intentar acceder a `text` (formato legacy).
+- Herramienta(s) Utilizada(s): replace_file_content, git commit/push, ssh git pull
+- Resultado: Éxito (Fix desplegado)
+- Verificación: Sintaxis PHP correcta, despliegue exitoso.
+- Observaciones de Gemini: El historial ahora es híbrido, conteniendo mensajes simples de texto y mensajes complejos de invocación de herramientas. La lógica anterior fallaba al asumir que todos los mensajes tenían propiedad `text` plana.
+- Respuesta de Gemini: He corregido el error 500. El problema era que el sistema intentaba leer texto simple de mensajes que contenían llamadas a funciones (estructura diferente). Ya está actualizado y debería procesar correctamente tu historial.

@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Reporte de error 400 "Invalid value at 'tools[0].function_declarations[2].parameters' (Map), Cannot bind a list to map for field 'properties'."
+- Archivos Involucrados: app/classes/AI/FunctionDefinitions.php
+- Acción Realizada: Se modificó la definición de esquemas JSON para 'obtenerTallas' y 'obtenerTelas'. Se forzó la conversión de `properties` a objeto vacío `(object)[]` en lugar de array vacío `[]`, ya que PHP serializa `[]` como lista JSON `[]` y Gemini requiere un mapa `{}`.
+- Herramienta(s) Utilizada(s): replace_file_content, git commit/push, ssh git pull
+- Resultado: Éxito (Hotfix desplegado)
+- Verificación: Sintaxis PHP correcta, push exitoso, pull en VPS exitoso.
+- Observaciones de Gemini: Error común de interoperabilidad PHP -> JSON -> API estricta. Resuelto rápidamente.
+- Respuesta de Gemini: He aplicado una corrección (hotfix) para resolver el error de validación de parámetros (Error 400). El problema era que Gemini esperaba un "Objeto" JSON `{}` para propiedades vacías, pero PHP enviaba una "Lista" `[]`. Ya está corregido y desplegado.
