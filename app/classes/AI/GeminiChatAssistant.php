@@ -666,8 +666,10 @@ class GeminiChatAssistant extends GeminiAssistant
         file_put_contents('/tmp/gemini_debug_v2.log', date('[Y-m-d H:i:s] ') . "Query result count: $count\n", FILE_APPEND);
 
         if (!empty($telas) && !isset($telas['status'])) {
-            // Extraer solo los nombres en array simple
-            return ['telas' => array_column($telas, 'nombre')];
+            // DEVOLVER OBJETOS COMPLETOS (no aplanar con array_column)
+            // Esto genera [{"nombre": "ALGODON"}, ...] que es más fácil de entender para Gemini
+            // que un array plano ["ALGODON", ...]
+            return ['telas' => $telas];
         }
 
         return ['telas' => []];
