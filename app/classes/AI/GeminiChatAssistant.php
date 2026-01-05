@@ -144,7 +144,8 @@ class GeminiChatAssistant extends GeminiAssistant
 
                 // Llamar a Gemini enviando tools
                 // Nota: requestSQL=false porque usamos FC nativo
-                $geminiResponse = $this->callGeminiAPI($userQuery, false, $currentHistory, $tools);
+                // Usamos el prompt específico para órdenes conversacionales
+                $geminiResponse = $this->callGeminiAPI($userQuery, false, $currentHistory, $tools, $this->dbSchema['prompt_ordenes'] ?? null);
 
                 if (isset($geminiResponse['error'])) {
                     return [

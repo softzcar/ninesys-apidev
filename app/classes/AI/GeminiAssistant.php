@@ -40,7 +40,8 @@ abstract class GeminiAssistant
      */
     protected function buildBasePrompt(): string
     {
-        $prompt = $this->dbSchema['prompt_base'] ?? '';
+        // Prioridad: prompt_sql -> prompt_base (legacy)
+        $prompt = $this->dbSchema['prompt_sql'] ?? $this->dbSchema['prompt_base'] ?? '';
 
         // Agregar recetas SQL curadas como ejemplos
         if (!empty($this->dbSchema['sql_recipes'])) {
@@ -120,16 +121,20 @@ abstract class GeminiAssistant
      * @param bool $requestSQL Si debe solicitar SQL como function call
      * @param array $history Historial de conversación [['role' => 'user'|'model', 'text' => '...'], ...]
      * @param array|null $tools Definiciones de funciones para Function Calling
+     * @param string|null $overridePrompt Prompt de sistema opcional para sobreescribir el base
      * @return array Respuesta de Gemini
      */
-    protected function callGeminiAPI(string $userQuery, bool $requestSQL = true, array $history = [], ?array $tools = null): array
+    protected function callGeminiAPI(string $userQuery, bool $requestSQL = true, array $history = [], ?array $tools = null, ?string $overridePrompt = null): array
     {
         $url = $this->apiUrl . $this->model . ':generateContent?key=' . $this->apiKey;
 
-        $systemInstruction = $this->basePrompt;
+        $systemInstruction = $overridePrompt ?? $this->basePrompt;
 
-        // Agregar contexto de queries relevantes según la pregunta
-        $systemInstruction .= $this->getRelevantQueriesContext($userQuery);
+        // Si no se está usando un prompt de override (que ya debería ser específico),
+        // agregar contexto de queries relevantes según la pregunta
+        if (!$overridePrompt) {
+            $systemInstruction .= $this->getRelevantQueriesContext($userQuery);
+        }
 
         if ($requestSQL) {
             $systemInstruction .= "\n\nCuando el usuario haga una pregunta sobre datos, genera la consulta SQL necesaria.";
