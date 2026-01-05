@@ -170,8 +170,18 @@ abstract class GeminiAssistant
             }
         }
 
-        // Agregar mensaje actual del usuario (solo si no está vacío)
-        if (!empty($userQuery)) {
+        // Verificar si el último mensaje del historial es idéntico al query actual
+        // para evitar duplicación ("si" + "si" = "sisi" o repetición)
+        $lastMsg = !empty($contents) ? end($contents) : [];
+        $lastRole = $lastMsg['role'] ?? '';
+        $lastText = '';
+
+        if (isset($lastMsg['parts'][0]['text'])) {
+            $lastText = $lastMsg['parts'][0]['text'];
+        }
+
+        // Agregar mensaje actual del usuario (solo si no está vacío Y no es duplicado del último)
+        if (!empty($userQuery) && ($lastRole !== 'user' || trim($lastText) !== trim($userQuery))) {
             $contents[] = [
                 'role' => 'user',
                 'parts' => [
