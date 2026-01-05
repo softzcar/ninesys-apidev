@@ -1,0 +1,9 @@
+- Solicitud del Usuario: Persistencia de "voz doble" pese a fixes anteriores.
+- Causa Raíz (Nivel Dios): "Doble Inserción". 
+  1. El Frontend enviaba el mensaje actual dentro del historial.
+  2. `GeminiChatAssistant` (mi código) volvía a agregar el mensaje actual (`$userQuery`) al inicio del array.
+  3. Resultado: `[UserMsg, UserMsg, ...]`.
+  4. Mi deduplicación agresiva borraba UNO, pero dejaba el otro. Y agregaba el query enriquecido al final (en caso de loop).
+  5. Resultado final enviado: `[UserMsg, ..., EnrichedUserMsg]`.
+- Solución: Lógica defensiva en `processOrderQuery`. Antes de agregar `userQuery` al historial, verifica si el ÚLTIMO mensaje del historial ya es igual al query. Si lo es, NO lo agrega.
+- Impacto: Esto previene la duplicación inicial, independientemente de lo que haga el frontend o el loop.

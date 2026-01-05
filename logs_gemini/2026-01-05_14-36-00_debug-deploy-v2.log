@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Gemini sigue sin devolver telas. El log anterior no se pudo leer.
+- Archivos Involucrados: app/classes/AI/GeminiChatAssistant.php
+- Acción Realizada: Se cambió el path de log a `/tmp/gemini_debug_v2.log` (permisos garantizados) y se agregó log en `callFunctionHandler` para detectar entrada al dispatcher.
+- Herramienta(s) Utilizada(s): replace_file_content, git commit/push, ssh git pull
+- Resultado: Debug V2 deployado.
+- Verificación: Pendiente.
+- Observaciones de Gemini: Si el log sigue vacío, entonces Gemini no está haciendo Function Calls.
+- Respuesta de Gemini: He actualizado el sistema de diagnóstico a uno más robusto. Parece que el anterior tuvo problemas de permisos en el servidor.

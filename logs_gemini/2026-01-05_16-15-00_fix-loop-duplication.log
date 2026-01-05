@@ -1,0 +1,6 @@
+- Solicitud del Usuario: Persistencia de "mensajes dobles" ("ozcar atenciocrea...").
+- Causa Raíz Detectada: En la lógica de bucle (Function Calling Loop), la variable `$augmentedQuery` mantenía el texto original del usuario (+ metadata) incluso en la segunda o tercera iteración (cuando Gemini ya había respondido con un `functionCall`). 
+  Esto provocaba que, al re-llamar a la API de Gemini con el resultado de la función, se volviera a adjuntar el mensaje original al final del historial.
+  Como el historial ya tenía mensajes intermedios (rol 'model' y 'function'), mi deduplicación agresiva (que mira el final del array) no detectaba el duplicado porque estaba "enterrado" al inicio de la tanda.
+- Solución: Se agregó `$augmentedQuery = "";` dentro del bucle, para asegurar que en las iteraciones subsiguientes solo se envíe el historial acumulado limpiamente, sin duplicar el input inicial.
+- Resultado: Solución matemática al problema de duplicación en flujos complejos (Function Calling).

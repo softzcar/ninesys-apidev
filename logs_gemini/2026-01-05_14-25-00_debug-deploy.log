@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Gemini sigue sin encontrar telas.
+- Archivos Involucrados: app/classes/AI/GeminiChatAssistant.php
+- Acción Realizada: Se insertó código de logging en `handleObtenerTelas` para escribir en `gemini_debug.log` la base de datos conectada y el conteo de resultados.
+- Herramienta(s) Utilizada(s): replace_file_content, git commit/push, ssh git pull
+- Resultado: Debug deployado.
+- Verificación: Pendiente de ejecución del usuario.
+- Observaciones de Gemini: Necesario saber si el entorno connecta a la BD correcta.
+- Respuesta de Gemini: He activado el modo de diagnóstico avanzado. Aunque mis pruebas manuales mostraron que los datos existen, parece que el asistente "en vivo" no los ve. He añadido un sistema de registro oculto para ver exactamente qué está pasando cuando intentas buscar telas.

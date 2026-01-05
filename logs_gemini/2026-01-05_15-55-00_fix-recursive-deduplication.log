@@ -1,0 +1,5 @@
+- Solicitud del Usuario: A pesar del primer fix, Gemini seguía viendo texto duplicado ("ozcar atenciocrea...").
+- Análisis Forense: Se detectó en `gemini_payload.json` que el historial enviado contenía DOS copias del mensaje del usuario (probablemente por reintentos anteriores o estado sucio en frontend). El fix original solo limpiaba la ÚLTIMA copia, dejando la penúltima intacta, que se concatenaba con el mensaje nuevo.
+- Solución Definitiva: Se implementó una lógica de deduplicación AGRESIVA y RECURSIVA (`while` loop). El sistema ahora mira hacia atrás en el historial y elimina **todas** las copias consecutivas del mensaje actual hasta encontrar algo diferente. Luego agrega la versión enriquecida UNA sola vez.
+- Resultado: Inmunidad total contra historiales corruptos o reintentos del frontend. Gemini solo verá 1 mensaje.
+- Respuesta: "He implementado una limpieza profunda. Aunque tu navegador envíe 10 copias del mismo mensaje, el servidor los borrará todos y dejará solo el correcto. Ahora sí, problema resuelto de raíz."

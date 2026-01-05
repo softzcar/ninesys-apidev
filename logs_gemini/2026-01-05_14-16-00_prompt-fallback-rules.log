@@ -1,0 +1,11 @@
+- Solicitud del Usuario: El sistema debe notificar si no encuentra datos, en lugar de inventar.
+- Archivos Involucrados: app/schemas/db-schema-gemini.php
+- Acción Realizada: Se agregó un bloque explícito '🚫 QUÉ HACER SI LA FUNCIÓN DEVUELVE VACÍO' en el Prompt System.
+    - Regla 1: NO INVENTAR NADA.
+    - Regla 2: Informar al usuario explícitamente "No encontré...".
+    - Regla 3: Ofrecer reintentar o registrar.
+- Herramienta(s) Utilizada(s): replace_file_content, git commit/push, ssh git pull
+- Resultado: Éxito (Reglas desplegadas)
+- Verificación: Git pull confirmó la actualización del archivo db-schema-gemini.php.
+- Observaciones de Gemini: Establecer comportamientos de "fallback" (qué hacer cuando algo falla) es crucial para la robustez de los agentes de IA.
+- Respuesta de Gemini: Tienes toda la razón. He añadido una "Regla de Seguridad" global al cerebro de la IA. Ahora, si busca algo y no lo encuentra, tiene la orden estricta de decir "No encontré resultados" en lugar de intentar rellenar el hueco con datos falsos.

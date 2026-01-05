@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Gemini sigue inventando telas que no existen en el catálogo.
+- Archivos Involucrados: app/schemas/db-schema-gemini.php
+- Acción Realizada: Se eliminaron los ejemplos hardcoded de telas del prompt, ya que el modelo los tomaba como verdad absoluta. Se reforzó la instrucción de usar `obtenerTelas()` y mostrar EXCLUSIVAMENTE lo que retorna esa función.
+- Herramienta(s) Utilizada(s): replace_file_content, git commit/push, ssh git pull
+- Resultado: Éxito (Prompt actualizado en VPS)
+- Verificación: Git pull reporta cambios en db-schema-gemini.php.
+- Observaciones de Gemini: Los LLMs tienden a priorizar ejemplos en el prompt sobre llamadas a herramientas si los ejemplos se presentan como "opciones disponibles". La eliminación de estos ejemplos fuerza al modelo a buscar la información.
+- Respuesta de Gemini: He ajustado el prompt ("cerebro") del asistente. El problema era que tenía una lista de ejemplos de telas fija en sus instrucciones, y a veces usaba esos ejemplos en lugar de consultar la base de datos real. He borrado esos ejemplos y le he ordenado estrictamente llamar a la función `obtenerTelas()` antes de ofrecer opciones.

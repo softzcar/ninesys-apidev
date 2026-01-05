@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Mensajes concatenados incorrectamente "tela aliciausaremos tela alicia".
+- Archivos Involucrados: app/classes/AI/GeminiAssistant.php, app/classes/AI/GeminiChatAssistant.php
+- Diagnóstico: Al entrar en el bucle de Function Calling (iteración 1), el sistema agregaba la respuesta del modelo (llamada a función) al historial temporal, PERO olvidaba agregar primero el mensaje del usuario que provocó dicha respuesta. Esto generaba un historial corrupto [Model -> Function] sin User previo, lo que causaba alucinaciones y duplicaciones en Gemini.
+- Acción Realizada:
+    1. Se parcheó `GeminiChatAssistant.php` para inyectar explícitamente el mensaje del usuario en el historial antes de agregar la respuesta de Function Call.
+    2. Se ajustó `GeminiAssistant.php` para no agregar mensajes de usuario vacíos, permitiendo llamadas de seguimiento seguras.
+- Resultado: Fix deployado.
+- Respuesta de Gemini: He corregido la "memoria a corto plazo" del asistente durante las llamadas a funciones. Se estaba saltando un paso (tu mensaje original) al procesar la respuesta interna, lo que lo confundía.

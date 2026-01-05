@@ -1,0 +1,9 @@
+- Solicitud del Usuario: "No consigue todos los registros para franelas". La búsqueda "franelas disponibles" devolvía solo 2 resultados.
+- Causa: El sistema buscaba literalmente "franelas disponibles" o "franela disponible". Como los productos no tienen "disponible" en el nombre, fallaba.
+- Solución: Se implementó un motor de búsqueda por palabras clave en `GeminiChatAssistant.php`:
+    1. Tokeniza la frase ("franelas", "disponibles").
+    2. Filtra palabras vacías (stopwords) como "disponibles", "precio", "busco".
+    3. Singulariza las palabras clave ("franelas" -> "franela").
+    4. Busca coincidencias parciales con lógica AND (`LIKE %franela%`).
+    5. Aumenta el límite de resultados de 15 a 50.
+- Resultado Esperado: Ahora encontrará todos los productos que contengan "franela", ignorando el resto de la frase de relleno.

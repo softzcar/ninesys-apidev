@@ -1,0 +1,6 @@
+- Solicitud del Usuario: Gemini respondía con array vacío `[]` al solicitar telas, a pesar de que la base de datos tenía registros. Sugerencia de replicar estructura de "clientes".
+- Archivos Involucrados: app/classes/AI/GeminiChatAssistant.php
+- Diagnóstico: La función `obtenerTelas` devolvía un array plano de strings (`['A', 'B']`). El modelo LLM (Gemini) parece tener dificultades para parsear listas planas en este contexto específico o prefiere estructuras de objetos JSON (`[{'nombre': 'A'}, {'nombre': 'B'}]`) como las que usa `buscarClientes`.
+- Acción Realizada: Se modificó `handleObtenerTelas` para devolver el array de filas de la base de datos completo (objetos) en lugar de usar `array_column` para aplanarlo.
+- Resultado: Fix deployado.
+- Respuesta de Gemini: He reestructurado la forma en que leemos el catálogo de telas. Ahora el asistente recibe un formato más detallado (objetos en lugar de texto simple), idéntico al que usamos para buscar clientes, lo cual debería eliminar la confusión.

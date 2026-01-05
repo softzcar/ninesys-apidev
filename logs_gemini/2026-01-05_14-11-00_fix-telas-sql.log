@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Lista de telas aparece vacía en el chat.
+- Archivos Involucrados: app/classes/AI/GeminiChatAssistant.php
+- Acción Realizada: Se corrigió la consulta SQL en `handleObtenerTelas`. La tabla `catalogo_telas` tiene la columna `tela` en lugar de `nombre`, y no tiene columna `activo`. Se ajustó el query a `SELECT tela as nombre FROM catalogo_telas`.
+- Herramienta(s) Utilizada(s): replace_file_content, ssh (describe table), run_command (git)
+- Resultado: Éxito (Fix desplegado)
+- Verificación: Consulta de estructura de tabla via SSH confirmó los nombres de columna correctos.
+- Observaciones de Gemini: Error típico de disparidad entre código y esquema real de BD.
+- Respuesta de Gemini: He corregido la función de búsqueda de telas. El problema era técnico: el sistema buscaba una columna llamada "nombre" en la base de datos, pero la columna real se llama "tela". Ya está corregido y actualizado.

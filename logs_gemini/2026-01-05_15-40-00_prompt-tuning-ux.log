@@ -1,0 +1,7 @@
+- Solicitud del Usuario: Gemini se detenía a pedir confirmación ("necesito verificar su información") en lugar de actuar, o después de encontrar al cliente pedía confirmación innecesaria ("¿Es correcto?").
+- Acción Realizada: Se modificó el Prompt del Sistema (`db-schema-gemini.php`) para incluir instrucciones imperativas:
+    1. "ACCIÓN CRÍTICA: SI EL USUARIO DA UN NOMBRE, LLAMA INMEDIATAMENTE".
+    2. "NO digas 'voy a buscar', NO pidas permiso".
+    3. "Si devuelve uno solo: ¡SELECCIÓNALO AUTOMÁTICAMENTE!".
+- Resultado Esperado: Gemini debería saltar directamente de "crea orden para Ozcar" a "Orden para Ozcar Atencio lista. ¿Qué productos deseas?".
+- Validaciones: Sintaxis PHP verificada y despliegue exitoso.

@@ -1,0 +1,7 @@
+- Solicitud del Usuario: Error 400 "Unknown name args... cannot start list".
+- Archivos Involucrados: app/classes/AI/GeminiChatAssistant.php
+- Acción Realizada: Se forzó la conversión de argumentos vacíos `[]` a objeto `(object)[]` en la construcción del historial de Function Calling. La API de Gemini requiere un mapa JSON `{}` para argumentos, no una lista.
+- Diagnóstico Adicional: El log `/tmp/gemini_debug_v2.log` reveló que la función `obtenerTelas` SÍ se ejecutó exitosamente, conectando a la BD `api_emp_163` y recuperando 31 registros. El fallo ocurría después, al intentar enviar estos resultados de vuelta a Gemini.
+- Resultado: Fix deployado.
+- Observaciones de Gemini: Error sutil de serialización JSON en PHP vs Protobuf.
+- Respuesta de Gemini: He corregido el error de conexión. Era un tecnicismo en cómo le enviábamos la lista "vacía" de argumentos a Google cuando pedíamos las telas.
