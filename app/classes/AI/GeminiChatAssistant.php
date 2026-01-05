@@ -179,7 +179,10 @@ class GeminiChatAssistant extends GeminiAssistant
             // 3. Detectar JSON estructurado (objetos grandes con múltiples campos)
             $tieneJSONEstructurado = preg_match('/\{\s*"[\w_]+"\s*:.*"[\w_]+"\s*:/s', $responseText);
 
-            if ($tieneCodigoMarkdown || $tieneSQLPlano || $tieneJSONEstructurado) {
+            // 4. Detectar bloque de CONTEXTO DE BASE DE DATOS (NO mostrar al usuario)
+            $tieneContextoBD = preg_match('/\[CONTEXTO DE BASE DE DATOS/i', $responseText);
+
+            if ($tieneCodigoMarkdown || $tieneSQLPlano || $tieneJSONEstructurado || $tieneContextoBD) {
                 $textoOriginal = $responseText;
 
                 // ESTRATEGIA 1: Limpiar bloques markdown completos (```...```)
@@ -192,6 +195,12 @@ class GeminiChatAssistant extends GeminiAssistant
                 // ESTRATEGIA 3: Limpiar objetos JSON grandes
                 // Solo si tiene estructura compleja (múltiples líneas con campos)
                 $responseText = preg_replace('/\{[^}]{150,}\}/s', '', $responseText);
+
+                // ESTRATEGIA 4: Limpiar bloque de CONTEXTO DE BASE DE DATOS completo
+                // Desde [CONTEXTO... hasta [ORDEN EN PROGRESO] o final de texto
+                $responseText = preg_replace('/\[CONTEXTO DE BASE DE DATOS.*?\[ORDEN EN PROGRESO\]:[^\]]*\]/is', '', $responseText);
+                // Si no hay ORDEN EN PROGRESO, limpiar hasta el final
+                $responseText = preg_replace('/\[CONTEXTO DE BASE DE DATOS.*$/is', '', $responseText);
 
                 // ESTRATEGIA 4: Limpiar líneas que empiezan con estructura de objeto
                 $lineas = explode("\n", $responseText);
