@@ -599,20 +599,57 @@ class GeminiChatAssistant extends GeminiAssistant
      */
     private function handleBuscarProductos($db, string $query): array
     {
-        $nombre = trim($query);
-        // Normalizar plurales
-        $nombreSingular = preg_replace('/(es|s)$/i', '', $nombre);
+        $originalQuery = $query;
+        // Palabras a ignorar para mejorar coincidencia
+        $stopwords = ['disponibles', 'disponible', 'precio', 'busco', 'quiero', 'necesito', 'las', 'los', 'el', 'la', 'en', 'de', 'para', 'con', 'que', 'tenga'];
+
+        // Limpiar y tokenizar
+        $queryClean = strtolower(trim($query));
+        $words = preg_split('/\s+/', $queryClean);
+        $keywords = array_diff($words, $stopwords);
+
+        // Si nos quedamos sin palabras (ej. solo buscó "disponibles"), usar el original
+        if (empty($keywords)) {
+            $keywords = $words;
+        }
+
+        $conditions = [];
+        $params = [];
+
+        foreach ($keywords as $word) {
+            // Singularización básica (quita 'es' o 's' al final)
+            // Solo si la palabra es suficientemente larga para evitar falsos positivos con 's'
+            $wordBase = $word;
+            if (strlen($word) > 3) {
+                $wordBase = preg_replace('/(es|s)$/i', '', $word);
+            }
+
+            // Construir condición
+            $conditions[] = "p.product LIKE ?";
+            $params[] = "%{$wordBase}%";
+        }
+
+        // Fallback robusto por si acaso
+        if (empty($conditions)) {
+            $conditions[] = "p.product LIKE ?";
+            $params[] = "%" . trim($query) . "%";
+        }
+
+        $sqlWhere = implode(' AND ', $conditions);
+
+        // DEBUG:
+        file_put_contents('/tmp/gemini_product_search.log', "Original: '$originalQuery' | Where: $sqlWhere | Params: " . json_encode($params) . "\n", FILE_APPEND);
 
         $sql = "SELECT p._id as id, p.product as nombre, 
                        COALESCE(pp.price, p.price) as precio
                 FROM products p
                 LEFT JOIN products_prices pp ON pp.id_product = p._id
-                WHERE p.product LIKE ? OR p.product LIKE ?
+                WHERE $sqlWhere
                 GROUP BY p._id
                 ORDER BY p.product ASC
-                LIMIT 15";
+                LIMIT 50";
 
-        $productos = $db->goQuery($sql, ["%{$nombre}%", "%{$nombreSingular}%"]);
+        $productos = $db->goQuery($sql, $params);
 
         if (!empty($productos) && !isset($productos['status'])) {
             return ['productos' => $productos];
