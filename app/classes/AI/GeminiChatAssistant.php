@@ -165,7 +165,7 @@ class GeminiChatAssistant extends GeminiAssistant
                             [
                                 'functionCall' => [
                                     'name' => $functionName,
-                                    'args' => $functionArgs
+                                    'args' => empty($functionArgs) ? (object) [] : $functionArgs
                                 ]
                             ]
                         ]
