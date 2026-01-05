@@ -534,6 +534,9 @@ class GeminiChatAssistant extends GeminiAssistant
         // Usar la conexión existente
         $db = $this->dbConnection;
 
+        // DEBUG
+        file_put_contents('/tmp/gemini_debug_v2.log', date('[Y-m-d H:i:s] ') . "Calling function handler: $functionName\n", FILE_APPEND);
+
         try {
             switch ($functionName) {
                 case 'buscarClientes':
@@ -638,9 +641,9 @@ class GeminiChatAssistant extends GeminiAssistant
             $dbNameQuery = $db->goQuery("SELECT DATABASE() as db", []);
             $currentDb = $dbNameQuery[0]['db'] ?? 'unknown';
             $logMsg = date('[Y-m-d H:i:s] ') . "handleObtenerTelas called using DB: $currentDb\n";
-            file_put_contents(__DIR__ . '/../../../gemini_debug.log', $logMsg, FILE_APPEND);
+            file_put_contents('/tmp/gemini_debug_v2.log', $logMsg, FILE_APPEND);
         } catch (\Throwable $e) {
-            file_put_contents(__DIR__ . '/../../../gemini_debug.log', "Error logging DB: " . $e->getMessage() . "\n", FILE_APPEND);
+            file_put_contents('/tmp/gemini_debug_v2.log', "Error logging DB: " . $e->getMessage() . "\n", FILE_APPEND);
         }
 
         $sql = "SELECT tela as nombre 
@@ -651,7 +654,7 @@ class GeminiChatAssistant extends GeminiAssistant
 
         // DEBUG RESULTS
         $count = count($telas);
-        file_put_contents(__DIR__ . '/../../../gemini_debug.log', date('[Y-m-d H:i:s] ') . "Query result count: $count\n", FILE_APPEND);
+        file_put_contents('/tmp/gemini_debug_v2.log', date('[Y-m-d H:i:s] ') . "Query result count: $count\n", FILE_APPEND);
 
         if (!empty($telas) && !isset($telas['status'])) {
             // Extraer solo los nombres en array simple
