@@ -299,41 +299,46 @@ abstract class GeminiAssistant
         }
 
         $data = json_decode($response, true);
+        $parts = $data['candidates'][0]['content']['parts'] ?? [];
 
-        // ============================================================
-        // FUNCTION CALLING: Detectar si Gemini quiere llamar una función
-        // ============================================================
-        if (isset($data['candidates'][0]['content']['parts'][0]['functionCall'])) {
-            $functionCall = $data['candidates'][0]['content']['parts'][0]['functionCall'];
+        $result = [
+            'success' => true,
+            'raw' => $data,
+            'is_function_call' => false,
+            'text' => ''
+        ];
 
-            return [
-                'success' => true,
-                'is_function_call' => true,
-                'function_name' => $functionCall['name'],
-                'function_args' => $functionCall['args'] ?? [],
-                'raw' => $data
-            ];
+        foreach ($parts as $part) {
+            if (isset($part['functionCall'])) {
+                $result['is_function_call'] = true;
+                $result['function_name'] = $part['functionCall']['name'];
+                $result['function_args'] = $part['functionCall']['args'] ?? [];
+            }
+            if (isset($part['text'])) {
+                $result['text'] .= $part['text'];
+            }
         }
 
-        // Respuesta de texto normal
-        if (!isset($data['candidates'][0]['content']['parts'][0]['text'])) {
-            // LOG PARA DEBUG PROFUNDO
+        if ($result['is_function_call']) {
+            return $result;
+        }
+
+        if (empty($parts)) {
             file_put_contents('/tmp/gemini_raw_response.log', date('[Y-m-d H:i:s] ') . "Invalid Response Data: " . json_encode($data, JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
             return ['error' => 'Respuesta inválida de Gemini', 'raw' => $data];
         }
 
-        $text = $data['candidates'][0]['content']['parts'][0]['text'];
-
-        // Intentar parsear como JSON
+        // Caso: Texto con JSON (Legacy mode)
         $jsonMatch = [];
-        if (preg_match('/\{[\s\S]*\}/', $text, $jsonMatch)) {
+        if (preg_match('/\{[\s\S]*\}/', $result['text'], $jsonMatch)) {
             $parsed = json_decode($jsonMatch[0], true);
             if ($parsed) {
-                return ['success' => true, 'data' => $parsed, 'raw_text' => $text];
+                $result['data'] = $parsed;
+                return $result;
             }
         }
 
-        return ['success' => true, 'text' => $text];
+        return $result;
     }
 
     /**
