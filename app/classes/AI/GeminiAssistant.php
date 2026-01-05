@@ -146,7 +146,9 @@ abstract class GeminiAssistant
         // Agregar mensajes del historial
         // Agregar mensajes del historial
         foreach ($history as $msg) {
-            $role = $msg['role'] === 'user' ? 'user' : 'model';
+            // Gemini exige alternancia estricta entre 'user' y 'model'.
+            // Los resultados de funciones (role: function) deben enviarse como 'user' para mantener la alternancia.
+            $role = ($msg['role'] === 'user' || $msg['role'] === 'function') ? 'user' : 'model';
 
             // Si el mensaje ya tiene 'parts' (ej: Function Calling), usarlo tal cual
             if (isset($msg['parts'])) {
@@ -195,8 +197,12 @@ abstract class GeminiAssistant
 
             $cleanLast = preg_replace('/\n\[(ORDEN EN PROGRESO|CONTEXTO BD)\]:.*$/s', '', $lastText);
 
+            // Normalización agresiva para comparación
+            $normLast = preg_replace('/\s+/', ' ', strtolower(trim($cleanLast)));
+            $normQuery = preg_replace('/\s+/', ' ', strtolower(trim($cleanUserQuery)));
+
             // Verificar si es duplicado del usuario
-            if ($lastRole === 'user' && trim($cleanLast) === trim($cleanUserQuery)) {
+            if ($lastRole === 'user' && $normLast === $normQuery) {
                 array_pop($contents); // Eliminar duplicado
                 $removedCount++;
             } else {
@@ -301,6 +307,8 @@ abstract class GeminiAssistant
 
         // Respuesta de texto normal
         if (!isset($data['candidates'][0]['content']['parts'][0]['text'])) {
+            // LOG PARA DEBUG PROFUNDO
+            file_put_contents('/tmp/gemini_raw_response.log', date('[Y-m-d H:i:s] ') . "Invalid Response Data: " . json_encode($data, JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
             return ['error' => 'Respuesta inválida de Gemini', 'raw' => $data];
         }
 
