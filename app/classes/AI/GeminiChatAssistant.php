@@ -165,16 +165,51 @@ class GeminiChatAssistant extends GeminiAssistant
             // Respuesta en texto natural
             $responseText = $geminiResponse['text'] ?? $geminiResponse['raw_text'] ?? 'No pude procesar tu consulta.';
 
-            // Filtrar SQL de la respuesta (no debe mostrarse al usuario)
-            if (preg_match('/```sql/i', $responseText) || preg_match('/\bSELECT\b.*\bFROM\b/i', $responseText)) {
-                // Si la respuesta contiene SQL, limpiarla
-                $responseText = preg_replace('/```sql[\s\S]*?```/i', '', $responseText);
-                $responseText = preg_replace('/SELECT\s+[\s\S]*?;/i', '', $responseText);
+            // Filtrar CUALQUIER bloque de código de la respuesta (no debe mostrarse al usuario)
+            // Detecta bloques markdown ```lenguaje ... ``` y código plano
+            $tieneCodigoBloque = preg_match('/```[\w]*[\s\S]*?```/i', $responseText);
+            $tieneSQLPlano = preg_match('/\b(SELECT|INSERT|UPDATE|DELETE)\b.*\b(FROM|INTO|SET|WHERE)\b/i', $responseText);
+            $tieneJSONPlano = preg_match('/\{\s*"[\w_]+"\s*:\s*[\[\{"]/', $responseText);
+
+            if ($tieneCodigoBloque || $tieneSQLPlano || $tieneJSONPlano) {
+                $textoOriginal = $responseText;
+
+                // Limpiar bloques de código markdown (```sql, ```json, ```php, etc.)
+                $responseText = preg_replace('/```[\w]*[\s\S]*?```/i', '', $responseText);
+
+                // Limpiar SQL plano (sin markdown)
+                $responseText = preg_replace('/(SELECT|INSERT|UPDATE|DELETE)\s+[\s\S]*?;/i', '', $responseText);
+
+                // Limpiar JSON grande (sin markdown) - solo si es un bloque grande
+                if (preg_match('/\{[\s\S]{100,}\}/i', $responseText)) {
+                    $responseText = preg_replace('/\{[\s\S]*?\}/i', '', $responseText);
+                }
+
                 $responseText = trim($responseText);
 
-                // Si quedó vacío, dar una respuesta genérica
-                if (empty($responseText)) {
-                    $responseText = 'Estoy procesando tu solicitud. ¿Podrías darme más detalles sobre lo que necesitas?';
+                // Si quedó vacío o muy corto después de limpiar, extraer SOLO texto natural del original
+                if (empty($responseText) || strlen($responseText) < 20) {
+                    // Intentar extraer solo las líneas que NO son código
+                    $lineas = explode("\n", $textoOriginal);
+                    $lineasTexto = [];
+                    $dentroBloque = false;
+
+                    foreach ($lineas as $linea) {
+                        if (preg_match('/```/', $linea)) {
+                            $dentroBloque = !$dentroBloque;
+                            continue;
+                        }
+                        if (!$dentroBloque && !preg_match('/^\s*(SELECT|INSERT|UPDATE|\{|\}|"[\w_]+":)/i', $linea)) {
+                            $lineasTexto[] = $linea;
+                        }
+                    }
+
+                    $responseText = trim(implode("\n", $lineasTexto));
+
+                    // Si todavía está vacío, dar respuesta genérica
+                    if (empty($responseText) || strlen($responseText) < 10) {
+                        $responseText = 'Entendido. ¿Qué tipo de tela necesita para esta orden?';
+                    }
                 }
             }
 
