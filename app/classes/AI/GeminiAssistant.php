@@ -13,7 +13,7 @@
 abstract class GeminiAssistant
 {
     protected string $apiKey;
-    protected string $model = 'gemini-2.0-flash';
+    protected string $model = 'gemini-1.5-pro';
     protected string $apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/';
     protected array $dbSchema;
     protected $dbConnection;
