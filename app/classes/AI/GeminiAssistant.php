@@ -261,9 +261,6 @@ abstract class GeminiAssistant
             'prompt_length' => strlen($systemInstruction),
             'system_instruction' => $systemInstruction
         ];
-        file_put_contents($logFile, json_encode($logEntry, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n---\n\n", FILE_APPEND);
-        // DEBUG: Guardar payload para inspección
-        file_put_contents('/tmp/gemini_payload.json', json_encode($payload, JSON_PRETTY_PRINT));
 
         // Realizar petición HTTP
         $ch = curl_init($url);
@@ -279,6 +276,14 @@ abstract class GeminiAssistant
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         curl_close($ch);
+
+        // Loguear también la respuesta
+        $logEntry['response_http_code'] = $httpCode;
+        $logEntry['response_raw'] = $response;
+        file_put_contents($logFile, json_encode($logEntry, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n---\n\n", FILE_APPEND);
+
+        // DEBUG: Guardar payload para inspección
+        file_put_contents('/tmp/gemini_payload.json', json_encode($payload, JSON_PRETTY_PRINT));
 
         if ($error) {
             return ['error' => 'Error de conexión: ' . $error];

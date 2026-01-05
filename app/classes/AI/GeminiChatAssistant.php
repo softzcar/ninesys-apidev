@@ -164,9 +164,12 @@ class GeminiChatAssistant extends GeminiAssistant
                     $lastMsg = !empty($currentHistory) ? end($currentHistory) : null;
                     $lastText = $lastMsg['parts'][0]['text'] ?? '';
 
+                    // Limpiar metadatos del query para comparación
+                    $cleanQuery = preg_replace('/\n\[(ORDEN EN PROGRESO|CONTEXTO BD)\]:.*$/s', '', $userQuery);
+
                     // Normalización profunda para comparación (quitar espacios, lower case, saltos de línea)
                     $normLast = preg_replace('/\s+/', ' ', strtolower(trim($lastText)));
-                    $normQuery = preg_replace('/\s+/', ' ', strtolower(trim($userQuery)));
+                    $normQuery = preg_replace('/\s+/', ' ', strtolower(trim($cleanQuery)));
 
                     $isAlreadyInHistory = $lastMsg &&
                         ($lastMsg['role'] === 'user') &&
