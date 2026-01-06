@@ -217,4 +217,23 @@ class FunctionDefinitions
             $allFunctions[4]   // validarOrdenMasiva  
         ];
     }
+
+    /**
+     * Obtiene solo las funciones esenciales para el flujo rápido de órdenes
+     * FLUJO OPTIMIZADO: buscarClientes -> validarOrdenMasiva -> crearOrdenFinal
+     * Sin validaciones individuales para maximizar velocidad
+     * 
+     * @return array Array con las 3 funciones esenciales solamente
+     */
+    public static function getSimplifiedOrderFunctions(): array
+    {
+        $allFunctions = self::getOrderFunctions();
+
+        // Solo las funciones críticas: buscarClientes (0), validarOrdenMasiva (4), crearOrdenFinal (5)
+        return [
+            $allFunctions[0],  // buscarClientes
+            $allFunctions[4],  // validarOrdenMasiva
+            $allFunctions[5]   // crearOrdenFinal
+        ];
+    }
 }

@@ -133,33 +133,20 @@ class GeminiChatAssistant extends GeminiAssistant
                 $userQuery .= "\n[ORDEN EN PROGRESO]: " . json_encode($ordenEnProgreso, JSON_UNESCAPED_UNICODE);
             }
 
-            // Detectar si es una orden grande (>3 productos mencionados)
-            $productCount = preg_match_all('/\d+\)/', $query, $matches);
-            $isLargeOrder = $productCount > 3;
+            // FLUJO SIMPLIFICADO Y RÁPIDO
+            // Solo 3 funciones disponibles: buscarClientes, validarOrdenMasiva, crearOrdenFinal
+            // Esto garantiza velocidad y determinismo - sin validaciones individuales lentas
+            $tools = \App\Classes\AI\FunctionDefinitions::getSimplifiedOrderFunctions();
 
-            // Obtener definiciones de funciones
-            // ESTRATEGIA: Para órdenes grandes en la PRIMERA iteración, solo exponer
-            // buscarClientes y validarOrdenMasiva para forzar el flujo batch
-            $tools = \App\Classes\AI\FunctionDefinitions::getOrderFunctions();
-
-            // Límite de iteraciones para evitar bucles infinitos
-            // Aumentado a 15 para soportar órdenes con 20+ productos que requieren
-            // múltiples llamadas a funciones de validación
-            $maxIterations = 15;
+            // Límite de iteraciones reducido (solo necesitamos 3-4 como máximo)
+            $maxIterations = 5;
             $iteration = 0;
 
             while ($iteration < $maxIterations) {
                 $iteration++;
 
-                // En la primera iteración de una orden grande, restringir funciones
-                $currentTools = ($iteration === 1 && $isLargeOrder)
-                    ? \App\Classes\AI\FunctionDefinitions::getBatchValidationFunctions()
-                    : $tools;
-
                 // Llamar a Gemini enviando tools
-                // Nota: requestSQL=false porque usamos FC nativo
-                // Usamos el prompt específico para órdenes conversacionales
-                $geminiResponse = $this->callGeminiAPI($userQuery, false, $currentHistory, $currentTools, $this->dbSchema['prompt_ordenes'] ?? null);
+                $geminiResponse = $this->callGeminiAPI($userQuery, false, $currentHistory, $tools, $this->dbSchema['prompt_ordenes'] ?? null);
 
                 if (isset($geminiResponse['error'])) {
                     return [
