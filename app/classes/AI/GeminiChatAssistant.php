@@ -933,13 +933,14 @@ class GeminiChatAssistant extends GeminiAssistant
             // INICIAR TRANSACCIÓN
             $db->beginTransaction();
 
-            // 3. Insertar Orden (REMOVIDA columna observaciones que no existe en la tabla)
+            // 3. Insertar Orden - CRÍTICO: incluir id_wp (ID del cliente) para que funcionen los JOINs
             $idResponsable = 1;
             $sqlOrden = "INSERT INTO ordenes (
                 responsable, moment, pago_descuento, pago_abono, 
                 cliente_cedula, pago_total, cliente_nombre, 
-                fecha_inicio, fecha_entrega, fecha_creacion, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                fecha_inicio, fecha_entrega, fecha_creacion, status,
+                id_wp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
             $paramsOrden = [
                 $idResponsable,
@@ -952,7 +953,8 @@ class GeminiChatAssistant extends GeminiAssistant
                 $today,
                 $fechaEntrega,
                 $today,
-                'En espera'
+                'En espera',
+                $idCliente  // ID del cliente de la tabla customers
             ];
 
             $resOrden = $db->goQuery($sqlOrden, $paramsOrden);
