@@ -577,6 +577,9 @@ class GeminiChatAssistant extends GeminiAssistant
                 case 'obtenerTelas':
                     return $this->handleObtenerTelas($db);
 
+                case 'validarOrdenMasiva':
+                    return $this->handleValidarOrdenMasiva($db, $args);
+
                 default:
                     return ['error' => "Función desconocida: {$functionName}"];
             }
@@ -728,5 +731,166 @@ class GeminiChatAssistant extends GeminiAssistant
         }
 
         return ['telas' => []];
+    }
+
+    /**
+     * Handler: Validar orden masiva con múltiples productos
+     * Procesa toda la orden en una sola operación para evitar límite de iteraciones
+     */
+    private function handleValidarOrdenMasiva($db, array $ordenData): array
+    {
+        $resultado = [
+            'cliente' => null,
+            'productos' => [],
+            'errores' => [],
+            'correctos' => 0,
+            'con_problemas' => 0
+        ];
+
+        // 1. VALIDAR CLIENTE
+        if (isset($ordenData['cliente'])) {
+            $clienteNombre = $ordenData['cliente'];
+            $sql = "SELECT _id as id, 
+                           CONCAT(first_name, ' ', IFNULL(last_name, '')) as nombre_completo,
+                           cedula,
+                           phone as telefono
+                    FROM customers 
+                    WHERE first_name LIKE ? 
+                       OR last_name LIKE ? 
+                       OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+                    LIMIT 5";
+
+            $clientes = $db->goQuery($sql, ["%{$clienteNombre}%", "%{$clienteNombre}%", "%{$clienteNombre}%"]);
+
+            if (!empty($clientes) && !isset($clientes['status'])) {
+                if (count($clientes) === 1) {
+                    $resultado['cliente'] = [
+                        'encontrado' => true,
+                        'datos' => $clientes[0],
+                        'multiple' => false
+                    ];
+                } else {
+                    $resultado['cliente'] = [
+                        'encontrado' => true,
+                        'datos' => $clientes,
+                        'multiple' => true
+                    ];
+                }
+            } else {
+                $resultado['cliente'] = [
+                    'encontrado' => false,
+                    'nombre_buscado' => $clienteNombre
+                ];
+                $resultado['errores'][] = "Cliente '{$clienteNombre}' no encontrado";
+            }
+        }
+
+        // 2. VALIDAR CADA PRODUCTO
+        if (isset($ordenData['productos']) && is_array($ordenData['productos'])) {
+            foreach ($ordenData['productos'] as $index => $prod) {
+                $prodValidado = [
+                    'indice' => $index + 1,
+                    'original' => $prod,
+                    'validacion' => [
+                        'producto' => null,
+                        'tela' => null,
+                        'talla' => null
+                    ],
+                    'tiene_errores' => false,
+                    'errores' => []
+                ];
+
+                // Validar producto
+                if (isset($prod['nombre'])) {
+                    $nombreProd = trim($prod['nombre']);
+                    $sql = "SELECT p._id as id, p.product as nombre, 
+                                   COALESCE(pp.price, p.price) as precio
+                            FROM products p
+                            LEFT JOIN products_prices pp ON pp.id_product = p._id
+                            WHERE p.product LIKE ?
+                            GROUP BY p._id
+                            LIMIT 5";
+
+                    $productos = $db->goQuery($sql, ["%{$nombreProd}%"]);
+
+                    if (!empty($productos) && !isset($productos['status'])) {
+                        $prodValidado['validacion']['producto'] = [
+                            'encontrado' => true,
+                            'resultados' => $productos,
+                            'multiple' => count($productos) > 1
+                        ];
+                        if (count($productos) > 1) {
+                            $prodValidado['errores'][] = "Producto '{$nombreProd}' tiene múltiples coincidencias";
+                            $prodValidado['tiene_errores'] = true;
+                        }
+                    } else {
+                        $prodValidado['validacion']['producto'] = [
+                            'encontrado' => false,
+                            'nombre_buscado' => $nombreProd
+                        ];
+                        $prodValidado['errores'][] = "Producto '{$nombreProd}' no encontrado";
+                        $prodValidado['tiene_errores'] = true;
+                    }
+                }
+
+                // Validar tela
+                if (isset($prod['tela'])) {
+                    $telaNombre = trim($prod['tela']);
+                    $sql = "SELECT nombre FROM telas WHERE LOWER(nombre) LIKE LOWER(?)";
+                    $telas = $db->goQuery($sql, ["%{$telaNombre}%"]);
+
+                    if (!empty($telas) && !isset($telas['status'])) {
+                        $prodValidado['validacion']['tela'] = [
+                            'encontrada' => true,
+                            'resultados' => $telas,
+                            'multiple' => count($telas) > 1
+                        ];
+                        if (count($telas) > 1) {
+                            $prodValidado['errores'][] = "Tela '{$telaNombre}' tiene múltiples coincidencias";
+                            $prodValidado['tiene_errores'] = true;
+                        }
+                    } else {
+                        $prodValidado['validacion']['tela'] = [
+                            'encontrada' => false,
+                            'nombre_buscado' => $telaNombre
+                        ];
+                        $prodValidado['errores'][] = "Tela '{$telaNombre}' no encontrada";
+                        $prodValidado['tiene_errores'] = true;
+                    }
+                } else {
+                    $prodValidado['errores'][] = "Falta especificar la tela";
+                    $prodValidado['tiene_errores'] = true;
+                }
+
+                // Validar talla (si existe)
+                if (!isset($prod['talla'])) {
+                    $prodValidado['errores'][] = "Falta especificar la talla";
+                    $prodValidado['tiene_errores'] = true;
+                }
+
+                // Validar corte (si existe)
+                if (!isset($prod['tipo_corte'])) {
+                    $prodValidado['errores'][] = "Falta especificar el tipo de corte (damas/caballeros/niños)";
+                    $prodValidado['tiene_errores'] = true;
+                }
+
+                // Validar cantidad (si existe)
+                if (!isset($prod['cantidad'])) {
+                    $prodValidado['errores'][] = "Falta especificar la cantidad";
+                    $prodValidado['tiene_errores'] = true;
+                }
+
+                // Contabilizar
+                if ($prodValidado['tiene_errores']) {
+                    $resultado['con_problemas']++;
+                } else {
+                    $resultado['correctos']++;
+                }
+
+                $resultado['productos'][] = $prodValidado;
+            }
+        }
+
+        return $resultado;
     }
 }

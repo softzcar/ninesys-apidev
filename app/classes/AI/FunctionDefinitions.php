@@ -68,6 +68,56 @@ class FunctionDefinitions
                     'type' => 'object',
                     'properties' => (object) [] // Force JSON object {}
                 ]
+            ],
+
+            // Función 5: Validar orden masiva (múltiples productos)
+            [
+                'name' => 'validarOrdenMasiva',
+                'description' => 'Valida una orden completa con múltiples productos en una sola operación. Usa ESTA función cuando el usuario proporcione 3 o más productos en un mensaje. Esta función valida cliente, productos, telas y tallas de todos los productos de una vez, evitando llamadas individuales.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'cliente' => [
+                            'type' => 'string',
+                            'description' => 'Nombre del cliente extraído del mensaje'
+                        ],
+                        'productos' => [
+                            'type' => 'array',
+                            'description' => 'Array de productos extraídos del mensaje',
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'nombre' => [
+                                        'type' => 'string',
+                                        'description' => 'Nombre del producto'
+                                    ],
+                                    'tipo_corte' => [
+                                        'type' => 'string',
+                                        'description' => 'Tipo de corte: damas, caballeros o niños'
+                                    ],
+                                    'talla' => [
+                                        'type' => 'string',
+                                        'description' => 'Talla del producto (XS, S, M, L, XL, etc)'
+                                    ],
+                                    'cantidad' => [
+                                        'type' => 'integer',
+                                        'description' => 'Cantidad de unidades'
+                                    ],
+                                    'tela' => [
+                                        'type' => 'string',
+                                        'description' => 'Tipo de tela/material'
+                                    ]
+                                ],
+                                'required' => ['nombre']
+                            ]
+                        ],
+                        'descripcion' => [
+                            'type' => 'string',
+                            'description' => 'Descripción o notas adicionales de la orden (opcional)'
+                        ]
+                    ],
+                    'required' => ['productos']
+                ]
             ]
         ];
     }
@@ -89,6 +139,9 @@ class FunctionDefinitions
             case 'obtenerTallas':
             case 'obtenerTelas':
                 return true; // No requieren parámetros
+
+            case 'validarOrdenMasiva':
+                return isset($args['productos']) && is_array($args['productos']) && !empty($args['productos']);
 
             default:
                 return false;
