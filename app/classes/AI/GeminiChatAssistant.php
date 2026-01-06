@@ -137,7 +137,9 @@ class GeminiChatAssistant extends GeminiAssistant
             $tools = \App\Classes\AI\FunctionDefinitions::getOrderFunctions();
 
             // Límite de iteraciones para evitar bucles infinitos
-            $maxIterations = 5;
+            // Aumentado a 15 para soportar órdenes con 20+ productos que requieren
+            // múltiples llamadas a funciones de validación
+            $maxIterations = 15;
             $iteration = 0;
 
             while ($iteration < $maxIterations) {
