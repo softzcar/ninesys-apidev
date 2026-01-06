@@ -548,6 +548,7 @@ class GeminiChatAssistant extends GeminiAssistant
      */
     public function callFunctionHandler(string $functionName, array $args): array
     {
+        error_log("IA: Calling function handler -> " . $functionName);
         require_once __DIR__ . '/FunctionDefinitions.php';
 
         // Validar argumentos
@@ -742,6 +743,7 @@ class GeminiChatAssistant extends GeminiAssistant
      */
     private function handleValidarOrdenMasiva($db, array $ordenData): array
     {
+        error_log("IA: Iniciando handleValidarOrdenMasiva");
         $resultado = [
             'cliente' => null,
             'productos' => [],
@@ -902,6 +904,7 @@ class GeminiChatAssistant extends GeminiAssistant
      */
     private function handleCrearOrdenFinal($db, array $args): array
     {
+        error_log("IA: Iniciando handleCrearOrdenFinal");
         try {
             require_once __DIR__ . '/../../model/CustomTime.php';
             $time = new \CustomTime();
