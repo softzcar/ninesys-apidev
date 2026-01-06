@@ -1037,4 +1037,82 @@ class GeminiChatAssistant extends GeminiAssistant
             ];
         }
     }
+
+    /**
+     * Extrae datos estructurados de un mensaje de orden escrito libremente
+     * Usa Gemini para parsear el mensaje pero NO para decidir qué funciones llamar
+     * 
+     * @param string $mensaje Mensaje del usuario con la orden
+     * @return array Datos estructurados con 'cliente' y 'productos'
+     */
+    public function extractOrderData(string $mensaje): array
+    {
+        $extractionPrompt = "Eres un asistente que extrae información estructurada de órdenes.
+
+Del siguiente mensaje, extrae:
+1. El nombre del cliente
+2. Todos los productos mencionados con sus atributos
+
+Responde ÚNICAMENTE con JSON válido en este formato exacto:
+{
+  \"cliente\": \"nombre del cliente\",
+  \"productos\": [
+    {
+      \"product\": \"nombre del producto\",
+      \"cantidad\": número,
+      \"talla\": \"S|M|L|XL|etc\",
+      \"tipo_corte\": \"damas|caballeros|niños|unisex\",
+      \"tela\": \"nombre de la tela\"
+    }
+  ],
+  \"observaciones\": \"notas adicionales si existen\"
+}
+
+REGLAS CRÍTICAS:
+- Si no mencionan un atributo, pon \"\" (string vacío)
+- Las cantidades son números, no strings
+- NO agregues explicaciones, solo el JSON
+- Si no encuentras cliente o productos, devuelve arrays vacíos
+
+Mensaje del usuario:
+{$mensaje}";
+
+        try {
+            // Llamar a Gemini sin tools, solo para obtener JSON
+            $response = $this->callGeminiAPI($extractionPrompt, false, [], null, null);
+
+            if (isset($response['error'])) {
+                return [
+                    'success' => false,
+                    'error' => 'Error al extraer datos: ' . $response['error']
+                ];
+            }
+
+            // Extraer JSON del texto de respuesta
+            $text = $response['text'] ?? '';
+
+            // Intentar encontrar JSON en la respuesta
+            if (preg_match('/\{.*\}/s', $text, $matches)) {
+                $jsonData = json_decode($matches[0], true);
+
+                if ($jsonData && isset($jsonData['cliente']) && isset($jsonData['productos'])) {
+                    return [
+                        'success' => true,
+                        'data' => $jsonData
+                    ];
+                }
+            }
+
+            return [
+                'success' => false,
+                'error' => 'No se pudo extraer información válida del mensaje'
+            ];
+
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'error' => 'Error al procesar: ' . $e->getMessage()
+            ];
+        }
+    }
 }

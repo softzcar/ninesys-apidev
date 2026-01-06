@@ -178,6 +178,123 @@ return function (App $app) {
     });
 
     /**
+     * POST /ai/validar-orden-rapida
+     * 
+     * Endpoint híbrido para validación rápida y determinística de órdenes.
+     * 
+     * FLUJO:
+     * 1. Gemini extrae cliente y productos del mensaje libre del usuario
+     * 2. Sistema llama DIRECTAMENTE a handleValidarOrdenMasiva (sin Function Calling)
+     * 3. Devuelve resultados estructurados con validación de todos los productos
+     * 
+     * REGLA: Solo permite crear orden si con_errores === 0
+     * 
+     * Body:
+     *   - mensaje: string (orden escrita libremente por el usuario)
+     * 
+     * Response:
+     *   - success: boolean
+     *   - datos_extraidos: object (cliente y productos parseados)
+     *   - validacion: object (resultados de validación)
+     *   - puede_crear_orden: boolean (true solo si con_errores === 0)
+     */
+    $app->post('/ai/validar-orden-rapida', function (Request $request, Response $response) {
+        require_once __DIR__ . '/../classes/AI/GeminiChatAssistant.php';
+        require_once __DIR__ . '/../schemas/db-schema-gemini.php';
+        require_once __DIR__ . '/../config.php';
+
+        $body = $request->getBody()->getContents();
+        $data = json_decode($body, true);
+
+        if ($data === null) {
+            $data = $request->getParsedBody() ?? [];
+        }
+
+        if (empty($data['mensaje'])) {
+            $result = [
+                'success' => false,
+                'error' => 'Se requiere el parámetro "mensaje"'
+            ];
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        if (empty(GEMINI_API_KEY)) {
+            $result = [
+                'success' => false,
+                'error' => 'La API Key de Gemini no está configurada'
+            ];
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
+        $schema = require __DIR__ . '/../schemas/db-schema-gemini.php';
+        $localConnection = new LocalDB();
+
+        try {
+            $assistant = new GeminiChatAssistant(GEMINI_API_KEY, $schema, $localConnection);
+
+            // PASO 1: Extraer datos del mensaje usando Gemini
+            $extractionResult = $assistant->extractOrderData($data['mensaje']);
+
+            if (!$extractionResult['success']) {
+                $localConnection->disconnect();
+                $result = [
+                    'success' => false,
+                    'error' => $extractionResult['error']
+                ];
+                $response->getBody()->write(json_encode($result));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            }
+
+            $datosExtraidos = $extractionResult['data'];
+
+            // PASO 2: Validar DIRECTAMENTE (sin pasar por Function Calling de Gemini)
+            $validacionResult = $assistant->handleValidarOrdenMasiva(
+                $localConnection,
+                $datosExtraidos['cliente'],
+                $datosExtraidos['productos'],
+                $datosExtraidos['observaciones'] ?? ''
+            );
+
+            $localConnection->disconnect();
+
+            // PASO 3: Determinar si se puede crear la orden (solo si con_errores === 0)
+            $puedeCrearOrden = false;
+            $conErrores = 0;
+
+            if (isset($validacionResult['resumen'])) {
+                $conErrores = $validacionResult['resumen']['con_errores'] ?? 0;
+                $puedeCrearOrden = ($conErrores === 0);
+            }
+
+            // PASO 4: Devolver resultados estructurados
+            $result = [
+                'success' => true,
+                'datos_extraidos' => $datosExtraidos,
+                'validacion' => $validacionResult,
+                'puede_crear_orden' => $puedeCrearOrden,
+                'mensaje' => $puedeCrearOrden
+                    ? "Orden validada correctamente. Todos los productos están listos para crear la orden."
+                    : "Se encontraron {$conErrores} productos con errores. Corrige los errores antes de crear la orden."
+            ];
+
+            $response->getBody()->write(json_encode($result, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+        } catch (Exception $e) {
+            $localConnection->disconnect();
+
+            $result = [
+                'success' => false,
+                'error' => 'Error interno: ' . $e->getMessage()
+            ];
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    /**
      * POST /ai/report
      * 
      * Procesa una pregunta y devuelve datos estructurados para una tabla.
