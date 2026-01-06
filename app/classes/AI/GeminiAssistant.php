@@ -249,6 +249,14 @@ abstract class GeminiAssistant
                     'functionDeclarations' => $tools
                 ]
             ];
+
+            // CRÍTICO: Forzar que Gemini USE las funciones en lugar de responder con texto
+            // Esto resuelve el problema donde Gemini ignoraba las funciones para órdenes grandes
+            $payload['tool_config'] = [
+                'function_calling_config' => [
+                    'mode' => 'ANY'  // Gemini DEBE llamar a una función, no puede responder con texto
+                ]
+            ];
         }
 
         // Logging del prompt para debugging
