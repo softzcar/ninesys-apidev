@@ -836,7 +836,7 @@ class GeminiChatAssistant extends GeminiAssistant
                 // Validar tela
                 if (isset($prod['tela'])) {
                     $telaNombre = trim($prod['tela']);
-                    $sql = "SELECT nombre FROM telas WHERE LOWER(nombre) LIKE LOWER(?)";
+                    $sql = "SELECT tela as nombre FROM catalogo_telas WHERE LOWER(tela) LIKE LOWER(?)";
                     $telas = $db->goQuery($sql, ["%{$telaNombre}%"]);
 
                     if (!empty($telas) && !isset($telas['status'])) {
