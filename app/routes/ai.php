@@ -250,12 +250,15 @@ return function (App $app) {
             $datosExtraidos = $extractionResult['data'];
 
             // PASO 2: Validar DIRECTAMENTE (sin pasar por Function Calling de Gemini)
-            $validacionResult = $assistant->handleValidarOrdenMasiva(
-                $localConnection,
-                $datosExtraidos['cliente'],
-                $datosExtraidos['productos'],
-                $datosExtraidos['observaciones'] ?? ''
-            );
+            // handleValidarOrdenMasiva espera: ($db, array $ordenData)
+            // donde $ordenData debe tener: cliente, productos, descripcion
+            $ordenData = [
+                'cliente' => $datosExtraidos['cliente'],
+                'productos' => $datosExtraidos['productos'],
+                'descripcion' => $datosExtraidos['observaciones'] ?? ''
+            ];
+
+            $validacionResult = $assistant->callFunctionHandler('validarOrdenMasiva', $ordenData);
 
             $localConnection->disconnect();
 
