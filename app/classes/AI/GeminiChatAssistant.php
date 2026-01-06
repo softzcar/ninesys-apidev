@@ -594,6 +594,7 @@ class GeminiChatAssistant extends GeminiAssistant
         $nombre = trim($query);
         $sql = "SELECT _id as id, 
                        CONCAT(first_name, ' ', IFNULL(last_name, '')) as nombre_completo,
+                       cedula,
                        phone as telefono
                 FROM customers 
                 WHERE first_name LIKE ? 
