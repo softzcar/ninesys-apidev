@@ -952,16 +952,20 @@ class GeminiChatAssistant extends GeminiAssistant
             ];
 
             $resOrden = $db->goQuery($sqlOrden, $paramsOrden);
+            file_put_contents('/tmp/gemini_order_debug.log', date('[Y-m-d H:i:s] ') . "Resultado INSERT ordenes: " . json_encode($resOrden) . "\n", FILE_APPEND);
 
             if (isset($resOrden['status']) && $resOrden['status'] === 'error') {
                 $db->rollback();
+                file_put_contents('/tmp/gemini_order_debug.log', "Error en cabecera: " . $resOrden['message'] . "\n", FILE_APPEND);
                 return ['success' => false, 'error' => "Error al insertar cabecera de orden: " . $resOrden['message']];
             }
 
             $idOrden = intval($resOrden['insert_id'] ?? 0);
+            file_put_contents('/tmp/gemini_order_debug.log', "ID Orden Generado: {$idOrden}\n", FILE_APPEND);
 
             if ($idOrden <= 0) {
                 $db->rollback();
+                file_put_contents('/tmp/gemini_order_debug.log', "Fallo al obtener ID real.\n", FILE_APPEND);
                 return ['success' => false, 'error' => "No se pudo obtener el ID de la orden creada."];
             }
 
