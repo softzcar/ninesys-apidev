@@ -250,11 +250,12 @@ abstract class GeminiAssistant
                 ]
             ];
 
-            // CRÍTICO: Forzar que Gemini USE las funciones en lugar de responder con texto
-            // Esto resuelve el problema donde Gemini ignoraba las funciones para órdenes grandes
+            // CRÍTICO: Configurar function calling para balance entre uso y libertad
+            // mode:AUTO permite a Gemini decidir cuándo usar funciones y cuándo responder con texto
+            // Esto evita bucles infinitos mientras mantiene el uso preferente de funciones
             $payload['tool_config'] = [
                 'function_calling_config' => [
-                    'mode' => 'ANY'  // Gemini DEBE llamar a una función, no puede responder con texto
+                    'mode' => 'AUTO'  // Gemini decide cuándo llamar funciones o responder
                 ]
             ];
         }
