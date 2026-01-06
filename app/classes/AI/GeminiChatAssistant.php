@@ -966,13 +966,13 @@ class GeminiChatAssistant extends GeminiAssistant
 
                 $paramsProd = [
                     $now,
-                    $p['precio_unitario'],
-                    $p['nombre'],
+                    $p['precio_unitario'] ?? 0,
+                    $p['nombre'] ?? $p['product'] ?? 'Producto Desconocido',
                     $idOrden,
-                    $p['cantidad'],
-                    $p['talla'],
-                    $p['corte'],
-                    $p['tela']
+                    $p['cantidad'] ?? 0,
+                    $p['talla'] ?? 'N/A',
+                    $p['corte'] ?? 'N/A',
+                    $p['tela'] ?? 'N/A'
                 ];
 
                 $db->goQuery($sqlProd, $paramsProd);
