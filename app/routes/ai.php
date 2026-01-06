@@ -264,12 +264,10 @@ return function (App $app) {
 
             // PASO 3: Determinar si se puede crear la orden (solo si con_errores === 0)
             $puedeCrearOrden = false;
-            $conErrores = 0;
+            $conProblemas = $validacionResult['con_problemas'] ?? 0;
 
-            if (isset($validacionResult['resumen'])) {
-                $conErrores = $validacionResult['resumen']['con_errores'] ?? 0;
-                $puedeCrearOrden = ($conErrores === 0);
-            }
+            // Solo se puede crear la orden si no hay productos con problemas
+            $puedeCrearOrden = ($conProblemas === 0);
 
             // PASO 4: Devolver resultados estructurados
             $result = [
@@ -279,7 +277,7 @@ return function (App $app) {
                 'puede_crear_orden' => $puedeCrearOrden,
                 'mensaje' => $puedeCrearOrden
                     ? "Orden validada correctamente. Todos los productos están listos para crear la orden."
-                    : "Se encontraron {$conErrores} productos con errores. Corrige los errores antes de crear la orden."
+                    : "Se encontraron {$conProblemas} productos con errores. Corrige los errores antes de crear la orden."
             ];
 
             $response->getBody()->write(json_encode($result, JSON_UNESCAPED_UNICODE));
