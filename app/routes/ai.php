@@ -158,7 +158,7 @@ return function (App $app) {
             // SI HAY ORDEN CONFIRMADA, CREARLA DIRECTAMENTE
             if ($ordenConfirmada && isset($ordenConfirmada['cliente_id']) && isset($ordenConfirmada['productos'])) {
                 $resultadoCreacion = $assistant->callFunctionHandler('crearOrdenFinal', [
-                    'cliente_id' => $ordenConfirmada['cliente_id'],
+                    'id_cliente' => $ordenConfirmada['cliente_id'],
                     'productos' => $ordenConfirmada['productos'],
                     'observaciones' => $ordenConfirmada['observaciones'] ?? ''
                 ]);
