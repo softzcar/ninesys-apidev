@@ -929,13 +929,13 @@ class GeminiChatAssistant extends GeminiAssistant
             // INICIAR TRANSACCIÓN
             $db->beginTransaction();
 
-            // 3. Insertar Orden
+            // 3. Insertar Orden (REMOVIDA columna observaciones que no existe en la tabla)
             $idResponsable = 1;
             $sqlOrden = "INSERT INTO ordenes (
                 responsable, moment, pago_descuento, pago_abono, 
-                cliente_cedula, observaciones, pago_total, cliente_nombre, 
+                cliente_cedula, pago_total, cliente_nombre, 
                 fecha_inicio, fecha_entrega, fecha_creacion, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
             $paramsOrden = [
                 $idResponsable,
@@ -943,7 +943,6 @@ class GeminiChatAssistant extends GeminiAssistant
                 $descuento,
                 $abono,
                 $clienteCedula,
-                $observaciones,
                 $total,
                 $clienteNombre,
                 $today,
@@ -952,14 +951,20 @@ class GeminiChatAssistant extends GeminiAssistant
                 'En espera'
             ];
 
+            file_put_contents('/tmp/gemini_order_debug.log', date('[Y-m-d H:i:s] ') . "Intentando INSERT en ordenes: " . json_encode($paramsOrden) . "\n", FILE_APPEND);
+
             $resOrden = $db->goQuery($sqlOrden, $paramsOrden);
+
+            file_put_contents('/tmp/gemini_order_debug.log', "Resultado INSERT ordenes: " . json_encode($resOrden) . "\n", FILE_APPEND);
 
             if (isset($resOrden['status']) && $resOrden['status'] === 'error') {
                 $db->rollback();
+                file_put_contents('/tmp/gemini_order_debug.log', "ERROR detectado, haciendo ROLLBACK.\n", FILE_APPEND);
                 return ['success' => false, 'error' => "Error al insertar cabecera de orden: " . $resOrden['message']];
             }
 
-            $idOrden = intval($resOrden['insert_id']);
+            $idOrden = intval($resOrden['insert_id'] ?? 0);
+            file_put_contents('/tmp/gemini_order_debug.log', "ID Orden Generado: {$idOrden}\n", FILE_APPEND);
 
             if ($idOrden <= 0) {
                 $db->rollback();
@@ -1013,7 +1018,9 @@ class GeminiChatAssistant extends GeminiAssistant
             }
 
             // TODO OK - COMMIT
+            file_put_contents('/tmp/gemini_order_debug.log', "Intentando COMMIT final.\n", FILE_APPEND);
             $db->commit();
+            file_put_contents('/tmp/gemini_order_debug.log', "COMMIT ejecutado exitosamente.\n", FILE_APPEND);
 
             return [
                 'success' => true,
