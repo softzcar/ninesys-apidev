@@ -200,4 +200,21 @@ class FunctionDefinitions
                 return false;
         }
     }
+
+    /**
+     * Obtiene solo las funciones necesarias para validación batch
+     * Usado en la primera iteración de órdenes grandes para forzar el uso de validarOrdenMasiva
+     * 
+     * @return array Array con buscarClientes y validarOrdenMasiva solamente
+     */
+    public static function getBatchValidationFunctions(): array
+    {
+        $allFunctions = self::getOrderFunctions();
+
+        // Filtrar solo buscarClientes (índice 0) y validarOrdenMasiva (índice 4)
+        return [
+            $allFunctions[0],  // buscarClientes
+            $allFunctions[4]   // validarOrdenMasiva  
+        ];
+    }
 }
