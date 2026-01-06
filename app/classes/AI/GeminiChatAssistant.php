@@ -548,7 +548,6 @@ class GeminiChatAssistant extends GeminiAssistant
      */
     public function callFunctionHandler(string $functionName, array $args): array
     {
-        file_put_contents('/tmp/gemini_debug_v2.log', "[" . date('Y-m-d H:i:s') . "] Calling function handler: {$functionName}\n", FILE_APPEND);
         require_once __DIR__ . '/FunctionDefinitions.php';
 
         // Validar argumentos
@@ -743,8 +742,6 @@ class GeminiChatAssistant extends GeminiAssistant
      */
     private function handleValidarOrdenMasiva($db, array $ordenData): array
     {
-        $logFile = '/tmp/gemini_debug_validation.log';
-        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Iniciando handleValidarOrdenMasiva: " . json_encode($ordenData) . "\n", FILE_APPEND);
         $resultado = [
             'cliente' => null,
             'productos' => [],
@@ -844,8 +841,6 @@ class GeminiChatAssistant extends GeminiAssistant
                     $telaNombre = trim($prod['tela']);
                     $sql = "SELECT tela as nombre FROM catalogo_telas WHERE LOWER(tela) LIKE LOWER(?)";
                     $telas = $db->goQuery($sql, ["%{$telaNombre}%"]);
-
-                    file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Validando tela: {$telaNombre} - Resultados: " . (is_array($telas) ? count($telas) : '0') . "\n", FILE_APPEND);
 
                     if (!empty($telas) && !isset($telas['status'])) {
                         $prodValidado['validacion']['tela'] = [
