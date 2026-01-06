@@ -154,9 +154,67 @@ return function (App $app) {
         try {
             $assistant = new GeminiChatAssistant(GEMINI_API_KEY, $schema, $localConnection);
 
-            // USAR NUEVO MÉTODO CON FUNCTION CALLING
-            // Ya no pasamos contexto_bd porque Gemini lo obtendrá bajo demanda
-            $result = $assistant->processOrderQueryWithFunctions($data['query'], $history, $ordenEnProgreso);
+            // DETECTAR SI ES UNA ORDEN (palabras clave)
+            $esOrden = preg_match('/\b(orden|ordenes|pedido|crear|crea|hacer)\b/i', $data['query']);
+
+            if ($esOrden) {
+                // FLUJO HÍBRIDO PARA ÓRDENES
+                // 1. Extraer datos con Gemini
+                $extractionResult = $assistant->extractOrderData($data['query']);
+
+                if (!$extractionResult['success']) {
+                    $result = [
+                        'success' => false,
+                        'response' => "No pude entender la orden. " . $extractionResult['error']
+                    ];
+                } else {
+                    $datosExtraidos = $extractionResult['data'];
+
+                    // 2. Validar directamente
+                    $ordenData = [
+                        'cliente' => $datosExtraidos['cliente'],
+                        'productos' => $datosExtraidos['productos'],
+                        'descripcion' => $datosExtraidos['observaciones'] ?? ''
+                    ];
+
+                    $validacionResult = $assistant->callFunctionHandler('validarOrdenMasiva', $ordenData);
+
+                    // 3. Verificar si se puede crear
+                    $conProblemas = $validacionResult['con_problemas'] ?? 0;
+                    $clienteEncontrado = $validacionResult['cliente']['encontrado'] ?? false;
+                    $puedeCrear = ($clienteEncontrado && $conProblemas === 0);
+
+                    // 4. Formatear respuesta amigable
+                    if (!$clienteEncontrado) {
+                        $nombreBuscado = $validacionResult['cliente']['nombre_buscado'] ?? 'desconocido';
+                        $respuesta = "❌ No encontré el cliente '{$nombreBuscado}'. Por favor verifica el nombre o créalo primero.";
+                    } elseif ($conProblemas > 0) {
+                        $respuesta = "He validado la orden pero encontré {$conProblemas} productos con errores:\n\n";
+                        foreach ($validacionResult['productos'] as $i => $p) {
+                            if ($p['tiene_errores']) {
+                                $respuesta .= "⚠️ Producto " . ($i + 1) . ": " . $p['original']['product'] . "\n";
+                                $respuesta .= "   Errores: " . implode(", ", $p['errores']) . "\n";
+                            }
+                        }
+                        $respuesta .= "\nPor favor corrige estos productos antes de crear la orden.";
+                    } else {
+                        $cliente = $validacionResult['cliente']['datos'];
+                        $respuesta = "✅ Orden validada correctamente para {$cliente['nombre_completo']}!\n\n";
+                        $respuesta .= "📦 {$validacionResult['correctos']} productos listos\n\n";
+                        $respuesta .= "¿Deseas que cree la orden? (Responde 'sí' o 'crear' para confirmar)";
+                    }
+
+                    $result = [
+                        'success' => true,
+                        'response' => $respuesta,
+                        'data' => $validacionResult,
+                        'puede_crear' => $puedeCrear
+                    ];
+                }
+            } else {
+                // FLUJO NORMAL PARA CONSULTAS (no órdenes)
+                $result = $assistant->processOrderQueryWithFunctions($data['query'], $history, $ordenEnProgreso);
+            }
 
             $localConnection->disconnect();
 
