@@ -150,9 +150,39 @@ return function (App $app) {
         $history = $data['history'] ?? [];
         $contextoBD = $data['contexto_bd'] ?? [];
         $ordenEnProgreso = $data['orden_en_progreso'] ?? null;
+        $ordenConfirmada = $data['orden_confirmada'] ?? null;
 
         try {
             $assistant = new GeminiChatAssistant(GEMINI_API_KEY, $schema, $localConnection);
+
+            // SI HAY ORDEN CONFIRMADA, CREARLA DIRECTAMENTE
+            if ($ordenConfirmada && isset($ordenConfirmada['cliente_id']) && isset($ordenConfirmada['productos'])) {
+                $resultadoCreacion = $assistant->callFunctionHandler('crearOrdenFinal', [
+                    'cliente_id' => $ordenConfirmada['cliente_id'],
+                    'productos' => $ordenConfirmada['productos'],
+                    'observaciones' => $ordenConfirmada['observaciones'] ?? ''
+                ]);
+
+                $localConnection->disconnect();
+
+                if ($resultadoCreacion['success']) {
+                    $result = [
+                        'success' => true,
+                        'response' => "✅ **¡Orden #{$resultadoCreacion['id_orden']} creada exitosamente!**\n\n" .
+                            "👤 Cliente: {$resultadoCreacion['cliente']}\n" .
+                            "💰 Total: \${$resultadoCreacion['total']}\n" .
+                            "📦 Productos: " . count($ordenConfirmada['productos']) . " items"
+                    ];
+                } else {
+                    $result = [
+                        'success' => false,
+                        'error' => $resultadoCreacion['error'] ?? 'Error al crear la orden'
+                    ];
+                }
+
+                $response->getBody()->write(json_encode($result, JSON_UNESCAPED_UNICODE));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus($result['success'] ? 200 : 400);
+            }
 
             // DETECTAR SI ES UNA ORDEN (palabras clave)
             $esOrden = preg_match('/\b(orden|ordenes|pedido|crear|crea|hacer)\b/i', $data['query']);
