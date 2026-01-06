@@ -580,6 +580,9 @@ class GeminiChatAssistant extends GeminiAssistant
                 case 'validarOrdenMasiva':
                     return $this->handleValidarOrdenMasiva($db, $args);
 
+                case 'crearOrdenFinal':
+                    return $this->handleCrearOrdenFinal($db, $args);
+
                 default:
                     return ['error' => "Función desconocida: {$functionName}"];
             }
@@ -892,5 +895,107 @@ class GeminiChatAssistant extends GeminiAssistant
         }
 
         return $resultado;
+    }
+
+    /**
+     * Handler: Crear orden final en la base de datos
+     */
+    private function handleCrearOrdenFinal($db, array $args): array
+    {
+        try {
+            require_once __DIR__ . '/../../model/CustomTime.php';
+            $time = new \CustomTime();
+            $now = $time->today();
+            $today = date('Y-m-d');
+
+            $idCliente = $args['id_cliente'];
+            $productos = $args['productos'];
+            $observaciones = $args['observaciones'] ?? '';
+            $fechaEntrega = $args['fecha_entrega'] ?? date('Y-m-d', strtotime('+7 days'));
+            $descuento = $args['pago_descuento'] ?? 0;
+            $abono = $args['pago_abono'] ?? 0;
+
+            // 1. Obtener nombre del cliente para denuncias
+            $clienteData = $db->goQuery("SELECT CONCAT(first_name, ' ', IFNULL(last_name, '')) as nombre, cedula FROM customers WHERE _id = ?", [$idCliente]);
+            $clienteNombre = !empty($clienteData) ? $clienteData[0]['nombre'] : 'Cliente Desconocido';
+            $clienteCedula = !empty($clienteData) ? $clienteData[0]['cedula'] : '';
+
+            // 2. Calcular total
+            $total = 0;
+            foreach ($productos as $p) {
+                $total += ($p['precio_unitario'] * $p['cantidad']);
+            }
+
+            // 3. Insertar Orden (responsable hardcodeado 1 como demo si no se provee)
+            // En un sistema real, el ID del responsable vendría de la sesión del usuario
+            $idResponsable = 1;
+
+            $sqlOrden = "INSERT INTO ordenes (
+                responsable, moment, pago_descuento, pago_abono, 
+                cliente_cedula, observaciones, pago_total, cliente_nombre, 
+                fecha_inicio, fecha_entrega, fecha_creacion, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+            $paramsOrden = [
+                $idResponsable,
+                $now,
+                $descuento,
+                $abono,
+                $clienteCedula,
+                $observaciones,
+                $total,
+                $clienteNombre,
+                $today,
+                $fechaEntrega,
+                $today,
+                'En espera'
+            ];
+
+            $db->goQuery($sqlOrden, $paramsOrden);
+
+            // 4. Obtener ID de la orden creada
+            $last = $db->goQuery('SELECT MAX(_id) as id FROM ordenes');
+            $idOrden = intval($last[0]['id']);
+
+            // 5. Insertar Productos
+            foreach ($productos as $p) {
+                $sqlProd = "INSERT INTO ordenes_productos (
+                    moment, precio_unitario, name, id_orden, 
+                    cantidad, talla, corte, tela
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+                $paramsProd = [
+                    $now,
+                    $p['precio_unitario'],
+                    $p['nombre'],
+                    $idOrden,
+                    $p['cantidad'],
+                    $p['talla'],
+                    $p['corte'],
+                    $p['tela']
+                ];
+
+                $db->goQuery($sqlProd, $paramsProd);
+            }
+
+            // 6. Insertar Observaciones si existen
+            if (!empty($observaciones)) {
+                $db->goQuery("INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)", [$idOrden, $observaciones]);
+            }
+
+            return [
+                'success' => true,
+                'id_orden' => $idOrden,
+                'cliente' => $clienteNombre,
+                'total' => $total,
+                'mensaje' => "Orden #{$idOrden} creada exitosamente para {$clienteNombre}."
+            ];
+
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'error' => "Error al crear la orden: " . $e->getMessage()
+            ];
+        }
     }
 }

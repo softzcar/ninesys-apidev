@@ -168,14 +168,22 @@ RESUMEN FINAL:
 ⚠️ [Y] productos con problemas
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-¿Deseas corregir los productos con problemas?\"
+¿Deseas corregir los productos con problemas? o ¿Deseas proceder con la creación de la orden para los productos correctos?
 
-PASO 5: CORRECCIÓN INCREMENTAL
+PASO 4: CORRECCIÓN INCREMENTAL
 
 Si hay errores y el usuario proporciona correcciones:
 - Actualiza solo los productos corregidos
 - Vuelve a validar SOLO esos productos (con funciones individuales)
 - Muestra resumen actualizado
+
+PASO 5: CREACIÓN DE ORDEN FINAL (CRÍTICO)
+
+Una vez que el usuario diga 'Sí', 'Proceder', 'Crear orden' o similar Y todos los productos importantes estén validados (✓):
+
+1. Recopila todos los IDs de productos, tallas, telas resultantes de las validaciones previas.
+2. Llama a crearOrdenFinal() con los datos definitivos.
+3. Informa al usuario del éxito y proporciona el número de orden devuelto.\",
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 PROCESO PARA ÓRDENES PEQUEÑAS (1-2 PRODUCTOS)

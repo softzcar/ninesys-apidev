@@ -118,6 +118,56 @@ class FunctionDefinitions
                     ],
                     'required' => ['productos']
                 ]
+            ],
+
+            // Función 6: Crear orden final
+            [
+                'name' => 'crearOrdenFinal',
+                'description' => 'Crea la orden definitiva en la base de datos. Úsala SOLO cuando el usuario haya confirmado que el resumen es correcto y todos los productos tengan ✓. Esta función guarda la orden y retorna el ID de la orden creada.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'id_cliente' => [
+                            'type' => 'integer',
+                            'description' => 'ID del cliente confirmado'
+                        ],
+                        'productos' => [
+                            'type' => 'array',
+                            'description' => 'Lista de productos validados con sus IDs finales',
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'id_producto' => ['type' => 'integer'],
+                                    'nombre' => ['type' => 'string'],
+                                    'cantidad' => ['type' => 'integer'],
+                                    'talla' => ['type' => 'string'],
+                                    'corte' => ['type' => 'string'],
+                                    'tela' => ['type' => 'string'],
+                                    'id_tela' => ['type' => 'integer'],
+                                    'precio_unitario' => ['type' => 'number']
+                                ],
+                                'required' => ['id_producto', 'cantidad', 'talla', 'corte', 'tela', 'precio_unitario']
+                            ]
+                        ],
+                        'observaciones' => [
+                            'type' => 'string',
+                            'description' => 'Notas u observaciones finales de la orden'
+                        ],
+                        'fecha_entrega' => [
+                            'type' => 'string',
+                            'description' => 'Fecha estimada de entrega (YYYY-MM-DD)'
+                        ],
+                        'pago_abono' => [
+                            'type' => 'number',
+                            'description' => 'Monto del abono inicial (si se mencionó)'
+                        ],
+                        'pago_descuento' => [
+                            'type' => 'number',
+                            'description' => 'Monto del descuento (si se mencionó)'
+                        ]
+                    ],
+                    'required' => ['id_cliente', 'productos']
+                ]
             ]
         ];
     }
@@ -142,6 +192,9 @@ class FunctionDefinitions
 
             case 'validarOrdenMasiva':
                 return isset($args['productos']) && is_array($args['productos']) && !empty($args['productos']);
+
+            case 'crearOrdenFinal':
+                return isset($args['id_cliente']) && isset($args['productos']) && is_array($args['productos']);
 
             default:
                 return false;
