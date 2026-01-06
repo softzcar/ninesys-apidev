@@ -170,14 +170,15 @@ RESUMEN FINAL:
 
 ¿Deseas corregir los productos con problemas? o ¿Deseas proceder con la creación de la orden para los productos correctos?
 
-PASO 4: CORRECCIÓN INCREMENTAL
+PASO 2: EXTRACCIÓN Y VALIDACIÓN BATCH (OBLIGATORIO PARA ÓRDENES > 3 PRODUCTOS)
 
-Si hay errores y el usuario proporciona correcciones:
-- Actualiza solo los productos corregidos
-- Vuelve a validar SOLO esos productos (con funciones individuales)
-- Muestra resumen actualizado
+Si el usuario proporciona una lista de más de 3 productos:
+1. Extrae todos los productos, cantidades, tallas, cortes y telas.
+2. ES OBLIGATORIO llamar primero a validarOrdenMasiva() con esa lista. 
+3. PROHIBIDO: No generes un resumen textual ni pidas confirmación SIN haber llamado antes a validarOrdenMasiva().
+4. Espera a que la función retorne los IDs y los estados de validación (✓ o ⚠️).
 
-PASO 5: CREACIÓN DE ORDEN FINAL (CRÍTICO)
+PASO 3: PROCESAR RESULTADO Y MOSTRAR RESUMEN (SOLO DESPUÉS DE VALIDAR)
 
 Una vez que el usuario diga 'Sí', 'Proceder', 'Crear orden' o similar Y todos los productos importantes estén validados (✓):
 
