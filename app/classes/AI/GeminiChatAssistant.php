@@ -978,10 +978,22 @@ class GeminiChatAssistant extends GeminiAssistant
                 $db->goQuery($sqlProd, $paramsProd);
             }
 
-            // 6. Insertar Observaciones si existen
-            if (!empty($observaciones)) {
-                $db->goQuery("INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)", [$idOrden, $observaciones]);
+            // 6. Generar resumen textual para ordenes_observaciones (Detalle de la Orden)
+            $detalleTexto = "Resumen de Orden para {$clienteNombre}:\n";
+            foreach ($productos as $p) {
+                $nombre = $p['nombre'] ?? $p['product'] ?? 'Producto';
+                $corte = $p['corte'] ?? 'N/A';
+                $talla = $p['talla'] ?? 'N/A';
+                $tela = $p['tela'] ?? 'N/A';
+                $cant = $p['cantidad'] ?? 0;
+                $detalleTexto .= "- {$cant} {$nombre} ({$corte}, {$talla}) - Tela: {$tela}\n";
             }
+
+            if (!empty($observaciones)) {
+                $detalleTexto .= "\nNotas: {$observaciones}";
+            }
+
+            $db->goQuery("INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)", [$idOrden, $detalleTexto]);
 
             return [
                 'success' => true,
