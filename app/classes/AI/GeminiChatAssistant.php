@@ -915,21 +915,22 @@ class GeminiChatAssistant extends GeminiAssistant
             $descuento = $args['pago_descuento'] ?? 0;
             $abono = $args['pago_abono'] ?? 0;
 
-            // 1. Obtener nombre del cliente para denuncias
+            // 1. Obtener datos del cliente
             $clienteData = $db->goQuery("SELECT CONCAT(first_name, ' ', IFNULL(last_name, '')) as nombre, cedula FROM customers WHERE _id = ?", [$idCliente]);
-            $clienteNombre = !empty($clienteData) ? $clienteData[0]['nombre'] : 'Cliente Desconocido';
-            $clienteCedula = !empty($clienteData) ? $clienteData[0]['cedula'] : '';
+            $clienteNombre = !empty($clienteData) && !isset($clienteData['status']) ? $clienteData[0]['nombre'] : 'Cliente Desconocido';
+            $clienteCedula = !empty($clienteData) && !isset($clienteData['status']) ? $clienteData[0]['cedula'] : '';
 
             // 2. Calcular total
             $total = 0;
             foreach ($productos as $p) {
-                $total += ($p['precio_unitario'] * $p['cantidad']);
+                $total += (($p['precio_unitario'] ?? 0) * ($p['cantidad'] ?? 0));
             }
 
-            // 3. Insertar Orden (responsable hardcodeado 1 como demo si no se provee)
-            // En un sistema real, el ID del responsable vendría de la sesión del usuario
-            $idResponsable = 1;
+            // INICIAR TRANSACCIÓN
+            $db->beginTransaction();
 
+            // 3. Insertar Orden
+            $idResponsable = 1;
             $sqlOrden = "INSERT INTO ordenes (
                 responsable, moment, pago_descuento, pago_abono, 
                 cliente_cedula, observaciones, pago_total, cliente_nombre, 
@@ -951,13 +952,21 @@ class GeminiChatAssistant extends GeminiAssistant
                 'En espera'
             ];
 
-            $db->goQuery($sqlOrden, $paramsOrden);
+            $resOrden = $db->goQuery($sqlOrden, $paramsOrden);
 
-            // 4. Obtener ID de la orden creada
-            $last = $db->goQuery('SELECT MAX(_id) as id FROM ordenes');
-            $idOrden = intval($last[0]['id']);
+            if (isset($resOrden['status']) && $resOrden['status'] === 'error') {
+                $db->rollback();
+                return ['success' => false, 'error' => "Error al insertar cabecera de orden: " . $resOrden['message']];
+            }
 
-            // 5. Insertar Productos
+            $idOrden = intval($resOrden['insert_id']);
+
+            if ($idOrden <= 0) {
+                $db->rollback();
+                return ['success' => false, 'error' => "No se pudo obtener el ID de la orden creada."];
+            }
+
+            // 4. Insertar Productos
             foreach ($productos as $p) {
                 $sqlProd = "INSERT INTO ordenes_productos (
                     moment, precio_unitario, name, id_orden, 
@@ -975,10 +984,14 @@ class GeminiChatAssistant extends GeminiAssistant
                     $p['tela'] ?? 'N/A'
                 ];
 
-                $db->goQuery($sqlProd, $paramsProd);
+                $resProd = $db->goQuery($sqlProd, $paramsProd);
+                if (isset($resProd['status']) && $resProd['status'] === 'error') {
+                    $db->rollback();
+                    return ['success' => false, 'error' => "Error al insertar producto '{$p['nombre']}': " . $resProd['message']];
+                }
             }
 
-            // 6. Generar resumen textual para ordenes_observaciones (Detalle de la Orden)
+            // 5. Generar y guardar resumen textual
             $detalleTexto = "Resumen de Orden para {$clienteNombre}:\n";
             foreach ($productos as $p) {
                 $nombre = $p['nombre'] ?? $p['product'] ?? 'Producto';
@@ -993,7 +1006,14 @@ class GeminiChatAssistant extends GeminiAssistant
                 $detalleTexto .= "\nNotas: {$observaciones}";
             }
 
-            $db->goQuery("INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)", [$idOrden, $detalleTexto]);
+            $resObs = $db->goQuery("INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)", [$idOrden, $detalleTexto]);
+            if (isset($resObs['status']) && $resObs['status'] === 'error') {
+                $db->rollback();
+                return ['success' => false, 'error' => "Error al guardar observaciones: " . $resObs['message']];
+            }
+
+            // TODO OK - COMMIT
+            $db->commit();
 
             return [
                 'success' => true,
