@@ -742,6 +742,7 @@ class GeminiChatAssistant extends GeminiAssistant
      */
     private function handleValidarOrdenMasiva($db, array $ordenData): array
     {
+        error_log("Iniciando handleValidarOrdenMasiva: " . json_encode($ordenData));
         $resultado = [
             'cliente' => null,
             'productos' => [],
@@ -841,6 +842,8 @@ class GeminiChatAssistant extends GeminiAssistant
                     $telaNombre = trim($prod['tela']);
                     $sql = "SELECT tela as nombre FROM catalogo_telas WHERE LOWER(tela) LIKE LOWER(?)";
                     $telas = $db->goQuery($sql, ["%{$telaNombre}%"]);
+
+                    error_log("Validando tela: {$telaNombre} - Resultados: " . count($telas));
 
                     if (!empty($telas) && !isset($telas['status'])) {
                         $prodValidado['validacion']['tela'] = [
