@@ -163,9 +163,23 @@ return function (App $app) {
                     'observaciones' => $ordenConfirmada['observaciones'] ?? ''
                 ]);
 
+                // Log para debugging
+                error_log("Resultado de crearOrdenFinal: " . json_encode($resultadoCreacion));
+
                 $localConnection->disconnect();
 
-                if ($resultadoCreacion['success']) {
+                // Verificar que el resultado sea un array y tenga la clave 'success'
+                if (!is_array($resultadoCreacion)) {
+                    $result = [
+                        'success' => false,
+                        'error' => 'Error: La creación de orden no retornó un resultado válido'
+                    ];
+                } elseif (!isset($resultadoCreacion['success'])) {
+                    $result = [
+                        'success' => false,
+                        'error' => 'Error: La creación de orden no retornó el formato esperado'
+                    ];
+                } elseif ($resultadoCreacion['success']) {
                     $result = [
                         'success' => true,
                         'response' => "✅ **¡Orden #{$resultadoCreacion['id_orden']} creada exitosamente!**\n\n" .
