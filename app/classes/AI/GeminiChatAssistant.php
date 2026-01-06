@@ -548,6 +548,7 @@ class GeminiChatAssistant extends GeminiAssistant
      */
     public function callFunctionHandler(string $functionName, array $args): array
     {
+        file_put_contents('/tmp/gemini_debug_v2.log', "[" . date('Y-m-d H:i:s') . "] Calling function handler: {$functionName}\n", FILE_APPEND);
         require_once __DIR__ . '/FunctionDefinitions.php';
 
         // Validar argumentos
