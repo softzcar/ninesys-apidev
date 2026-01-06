@@ -262,12 +262,27 @@ return function (App $app) {
 
             $localConnection->disconnect();
 
-            // PASO 3: Determinar si se puede crear la orden (solo si con_errores === 0)
+            // PASO 3: Determinar si se puede crear la orden
+            // REGLA: Solo se puede crear si:
+            // 1. El cliente fue encontrado
+            // 2. No hay productos con problemas
             $puedeCrearOrden = false;
             $conProblemas = $validacionResult['con_problemas'] ?? 0;
+            $clienteEncontrado = $validacionResult['cliente']['encontrado'] ?? false;
 
-            // Solo se puede crear la orden si no hay productos con problemas
-            $puedeCrearOrden = ($conProblemas === 0);
+            // Ambas condiciones deben cumplirse
+            $puedeCrearOrden = ($clienteEncontrado && $conProblemas === 0);
+
+            // Construir mensaje apropiado
+            $mensaje = '';
+            if (!$clienteEncontrado) {
+                $nombreBuscado = $validacionResult['cliente']['nombre_buscado'] ?? 'desconocido';
+                $mensaje = "Cliente '{$nombreBuscado}' no encontrado. Verifica el nombre o crea el cliente primero.";
+            } elseif ($conProblemas > 0) {
+                $mensaje = "Se encontraron {$conProblemas} productos con errores. Corrige los errores antes de crear la orden.";
+            } else {
+                $mensaje = "Orden validada correctamente. Todos los productos están listos para crear la orden.";
+            }
 
             // PASO 4: Devolver resultados estructurados
             $result = [
