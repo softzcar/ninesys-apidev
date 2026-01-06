@@ -120,6 +120,7 @@ class GeminiChatAssistant extends GeminiAssistant
      */
     public function processOrderQueryWithFunctions(string $query, array $history = [], ?array $ordenEnProgreso = null): array
     {
+        file_put_contents('/tmp/gemini_flow.log', "[" . date('Y-m-d H:i:s') . "] IA: START processOrderQueryWithFunctions -> Query: " . substr($query, 0, 100) . "\n", FILE_APPEND);
         require_once __DIR__ . '/FunctionDefinitions.php';
 
         try {
