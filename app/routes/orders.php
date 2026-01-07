@@ -1205,7 +1205,7 @@ return function (App $app) {
   });
   // BUSCAR ORDENES QUE NO TIENEN NINGUN EMPLEADO ASIGNADO
 
-  $app->get('/ordenes/sin-asignacion/{id_vendedor}', function (Request $request, Response $response, array $args) {
+  $app->get('/ordenes-sin-asignar/{id_vendedor}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
     //  Verificar existencia de la orden
@@ -1230,6 +1230,8 @@ return function (App $app) {
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
   });
+
+
 
   // BUSCAR ORDEN POR ID
   // Función para obtener la respuesta de /buscar
@@ -1398,6 +1400,7 @@ return function (App $app) {
       ->withHeader('Content-Type', $result['contentType'])
       ->withStatus(200);
   });
+
 
   /*$app->get('/buscar_old/{id}[/{email}]', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
@@ -2914,79 +2917,110 @@ $object['sales_commission_ISSET'][] = false;
   });
 
   // CREAR NUEVA ORDEN ANTES DE SPORT
+  // CREAR NUEVA ORDEN ANTES DE SPORT
   $app->post('/ordenes/nueva/sport', function (Request $request, Response $response, $arg) {
     $newJson = $request->getParsedBody();
+
+    // ========== VALIDACIONES TEMPRANAS ==========
+    $productosRaw = $newJson['productos'] ?? '';
+    // Intentar decodificar si es string, si ya es array usarlo directo (por si el middleware ya lo procesó, aunque getParsedBody suele traer array si es JSON)
+    // El código original usaba json_decode($newJson['productos'], true), asumiendo que viene como JSON string dentro del post body.
     $misProductos = json_decode($newJson['productos'], true);
+
+    if (empty($misProductos) || !is_array($misProductos) || count($misProductos) === 0) {
+      return ApiResponse::validationError($response, 'Debe agregar al menos un producto a la orden');
+    }
+
+    if (empty($newJson['responsable']) || !is_numeric($newJson['responsable'])) {
+      return ApiResponse::validationError($response, 'Debe seleccionar un responsable para la orden');
+    }
+
+    if (empty($newJson['fechaEntrega'])) {
+      return ApiResponse::validationError($response, 'Debe seleccionar una fecha de entrega');
+    }
+
     $localConnection = new LocalDB();
 
-    $count = count($misProductos);
+    // ========== INICIAR TRANSACCIÓN ==========
+    $localConnection->beginTransaction();
 
-    $arr['id_wp'] = json_decode($newJson['id']);
-    $arr['nombre'] = json_decode($newJson['nombre']);
-    $arr['vinculada'] = json_decode($newJson['vinculada']);
-    $arr['apellido'] = json_decode($newJson['apellido']);
-    $arr['cedula'] = json_decode($newJson['cedula']);
-    $arr['telefono'] = json_decode($newJson['telefono']);
-    if (is_null(json_decode($newJson['email']))) {
-      $arr['email'] = json_decode($newJson['email']);
-    } else {
-      $arr['email'] = strtolower(json_decode($newJson['email']));
-    }
-    $arr['direccion'] = json_decode($newJson['direccion']);
-    $arr['fechaEntrega'] = json_decode($newJson['fechaEntrega']);
-    $arr['misProductos'] = json_decode($newJson['productos'], true);
-    $arr['obs'] = json_decode($newJson['obs']);
-    $arr['total'] = json_decode($newJson['total']);
-    $arr['abono'] = json_decode($newJson['abono']);
-    $arr['descuento'] = json_decode($newJson['descuento']);
-    $arr['descuentoDetalle'] = json_decode($newJson['descuentoDetalle']);
-    $arr['diseno_grafico'] = json_decode($newJson['diseno_grafico']);
-    $arr['diseno_modas'] = json_decode($newJson['diseno_modas']);
-    $arr['responsable'] = json_decode($newJson['responsable']);
-    $arr['sales_commission'] = json_decode($newJson['sales_commission']);
+    try {
+      $count = count($misProductos);
 
-    // RECIBIR LOS METODOS DE PAGO
-    $arr['montoDolaresEfectivo'] = json_decode($newJson['montoDolaresEfectivo']);
-    $arr['montoDolaresEfectivoDetalle'] = json_decode($newJson['montoDolaresEfectivoDetalle']);
-    $arr['montoDolaresZelle'] = json_decode($newJson['montoDolaresZelle']);
-    $arr['montoDolaresZelleDetalle'] = json_decode($newJson['montoDolaresZelleDetalle']);
-    $arr['montoDolaresPanama'] = json_decode($newJson['montoDolaresPanama']);
-    $arr['montoDolaresPanamaDetalle'] = json_decode($newJson['montoDolaresPanamaDetalle']);
-    $arr['montoPesosEfectivo'] = json_decode($newJson['montoPesosEfectivo']);
-    $arr['montoPesosEfectivoDetalle'] = json_decode($newJson['montoPesosEfectivoDetalle']);
-    $arr['montoPesosTransferencia'] = json_decode($newJson['montoPesosTransferencia']);
-    $arr['montoPesosTransferenciaDetalle'] = json_decode($newJson['montoPesosTransferenciaDetalle']);
-    $arr['montoBolivaresEfectivo'] = json_decode($newJson['montoBolivaresEfectivo']);
-    $arr['montoBolivaresEfectivoDetalle'] = json_decode($newJson['montoBolivaresEfectivoDetalle']);
-    $arr['montoBolivaresPunto'] = json_decode($newJson['montoBolivaresPunto']);
-    $arr['montoBolivaresPuntoDetalle'] = json_decode($newJson['montoBolivaresPuntoDetalle']);
-    $arr['montoBolivaresPagomovil'] = json_decode($newJson['montoBolivaresPagomovil']);
-    $arr['montoBolivaresPagomovilDetalle'] = json_decode($newJson['montoBolivaresPagomovilDetalle']);
-    $arr['montoBolivaresTransferencia'] = json_decode($newJson['montoBolivaresTransferencia']);
-    $arr['montoBolivaresTransferenciaDetalle'] = json_decode($newJson['montoBolivaresTransferenciaDetalle']);
-    $arr['tasa_dolar'] = json_decode($newJson['tasa_dolar']);
-    $arr['tasa_peso'] = json_decode($newJson['tasa_peso']);
-    $sendWhatsApp = filter_var($newJson['sendWhatsAppMessage'] ?? false);
+      $arr = [];
+      // Manteniendo la lógica de decodificación original detallada
+      $arr['id_wp'] = json_decode($newJson['id']);
+      $arr['nombre'] = json_decode($newJson['nombre']);
+      $arr['vinculada'] = json_decode($newJson['vinculada']);
+      $arr['apellido'] = json_decode($newJson['apellido']);
+      $arr['cedula'] = json_decode($newJson['cedula']);
+      $arr['telefono'] = json_decode($newJson['telefono']);
 
-    $arr['hoy'] = date('d/m/Y');
-    $cliente = $newJson['nombre'] . ' ' . $newJson['apellido'];
+      if (is_null(json_decode($newJson['email']))) {
+        $arr['email'] = json_decode($newJson['email']);
+      } else {
+        $arr['email'] = strtolower(json_decode($newJson['email']));
+      }
 
-    $myDate = new CustomTime();
-    $now = $myDate->today();
+      $arr['direccion'] = json_decode($newJson['direccion']);
+      $arr['fechaEntrega'] = json_decode($newJson['fechaEntrega']);
+      $arr['misProductos'] = $misProductos;
+      $arr['obs'] = json_decode($newJson['obs']);
+      $arr['total'] = json_decode($newJson['total']);
+      $arr['abono'] = json_decode($newJson['abono']);
+      $arr['descuento'] = json_decode($newJson['descuento']);
+      $arr['descuentoDetalle'] = json_decode($newJson['descuentoDetalle']);
+      $arr['diseno_grafico'] = json_decode($newJson['diseno_grafico']);
+      $arr['diseno_modas'] = json_decode($newJson['diseno_modas']);
+      $arr['responsable'] = json_decode($newJson['responsable']);
+      $arr['sales_commission'] = json_decode($newJson['sales_commission']);
 
-    $orderWC = 0;
+      // RECIBIR LOS METODOS DE PAGO
+      $arr['montoDolaresEfectivo'] = json_decode($newJson['montoDolaresEfectivo']);
+      $arr['montoDolaresEfectivoDetalle'] = json_decode($newJson['montoDolaresEfectivoDetalle']);
+      $arr['montoDolaresZelle'] = json_decode($newJson['montoDolaresZelle']);
+      $arr['montoDolaresZelleDetalle'] = json_decode($newJson['montoDolaresZelleDetalle']);
+      $arr['montoDolaresPanama'] = json_decode($newJson['montoDolaresPanama']);
+      $arr['montoDolaresPanamaDetalle'] = json_decode($newJson['montoDolaresPanamaDetalle']);
+      $arr['montoPesosEfectivo'] = json_decode($newJson['montoPesosEfectivo']);
+      $arr['montoPesosEfectivoDetalle'] = json_decode($newJson['montoPesosEfectivoDetalle']);
+      $arr['montoPesosTransferencia'] = json_decode($newJson['montoPesosTransferencia']);
+      $arr['montoPesosTransferenciaDetalle'] = json_decode($newJson['montoPesosTransferenciaDetalle']);
+      $arr['montoBolivaresEfectivo'] = json_decode($newJson['montoBolivaresEfectivo']);
+      $arr['montoBolivaresEfectivoDetalle'] = json_decode($newJson['montoBolivaresEfectivoDetalle']);
+      $arr['montoBolivaresPunto'] = json_decode($newJson['montoBolivaresPunto']);
+      $arr['montoBolivaresPuntoDetalle'] = json_decode($newJson['montoBolivaresPuntoDetalle']);
+      $arr['montoBolivaresPagomovil'] = json_decode($newJson['montoBolivaresPagomovil']);
+      $arr['montoBolivaresPagomovilDetalle'] = json_decode($newJson['montoBolivaresPagomovilDetalle']);
+      $arr['montoBolivaresTransferencia'] = json_decode($newJson['montoBolivaresTransferencia']);
+      $arr['montoBolivaresTransferenciaDetalle'] = json_decode($newJson['montoBolivaresTransferenciaDetalle']);
+      $arr['tasa_dolar'] = json_decode($newJson['tasa_dolar']);
+      $arr['tasa_peso'] = json_decode($newJson['tasa_peso']);
+      $sendWhatsApp = filter_var($newJson['sendWhatsAppMessage'] ?? false);
 
-    $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, `status`, tipo ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  '" . $arr['id_wp'] . "', '" . $arr['cedula'] . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'entregada', 'sport')";
-    $nueva_oreden_response = $localConnection->goQuery($sql);
-    $object['nueva_oreden_sql'] = $sql;
+      $arr['hoy'] = date('d/m/Y');
+      $cliente = $newJson['nombre'] . ' ' . $newJson['apellido'];
 
-    if (isset($nueva_oreden_response['status']) && $nueva_oreden_response['status'] === 'error') {
-      $object['orden_creada'] = false;
-      $object['response'] = $nueva_oreden_response;
-      $object['response']['status'] = 'error';
-    } else {
+      $myDate = new CustomTime();
+      $now = $myDate->today();
+
+      $orderWC = 0;
+
+      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, `status`, tipo ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  '" . $arr['id_wp'] . "', '" . $arr['cedula'] . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'entregada', 'sport')";
+
+      $nueva_oreden_response = $localConnection->goQuery($sql);
+      $object['nueva_oreden_sql'] = $sql;
+
+      if (isset($nueva_oreden_response['status']) && $nueva_oreden_response['status'] === 'error') {
+        throw new Exception("Error al crear la orden en BD: " . ($nueva_oreden_response['message'] ?? 'Desconocido'));
+      }
+
+      $last_id = isset($nueva_oreden_response['insert_id']) ? $nueva_oreden_response['insert_id'] : null;
+      if (!$last_id) {
+        throw new Exception("No se pudo obtener el ID de la orden creada.");
+      }
+
       $object['orden_creada'] = true;
-      $last_id = $nueva_oreden_response['insert_id'];
 
       if (!empty($newJson['obs'])) {
         $observaciones = addslashes($newJson['obs'] ?? '');
@@ -2996,16 +3030,9 @@ $object['sales_commission_ISSET'][] = false;
       }
 
       // GUARDAR PRODUCTOS ASOCIADOS A LA ORDEN
-      $sql = 'SELECT _id';
-
       for ($i = 0; $i <= $count; $i++) {
         if (isset($misProductos[$i])) {
-          // PREPARAR FECHAS
-          $myDate = new CustomTime();
-          $now = $myDate->today();
-
           $decodedObj = $misProductos[$i];
-
           $cat_name = 'Uncatagorized';
 
           $values = "'" . $now . "',";
@@ -3049,18 +3076,21 @@ $object['sales_commission_ISSET'][] = false;
           $producto_detalle_response = $localConnection->goQuery($sql2);
           $object['producto_detalle'][] = $producto_detalle_response;
 
+          // Verificar error en inserción de producto
+          if (isset($producto_detalle_response['status']) && $producto_detalle_response['status'] === 'error') {
+            throw new Exception("Error al guardar producto: " . ($producto_detalle_response['message'] ?? 'Desconocido'));
+          }
+
           if (isset($producto_detalle_response['insert_id'])) {
             $last_id_ordenes_productos = $producto_detalle_response['insert_id'];
 
-            // === INICIO DE LA ÚNICA CORRECCIÓN: Procesar atributos_seleccionados ===
+            // Procesar atributos_seleccionados
             if (isset($decodedObj['atributos_seleccionados']) && is_array($decodedObj['atributos_seleccionados'])) {
-              // Obtener el id_product (que es id_woo en esta tabla)
               $product_id_for_attributes_table = intval($decodedObj['cod']);
-
               $object['response_data'] = $decodedObj['atributos_seleccionados'];
+
               foreach ($decodedObj['atributos_seleccionados'] as $attribute_data) {
                 $object['response_flag'][] = true;
-                // Validar que las claves necesarias existan y sean del tipo correcto
                 if (
                   isset($attribute_data['value']) &&
                   is_numeric($attribute_data['value']) &&
@@ -3069,37 +3099,28 @@ $object['sales_commission_ISSET'][] = false;
                   is_numeric($attribute_data['precio'])
                 ) {
                   $id_product_attribute = intval($attribute_data['value']);
-                  $attribute_value_text = $attribute_data['text'];  // No se aplica addslashes si goQuery usa prepared statements
+                  $attribute_value_text = $attribute_data['text'];
                   $attribute_price_value = floatval($attribute_data['precio']);
 
-                  // Construir la sentencia INSERT con los nombres de columna correctos y todos los valores
                   $sql_attr = 'INSERT INTO products_attributes_values (id_orden, id_product, id_product_attribute, attribute_value, attribute_price) VALUES (?, ?, ?, ?, ?)';
-
-                  // Preparar los parámetros para la sentencia INSERT
-                  // Asumo que goQuery() maneja parámetros de forma segura (prepared statements)
                   $params_attr = [
-                    $last_id,  // id_orden
-                    $product_id_for_attributes_table,  // id_product (id_woo del producto)
-                    $id_product_attribute,  // id_product_attribute
-                    $attribute_value_text,  // attribute_value (texto del atributo)
-                    $attribute_price_value  // attribute_price (precio del atributo)
+                    $last_id,
+                    $product_id_for_attributes_table,
+                    $id_product_attribute,
+                    $attribute_value_text,
+                    $attribute_price_value
                   ];
-
-                  // Ejecutar la consulta
                   $object['response_Atrinutos'][] = $localConnection->goQuery($sql_attr, $params_attr);
                 }
               }
-              // Para depuración, esto mostrará la última query de atributos ejecutada
-              // El campo original era $object['myOrder_sql'], lo renombro para claridad
-              // $object['sql_atributos_seleccionados'] = $sql_attr;
             } else {
               $object['response_flag'][] = false;
             }
-            // === FIN DE LA ÚNICA CORRECCIÓN ===
           }
         }
       }
 
+      // STOCK UPDATE
       $stock_updates = [];
       foreach ($misProductos as $producto) {
         $product_id = intval($producto['cod']);
@@ -3113,7 +3134,6 @@ $object['sales_commission_ISSET'][] = false;
 
       $sql_stock_update = '';
       foreach ($stock_updates as $product_id => $total_quantity) {
-        // $sql_stock_update .= "UPDATE products SET stock_quantity = stock_quantity + {$total_quantity} WHERE _id = {$product_id};";
         $sql_stock_update .= "UPDATE products SET stock_quantity = stock_quantity - {$total_quantity} WHERE _id = {$product_id};";
       }
 
@@ -3122,13 +3142,8 @@ $object['sales_commission_ISSET'][] = false;
         $object['stock_update_response'] = $localConnection->goQuery($sql_stock_update);
       }
 
-      // INICIO: Lógica de comisión para vendedores (copiada de /nueva/custom)
-      // NUEVO: Debugging para guardar_stock
-      error_log('DEBUG: guardar_stock raw value: ' . ($newJson['guardar_stock'] ?? 'NOT SET'));
-      error_log('DEBUG: guardar_stock filter_var result: ' . (filter_var($newJson['guardar_stock'] ?? null, FILTER_VALIDATE_BOOLEAN) ? 'TRUE' : 'FALSE'));
-
+      // COMISIÓN VENDEDORES
       if (floatval($newJson['abono']) > 0 && !(isset($newJson['guardar_stock']) && filter_var($newJson['guardar_stock'], FILTER_VALIDATE_BOOLEAN))) {
-        // BUSCAR COMISION DEL VENDEDOR
         $sql_comision = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $newJson['responsable'];
         $respComisionArr = $localConnection->goQuery($sql_comision);
 
@@ -3153,7 +3168,9 @@ $object['sales_commission_ISSET'][] = false;
           $object['pago_a_vendedor'] = 'NO se encontró información de comisión para el vendedor.';
         }
       }
-      // FIN: Lógica de comisión para vendedores
+
+      // CONFIRMAR TRANSACCIÓN
+      $localConnection->commit();
 
       $response->getBody()->write(json_encode($object));
       $localConnection->disconnect();
@@ -3161,6 +3178,16 @@ $object['sales_commission_ISSET'][] = false;
       return $response
         ->withHeader('Content-Type', 'application/json')
         ->withStatus(200);
+
+    } catch (\Throwable $e) {
+      // EN CASO DE ERROR, REVERTIR TRANSACCIÓN
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
+      $localConnection->disconnect();
+
+      error_log('Error en /ordenes/nueva/sport: ' . $e->getMessage());
+      return ApiResponse::serverError($response, 'Error al crear la orden Sport: ' . $e->getMessage(), $e);
     }
   });
 
