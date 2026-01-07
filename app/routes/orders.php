@@ -2804,7 +2804,7 @@ $object['sales_commission_ISSET'][] = false;
       }
 
       if (floatval($arr['montoDolaresZelle']) > 0) {
-        $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Zelle', '" . $arr['montoDolaresZelle'] . "', '1', ' " . addslashes($arr['montoDolaresZelleDetalle'] ?? '') . " ');";
+        $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Zelle', '" . $arr['montoDolaresZelle'] . "', '1', '" . addslashes($arr['montoDolaresZelleDetalle'] ?? '') . "');";
       }
 
       if (floatval($arr['montoDolaresPanama']) > 0) {
