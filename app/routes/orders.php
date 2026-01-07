@@ -2101,8 +2101,8 @@ $object['sales_commission_ISSET'][] = false;
       ->withStatus(200);
   });
 
-  // OBTENER LISTA DE PRESUPUESTOS GUARDADOS
-  $app->get('/presupuestos/guardados', function (Request $request, Response $response) {
+  // OBTENER LISTA DE PRESUPUESTOS FINALIZADOS (guardados en tabla presupuestos)
+  $app->get('/presupuestos/lista', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
 
     $sql = "SELECT p._id, p.cliente_nombre, p.cliente_cedula, p.pago_total, 
@@ -2123,8 +2123,8 @@ $object['sales_commission_ISSET'][] = false;
       ->withStatus(200);
   });
 
-  // OBTENER UN PRESUPUESTO ESPECÍFICO CON SUS PRODUCTOS
-  $app->get('/presupuesto/{id}', function (Request $request, Response $response, $args) {
+  // OBTENER UN PRESUPUESTO FINALIZADO ESPECÍFICO CON SUS PRODUCTOS
+  $app->get('/presupuesto/detalle/{id}', function (Request $request, Response $response, $args) {
     $id_presupuesto = intval($args['id']);
     $localConnection = new LocalDB();
     $object = [];
@@ -2148,7 +2148,7 @@ $object['sales_commission_ISSET'][] = false;
     $sql_productos = "SELECT pp.*, 
                              s.nombre as talla_nombre,
                              ct.tela as tela_nombre,
-                             pa.nombre as atributo_nombre
+                             pa.attribute_name as atributo_nombre
                       FROM presupuestos_productos pp
                       LEFT JOIN sizes s ON pp.id_size = s._id
                       LEFT JOIN catalogo_telas ct ON pp.id_tela = ct._id
