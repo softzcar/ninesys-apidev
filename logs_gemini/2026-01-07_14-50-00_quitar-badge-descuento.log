@@ -1,0 +1,14 @@
+- Solicitud del Usuario: vamos a quitar el flag que pusute ahora que ya has arreglado que se carguen los datos del descuento
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/niesys/app_multi/components/ordenes/nueva.vue
+
+- Acción Realizada:
+  1. Removí el `b-badge` y el contenedor `div` flex que mostraba el texto "Acumulado: $XX" junto al título de DESCUENTO.
+
+- Herramienta(s) Utilizada(s):
+  * `default_api.replace_file_content`
+
+- Resultado: Éxito. La interfaz ahora está más limpia y confía en el poblado automático de los inputs.
+
+- Respuesta de Gemini: Confirmación de eliminación del badge.

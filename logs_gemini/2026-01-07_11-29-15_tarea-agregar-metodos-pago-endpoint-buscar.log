@@ -1,0 +1,66 @@
+- Solicitud del Usuario: Al cargar una orden sin asignar desde la página `/comercializacion/ordenes`, las pestañas "Cliente" y "Productos" se poblaban correctamente, pero la pestaña "Pago y Asignación" no mostraba los datos de métodos de pago.
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/buscar.php (MODIFICADO - agregada consulta y transformación de métodos de pago)
+
+- Acción Realizada:
+  1. Investigué la estructura de la tabla `metodos_de_pago` consultando la base de datos de producción
+  2. Identifiqué que la orden 16 tiene 7 registros con diferentes monedas (Dólares, Bolívares) y métodos (Efectivo, Zelle, Panamá, Punto, Pagomovil, Transferencia)
+  3. Modifiqué el endpoint `/buscar/{id}` para agregar una consulta SQL:
+     ```sql
+     SELECT moneda, metodo_pago, detalle, monto, tasa FROM metodos_de_pago WHERE id_orden = {id}
+     ```
+  4. Implementé lógica de transformación de datos que mapea:
+     - `Dólares_Efectivo` → `montoDolaresEfectivo`
+     - `Dólares_Zelle` → `montoDolaresZelle`
+     - `Dólares_Panamá` → `montoDolaresPanama`
+     - `Bolívares_Efectivo` → `montoBolivaresEfectivo`
+     - `Bolívares_Punto` → `montoBolivaresPunto`
+     - `Bolívares_Pagomovil` → `montoBolivaresPagomovil`
+     - `Bolívares_Transferencia` → `montoBolivaresTransferencia`
+     - `Pesos_Efectivo` → `montoPesosEfectivo`
+     - `Pesos_Transferencia` → `montoPesosTransferencia`
+  5. Agregué soporte para concatenar múltiples detalles del mismo método de pago
+  6. Agregué el objeto `metodos_pago` a la respuesta del endpoint
+  7. Desplegué el archivo al servidor de producción
+
+- Herramienta(s) Utilizada(s):
+  * view_file - Para revisar el código del endpoint buscar.php
+  * grep_search - Para buscar referencias a métodos de pago
+  * run_command (ssh + mysql) - Para consultar la estructura y datos de la tabla metodos_de_pago
+  * replace_file_content - Para modificar buscar.php
+  * run_command (scp) - Para desplegar a producción
+  * run_command (curl) - Para verificar la respuesta del endpoint
+
+- Resultado: Éxito
+
+- Verificación:
+  El endpoint ahora retorna correctamente el objeto `metodos_pago`:
+  ```bash
+  curl -X GET "https://apidev.nineteengreen.com/buscar/16" -H "Authorization: 169"
+  ```
+  Respuesta (extracto):
+  ```json
+  {
+    "metodos_pago": {
+      "montoDolaresEfectivo": 20,
+      "montoDolaresZelle": 10,
+      "montoDolaresPanama": 20,
+      "montoDolaresPanamaDetalle": "9080808",
+      "montoBolivaresEfectivo": 4000,
+      "montoBolivaresPunto": 2000,
+      "montoBolivaresPagomovil": 2000,
+      "montoBolivaresTransferencia": 4000,
+      "montoBolivaresTransferenciaDetalle": "90900"
+    }
+  }
+  ```
+
+- Observaciones de Gemini:
+  * La tabla `metodos_de_pago` almacena cada método de pago como un registro individual con moneda, método, monto y detalle
+  * Los montos en monedas extranjeras (Bolívares, Pesos) se retornan en su moneda original; el frontend se encarga de las conversiones
+  * La lógica de transformación maneja correctamente múltiples pagos del mismo tipo concatenando los detalles
+  * Total verificado: $20 + $10 + $20 (Dólares) + $10 + $5 + $5 + $10 (Bolívares convertidos) = $80 USD
+  * Este cambio es aditivo y no afecta la funcionalidad existente del endpoint
+
+- Respuesta de Gemini: He modificado exitosamente el endpoint `/buscar/{id}` para incluir el detalle de los métodos de pago que necesita la pestaña "Pago y Asignación". El endpoint ahora consulta la tabla `metodos_de_pago` y transforma los datos al formato que espera el frontend (montoDolaresEfectivo, montoDolaresZelle, etc.). Los cambios están desplegados en producción y funcionando correctamente.

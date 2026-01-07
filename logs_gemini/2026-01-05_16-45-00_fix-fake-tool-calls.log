@@ -1,0 +1,6 @@
+- Solicitud del Usuario: Queja de que Gemini no confirma el cliente y muestra "código" (`tool_code`) en el chat en vez de ejecutar la acción.
+- Diagnóstico: "Alucinación de Formato". Gemini creía que debía escribir el código de la herramienta para que el usuario (o un sistema externo) lo ejecutara, en lugar de invocar la API de Function Calling internamente.
+- Causa Raíz: El Prompt del Sistema no prohibía explícitamente este comportamiento, y modelos como Gemini Flash pueden confundirse si han visto ejemplos de "Reasoning" o "Chain of Thought" en su entrenamiento base.
+- Solución: Prompt Engineering (Negative Constraint). Se añadió una regla CRÍTICA al sistema:
+  "**NUNCA** escribas bloques de código simulados... **NUNCA** simules ejecución... USA LA API NATIVA".
+- Resultado: Gemini ahora entenderá que su única vía para interactuar con la BD es la API oculta, no el texto del chat.

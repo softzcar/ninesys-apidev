@@ -1,0 +1,37 @@
+- Solicitud del Usuario: Investigar y corregir por qué el descuento no se guarda al editar una orden (payload con descuento=1 enviado, pero usuario reporta falla).
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php (Investigación y logs backend)
+  * /home/developer/Escritorio/niesys/app_multi/components/ordenes/nueva.vue (Corrección frontend)
+
+- Acción Realizada:
+  1. Habilité logs en backend y verifiqué con reproducción CURL que el descuento SÍ se guardaba en la base de datos (tabla `abonos`, registro creado correctamente).
+  2. Analicé el frontend `nueva.vue` y descubrí que:
+     - El endpoint `/buscar/{id}` devuelve el `pago_descuento` acumulado correctamente.
+     - Pero `nueva.vue` ignoraba este campo al cargar la orden (`this.descuentoHistorico` no existía).
+     - El cálculo del `saldo` restaba `form.descuento` (nuevo) y `abonoHistorico`, pero omitía el descuento previo.
+     - Al cargar la orden, `form.descuento` se inicializaba en 0, haciendo invisible el descuento anterior.
+  3. Modifiqué `nueva.vue`:
+     - Agregué `descuentoHistorico` a `data()`.
+     - En `manejarOrdenCargada`, asigné `this.descuentoHistorico = parseFloat(ordenData.pago_descuento) || 0;`.
+     - Actualicé `calculoPago` para restar `this.descuentoHistorico`.
+     - Actualicé `clearForm` para resetear la variable.
+
+- Herramienta(s) Utilizada(s):
+  * replace_file_content (backend logs)
+  * grep_search (frontend)
+  * multi_replace_file_content (corrección frontend)
+  * run_command (reproducción curl)
+
+- Resultado: Éxito. El frontend ahora debe mostrar y calcular correctamente el saldo considerando descuentos históricos.
+
+- Verificación:
+  - Backend confirmado salvando datos.
+  - Frontend modificado para leer y usar esos datos.
+  - Se requiere despliegue del frontend (script ./deploy.sh) para ver cambios en producción.
+
+- Observaciones de Gemini:
+  * El problema era visual/de cálculo en frontend, no de persistencia en backend.
+  * Se requiere ejecutar `deploy.sh` para aplicar cambios de frontend (Nuxt generate).
+
+- Respuesta de Gemini: He corregido el problema en `nueva.vue`. El descuento sí se guardaba en base de datos, pero el frontend no lo mostraba ni lo incluía en el cálculo del saldo al recargar la orden. He agregado la lógica para manejar `descuentoHistorico` y ahora el saldo restante será correcto. Por favor, realizar despliegue del frontend.

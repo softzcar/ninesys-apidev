@@ -1,0 +1,71 @@
+- Solicitud del Usuario: Revisar por qué la corrección del detalle de Zelle no funcionó en la orden 18, a pesar del despliegue previo.
+
+- Archivos Involucrados: 
+  * /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php (líneas 2420-2436)
+  * Tabla: api_emp_169.metodos_de_pago
+
+- Acción Realizada: 
+  1. Verifiqué la orden 18 en la base de datos - confirmó que el detalle de Zelle seguía vacío
+  2. Confirmé que la corrección anterior (remover espacios) SÍ estaba desplegada en el VPS
+  3. Investigué el código y descubrí el problema real: TODOS los campos *Detalle usaban json_decode()
+  4. El problema: json_decode() convierte strings simples (como "detalle zelle 23123") en NULL
+  5. Ejemplo: json_decode("detalle zelle 23123") devuelve NULL porque no es JSON válido
+  6. Corregí TODOS los campos *Detalle removiendo json_decode() y usando acceso directo con ??
+  7. Cambié de: $arr['montoDolaresZelleDetalle'] = json_decode($newJson['montoDolaresZelleDetalle']);
+     A:         $arr['montoDolaresZelleDetalle'] = $newJson['montoDolaresZelleDetalle'] ?? '';
+  8. Apliqué el mismo cambio a todos los métodos de pago (9 campos en total)
+  9. Hice commit y push de los cambios
+  10. Desplegué la corrección real en el VPS
+
+- Herramienta(s) Utilizada(s): 
+  * run_command - Para consultar BD y verificar código desplegado
+  * view_file - Para revisar el código de recepción de datos
+  * multi_replace_file_content - Para corregir los 9 campos de detalle
+  * git - Para commit, push y deploy
+
+- Resultado: Éxito
+
+- Verificación: 
+  * Orden 18 confirmó el problema: detalle de Zelle vacío (igual que orden 17)
+  * Identificado el problema raíz: json_decode() en campos string
+  * Corrección anterior (espacios) era necesaria pero insuficiente
+  * Código corregido en líneas 2420, 2422, 2424, 2426, 2428, 2430, 2432, 2434, 2436
+  * Commits: e5d843f (espacios) y e376bf2 (json_decode) creados
+  * Ambas correcciones desplegadas al VPS
+  * Listo para probar con orden 19
+
+- Observaciones de Gemini: 
+  El problema tenía DOS capas:
+  1. Espacios extra en el SQL (corregido primero)
+  2. json_decode() convirtiendo strings a NULL (problema raíz)
+  
+  La segunda capa no era evidente hasta probar la primera corrección. Los datos que funcionaban (Panamá, Pago Móvil en orden 17) probablemente fueron de pruebas anteriores antes de que se agregara json_decode() a esas líneas, o el código cambió entre órdenes.
+
+- Respuesta de Gemini: ✅ **Problema raíz encontrado y corregido**
+
+He identificado el problema real que impedía guardar los detalles:
+
+**Problema raíz:**
+Usar `json_decode()` en campos de texto simple convierte los strings en `NULL`:
+```php
+json_decode("detalle zelle 23123") // Devuelve NULL ❌
+```
+
+**Corrección aplicada:**
+Removí `json_decode()` de TODOS los campos `*Detalle` (9 campos):
+- montoDolaresEfectivoDetalle
+- montoDolaresZelleDetalle
+- montoDolaresPanamaDetalle
+- montoPesosEfectivoDetalle
+- montoPesosTransferenciaDetalle
+- montoBolivaresEfectivoDetalle
+- montoBolivaresPuntoDetalle
+- montoBolivaresPagomovilDetalle
+- montoBolivaresTransferenciaDetalle
+
+**Estado:**
+- ✅ Código corregido (commit e376bf2)
+- ✅ Desplegado en VPS
+- 🎯 Listo para probar con una nueva orden
+
+Ahora puedes crear la orden 19 con el mismo payload y verificar que el detalle de Zelle se guarde correctamente.

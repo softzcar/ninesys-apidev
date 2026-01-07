@@ -6,39 +6,39 @@ use Slim\App;
 
 return function (App $app) {
 
-    // Función para obtener la respuesta de /buscar
-    function obtenerRespuestaBuscar($id, $email = null): array
-    {
-        $object = array();
-        $localConnection = new LocalDB();
+  // Función para obtener la respuesta de /buscar
+  function obtenerRespuestaBuscar($id, $email = null): array
+  {
+    $object = array();
+    $localConnection = new LocalDB();
 
-        // Verificar existencia de la orden
-        $sql = 'SELECT _id FROM ordenes WHERE _id=' . $id;
-        $resp = $localConnection->goQuery($sql);
+    // Verificar existencia de la orden
+    $sql = 'SELECT _id FROM ordenes WHERE _id=' . $id;
+    $resp = $localConnection->goQuery($sql);
 
-        if (!$resp) {
-            $object = $resp;
-        } else {
-            // Buscar datos del cliente en Woocommerce
-            $sql = 'SELECT id_wp FROM ordenes WHERE _id = ' . $id;
-            $id_wp = $localConnection->goQuery($sql);
-            $id_customer = $id_wp[0]['id_wp'];
-            $id_customer = $id_wp[0]['id_wp'];
+    if (!$resp) {
+      $object = $resp;
+    } else {
+      // Buscar datos del cliente en Woocommerce
+      $sql = 'SELECT id_wp FROM ordenes WHERE _id = ' . $id;
+      $id_wp = $localConnection->goQuery($sql);
+      $id_customer = $id_wp[0]['id_wp'];
+      $id_customer = $id_wp[0]['id_wp'];
 
-            $woo = new WooMe();
-            $data = $woo->getCustomerByIdWP($id_customer);
-            $customer = json_decode(json_encode($data), true);
-            $object['customer']['data'] = $customer;
+      $woo = new WooMe();
+      $data = $woo->getCustomerByIdWP($id_customer);
+      $customer = json_decode(json_encode($data), true);
+      $object['customer']['data'] = $customer;
 
-            $object['customer']['nombre'] = ($customer[0]['billing_first_name'] ?? '') . ' ' . ($customer[0]['billing_last_name'] ?? '');
-            $object['customer']['direccion'] = $customer[0]['billing_address_1'] ?? '';
-            $object['customer']['email'] = $customer[0]['billing_email'] ?? '';
-            $object['customer']['cedula'] = $customer[0]['billing_postcode'] ?? '';
-            $object['customer']['telefono'] = $customer[0]['billing_phone'] ?? '';
+      $object['customer']['nombre'] = ($customer[0]['billing_first_name'] ?? '') . ' ' . ($customer[0]['billing_last_name'] ?? '');
+      $object['customer']['direccion'] = $customer[0]['billing_address_1'] ?? '';
+      $object['customer']['email'] = $customer[0]['billing_email'] ?? '';
+      $object['customer']['cedula'] = $customer[0]['billing_postcode'] ?? '';
+      $object['customer']['telefono'] = $customer[0]['billing_phone'] ?? '';
 
-            // Buscar datos de la orden!
-            // CONSULTA CORREGIDA: Se eliminaron las líneas comentadas que causaban el error.
-            $sql_orden = 'SELECT
+      // Buscar datos de la orden!
+      // CONSULTA CORREGIDA: Se eliminaron las líneas comentadas que causaban el error.
+      $sql_orden = 'SELECT
             a._id,
             a.status,
             a.cliente_nombre,
@@ -53,27 +53,101 @@ return function (App $app) {
           LEFT JOIN api_empresas.empresas_usuarios c ON c.id_usuario = a.responsable
           WHERE
             a._id = ' . $id;
-            $object['orden'] = $localConnection->goQuery($sql_orden);
+      $object['orden'] = $localConnection->goQuery($sql_orden);
 
-            // --- INICIO: CÁLCULO DE ABONOS Y DESCUENTOS ACTUALIZADOS ---
-            $sql_abonos = 'SELECT SUM(abono) AS total_abonos, SUM(descuento) AS total_descuentos FROM abonos WHERE id_orden = ' . $id;
-            $totales_abonos = $localConnection->goQuery($sql_abonos);
+      // --- INICIO: CÁLCULO DE ABONOS Y DESCUENTOS ACTUALIZADOS ---
+      $sql_abonos = "SELECT 
+                        SUM(abono) AS total_abonos, 
+                        SUM(descuento) AS total_descuentos,
+                        GROUP_CONCAT(CASE WHEN descuento > 0 THEN detalle ELSE NULL END SEPARATOR ', ') AS descuento_detalle
+                     FROM abonos 
+                     WHERE id_orden = " . $id;
+      $totales_abonos = $localConnection->goQuery($sql_abonos);
 
-            if (isset($object['orden'][0])) {
-                $object['orden'][0]['pago_abono'] = (float) ($totales_abonos[0]['total_abonos'] ?? 0);
-                $object['orden'][0]['pago_descuento'] = (float) ($totales_abonos[0]['total_descuentos'] ?? 0);
+      if (isset($object['orden'][0])) {
+        $object['orden'][0]['pago_abono'] = (float) ($totales_abonos[0]['total_abonos'] ?? 0);
+        $object['orden'][0]['pago_descuento'] = (float) ($totales_abonos[0]['total_descuentos'] ?? 0);
+        $object['orden'][0]['descuento_detalle'] = $totales_abonos[0]['descuento_detalle'] ?? '';
+      }
+      // --- FIN: CÁLCULO DE ABONOS Y DESCUENTOS ACTUALIZADOS ---
+
+      // --- INICIO: CONSULTA DE MÉTODOS DE PAGO ---
+      $sql_metodos_pago = 'SELECT moneda, metodo_pago, detalle, monto, tasa FROM metodos_de_pago WHERE id_orden = ' . $id;
+      $registros_metodos_pago = $localConnection->goQuery($sql_metodos_pago);
+
+      // Inicializar todos los campos de métodos de pago en 0
+      $metodos_pago = [
+        'montoDolaresEfectivo' => 0,
+        'montoDolaresEfectivoDetalle' => '',
+        'montoDolaresZelle' => 0,
+        'montoDolaresZelleDetalle' => '',
+        'montoDolaresPanama' => 0,
+        'montoDolaresPanamaDetalle' => '',
+        'montoPesosEfectivo' => 0,
+        'montoPesosEfectivoDetalle' => '',
+        'montoPesosTransferencia' => 0,
+        'montoPesosTransferenciaDetalle' => '',
+        'montoBolivaresEfectivo' => 0,
+        'montoBolivaresEfectivoDetalle' => '',
+        'montoBolivaresPunto' => 0,
+        'montoBolivaresPuntoDetalle' => '',
+        'montoBolivaresPagomovil' => 0,
+        'montoBolivaresPagomovilDetalle' => '',
+        'montoBolivaresTransferencia' => 0,
+        'montoBolivaresTransferenciaDetalle' => '',
+      ];
+
+      // Mapeo de moneda + metodo_pago a nombres de campos del frontend
+      $mapeo_campos = [
+        'Dólares_Efectivo' => 'montoDolaresEfectivo',
+        'Dólares_Zelle' => 'montoDolaresZelle',
+        'Dólares_Panamá' => 'montoDolaresPanama',
+        'Pesos_Efectivo' => 'montoPesosEfectivo',
+        'Pesos_Transferencia' => 'montoPesosTransferencia',
+        'Bolívares_Efectivo' => 'montoBolivaresEfectivo',
+        'Bolívares_Punto' => 'montoBolivaresPunto',
+        'Bolívares_Pagomovil' => 'montoBolivaresPagomovil',
+        'Bolívares_Transferencia' => 'montoBolivaresTransferencia',
+      ];
+
+      // Transformar registros al formato del frontend
+      if ($registros_metodos_pago && is_array($registros_metodos_pago)) {
+        foreach ($registros_metodos_pago as $registro) {
+          $clave = $registro['moneda'] . '_' . $registro['metodo_pago'];
+
+          if (isset($mapeo_campos[$clave])) {
+            $campo_monto = $mapeo_campos[$clave];
+            $campo_detalle = $campo_monto . 'Detalle';
+
+            // Para todas las monedas, guardamos el monto en la moneda original
+            // El frontend se encarga de hacer las conversiones si es necesario
+            $metodos_pago[$campo_monto] += (float) $registro['monto'];
+
+            // Concatenar detalles si hay múltiples pagos del mismo tipo
+            if (!empty($registro['detalle'])) {
+              if (!empty($metodos_pago[$campo_detalle])) {
+                $metodos_pago[$campo_detalle] .= ', ' . $registro['detalle'];
+              } else {
+                $metodos_pago[$campo_detalle] = $registro['detalle'];
+              }
             }
-            // --- FIN: CÁLCULO DE ABONOS Y DESCUENTOS ACTUALIZADOS ---
+          }
+        }
+      }
 
-            // Buscar datos del diseño
-            $sql = 'SELECT tipo FROM disenos WHERE id_orden = ' . $id;
-            $object['diseno'] = $localConnection->goQuery($sql);
-            if (empty($object['diseno'])) {
-                $object['diseno'][]['tipo'] = 'Ninguno';
-            }
+      // Agregar métodos de pago al objeto de respuesta
+      $object['metodos_pago'] = $metodos_pago;
+      // --- FIN: CONSULTA DE MÉTODOS DE PAGO ---
 
-            // Buscar datos de productos
-            $sql = 'SELECT
+      // Buscar datos del diseño
+      $sql = 'SELECT tipo FROM disenos WHERE id_orden = ' . $id;
+      $object['diseno'] = $localConnection->goQuery($sql);
+      if (empty($object['diseno'])) {
+        $object['diseno'][]['tipo'] = 'Ninguno';
+      }
+
+      // Buscar datos de productos
+      $sql = 'SELECT
             op._id,
             op.name,
             pr.sku AS sku,
@@ -123,53 +197,53 @@ return function (App $app) {
           WHERE
             op.id_orden = ' . $id;
 
-            $tmpProducts = $localConnection->goQuery($sql);
+      $tmpProducts = $localConnection->goQuery($sql);
 
-            // ATRIBUTOS DE PRODUCTOS
-            $sqlAttr = "SELECT id_product, attribute_value, attribute_price FROM products_attributes_values WHERE id_orden = {$id}";
-            $object['atributos_prodcutos'] = $localConnection->goQuery($sqlAttr);
+      // ATRIBUTOS DE PRODUCTOS
+      $sqlAttr = "SELECT id_product, attribute_value, attribute_price FROM products_attributes_values WHERE id_orden = {$id}";
+      $object['atributos_prodcutos'] = $localConnection->goQuery($sqlAttr);
 
-            // PARSEAR PRODUCTOS
-            $data = [];
-            $key = 0;
-            foreach ($tmpProducts as $product) {
-                $data[$key]['_id'] = intval($product['_id']);
-                $data[$key]['name'] = $product['name'];
-                $data[$key]['cod'] = $product['cod'];
-                $data[$key]['producto_fisico'] = $product['producto_fisico'];
-                $data[$key]['id_woo'] = $product['id_woo'];
-                $data[$key]['cantidad'] = $product['cantidad'];
-                $data[$key]['id_tela'] = $product['id_tela'];
-                $data[$key]['id_talla'] = $product['id_talla'];
-                $data[$key]['talla'] = $product['talla'];
-                $data[$key]['tela'] = $product['tela'];
-                $data[$key]['corte'] = $product['corte'];
-                $data[$key]['precio'] = $product['precio'];
-                $data[$key]['atributo'] = $product['atributo'];
-                $data[$key]['atributo_nombre'] = $product['atributo_nombre'];
-                $data[$key]['prices'] = json_decode($product['prices']);
-                $key++;
-            }
-            $object['productos'] = $data;
-            $object['productos_count'] = count($object['productos']);
-            $object['conterwoo'] = count($object['productos']);
-        }
-
-        $localConnection->disconnect();
-
-        $contentType = 'application/json';
-        return array('object' => $object, 'contentType' => $contentType);
+      // PARSEAR PRODUCTOS
+      $data = [];
+      $key = 0;
+      foreach ($tmpProducts as $product) {
+        $data[$key]['_id'] = intval($product['_id']);
+        $data[$key]['name'] = $product['name'];
+        $data[$key]['cod'] = $product['cod'];
+        $data[$key]['producto_fisico'] = $product['producto_fisico'];
+        $data[$key]['id_woo'] = $product['id_woo'];
+        $data[$key]['cantidad'] = $product['cantidad'];
+        $data[$key]['id_tela'] = $product['id_tela'];
+        $data[$key]['id_talla'] = $product['id_talla'];
+        $data[$key]['talla'] = $product['talla'];
+        $data[$key]['tela'] = $product['tela'];
+        $data[$key]['corte'] = $product['corte'];
+        $data[$key]['precio'] = $product['precio'];
+        $data[$key]['atributo'] = $product['atributo'];
+        $data[$key]['atributo_nombre'] = $product['atributo_nombre'];
+        $data[$key]['prices'] = json_decode($product['prices']);
+        $key++;
+      }
+      $object['productos'] = $data;
+      $object['productos_count'] = count($object['productos']);
+      $object['conterwoo'] = count($object['productos']);
     }
 
-    $app->get('/buscar/{id}[/{email}]', function (Request $request, Response $response, array $args) {
-        $id = $args['id'];
-        $email = isset($args['email']) ? $args['email'] : null;
+    $localConnection->disconnect();
 
-        $result = obtenerRespuestaBuscar($id, $email);
-        $response->getBody()->write(json_encode($result['object'], JSON_NUMERIC_CHECK));
+    $contentType = 'application/json';
+    return array('object' => $object, 'contentType' => $contentType);
+  }
 
-        return $response
-            ->withHeader('Content-Type', $result['contentType'])
-            ->withStatus(200);
-    });
+  $app->get('/buscar/{id}[/{email}]', function (Request $request, Response $response, array $args) {
+    $id = $args['id'];
+    $email = isset($args['email']) ? $args['email'] : null;
+
+    $result = obtenerRespuestaBuscar($id, $email);
+    $response->getBody()->write(json_encode($result['object'], JSON_NUMERIC_CHECK));
+
+    return $response
+      ->withHeader('Content-Type', $result['contentType'])
+      ->withStatus(200);
+  });
 };

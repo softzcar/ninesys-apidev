@@ -1,0 +1,32 @@
+- Solicitud del Usuario: Actualizar la URL del endpoint en el frontend que estaba causando error 405 porque usaba la ruta antigua `/ordenes/sin-asignacion` en lugar de la nueva `/ordenes-sin-asignar`.
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/niesys/app_multi/components/ordenes/nueva.vue (MODIFICADO - línea 1628)
+
+- Acción Realizada:
+  1. Busqué la llamada al endpoint en el archivo nueva.vue usando grep_search
+  2. Encontré la URL antigua en la línea 1628: `${this.$config.API}/ordenes/sin-asignacion/${idVendedor}`
+  3. Actualicé la URL a: `${this.$config.API}/ordenes-sin-asignar/${idVendedor}`
+
+- Herramienta(s) Utilizada(s):
+  * grep_search - Para localizar la llamada al endpoint
+  * view_file - Para revisar el contexto del código
+  * replace_file_content - Para actualizar la URL
+
+- Resultado: Éxito
+
+- Verificación: 
+  El cambio se realizó correctamente en el archivo nueva.vue línea 1628.
+  La nueva URL coincide con el endpoint desplegado en el backend que funciona correctamente:
+  ```bash
+  curl -X GET "https://apidev.nineteengreen.com/ordenes-sin-asignar/564" -H "Authorization: 169"
+  # Retorna correctamente datos HTTP 200
+  ```
+
+- Observaciones de Gemini:
+  * El cambio es simple pero crítico - cambió de `/ordenes/sin-asignacion` a `/ordenes-sin-asignar`
+  * La app ahora debería funcionar correctamente al cargar órdenes sin asignar
+  * Este cambio es complementario al fix del backend donde se movió el endpoint a un archivo separado
+  * El frontend necesitará ser desplegado para que los usuarios vean el cambio
+
+- Respuesta de Gemini: Actualicé exitosamente la URL del endpoint en `nueva.vue` línea 1628 de `/ordenes/sin-asignacion` a `/ordenes-sin-asignar`. El cambio está listo para ser desplegado. La aplicación ahora usará la URL correcta que funciona en el backend.

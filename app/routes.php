@@ -195,6 +195,9 @@ return function (App $app) {
 
   // RUTA DE BÚSQUEDA DE ÓRDENES
   (require __DIR__ . '/routes/buscar.php')($app);
+
+  // RUTA DE ÓRDENES SIN ASIGNACIÓN
+  (require __DIR__ . '/routes/ordenes-sin-asignacion.php')($app);
   /** ENVIAR EMAILS */
   $app->get('/send-email', function (Request $request, Response $response) {
     $data = $request->getParsedBody();

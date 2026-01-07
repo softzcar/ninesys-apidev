@@ -1,0 +1,15 @@
+- Solicitud del Usuario: Comparar `/ordenes/nueva/custom` con `/ordenes/nueva/sport` e implementar rollback en caso de error para `sport`.
+- Archivos Involucrados: `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php`
+- Acción Realizada:
+    - Se refactorizó completamente el endpoint `/ordenes/nueva/sport`.
+    - Se agregaron validaciones de entrada al inicio (productos, responsable, fecha de entrega) usando `ApiResponse::validationError`.
+    - Se envolvió toda la lógica de negocio dentro de un bloque `try-catch`.
+    - Se implementó el uso de transacciones: `$localConnection->beginTransaction()` al inicio.
+    - Se agregó `$localConnection->commit()` al finalizar exitosamente todas las operaciones (orden, productos, stock, comisiones).
+    - Se agregó `$localConnection->rollback()` dentro del bloque `catch` para deshacer cualquier cambio parcial si ocurre un error en cualquier punto del proceso (ej. fallo al guardar un producto).
+    - Se mejoró el manejo de errores para lanzar excepciones descriptivas si las consultas SQL fallan.
+- Herramienta(s) Utilizada(s): `default_api.replace_file_content`
+- Resultado: Éxito. El endpoint ahora posee la misma robustez que el endpoint `custom`.
+- Verificación: Se revisó que la lógica de negocio (inserción de productos, cálculo de stock, comisiones, métodos de pago) se mantuviera intacta, pero ahora protegida por la transacción.
+- Observaciones de Gemini: Las advertencias de linter sobre tipos (`ResponseInterface` vs `Response`) son consistentes con el resto del archivo y no afectan la funcionalidad.
+- Respuesta de Gemini: Se ha completado la refactorización.

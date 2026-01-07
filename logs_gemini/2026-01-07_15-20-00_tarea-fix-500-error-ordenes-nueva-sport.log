@@ -1,0 +1,8 @@
+- Solicitud del Usuario: He probado crear una nueva orden usando la opción 'Tienda' ... enviado a /ordenes/nueva/sport ... recibimos error 500 ... Return value must be of type Psr\Http\Message\ResponseInterface, null returned. Analizar y corregir.
+- Archivos Involucrados: /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php
+- Acción Realizada: Se identificó que el endpoint `/ordenes/nueva/sport` no retornaba una respuesta (retornaba `null`) cuando fallaba la inserción inicial de la orden (SQL INSERT), debido a que la sentencia `return` estaba se encontraba indentada dentro del bloque `else` (éxito). Se movió la lógica de generación de respuesta y cierre de conexión fuera del bloque `else` para que se ejecute en todos los casos.
+- Herramienta(s) Utilizada(s): `default_api.view_file`, `default_api.replace_file_content`
+- Resultado: Éxito
+- Verificación: Se verificó mediante análisis de código que el flujo de ejecución ahora garantiza el retorno de un objeto `ResponseInterface` tanto en caso de éxito como de error en la creación de la orden.
+- Observaciones de Gemini: El error original se debía a que el payload enviado contenía un `id` vacío para `id_wp`, lo cual probablemente está causando el fallo en el INSERT SQL. Con esta corrección, el servidor ahora devolverá el error SQL en formato JSON (status: error) en lugar de fallar con un error 500, permitiendo ver la causa real del rechazo de la base de datos.
+- Respuesta de Gemini: Se ha corregido el error 500. El problema era que el código no retornaba respuesta si fallaba el primer INSERT. Ahora devolverá el error detallado de la base de datos.

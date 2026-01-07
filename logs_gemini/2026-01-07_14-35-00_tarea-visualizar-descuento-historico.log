@@ -1,0 +1,25 @@
+- Solicitud del Usuario: ¿Estamos trayendo el monto de descuenots hechos a la orden? no veo que se este cargandoe ste dato en el formulario cuando cargamos una orden desde 'Cargar orden no asignada'
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/niesys/app_multi/components/ordenes/nueva.vue
+
+- Acción Realizada:
+  1. Verifiqué que el backend `buscar.php` efectivamente envía el campo `pago_descuento` con el valor acumulado (confirmado con curl: 10.00 para la orden 19).
+  2. Identifiqué que en `nueva.vue`, la variable `descuentoHistorico` estaba declarada por error dentro del objeto `formPrint` en lugar de estar en la raíz de `data()`, lo que impedía que `this.descuentoHistorico` funcionara correctamente en los cálculos y visualización.
+  3. Moví `descuentoHistorico` a la raíz de `data()`.
+  4. Actualicé `clearForm` para resetear `descuentoHistorico` a 0 al limpiar el formulario.
+  5. Agregué un indicador visual en el template (un `b-badge`) junto al encabezado "DESCUENTO" para mostrar el monto acumulado cuando sea mayor a 0.
+
+- Herramienta(s) Utilizada(s):
+  * `default_api.view_file`
+  * `default_api.grep_search`
+  * `default_api.multi_replace_file_content`
+  * `default_api.run_command` (curl y sql)
+
+- Resultado: Éxito. El dato ahora es accesible, reactivo y visible en la interfaz local.
+
+- Verificación: Confirmado mediante inspección de código y pruebas de consistencia de datos en la base de datos (pago_descuento en ordenes vs suma en abonos coinciden).
+
+- Observaciones de Gemini: El problema era puramente de ubicación de la variable en el frontend y falta de un elemento visual que indicara al usuario que el descuento previo ya estaba cargado.
+
+- Respuesta de Gemini: Sí, el monto de descuentos se está trayendo correctamente desde el backend. El problema era que el frontend no lo mostraba visualmente y la variable estaba mal ubicada en el código. He corregido esto en `nueva.vue` y ahora verás un indicador "Acumulado: $XX" junto al título de DESCUENTO cuando cargues la orden.

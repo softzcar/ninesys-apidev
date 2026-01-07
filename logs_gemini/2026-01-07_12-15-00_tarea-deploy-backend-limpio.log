@@ -1,0 +1,16 @@
+- Solicitud del Usuario: Desplegar solo el backend actualizado.
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php (Limpieza y despliegue)
+
+- Acción Realizada:
+  1. Eliminé las líneas de debug (`file_put_contents`) de `orders.php` para dejar el archivo limpio para producción.
+  2. Ejecuté `scp` para subir `orders.php` al VPS.
+
+- Herramienta(s) Utilizada(s):
+  * replace_file_content (limpieza)
+  * run_command (scp)
+
+- Resultado: Éxito. El backend en producción está actualizado con la versión más reciente y limpia de `orders.php`, además de los cambios previos en `buscar.php` y `ordenes-sin-asignacion.php`.
+
+- Respuesta de Gemini: Confirmación de que el backend ha sido limpiado de logs de depuración y desplegado exitosamente.
