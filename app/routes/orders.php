@@ -2107,7 +2107,7 @@ $object['sales_commission_ISSET'][] = false;
 
     $sql = "SELECT p._id, p.cliente_nombre, p.cliente_cedula, p.pago_total, 
                    p.fecha_creacion, p.fecha_entrega, p.status, p.observaciones, p.responsable,
-                   u.nombre as empleado_nombre, u.apellido as empleado_apellido
+                   u.nombre as empleado_nombre
             FROM presupuestos p
             LEFT JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
             WHERE p.status != 'Convertido'
