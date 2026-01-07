@@ -2064,7 +2064,23 @@ $object['sales_commission_ISSET'][] = false;
           $values .= "''";
         }
 
-        $sql2 = 'INSERT INTO presupuestos_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela) VALUES (' . $values . ')';
+        // AGREGAR SOPORTE PARA ATRIBUTOS DE PRODUCTOS
+        $id_products_attributes = 'NULL';
+        if (isset($decodedObj['atributo']) && $decodedObj['atributo'] !== null && $decodedObj['atributo'] !== '') {
+          $id_products_attributes = intval($decodedObj['atributo']);
+        }
+
+        $id_size = 'NULL';
+        if (isset($decodedObj['talla']) && $decodedObj['talla'] !== null && $decodedObj['talla'] !== '') {
+          $id_size = intval($decodedObj['talla']);
+        }
+
+        $id_tela = 'NULL';
+        if (isset($decodedObj['tela']) && $decodedObj['tela'] !== null && $decodedObj['tela'] !== '') {
+          $id_tela = intval($decodedObj['tela']);
+        }
+
+        $sql2 = 'INSERT INTO presupuestos_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela, id_products_attributes, id_size, id_tela) VALUES (' . $values . ', ' . $id_products_attributes . ', ' . $id_size . ', ' . $id_tela . ')';
         $object['sql_presupuestos_productos'] = $sql2;
         $object['producto_detalle'][] = $localConnection->goQuery($sql2);
       }
@@ -2078,6 +2094,72 @@ $object['sales_commission_ISSET'][] = false;
 
     $response->getBody()->write(json_encode($object));
 
+    $localConnection->disconnect();
+
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  // OBTENER LISTA DE PRESUPUESTOS GUARDADOS
+  $app->get('/presupuestos/guardados', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+
+    $sql = "SELECT p._id, p.cliente_nombre, p.cliente_cedula, p.pago_total, 
+                   p.fecha_creacion, p.fecha_entrega, p.status, p.observaciones, p.responsable,
+                   u.nombre as empleado_nombre, u.apellido as empleado_apellido
+            FROM presupuestos p
+            LEFT JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
+            WHERE p.status != 'Convertido'
+            ORDER BY p._id DESC";
+
+    $result = $localConnection->goQuery($sql);
+
+    $response->getBody()->write(json_encode($result));
+    $localConnection->disconnect();
+
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  // OBTENER UN PRESUPUESTO ESPECÍFICO CON SUS PRODUCTOS
+  $app->get('/presupuesto/{id}', function (Request $request, Response $response, $args) {
+    $id_presupuesto = intval($args['id']);
+    $localConnection = new LocalDB();
+    $object = [];
+
+    // Obtener datos del presupuesto
+    $sql = "SELECT * FROM presupuestos WHERE _id = {$id_presupuesto}";
+    $presupuesto = $localConnection->goQuery($sql);
+
+    if (empty($presupuesto)) {
+      $object['error'] = 'Presupuesto no encontrado';
+      $response->getBody()->write(json_encode($object));
+      $localConnection->disconnect();
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(404);
+    }
+
+    $presupuesto = $presupuesto[0];
+
+    // Obtener productos del presupuesto
+    $sql_productos = "SELECT pp.*, 
+                             s.nombre as talla_nombre,
+                             ct.tela as tela_nombre,
+                             pa.nombre as atributo_nombre
+                      FROM presupuestos_productos pp
+                      LEFT JOIN sizes s ON pp.id_size = s._id
+                      LEFT JOIN catalogo_telas ct ON pp.id_tela = ct._id
+                      LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
+                      WHERE pp.id_orden = {$id_presupuesto}";
+    $productos = $localConnection->goQuery($sql_productos);
+
+    $presupuesto['productos'] = $productos;
+    $object = $presupuesto;
+
+    $response->getBody()->write(json_encode($object));
     $localConnection->disconnect();
 
     return $response

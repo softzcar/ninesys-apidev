@@ -723,8 +723,11 @@ CREATE TABLE `presupuestos_productos` (
   `cantidad` int(11) NOT NULL DEFAULT 0 COMMENT 'Cantidad del producto',
   `talla` varchar(8) DEFAULT NULL COMMENT 'Talla del producto',
   `corte` varchar(32) DEFAULT NULL COMMENT 'Dama, caballero, niño',
-  `id_catalogo_telas` int(11) DEFAULT NULL COMMENT 'ID de el catálogo de telas',
+  `id_catalogo_telas` int(11) DEFAULT NULL COMMENT 'IDde el catálogo de telas',
   `tela` varchar(128) DEFAULT NULL COMMENT 'Tela principal seleccionada desde Comercialización',
+  `id_products_attributes` int(11) DEFAULT NULL COMMENT 'ID de la variante del producto',
+  `id_size` int(11) DEFAULT NULL COMMENT 'ID de la talla',
+  `id_tela` int(11) DEFAULT NULL COMMENT 'ID de la tela a utilizar del catálogo de telas',
   `precio_unitario` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio del producto',
   `precio_woo` decimal(10, 0) DEFAULT NULL COMMENT 'Precio de Woocommerce',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
