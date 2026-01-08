@@ -2064,23 +2064,8 @@ $object['sales_commission_ISSET'][] = false;
           $values .= "''";
         }
 
-        // AGREGAR SOPORTE PARA ATRIBUTOS DE PRODUCTOS
-        $id_products_attributes = 'NULL';
-        if (isset($decodedObj['atributo']) && $decodedObj['atributo'] !== null && $decodedObj['atributo'] !== '') {
-          $id_products_attributes = intval($decodedObj['atributo']);
-        }
 
-        $id_size = 'NULL';
-        if (isset($decodedObj['talla']) && $decodedObj['talla'] !== null && $decodedObj['talla'] !== '') {
-          $id_size = intval($decodedObj['talla']);
-        }
-
-        $id_tela = 'NULL';
-        if (isset($decodedObj['tela']) && $decodedObj['tela'] !== null && $decodedObj['tela'] !== '') {
-          $id_tela = intval($decodedObj['tela']);
-        }
-
-        $sql2 = 'INSERT INTO presupuestos_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela, id_products_attributes, id_size, id_tela) VALUES (' . $values . ', ' . $id_products_attributes . ', ' . $id_size . ', ' . $id_tela . ')';
+        $sql2 = 'INSERT INTO presupuestos_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela) VALUES (' . $values . ')';
         $object['sql_presupuestos_productos'] = $sql2;
         $object['producto_detalle'][] = $localConnection->goQuery($sql2);
       }
