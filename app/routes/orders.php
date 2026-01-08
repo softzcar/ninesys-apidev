@@ -2077,6 +2077,15 @@ $object['sales_commission_ISSET'][] = false;
     // $result = $woo->sendMail($orderWC->id, $resultBuscar["object"]);
     // $object["sendMail"] = $result;
 
+
+    // Agregar indicadores de éxito para el frontend
+    $object['orden_creada'] = true;
+    $object['response'] = [
+      'status' => 'success',
+      'message' => 'Presupuesto creado exitosamente',
+      'id_presupuesto' => $last_id
+    ];
+
     $response->getBody()->write(json_encode($object));
 
     $localConnection->disconnect();
