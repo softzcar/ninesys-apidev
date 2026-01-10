@@ -221,7 +221,8 @@ return function (App $app) {
         $data[$key]['precio'] = $product['precio'];
         $data[$key]['atributo'] = $product['atributo'];
         $data[$key]['atributo_nombre'] = $product['atributo_nombre'];
-        $data[$key]['prices'] = json_decode($product['prices']);
+        // Manejar el caso donde prices puede ser NULL (productos sin precios asociados)
+        $data[$key]['prices'] = !empty($product['prices']) ? json_decode($product['prices']) : [];
         $key++;
       }
       $object['productos'] = $data;
