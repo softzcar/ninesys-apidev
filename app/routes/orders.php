@@ -3751,6 +3751,26 @@ $object['sales_commission_ISSET'][] = false;
       }
 
       // ==========================================================
+      // VALIDACIÓN CRÍTICA: Verificar que TODOS los productos tengan producto_id válido
+      // ==========================================================
+      $productos_invalidos = [];
+      foreach ($productos_procesados as $prod) {
+        if (empty($prod['producto_id']) || !is_numeric($prod['producto_id'])) {
+          $productos_invalidos[] = $prod['producto_nombre'] ?? $prod['nombre_buscado'] ?? 'Desconocido';
+        }
+      }
+
+      if (!empty($productos_invalidos)) {
+        return ApiResponse::error(
+          $response,
+          "No se puede crear la orden. Los siguientes productos no tienen un ID válido: " .
+          implode(', ', $productos_invalidos) . ". " .
+          "Esto indica que no fueron encontrados en la base de datos durante la prevalidación.",
+          400
+        );
+      }
+
+      // ==========================================================
       // CREAR LA ORDEN
       // ==========================================================
       $myDate = new CustomTime();
