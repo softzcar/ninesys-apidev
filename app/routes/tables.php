@@ -168,12 +168,7 @@ return function (App $app) {
 
     $object['items'] = $localConnection->goQuery($sql);
 
-    foreach ($object['items'] as $key => $item) {
-      if (is_array($item) && isset($item['form'])) {
-        // Decodificar el JSON directamente en el array original
-        $object['items'][$key]['form'] = json_decode($item['form']);
-      }
-    }
+    // No decodificamos el JSON aquí. El frontend lo manejará con manejo de errores adecuado.
 
     $response->getBody()->write(json_encode($object));
     return $response
