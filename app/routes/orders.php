@@ -3578,8 +3578,7 @@ $object['sales_commission_ISSET'][] = false;
         error_log('/ordenes/nueva/simple - Raw body: ' . $rawBody);
       }
 
-      error_log('/ordenes/nueva/simple - Data received: ' . json_encode($data));
-      error_log('/ordenes/nueva/simple - Productos en payload: ' . json_encode($data['productos'] ?? []));
+
 
       $id_empresa = defined('ID_EMPRESA') ? ID_EMPRESA : 163;
 
@@ -3743,9 +3742,6 @@ $object['sales_commission_ISSET'][] = false;
         $productos_procesados[] = $producto_info;
       }
 
-      // DEBUG: Log productos procesados antes de validación
-      error_log('/ordenes/nueva/simple - Productos procesados: ' . json_encode($productos_procesados));
-
       if (empty($productos_procesados)) {
         return ApiResponse::error(
           $response,
@@ -3773,9 +3769,6 @@ $object['sales_commission_ISSET'][] = false;
           400
         );
       }
-
-      // DEBUG: Validación pasó exitosamente
-      error_log('/ordenes/nueva/simple - Validación OK. Todos los productos tienen ID válido');
 
       // ==========================================================
       // CREAR LA ORDEN

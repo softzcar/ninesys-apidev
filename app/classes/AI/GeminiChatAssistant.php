@@ -975,18 +975,36 @@ class GeminiChatAssistant extends GeminiAssistant
                 return ['success' => false, 'error' => "No se pudo obtener el ID de la orden creada."];
             }
 
-            // 4. Insertar Productos
+            // 4. VALIDAR que todos los productos tengan id_producto válido
+            $productosInvalidos = [];
+            foreach ($productos as $p) {
+                if (empty($p['id_producto']) || !is_numeric($p['id_producto'])) {
+                    $productosInvalidos[] = $p['nombre'] ?? $p['product'] ?? 'Producto Desconocido';
+                }
+            }
+
+            if (!empty($productosInvalidos)) {
+                $db->rollback();
+                $error = "No se puede crear la orden. Los siguientes productos no tienen un ID válido: " .
+                    implode(', ', $productosInvalidos) . ". " .
+                    "Esto indica que no fueron encontrados en la base de datos durante la validación.";
+                file_put_contents('/tmp/gemini_order_debug.log', "Validación fallida: {$error}\\n", FILE_APPEND);
+                return ['success' => false, 'error' => $error];
+            }
+
+            // 5. Insertar Productos (con id_woo)
             foreach ($productos as $p) {
                 $sqlProd = "INSERT INTO ordenes_productos (
-                    moment, precio_unitario, name, id_orden, 
+                    moment, precio_unitario, name, id_orden, id_woo,
                     cantidad, talla, corte, tela
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 $paramsProd = [
                     $now,
                     $p['precio_unitario'] ?? 0,
                     $p['nombre'] ?? $p['product'] ?? 'Producto Desconocido',
                     $idOrden,
+                    $p['id_producto'],  // ← CRÍTICO: Agregar id_woo
                     $p['cantidad'] ?? 0,
                     $p['talla'] ?? 'N/A',
                     $p['corte'] ?? 'N/A',
