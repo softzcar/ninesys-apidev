@@ -13,6 +13,7 @@ return function (App $app) {
   // $app->get('/config', function (Request $request, Response $response) {
   $app->post('/config/select-empleados', function (Request $request, Response $response, $args) {
     $datos = $request->getParsedBody();
+    $localConnection = new LocalDB();
 
     /*  if ($datos["estado"] == true) {
        $estado = 1;
@@ -20,9 +21,33 @@ return function (App $app) {
        $estado = 0;
      } */
 
-    // DETERMINAR QUE DEPARTAMENTO HACE QUE
-    $departamento = $datos['departamento'];
+    // OBTENER EL NOMBRE DEL DEPARTAMENTO A PARTIR DEL ID
+    $id_departamento = isset($datos['id_departamento']) ? $datos['id_departamento'] : null;
 
+    if (!$id_departamento) {
+      $object['error'] = 'El ID del departamento es requerido';
+      $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(400);
+    }
+
+    // Consultar el nombre del departamento
+    $sql_dept = "SELECT departamento FROM departamentos WHERE _id = " . intval($id_departamento);
+    $dept_data = $localConnection->goQuery($sql_dept);
+
+    if (empty($dept_data)) {
+      $object['error'] = 'No se encontró el departamento con ID ' . $id_departamento;
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(404);
+    }
+
+    $departamento = $dept_data[0]['departamento'];
+
+    // DETERMINAR QUE CAMPO ACTUALIZAR SEGÚN EL NOMBRE DEL DEPARTAMENTO
     switch ($departamento) {
       case 'Estampado':
         $campo = 'sys_mostrar_rollo_en_empleado_estampado';
@@ -45,13 +70,15 @@ return function (App $app) {
     }
 
     if ($campo != 'Unknown') {
-      $localConnection = new LocalDB();
       $sql = 'UPDATE config SET ' . $campo . ' = ' . $datos['estado'] . ' WHERE _id = 1';
       $object['sql'] = $sql;
+      $object['departamento'] = $departamento;
+      $object['id_departamento'] = $id_departamento;
       $object['response'] = $localConnection->goQuery($sql);
       $localConnection->disconnect();
     } else {
-      $object['response'] = 'No existe el departamento ' . $datos['departamento'];
+      $object['error'] = 'No existe una configuración para el departamento ' . $departamento;
+      $localConnection->disconnect();
     }
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
