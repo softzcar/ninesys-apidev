@@ -1,0 +1,14 @@
+- Solicitud del Usuario: Error SQLSTATE[22007]: Invalid datetime format: 1366 Incorrect integer value: '' for column `id_wp`.
+- Archivos Involucrados: `app/routes/orders.php`
+- Acción Realizada:
+    - Se identificó que cuando se crea una orden para un cliente nuevo (sin ID de cliente), el frontend envía `id_wp` vacío o como cadena vacía.
+    - MySQL en modo estricto rechaza `''` para columnas enteras (`id_wp`).
+    - Se modificó la lógica antes del INSERT para validar `id_wp`:
+        - ` $id_wp_val = (is_numeric($arr['id_wp']) && $arr['id_wp'] > 0) ? $arr['id_wp'] : "NULL";`
+    - Se actualizó la consulta SQL para usar `NULL` (sin comillas) cuando no hay ID válido.
+    - Se desplegó el cambio al VPS (`git reset --hard origin/refactor/modular-routes` tras push).
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command`.
+- Resultado: Éxito. El error de tipo de dato debería estar resuelto.
+- Verificación: Despliegue confirmado en el VPS (commit 9749c29).
+- Observaciones de Gemini: Es común este error al migrar a versiones más estrictas de MySQL o al refactorizar consultas concatenadas.
+- Respuesta de Gemini: Notificación de corrección y despliegue.

@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Las órdenes sport se están creando con status 'entregada' cuando deberían crearse con status 'En espera'.
+- Archivos Involucrados: `app/routes/orders.php`
+- Acción Realizada:
+    - Se modificó la línea 3014 del INSERT de la orden sport.
+    - Se cambió el valor del campo `status` de `'entregada'` a `'En espera'`.
+    - Se hizo commit y push al repositorio.
+    - Se desplegó al VPS mediante `git reset --hard origin/refactor/modular-routes`.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command`.
+- Resultado: Éxito. Las órdenes sport ahora se crearán con el status correcto.
+- Verificación: Commit c55c492 desplegado en VPS.
+- Observaciones de Gemini: Error simple de configuración inicial del endpoint.
+- Respuesta de Gemini: Confirmación de corrección y despliegue.

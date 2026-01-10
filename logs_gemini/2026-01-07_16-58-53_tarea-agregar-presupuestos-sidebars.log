@@ -1,0 +1,57 @@
+- Solicitud del Usuario: Agregar la opción 'Presupuestos' en los sidebars de ambos departamentos (Admin y Comercialización)
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/niesys/app_multi/components/sidebars/SidebarAdmin.vue
+  * /home/developer/Escritorio/niesys/app_multi/components/sidebars/SidebarComercializacion.vue
+
+- Acción Realizada:
+  1. Se revisaron los archivos de sidebar para identificar la estructura actual
+  2. Se encontró que SidebarComercializacion.vue ya tenía la opción "Nuevo Presupuesto" activada (líneas 11-17)
+  3. Se identificó que SidebarAdmin.vue no tenía la opción de Presupuestos
+  4. Se creó un script Python para insertar el item "Nuevo Presupuesto" en SidebarAdmin.vue
+  5. Se agregó el nuevo item después de "Nueva Orden" y antes de "Relación de Pagos"
+  6. Se verificó que el cambio se aplicó correctamente
+
+  Orden final en SidebarAdmin.vue → submenu "Órdenes y Lotes":
+  - Nueva Orden
+  - Nuevo Presupuesto ✅ (agregado)
+  - Relación de Pagos
+  - Órdenes En Curso
+  - Todas las Órdenes
+
+- Herramienta(s) Utilizada(s):
+  * find_by_name (para buscar archivos de sidebar)
+  * view_file (para revisar el contenido de los sidebars)
+  * run_command (para ejecutar script Python de inserción)
+  * command_status (para verificar la ejecución del script)
+  * write_to_file (para crear este archivo de log)
+
+- Resultado: Éxito
+  La opción "Nuevo Presupuesto" está ahora disponible en ambos sidebars:
+  - ✅ SidebarAdmin.vue: Agregada en el submenu "Órdenes y Lotes"
+  - ✅ SidebarComercializacion.vue: Ya estaba presente como item de nivel superior
+
+- Verificación:
+  Se verificó mediante view_file que las líneas 17-21 de SidebarAdmin.vue ahora contienen el router-link de "Nuevo Presupuesto"
+  El tamaño del archivo cambió de 9908 bytes a 10093 bytes (185 bytes agregados)
+  La ruta /comercializacion/presupuesto está ahora accesible desde ambos sidebars
+
+- Observaciones de Gemini:
+  - La interfaz actual usa sidebars en lugar de los menús de navegación horizontal anteriores (menuAdmin.vue y menuComercializacion.vue)
+  - SidebarComercializacion.vue tiene un diseño más simple con items de nivel superior
+  - SidebarAdmin.vue organiza las opciones en submenus colapsables
+  - Ambas estructuras ahora tienen acceso a la funcionalidad de Presupuestos
+  - Los cambios previos en menuAdmin.vue y menuComercializacion.vue pueden no estar siendo utilizados actualmente
+
+- Respuesta de Gemini:
+  He agregado exitosamente la opción "Nuevo Presupuesto" en ambos sidebars:
+  
+  ✅ SidebarAdmin.vue: 
+     - Ubicación: Submenu "Órdenes y Lotes"
+     - Posición: Después de "Nueva Orden"
+  
+  ✅ SidebarComercializacion.vue: 
+     - Ubicación: Item de nivel superior
+     - Posición: Ya estaba presente después de "Nueva Orden"
+  
+  Ahora ambos departamentos tienen acceso a la funcionalidad de Presupuestos desde sus respectivos sidebars.

@@ -169,9 +169,9 @@ return function (App $app) {
     $object['items'] = $localConnection->goQuery($sql);
 
     foreach ($object['items'] as $key => $item) {
-      // $item[$key]['form'] = json_decode($item['form']);
       if (is_array($item) && isset($item['form'])) {
-        $item['form'] = json_decode($item['form']);
+        // Decodificar el JSON directamente en el array original
+        $object['items'][$key]['form'] = json_decode($item['form']);
       }
     }
 

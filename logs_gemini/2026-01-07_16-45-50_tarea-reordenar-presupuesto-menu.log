@@ -1,0 +1,52 @@
+- Solicitud del Usuario: Reordenar la opción 'Nuevo Presupuesto' para que esté justo debajo de 'Nueva Orden' en el menú "Ordenes y Lotes"
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/niesys/app_multi/components/menus/menuAdmin.vue
+
+- Acción Realizada:
+  1. Se revisó la estructura del dropdown "Ordenes y Lotes" en menuAdmin.vue
+  2. Se identificó que el orden anterior era:
+     - Nueva Orden (líneas 37-50)
+     - Relacion de pagos (líneas 52-65)
+     - Nuevo Presupuesto (líneas 67-80)
+     - Ordenes En Curso (líneas 81-94)
+  3. Se creó un script Python para extraer el bloque de "Nuevo Presupuesto" (líneas 67-80)
+  4. Se eliminó el bloque de su posición original
+  5. Se insertó el bloque justo después de "Nueva Orden" (después de la línea 50)
+  6. El nuevo orden quedó:
+     - Nueva Orden (líneas 37-50)
+     - Nuevo Presupuesto (líneas 51-64) ✅
+     - Relacion de pagos (líneas 66-79)
+     - Ordenes En Curso (líneas 81-94)
+
+- Herramienta(s) Utilizada(s):
+  * view_file (para revisar la estructura del menú)
+  * run_command (para ejecutar el script Python de reordenamiento)
+  * command_status (para verificar la ejecución del script)
+  * write_to_file (para crear este archivo de log)
+
+- Resultado: Éxito
+  La opción "Nuevo Presupuesto" ahora aparece inmediatamente después de "Nueva Orden" en el dropdown "Ordenes y Lotes"
+
+- Verificación:
+  Se verificó mediante view_file que las líneas 51-64 ahora contienen el router-link de "Nuevo Presupuesto"
+  El orden del menú es el solicitado: Nueva Orden → Nuevo Presupuesto → Relacion de pagos → Ordenes En Curso → Todas las ordenes
+  El tamaño del archivo se mantuvo en 28461 bytes (no hubo pérdida de contenido)
+
+- Observaciones de Gemini:
+  - La reorganización se realizó mediante manipulación de líneas del archivo usando Python
+  - Se utilizó slicing de listas para extraer, eliminar e insertar el bloque de código
+  - El script fue exitoso en el primer intento, sin necesidad de correcciones
+  - Esta es una mejora de UX que agrupa lógicamente las opciones relacionadas con creación de órdenes y presupuestos
+
+- Respuesta de Gemini:
+  He reordenado correctamente la opción 'Nuevo Presupuesto' en el menú "Ordenes y Lotes".
+  
+  Orden actualizado:
+  1. Nueva Orden
+  2. Nuevo Presupuesto ✅ (movido aquí)
+  3. Relacion de pagos
+  4. Ordenes En Curso
+  5. Todas las ordenes
+  
+  Ahora la opción "Nuevo Presupuesto" aparece inmediatamente después de "Nueva Orden", tal como solicitaste.

@@ -1,0 +1,41 @@
+- Solicitud del Usuario: Activar la opción 'Presupuestos' en los archivos menuAdmin.vue y menuComercializacion.vue
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/niesys/app_multi/components/menus/menuAdmin.vue
+  * /home/developer/Escritorio/niesys/app_multi/components/menus/menuComercializacion.vue
+
+- Acción Realizada:
+  1. Se revisaron ambos archivos de menú para identificar el estado de la opción 'Presupuestos'
+  2. Se encontró que en menuAdmin.vue (líneas 67-80) la opción estaba comentada con \u003c!-- --\u003e
+  3. Se encontró que en menuComercializacion.vue (líneas 22-27) la opción ya estaba activa
+  4. Se descomentó el bloque \u003crouter-link\u003e del menú de Presupuestos en menuAdmin.vue usando un script Python
+  5. Se eliminaron los marcadores de comentario HTML \u003c!-- y --\u003e que envolvían el router-link
+  6. Se verificó que el cambio se aplicó correctamente
+
+- Herramienta(s) Utilizada(s):
+  * view_file (para revisar el contenido de los archivos)
+  * run_command (para ejecutar comandos de terminal - sed, perl, python3)
+  * write_to_file (para crear este archivo de log)
+
+- Resultado: Éxito
+  La opción 'Nuevo Presupuesto' fue activada correctamente en menuAdmin.vue (to="/comercializacion/presupuesto")
+  En menuComercializacion.vue la opción ya estaba activa, no requirió modificaciones
+
+- Verificación:
+  Se verificó mediante view_file que las líneas 67-80 de menuAdmin.vue ahora muestran el router-link sin comentarios HTML
+  El tamaño del archivo cambió de 28470 bytes a 28461 bytes (9 bytes menos debido a la eliminación de los comentarios)
+  La ruta /comercializacion/presupuesto ahora está accesible desde el menú de administración
+
+- Observaciones de Gemini:
+  - Inicialmente intenté usar el tool replace_file_content pero no pude obtener la coincidencia exacta del contenido debido a espacios en blanco
+  - Utilicé varios enfoques (sed, perl) sin éxito
+  - Finalmente el script Python con regex y flag DOTALL funcionó correctamente para descomentar el bloque multilinea
+  - El archivo menuComercializacion.vue ya tenía la opción activa, lo cual es consistente con que ese menú es para usuarios de comercialización
+
+- Respuesta de Gemini:
+  He activado correctamente la opción 'Presupuestos' en ambos archivos de menú:
+  
+  ✅ menuAdmin.vue: Opción descomentada y activada (líneas 67-80)
+  ✅ menuComercializacion.vue: Opción ya estaba activa (no requirió cambios)
+  
+  Ahora la opción "Nuevo Presupuesto" está disponible en el menú de administración y redirige a /comercializacion/presupuesto
