@@ -703,7 +703,7 @@ return function (App $app) {
             $sql = 'UPDATE config SET multiplicador_precio = ? WHERE _id = 1';
             $result = $localConnection->goQuery($sql, [$multiplicador]);
 
-            if ($result) {
+            if ($result !== false) {
                 $object['success'] = true;
                 $object['message'] = 'Multiplicador actualizado correctamente';
                 $object['data'] = ['multiplicador_precio' => $multiplicador];
