@@ -117,7 +117,7 @@ return function (App $app) {
                 $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
                 $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
 
-                $sql_config = 'SELECT sys_mostrar_detalle_terminar_indicidual, sys_mostrar_rollo_en_empleado_corte, sys_mostrar_rollo_en_empleado_estampado, sys_mostrar_insumo_en_empleado_costura, sys_mostrar_insumo_en_empleado_limpieza, sys_mostrar_insumo_en_empleado_revision, sys_comision_de_costura FROM config WHERE _id = 1';
+                $sql_config = 'SELECT sys_mostrar_detalle_terminar_indicidual, sys_mostrar_rollo_en_empleado_corte, sys_mostrar_rollo_en_empleado_estampado, sys_mostrar_insumo_en_empleado_costura, sys_mostrar_insumo_en_empleado_limpieza, sys_mostrar_insumo_en_empleado_revision, sys_comision_de_costura, multiplicador_precio FROM config WHERE _id = 1';
                 $config_data = $localConnection->goQuery($sql_config);
 
                 if (!empty($config_data)) {
@@ -129,6 +129,7 @@ return function (App $app) {
                         'sys_mostrar_insumo_en_empleado_limpieza' => (bool) $config_data[0]['sys_mostrar_insumo_en_empleado_limpieza'],
                         'sys_mostrar_insumo_en_empleado_revision' => (bool) $config_data[0]['sys_mostrar_insumo_en_empleado_revision'],
                         'sys_comision_de_costura' => (bool) $config_data[0]['sys_comision_de_costura'],
+                        'multiplicador_precio' => (float) $config_data[0]['multiplicador_precio'],
                     ];
                 }
             }
@@ -175,7 +176,7 @@ return function (App $app) {
         $company_pass = $empresa_data['db_password'];
         $localConnection->switchDatabase($company_dns, $company_user, $company_pass);
 
-        $sql_config = 'SELECT msg_welcome, msg_bye, msg_saldo, sys_mostrar_detalle_terminar_indicidual, sys_mostrar_rollo_en_empleado_corte, sys_mostrar_rollo_en_empleado_estampado, sys_mostrar_insumo_en_empleado_costura, sys_mostrar_insumo_en_empleado_limpieza, sys_mostrar_insumo_en_empleado_revision FROM config';
+        $sql_config = 'SELECT msg_welcome, msg_bye, msg_saldo, sys_mostrar_detalle_terminar_indicidual, sys_mostrar_rollo_en_empleado_corte, sys_mostrar_rollo_en_empleado_estampado, sys_mostrar_insumo_en_empleado_costura, sys_mostrar_insumo_en_empleado_limpieza, sys_mostrar_insumo_en_empleado_revision, multiplicador_precio FROM config';
         $config_empresa = $localConnection->goQuery($sql_config);
         if (isset($config_empresa['status']) && $config_empresa['status'] === 'error') {
             $login_successful = false;
@@ -264,7 +265,7 @@ return function (App $app) {
             $companyDsn = 'mysql:host=' . $empresa_data['db_host'] . ';dbname=' . $empresa_data['db_name'];
             $localConnection->switchDatabase($companyDsn, $empresa_data['db_user'], $empresa_data['db_password']);
 
-            $sql_config = 'SELECT sys_mostrar_detalle_terminar_indicidual, sys_mostrar_rollo_en_empleado_corte, sys_mostrar_rollo_en_empleado_estampado, sys_mostrar_insumo_en_empleado_costura, sys_mostrar_insumo_en_empleado_limpieza, sys_mostrar_insumo_en_empleado_revision, sys_comision_de_costura FROM config WHERE _id = 1';
+            $sql_config = 'SELECT sys_mostrar_detalle_terminar_indicidual, sys_mostrar_rollo_en_empleado_corte, sys_mostrar_rollo_en_empleado_estampado, sys_mostrar_insumo_en_empleado_costura, sys_mostrar_insumo_en_empleado_limpieza, sys_mostrar_insumo_en_empleado_revision, sys_comision_de_costura, multiplicador_precio FROM config WHERE _id = 1';
             $config_data = $localConnection->goQuery($sql_config);
 
             if (!empty($config_data)) {
@@ -276,6 +277,7 @@ return function (App $app) {
                     'sys_mostrar_insumo_en_empleado_limpieza' => (bool) $config_data[0]['sys_mostrar_insumo_en_empleado_limpieza'],
                     'sys_mostrar_insumo_en_empleado_revision' => (bool) $config_data[0]['sys_mostrar_insumo_en_empleado_revision'],
                     'sys_comision_de_costura' => (bool) $config_data[0]['sys_comision_de_costura'],
+                    'multiplicador_precio' => (float) $config_data[0]['multiplicador_precio'],
                 ];
             }
             // FIN DE DATOS ADICIONALES PARA EL WIZARD

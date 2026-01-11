@@ -132,7 +132,8 @@ CREATE TABLE `config` (
   `sys_mostrar_insumo_en_empleado_costura` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Mostrar select de insumos en modulo de empleados',
   `sys_mostrar_insumo_en_empleado_limpieza` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'empleados',
   `sys_mostrar_insumo_en_empleado_revision` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'empleados',
-  `sys_comision_de_costura` varchar(8) NOT NULL DEFAULT 'producto' COMMENT 'Define si a costura se le calclua comision por el porcentaje en la tabla empleados o el porcentaje ne la tabla productos'
+  `sys_comision_de_costura` varchar(8) NOT NULL DEFAULT 'producto' COMMENT 'Define si a costura se le calclua comision por el porcentaje en la tabla empleados o el porcentaje ne la tabla productos',
+  `multiplicador_precio` DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT 'Multiplicador de precio predeterminado para conversión USD a VES'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Configuración general de la empresa. Almacena parámetros del sistema como datos fiscales, mensajes de WhatsApp, opciones de visualización en módulos y tipo de comisión.';
 INSERT INTO `config` (
     `_id`,
@@ -152,7 +153,8 @@ INSERT INTO `config` (
     `sys_mostrar_insumo_en_empleado_costura`,
     `sys_mostrar_insumo_en_empleado_limpieza`,
     `sys_mostrar_insumo_en_empleado_revision`,
-    `sys_comision_de_costura`
+    `sys_comision_de_costura`,
+    `multiplicador_precio`
   )
 VALUES (
     1,
@@ -172,7 +174,8 @@ VALUES (
     0,
     0,
     0,
-    'producto'
+    'producto',
+    0.00
   );
 CREATE TABLE `customers` (
   `_id` int(10) UNSIGNED NOT NULL,
