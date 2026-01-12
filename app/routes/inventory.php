@@ -268,7 +268,7 @@ return function (App $app) {
         $writer = new Xlsx($spreadsheet);
 
         $idEmpresa = ID_EMPRESA;
-        $filePath = __DIR__ . "/../public/downloads/carga_productos/carga_de_productos_{$idEmpresa}.xlsx";  // Guardar en el directorio public
+        $filePath = $_SERVER['DOCUMENT_ROOT'] . "/public/downloads/carga_productos/carga_de_productos_{$idEmpresa}.xlsx";  // Guardar en el directorio public
         $writer->save($filePath);
 
         $fileUrl = "/downloads/carga_productos/carga_de_productos_{$idEmpresa}.xlsx";  // URL para acceder al archivo
@@ -646,7 +646,7 @@ return function (App $app) {
 
             // Save the Excel file
             $fileName = 'plantilla_productos_' . ID_EMPRESA . '.xlsx';
-            $outputDirectory = __DIR__ . '/../public/downloads/carga_productos/';
+            $outputDirectory = $_SERVER['DOCUMENT_ROOT'] . '/public/downloads/carga_productos/';
             $filePath = $outputDirectory . $fileName;
 
             // Ensure the directory exists
