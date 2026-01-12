@@ -213,7 +213,7 @@ return function (App $app) {
 
             // Save the Excel file
             $fileName = 'plantilla_inventario_' . ID_EMPRESA . '.xlsx';
-            $outputDirectory = __DIR__ . '/../public/downloads/carga_inventario/';
+            $outputDirectory = $_SERVER['DOCUMENT_ROOT'] . '/public/downloads/carga_inventario/';
             $filePath = $outputDirectory . $fileName;
 
             // Ensure the directory exists
