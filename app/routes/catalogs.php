@@ -186,7 +186,7 @@ return function (App $app) {
                 a.unidad,
                 s.nombre AS talla,
                 a.tiempo tiempo_cero,
-                (SELECT tiempo FROM products_tiempos_de_produccion WHERE id_product = b._id AND id_departamento = a.id_departamento) tiempo
+                (SELECT tiempo FROM products_tiempos_de_produccion WHERE id_product = b._id AND id_departamento = a.id_departamento LIMIT 1) tiempo
             FROM
                 product_insumos_asignados a
             LEFT JOIN products b ON b._id = a.id_product
