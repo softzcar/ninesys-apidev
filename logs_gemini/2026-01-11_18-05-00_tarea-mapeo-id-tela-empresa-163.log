@@ -1,0 +1,143 @@
+- Solicitud del Usuario: Aprobación del plan de mapeo para el campo id_tela y ejecución del mismo.
+
+- Archivos Involucrados:
+  - /tmp/mapeo_id_tela.sql (script de mapeo ejecutado)
+  - /home/developer/.gemini/antigravity/brain/b399ae6a-d435-4b7a-b945-c5cde4b23f68/implementation_plan.md (plan aprobado)
+  - /home/developer/.gemini/antigravity/brain/b399ae6a-d435-4b7a-b945-c5cde4b23f68/task.md (checklist actualizado)
+
+- Acción Realizada:
+  Se ejecutó el mapeo del campo id_tela en la tabla ordenes_productos de la empresa 163, utilizando una estrategia de mapeo case-insensitive desde el campo tela (texto) hacia el catálogo catalogo_telas.
+  
+  **FASE 1: Análisis Inicial**
+  - Estado inicial: 7,315 registros con id_tela (93.45%), 513 registros sin id_tela
+  - Análisis de campo tela (VARCHAR):
+    * Top telas: DRY FIT 1.60 (1,919), TELA DEL CLIENTE (1,745), ESCOSIA 1.60 (711)
+  - Catálogo de telas: 31 registros disponibles
+  - Registros sin id_tela desglosados:
+    * 478 sin dato de tela (NULL o vacío)
+    * 35 con nombre de tela en texto
+  
+  **FASE 2: Identificación de Coincidencias**
+  - Consulta JOIN con UPPER(TRIM()) para coincidencias case-insensitive
+  - Coincidencias exactas encontradas: 22 registros
+    * SUPER POLY: 8 registros
+    * pique → PIQUE: 5 registros
+    * TELA DEL CLIENTE: 3 registros
+    * algodon → ALGODON: 3 registros
+    * roma heavy → ROMA HEAVY: 2 registros
+    * MICRODURAZNO 1.50: 1 registro
+  
+  **FASE 3: Creación del Script SQL**
+  - Script con transacciones para seguridad
+  - Mapeo usando: UPPER(TRIM(op.tela)) = UPPER(TRIM(ct.tela))
+  - Validaciones pre y post ejecución
+  - Verificación de integridad referencial
+  - Análisis de registros restantes
+  
+  **FASE 4: Ejecución del Mapeo**
+  - Script copiado al VPS vía scp
+  - Ejecución en base de datos api_emp_163
+  - Transacción ejecutada y confirmada con COMMIT
+  - Resultados:
+    * 22 registros mapeados exitosamente
+    * Estado post-mapeo: 7,337 con id_tela (93.73%)
+    * 491 registros sin id_tela (6.27%)
+  
+  **FASE 5: Validación Post-Mapeo**
+  - Integridad referencial verificada: 0 errores
+  - Análisis de registros restantes sin id_tela:
+    * 478 sin dato de tela (correcto - NULL es válido)
+    * 13 con nombre de tela pero sin coincidencia:
+      - dry fit: 4 registros (probablemente variante de "DRY FIT 1.60")
+      - atletica: 3 registros (probablemente variante de "ATLÉTICA 1.60")
+      - microdurazno: 2 registros (variante de "MICRODURAZNO 1.50")
+      - licra sport: 2 registros (probablemente "LICRA SPORT LAT 1.40")
+      - string: 1 registro (dato inválido)
+      - novak: 1 registro (probablemente "NOVAK REPEL 1.50")
+
+- Herramienta(s) Utilizada(s):
+  - run_command (ssh, mysql, scp)
+  - write_to_file (script SQL, documentación)
+  - task_boundary (gestión de fases)
+
+- Resultado: Éxito
+
+- Verificación:
+  1. Estado inicial confirmado:
+     - ✅ 7,828 registros totales
+     - ✅ 7,315 con id_tela (93.45%)
+     - ✅ 513 sin id_tela (6.55%)
+  
+  2. Coincidencias identificadas:
+     - ✅ 22 registros con coincidencia exacta case-insensitive
+     - ✅ Verificación cruzada con catálogo exitosa
+  
+  3. Mapeo ejecutado:
+     - ✅ 22 registros actualizados
+     - ✅ Mapeo basado en JOIN con UPPER(TRIM())
+     - ✅ Sin errores SQL
+  
+  4. Estado final:
+     - ✅ 7,337 registros con id_tela (93.73%)
+     - ✅ 491 registros sin id_tela (6.27%)
+     - ✅ Mejora: +0.28% (22 registros)
+  
+  5. Integridad referencial:
+     - ✅ 0 errores de integridad
+     - ✅ Todos los id_tela apuntan a registros válidos en catalogo_telas
+  
+  6. Registros restantes analizados:
+     - ✅ 478 sin dato de tela (correcto - no requieren tela)
+     - ✅ 13 con nombres que no coinciden (probables variantes o typos):
+       * dry fit (4) - falta dimensión "1.60"
+       * atletica (3) - falta acento y dimensión
+       * microdurazno (2) - falta dimensión
+       * licra sport (2) - nombre incompleto
+       * string (1) - dato inválido
+       * novak (1) - nombre incompleto
+
+- Observaciones de Gemini:
+  - El mapeo fue exitoso y conservador, solo mapeando coincidencias exactas verificadas.
+  - La estrategia de UPPER(TRIM()) permitió mapear variaciones de mayúsculas/minúsculas.
+  - Los 13 registros restantes con nombres probablemente son variaciones o typos de telas existentes en el catálogo:
+    * "dry fit" vs "DRY FIT 1.60"
+    * "atletica" vs "ATLÉTICA 1.60"
+    * "microdurazno" vs "MICRODURAZNO 1.50"
+  - Estos podrían mapearse con lógica más flexible (LIKE) pero requieren validación manual para evitar mapeos incorrectos.
+  - Los 478 registros sin dato de tela son correctos - probablemente productos que no requieren tela (accesorios, diseños, etc.).
+  - El campo id_tela está ahora en muy buen estado con 93.73% de cobertura.
+  - La mejora es modesta (+22 registros, +0.28%) pero importante para mantener integridad referencial.
+  - Si se desea aumentar la cobertura, se podría:
+    1. Revisar manualmente los 13 registros restantes
+    2. Agregar las variantes al catálogo o corregir los nombres en órdenes
+    3. Usar mapeo fuzzy con validación manual
+
+- Respuesta de Gemini: ✅ **Campo `id_tela` mapeado exitosamente**
+
+**Resumen de ejecución:**
+- 22 registros mapeados con coincidencias exactas
+- Cobertura mejorada: 93.45% → 93.73% (+0.28%)
+- 0 errores de integridad referencial
+
+**Estado final:**
+- 7,337 de 7,828 registros con id_tela válido (93.73%)
+- 491 registros sin id_tela:
+  * 478 sin dato de tela (correcto - NULL es válido)
+  * 13 con nombres sin coincidencia
+    (probables variantes: dry fit, atletica, microdurazno, etc.)
+
+**Registros mapeados por tela:**
+1. SUPER POLY: 8 registros
+2. PIQUE: 5 registros
+3. TELA DEL CLIENTE: 3 registros
+4. ALGODON: 3 registros
+5. ROMA HEAVY: 2 registros
+6. MICRODURAZNO 1.50: 1 registro
+
+**Próxima acción sugerida:**
+Los 13 registros restantes con nombres sin coincidencia pueden:
+- Dejarse como están (son solo 0.17% del total)
+- Corregirse manualmente si se desea perfección absoluta
+- Proceder con el análisis del campo id_products_attributes
+
+Campo id_tela prácticamente completado.

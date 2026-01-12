@@ -1,0 +1,126 @@
+- Solicitud del Usuario: Revisar TODOS los endpoints del backend para identificar consultas SQL que filtran por "el año actual" y generar un reporte con endpoint, consulta y propósito.
+
+- Archivos Involucrados:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/administration.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/finance.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/tables.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/production.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/schemas/db-schema-gemini.php
+  - /home/developer/.gemini/antigravity/brain/b399ae6a-d435-4b7a-b945-c5cde4b23f68/implementation_plan.md (reporte generado)
+
+- Acción Realizada:
+  Búsqueda exhaustiva en todos los archivos PHP del backend usando grep_search con múltiples patrones:
+  1. YEAR(CURDATE())
+  2. YEAR(NOW())
+  3. MONTH(CURDATE())
+  4. CURDATE()
+  5. YEARWEEK()
+  6. DATE()
+  
+  Revisión manual del contexto de cada resultado para identificar el endpoint, la consulta completa y su propósito.
+  
+  **RESULTADOS:**
+  
+  **1. administration.php - GET /administracion/dashboard-stats (líneas 128-144)**
+  - Consulta: Suma de ventas, cobros y saldo por cobrar del MES ACTUAL
+  - Filtro: YEAR(fecha_creacion) = YEAR(CURDATE()) AND MONTH(fecha_creacion) = MONTH(CURDATE())
+  - Propósito: Gráfico 4 del dashboard de administración
+  - Estado: ACTIVO
+  
+  **2. tables.php - GET /ordenes/borrador/reporte-semanal (línea 213)**
+  - Consulta: Borradores de órdenes de la SEMANA ACTUAL
+  - Filtro: YEARWEEK(a.moment, 1) = YEARWEEK(CURDATE(), 1)
+  - Propósito: Reporte productividad semanal por empleado
+  - Estado: ACTIVO
+  
+  **3. manufacturing.php - GET /calculo-pago-real (línea 2748)**
+  - Consulta: Promedio de tasa de cambio del DÍA ACTUAL
+  - Filtro: DATE(moment) = CURDATE()
+  - Propósito: Cálculo de pago a empleados con tasa del día
+  - Estado: ACTIVO
+  
+  **4. administration.php y production.php - Semáforo de entregas (líneas 205-207, 2161-2163)**
+  - Consulta: Comparación fecha_entrega vs CURDATE()
+  - Filtro: DATE(fecha_entrega) < / = / > CURDATE()
+  - Propósito: Semáforo de tiempos de entrega (retrasado, en el día, a tiempo)
+  - Estado: ACTIVO y CORRECTO (lógica de negocio necesaria)
+  
+  **5. finance.php - GET /reporte-de-pagos (líneas 100-107)**
+  - Consulta: Filtro por año/mes actual
+  - Estado: COMENTADO (código inactivo)
+  - El código activo ya permite filtrar por rango de fechas
+  
+  **6. db-schema-gemini.php (líneas 225-227, 239, 286, 988)**
+  - Consultas de documentación para IA
+  - Estado: NO AFECTA PRODUCCIÓN (solo ejemplos)
+
+- Herramienta(s) Utilizada(s):
+  - grep_search (búsqueda de patrones en archivos PHP)
+  - view_file (revisión de contexto de cada consulta)
+  - write_to_file (generación de reporte)
+  - task_boundary (organización del trabajo)
+
+- Resultado: Éxito
+
+- Verificación:
+  1. Patrones buscados:
+     - ✅ YEAR(CURDATE()) - 10 coincidencias
+     - ✅ MONTH(CURDATE()) - 5 coincidencias
+     - ✅ CURDATE() general - 18 coincidencias
+     - ✅ YEARWEEK() - 1 coincidencia
+  
+  2. Archivos de rutas analizados:
+     - ✅ administration.php
+     - ✅ finance.php
+     - ✅ tables.php
+     - ✅ manufacturing.php
+     - ✅ production.php
+     - ✅ orders.php (sin consultas de período actual)
+     - ✅ Otros archivos de rutas (sin consultas relevantes)
+  
+  3. Clasificación de resultados:
+     - ✅ 4 consultas ACTIVAS identificadas
+     - ✅ 2 consultas COMENTADAS identificadas
+     - ✅ 1 archivo de documentación identificado
+  
+  4. Reporte generado:
+     - ✅ Incluye endpoint para cada consulta
+     - ✅ Incluye archivo y número de línea
+     - ✅ Incluye SQL de la consulta
+     - ✅ Incluye propósito/explicación
+     - ✅ Incluye estado (activo/comentado)
+     - ✅ Incluye impacto y recomendaciones
+
+- Observaciones de Gemini:
+  - La consulta más importante a revisar es la del dashboard de administración (ventas del mes).
+  - Los filtros del semáforo de entregas (CURDATE()) son correctos y necesarios para la lógica de negocio.
+  - El código de finance.php ya fue corregido anteriormente - los filtros por mes/año están comentados.
+  - El archivo db-schema-gemini.php contiene ejemplos de consultas para que la IA entienda la estructura, pero no se ejecutan en producción.
+  - Si se necesita ver datos históricos en el dashboard de administración, se requerirá agregar parámetros de fecha al endpoint.
+
+- Respuesta de Gemini: ✅ **Búsqueda completada exitosamente**
+
+**Consultas activas con filtros por período actual:**
+
+1. **administration.php** (líneas 128-144)
+   - Endpoint: `/administracion/dashboard-stats`
+   - Filtro: YEAR/MONTH(CURDATE()) para ventas del mes
+
+2. **tables.php** (línea 213)
+   - Endpoint: `/ordenes/borrador/reporte-semanal`
+   - Filtro: YEARWEEK(CURDATE()) para semana actual
+
+3. **manufacturing.php** (línea 2748)
+   - Endpoint: `/calculo-pago-real`
+   - Filtro: DATE() = CURDATE() para promedio tasa del día
+
+4. **administration.php / production.php** (varias líneas)
+   - Endpoints: dashboard-stats, sse/produccion
+   - Filtro: CURDATE() para semáforo de entregas (correcto)
+
+**Código inactivo:**
+- finance.php: filtros comentados (ya corregido)
+- db-schema-gemini.php: solo documentación
+
+Reporte detallado en: `/home/developer/.gemini/antigravity/brain/b399ae6a-d435-4b7a-b945-c5cde4b23f68/implementation_plan.md`

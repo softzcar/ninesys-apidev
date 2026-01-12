@@ -1,0 +1,108 @@
+- Solicitud del Usuario: "esas telas se eliminaron del catálogo y esos registros quedaron huerfanos, vamos a asignarle los Id de las telas similares que has encontrado para cada registro"
+
+- Archivos Involucrados:
+  - /tmp/mapeo_huerfanos_corregido.sql (script ejecutado)
+  - /tmp/consulta_analisis_sin_id_tela.sql (consulta de análisis)
+  - /home/developer/.gemini/antigravity/brain/b399ae6a-d435-4b7a-b945-c5cde4b23f68/task.md
+
+- Acción Realizada:
+  Se mapearon 12 registros huérfanos que contenían nombres de telas eliminadas del catálogo, asignándoles IDs de telas similares/equivalentes del catálogo actual.
+  
+  **FASE 1: Identificación de IDs del Catálogo**
+  - Consulta a catalogo_telas para obtener IDs correctos:
+    * DRY FIT 1.60: _id = 47
+    * ATLÉTICA 1.60: _id = 5
+    * MICRODURAZNO 1.50: _id = 73
+    * LICRA SPORT LAT 1.40: _id = 54
+    * NOVAK REPEL 1.50: _id = 78
+  
+  **FASE 2: Creación del Script de Mapeo**
+  - Script con 5 UPDATEs individuales para cada variante
+  - Mapeo case-insensitive con LOWER(TRIM())
+  - Transacción con COMMIT para seguridad
+  
+  **FASE 3: Ejecución del Mapeo**
+  Resultados por tela:
+  - "dry fit" → DRY FIT 1.60 (id 47): 4 registros mapeados
+  - "atletica" → ATLÉTICA 1.60 (id 5): 3 registros mapeados
+  - "microdurazno" → MICRODURAZNO 1.50 (id 73): 2 registros mapeados
+  - "licra sport" → LICRA SPORT LAT 1.40 (id 54): 2 registros mapeados
+  - "novak" → NOVAK REPEL 1.50 (id 78): 1 registro mapeado
+  - Total: 12 registros huérfanos mapeados
+  
+  **FASE 4: Validación Post-Mapeo**
+  - Estado final: 7,349 con id_tela (93.88%)
+  - Registros sin id_tela: 479 (6.12%)
+  - Integridad referencial: 0 errores
+  - Registro "string" queda sin mapear (dato inválido)
+
+- Herramienta(s) Utilizada(s):
+  - run_command (ssh, mysql, scp)
+  - write_to_file (scripts SQL)
+  - task_boundary (gestión de fases)
+
+- Resultado: Éxito
+
+- Verificación:
+  1. IDs del catálogo confirmados:
+     - ✅ DRY FIT 1.60: 47
+     - ✅ ATLÉTICA 1.60: 5
+     - ✅ MICRODURAZNO 1.50: 73
+     - ✅ LICRA SPORT LAT 1.40: 54
+     - ✅ NOVAK REPEL 1.50: 78
+  
+  2. Mapeo ejecutado exitosamente:
+     - ✅ 4 registros dry fit → id 47
+     - ✅ 3 registros atletica → id 5
+     - ✅ 2 registros microdurazno → id 73
+     - ✅ 2 registros licra sport → id 54
+     - ✅ 1 registro novak → id 78
+     - ✅ Total: 12 registros
+  
+  3. Estado final verificado:
+     - ✅ 7,349 registros con id_tela (93.88%)
+     - ✅ 479 registros sin id_tela (6.12%)
+     - ✅ Mejora desde estado anterior: +12 registros (+0.15%)
+  
+  4. Integridad referencial:
+     - ✅ 0 errores de integridad
+     - ✅ Todos los id_tela apuntan a registros válidos
+  
+  5. Registros restantes sin id_tela (479):
+     - ✅ 478 sin dato de tela (NULL o vacío) - correcto
+     - ⚠️ 1 con tela = "string" - dato inválido
+
+- Observaciones de Gemini:
+  - Los registros huérfanos son resultado de telas que fueron eliminadas del catálogo en algún momento.
+  - El mapeo a telas similares es lógico y mantiene la coherencia de los datos:
+    * "dry fit" claramente se refiere a "DRY FIT 1.60" (versión sin dimensión)
+    * "atletica" es "ATLÉTICA 1.60" sin tilde ni dimensión
+    * "microdurazno" es "MICRODURAZNO 1.50" sin dimensión
+    * "licra sport" es forma corta de "LICRA SPORT LAT 1.40"
+    * "novak" es versión corta de "NOVAK REPEL 1.50"
+  - El único registro que queda sin mapear ("string") es claramente un dato inválido y es correcto dejarlo en NULL.
+  - Campo id_tela ahora prácticamente completado: 93.88% de cobertura.
+  - Mejora total en id_tela: 34 registros (22 coincidencias exactas + 12 huérfanos).
+  - Solo queda 1 registro con dato inválido sin mapear de los que tienen texto en campo tela.
+  - Los 478 registros sin dato de tela no requieren acción - están correctamente en NULL.
+
+- Respuesta de Gemini: ✅ **Registros huérfanos mapeados exitosamente**
+
+**Resumen:**
+- 12 registros huérfanos mapeados a telas similares
+- Cobertura mejorada: 93.73% → 93.88% (+0.15%)
+- 0 errores de integridad
+
+**Mapeos realizados:**
+1. dry fit (4) → DRY FIT 1.60
+2. atletica (3) → ATLÉTICA 1.60
+3. microdurazno (2) → MICRODURAZNO 1.50
+4. licra sport (2) → LICRA SPORT LAT 1.40
+5. novak (1) → NOVAK REPEL 1.50
+
+**Estado final campo id_tela:**
+- 7,349/7,828 registros poblados (93.88%)
+- 478 sin dato de tela (NULL correcto)
+- 1 dato inválido ("string")
+
+Campo id_tela ✅ completado.

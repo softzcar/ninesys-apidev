@@ -1,0 +1,71 @@
+- Solicitud del Usuario: Revisar rutina de creación de órdenes desde chat IA donde id_woo podría estar guardándose como NULL
+- Archivos Involucrados:
+  * /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php
+  * /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/buscar.php
+  
+- Acción Realizada:
+  1. Investigación del problema:
+     - Revisado endpoint /ordenes/nueva/simple (línea 3567 de orders.php)
+     - Confirmado que id_woo SÍ se guarda en línea 3822: $prod['producto_id']
+     - Consultado base de datos empresa 163: 10 registros con id_woo NULL
+     - Productos afectados: "chaqueta con capucha", "Producto Desconocido", "Franela Sublimada", etc.
+  
+  2. Root cause identificado:
+     - Productos buscados por nombre que no existen tienen continue (líneas 3696-3698, 3706-3708)
+     - PERO el código agrega todos los productos a $productos_procesados (línea 3742)
+     - Esto permite que productos con producto_id = null pasen a INSERT
+     - Al guardar en ordenes_productos con id_woo NULL:
+       * LEFT JOIN en /buscar/{id} retorna prices = NULL
+       * json_decode(null) genera error de deprecación
+  
+  3. Solución implementada:
+     orders.php (líneas 3752-3771):
+     - Agregada validación CRÍTICA antes de crear la orden
+     - Verifica que TODOS los productos tengan producto_id válido (no null, numérico)
+     - Si algún producto no tiene ID válido:
+       * Aborta COMPLETAMENTE la creación de la orden
+       * Retorna error 400 con lista de productos inválidos
+       * Mensaje claro: "no fueron encontrados en la base de datos durante la prevalidación"
+     
+     Esta validación previene:
+     - Inserción de registros con id_woo NULL
+     - Errores de json_decode en endpoint /buscar
+     - Creación de órdenes con productos inexistentes
+  
+  4. Fixes relacionados implementados previamente:
+     buscar.php (línea 224):
+     - Manejo de precios NULL: `!empty($product['prices']) ? json_decode($product['prices']) : []`
+     
+     tables.php:
+     - Eliminado intento fallido de json_decode en backend /ordenes/guardadas
+
+- Herramienta(s) Utilizada(s): view_file, grep_search, ssh, mysql, replace_file_content, git
+
+- Resultado: Éxito
+
+- Verificación:
+  1. Código desplegado en VPS correctamente
+  2. Validación activa en endpoint /ordenes/nueva/simple
+  3. Futuras órdenes desde chat IA rechazarán productos sin ID válido
+  4. Sistema ahora previene creación de órdenes con datos incompletos
+  5. Cambios complementan fix anterior de json_decode(null)
+
+- Observaciones de Gemini:
+  Este fix completa la solución de tres partes:
+  1. Frontend: Manejo robusto de JSON corrupto (ordenes/guardadas)
+  2. Backend /buscar: Manejo de prices NULL (json_decode defensivo)
+  3. Backend /ordenes/nueva/simple: Prevención de id_woo NULL (validación estricta)
+  
+  Juntos forman una defensa en profundidad:
+  - Prevención en origen (validación pre-inserción)
+  - Manejo resiliente en consulta (null-safe json_decode)
+  - Recuperación en carga (try-catch en frontend)
+
+- Respuesta de Gemini:
+  He corregido el problema raíz en el endpoint /ordenes/nueva/simple.
+  
+  Implementé una validación estricta que verifica que TODOS los productos tengan un producto_id válido antes de crear cualquier registro. Si algún producto no tiene ID válido, la orden completa es rechazada con un error claro indicando qué productos fallaron.
+  
+  Esto previene completamente la creación de registros con id_woo NULL, eliminando la causa raíz del error de json_decode que vimos anteriormente.
+  
+  Los cambios están desplegados en el VPS.

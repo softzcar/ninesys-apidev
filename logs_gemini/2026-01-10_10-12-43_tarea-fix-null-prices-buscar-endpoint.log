@@ -1,0 +1,50 @@
+- Solicitud del Usuario: Investigar error 500 en endpoint /buscar/3543 con empresa 163
+- Archivos Involucrados:
+  * /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/buscar.php
+  
+- Acción Realizada:
+  1. Análisis del error:
+     - Error: "json_decode(): Passing null to parameter #1 ($json) of type string is deprecated"
+     - Línea 224 de buscar.php: `$data[$key]['prices'] = json_decode($product['prices']);`
+     - Afectaba órdenes 3543 y 3538 en empresa ID 163
+  
+  2. Investigación de base de datos:
+     - Consultado productos de las órdenes afectadas
+     - Identificado que algunos productos tienen `id_woo = NULL`
+     - Productos sin registros en `products_prices` resultan en `prices = NULL` 
+     - Ejemplo: "chaqueta con capucha" y "Producto Desconocido" sin precios asociados
+  
+  3. Root cause:
+     - LEFT JOIN con subconsulta derivada de products_prices retorna NULL cuando no hay precios
+     - PHP 8.1+ depreca pasar NULL a json_decode() como primer parámetro
+     - Causaba error 500 en lugar de manejar gracefully productos sin precios
+  
+  4. Solución implementada:
+     - Agregado validación antes de json_decode en línea 224:
+       `$data[$key]['prices'] = !empty($product['prices']) ? json_decode($product['prices']) : [];`
+     - Retorna array vacío cuando prices es NULL
+     - Previene error de deprecación
+     - Permite que la orden se cargue correctamente incluso con productos sin precios
+
+- Herramienta(s) Utilizada(s): curl, ssh, mysql, view_file, replace_file_content, git, python
+
+- Resultado: Éxito
+
+- Verificación:
+  1. Endpoint /buscar/3543 ahora responde con código 200
+  2. Endpoint /buscar/3538 ahora responde con código 200
+  3. Productos sin precios tienen array vacío en campo 'prices'
+  4. No se generan errores de deprecación
+  5. Cambios desplegados en VPS
+
+- Observaciones de Gemini:
+  Problema similar al anterior pero con diferente causa raíz. En el caso anterior era JSON malformado en la base de datos. En este caso es un valor NULL legítimo que no estaba siendo manejado correctamente antes de json_decode().
+  
+  La solución es consistente con las mejores prácticas: validar datos antes de procesarlos, manejar casos edge gracefully, y retornar valores por defecto seguros (empty array) cuando los datos opcionales no están presentes.
+
+- Respuesta de Gemini:
+  He resuelto el error 500 en el endpoint /buscar/{id} para las órdenes 3543 y 3538 de la empresa 163.
+  
+  El problema era que algunos productos no tienen precios asociados en la tabla products_prices, lo que resulta en un valor NULL que causaba un error de deprecación al intentar pasarlo a json_decode() en PHP 8.1+.
+  
+  Implementé una validación que retorna un array vacío cuando el campo prices es NULL, permitiendo que el endpoint funcione correctamente para todos los casos.

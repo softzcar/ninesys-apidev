@@ -1,0 +1,86 @@
+- Solicitud del Usuario: Comparar registros de la tabla `ordenes` entre empresa ID 163 (muestra desde orden ID 3522 hacia abajo) y empresa 170 para identificar discrepancias.
+
+- Archivos Involucrados:
+  - Base de datos api_emp_163 (tabla ordenes)
+  - Base de datos api_emp_170 (tabla ordenes)
+  - /tmp/ordenes_163_muestra.txt (exportación de datos)
+  - /tmp/ordenes_170_muestra.txt (exportación de datos)
+  - /home/developer/.gemini/antigravity/brain/b399ae6a-d435-4b7a-b945-c5cde4b23f68/implementation_plan.md (análisis comparativo)
+
+- Acción Realizada:
+  Análisis comparativo de la tabla ordenes entre dos empresas del sistema.
+  
+  **FASE 1: Análisis de Estructura**
+  - Verificación de estructura de tabla ordenes: IDÉNTICA en ambas empresas
+  - Campos: _id, id_wp, id_wp_order, status, tipo, responsable, cliente_nombre, cliente_cedula, lote_id, fecha_inicio, fecha_entrega, fecha_creacion, token, pago_descuento, pago_total, pago_abono, pago_comision, moment
+  
+  **FASE 2: Análisis de Volumen**
+  - Empresa 163: 3,522 órdenes (IDs 1-3522)
+  - Empresa 170: 6 órdenes (IDs 1-6)
+  - Diferencia de volumen significativa
+  
+  **FASE 3: Comparación de Registros (IDs 1-6)**
+  
+  Empresa 163 (Producción - Feb 2025):
+  - Clientes reales: JOEL PRIETO, SAYERLIN QUINTERO, VICTOR ESCALANTE, etc.
+  - Cédulas variadas: 17793979, 32534278, 13977787
+  - Estados: entregada (4), cancelada (2)
+  - IDs wp variados: 975, 67, 807, 1167, 612
+  - Responsables: 22, 10
+  
+  Empresa 170 (Pruebas - Ene 2026):
+  - Cliente único: "Cliente de Pruebas"
+  - Cédula de prueba: V12345678
+  - Estados: activa (3), En espera (3)
+  - ID wp siempre 1
+  - Responsables: 578, 1
+  
+  **FASE 4: Hallazgos Clave**
+  1. Las órdenes NO están relacionadas entre empresas
+  2. Empresa 170 es claramente de prueba
+  3. Empresa 163 es producción con datos reales
+  4. Fechas diferentes (2025 vs 2026) confirman independencia
+
+- Herramienta(s) Utilizada(s):
+  - run_command (ssh, mysql)
+  - view_file (análisis de resultados)
+  - write_to_file (documentación)
+
+- Resultado: Éxito
+
+- Verificación:
+  1. Estructura de tabla:
+     - ✅ DESCRIBE ordenes ejecutado en ambas empresas
+     - ✅ Resultado: estructuras IDÉNTICAS
+  
+  2. Conteo de registros:
+     - ✅ Empresa 163: 3,522 órdenes
+     - ✅ Empresa 170: 6 órdenes
+  
+  3. Comparación de datos:
+     - ✅ Órdenes exportadas y comparadas
+     - ✅ Diferencias de contenido identificadas
+     - ✅ No hay discrepancias estructurales
+  
+  4. Conclusiones validadas:
+     - ✅ Empresa 170 es de prueba (cliente único, cédula genérica)
+     - ✅ Empresa 163 es producción (clientes reales)
+     - ✅ No hay relación entre registros
+
+- Observaciones de Gemini:
+  - La comparación reveló que empresa 170 es un ambiente de prueba con solo 6 órdenes creadas en enero 2026.
+  - Empresa 163 es el ambiente de producción real con 3,522 órdenes históricas desde febrero 2025.
+  - No se encontraron discrepancias estructurales - ambas usan el mismo schema.
+  - Las diferencias son solo de contenido (datos de prueba vs producción).
+  - La estructura de la tabla ordenes está sincronizada correctamente entre empresas.
+
+- Respuesta de Gemini: ✅ **Comparación completada**
+
+**Hallazgos:**
+- ✅ Estructura: IDÉNTICA entre empresas
+- ⚠️ Datos: COMPLETAMENTE DIFERENTES
+
+**Empresa 163:** 3,522 órdenes reales (producción, Feb 2025)
+**Empresa 170:** 6 órdenes de prueba ("Cliente de Pruebas", Ene 2026)
+
+**Conclusión:** No hay discrepancias estructurales. Empresa 170 es de prueba con datos ficticios. Las órdenes NO se relacionan entre empresas.
