@@ -640,32 +640,7 @@ return function (App $app) {
       $progreso = 'en curso';
 
       $sqln = "UPDATE lotes SET paso = '{$miEmpleado['departamento']}', id_departamento_actual = {$miEmpleado['id_departamento']}  WHERE id_orden = " . $miEmpleado['id_orden'] . ";";
-
-      // Check if assignment exists
-      // For repositions with id_reposicion, handle separately
-      if (isset($miEmpleado['es_reposicion']) && $miEmpleado['es_reposicion'] && isset($miEmpleado['id_reposicion']) && $miEmpleado['id_reposicion'] !== null) {
-        $id_reposicion = $miEmpleado['id_reposicion'];
-        $checkSql = "SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$id_reposicion}";
-        $assignment = $localConnection->goQuery($checkSql);
-
-        if (!empty($assignment)) {
-          $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$id_reposicion};";
-        } else {
-          $sqln .= "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision, id_reposicion) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0, {$id_reposicion});";
-        }
-      } else {
-        // Regular orders - use original logic without id_reposicion
-        $checkSql = "SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
-        $assignment = $localConnection->goQuery($checkSql);
-
-        if (!empty($assignment)) {
-          $assignment_id = $assignment[0]['_id'];
-          $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE _id = {$assignment_id};";
-        } else {
-          $sqln .= "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0);";
-        }
-      }
-
+      $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . ";";
       // Actualizar status de la orden a 'activa' al iniciar primer paso
       $sqln .= "UPDATE ordenes SET `status` = 'activa' WHERE _id = " . $miEmpleado['id_orden'] . " AND `status` = 'En espera';";
       $object['sql_update_lotes'] = $sqln;
@@ -680,8 +655,6 @@ return function (App $app) {
         // Terminar reposicion
         $sqlRepo = "UPDATE reposiciones SET terminada = 1 WHERE _id = {$miEmpleado['id_reposicion']};";
         $sqlRepo .= "DELETE FROM `ordenes_fila_reposiciones` WHERE id_reposicion = {$miEmpleado['id_reposicion']};";
-        // Close tracking record
-        $sqlRepo .= "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$miEmpleado['id_reposicion']};";
 
         $response_update_reposicion = $localConnection->goQuery($sqlRepo);
 
@@ -2385,8 +2358,6 @@ return function (App $app) {
                 {$args['orden_proceso']} orden_proceso_recibido,                
                 (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento_solicitante) orden_proceso_solicitante,
                 (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento) orden_proceso_inicial,
-                (SELECT fecha_inicio FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_empleado = {$args['id_empleado']} AND id_departamento = {$args['id_departamento']} AND id_reposicion = a._id ORDER BY _id DESC LIMIT 1) as fecha_inicio_reposicion,
-                (SELECT fecha_terminado FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_empleado = {$args['id_empleado']} AND id_departamento = {$args['id_departamento']} AND id_reposicion = a._id ORDER BY _id DESC LIMIT 1) as fecha_terminado_reposicion,
                 c.corte    
             FROM
                 reposiciones a  
