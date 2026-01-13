@@ -642,8 +642,8 @@ return function (App $app) {
       $sqln = "UPDATE lotes SET paso = '{$miEmpleado['departamento']}', id_departamento_actual = {$miEmpleado['id_departamento']}  WHERE id_orden = " . $miEmpleado['id_orden'] . ";";
 
       // Check if assignment exists
-      $id_reposicion_val = (isset($miEmpleado['es_reposicion']) && $miEmpleado['es_reposicion']) ? $miEmpleado['id_reposicion'] : 'NULL';
-      $sql_reposicion_condition = (isset($miEmpleado['es_reposicion']) && $miEmpleado['es_reposicion']) ? "AND id_reposicion = {$id_reposicion_val}" : "AND id_reposicion IS NULL";
+      $id_reposicion_val = (isset($miEmpleado['es_reposicion']) && $miEmpleado['es_reposicion'] && isset($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : 'NULL';
+      $sql_reposicion_condition = (isset($miEmpleado['es_reposicion']) && $miEmpleado['es_reposicion'] && isset($miEmpleado['id_reposicion']) && $miEmpleado['id_reposicion'] !== 'NULL') ? "AND id_reposicion = {$id_reposicion_val}" : "AND id_reposicion IS NULL";
 
       // Check if assignment exists
       $checkSql = "SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} {$sql_reposicion_condition}";
