@@ -655,13 +655,14 @@ return function (App $app) {
         }
       } else {
         // Regular orders - use original logic without id_reposicion
-        $checkSql = "SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND (id_reposicion IS NULL OR id_reposicion = 0)";
+        $checkSql = "SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
         $assignment = $localConnection->goQuery($checkSql);
 
         if (!empty($assignment)) {
-          $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND (id_reposicion IS NULL OR id_reposicion = 0);";
+          $assignment_id = $assignment[0]['_id'];
+          $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE _id = {$assignment_id};";
         } else {
-          $sqln .= "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision, id_reposicion) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0, NULL);";
+          $sqln .= "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0);";
         }
       }
 
