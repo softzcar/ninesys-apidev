@@ -640,7 +640,18 @@ return function (App $app) {
       $progreso = 'en curso';
 
       $sqln = "UPDATE lotes SET paso = '{$miEmpleado['departamento']}', id_departamento_actual = {$miEmpleado['id_departamento']}  WHERE id_orden = " . $miEmpleado['id_orden'] . ";";
-      $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . ";";
+
+      // Check if assignment exists
+      $checkSql = "SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']}";
+      $assignment = $localConnection->goQuery($checkSql);
+
+      if (!empty($assignment)) {
+        $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . " AND id_departamento = " . $miEmpleado['id_departamento'] . ";";
+      } else {
+        // Insert new assignment record if it doesn't exist (e.g. for repositions)
+        $sqln .= "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0);";
+      }
+
       // Actualizar status de la orden a 'activa' al iniciar primer paso
       $sqln .= "UPDATE ordenes SET `status` = 'activa' WHERE _id = " . $miEmpleado['id_orden'] . " AND `status` = 'En espera';";
       $object['sql_update_lotes'] = $sqln;
@@ -2358,6 +2369,7 @@ return function (App $app) {
                 {$args['orden_proceso']} orden_proceso_recibido,                
                 (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento_solicitante) orden_proceso_solicitante,
                 (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento) orden_proceso_inicial,
+                (SELECT progreso FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_empleado = {$args['id_empleado']} AND id_departamento = {$args['id_departamento']} ORDER BY _id DESC LIMIT 1) as progreso,
                 c.corte    
             FROM
                 reposiciones a  
