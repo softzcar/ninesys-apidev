@@ -787,7 +787,7 @@ return function (App $app) {
     // Verificamos si se ha enviado la solicitud desde PRoduccion, lelgan los dos id de emploados
     if (isset($data['id_empleado_emisor'])) {
       // crear estructura de datos para los dos empleados
-      $campos = '(moment, id_orden, id_empleado, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor)';
+      $campos = '(moment, id_orden, id_empleado, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, id_departamento_solicitante, id_departamento)';
       $values = '(';
       $values .= "'" . $now . "',";
       $values .= '' . $producto['id_orden'] . ',';
@@ -795,7 +795,23 @@ return function (App $app) {
       $values .= '' . $data['id_empleado_emisor'] . ',';
       $values .= '' . $producto['_id'] . ',';
       $values .= '' . $data['cantidad'] . ',';
-      $values .= "'" . $data['detalle'] . "')";
+      $values .= "'" . $data['detalle'] . "',";
+
+      // Añadimos id_departamento_solicitante
+      if (isset($data['id_departamento_solicitante'])) {
+        $values .= intval($data['id_departamento_solicitante']) . ',';
+      } else {
+        $values .= 'NULL,';
+      }
+
+      // Añadimos id_departamento (visibilidad)
+      if (isset($data['id_departamento'])) {
+        $values .= intval($data['id_departamento']);
+      } else {
+        $values .= 'NULL';
+      }
+
+      $values .= ')';
     } else {
       // Si no viene id_empleado_emisor, asumimos que es la creación desde el módulo de empleados
       // Añadimos id_departamento_solicitante aquí
