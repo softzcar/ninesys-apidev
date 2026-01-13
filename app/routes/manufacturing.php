@@ -2384,7 +2384,8 @@ return function (App $app) {
                 {$args['orden_proceso']} orden_proceso_recibido,                
                 (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento_solicitante) orden_proceso_solicitante,
                 (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento) orden_proceso_inicial,
-                (SELECT progreso FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_empleado = {$args['id_empleado']} AND id_departamento = {$args['id_departamento']} AND id_reposicion = a._id ORDER BY _id DESC LIMIT 1) as progreso,
+                (SELECT fecha_inicio FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_empleado = {$args['id_empleado']} AND id_departamento = {$args['id_departamento']} AND id_reposicion = a._id ORDER BY _id DESC LIMIT 1) as fecha_inicio_reposicion,
+                (SELECT fecha_terminado FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_empleado = {$args['id_empleado']} AND id_departamento = {$args['id_departamento']} AND id_reposicion = a._id ORDER BY _id DESC LIMIT 1) as fecha_terminado_reposicion,
                 c.corte    
             FROM
                 reposiciones a  
