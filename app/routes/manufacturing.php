@@ -666,6 +666,8 @@ return function (App $app) {
         // Terminar reposicion
         $sqlRepo = "UPDATE reposiciones SET terminada = 1 WHERE _id = {$miEmpleado['id_reposicion']};";
         $sqlRepo .= "DELETE FROM `ordenes_fila_reposiciones` WHERE id_reposicion = {$miEmpleado['id_reposicion']};";
+        // Close tracking record
+        $sqlRepo .= "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']};";
 
         $response_update_reposicion = $localConnection->goQuery($sqlRepo);
 
