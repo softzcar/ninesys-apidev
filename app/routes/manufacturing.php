@@ -642,18 +642,27 @@ return function (App $app) {
       $sqln = "UPDATE lotes SET paso = '{$miEmpleado['departamento']}', id_departamento_actual = {$miEmpleado['id_departamento']}  WHERE id_orden = " . $miEmpleado['id_orden'] . ";";
 
       // Check if assignment exists
-      $id_reposicion_val = (isset($miEmpleado['es_reposicion']) && $miEmpleado['es_reposicion'] && isset($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : 'NULL';
-      $sql_reposicion_condition = (isset($miEmpleado['es_reposicion']) && $miEmpleado['es_reposicion'] && isset($miEmpleado['id_reposicion']) && $miEmpleado['id_reposicion'] !== 'NULL') ? "AND id_reposicion = {$id_reposicion_val}" : "AND id_reposicion IS NULL";
+      // For repositions with id_reposicion, handle separately
+      if (isset($miEmpleado['es_reposicion']) && $miEmpleado['es_reposicion'] && isset($miEmpleado['id_reposicion']) && $miEmpleado['id_reposicion'] !== null) {
+        $id_reposicion = $miEmpleado['id_reposicion'];
+        $checkSql = "SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$id_reposicion}";
+        $assignment = $localConnection->goQuery($checkSql);
 
-      // Check if assignment exists
-      $checkSql = "SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} {$sql_reposicion_condition}";
-      $assignment = $localConnection->goQuery($checkSql);
-
-      if (!empty($assignment)) {
-        $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . " AND id_departamento = " . $miEmpleado['id_departamento'] . " {$sql_reposicion_condition};";
+        if (!empty($assignment)) {
+          $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$id_reposicion};";
+        } else {
+          $sqln .= "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision, id_reposicion) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0, {$id_reposicion});";
+        }
       } else {
-        // Insert new assignment record if it doesn't exist (e.g. for repositions)
-        $sqln .= "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision, id_reposicion) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0, {$id_reposicion_val});";
+        // Regular orders - use original logic without id_reposicion
+        $checkSql = "SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND (id_reposicion IS NULL OR id_reposicion = 0)";
+        $assignment = $localConnection->goQuery($checkSql);
+
+        if (!empty($assignment)) {
+          $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND (id_reposicion IS NULL OR id_reposicion = 0);";
+        } else {
+          $sqln .= "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision, id_reposicion) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0, NULL);";
+        }
       }
 
       // Actualizar status de la orden a 'activa' al iniciar primer paso
