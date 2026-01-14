@@ -615,6 +615,14 @@ return function (App $app) {
   // Control de de estado del proceso de produccion del empleado con varios empleados
   $app->post('/registrar-paso-empleado', function (Request $request, Response $response, array $args) {
     $miEmpleado = $request->getParsedBody();
+
+    // Sanitizar valores booleanos y nulos que vienen como strings
+    if (isset($miEmpleado['es_reposicion'])) {
+      $miEmpleado['es_reposicion'] = filter_var($miEmpleado['es_reposicion'], FILTER_VALIDATE_BOOLEAN);
+    }
+    if (isset($miEmpleado['id_reposicion']) && $miEmpleado['id_reposicion'] === 'null') {
+      $miEmpleado['id_reposicion'] = null;
+    }
     // PREPARAR FECHAS
     $myDate = new CustomTime();
     $now = $myDate->today();
