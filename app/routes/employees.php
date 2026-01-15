@@ -616,6 +616,25 @@ return function (App $app) {
                     'pendientes' => $pendientes
                 ];
 
+                // REPOSICIONES
+                $sqlReposicionesTerminadas = "SELECT COUNT(DISTINCT r._id) as count FROM reposiciones r WHERE r.id_empleado = $id_empleado AND r.id_departamento = $id_departamento AND r.terminada = 1";
+                $reposicionesTerminadasResult = $localConnection->goQuery($sqlReposicionesTerminadas);
+                $reposiciones_terminadas = !empty($reposicionesTerminadasResult) && !isset($reposicionesTerminadasResult['status']) ? $reposicionesTerminadasResult[0]['count'] : 0;
+
+                $sqlReposicionesEnCurso = "SELECT COUNT(DISTINCT r._id) as count FROM reposiciones r LEFT JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_reposicion = r._id WHERE r.id_empleado = $id_empleado AND r.id_departamento = $id_departamento AND r.terminada = 0 AND ldea.fecha_inicio IS NOT NULL";
+                $reposicionesEnCursoResult = $localConnection->goQuery($sqlReposicionesEnCurso);
+                $reposiciones_en_curso = !empty($reposicionesEnCursoResult) && !isset($reposicionesEnCursoResult['status']) ? $reposicionesEnCursoResult[0]['count'] : 0;
+
+                $sqlReposicionesPendientes = "SELECT COUNT(DISTINCT r._id) as count FROM reposiciones r WHERE r.id_empleado = $id_empleado AND r.id_departamento = $id_departamento AND r.terminada = 0 AND NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_asignados ldea2 WHERE ldea2.id_reposicion = r._id AND ldea2.fecha_inicio IS NOT NULL)";
+                $reposicionesPendientesResult = $localConnection->goQuery($sqlReposicionesPendientes);
+                $reposiciones_pendientes = !empty($reposicionesPendientesResult) && !isset($reposicionesPendientesResult['status']) ? $reposicionesPendientesResult[0]['count'] : 0;
+
+                $finalResponse['reposiciones'] = [
+                    'terminadas' => $reposiciones_terminadas,
+                    'en_curso' => $reposiciones_en_curso,
+                    'pendientes' => $reposiciones_pendientes
+                ];
+
                 // 2. EFICIENCIA (No aplica para diseño ni impresión, retornamos 0)
                 $finalResponse['eficiencia'] = [
                     'tiempo_real' => 0,
@@ -683,6 +702,25 @@ return function (App $app) {
                     'terminadas' => $terminadas,
                     'activas' => $activas,
                     'pendientes' => $pendientes
+                ];
+
+                // REPOSICIONES
+                $sqlReposicionesTerminadas = "SELECT COUNT(DISTINCT r._id) as count FROM reposiciones r WHERE r.id_empleado = $id_empleado AND r.id_departamento = $id_departamento AND r.terminada = 1";
+                $reposicionesTerminadasResult = $localConnection->goQuery($sqlReposicionesTerminadas);
+                $reposiciones_terminadas = !empty($reposicionesTerminadasResult) && !isset($reposicionesTerminadasResult['status']) ? $reposicionesTerminadasResult[0]['count'] : 0;
+
+                $sqlReposicionesEnCurso = "SELECT COUNT(DISTINCT r._id) as count FROM reposiciones r LEFT JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_reposicion = r._id WHERE r.id_empleado = $id_empleado AND r.id_departamento = $id_departamento AND r.terminada = 0 AND ldea.fecha_inicio IS NOT NULL";
+                $reposicionesEnCursoResult = $localConnection->goQuery($sqlReposicionesEnCurso);
+                $reposiciones_en_curso = !empty($reposicionesEnCursoResult) && !isset($reposicionesEnCursoResult['status']) ? $reposicionesEnCursoResult[0]['count'] : 0;
+
+                $sqlReposicionesPendientes = "SELECT COUNT(DISTINCT r._id) as count FROM reposiciones r WHERE r.id_empleado = $id_empleado AND r.id_departamento = $id_departamento AND r.terminada = 0 AND NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_asignados ldea2 WHERE ldea2.id_reposicion = r._id AND ldea2.fecha_inicio IS NOT NULL)";
+                $reposicionesPendientesResult = $localConnection->goQuery($sqlReposicionesPendientes);
+                $reposiciones_pendientes = !empty($reposicionesPendientesResult) && !isset($reposicionesPendientesResult['status']) ? $reposicionesPendientesResult[0]['count'] : 0;
+
+                $finalResponse['reposiciones'] = [
+                    'terminadas' => $reposiciones_terminadas,
+                    'en_curso' => $reposiciones_en_curso,
+                    'pendientes' => $reposiciones_pendientes
                 ];
 
                 // 2. EFICIENCIA DE TIEMPO
