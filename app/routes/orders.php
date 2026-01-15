@@ -585,6 +585,13 @@ return function (App $app) {
     $departamento = $localConnection->goQuery($sql);
     $object['departamento'] = $departamento[0]['departamento'];
 
+    // Obtener datos salariales del empleado
+    $sqlEmpleado = "SELECT salario_tipo, salario_monto, salario_periodo, comision, comision_tipo 
+                    FROM api_empresas.empresas_usuarios 
+                    WHERE id_usuario = {$args['id_empleado']}";
+    $datosEmpleado = $localConnection->goQuery($sqlEmpleado);
+    $object['datos_empleado'] = !empty($datosEmpleado) ? $datosEmpleado[0] : null;
+
     $sql = "SELECT DISTINCT
                 a._id id_lote_detalles,
                 a.id_orden,
@@ -595,8 +602,10 @@ return function (App $app) {
                 a.progreso,
                 (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = a.id_orden) total_productos,
                 d.comision_tipo,
-                -- d.monto_pago,
                 d.monto_pago,
+                eu.salario_tipo,
+                eu.salario_monto,
+                eu.salario_periodo,
                 TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) AS tiempo_empleado,
                 c.tiempo tiempo_estimado_de_produccion,
                 (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - c.tiempo) rendimiento,
@@ -608,11 +617,11 @@ return function (App $app) {
                 b.talla
             FROM
                 lotes_detalles_empleados_asignados a
-            -- RIGHT JOIN ordenes ord ON ord._id = a.id_orden
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
-            JOIN pagos d ON d.id_lotes_detalles = a._id -- DIVIDIR ENTRE CANTIDAD DE EMPLEADOS ASIGNADOS
+            JOIN pagos d ON d.id_lotes_detalles = a._id
+            LEFT JOIN api_empresas.empresas_usuarios eu ON a.id_empleado = eu.id_usuario
             WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} ORDER BY a.id_orden ASC
             
         ";
