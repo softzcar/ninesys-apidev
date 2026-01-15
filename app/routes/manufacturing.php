@@ -2544,7 +2544,7 @@ return function (App $app) {
                 -- b.terminado,
                 ch.moment terminado,
                 a.name,
-                (SELECT nombre FROM sizes WHERE _id = a.talla) talla,
+                a.talla,
                 r.unidades unidades_reposicion,
                 r.detalle detalle_reposicion,
                 a.cantidad,
