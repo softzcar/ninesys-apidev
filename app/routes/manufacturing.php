@@ -2904,35 +2904,32 @@ return function (App $app) {
             SELECT
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
-                pia.id_departamento,
+                im.id_departamento,
                 
-                -- Consumo Estándar: Solo de órdenes que tienen movimientos registrados
-                SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
-                MAX(pia.unidad) AS unidad,
+                -- Consumo Estándar: Calculado independientemente para evitar multiplicación por movimientos
+                COALESCE((
+                    SELECT SUM(op_sub.cantidad * pia_sub.cantidad)
+                    FROM ordenes_productos op_sub
+                    JOIN product_insumos_asignados pia_sub ON pia_sub.id_product = op_sub.id_woo 
+                        AND pia_sub.id_talla = op_sub.id_size
+                    WHERE op_sub.id_orden IN ($idsString)
+                      AND pia_sub.id_catalogo_insumos_productos = cip._id
+                      AND pia_sub.id_departamento = im.id_departamento
+                ), 0) AS cantidad_estandar,
 
-                -- Consumo Real (subconsulta para evitar duplicación)
-                (
-                    SELECT SUM(im2.valor_inicial - im2.valor_final)
-                    FROM inventario_movimientos im2
-                    JOIN inventario inv2 ON inv2._id = im2.id_insumo
-                    WHERE im2.id_orden IN ($idsString)
-                      AND inv2.id_catalogo = cip._id
-                      AND im2.id_departamento = pia.id_departamento
-                      AND (im2.valor_inicial - im2.valor_final) > 0
-                ) AS cantidad_real
+                MAX(inv.unidad) AS unidad,
+
+                -- Consumo Real: Suma directa de movimientos (sin duplicación por joins externos)
+                SUM(im.valor_inicial - im.valor_final) AS cantidad_real
 
             FROM inventario_movimientos im
             JOIN inventario inv ON inv._id = im.id_insumo
             JOIN catalogo_insumos_productos cip ON cip._id = inv.id_catalogo
             JOIN ordenes o ON o._id = im.id_orden
-            JOIN ordenes_productos op ON op.id_orden = o._id
-            JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo 
-                AND pia.id_talla = op.id_size
-                AND pia.id_catalogo_insumos_productos = cip._id
-                AND pia.id_departamento = im.id_departamento
+            
             WHERE im.id_orden IN ($idsString)
               AND (im.valor_inicial - im.valor_final) > 0
-            GROUP BY cip._id, cip.nombre, pia.id_departamento
+            GROUP BY cip._id, cip.nombre, im.id_departamento
         ";
 
     file_put_contents('debug_sql_error.log', "SQL Query:\n" . $sql . "\n", FILE_APPEND);
