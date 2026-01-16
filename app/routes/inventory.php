@@ -1168,41 +1168,76 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $object['response_rendimiento'] = json_encode($localConnection->goQuery($sql));
         }
 
-        // --- INICIO: Corrección para manejar NULL y usar sentencias preparadas ---
-        // 1. Preparar la consulta SQL con placeholders (?)
-        $sql = 'INSERT INTO inventario_movimientos
-            (
-             id_orden, 
-             id_empleado, 
-             id_producto, 
-             id_insumo, 
-             id_departamento, 
-             id_catalogo_insumos_prodcutos,
-             departamento, 
-             valor_inicial, 
-             valor_final)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        // --- INICIO: Verificación de duplicados antes de insertar ---
+        // Verificar si ya existe un movimiento para esta orden/insumo/departamento
+        $sql_check_mov = 'SELECT _id FROM inventario_movimientos 
+                          WHERE id_orden = ? AND id_insumo = ? AND id_departamento = ?';
+        $check_mov_params = [
+            $miInsumo['id_orden'],
+            $miInsumo['id_insumo'],
+            $miInsumo['id_departamento']
+        ];
+        $existing_mov = $localConnection->goQuery($sql_check_mov, $check_mov_params);
 
-        // 2. Preparar los parámetros, convirtiendo la cadena "null" a un verdadero NULL de PHP
+        // Preparar el valor de id_catalogo
         $id_catalogo = (isset($miInsumo['id_catalogo']) && $miInsumo['id_catalogo'] !== 'null' && $miInsumo['id_catalogo'] !== '')
             ? intval($miInsumo['id_catalogo'])
             : null;
 
-        $params = [
-            $miInsumo['id_orden'],
-            $miInsumo['id_empleado'],
-            $miInsumo['id_producto'],
-            $miInsumo['id_insumo'],
-            $miInsumo['id_departamento'],
-            $id_catalogo,  // Aquí va el valor ya procesado (sea un número o un NULL de PHP)
-            $miInsumo['departamento'],
-            $cantidad_inicial,
-            $cantidad_consumida
-        ];
+        if (!empty($existing_mov)) {
+            // Ya existe, hacer UPDATE en lugar de INSERT
+            $sql = 'UPDATE inventario_movimientos 
+                    SET id_empleado = ?, 
+                        id_producto = ?, 
+                        id_catalogo_insumos_prodcutos = ?,
+                        valor_inicial = ?, 
+                        valor_final = ?,
+                        moment = NOW()
+                    WHERE _id = ?';
+            $params = [
+                $miInsumo['id_empleado'],
+                $miInsumo['id_producto'],
+                $id_catalogo,
+                $cantidad_inicial,
+                $cantidad_consumida,
+                $existing_mov[0]['_id']
+            ];
+            $object['sql_inventario_movimientos'] = $sql;
+            $object['resp_invetario_movimientos'] = $localConnection->goQuery($sql, $params);
+            $object['movimiento_actualizado'] = true;
+            $object['movimiento_id'] = $existing_mov[0]['_id'];
+        } else {
+            // No existe, hacer INSERT
+            $sql = 'INSERT INTO inventario_movimientos
+                (
+                 id_orden, 
+                 id_empleado, 
+                 id_producto, 
+                 id_insumo, 
+                 id_departamento, 
+                 id_catalogo_insumos_prodcutos,
+                 departamento, 
+                 valor_inicial, 
+                 valor_final)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
-        $object['sql_inventario_movimientos'] = $sql;
-        $object['resp_invetario_movimientos'] = $localConnection->goQuery($sql, $params);
-        // --- FIN: Corrección ---
+            $params = [
+                $miInsumo['id_orden'],
+                $miInsumo['id_empleado'],
+                $miInsumo['id_producto'],
+                $miInsumo['id_insumo'],
+                $miInsumo['id_departamento'],
+                $id_catalogo,
+                $miInsumo['departamento'],
+                $cantidad_inicial,
+                $cantidad_consumida
+            ];
+
+            $object['sql_inventario_movimientos'] = $sql;
+            $object['resp_invetario_movimientos'] = $localConnection->goQuery($sql, $params);
+            $object['movimiento_creado'] = true;
+        }
+        // --- FIN: Verificación de duplicados ---
 
         $localConnection->disconnect();
 

@@ -317,19 +317,43 @@ return function (App $app) {
     $miInsumo = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    // Usar sentencias preparadas para prevenir inyección SQL
+    // Preparar los parámetros
+    // Aseguramos que id_talla (recibido como id_size) sea null si no se envía o está vacío
+    $id_talla = isset($miInsumo['id_size']) && !empty($miInsumo['id_size']) && $miInsumo['id_size'] !== 'null' ? intval($miInsumo['id_size']) : null;
+    $id_product = intval($miInsumo['id_product']);
+    $id_departamento = intval($miInsumo['departamento']);
+    $id_catalogo = intval($miInsumo['insumo']);
+
+    // Verificar si ya existe un registro con la misma combinación
+    $sql_check = 'SELECT _id FROM product_insumos_asignados 
+                  WHERE id_product = ? 
+                    AND id_departamento = ? 
+                    AND id_catalogo_insumos_productos = ? 
+                    AND (id_talla = ? OR (id_talla IS NULL AND ? IS NULL))';
+    $check_params = [$id_product, $id_departamento, $id_catalogo, $id_talla, $id_talla];
+    $existing = $localConnection->goQuery($sql_check, $check_params);
+
+    if (!empty($existing)) {
+      // Ya existe, devolver error
+      $localConnection->disconnect();
+      $object['error'] = true;
+      $object['message'] = 'Ya existe un insumo asignado con esta combinación de producto, departamento, catálogo y talla.';
+      $object['existing_id'] = $existing[0]['_id'];
+      $response->getBody()->write(json_encode($object));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(409); // Conflict
+    }
+
+    // No existe, proceder con la inserción
     $sql = 'INSERT INTO product_insumos_asignados 
                     (id_product, id_departamento, id_catalogo_insumos_productos, cantidad, unidad, id_talla) 
                 VALUES (?, ?, ?, ?, ?, ?)';
 
-    // Preparar los parámetros para la consulta
-    // Aseguramos que id_talla (recibido como id_size) sea null si no se envía o está vacío
-    $id_talla = isset($miInsumo['id_size']) && !empty($miInsumo['id_size']) && $miInsumo['id_size'] !== 'null' ? $miInsumo['id_size'] : null;
-
     $params = [
-      $miInsumo['id_product'],
-      $miInsumo['departamento'],
-      $miInsumo['insumo'],
+      $id_product,
+      $id_departamento,
+      $id_catalogo,
       $miInsumo['cantidad'],
       $miInsumo['unidad'],
       $id_talla
@@ -337,6 +361,7 @@ return function (App $app) {
 
     $object['sql'] = $sql;
     $object['response'] = $localConnection->goQuery($sql, $params);
+    $object['error'] = false;
     $localConnection->disconnect();
     $response->getBody()->write(json_encode($object));
 
