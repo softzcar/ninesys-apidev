@@ -1747,6 +1747,77 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             ->withHeader('Content-Type', 'application/json')
             ->withStatus(200);
     });
+
+    // OBTENER CONSUMO DE MATERIAL POR INSUMO
+    $app->get('/inventario/consumo/{id_insumo}', function (Request $request, Response $response, array $args) {
+        $id_insumo = $args['id_insumo'] ?? null;
+
+        if (!$id_insumo || !is_numeric($id_insumo)) {
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'ID de insumo inválido'
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(400);
+        }
+
+        $localConnection = new LocalDB();
+
+        // Consulta para obtener el consumo de material con los datos relacionados
+        $sql = "SELECT
+            inv._id id_inventario,
+            inv.insumo,
+            imo._id id_movimiento,
+            imo.id_orden,      
+            ord.cliente_nombre,
+            dep._id id_departamento,
+            emp.id_usuario id_empleado,
+            emp.nombre nombre_empleado,
+            dep.departamento,
+            (imo.valor_inicial - imo.valor_final) material_consumido,
+            imo.valor_inicial,
+            imo.valor_final,
+            inv.cantidad cantidad_inventario,
+            imo.moment fecha_del_consumo
+        FROM
+            inventario inv
+        JOIN inventario_movimientos imo ON imo.id_insumo = inv._id 
+        JOIN departamentos dep ON dep._id = imo.id_departamento 
+        JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = imo.id_empleado 
+        JOIN ordenes ord ON ord._id = imo.id_orden
+        WHERE
+            imo.id_insumo = ?
+        ORDER BY imo.moment ASC";
+
+        try {
+            $result = $localConnection->goQuery($sql, [$id_insumo]);
+
+            $object = [
+                'success' => true,
+                'data' => $result ?? [],
+                'count' => count($result ?? [])
+            ];
+
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(200);
+        } catch (\Exception $e) {
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'Error al obtener el consumo de material',
+                'error' => $e->getMessage()
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(500);
+        }
+    });
     /** FIN INVENTARIO */
 
 }; // Fin de la función que envuelve las rutas
