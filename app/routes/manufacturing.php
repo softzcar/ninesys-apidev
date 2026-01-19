@@ -2902,6 +2902,7 @@ return function (App $app) {
 
     $sql = "
             SELECT
+                inv._id AS id_insumo, -- Agregado para el modal de consumo
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
                 im.id_departamento,
@@ -2929,7 +2930,7 @@ return function (App $app) {
             
             WHERE im.id_orden IN ($idsString)
               AND (im.valor_inicial - im.valor_final) > 0
-            GROUP BY cip._id, cip.nombre, im.id_departamento
+            GROUP BY inv._id, cip._id, cip.nombre, im.id_departamento
         ";
 
     file_put_contents('debug_sql_error.log', "SQL Query:\n" . $sql . "\n", FILE_APPEND);
