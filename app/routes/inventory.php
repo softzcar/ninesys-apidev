@@ -1963,6 +1963,69 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 ->withStatus(500);
         }
     });
+
+    // OBTENER HISTORIAL DE CAMBIOS DE UN MOVIMIENTO
+    $app->get('/inventario/consumo/{id_movimiento}/historial', function (Request $request, Response $response, array $args) {
+        $id_movimiento = $args['id_movimiento'] ?? null;
+
+        if (!$id_movimiento || !is_numeric($id_movimiento)) {
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'ID de movimiento inválido'
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(400);
+        }
+
+        $localConnection = new LocalDB();
+
+        try {
+            // Consulta para obtener el historial con datos del usuario
+            $sql = "SELECT
+                h._id,
+                h.id_movimiento,
+                h.campo_modificado,
+                h.valor_anterior,
+                h.valor_nuevo,
+                h.id_usuario_modificacion,
+                emp.nombre AS usuario_nombre,
+                h.fecha_modificacion,
+                h.observaciones
+            FROM
+                inventario_movimientos_historial h
+            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = h.id_usuario_modificacion
+            WHERE
+                h.id_movimiento = ?
+            ORDER BY h.fecha_modificacion DESC";
+
+            $historial = $localConnection->goQuery($sql, [$id_movimiento]);
+
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'data' => $historial ?? [],
+                'count' => count($historial ?? [])
+            ], JSON_NUMERIC_CHECK));
+
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(200);
+
+        } catch (\Exception $e) {
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'Error al obtener el historial',
+                'error' => $e->getMessage()
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(500);
+        }
+    });
     /** FIN INVENTARIO */
 
 }; // Fin de la función que envuelve las rutas
