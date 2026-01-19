@@ -1833,7 +1833,21 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 ->withStatus(400);
         }
 
-        $data = $request->getParsedBody();
+
+        // Parsear JSON del body
+        $body = $request->getBody()->getContents();
+        $data = json_decode($body, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'JSON inválido en el body'
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(400);
+        }
+
         $nuevo_valor = $data['material_consumido'] ?? null;
         $observaciones = $data['observaciones'] ?? '';
         $id_usuario = $data['id_usuario'] ?? null;
