@@ -2001,6 +2001,38 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
             $historial = $localConnection->goQuery($sql, [$id_movimiento]);
 
+            // Consulta para obtener datos de creación del movimiento
+            $sql_creation = "SELECT 
+                m._id as id_movimiento,
+                (m.valor_inicial - m.valor_final) as nuevo_valor,
+                m.id_empleado,
+                emp.nombre as usuario_nombre,
+                m.fecha as fecha_modificacion
+            FROM inventario_movimientos m
+            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = m.id_empleado
+            WHERE m._id = ?";
+
+            $creation_data = $localConnection->goQuery($sql_creation, [$id_movimiento]);
+
+            if (!empty($creation_data)) {
+                $creation_record = $creation_data[0];
+                // Formatear registro de creación para que coincida con estructura de historial
+                $fake_history_record = [
+                    '_id' => 'orig_' . $creation_record['id_movimiento'],
+                    'id_movimiento' => $creation_record['id_movimiento'],
+                    'campo_modificado' => 'Creación',
+                    'valor_anterior' => 0,
+                    'valor_nuevo' => $creation_record['nuevo_valor'],
+                    'id_usuario_modificacion' => $creation_record['id_empleado'],
+                    'usuario_nombre' => $creation_record['usuario_nombre'],
+                    'fecha_modificacion' => $creation_record['fecha_modificacion'],
+                    'observaciones' => 'Registro inicial de consumo'
+                ];
+
+                // Agregar el registro de creación al final del array (es el más antiguo)
+                $historial[] = $fake_history_record;
+            }
+
             $localConnection->disconnect();
 
             $response->getBody()->write(json_encode([
