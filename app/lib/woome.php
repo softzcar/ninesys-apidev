@@ -659,19 +659,19 @@ class WooMe
       $sql = 'NO HAY PRECIOS PARA PROCESAR';
     }
     // ASIGNAR ATRIBUTOS
-   /* $attributes = json_decode($attributesDat, true);
-     if (!empty($attributes)) {
-      $sql = 'INSERT INTO products_attributes_values (id_product, id_product_attribute, `attribute_value`) VALUES ';
-      $values = [];
-      foreach ($attributes as $attribute) {
-        $values[] = "($newID, {$attribute['attribute']}, '{$attribute['descripcion']}')";
-      }
-      $sql .= implode(', ', $values) . ';';
-      // Ejecutar la consulta
-      $localConnection->goQuery($sql);
-    } else {
-      $sql = 'NO HAY ATRIBUTOS PARA PROCESAR';
-    } */
+    /* $attributes = json_decode($attributesDat, true);
+      if (!empty($attributes)) {
+       $sql = 'INSERT INTO products_attributes_values (id_product, id_product_attribute, `attribute_value`) VALUES ';
+       $values = [];
+       foreach ($attributes as $attribute) {
+         $values[] = "($newID, {$attribute['attribute']}, '{$attribute['descripcion']}')";
+       }
+       $sql .= implode(', ', $values) . ';';
+       // Ejecutar la consulta
+       $localConnection->goQuery($sql);
+     } else {
+       $sql = 'NO HAY ATRIBUTOS PARA PROCESAR';
+     } */
     // $sqlCreate = $sql; // Ya no necesitamos esta variable
     $sql = 'SELECT * FROM products WHERE _id = ' . $newID;
     $resp['product'] = $localConnection->goQuery($sql);
@@ -1288,7 +1288,7 @@ class WooMe
    */
   public function getSizes()
   {
-    $sql = 'SELECT _id, nombre `name` FROM sizes';
+    $sql = 'SELECT _id, nombre `name`, variation_percentage FROM sizes';
     $localConnection = new LocalDB();
     $sizes = $localConnection->goQuery($sql);
     $localConnection->disconnect();

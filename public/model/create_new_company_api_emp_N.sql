@@ -92,6 +92,7 @@ INSERT INTO `catalogo_insumos_productos` (`_id`, `nombre`, `id_product`, `id_dep
 (5, 'Tela Licra', 1, 3),
 (6, 'Tela Algodón', 1, 3),
 (7, 'Diseño Gráfico', 2, 7);
+
 CREATE TABLE `catalogo_telas` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico de la tabla',
   `tela` varchar(45) DEFAULT NULL COMMENT 'Nombre de la tela',
@@ -1007,7 +1008,8 @@ CREATE TABLE `revisiones` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Control de revisiones de diseño. Registra cada iteración de revisión solicitada al diseñador con límite máximo de dos.';
 CREATE TABLE `sizes` (
   `_id` int(11) NOT NULL COMMENT 'ID único de la talla',
-  `nombre` varchar(100) DEFAULT NULL COMMENT 'Nombre de la talla'
+  `nombre` varchar(100) DEFAULT NULL COMMENT 'Nombre de la talla',
+  `variation_percentage` decimal(5,2) DEFAULT 0.00 COMMENT 'Porcentaje de variación para cálculo de insumos'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de tallas disponibles. Define las tallas manejadas por la empresa para asignación en productos y órdenes.';
 INSERT INTO `sizes` (`_id`, `nombre`) VALUES
 (1, 'S'),
