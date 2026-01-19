@@ -3046,6 +3046,7 @@ return function (App $app) {
                   o.status,
                   c.first_name AS cliente_nombre,
                   c.cedula AS cliente_cedula,
+                  op.id_woo AS id_product_woo, -- Agregado para identificar producto en frontend
                   op.name AS producto,
                   op.cantidad,
                   
