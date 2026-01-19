@@ -1818,6 +1818,137 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 ->withStatus(500);
         }
     });
+
+    // ACTUALIZAR CONSUMO DE MATERIAL Y REGISTRAR EN HISTORIAL
+    $app->patch('/inventario/consumo/{id_movimiento}', function (Request $request, Response $response, array $args) {
+        $id_movimiento = $args['id_movimiento'] ?? null;
+
+        if (!$id_movimiento || !is_numeric($id_movimiento)) {
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'ID de movimiento inválido'
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(400);
+        }
+
+        $data = $request->getParsedBody();
+        $nuevo_valor = $data['material_consumido'] ?? null;
+        $observaciones = $data['observaciones'] ?? '';
+        $id_usuario = $data['id_usuario'] ?? null;
+
+        // Validaciones
+        if ($nuevo_valor === null || !is_numeric($nuevo_valor) || $nuevo_valor < 0) {
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'Valor de material consumido inválido'
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(400);
+        }
+
+        if (!$id_usuario || !is_numeric($id_usuario)) {
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'ID de usuario inválido'
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(400);
+        }
+
+        $localConnection = new LocalDB();
+
+        try {
+            // Iniciar transacción
+            $localConnection->beginTransaction();
+
+            // Obtener valor anterior
+            $sql_get_current = "SELECT 
+                (valor_inicial - valor_final) as material_consumido_actual,
+                valor_inicial,
+                id_insumo
+            FROM inventario_movimientos 
+            WHERE _id = ?";
+
+            $current_data = $localConnection->goQuery($sql_get_current, [$id_movimiento]);
+
+            if (empty($current_data)) {
+                $localConnection->rollback();
+                $response->getBody()->write(json_encode([
+                    'success' => false,
+                    'message' => 'Movimiento no encontrado'
+                ]));
+                return $response
+                    ->withHeader('Content-Type', 'application/json')
+                    ->withStatus(404);
+            }
+
+            $valor_anterior = $current_data[0]['material_consumido_actual'];
+            $valor_inicial = $current_data[0]['valor_inicial'];
+            $id_insumo = $current_data[0]['id_insumo'];
+
+            // Calcular nuevo valor_final
+            $nuevo_valor_final = $valor_inicial - $nuevo_valor;
+
+            // Registrar en historial si hubo cambio
+            if ($valor_anterior != $nuevo_valor) {
+                $sql_historial = "INSERT INTO inventario_movimientos_historial 
+                    (id_movimiento, campo_modificado, valor_anterior, valor_nuevo, id_usuario_modificacion, observaciones) 
+                    VALUES (?, 'material_consumido', ?, ?, ?, ?)";
+
+                $localConnection->goQuery($sql_historial, [
+                    $id_movimiento,
+                    $valor_anterior,
+                    $nuevo_valor,
+                    $id_usuario,
+                    $observaciones
+                ]);
+            }
+
+            // Actualizar valor_final en inventario_movimientos
+            $sql_update = "UPDATE inventario_movimientos 
+                SET valor_final = ? 
+                WHERE _id = ?";
+
+            $localConnection->goQuery($sql_update, [$nuevo_valor_final, $id_movimiento]);
+
+            // Confirmar transacción
+            $localConnection->commit();
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'message' => 'Material consumido actualizado correctamente',
+                'data' => [
+                    'id_movimiento' => $id_movimiento,
+                    'valor_anterior' => $valor_anterior,
+                    'valor_nuevo' => $nuevo_valor,
+                    'valor_final' => $nuevo_valor_final
+                ]
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(200);
+
+        } catch (\Exception $e) {
+            if ($localConnection->inTransaction()) {
+                $localConnection->rollback();
+            }
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'Error al actualizar el consumo de material',
+                'error' => $e->getMessage()
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(500);
+        }
+    });
     /** FIN INVENTARIO */
 
 }; // Fin de la función que envuelve las rutas

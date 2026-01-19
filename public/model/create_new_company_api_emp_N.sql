@@ -388,6 +388,19 @@ CREATE TABLE `inventario_movimientos` (
   `fecha` datetime NOT NULL DEFAULT current_timestamp() COMMENT 'fecha del registro',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de movimientos de inventario de insumos. Almacena cada consumo de material vinculado a orden, producto, empleado y departamento.';
+CREATE TABLE `inventario_movimientos_historial` (
+  `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID único del registro',
+  `id_movimiento` int(11) NOT NULL COMMENT 'ID del movimiento modificado (FK a inventario_movimientos._id)',
+  `campo_modificado` varchar(50) NOT NULL COMMENT 'Nombre del campo que fue modificado',
+  `valor_anterior` decimal(10, 2) DEFAULT NULL COMMENT 'Valor anterior del campo',
+  `valor_nuevo` decimal(10, 2) DEFAULT NULL COMMENT 'Valor nuevo del campo',
+  `id_usuario_modificacion` int(11) NOT NULL COMMENT 'ID del usuario que realizó el cambio',
+  `fecha_modificacion` datetime DEFAULT current_timestamp() COMMENT 'Fecha y hora del cambio',
+  `observaciones` text DEFAULT NULL COMMENT 'Observaciones o motivo del cambio',
+  PRIMARY KEY (`_id`),
+  INDEX `idx_movimiento` (`id_movimiento`),
+  INDEX `idx_fecha` (`fecha_modificacion`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Historial de cambios en inventario_movimientos. Registra modificaciones de material_consumido para auditoría y trazabilidad.';
 CREATE TABLE `lotes` (
   `_id` int(11) NOT NULL COMMENT 'ID Autonumérico',
   `lote` mediumtext DEFAULT NULL COMMENT 'Código del Lote',
