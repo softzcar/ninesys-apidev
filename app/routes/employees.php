@@ -116,6 +116,16 @@ return function (App $app) {
 
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
+        // Validar que el email no exista
+        $checkEmailSql = "SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE email = '" . $miEmpleado['email'] . "'";
+        $emailCheck = $localConnection->goQuery($checkEmailSql);
+
+        if (isset($emailCheck[0]['count']) && $emailCheck[0]['count'] > 0) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'El email ya se encuentra registrado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
         // PREPARAR FECHAS
         $myDate = new CustomTime();
         $now = $myDate->today();
@@ -205,6 +215,18 @@ return function (App $app) {
         // Lógica para manejar diferentes tipos de comisión
         $comision = 0;
         $comision_porcentaje = 0;
+
+        // Validar que el email no exista en otro usuario
+        if (isset($miEmpleado['email']) && !empty($miEmpleado['email'])) {
+            $checkEmailSql = "SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE email = '" . $miEmpleado['email'] . "' AND id_usuario != " . $miEmpleado['_id'];
+            $emailCheck = $localConnection->goQuery($checkEmailSql);
+
+            if (isset($emailCheck[0]['count']) && $emailCheck[0]['count'] > 0) {
+                $localConnection->disconnect();
+                $response->getBody()->write(json_encode(['error' => 'El email ya se encuentra registrado en otro usuario.']));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            }
+        }
 
         if ($miEmpleado['comsion_tipo'] === 'fija') {
             $comision = $miEmpleado['comision'];
