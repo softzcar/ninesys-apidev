@@ -655,7 +655,7 @@ return function (App $app) {
         // Check if exists specific record
         $check = $localConnection->goQuery("SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$id_repo}");
 
-        if (!empty($check)) {
+        if (!empty($check) && isset($check[0])) {
           $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE _id = {$check[0]['_id']};";
         } else {
           $sqln .= "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision, id_reposicion) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0, {$id_repo});";
