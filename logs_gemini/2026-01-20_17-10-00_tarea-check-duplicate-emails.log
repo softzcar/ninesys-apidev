@@ -1,0 +1,11 @@
+- Solicitud del Usuario: crear una consulta para verificar emails repetidos y arreglarlos manualmente.
+- Archivos Involucrados: N/A - Ejecución directa en DB
+- Acción Realizada: Se generó y ejecutó una consulta SQL en el VPS para identificar usuarios con el mismo email. La consulta agrupa por email y muestra los IDs de usuario y de empresa asociados.
+- Herramienta(s) Utilizada(s): run_command (ssh, mysql)
+- Resultado: Éxito. Se identificaron 3 casos de duplicidad:
+    - linyersaqb@gmail.com (IDs 10, 20)
+    - softzcar40@gmail.com (IDs 589, 597) -> Este es el caso que acabamos de tratar.
+    - softzcar@hotmail.com (IDs 2, 435)
+- Verificación: La salida del comando muestra claramente los conteos mayores a 1.
+- Observaciones de Gemini: Proveeré al usuario la consulta para que pueda usarla a futuro y le mostraré los resultados actuales para que tome acción manual si lo desea.
+- Respuesta de Gemini: Aquí tienes la consulta para detectar duplicados. He hecho una prueba y he encontrado estos 3 correos con registros dobles actualmente: [lista]. Puedes usarlos para depurar.
