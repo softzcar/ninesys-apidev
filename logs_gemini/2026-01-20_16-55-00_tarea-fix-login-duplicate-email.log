@@ -1,0 +1,8 @@
+- Solicitud del Usuario: He creado una nueva empresa... con el email softzcar40@gmail.com... pero al ingresar estas credenciales al interfaz me muestra un mensaje de datos incorrectos.
+- Archivos Involucrados: app/routes/auth.php
+- Acción Realizada: Se identificó que existían dos usuarios con el mismo email en la base de datos (uno antiguo y uno nuevo). La lógica de login original solo verificaba el primero que encontraba, causando fallo si las contraseñas no coincidían. Se modificó app/routes/auth.php para iterar sobre todos los usuarios encontrados con ese email y verificar si ALGUNO coincide con la contraseña proporcionada.
+- Herramienta(s) Utilizada(s): run_command (ssh, curl, git), view_file, replace_file_content
+- Resultado: Éxito
+- Verificación: Se realizó una petición curl al endpoint /login con las credenciales problemáticas. Antes devolvía "datos incorrectos", ahora devuelve el objeto JSON esperado para una empresa nueva (datos faltantes para el wizard).
+- Observaciones de Gemini: La existencia de emails duplicados en la base de datos es una inconsistencia que debería corregirse a nivel de restricciones de DB, pero la solución implementada hace que el login sea robusto ante esta situación sin requerir intervención manual en la base de datos.
+- Respuesta de Gemini: He corregido el problema. La causa era que existía un usuario previo con el mismo email pero diferente contraseña. He actualizado la lógica de inicio de sesión para que el sistema busque entre todos los usuarios con ese email y permita el acceso si la contraseña coincide con alguno de ellos. Ahora deberías poder ingresar correctamente y ver el Wizard de configuración.
