@@ -1,0 +1,10 @@
+- Solicitud del Usuario: Validar que el email no se repita en el programa que crea una nueva empresa y en el CRUD de empleados de la app.
+- Archivos Involucrados: app/routes/employees.php
+- Acción Realizada: 
+    1. Se verificó que el endpoint de creación de empresas (`POST /setup/user`) en `app/routes.php` ya contiene validación de emails duplicados tanto en la tabla `empresas` como en `empresas_usuarios`.
+    2. Se implementó una verificación de existencia de email en los endpoints `POST /empleados/nuevo` y `POST /empleados/editar` en `app/routes/employees.php`. Se consulta con `COUNT(*)` si el email existe antes de proceder con el INSERT o UPDATE.
+- Herramienta(s) Utilizada(s): view_file, multi_replace_file_content, replace_file_content, run_command (git, ssh)
+- Resultado: Éxito
+- Verificación: Se desplegaron los cambios al VPS. La validación impide crear o editar empleados con un email que ya esté registrado en la tabla `empresas_usuarios`.
+- Observaciones de Gemini: Esta validación es crucial para mantener la integridad de la autenticación, ya que el login depende de la unicidad del email (aunque ahora el login es más robusto, es mejor prevenir la duplicidad).
+- Respuesta de Gemini: He implementado la validación para impedir el registro de correos duplicados tanto al crear como al editar empleados. También verifiqué que el sistema de creación de empresas ya contaba con esta protección.
