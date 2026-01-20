@@ -28,6 +28,11 @@ return function (App $app) {
         $usuario_data = $credenciales[0];
 
         // Paso 2: Verificar contraseña ANTES de cualquier otra validación
+        $object['debug'][] = 'Pass DB: ' . $usuario_data['password'] . ' (' . strlen($usuario_data['password']) . ')';
+        $object['debug'][] = 'Pass Req: ' . $datosAcceso['password'] . ' (' . strlen($datosAcceso['password']) . ')';
+        $object['debug'][] = 'Match (Strict): ' . ($usuario_data['password'] === $datosAcceso['password'] ? 'YES' : 'NO');
+        $object['debug'][] = 'Match (Loose): ' . ($usuario_data['password'] == $datosAcceso['password'] ? 'YES' : 'NO');
+
         if ($usuario_data['password'] !== $datosAcceso['password']) {
             $object['msg'] = 'Los datos de acceso proporcionados no son correctos';
             $object['data']['access'] = false;
