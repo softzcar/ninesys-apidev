@@ -25,14 +25,21 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
 
-        $usuario_data = $credenciales[0];
+        $usuario_data = null;
+        // Buscar entre los resultados si alguno coincide con la contraseña
+        foreach ($credenciales as $posible_usuario) {
+            if ($posible_usuario['password'] === $datosAcceso['password']) {
+                $usuario_data = $posible_usuario;
+                break;
+            }
+        }
+
+        // Si no se encontró coincidencia, usar el primero para fallar en la validación
+        if ($usuario_data === null) {
+            $usuario_data = $credenciales[0];
+        }
 
         // Paso 2: Verificar contraseña ANTES de cualquier otra validación
-        $object['debug'][] = 'Pass DB: ' . $usuario_data['password'] . ' (' . strlen($usuario_data['password']) . ')';
-        $object['debug'][] = 'Pass Req: ' . $datosAcceso['password'] . ' (' . strlen($datosAcceso['password']) . ')';
-        $object['debug'][] = 'Match (Strict): ' . ($usuario_data['password'] === $datosAcceso['password'] ? 'YES' : 'NO');
-        $object['debug'][] = 'Match (Loose): ' . ($usuario_data['password'] == $datosAcceso['password'] ? 'YES' : 'NO');
-
         if ($usuario_data['password'] !== $datosAcceso['password']) {
             $object['msg'] = 'Los datos de acceso proporcionados no son correctos';
             $object['data']['access'] = false;
