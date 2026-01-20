@@ -808,11 +808,13 @@ return function (App $app) {
 
 
   // Crear una nueva talla
+  // Crear una nueva talla
   $app->post('/sizes', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
-    $sql = 'INSERT INTO sizes (nombre) VALUES (?)';
-    $result = $localConnection->goQuery($sql, [$data['name']]);
+    $sql = 'INSERT INTO sizes (nombre, variation_percentage) VALUES (?, ?)';
+    $variation = isset($data['variation_percentage']) ? $data['variation_percentage'] : 0;
+    $result = $localConnection->goQuery($sql, [$data['name'], $variation]);
     $newId = $result['insert_id'] ?? null;
     $localConnection->disconnect();
 
@@ -832,8 +834,9 @@ return function (App $app) {
   $app->post('/sizes/editar', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
-    $sql = 'UPDATE sizes SET nombre = ? WHERE _id = ?';
-    $result = $localConnection->goQuery($sql, [$data['name'], $data['id']]);
+    $sql = 'UPDATE sizes SET nombre = ?, variation_percentage = ? WHERE _id = ?';
+    $variation = isset($data['variation_percentage']) ? $data['variation_percentage'] : 0;
+    $result = $localConnection->goQuery($sql, [$data['name'], $variation, $data['id']]);
     $localConnection->disconnect();
 
     $responseData = [
