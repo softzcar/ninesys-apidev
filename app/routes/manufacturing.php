@@ -2432,7 +2432,15 @@ return function (App $app) {
             y.id_departamento, -- Tomado directamente de la asignación del empleado
             (SELECT MIN(dep.orden_proceso) FROM lotes_detalles_empleados_asignados ldea JOIN departamentos dep ON ldea.id_departamento = dep._id WHERE ldea.id_orden = y.id_orden) AS orden_proceso_min,
             (SELECT orden_proceso FROM departamentos WHERE _id = {$args['id_departamento']}) AS orden_proceso_departamento,            
-            (SELECT orden_proceso FROM departamentos WHERE _id = c.id_departamento_actual) AS orden_proceso,
+            (
+                SELECT dep.orden_proceso
+                FROM lotes_detalles_empleados_asignados ldea2
+                JOIN departamentos dep ON dep._id = ldea2.id_departamento
+                WHERE ldea2.id_orden = y.id_orden
+                    AND ldea2.fecha_terminado IS NULL
+                ORDER BY dep.orden_proceso ASC
+                LIMIT 1
+            ) AS orden_proceso,
             c.id_departamento_actual,
             a.id_orden AS orden,
             a.id_woo,
