@@ -1,0 +1,35 @@
+- Solicitud del Usuario: Investigar el alto consumo de CPU en el VPS (referido como VPN por el usuario).
+
+- Archivos Involucrados:
+  - /var/log/messages (Analizado sin errores críticos recientes)
+  - /var/log/sa/sa20 (Datos de sysstat/sar del día actual)
+
+- Acción Realizada:
+  1. Intentos de diagnóstico en tiempo real:
+     - `ps aux --sort` falló/colgó debido a la alta carga.
+     - `uptime` reveló Load Average extremo: **18.18, 22.32, 22.21** (para 1 CPU).
+  
+  2. Análisis de logs y métricas históricas (`sar`):
+     - Se extrajeron los últimos 20 minutos de actividad de CPU.
+     - Resultados de `sar -u`:
+       - **%user**: ~10%
+       - **%system**: ~10%
+       - **%iowait**: 0%
+       - **%steal**: **~80%** (EXTREMADAMENTE ALTO)
+       - **%idle**: 0%
+
+- Herramienta(s) Utilizada(s): run_command (uptime, sar, tail)
+
+- Resultado: Diagnóstico Exitoso (Causa Externa Identificada)
+
+- Verificación:
+  - El valor de `%steal` consistente en ~80% confirma que el hipervisor (host físico de Hostinger) está sobrecargado y no está entregando ciclos de CPU al VPS.
+  - El VPS solo tiene disponible efectivamente el 20% del CPU, el cual está siendo saturado por procesos normales del sistema (User+System ~20%).
+  - No hay un proceso "culpable" dentro del VPS; el culpable es el proveedor de hosting.
+
+- Observaciones de Gemini:
+  - El "Load Average" de 22 es síntoma de que los procesos están en fila esperando CPU, pero el CPU no está disponible porque el host físico lo está usando en otro lugar.
+  - Solución recomendada: Contactar a soporte de Hostinger reportando "High CPU Steal Time" o reiniciar el VPS desde el panel de control para ver si migra a otro nodo menos congestionado.
+
+- Respuesta de Gemini:
+  El problema NO es un proceso interno. Es **CPU Steal Time** al 80%. El servidor físico está saturado.

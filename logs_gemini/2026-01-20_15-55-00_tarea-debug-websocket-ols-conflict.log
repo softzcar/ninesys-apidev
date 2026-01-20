@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Error de timeout persiste tras el primer ajuste. Error 400 Bad Request en handshake de WebSocket.
+- Archivos Involucrados: `/usr/local/lsws/conf/vhosts/ws.nineteengreen.com/vhost.conf` en VPS.
+- Acción Realizada: 
+    - Se identificó que el bloque `websocket { map ... }` en OpenLiteSpeed puede entrar en conflicto con el `Context /` (tipo proxy) cuando se usa Socket.IO, ya que interfiere con el manejo de headers de Upgrade.
+    - Se verificó mediante `curl` que el backend responde correctamente a `transport=polling` (HTTP 200) pero fallaba en `transport=websocket` (HTTP 400).
+    - Se comentó/eliminó el bloque `websocket` en `vhost.conf` para delegar todo el tráfico (incluyendo upgrades) al Proxy Context estándar.
+    - Se reinició OpenLiteSpeed.
+- Herramienta(s) Utilizada(s): `run_command` (sed, curl, lswsctrl).
+- Resultado: Éxito (Configuración aplicada).
+- Verificación: Se confirmó que el servicio de backend está activo y responde. Se espera que el proxy maneje ahora la actualización de protocolo correctamente.
+- Observaciones de Gemini: La duplicidad de directivas (proxy context vs websocket map) es una causa común de fallos en handshakes complejos como el de Socket.IO.
+- Respuesta de Gemini: Se ha eliminado la configuración específica de WebSocket en el VPS que causaba conflictos, permitiendo que el proxy principal maneje la conexión de forma transparente.

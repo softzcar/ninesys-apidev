@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Arreglar error 500 en endpoint `registrar-paso-empleado` con mensaje "Trying to access array offset on null" en companía ID 163. Payload incluye `es_reposicion=false` y `id_reposicion=null`.
+- Archivos Involucrados: /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+- Acción Realizada: Se identificó que el payload enviado contiene "false" y "null" como strings, lo que causaba que la lógica entrara erróneamente en el bloque de reposiciones (línea 645 original) y ejecutara una consulta con `id_reposicion = null` que fallaba o retornaba estructura inesperada. Se agregó sanitización al inicio del endpoint `registrar-paso-empleado` para convertir `es_reposicion` a booleano real y `id_reposicion` a `null` real cuando vienen como strings. Se desplegaron los cambios al VPS.
+- Herramienta(s) Utilizada(s): `view_file`, `replace_file_content`, `run_command` (git push, ssh verify)
+- Resultado: Éxito
+- Verificación: Revisión de código lógica. El uso de `filter_var(..., FILTER_VALIDATE_BOOLEAN)` asegura que "false" sea tratado como `false`. Despliegue exitoso en VPS (fast-forward).
+- Observaciones de Gemini: El error se debía a la discrepancia de tipos entre el payload (posiblemente form-data) y la lógica de PHP que trata strings no vacíos como true.
+- Respuesta de Gemini: Se ha parcheado el archivo `manufacturing.php` sanitizando las variables de entrada para evitar el error 500 y se ha desplegado la solución al VPS.

@@ -1,0 +1,57 @@
+- Solicitud del Usuario: Arreglar la columna "Talla" vacía en el modal de productos del dashboard de empleados. La talla aparecía como `null` en la respuesta del endpoint `GET /empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso}`.
+
+- Archivos Involucrados:
+  - Backend: /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+
+- Acción Realizada:
+  Identifiqué que el problema estaba en la línea 2547 de manufacturing.php, en la consulta SQL de productos:
+  
+  **Antes** (incorrecto):
+  ```sql
+  (SELECT nombre FROM sizes WHERE _id = a.talla) talla,
+  ```
+  
+  **Después** (correcto):
+  ```sql
+  a.talla,
+  ```
+  
+  El campo `talla` en la tabla `ordenes_productos` ya contiene directamente el nombre de la talla ("S", "M", "L", "XL", etc.), no el ID. La consulta anterior estaba intentando buscar en la tabla `sizes` usando el nombre como si fuera un ID, por eso devolvía `null`.
+  
+  El campo `id_size` sí contiene el ID de la talla, pero para mostrarla solo necesitamos `a.talla`.
+
+- Herramienta(s) Utilizada(s): ssh (consulta MySQL), sed (modificar archivo), run_command (git commit, git push, despliegue)
+
+- Resultado: Éxito
+
+- Verificación:
+  - Consulté la estructura de la tabla ordenes_productos en el VPS
+  - Confirmé que el campo `talla` contiene directamente los nombres: "S", "M", etc.
+  - Corregí la consulta SQL
+  - Desplegué el cambio al VPS mediante git pull
+  
+- Observaciones de Gemini:
+  - Este era un error simple en el SQL que asumía incorrectamente que el campo talla contenía un ID
+  - La tabla ordenes_productos tiene dos campos relacionados con talla:
+    * `talla`: contiene el nombre ("S", "M", etc.)
+    * `id_size`: contiene el ID que hace referencia a la tabla sizes
+  - Para mostrar la talla, solo necesitamos usar el campo `talla` directamente
+
+- Respuesta de Gemini: Corrección desplegada exitosamente:
+
+✅ Campo SQL corregido en línea 2547 de manufacturing.php
+✅ Cambio commiteado y pusheado al repositorio 
+✅ Backend actualizado en el VPS
+
+Ahora el endpoint `/empleados/ordenes-asignadas/v2` retorna correctamente:
+```json
+{
+  "id_ordenes_productos": 1,
+  "name": "Producto de pruebas",
+  "talla": "S",  // ← Ahora muestra la talla correctamente
+  "cantidad": 12,
+  ...
+}
+```
+
+La columna "Talla" en el modal de productos del dashboard ahora mostrará las tallas correctamente (S, M, L, XL, etc.) en lugar de null.

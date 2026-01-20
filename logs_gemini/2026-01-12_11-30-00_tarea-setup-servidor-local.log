@@ -1,0 +1,23 @@
+- Solicitud del Usuario: Configuración e instalación de servidor local de desarrollo compatible con VPS de producción.
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/lib/config.php
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/.env.local
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/sync-db.sh
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/start-dev.sh
+    - /home/developer/Escritorio/niesys/app_multi/nuxt.config.js
+    - /home/developer/Escritorio/niesys/app_multi/.env
+    - /etc/hosts
+    - /etc/httpd/conf/httpd.conf
+- Acción Realizada:
+    1. Compilación e instalación local de PHP 8.1.33 usando phpenv y php-build.
+    2. Instalación de stack LAMP (MariaDB, Apache, phpMyAdmin).
+    3. Configuración de VirtualHost Apache 'apidev.local' con proxy FPM a puerto 9000.
+    4. Implementación de sistema de configuración dual (.env/.env.local) en backend y frontend para soportar entorno local sin afectar producción.
+    5. Creación de script `sync-db.sh` para importar datos del VPS y parchear credenciales automáticamente.
+    6. Verificación exitosa de endpoints y conexión a BBDD local.
+    7. Creación de documentación `local_server_guide.md`.
+- Herramienta(s) Utilizada(s): `run_command`, `replace_file_content`, `write_to_file`.
+- Resultado: Éxito
+- Verificación: `http://apidev.local/test_company_connection.php` devuelve conexión exitosa y conteo de órdenes. `http://apidev.local/test_install.php` devuelve info correcta de PHP 8.1.
+- Observaciones de Gemini: El proceso requirió ajustes manuales en la configuración de Apache y permisos de directorios que se resolvieron interactivamente. Se implementó una solución robusta para que el código sea agnóstico al entorno.
+- Respuesta de Gemini: Servidor local operativo y documentado. Se entregaron scripts de automatización para facilitar el mantenimiento futuro.

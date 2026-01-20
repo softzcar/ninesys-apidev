@@ -1,0 +1,33 @@
+- Solicitud del Usuario: Incorporar el componente de modal de consumo (`inventario-ConsumoMaterialModal`) dentro de la tabla de eficiencia de insumos en el componente `progreso-tiempo-semaforo.vue`, asegurando que reciba el ID de insumo correcto.
+
+- Archivos Involucrados:
+  Backend:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+  Frontend:
+  - /home/developer/Escritorio/niesys/app_multi/components/progreso-tiempo-semaforo.vue
+
+- Acción Realizada:
+  **Backend:**
+  - Se modificó la consulta en `/reports/input-efficiency/{id_ordenes}` para agrupar por `inv._id` y devolverlo como `id_insumo`. Esto permite vincular cada fila del reporte con un ítem específico del inventario.
+  - Se actualizó el GROUP BY para incluir `inv._id`.
+  
+  **Frontend:**
+  - Se editó `progreso-tiempo-semaforo.vue` para incluir `<inventario-ConsumoMaterialModal>` en la columna de eficiencia.
+  - Se configuró para pasar `idInsumo` recibido del backend y escuchar el evento `@reload` para refrescar el reporte.
+
+- Herramienta(s) Utilizada(s):
+  - replace_file_content: Para modificar tanto el endpoint PHP como el template Vue.
+  - run_command: Para despliegue (backend) y verificación.
+
+- Resultado: Éxito
+
+- Verificación:
+  - Backend desplegado a VPS.
+  - `grep` confirmó la presencia del componente en el archivo Vue.
+  - La lógica de agrupación en backend asegura que `id_insumo` esté disponible para el modal.
+
+- Observaciones de Gemini:
+  - Al agrupar por `inv._id` en lugar de solo `catalogo._id`, el reporte se vuelve más preciso para el control de inventario específico (rollos, lotes), lo cual es ideal para la trazabilidad que busca el usuario.
+
+- Respuesta de Gemini:
+  Integración completada. El botón de consumo ahora aparece en el reporte de eficiencia y está vinculado correctamente a los datos.

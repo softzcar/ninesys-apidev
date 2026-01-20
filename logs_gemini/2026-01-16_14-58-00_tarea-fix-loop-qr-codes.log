@@ -1,0 +1,29 @@
+
+- Solicitud del Usuario: Optimizar aplicación msg-ninesys para evitar consumo innecesario de recursos, comenzando por el problema del loop de QR codes.
+- Archivos Involucrados:
+    - /home/ozcar/msg-ninesys/controllers/whatsappController.js
+    - /home/ozcar/msg-ninesys/controllers/whatsappController.js.backup (respaldo)
+- Acción Realizada:
+    1. Análisis del código existente para identificar causa del loop de QRs.
+    2. Agregadas constantes de configuración:
+       - `QR_ATTEMPT_LIMIT = 5` (máximo 5 QRs antes de pausar)
+       - `QR_COOLDOWN_MS = 300000` (5 minutos de cooldown)
+    3. Modificada estructura de `clients[companyId]` para incluir campos:
+       - `qrAttempts`: contador de intentos de QR
+       - `pausedUntil`: timestamp de fin de pausa
+    4. Modificado listener de evento 'qr':
+       - Verifica si sesión está pausada antes de generar QR
+       - Incrementa contador de intentos
+       - Si alcanza límite: pausa sesión, limpia QR, destruye cliente
+       - Log mejorado con formato [QR X/5]
+    5. Modificado listener de evento 'ready':
+       - Reset de `qrAttempts` a 0 cuando se conecta exitosamente
+       - Reset de `pausedUntil` a null
+- Herramienta(s) Utilizada(s): `multi_replace_file_content`, `replace_file_content`, `scp`, `run_command`
+- Resultado: Éxito
+- Verificación:
+    - Sintaxis verificada con `node --check`: OK
+    - Archivo subido al VPS exitosamente
+    - Pendiente: Prueba en vivo de comportamiento de límite de QRs
+- Observaciones de Gemini: Esta implementación previene loops infinitos de generación de QR cuando una sesión no se autentica. Después de 5 QRs sin escanear, el cliente se destruye y la sesión entra en cooldown de 5 minutos, evitando consumo continuo de CPU e I/O para logs.
+- Respuesta de Gemini: Fix implementado exitosamente. Pendiente iniciar servicio y probar.

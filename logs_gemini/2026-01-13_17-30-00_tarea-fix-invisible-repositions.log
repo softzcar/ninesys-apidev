@@ -1,0 +1,15 @@
+- Solicitud del Usuario: Investigar por qué las reposiciones creadas desde `/test/test` (Control de Producción) no se muestran al usuario.
+- Archivos Involucrados:
+    - `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/production.php`
+    - `/home/developer/Escritorio/niesys/app_multi/components/produccionsse/reposicionForm.vue` (Análisis)
+- Acción Realizada:
+    - Se analizó `reposicionForm.vue` y se confirmó que envía `id_empleado` (asignado) e `id_departamento_solicitante` correctamente.
+    - Se descubrió un BUG en `app/routes/production.php`: en la rama lógica donde se envían dos empleados (`id_empleado_emisor` presente), el INSERT ignoraba por completo los campos `id_departamento` e `id_departamento_solicitante`, dejándolos en NULL.
+    - Esto causaba que la reposición fuera invisible en el dashboard, ya que el dashboard filtra por `orden_proceso` basado en el `id_departamento` de la reposición.
+    - Se aplicó un parche al backend para incluir estos campos en el INSERT.
+    - Se desplegó el cambio al VPS.
+- Herramienta(s) Utilizada(s): `view_file`, `replace_file_content`, `run_command` (git push / git pull).
+- Resultado: Backend corregido y desplegado.
+- Verificación: Pendiente de confirmación del usuario mediante una nueva prueba de creación de reposición.
+- Observaciones de Gemini: Además del bug de departamento, se notó que el usuario asignó la tarea al empleado 583 (Corte) pero visualizaba como 581 (Impresión). Es posible que incluso con el fix, si la vista es estrictamente personal, no la vea. Pero el fix de departamento es prerrequisito para cualquier visibilidad.
+- Respuesta de Gemini: Backend parcheado. Solicitar prueba.

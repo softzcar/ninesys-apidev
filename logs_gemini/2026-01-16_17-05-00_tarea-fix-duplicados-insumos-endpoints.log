@@ -1,0 +1,48 @@
+- Solicitud del Usuario: Investigar por qué el endpoint `/reports/input-efficiency/3554` mostraba valores incorrectos en `cantidad_real` y `cantidad_estandar`, limpiar duplicados encontrados e implementar verificaciones para prevenir futuros duplicados.
+
+- Archivos Involucrados:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/catalogs.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/inventory.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php (análisis)
+
+- Acción Realizada:
+  1. ANÁLISIS:
+     - Identificado endpoint `/reports/input-efficiency/{id_ordenes}` en manufacturing.php (líneas 2883-2947)
+     - Descubiertos duplicados en `product_insumos_asignados`: 6 registros para producto 140 + insumo 1 + departamento 1 + talla 78
+     - Descubiertos duplicados en `inventario_movimientos`: 2 registros duplicados para cada insumo en orden 3554
+  
+  2. LIMPIEZA DE DATOS:
+     - Eliminados 5 registros duplicados de `product_insumos_asignados` (mantenido ID 2127)
+     - Eliminados 2 registros duplicados de `inventario_movimientos` (IDs 442 y 443)
+  
+  3. MODIFICACIÓN DE ENDPOINTS:
+     a) POST /insumos-productos (catalogs.php líneas 316-370):
+        - Añadida verificación de existencia antes de INSERT
+        - Si existe la combinación id_product + id_departamento + id_catalogo + id_talla, devuelve error 409 (Conflict)
+        
+     b) POST /inventario-movimientos/empleados/update-insumo (inventory.php líneas 1171-1240):
+        - Añadida verificación de existencia antes de INSERT
+        - Si existe movimiento para la misma orden/insumo/departamento, hace UPDATE en lugar de INSERT
+
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command` (MySQL, SSH, Git), `view_file`, `grep_search`
+
+- Resultado: Éxito
+
+- Verificación:
+  1. Sintaxis PHP verificada sin errores:
+     - `php -l catalogs.php` → No syntax errors detected
+     - `php -l inventory.php` → No syntax errors detected
+  2. Commit creado: 1f207e2 "fix: agregar verificación de duplicados en endpoints de insumos"
+  3. Push a origin/refactor/modular-routes exitoso
+  4. Desplegado en VPS con git pull exitoso
+  5. Endpoint verificado post-despliegue:
+     - Antes: cantidad_estandar=144, cantidad_real=24 (duplicados)
+     - Después: cantidad_estandar=12, cantidad_real=12 (valores correctos)
+
+- Observaciones de Gemini: 
+  - Los duplicados se creaban porque los endpoints no verificaban la existencia de registros antes de hacer INSERT
+  - Los registros duplicados en `product_insumos_asignados` tenían fechas del 2026-01-12, sugiriendo que se crearon varias veces ese día
+  - Los movimientos duplicados en `inventario_movimientos` tenían exactamente el mismo timestamp (2026-01-13 15:37:38), indicando una doble ejecución del endpoint
+  - Existen lint warnings pre-existentes en inventory.php (líneas 1049, 1165) no relacionados con estos cambios
+
+- Respuesta de Gemini: Se implementaron verificaciones de duplicados en los endpoints `POST /insumos-productos` y `POST /inventario-movimientos/empleados/update-insumo`. Los datos corruptos fueron limpiados y el endpoint `/reports/input-efficiency/3554` ahora muestra valores correctos (cantidad_estandar=12, cantidad_real=12). Los cambios fueron desplegados en el VPS.

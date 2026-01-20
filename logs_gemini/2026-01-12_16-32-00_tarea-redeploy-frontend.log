@@ -1,0 +1,10 @@
+- Solicitud del Usuario: "hagamos un deploy nuevamente de la app, funciona en local pero no en el VPS"
+- Archivos Involucrados: frontend (todo el build).
+- Acción Realizada: 
+    - Ejecutado script `./deploy.sh` por segunda vez.
+    - El script regeneró los archivos estáticos (npm run generate) y los sincronizó via rsync con el VPS.
+- Herramienta(s) Utilizada(s): `run_command` (deploy.sh).
+- Resultado: Éxito.
+- Verificación: Script finalizó con mensaje de éxito. App en producción debería estar sincronizada con la versión local funcional.
+- Observaciones de Gemini: Es posible que la caché del navegador del usuario o un retraso en la sincronización anterior causara la discrepancia. Este nuevo despliegue asegura la consistencia.
+- Respuesta de Gemini: Confirmación de re-despliegue y solicitud de prueba (con énfasis en limpiar caché).

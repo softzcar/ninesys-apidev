@@ -1,0 +1,33 @@
+- Solicitud del Usuario: Verificar si la orden 3578 también tenía duplicados, ya que reportaba (16, 16, 2) y el usuario sospechaba duplicación.
+
+- Archivos Involucrados:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+
+- Acción Realizada:
+  1. Análisis de datos de orden 3578:
+     - Productos: 8 uni Sublimación + 2 uni DTF.
+     - Asignaciones (estándar): 1 uni Papel + 1 uni Tela por prod Sublimación.
+     - Movimientos Inventario: 2 movimientos de 8 uni para Papel y Tela (Total real 16).
+     
+  2. Diagnóstico:
+     - El endpoint reportaba `cantidad_estandar: 16`.
+     - Error identificado: La consulta SQL hacía JOIN entre `inventario_movimientos` (2 filas) y la tabla de productos, multiplicando el cálculo del estándar por el número de movimientos.
+     
+  3. Corrección:
+     - Modificación de la consulta SQL `/reports/input-efficiency/{id}`.
+     - Se reemplazó el cálculo de `cantidad_estandar` por una subconsulta independiente que no depende de los movimientos de inventario.
+     - Se eliminaron los JOINs redundantes en la consulta principal.
+
+- Herramienta(s) Utilizada(s): `run_command` (MySQL, Git, Curl), `replace_file_content`
+
+- Resultado: Éxito
+
+- Verificación:
+  - Endpoint `/reports/input-efficiency/3578` verificado:
+    - Antes: Estándar 16 (Incorrecto, duplicado por 2 movimientos)
+    - Después: Estándar 8 (Correcto: 8 productos * 1 unidad)
+    - Real: 16 (Correcto suma de movimientos)
+
+- Observaciones de Gemini: Este error afectaba a cualquier orden con más de un movimiento de inventario para el mismo insumo (ej. cortes parciales), mostrando un estándar inflado. Ahora el reporte es robusto.
+
+- Respuesta de Gemini: Se corrigió la lógica del reporte. La orden 3578 mostraba un estándar duplicado porque tenía 2 movimientos de inventario. Tras la corrección, los valores son correctos: Estándar 8 (esperado) vs Real 16 (consumido).

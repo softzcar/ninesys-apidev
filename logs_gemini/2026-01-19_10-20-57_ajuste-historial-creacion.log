@@ -1,0 +1,28 @@
+- Solicitud del Usuario: Incluir el evento de creación inicial en el historial de cambios, para que el usuario pueda ver la traza completa (creación -> modificaciones) sin necesidad de insertar datos redundantes en la tabla de historial al momento de crear.
+
+- Archivos Involucrados:
+  Backend:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/inventory.php
+
+- Acción Realizada:
+  - Modificado el endpoint GET /inventario/consumo/{id_movimiento}/historial.
+  - Se agregó una segunda consulta SQL para obtener los datos originales de la tabla `inventario_movimientos` (creador, fecha creación, valor inicial de consumo).
+  - Se construyó un objeto "fake_history_record" que simula la estructura de la tabla historial, marcando el campo modificado como 'Creación'.
+  - Se combinó este registro al final del array de respuesta JSON (posición cronológica más antigua).
+
+- Herramienta(s) Utilizada(s):
+  - replace_file_content: Para inyectar la lógica adicional en el endpoint existente.
+  - run_command: Para desplegar y verificar con curl.
+
+- Resultado: Éxito
+
+- Verificación:
+  - Curl GET retorna un array donde el último elemento es el evento "Creación" con los datos correctos del empleado que originó el consumo.
+  - El frontend (HistorialCambiosModal) mostrará ahora automáticamente este evento en el timeline sin requerir cambios de código.
+
+- Observaciones de Gemini:
+  - Esta estrategia evita duplicar datos en la base de datos (no ensuciamos la tabla historial con INSERTS redundantes).
+  - Se mantiene la integridad de los datos y se mejora la visualización para el usuario final.
+
+- Respuesta de Gemini:
+  Endpoint ajustado. Ahora el historial muestra la historia completa: desde la creación inicial hasta la última modificación.

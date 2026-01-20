@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Tengo estas estadistivas del uso del VPS el día de hoy ¿Es posible que investigues que ha sucuedido, que porcesos han consumido ttnos recursos ene se momento?
+- Archivos Involucrados: Logs del sistema VPS (/var/log/messages, /var/log/sa/sa14)
+- Acción Realizada: 
+    1. Se conectó al VPS via SSH para verificar el estado actual (uptime, free, top).
+    2. Se detectó que el servidor se reinició a las 11:44 AM de hoy.
+    3. Se consultaron los logs históricos de actividad (`sar`) para el periodo anterior al reinicio (10:00 AM - 12:00 PM).
+    4. Se identificó que el CPU mostraba un 80% de "Steal Time" (%steal) constante antes del reinicio.
+- Herramienta(s) Utilizada(s): `run_command` (ssh, uptime, last, sar)
+- Resultado: Éxito
+- Verificación: La salida del comando `sar` confirma que el %steal estaba en ~80% y el %idle en 0% hasta el momento del reinicio, lo que explica la gráfica plana al 100% de uso.
+- Observaciones de Gemini: El "Steal Time" alto indica que el servidor físico (Host) donde está alojado el VPS estaba sobrecargado y no le entregaba recursos al VPS. No fue un proceso interno (como MySQL o Node) el que consumió la CPU, sino que la CPU "desapareció" porque el proveedor no la asignaba. El reinicio solucionó el problema, probablemente al migrar la instancia o resetear la conexión con el hipervisor.
+- Respuesta de Gemini: Se explicará al usuario que el problema fue externo (infraestructura del proveedor/Noisy Neighbor) y se muestra la evidencia del "Steal Time".

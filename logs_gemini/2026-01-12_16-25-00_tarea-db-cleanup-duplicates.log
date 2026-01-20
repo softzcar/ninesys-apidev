@@ -1,0 +1,10 @@
+- Solicitud del Usuario: "Vamos a buscar eliminar los registros duplicados dejando solo un registro por cada duplicado o trplicado, y probamos de nuevo"
+- Archivos Involucrados: Base de datos `api_emp_163` (remota en VPS).
+- Acción Realizada: 
+    - Identificada duplicidad masiva en tabla `products_tiempos_de_produccion` (2 registros por par producto/departamento).
+    - Ejecutada consulta SQL via SSH para eliminar duplicados manteniendo el registro con mayor `_id`: `DELETE t1 FROM products_tiempos_de_produccion t1 INNER JOIN products_tiempos_de_produccion t2 WHERE t1._id < t2._id ...`
+- Herramienta(s) Utilizada(s): `run_command` (ssh + mysql).
+- Resultado: Éxito. Duplicados eliminados.
+- Verificación: Consulta `COUNT(*) ... HAVING count > 1` retornó 0 filas.
+- Observaciones de Gemini: La intervención directa en BD solucionó la causa raíz del error 500 (Subquery returns more than 1 row).
+- Respuesta de Gemini: Confirmación de limpieza y solicitud de prueba final.

@@ -1,0 +1,28 @@
+- Solicitud del Usuario: Simplificar el flujo de apertura del modal de asignación. Actualmente requiere abrir un modal intermedio vacío para luego abrir el modal real haciendo clic en otro botón.
+
+- Archivos Involucrados:
+  Frontend:
+  - /home/developer/Escritorio/niesys/app_multi/components/progreso-tiempo-semaforo.vue
+
+- Acción Realizada:
+  **Frontend:**
+  - Se eliminó el botón manual "+ Insumos" y el modal wrapper que lo contenía.
+  - Se insertó directamente el componente `<admin-AsignacionDeInsumosAProductos>` en la tabla de eficiencia. Este componente ya encapsula su propio botón "toggle" y su modal.
+  - Se implementó una propiedad computada `productInfo` para pasar dinámicamente la información del producto al componente.
+  - Se automatizó la llamada a `loadAsignacionData()` dentro de `fetchManufacturingReport` para asegurar que los catálogos necesarios (departamentos, insumos) estén listos cuando se muestra el reporte, eliminando la necesidad de carga manual al hacer clic.
+
+- Herramienta(s) Utilizada(s):
+  - multi_replace_file_content: Para reestructurar template y script.
+  - replace_file_content: Para inserciones precisas.
+
+- Resultado: Éxito
+
+- Verificación:
+  - El código ahora es más limpio (menos anidación).
+  - El flujo de usuario debería ser directo: Click en botón tabla -> Modal de asignación final.
+
+- Observaciones de Gemini:
+  - Se identificó que el componente reutilizado no estaba diseñado para ser usado como contenido de un modal externo, sino como un elemento autónomo (botón + modal).
+
+- Respuesta de Gemini:
+  Flujo corregido. Ahora el botón de asignación abre directamente la ventana de configuración sin pasos intermedios.

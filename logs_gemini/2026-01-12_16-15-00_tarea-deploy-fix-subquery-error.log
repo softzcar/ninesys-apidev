@@ -1,0 +1,15 @@
+- Solicitud del Usuario: "si depleguemos el cambio para solucionar el error" (Cardinality violation en /insumos-productos-asignados y filtrado frontend).
+- Archivos Involucrados: 
+    - backend: app/routes/catalogs.php (LIMIT 1)
+    - frontend: components/admin/AsignacionDeInsumosAProductosTab.vue (filtrado ==), .env, nuxt.config.js
+- Acción Realizada: 
+    - Identificado error SQL (Subquery returns more than 1 row).
+    - Insertado `LIMIT 1` en la subconsulta de tiempos de producción en `catalogs.php`.
+    - Relajado la comparación de IDs en frontend (`AsignacionDeInsumosAProductosTab.vue`) de `===` a `==`.
+    - Actualizado `.env` frontend para apuntar a producción.
+    - Confirmado cambios en git y pusheado a repositorios (backend branch `refactor/modular-routes`, frontend branch `main`).
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command`, `git`.
+- Resultado: Éxito. Cambios subidos al repositorio.
+- Verificación: Git commit y push exitosos.
+- Observaciones de Gemini: El error de subquery indica datos duplicados en `products_tiempos_de_produccion` que deberían limpiarse, pero `LIMIT 1` es una cura rápida efectiva.
+- Respuesta de Gemini: Notificación con comandos para actualizar el VPS.

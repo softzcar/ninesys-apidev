@@ -1,0 +1,26 @@
+- Solicitud del Usuario: Corregir bug en la paginación de la tabla en `/inventario/gestion`. Al cargar inicialmente, el paginador mostraba solo 1 página hasta que se usaba el filtro.
+
+- Archivos Involucrados:
+  Frontend:
+  - /home/developer/Escritorio/niesys/app_multi/pages/inventario/gestion/index.vue
+
+- Acción Realizada:
+  **Frontend:**
+  - Se identificó que la propiedad reactiva `totalRows` se inicializaba en 0 y nunca se actualizaba tras la carga inicial de datos en `getInsumos()`.
+  - Se modificó `getInsumos()` para asignar `this.totalRows = this.dataTableDyn.length` después de obtener los datos.
+  - Se modificó `showResultRadio()` (filtro por departamentos) para actualizar también `totalRows` cuando cambia la longitud de los datos filtrados.
+
+- Herramienta(s) Utilizada(s):
+  - multi_replace_file_content / replace_file_content: Para las correcciones.
+
+- Resultado: Éxito
+
+- Verificación:
+  - Al cargar la página, `totalRows` ahora reflejará el total real de items, haciendo que el componente `<b-pagination>` calcule correctamente el número de páginas desde el inicio.
+  - Al filtrar por botones de radio (departamentos), la paginación se ajustará dinámicamente.
+
+- Observaciones de Gemini:
+  - El componente `<b-pagination>` de BootstrapVue depende explícitamente de `total-rows`. Si este valor es 0 o incorrecto, la paginación falla silenciosamente mostrando solo la primera página.
+
+- Respuesta de Gemini:
+  Bug corregido. La paginación ahora funcionará correctamente desde la carga inicial.

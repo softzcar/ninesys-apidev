@@ -1,0 +1,12 @@
+- Solicitud del Usuario: vamos a a signar en la empresa 163 en la tabla pagos a la columna `fecha_pago` la fecha 30 de diciembre de 2025 para los registros cuyo valor en esa columna sea NULL y dea <= al año 2025 el formato de la fecha debe tener estas caraceristicas `2025-08-01 12:11:15` importante que prevengas poder dehacer este cambio en caso de que cuando pruebe algo se rompa.
+- Archivos Involucrados: Base de datos `pai_emp_163`, tabla `pagos`.
+- Acción Realizada: 
+    1. Se verificó el esquema de la tabla `pagos`.
+    2. Se contaron 353 registros que cumplían la condición `fecha_pago IS NULL AND YEAR(moment) <= 2025`.
+    3. Se creó una tabla de respaldo `pagos_backup_20260116` con esos 353 registros.
+    4. Se ejecutó la actualización: `UPDATE pagos SET fecha_pago = '2025-12-30 12:00:00' WHERE fecha_pago IS NULL AND YEAR(moment) <= 2025;`.
+- Herramienta(s) Utilizada(s): `run_command` (mysql via ssh).
+- Resultado: Éxito. 353 registros actualizados.
+- Verificación: Se confirmó que 353 registros tienen la nueva fecha y 0 registros permanecen con NULL bajo la condición dada.
+- Observaciones de Gemini: Se creó una tabla de backup para permitir rollback.
+- Respuesta de Gemini: Se notificó al usuario la actualización exitosa y se proporcionó la instrucción SQL para revertir los cambios si fuera necesario.

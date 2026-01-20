@@ -1,0 +1,17 @@
+
+- Solicitud del Usuario: Revertir `whatsapp-web.js` a la versión anterior estable debido a inestabilidad y problemas de detección de estado (`ws_ready: false`) con la versión 1.34.4.
+- Archivos Involucrados:
+    - /home/ozcar/msg-ninesys/package.json
+    - /home/ozcar/msg-ninesys/node_modules/
+- Acción Realizada:
+    1. Detención del servicio `ntmsg-app` (estaba detenido previamente).
+    2. Instalación de `whatsapp-web.js@1.34.2` vía `npm install`.
+    3. Verificación de eliminación de `puppeteer` v24 para evitar conflictos.
+    4. Confirmación de versiones instaladas con `npm list` (ahora usa puppeteer 18.2.1 internamente).
+- Herramienta(s) Utilizada(s): `run_command`
+- Resultado: Éxito
+- Verificación:
+    - `npm list` confirma `whatsapp-web.js@1.34.2`.
+    - No hay errores de peer dependencies.
+- Observaciones de Gemini: La versión 1.34.4 introdujo una versión muy reciente de Puppeteer (v24) que causó timeouts en el VPS limitado. El downgrade devuelve el sistema a una configuración conocida y estable. Queda pendiente iniciar el servicio y aplicar optimizaciones de código para prevenir loops al regresar.
+- Respuesta de Gemini: Downgrade completado. Esperando regreso del usuario para continuar.

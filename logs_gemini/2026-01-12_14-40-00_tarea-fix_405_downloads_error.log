@@ -1,0 +1,15 @@
+- Solicitud del Usuario: Investigar y corregir error 405 Method Not Allowed en descarga de plantilla de inventario (empresa 171).
+- Archivos Involucrados: 
+    - /home/apidev.nineteengreen.com/public_html/app/routes/inventory.php
+    - /home/apidev.nineteengreen.com/public_html/app/routes/designs.php
+    - /home/apidev.nineteengreen.com/public_html/public/.htaccess
+- Acción Realizada:
+    - Se identificó que el error 405 ocurría porque el archivo solicitado no existía físicamente en el servidor, causando que Apache reenviara la petición a Slim (que no tenía ruta GET para esa URL).
+    - Se descubrió que el endpoint de generación de plantillas (`/api/inventario/template-excel`) estaba guardando los archivos en una ruta incorrecta (`/app/public/downloads/...` en lugar de `/public/downloads/...`) debido a un error en el uso de `__DIR__`.
+    - Se corrigió la ruta de salida en `inventory.php` (para plantillas de inventario y productos) y en `designs.php`.
+    - Se desplegaron los cambios al VPS y se verificó la generación correcta del archivo.
+- Herramienta(s) Utilizada(s): `grep_search`, `view_file`, `run_command` (ssh, curl, git), `replace_file_content`, `multi_replace_file_content`.
+- Resultado: Éxito
+- Verificación: Se ejecutó `curl` con credenciales de la empresa 171 para regenerar la plantilla y posteriormente se confirmó acceso directo al archivo vía HTTP obteniendo un código 200 OK.
+- Observaciones de Gemini: El problema era sutil, causado por la estructura de directorios en el servidor y cómo PHP resolvía las rutas relativas. La corrección asegura que los archivos se guarden donde el servidor web espera encontrarlos.
+- Respuesta de Gemini: Se corrigió el error 405. La causa raíz era que el backend guardaba los archivos en una carpeta incorrecta (`/app/public` en vez de `/public`), por lo que al intentar descargarlos no se encontraban y el servidor lanzaba el error. Ya se aplicó la corrección y verifiqué que la descarga funciona correctamente para la empresa 171.

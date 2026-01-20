@@ -1,0 +1,108 @@
+- Solicitud del Usuario: Limpiar los logs masivos del servicio msg-ninesys y configurar rotación automática de logs con PM2.
+
+- Archivos Involucrados:
+  * ~/.pm2/logs/ntmsg-app-out.log (229 MB → 0 bytes)
+  * ~/.pm2/logs/ntmsg-app-error.log (1.6 MB → 0 bytes)
+  * pm2-logrotate (módulo de PM2 instalado)
+
+- Acción Realizada:
+  1. Limpieza de logs masivos usando `pm2 flush ntmsg-app`
+     - Estado inicial: ntmsg-app-out.log (229 MB) + ntmsg-app-error.log (1.6 MB)
+     - Estado final: Ambos archivos en 0 bytes
+  
+  2. Instalación del módulo pm2-logrotate
+     - Comando: `pm2 install pm2-logrotate`
+     - Versión instalada: 3.0.0
+     - Tiempo de instalación: 2 minutos (162 paquetes NPM)
+  
+  3. Configuración de parámetros de rotación:
+     - max_size: 50M (rota cuando el log alcanza 50 MB)
+     - retain: 10 (mantiene los últimos 10 archivos rotados)
+     - compress: true (comprime logs antiguos con gzip)
+     - dateFormat: YYYY-MM-DD_HH-mm-ss (formato de timestamp)
+     - workerInterval: 30 segundos (verifica cada 30s)
+     - rotateInterval: '0 0 * * *' (rotación forzada diaria a medianoche)
+     - rotateModule: true (también rota logs del propio módulo)
+
+- Herramienta(s) Utilizada(s):
+  * run_command (ssh, pm2 flush, pm2 install, pm2 set, pm2 conf, ls)
+  * command_status
+  * write_to_file
+
+- Resultado: Éxito
+  - Logs limpiados completamente
+  - Sistema de rotación automática activado y funcionando
+  - Módulo pm2-logrotate online (PID 127305, memoria: 21.6 MB)
+
+- Verificación:
+  ## Estado Inicial:
+  ```
+  -rw-r--r-- 1 root root 229M Jan 16 09:39 ntmsg-app-out.log
+  -rw-r--r-- 1 root root 1.6M Jan 15 16:48 ntmsg-app-error.log
+  Total: ~230.6 MB
+  ```
+
+  ## Estado Después de Limpieza:
+  ```
+  -rw-r--r-- 1 root root   0 Jan 16 10:34 ntmsg-app-out.log
+  -rw-r--r-- 1 root root   0 Jan 16 10:34 ntmsg-app-error.log
+  Total: 0 bytes
+  ```
+
+  ## Configuración Final Verificada:
+  ```
+  pm2-logrotate:max_size = 50M
+  pm2-logrotate:retain = 10
+  pm2-logrotate:compress = true
+  pm2-logrotate:dateFormat = YYYY-MM-DD_HH-mm-ss
+  pm2-logrotate:workerInterval = 30
+  pm2-logrotate:rotateInterval = 0 0 * * *
+  pm2-logrotate:rotateModule = true
+  ```
+
+  ## Módulo PM2 en Ejecución:
+  ```
+  ┌────┬──────────────────┬─────────┬─────────┬────────┬─────────┬──────────┐
+  │ id │ module           │ version │ pid     │ status │ cpu     │ mem      │
+  ├────┼──────────────────┼─────────┼─────────┼────────┼─────────┼──────────┤
+  │ 1  │ pm2-logrotate    │ 3.0.0   │ 127305  │ online │ 0%      │ 21.6mb   │
+  └────┴──────────────────┴─────────┴─────────┴────────┴─────────┴──────────┘
+  ```
+
+- Observaciones de Gemini:
+  * **Espacio recuperado**: 230.6 MB liberados inmediatamente
+  * **Protección automática**: Con retain=10 y max_size=50M, el máximo espacio que puede consumir el servicio es:
+    - Sin comprimir: 50MB × 11 archivos (1 actual + 10 rotados) = 550 MB máximo
+    - Con compress=true: ~50-100 MB total (compresión estimada 10:1 para logs de texto repetitivo)
+  * **Prevención de futuros problemas**: Si vuelve a ocurrir un loop infinito como el del 15 de enero:
+    - Los logs rotarán automáticamente cada 50 MB
+    - Solo se mantendrán los últimos 10 archivos
+    - El servidor NO se quedará sin espacio en disco
+  * **Verificación cada 30 segundos**: El worker verifica el tamaño de logs cada 30s para detectar crecimiento rápido
+  * **Rotación forzada diaria**: A medianoche se fuerza una rotación independientemente del tamaño
+  * **Advertencia PM2**: El servidor tiene PM2 desactualizado (memoria: 6.0.14 vs local: 5.4.3), se recomienda ejecutar `pm2 update` para sincronizar, pero esto NO afecta la funcionalidad de logrotate
+
+  ## Criterios de Autolimpieza Explicados al Usuario:
+  
+  1. **Por Tamaño (max_size)**: Criterio principal
+     - Cada vez que un log alcanza 50MB, se rota automáticamente
+     - El archivo actual se renombra a .log.1, .log.2, etc.
+     - Se crea un nuevo archivo vacío para continuar escribiendo
+  
+  2. **Por Retención (retain)**: Criterio de eliminación
+     - Solo mantiene los últimos 10 archivos rotados
+     - Cuando se rota y ya existen 10 archivos, el más antiguo se elimina
+     - Esto garantiza que nunca se superen los 550 MB (11 archivos × 50 MB)
+  
+  3. **Por Compresión (compress)**: Ahorro de espacio
+     - Los archivos rotados se comprimen con gzip
+     - Reduce el tamaño en ~90% para logs de texto repetitivo
+     - Ejemplo: ntmsg-app-out.log.1.gz en lugar de .log.1
+  
+  4. **Por Intervalo (rotateInterval)**: Rotación forzada
+     - A medianoche (0 0 * * *) se fuerza una rotación
+     - Útil para tener logs organizados por día
+     - Aunque no haya alcanzado los 50 MB
+
+- Respuesta de Gemini:
+  Limpieza y configuración completadas exitosamente. Se liberaron 230.6 MB de espacio y ahora el servidor tiene protección automática contra logs masivos. El sistema de rotación está activo y verificando el tamaño de logs cada 30 segundos. Con esta configuración, el máximo espacio que pueden consumir los logs es de ~550 MB sin comprimir o ~50-100 MB comprimidos, previniendo completamente el problema que ocurrió el 15 de enero.

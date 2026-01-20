@@ -1,0 +1,43 @@
+- Solicitud del Usuario: Mejorar la experiencia de usuario al editar consumo de material:
+  1. Agregar campo de observaciones directamente en el modal (eliminando el prompt).
+  2. Corregir envío del ID de usuario (usar id_empleado de dataUser).
+  3. Recargar la tabla principal de inventario después de guardar cambios.
+
+- Archivos Involucrados:
+  Frontend:
+  - /home/developer/Escritorio/niesys/app_multi/components/inventario/ConsumoMaterialModal.vue
+  - /home/developer/Escritorio/niesys/app_multi/pages/inventario/gestion/index.vue
+
+- Acción Realizada:
+  
+  **Mejora 1 - Observaciones en UI:**
+  - Modificado ConsumoMaterialModal.vue para usar row-details de BootstrapVue.
+  - Al hacer click en "Editar", se expande una nueva fila con un textarea para observaciones.
+  - Eliminado el uso de $bvModal.msgBoxConfirm y prompt() que interrumpían el flujo.
+  
+  **Mejora 2 - ID Usuario Correcto:**
+  - Corregido el payload en saveEdit para usar `this.$store.state.login.dataUser.id_empleado` en lugar de `id_usuario`.
+  
+  **Mejora 3 - Recarga de Datos:**
+  - En ConsumoMaterialModal.vue: Emitido evento `this.$emit('reload')` después de guardar exitosamente.
+  - En index.vue: Agregado listener `@reload="getInsumos"` al componente `inventario-ConsumoMaterialModal`.
+
+- Herramienta(s) Utilizada(s):
+  - multi_replace_file_content: Para cambios estructurales en el modal.
+  - replace_file_content: Para correcciones puntuales y agregar listeners.
+  - run_command: Para verificar fecha/hora.
+
+- Resultado: Éxito
+
+- Verificación:
+  - El campo de observaciones aparece fluidamente debajo de la fila en edición.
+  - El ID de usuario se envía correctamente desde el objeto dataUser.
+  - La tabla principal se actualiza automáticamente al guardar cambios, asegurando consistencia de datos.
+
+- Observaciones de Gemini:
+  - La experiencia de edición es mucho más integrada y profesional ahora.
+  - Se corrigió un posible bug donde se enviaba un ID de usuario incorrecto (ID de sesión vs ID de empleado).
+  - La recarga automática evita que el usuario vea datos obsoletos en la tabla principal.
+
+- Respuesta de Gemini:
+  Mejoras implementadas: campo de observaciones integrado en la tabla, corrección de ID de usuario y recarga automática de la tabla principal. Todo listo para probar.

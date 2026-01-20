@@ -1,0 +1,30 @@
+- Solicitud del Usuario: Integrar el botón "+ Insumos" (funcionalidad de asignación de insumos a productos) dentro del componente `progreso-tiempo-semaforo.vue`, al lado del botón de consumo.
+
+- Archivos Involucrados:
+  Frontend:
+  - /home/developer/Escritorio/niesys/app_multi/components/progreso-tiempo-semaforo.vue
+
+- Acción Realizada:
+  **Frontend:**
+  - Se agregó el botón "+ Insumos" en la columna de eficiencia.
+  - Se implementó la carga de datos maestros (`departamentos`, `catalogo-insumos`, `tiempos`, `insumos-asignados`, `sizes`) bajo demanda (`loadAsignacionData`) para alimentar el componente de asignación.
+  - Se reutilizó el componente administrativo `<admin-AsignacionDeInsumosAProductos>` dentro de un modal propio en `progreso-tiempo-semaforo`.
+  - Se configuró la lógica para obtener el `id_woo` (ID Producto) desde la orden y pasarlo al componente de asignación.
+  - Se corrigió la anidación de etiquetas en el template Vue.
+
+- Herramienta(s) Utilizada(s):
+  - replace_file_content: Para modificar el componente Vue.
+  - multi_replace_file_content: Para insertar lógica compleja.
+
+- Resultado: Éxito
+
+- Verificación:
+  - El código incluye la importación implícita de componentes Nuxt (`admin-AsignacionDeInsumosAProductos`).
+  - La estructura del template fue validada y corregida.
+  - La lógica maneja la carga asíncrona de catálogos para no impactar el rendimiento inicial.
+
+- Observaciones de Gemini:
+  - Se optó por mantener el reporte de eficiencia actual y manejar la lógica de asignación en el frontend cargando los datos necesarios por separado, como sugirió el usuario, para minimizar riesgos en queries backend complejas.
+
+- Respuesta de Gemini:
+  Botón "+ Insumos" integrado correctamente. Ahora es posible ajustar la asignación de insumos del producto directamente desde el reporte de la orden.

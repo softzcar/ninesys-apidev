@@ -1,0 +1,24 @@
+
+- Solicitud del Usuario: Evitar que el servicio genere QRs automáticamente para empresas que no utilizan WhatsApp.
+- Archivos Involucrados:
+    - /home/ozcar/msg-ninesys/controllers/whatsappController.js
+- Acción Realizada:
+    1. Modificada función `initializeAllClientsFromSessions()` para implementar inicialización lazy.
+    2. Cambios:
+       - Ya no llama a `initializeClient()` para cada sesión al inicio.
+       - Solo registra las sesiones existentes en memoria con estructura básica.
+       - Agrega campo `sessionExists: true` para indicar que hay datos de sesión guardados.
+       - Los clientes se inicializan solo cuando se llama a `/session-info/:companyId`.
+    3. Beneficios:
+       - No se inician navegadores Chromium al arrancar el servicio.
+       - No se generan QRs para empresas que no usan WhatsApp.
+       - Inicio del servicio más rápido.
+       - Menor consumo de recursos.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `scp`, `run_command`
+- Resultado: Éxito
+- Verificación:
+    - Sintaxis verificada con `node --check`: OK
+    - Archivo subido al VPS exitosamente
+    - Pendiente: Reiniciar servicio y probar comportamiento
+- Observaciones de Gemini: Esta optimización elimina el consumo de recursos para sesiones no utilizadas. Combinada con el límite de QRs implementado anteriormente, el servicio ahora es mucho más eficiente.
+- Respuesta de Gemini: Inicialización lazy implementada. Reiniciar servicio para probar.

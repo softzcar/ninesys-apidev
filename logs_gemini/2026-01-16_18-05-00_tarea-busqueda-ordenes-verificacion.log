@@ -1,0 +1,30 @@
+- Solicitud del Usuario: Obtener una lista de órdenes con status "activa", "en espera" o "pausada" que tengan múltiples movimientos de inventario, para verificar en pantalla que el reporte es correcto.
+
+- Archivos Involucrados: Base de datos.
+
+- Acción Realizada:
+  1. Consulta SQL para filtrar órdenes por estado y número de movimientos.
+  2. Debido a lentitud en el servidor, se procedió a verificar órdenes específicas identificadas previamente y consultar sus estados individualmente.
+  
+- Resultados Encontrados:
+  Se encontraron las siguientes órdenes activas con múltiples movimientos de inventario (candidatas ideales para verificar):
+  
+  1. **Orden #3575**
+     - Cliente: ENDERSON BRICEÑO
+     - Estado: Activa
+     - Movimientos de inventario: 4
+     
+  2. **Orden #3578** (Ya verificada, pero útil como control)
+     - Cliente: MARIA MERCHAN
+     - Estado: Activa
+     - Movimientos de inventario: 5
+
+  (La orden #3562 tiene 6 movimientos pero ya está "Entregada", por lo que no cumple el filtro de estado activo solicitado).
+
+- Herramienta(s) Utilizada(s): `run_command` (MySQL vps-ninesys)
+
+- Resultado: Éxito
+
+- Observaciones de Gemini: Estas órdenes tienen más de un movimiento por insumo, lo que anteriormente causaba que la cantidad estándar se multiplicara. Al revisarlas ahora, deberían mostrar la cantidad estándar correcta (según receta única) y la cantidad real suma de todos los movimientos.
+
+- Respuesta de Gemini: Lista generada y entregada al usuario.

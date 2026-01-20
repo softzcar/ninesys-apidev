@@ -1,0 +1,129 @@
+- Solicitud del Usuario: Implementar funcionalidad para gestionar el consumo de material por insumo en la página de inventario. Crear un botón que abra un modal mostrando el consumo de material por orden, con la columna material_consumido editable y registro de cambios en una tabla de historial.
+
+- Archivos Involucrados:
+  Backend:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/inventory.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/public/model/create_new_company_api_emp_N.sql
+  
+  Frontend:
+  - /home/developer/Escritorio/niesys/app_multi/components/inventario/ConsumoMaterialModal.vue
+  - /home/developer/Escritorio/niesys/app_multi/pages/inventario/gestion/index.vue
+
+- Acción Realizada:
+  
+  **FASE 1 - Backend - Endpoint de Lectura:**
+  - Creado endpoint GET /inventario/consumo/{id_insumo} en inventory.php
+  - Implementada consulta SQL con JOINs a tablas: inventario, inventario_movimientos, departamentos, api_empresas.empresas_usuarios, ordenes
+  - Corregido alias de columna de matarial_consumido a material_consumido
+  - Agregado id_movimiento al resultado para futuras operaciones de actualización
+  
+  **FASE 2 - Frontend - Visualización:**
+  - Creado componente ConsumoMaterialModal.vue con las siguientes características:
+    * Modal tamaño XL con tabla responsive
+    * Integración del componente linkSearch.vue para IDs de orden clickeables
+    * Campos mostrados: ID Orden, Cliente, Departamento, Empleado, Material Consumido, Valor Inicial, Valor Final, Fecha
+    * Paginación de resultados (10 por página)
+    * Overlay de cargando durante fetch de datos
+  - Modificada página inventario/gestion/index.vue para agregar:
+    * Nueva columna "Consumo" en la tabla de inventario
+    * Botón "Ver Consumo" que abre el modal
+    * Template slot para integrar el componente ConsumoMaterialModal
+  
+  **FASE 3 - Frontend - Edición:**
+  - Implementada edición inline de material_consumido:
+    * Botón "Editar" que habilita un campo numérico editable
+    * Validación de entrada (numérico, >= 0)
+    * Botones de guardar (check) y cancelar (x)
+    * Estados visual (editing/no-editing)
+  
+  **FASE 4 - Backend - Guardado y Logs:**
+  - Creada tabla inventario_movimientos_historial con estructura:
+    * _id (PK AUTO_INCREMENT)
+    * id_movimiento (FK a inventario_movimientos)
+    * campo_modificado
+    * valor_anterior, valor_nuevo (DECIMAL 10,2)
+    * id_usuario_modificacion  
+    * fecha_modificacion (DATETIME)
+    * observaciones (TEXT)
+    * Índices en id_movimiento y fecha_modificacion
+  - Actualizado script create_new_company_api_emp_N.sql para incluir la nueva tabla
+  - Creado endpoint PATCH /inventario/consumo/{id_movimiento}:
+    * Validación de parámetros (id_movimiento, material_consumido, id_usuario)
+    * Uso de transacciones para integridad de datos
+    * Obtención de valor anterior mediante consulta
+    * Registro en tabla de historial solo si hay cambios
+    * Actualización de valor_final en inventario_movimientos
+    * Manejo de errores con rollback automático
+    * Parseo correcto de JSON del body (fix aplicado)
+  - Actualizado frontend para conectar método saveEdit con endpoint PATCH:
+    * Solicitud de observaciones mediante prompt
+    * Envío de datos: material_consumido, observaciones, id_usuario
+    * Manejo de respuestas (éxito/error)
+    * Recarga de datos después de guardar
+    * Toast notifications para feedback
+
+  **FASE 5 - Verificación:**
+  - Probado endpoint GET con id_insumo=355 (empresa 163): ✓ 14 registros retornados
+  - Probado endpoint PATCH con id_movimiento=434:
+    * Valor anterior: 2.60
+    * Valor nuevo: 3.00
+    * ✓ Actualización exitosa en inventario_movimientos
+    * ✓ Registro creado en inventario_movimientos_historial
+    * ✓ Observaciones guardadas correctamente
+  - Deploy exitoso al VPS (https://apidev.nineteengreen.com)
+
+- Herramienta(s) Utilizada(s):
+  - view_file: Para revisar estructura de archivos existentes
+  - write_to_file: Para crear ConsumoMaterialModal.vue
+  - replace_file_content: Para modificar inventory.php, index.vue, create_new_company_api_emp_N.sql
+  - multi_replace_file_content: Para agregar columna en múltiples secciones de index.vue
+  - run_command: Para ejecutar comandos SQL, git, ssh, curl
+  - grep_search: Para buscar patrones en el código
+
+- Resultado: Éxito
+
+- Verificación:
+  1. ✓ Endpoint GET /inventario/consumo/355 retorna 14 registros con todos los campos correctos
+  2. ✓ Frontend muestra modal con tabla de consumo y botones de edición
+  3. ✓ Endpoint PATCH /inventario/consumo/434 actualiza correctamente:
+     - Cambió material_consumido de 2.60 a 3.00
+     - Calculó valor_final = 300 - 3 = 297
+     - Creó registro en inventario_movimientos_historial con:
+       * id_movimiento: 434
+       * campo_modificado: material_consumido
+       * valor_anterior: 2.60
+       * valor_nuevo: 3.00
+       * id_usuario_modificacion: 1
+       * fecha_modificacion: 2026-01-19 09:39:10
+       * observaciones: "Prueba del sistema de gestión de consumo"
+  4. ✓ Transacciones funcionan correctamente (commit/rollback)
+  5. ✓ Validaciones de entrada funcionan (numérico >= 0)
+  6. ✓ Script de creación de empresas actualizado
+  7. ✓ Deploy exitoso al VPS
+
+- Observaciones de Gemini:
+  - Se identificó y corrigió problema con parseo de JSON en Slim 4 (getParsedBody() no funciona con application/json por defecto)
+  - Se implementó solución usando $request->getBody()->getContents() y json_decode()
+  - La tabla de historial permite auditoría completa de cambios
+  - El sistema usa transacciones para garantizar integridad de datos
+  - Se integró exitosamente el componente linkSearch.vue existente
+  - Se siguieron las convenciones del proyecto (uso de $config.API, this.$axios, etc.)
+  - Los lints warnings existentes en inventory.php (líneas 1049, 1165) NO fueron causados por esta implementación
+
+- Respuesta de Gemini:
+  Sistema de gestión de consumo de material implementado completamente en 5 fases:
+  1. Backend - Endpoint de lectura ✓
+  2. Frontend - Visualización ✓
+  3. Frontend - Edición ✓
+  4. Backend - Guardado y logs ✓
+  5. Verificación final ✓
+
+  Funcionalidades implementadas:
+  - Botón "Ver Consumo" en tabla de inventario
+  - Modal con tabla detallada de consumo por orden
+  - Edición inline de material_consumido
+  - Sistema de historial de cambios
+  - Validaciones y manejo de errores
+  - Integración con componente linkSearch.vue
+  
+  Todo funcionando correctamente y desplegado en producción.

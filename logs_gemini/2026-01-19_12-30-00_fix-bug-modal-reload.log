@@ -1,0 +1,27 @@
+- Solicitud del Usuario: Corregir comportamiento del botón "+ Insumos" que solo recargaba la tabla pero no mostraba el modal (o se cerraba inmediatamente).
+
+- Archivos Involucrados:
+  Frontend:
+  - /home/developer/Escritorio/niesys/app_multi/components/admin/AsignacionDeInsumosAProductos.vue
+
+- Acción Realizada:
+  **Debug & Fix:**
+  - Se analizó el flujo de eventos del componente `AsignacionDeInsumosAProductos`.
+  - Se identificó que el método `loadDataTab` (invocado automáticamente al mostrar el modal) emitía un evento `@reload` hacia el padre.
+  - En el contexto del Semáforo (`progreso-tiempo-semaforo.vue`), el evento `@reload` dispara `fetchManufacturingReport`, lo cual recarga todos los datos de la tabla, provocando el re-renderizado y la destrucción inmediata del componente modal que acababa de abrirse.
+  - Se eliminó la línea `this.$emit("reload")` dentro de `loadDataTab` ya que era innecesaria para la apertura inicial y causaba este ciclo destructivo.
+
+- Herramienta(s) Utilizada(s):
+  - replace_file_content: Para comentar/eliminar la línea problemática.
+
+- Resultado: Éxito
+
+- Verificación:
+  - Al abrir el modal, ya no se dispara la recarga del padre, permitiendo que el modal permanezca abierto y funcional.
+  - Esto también optimiza el rendimiento en la página original `/insumos-productos` al evitar recargas redundantes al cambiar de pestaña.
+
+- Observaciones de Gemini:
+  - Un clásico problema de efectos secundarios en componentes reutilizados. El componente hijo no debería forzar el refresh del padre solo por navegación interna.
+
+- Respuesta de Gemini:
+  Corrección aplicada. El modal ahora se abre correctamente y permanece estable.

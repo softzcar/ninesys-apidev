@@ -1,0 +1,31 @@
+- Solicitud del Usuario: Corregir error "No se encontró información del producto" al abrir el modal de asignación de insumos. Investigar si la información se consume adecuadamente.
+
+- Archivos Involucrados:
+  Backend:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+  Frontend:
+  - /home/developer/Escritorio/niesys/app_multi/components/progreso-tiempo-semaforo.vue
+
+- Acción Realizada:
+  **Backend:**
+  - Se agregó `op.id_woo` al SELECT del endpoint `/reports/manufacturing-time` para exponer el ID del producto al frontend.
+
+  **Frontend:**
+  - Se actualizó `fetchManufacturingReport` para capturar este nuevo campo `id_product_woo`.
+  - Se actualizó `openAsignacionModal` para usar este ID prioritarimente sobre la búsqueda en `ordenesProyectadas2`, asegurando que siempre se tenga el ID correcto del producto asociado a la orden.
+  - Se corrigió un error de sintaxis (duplicación de función) introducido en la edición anterior.
+
+- Herramienta(s) Utilizada(s):
+  - replace_file_content: Para backend y frontend.
+  - run_command: Para deploy backend y verificación.
+
+- Resultado: Éxito
+
+- Verificación:
+  - Backend desplegado. Frontend utiliza ahora datos directos del reporte. La función `openAsignacionModal` está limpia y sin duplicados.
+
+- Observaciones de Gemini:
+  - La raíz del problema era la falta de datos explícitos del producto en el reporte de tiempos. Al agregarlos, la integración se vuelve robusta.
+
+- Respuesta de Gemini:
+  Corrección aplicada. Ahora el modal recibe el ID de producto correcto directamente desde el reporte de la orden.

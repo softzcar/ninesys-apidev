@@ -1,0 +1,14 @@
+- Solicitud del Usuario: Investigar y corregir "Error de conexión: timeout" en WebSockets (especialmente Empresa 171).
+- Archivos Involucrados: `/usr/local/lsws/conf/vhosts/ws.nineteengreen.com/vhost.conf` en VPS.
+- Acción Realizada: 
+    - Se identificó que el VPS usa OpenLiteSpeed.
+    - Se revisó la configuración del vhost `ws.nineteengreen.com`.
+    - Se detectó que el proxy usaba la IP pública y timeouts muy cortos (1s).
+    - Se modificó la configuración para usar `127.0.0.1:3000`.
+    - Se aumentaron `initTimeout` a 60s y `retryTimeout` a 5s.
+    - Se reinició el servicio OpenLiteSpeed.
+- Herramienta(s) Utilizada(s): `run_command` (ssh, sed, lswsctrl).
+- Resultado: Éxito.
+- Verificación: Se verificó el archivo de configuración con `cat` y se confirmó el reinicio del servidor sin errores.
+- Observaciones de Gemini: El uso de la IP pública en el proxy interno y timeouts agresivos eran la causa probable de la inestabilidad.
+- Respuesta de Gemini: Se ha optimizado la configuración del VPS para WebSockets, aumentando los tiempos de espera y corrigiendo el enrutamiento interno.

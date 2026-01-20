@@ -1,0 +1,17 @@
+- Solicitud del Usuario: Investigar y corregir error 405 en descarga de plantilla (empresa 171) y posterior corrección de error crítico de API.
+- Archivos Involucrados:
+    - `app/routes/inventory.php`
+- Acción Realizada:
+    1. Se diagnosticó que el endpoint `/api/inventario/template-excel` guardaba los archivos en una ruta incorrecta (`app/public/downloads/...` en lugar de `public/downloads/...`) debido a un uso relativo de `__DIR__`.
+    2. Un primer intento de corrección usando `__DIR__ . '/../../public/'` provocó un error crítico en el servidor (posible conflicto de rutas o open_basedir).
+    3. Se revertieron los cambios inmediatamente para restaurar el servicio.
+    4. Se realizó un diagnóstico del servidor mediante scripts PHP (`test_paths_web.php`) verificando que la ruta absoluta `$_SERVER['DOCUMENT_ROOT'] . '/public/...'` es segura, correcta y tiene permisos de escritura.
+    5. Se aplicó la corrección definitiva usando `$_SERVER['DOCUMENT_ROOT']` en las 3 ocurrencias dentro de `inventory.php`.
+- Herramienta(s) Utilizada(s): `run_command` (git, curl, ssh), `replace_file_content`, `multi_replace_file_content`.
+- Resultado: Éxito.
+- Verificación: 
+    - Se ejecutó `curl -I -X OPTIONS ...` confirmando API online (Status 200).
+    - Se generó la plantilla para la empresa 171 exitosamente.
+    - Se descargó el archivo generado obteniendo Status 200 (antes 405).
+- Observaciones de Gemini: El uso de rutas relativas con `../` puede ser peligroso en ciertos entornos de hosting compartido o con restricciones de `open_basedir`. Usar `DOCUMENT_ROOT` es una práctica más robusta.
+- Respuesta de Gemini: Sistema restablecido y error 405 corregido definitivamente usando rutas absolutas.

@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Desplegar los cambios en el backend para probar la corrección del botón "Iniciar Todo" en la orden 3604.
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+- Acción Realizada: 
+    - Se realizó commit de los cambios locales en `manufacturing.php` (fix cálculo orden_proceso).
+    - Se hizo push a la rama `refactor/modular-routes`.
+    - Se conectó vía SSH al VPS y se ejecutó `git pull` para actualizar el backend.
+- Herramienta(s) Utilizada(s): `run_command` (git, ssh)
+- Resultado: Éxito. El despliegue se completó correctamente (Fast-forward).
+- Verificación: La salida del comando SSH confirmó que `app/routes/manufacturing.php` fue actualizado en el servidor.
+- Observaciones de Gemini: El despliegue fue fluido. Se recomienda al usuario recargar el navegador.
+- Respuesta de Gemini: Confirmación de despliegue exitoso y solicitud de prueba al usuario.
