@@ -872,10 +872,11 @@ return function (App $app) {
     $response_departamentos = $localConnection->goQuery($sql);
     $enviar_mensaje = intval($response_departamentos[0]['enviar_mensaje'] ?? 0);
 
-    // Buscamos el nombre del cliente
+    // Buscamos el nombre y teléfono del cliente
     $sql = 'SELECT
                     a.id_wp,
-                    b.first_name
+                    b.first_name,
+                    b.phone
                 FROM
                     ordenes a
                 LEFT JOIN customers b ON b._id = a.id_wp
@@ -883,13 +884,18 @@ return function (App $app) {
                     a._id = ' . $dataMensaje['id_orden'];
     $response_client = $localConnection->goQuery($sql);
     $cliente = $response_client[0]['first_name'] ?? 'Cliente';
+    $phone_cliente = $response_client[0]['phone'] ?? null;
 
     if ($dataMensaje['tipo'] == 'terminar') {
-      $msg['mensaje'] = 'Hola ' . $cliente . ', *su orden número ' . $dataMensaje['id_orden'] . ' está lista, puede pasar a retir su pedido.*';
+      $msg['mensaje'] = 'Hola ' . $cliente . ', *su orden número ' . $dataMensaje['id_orden'] . ' está lista, puede pasar a retirar su pedido.*';
 
-      // Enviar mensaje de orden terminada
-      $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $dataMensaje['id_orden']);
-      $testResp = $msgApi->sendMessage(ID_EMPRESA, $dataMensaje['id_orden'], 'terminar-produccion', $msg);
+      // Enviar mensaje de orden terminada usando sendDirectMessageToNode
+      if ($phone_cliente) {
+        $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/');
+        $testResp = $msgApi->sendDirectMessageToNode(ID_EMPRESA, $phone_cliente, $msg['mensaje']);
+      } else {
+        $testResp = ['status' => 'error', 'message' => 'No se encontró teléfono del cliente'];
+      }
 
     } else if ($dataMensaje['tipo'] == 'paso') {
       $msg['mensaje'] = 'Hola ' . $cliente . ', en este momento su orden número ' . $dataMensaje['id_orden'] . ' se encuentra en el departamento de ' . $dataMensaje['departamento'] . ', ';
@@ -920,9 +926,11 @@ return function (App $app) {
             break;
         }
 
-        if ($msg['mensaje'] != '') {
-          $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $dataMensaje['id_orden']);
-          $testResp = $msgApi->sendMessage(ID_EMPRESA, $dataMensaje['id_orden'], 'paso-produccion', $msg);
+        if ($msg['mensaje'] != '' && $phone_cliente) {
+          $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/');
+          $testResp = $msgApi->sendDirectMessageToNode(ID_EMPRESA, $phone_cliente, $msg['mensaje']);
+        } else if (!$phone_cliente) {
+          $testResp = ['status' => 'error', 'message' => 'No se encontró teléfono del cliente'];
         }
       } else {
         $msg['mensaje'] = '';
@@ -931,8 +939,12 @@ return function (App $app) {
     } elseif ($dataMensaje['tipo'] == 'cobrar') {
       $msg['mensaje'] = 'Hola ' . $cliente . ' le recordamos que tiene una deuda pendiente de *' . $dataMensaje['monto'] . ' USD* de su Orden número *' . $dataMensaje['id_orden'] . '*';
 
-      $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $dataMensaje['id_orden']);
-      $testResp = $msgApi->sendMessage(ID_EMPRESA, $dataMensaje['id_orden'], 'paso-produccion', $msg);
+      if ($phone_cliente) {
+        $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/');
+        $testResp = $msgApi->sendDirectMessageToNode(ID_EMPRESA, $phone_cliente, $msg['mensaje']);
+      } else {
+        $testResp = ['status' => 'error', 'message' => 'No se encontró teléfono del cliente'];
+      }
     } else {
       $testResp = ['status' => 'error', 'message' => 'Tipo de mensaje no reconocido: ' . ($dataMensaje['tipo'] ?? 'null')];
     }
