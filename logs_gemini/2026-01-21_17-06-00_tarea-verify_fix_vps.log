@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Verificar el fix en el VPS usando un payload específico que antes fallaba.
+- Archivos Involucrados: N/A (Verificación externa)
+- Acción Realizada: Se ejecutó un comando `curl` contra `https://apidev.nineteengreen.com/ordenes/nueva/custom` con el payload proporcionado y la cabecera `Authorization: 163`.
+- Herramientas Utilizada(s): `run_command` (curl).
+- Resultado: Éxito. La API respondió `{"success":true,"message":"La orden número 3622 ha sido creada correctamente",...}`.
+- Verificación: La respuesta JSON indica éxito y devuelve un ID de orden (3622), confirmando que el error 500 ha desaparecido.
+- Observaciones de Gemini: El payload contenía `id=` (vacío), lo que provocaba el fallo antes del fix. Ahora se procesó correctamente.
+- Respuesta de Gemini: Confirmación de que la prueba fue exitosa y se creó la orden 3622.

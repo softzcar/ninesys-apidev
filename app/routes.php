@@ -198,6 +198,36 @@ return function (App $app) {
 
   // RUTA DE ÓRDENES SIN ASIGNACIÓN
   (require __DIR__ . '/routes/ordenes-sin-asignacion.php')($app);
+
+  /** PROXY PARA TASAS DE CAMBIO (CORS FIX) */
+  $app->get('/bcv-rates', function (Request $request, Response $response) {
+    $url = 'https://bcv.justcarlux.dev/api/v1/rates';
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Opcional, dependiendo del entorno
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+    $result = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    if (curl_errno($ch)) {
+      $error_msg = curl_error($ch);
+      curl_close($ch);
+      $response->getBody()->write(json_encode(['error' => 'Error backend: ' . $error_msg]));
+      return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+    }
+
+    curl_close($ch);
+
+    $response->getBody()->write($result);
+
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withHeader('Access-Control-Allow-Origin', '*') // Permitir acceso desde cualquier origen (incluyendo localhost)
+      ->withStatus($httpCode);
+  });
   /** ENVIAR EMAILS */
   $app->get('/send-email', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
