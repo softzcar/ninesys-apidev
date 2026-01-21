@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Arreglar error 500 al crear orden con cliente existente (número de teléfono repetido/nuevo cliente).
+- Archivos Involucrados: /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php
+- Acción Realizada: Se identificó que el campo `id_wp` recibía una cadena vacía en lugar de un entero o NULL al crear un cliente nuevo, causando un error SQL. Se modificó el código en los endpoints `/ordenes/nueva` y `/presupuesto/nuevo` para validar `id_wp`: si está vacío o no es numérico, se asigna `NULL` en la consulta SQL.
+- Herramientas Utilizada(s): `grep_search`, `view_file`, `multi_replace_file_content`.
+- Resultado: Éxito.
+- Verificación: Se revisó el código modificado para asegurar que la lógica de sanitización (`if (!empty($id_wp_val) && is_numeric($id_wp_val))`) se aplicara correctamente antes de la inserción.
+- Observaciones de Gemini: El error se debía a la restricción de tipos en la base de datos (INT no acepta cadena vacía en modo estricto).
+- Respuesta de Gemini: Se confirmó la corrección del código y se actualizó la documentación.

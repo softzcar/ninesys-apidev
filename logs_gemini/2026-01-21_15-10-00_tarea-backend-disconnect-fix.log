@@ -1,0 +1,13 @@
+- Solicitud del Usuario: El usuario reportó que la desconexión se "colgaba" en el frontend (esperando respuesta) y que al recargar la página se mostraba un estado falso de "Conectado", aunque en el móvil la sesión se había cerrado. También enfatizó que desconectar debe "destruir todo".
+- Archivos Involucrados: `/home/ozcar/msg-ninesys/controllers/whatsappController.js` (en VPS)
+- Acción Realizada: 
+    - Se creó un script Python (`update_disconnect_vps.py`) para parchear la función `disconnectClient` en el servidor Node.js.
+    - **Mejoras implementadas:**
+        1. **Timeout en Logout:** Se añadió un `Promise.race` de 5 segundos al `client.logout()`. Si WhatsApp Web tarda en responder, se aborta y se procede a la destrucción forzada.
+        2. **Limpieza Forzada:** Se garantiza la ejecución de `client.destroy()` y la **eliminación recursiva** de la carpeta `.wwebjs_auth/session-{id}` en todos los casos (éxito o error).
+        3. **Actualización de Estado Inmediata:** Se marca `whatsappReady = false` al inicio de la función para evitar lecturas de estado "falsos positivos" mientras se procesa la desconexión.
+- Herramienta(s) Utilizada(s): `write_to_file`, `scp`, `ssh` (python replacement)
+- Resultado: Éxito (Patch aplicado y servicio reiniciado).
+- Verificación: El servicio `ntmsg-app` reinició correctamente. El código ahora cumple con la solicitud de "destruir todo" al desconectar.
+- Observaciones de Gemini: El problema era que `puppeteer` a veces se queda colgado intentando hacer clic en "Cerrar sesión" en el DOM si la página no responde, lo que impedía que se ejecutara el código de limpieza posterior. El timeout resuelve esto.
+- Respuesta de Gemini: Confirmación de que la lógica backend ha sido blindada y solicitud de despliegue frontend pendiente.

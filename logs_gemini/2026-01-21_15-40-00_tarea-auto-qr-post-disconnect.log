@@ -1,0 +1,11 @@
+- Solicitud del Usuario: El usuario reportó que tras desconectar, el proceso se quedaba "limpiando archivos" pero no volvía a mostrar el código QR hasta que se activaba manualmente. El comportamiento deseado es volver a mostrar el QR automáticamente.
+- Archivos Involucrados: `websocket.js` (en VPS)
+- Acción Realizada: 
+    - Se parcheó `websocket.js` para modificar el manejador del evento `disconnect-client`.
+    - Después de llamar a `disconnectClient` (y esperar su finalización exitosa), ahora se llama explícitamente a `initializeClient(companyId)`.
+    - Esto inicia el proceso de cargar `whatsapp-web.js` nuevamente para obtener un nuevo QR.
+- Herramienta(s) Utilizada(s): `write_to_file`, `scp`, `ssh` (Python patch script)
+- Resultado: Éxito (Patch aplicado y PM2 restart).
+- Verificación: El servidor reinició sin errores. Lógicamente, al recibir `disconnect-client` y finalizar la limpieza, el flujo continuará hacia la inicialización.
+- Observaciones de Gemini: Flujo de usuario optimizado para "Desvincular y volver a vincular".
+- Respuesta de Gemini: Notificación de ajuste completado en el servidor.

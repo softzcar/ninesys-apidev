@@ -1,0 +1,16 @@
+- Solicitud del Usuario: Resolver problemas de desconexión, estado incorrecto y bucles de reconexión para Empresa 173.
+- Archivos Involucrados:
+    - `/home/developer/Escritorio/niesys/app_multi/components/checkConnection.vue` (Frontend)
+    - `/home/ozcar/msg-ninesys/controllers/whatsappController.js` (Backend VPS)
+    - `/home/ozcar/msg-ninesys/routes/index.js` (Backend VPS)
+- Acción Realizada:
+    1. **Frontend:** Implementada auto-activación para estados `INITIALIZING` y `NOT_REGISTERED`.
+    2. **Frontend:** Agregado método `checkInitialStatus` para verificar estado real al cargar página.
+    3. **Backend:** Creado endpoint `/ws-info/:companyId` para consulta rápida de estado.
+    4. **Backend:** Corregido `initializeClient` para manejar correctamente sesiones "lazy loaded".
+    5. **Backend:** Agregada destrucción explícita del cliente al detectar evento `LOGOUT` para prevenir bucles de QR.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command` (ssh, pm2, git).
+- Resultado: Éxito. Flujo completo de conexión/desconexión verificado y funcional.
+- Verificación: Usuario confirmó escaneo exitoso de QR y cierre de sesión correcto.
+- Observaciones de Gemini: El sistema ahora es robusto ante reinicios de servidor y desconexiones manuales desde el dispositivo.
+- Respuesta de Gemini: Confirmado que 'client namespace disconnect' es un log normal del cierre del modal y no afecta al servicio.

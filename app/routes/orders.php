@@ -1676,6 +1676,13 @@ return function (App $app) {
     /* $woo = new WooMe();
         $orderWC = $woo->createOrder($arr, $newJson);
         $object["create_product_WC"] = $orderWC; */
+    // Validar id_wp
+    $id_wp_val = $arr['id_wp'];
+    $id_wp_sql = "NULL";
+    if (!empty($id_wp_val) && is_numeric($id_wp_val)) {
+      $id_wp_sql = "'" . $id_wp_val . "'";
+    }
+
     $orderWC = 0;
     /* $response->getBody()->write(json_encode($object));
         return $response
@@ -1689,7 +1696,7 @@ return function (App $app) {
     // $woo->sendMail($orderWC->id, 'Mensaje de confirmacion de cracion de orden para el cliente'); // Reemplaza "enviarCorreoElectronico" con la función real
 
     /* Craer orden en nunesys */
-    $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  '" . $arr['id_wp'] . "', '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
+    $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql . ", '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
 
     $object['nueva_oreden_response'] = json_encode($localConnection->goQuery($sql));
 
@@ -1990,8 +1997,15 @@ $object['sales_commission_ISSET'][] = false;
     // Por ejemplo:
     // $woo->sendMail($orderWC->id, 'Mensaje de confirmacion de cracion de orden para el cliente'); // Reemplaza "enviarCorreoElectronico" con la función real
 
+    // Validar id_wp
+    $id_wp_val = $arr['id_wp'];
+    $id_wp_sql = "NULL";
+    if (!empty($id_wp_val) && is_numeric($id_wp_val)) {
+      $id_wp_sql = "'" . $id_wp_val . "'";
+    }
+
     /* Craer orden en nunesys */
-    $sql = 'INSERT INTO presupuestos (id_wp_order, responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $orderWC . ', ' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  '" . $arr['id_wp'] . "', '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
+    $sql = 'INSERT INTO presupuestos (id_wp_order, responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $orderWC . ', ' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql . ", '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
 
     $object['nuevo_presupuesto_response'] = json_encode($localConnection->goQuery($sql));
 
@@ -2561,11 +2575,18 @@ $object['sales_commission_ISSET'][] = false;
     $abono_value = (is_numeric($arr['abono']) && $arr['abono'] !== '') ? floatval($arr['abono']) : 0;
     $descuento_value = (is_numeric($arr['descuento']) && $arr['descuento'] !== '') ? floatval($arr['descuento']) : 0;
 
+    // Validar id_wp
+    $id_wp_val = $arr['id_wp'];
+    $id_wp_sql = "NULL";
+    if (!empty($id_wp_val) && is_numeric($id_wp_val)) {
+      $id_wp_sql = "'" . $id_wp_val . "'";
+    }
+
     // ========== INICIAR TRANSACCIÓN ==========
     $localConnection->beginTransaction();
 
     try {
-      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, `status` ) VALUES (' . intval($newJson['responsable']) . ", '" . $now . "', " . $descuento_value . ', ' . $abono_value . ",  '" . $arr['id_wp'] . "', '" . addslashes($arr['cedula'] ?? '') . "', " . floatval($newJson['total']) . ",'" . addslashes($cliente ?? '') . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
+      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, `status` ) VALUES (' . intval($newJson['responsable']) . ", '" . $now . "', " . $descuento_value . ', ' . $abono_value . ",  " . $id_wp_sql . ", '" . addslashes($arr['cedula'] ?? '') . "', " . floatval($newJson['total']) . ",'" . addslashes($cliente ?? '') . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
       $nueva_oreden_response = $localConnection->goQuery($sql);
       $object['nueva_oreden_sql'] = $sql;
 

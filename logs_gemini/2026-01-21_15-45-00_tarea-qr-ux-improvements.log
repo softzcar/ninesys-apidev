@@ -1,0 +1,10 @@
+- Solicitud del Usuario: Mejorar la experiencia al escanear el QR (mostrar "conectando" como WhatsApp Web) y al expirar los intentos (ocultar QR viejo).
+- Archivos Involucrados: `websocket.js`, `controllers/whatsappController.js` (Backend VPS), `checkConnection.vue` (Frontend Local).
+- Acción Realizada: 
+    1. **Backend:** Se parcheó el controlador para emitir el evento `status: Authenticated` cuando `whatsapp-web.js` confirma el escaneo. También se emite `status: PAUSED` explícitamente al llegar al límite de QRs.
+    2. **Frontend:** Se agregó manejo para `AUTHENTICATED` en `updateState`. Ahora oculta el QR (`ws.qr = null`) y muestra un mensaje "Dispositivo vinculado. Conectando..." con un estado de advertencia (amarillo) para indicar progreso.
+- Herramienta(s) Utilizada(s): `write_to_file`, `scp`, `ssh` (Python Scripts), `replace_file_content`.
+- Resultado: Éxito.
+- Verificación: Backend reiniciado. Frontend actualizado localmente. Estructura de eventos alineada con la UI.
+- Observaciones de Gemini: Esto cierra el ciclo de feedback visual que faltaba entre el escaneo y el estado "Ready".
+- Respuesta de Gemini: Notificación de cambios listos para prueba.
