@@ -1,0 +1,11 @@
+- Solicitud del Usuario: Persisten errores de timeout al conectar. Se sospecha fallo en handshake directo de WebSocket.
+- Archivos Involucrados: `/home/developer/Escritorio/niesys/app_multi/plugins/socket.client.js`
+- Acción Realizada: 
+    - Se modificó la configuración del cliente Socket.IO.
+    - Se cambió el orden de transportes de `['websocket', 'polling']` a `['polling', 'websocket']`.
+    - Esto fuerza al cliente a iniciar con una petición HTTP estándar (polling) que OpenLiteSpeed maneja sin problemas como proxy, para luego negociar el Upgrade a WebSocket.
+- Herramienta(s) Utilizada(s): `replace_file_content`.
+- Resultado: Configuración actualizada en frontend.
+- Verificación: Se requiere que el usuario recargue la página y pruebe. Si el polling funciona (HTTP 200), la conexión básica se establecerá y el error de "timeout" desaparecerá.
+- Observaciones de Gemini: Forzar `websocket` como primer transporte a menudo falla detrás de proxies reversos que no manejan perfectamente el Upgrade inicial en la primera petición TCP.
+- Respuesta de Gemini: Se ha ajustado el cliente para usar una estrategia de conexión más compatible (polling primero), lo cual debería rodear los problemas de negociación del proxy.
