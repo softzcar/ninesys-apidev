@@ -130,12 +130,33 @@ return function (App $app) {
 
     // CONFIGURACIÓN WIZARD - MONEDAS
     $app->post('/configuracion/monedas', function (Request $request, Response $response, array $args) {
-        $data = json_decode($request->getBody()->getContents(), true);
+        $rawBody = $request->getBody()->getContents();
+        $data = json_decode($rawBody, true);
+
+        // Si falló el decode de JSON (ej: es form-data) o no es array, intentamos getParsedBody
+        if (!is_array($data)) {
+            $data = $request->getParsedBody();
+
+            // Si getParsedBody falla (puede pasar si no hay Middleware o si ya se leyó el stream), 
+            // intentamos parsear manualmente el string raw (que es query string)
+            if (empty($data)) {
+                parse_str($rawBody, $parsed);
+                if (!empty($parsed)) {
+                    $data = $parsed;
+                }
+            }
+        }
+
         $employeeId = $data['id_empleado'] ?? null;
         $monedas = $data['monedas'] ?? null;
 
+        // Si se envió como string JSON (caso URLSearchParams), decodificarlo
+        if (is_string($monedas)) {
+            $monedas = json_decode($monedas, true);
+        }
+
         if (!$employeeId || !is_array($monedas)) {
-            $response->getBody()->write(json_encode(['error' => 'Datos inválidos']));
+            $response->getBody()->write(json_encode(['error' => 'Datos inválidos. Se espera id_empleado y monedas (array o json string).']));
             return $response
                 ->withHeader('Content-Type', 'application/json')
                 ->withHeader('Access-Control-Allow-Origin', '*')
