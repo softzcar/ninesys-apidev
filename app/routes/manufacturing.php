@@ -2433,11 +2433,20 @@ return function (App $app) {
             (SELECT MIN(dep.orden_proceso) FROM lotes_detalles_empleados_asignados ldea JOIN departamentos dep ON ldea.id_departamento = dep._id WHERE ldea.id_orden = y.id_orden) AS orden_proceso_min,
             (SELECT orden_proceso FROM departamentos WHERE _id = {$args['id_departamento']}) AS orden_proceso_departamento,            
             (
+                -- Subconsulta mejorada: busca el primer departamento donde existe al menos
+                -- un registro sin terminar Y no existe ningún registro terminado para ese depto.
+                -- Esto maneja correctamente el caso de múltiples empleados asignados al mismo paso.
                 SELECT dep.orden_proceso
                 FROM lotes_detalles_empleados_asignados ldea2
                 JOIN departamentos dep ON dep._id = ldea2.id_departamento
                 WHERE ldea2.id_orden = y.id_orden
                     AND ldea2.fecha_terminado IS NULL
+                    AND NOT EXISTS (
+                        SELECT 1 FROM lotes_detalles_empleados_asignados ldea3
+                        WHERE ldea3.id_orden = y.id_orden
+                          AND ldea3.id_departamento = ldea2.id_departamento
+                          AND ldea3.fecha_terminado IS NOT NULL
+                    )
                 ORDER BY dep.orden_proceso ASC
                 LIMIT 1
             ) AS orden_proceso,
