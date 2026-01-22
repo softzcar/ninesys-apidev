@@ -136,7 +136,10 @@ return function (App $app) {
 
         if (!$employeeId || !is_array($monedas)) {
             $response->getBody()->write(json_encode(['error' => 'Datos inválidos']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withHeader('Access-Control-Allow-Origin', '*')
+                ->withStatus(400);
         }
 
         // Conectar a la base de datos de empresas
@@ -149,7 +152,10 @@ return function (App $app) {
         if (empty($empresaResult) || !isset($empresaResult[0]['id_empresa'])) {
             $localConnection->disconnect();
             $response->getBody()->write(json_encode(['error' => 'Empleado no encontrado']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withHeader('Access-Control-Allow-Origin', '*')
+                ->withStatus(404);
         }
 
         $companyId = $empresaResult[0]['id_empresa'];
@@ -162,12 +168,16 @@ return function (App $app) {
 
         if (isset($result['status']) && $result['status'] === 'error') {
             $response->getBody()->write(json_encode(['error' => 'Error al guardar monedas: ' . $result['message']]));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withHeader('Access-Control-Allow-Origin', '*')
+                ->withStatus(500);
         }
 
         $response->getBody()->write(json_encode(['message' => 'Monedas guardadas correctamente']));
         return $response
             ->withHeader('Content-Type', 'application/json')
+            ->withHeader('Access-Control-Allow-Origin', '*') // CORS FIX
             ->withStatus(200);
     });
 
