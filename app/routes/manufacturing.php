@@ -2374,7 +2374,7 @@ return function (App $app) {
                 c.tela,
                 a.detalle AS detalle_empleado,
                 a.detalle_emisor,
-                a.detalle AS detalle_reposicion,
+                COALESCE(NULLIF(a.detalle_emisor, ''), a.detalle) AS detalle_reposicion,
                 a.aprobada,
                 a.terminada,
                 b.fecha_entrega,
