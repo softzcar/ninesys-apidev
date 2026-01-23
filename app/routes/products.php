@@ -680,7 +680,7 @@ return function (App $app) {
   $app->get('/departamentos-empleado/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "SELECT a.id_departamento, b.departamento from api_empresas.empresas_usuarios_departamentos a JOIN departamentos b On b._id = a.id_departamento WHERE a.id_empleado = {$args['id_empleado']}";
+    $sql = "SELECT a.id_departamento, b.departamento, b.orden_proceso from api_empresas.empresas_usuarios_departamentos a JOIN departamentos b On b._id = a.id_departamento WHERE a.id_empleado = {$args['id_empleado']}";
     $data = $localConnection->goQuery($sql);
     $localConnection->disconnect();
 
