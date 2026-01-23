@@ -670,7 +670,7 @@ return function (App $app) {
             c.tela,
             a.id_empleado,
             b.nombre empleado,
-            detalle
+            COALESCE(NULLIF(a.detalle_emisor, ''), a.detalle) AS detalle
         FROM
             reposiciones a
         LEFT JOIN api_empresas.empresas_usuarios b
