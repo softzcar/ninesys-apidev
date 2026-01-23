@@ -2374,6 +2374,7 @@ return function (App $app) {
                 c.tela,
                 a.detalle detalle_empleado,
                 a.detalle_emisor,
+                a.detalle_emisor AS detalle_reposicion,
                 a.aprobada,
                 a.terminada,
                 b.fecha_entrega,
