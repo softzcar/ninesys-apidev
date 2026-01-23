@@ -76,7 +76,7 @@ return function (App $app) {
     JOIN ordenes ord ON met.id_orden = ord._id 
     JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
     WHERE
-    (ord.status = 'activa' OR ord.status = 'En espera' OR ord.status = 'terminada' OR ord.status = 'pausada')
+    (ord.status = 'activa' OR ord.status = 'En espera' OR ord.status = 'terminada' OR ord.status = 'pausada' OR ord.status = 'entregada')
         -- met.moment >= DATE_SUB(CURDATE(), INTERVAL 1 WEEK)
         -- AND MONTH(met.moment) = MONTH(CURDATE()) -- Comentar esta línea
         {$searchVendedor}
