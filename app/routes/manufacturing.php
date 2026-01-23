@@ -647,7 +647,9 @@ return function (App $app) {
       $campo = 'fecha_inicio';
       $progreso = 'en curso';
 
-      $sqln = "UPDATE lotes SET paso = '{$miEmpleado['departamento']}', id_departamento_actual = {$miEmpleado['id_departamento']}  WHERE id_orden = " . $miEmpleado['id_orden'] . ";";
+      $sqlUpdateLote = "UPDATE lotes SET paso = '{$miEmpleado['departamento']}', id_departamento_actual = {$miEmpleado['id_departamento']}  WHERE id_orden = " . $miEmpleado['id_orden'] . ";";
+      $localConnection->goQuery($sqlUpdateLote);
+      $object['sql_update_lote'] = $sqlUpdateLote;
 
       // Reposition logic: specific tracking with id_reposicion
       if (isset($miEmpleado['es_reposicion']) && $miEmpleado['es_reposicion'] && isset($miEmpleado['id_reposicion']) && $miEmpleado['id_reposicion'] !== null) {
@@ -656,18 +658,20 @@ return function (App $app) {
         $check = $localConnection->goQuery("SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$id_repo}");
 
         if (!empty($check) && isset($check[0])) {
-          $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE _id = {$check[0]['_id']};";
+          $sqlUpdateTracking = "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE _id = {$check[0]['_id']};";
+          $localConnection->goQuery($sqlUpdateTracking);
         } else {
-          $sqln .= "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision, id_reposicion) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0, {$id_repo});";
+          $sqlInsertTracking = "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision, id_reposicion) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0, {$id_repo});";
+          $localConnection->goQuery($sqlInsertTracking);
         }
       } else {
         // Regular Order logic: original behavior
-        $sqln .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . " AND id_departamento = " . $miEmpleado['id_departamento'] . ";";
+        $sqlUpdateTracking = "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . " AND id_departamento = " . $miEmpleado['id_departamento'] . ";";
+        $localConnection->goQuery($sqlUpdateTracking);
       }
       // Actualizar status de la orden a 'activa' al iniciar primer paso
-      $sqln .= "UPDATE ordenes SET `status` = 'activa' WHERE _id = " . $miEmpleado['id_orden'] . " AND `status` = 'En espera';";
-      $object['sql_update_lotes'] = $sqln;
-      $response_update = $localConnection->goQuery($sqln);
+      $sqlUpdateOrden = "UPDATE ordenes SET `status` = 'activa' WHERE _id = " . $miEmpleado['id_orden'] . " AND `status` = 'En espera';";
+      $response_update = $localConnection->goQuery($sqlUpdateOrden);
       $object['response_update_lotes'] = $response_update;
     }
 
