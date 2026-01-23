@@ -2393,7 +2393,6 @@ return function (App $app) {
             JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
             LEFT JOIN departamentos d ON d._id = a.id_departamento
             WHERE a.terminada = 0
-            WHERE a.terminada = 0
                 AND (a.id_empleado = {$args['id_empleado']} OR a.id_departamento_solicitante = {$args['id_departamento']})
                 -- AND {$args['orden_proceso']} >= (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento) -- Filtramos que no se incluyan departamentos ateriores al asignado
                 -- AND {$args['orden_proceso']} <= (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento_solicitante) -- Filtramos que no se incluyan departamentos ateriores al asignado
