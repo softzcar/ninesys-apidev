@@ -647,9 +647,14 @@ return function (App $app) {
       $campo = 'fecha_inicio';
       $progreso = 'en curso';
 
-      $sqlUpdateLote = "UPDATE lotes SET paso = '{$miEmpleado['departamento']}', id_departamento_actual = {$miEmpleado['id_departamento']}  WHERE id_orden = " . $miEmpleado['id_orden'] . ";";
-      $localConnection->goQuery($sqlUpdateLote);
-      $object['sql_update_lote'] = $sqlUpdateLote;
+      // CRITICAL FIX: Only update the global order step if it's NOT a reposition.
+      // Repositions are partial and shouldn't move the entire order backward.
+      if (!isset($miEmpleado['es_reposicion']) || !$miEmpleado['es_reposicion']) {
+        $sqlUpdateLote = "UPDATE lotes SET paso = '{$miEmpleado['departamento']}', id_departamento_actual = {$miEmpleado['id_departamento']}  WHERE id_orden = " . $miEmpleado['id_orden'] . ";";
+        $localConnection->goQuery($sqlUpdateLote);
+        $object['sql_update_lote'] = $sqlUpdateLote;
+      }
+
 
       // Reposition logic: specific tracking with id_reposicion
       if (isset($miEmpleado['es_reposicion']) && $miEmpleado['es_reposicion'] && isset($miEmpleado['id_reposicion']) && $miEmpleado['id_reposicion'] !== null) {
