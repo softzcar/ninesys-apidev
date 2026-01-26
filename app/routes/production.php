@@ -728,7 +728,24 @@ return function (App $app) {
                 em_asignado.nombre empleado_asignado,
                 re.detalle detalle_emisor,
                 re.detalle detalle_encargado,                
-                COALESCE(SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0) material_consumido,
+                COALESCE(
+                  SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
+                ) + 
+                COALESCE(
+                  (SELECT SUM(
+                    (t.c * (ic.costo / NULLIF(ic.cantidad_inicial, 0))) +
+                    (t.m * (im.costo / NULLIF(im.cantidad_inicial, 0))) +
+                    (t.y * (iy.costo / NULLIF(iy.cantidad_inicial, 0))) +
+                    (t.k * (ik.costo / NULLIF(ik.cantidad_inicial, 0)))
+                  )
+                  FROM tintas t
+                  LEFT JOIN inventario ic ON ic._id = 3
+                  LEFT JOIN inventario im ON im._id = 4
+                  LEFT JOIN inventario iy ON iy._id = 5
+                  LEFT JOIN inventario ik ON ik._id = 6
+                  WHERE t.id_orden = re.id_orden AND t.id_empleado = re.id_empleado AND t.moment >= re.moment
+                  ), 0
+                ) material_consumido,
                 '$' as unidad,
                 DATE_FORMAT(re.moment, '%d/%m/%Y') fecha_creacion,
                 DATE_FORMAT(re.moment, '%h:%i %p') hora_creacion
@@ -807,7 +824,32 @@ return function (App $app) {
             JOIN inventario inv ON inv._id = inm.id_producto
             WHERE inm.id_orden = {$id_orden} 
               AND inm.id_empleado = {$id_empleado}
-            ORDER BY inm.moment DESC";
+            
+            UNION ALL
+
+            SELECT 
+              'Tinta Cyan' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.c as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.c * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'CYAN' as color
+            FROM tintas t JOIN inventario i ON i._id = 3 WHERE t.id_orden = {$id_orden} AND t.id_empleado = {$id_empleado} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+
+            UNION ALL
+
+            SELECT 
+              'Tinta Magenta' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.m as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.m * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'MAGENTA' as color
+            FROM tintas t JOIN inventario i ON i._id = 4 WHERE t.id_orden = {$id_orden} AND t.id_empleado = {$id_empleado} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+
+            UNION ALL
+
+            SELECT 
+              'Tinta Yellow' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.y as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.y * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'YELLOW' as color
+            FROM tintas t JOIN inventario i ON i._id = 5 WHERE t.id_orden = {$id_orden} AND t.id_empleado = {$id_empleado} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+
+            UNION ALL
+
+            SELECT 
+              'Tinta Black' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.k as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.k * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'BLACK' as color
+            FROM tintas t JOIN inventario i ON i._id = 6 WHERE t.id_orden = {$id_orden} AND t.id_empleado = {$id_empleado} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+            
+            ORDER BY fecha DESC";
 
     $items = $localConnection->goQuery($sql);
     $localConnection->disconnect();
