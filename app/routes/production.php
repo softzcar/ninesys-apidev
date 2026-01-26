@@ -745,6 +745,9 @@ return function (App $app) {
                   LEFT JOIN inventario ik ON ik._id = 6
                   WHERE t.id_orden = re.id_orden AND t.moment >= re.moment
                   ), 0
+                ) +
+                COALESCE(
+                  (SELECT SUM(monto_pago) FROM pagos WHERE id_reposicion = re._id), 0
                 ) material_consumido,
                 '$' as unidad,
                 DATE_FORMAT(re.moment, '%d/%m/%Y') fecha_creacion,
