@@ -722,14 +722,18 @@ return function (App $app) {
       $response_update2 = $localConnection->goQuery($sql5);
 
       // Calculo de comisiones
-      $sqlComisionEmpleado = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $miEmpleado['id_empleado'];
+      $sqlComisionEmpleado = 'SELECT comision, comision_tipo, comision_porcentaje, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $miEmpleado['id_empleado'];
       $respComisionEmpleado = $localConnection->goQuery($sqlComisionEmpleado);
       $object['rsp_empleados_comision'] = $respComisionEmpleado;  // Para depuración
 
       $comisionTipo = 'fija';  // Valor por defecto
       $comisionValue = 0;  // Valor por defecto
+      $salarioTipo = ''; // Variable control
+
       if (!empty($respComisionEmpleado)) {
         $comisionTipo = $respComisionEmpleado[0]['comision_tipo'];
+        $salarioTipo = $respComisionEmpleado[0]['salario_tipo'];
+
         if ($comisionTipo === 'porcentaje') {
           $comisionValue = floatval($respComisionEmpleado[0]['comision_porcentaje']);
         } else {
@@ -773,6 +777,11 @@ return function (App $app) {
         $id_lotes_detalles = $respComision[0]['id_lotes_detalles'];
         $comimision = $comisionValue; // El porcentaje
         $totalComimision = $respComision[0]['total_comision_porcentaje'];
+
+        // CORRECCIÓN: Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
+        if ($salarioTipo === 'Salario') {
+          $totalComimision = 0;
+        }
 
         // GUARDAR PAGO PARA COMISIÓN PORCENTAJE
         if ($miEmpleado['es_reposicion']) {
@@ -820,6 +829,12 @@ return function (App $app) {
         $comimision = $respComision[0]['comision_fija'];
         $totalComimision = $respComision[0]['total_comision_fija'];
 
+        // CORRECCIÓN: Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
+        if ($salarioTipo === 'Salario') {
+          $totalComimision = 0;
+          // Opcional: $comimision = 0; si queremos que se guarde tasa 0
+        }
+
         // GUARDAR PAGO PARA COMISIÓN FIJA
         if ($miEmpleado['es_reposicion']) {
           $sqlUnidades = "SELECT unidades FROM reposiciones WHERE _id = {$miEmpleado['id_reposicion']}";
@@ -866,6 +881,11 @@ return function (App $app) {
           $id_lotes_detalles = $producto['id_lotes_detalles'];
           $comimision = $producto['comision_producto'];  // Comisión del producto
           $totalComimision = $producto['monto_comision_por_producto'];  // Monto calculado con factor del empleado
+
+          // CORRECCIÓN: Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
+          if ($salarioTipo === 'Salario') {
+            $totalComimision = 0;
+          }
 
           // GUARDAR PAGO (Reconstruido)
           $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $miEmpleado['id_reposicion'] . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", 'variable', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
