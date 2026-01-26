@@ -728,8 +728,8 @@ return function (App $app) {
                 em_asignado.nombre empleado_asignado,
                 re.detalle detalle_emisor,
                 re.detalle detalle_encargado,                
-                (inm.valor_inicial - inm.valor_final) material_consumido,
-                inv.unidad,
+                COALESCE(SUM((inm.valor_inicial - inm.valor_final) * inv.costo), 0) material_consumido,
+                '$' as unidad,
                 DATE_FORMAT(re.moment, '%d/%m/%Y') fecha_creacion,
                 DATE_FORMAT(re.moment, '%h:%i %p') hora_creacion
             FROM
@@ -738,9 +738,10 @@ return function (App $app) {
             LEFT JOIN ordenes ord On ord._id = re.id_orden
             JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
             JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
-            JOIN inventario_movimientos inm ON inm.id_orden = re.id_orden AND inm.id_producto = op.id_woo AND inm.id_empleado = re.id_empleado
-            JOIN inventario inv ON inv._id = inm.id_producto
+            LEFT JOIN inventario_movimientos inm ON inm.id_orden = re.id_orden AND inm.id_empleado = re.id_empleado
+            LEFT JOIN inventario inv ON inv._id = inm.id_producto
             {$whereParams}
+            GROUP BY re._id
             ORDER BY re.id_orden ASC, re._id ASC;";
 
     /*
