@@ -866,7 +866,7 @@ return function (App $app) {
                 'N/A' as color
             FROM pagos p
             JOIN api_empresas.empresas_usuarios u ON u.id_usuario = p.id_empleado
-            WHERE p.id_reposicion = {$id_reposicion}
+            WHERE p.id_reposicion = {$id_reposicion} AND p.monto_pago > 0
             
             ORDER BY fecha DESC";
 
