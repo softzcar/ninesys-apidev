@@ -435,6 +435,7 @@ CREATE TABLE `lotes_detalles` (
 CREATE TABLE `lotes_detalles_empleados_asignados` (
   `_id` int(11) NOT NULL,
   `id_lotes_detalles` int(11) DEFAULT NULL COMMENT 'ID de lotes_detalles',
+  `id_reposicion` int(11) DEFAULT NULL COMMENT 'ID de la reposición',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID empleado',
   `id_departamento` int(11) DEFAULT NULL COMMENT 'ID del departamento',
