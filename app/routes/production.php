@@ -848,6 +848,22 @@ return function (App $app) {
             SELECT 
               'Tinta Black' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.k as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.k * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'BLACK' as color
             FROM tintas t JOIN inventario i ON i._id = 6 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+
+            UNION ALL
+
+            SELECT 
+                CONCAT('Mano de Obra - ', u.nombre) as insumo,
+                'UND' as unidad,
+                0 as valor_inicial,
+                0 as valor_final,
+                1 as cantidad_consumida,
+                p.monto_pago as costo_unitario,
+                p.monto_pago as costo_total,
+                DATE_FORMAT(p.moment, '%d/%m/%Y %h:%i %p') as fecha,
+                'N/A' as color
+            FROM pagos p
+            JOIN api_empresas.empresas_usuarios u ON u.id_usuario = p.id_empleado
+            WHERE p.id_reposicion = {$id_reposicion}
             
             ORDER BY fecha DESC";
 
