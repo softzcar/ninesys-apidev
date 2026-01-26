@@ -728,7 +728,7 @@ return function (App $app) {
                 em_asignado.nombre empleado_asignado,
                 re.detalle detalle_emisor,
                 re.detalle detalle_encargado,                
-                COALESCE(SUM((inm.valor_inicial - inm.valor_final) * inv.costo), 0) material_consumido,
+                COALESCE(SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0) material_consumido,
                 '$' as unidad,
                 DATE_FORMAT(re.moment, '%d/%m/%Y') fecha_creacion,
                 DATE_FORMAT(re.moment, '%h:%i %p') hora_creacion
@@ -799,8 +799,8 @@ return function (App $app) {
               inm.valor_inicial,
               inm.valor_final,
               (inm.valor_inicial - inm.valor_final) as cantidad_consumida,
-              inv.costo as costo_unitario,
-              ((inm.valor_inicial - inm.valor_final) * inv.costo) as costo_total,
+              (inv.costo / NULLIF(inv.cantidad_inicial, 0)) as costo_unitario,
+              ((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))) as costo_total,
               DATE_FORMAT(inm.moment, '%d/%m/%Y %h:%i %p') as fecha,
               inv.color
             FROM inventario_movimientos inm
