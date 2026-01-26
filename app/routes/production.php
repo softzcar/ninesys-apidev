@@ -776,6 +776,48 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  $app->get('/reposicion-detalles/{id_reposicion}', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+    $id_reposicion = $args['id_reposicion'];
+
+    // 1. Obtener datos clave de la reposición
+    $sqlRepo = "SELECT id_orden, id_empleado FROM reposiciones WHERE _id = {$id_reposicion}";
+    $repoData = $localConnection->goQuery($sqlRepo);
+
+    if (empty($repoData)) {
+      $response->getBody()->write(json_encode([]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    }
+
+    $id_orden = $repoData[0]['id_orden'];
+    $id_empleado = $repoData[0]['id_empleado'];
+
+    // 2. Consultar desglose de movimientos
+    $sql = "SELECT 
+              inv.insumo,
+              inv.unidad,
+              inm.valor_inicial,
+              inm.valor_final,
+              (inm.valor_inicial - inm.valor_final) as cantidad_consumida,
+              inv.costo as costo_unitario,
+              ((inm.valor_inicial - inm.valor_final) * inv.costo) as costo_total,
+              DATE_FORMAT(inm.moment, '%d/%m/%Y %h:%i %p') as fecha,
+              inv.color
+            FROM inventario_movimientos inm
+            JOIN inventario inv ON inv._id = inm.id_producto
+            WHERE inm.id_orden = {$id_orden} 
+              AND inm.id_empleado = {$id_empleado}
+            ORDER BY inm.moment DESC";
+
+    $items = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($items));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   $app->post('/produccion/reposicion', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
