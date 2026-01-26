@@ -743,7 +743,7 @@ return function (App $app) {
                   LEFT JOIN inventario im ON im._id = 4
                   LEFT JOIN inventario iy ON iy._id = 5
                   LEFT JOIN inventario ik ON ik._id = 6
-                  WHERE t.id_orden = re.id_orden AND t.id_empleado = re.id_empleado AND t.moment >= re.moment
+                  WHERE t.id_orden = re.id_orden AND t.moment >= re.moment
                   ), 0
                 ) material_consumido,
                 '$' as unidad,
@@ -755,7 +755,7 @@ return function (App $app) {
             LEFT JOIN ordenes ord On ord._id = re.id_orden
             JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
             JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
-            LEFT JOIN inventario_movimientos inm ON inm.id_orden = re.id_orden AND inm.id_empleado = re.id_empleado
+            LEFT JOIN inventario_movimientos inm ON inm.id_orden = re.id_orden AND inm.moment >= re.moment
             LEFT JOIN inventario inv ON inv._id = inm.id_producto
             {$whereParams}
             GROUP BY re._id
@@ -823,31 +823,31 @@ return function (App $app) {
             FROM inventario_movimientos inm
             JOIN inventario inv ON inv._id = inm.id_producto
             WHERE inm.id_orden = {$id_orden} 
-              AND inm.id_empleado = {$id_empleado}
+              AND inm.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
             
             UNION ALL
 
             SELECT 
               'Tinta Cyan' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.c as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.c * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'CYAN' as color
-            FROM tintas t JOIN inventario i ON i._id = 3 WHERE t.id_orden = {$id_orden} AND t.id_empleado = {$id_empleado} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+            FROM tintas t JOIN inventario i ON i._id = 3 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
 
             UNION ALL
 
             SELECT 
               'Tinta Magenta' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.m as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.m * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'MAGENTA' as color
-            FROM tintas t JOIN inventario i ON i._id = 4 WHERE t.id_orden = {$id_orden} AND t.id_empleado = {$id_empleado} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+            FROM tintas t JOIN inventario i ON i._id = 4 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
 
             UNION ALL
 
             SELECT 
               'Tinta Yellow' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.y as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.y * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'YELLOW' as color
-            FROM tintas t JOIN inventario i ON i._id = 5 WHERE t.id_orden = {$id_orden} AND t.id_empleado = {$id_empleado} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+            FROM tintas t JOIN inventario i ON i._id = 5 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
 
             UNION ALL
 
             SELECT 
               'Tinta Black' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.k as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.k * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'BLACK' as color
-            FROM tintas t JOIN inventario i ON i._id = 6 WHERE t.id_orden = {$id_orden} AND t.id_empleado = {$id_empleado} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+            FROM tintas t JOIN inventario i ON i._id = 6 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
             
             ORDER BY fecha DESC";
 
