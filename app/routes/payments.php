@@ -332,6 +332,7 @@ return function (App $app) {
     // --- 1. Consulta para empleados con COMISIÓN FIJA ---
     $sql_fija = "SELECT DISTINCT
                     a._id AS id_pago,
+                    a.id_reposicion,
                     'N/A' as cod,
                     b._id AS id_lotes_detalles,
                     b.id_orden AS orden,
@@ -379,6 +380,7 @@ return function (App $app) {
     // --- 2. Consulta para empleados con COMISIÓN VARIABLE (desglosada por producto) ---
     $sql_variable = "SELECT DISTINCT
                         a._id AS id_pago,
+                        a.id_reposicion,
                         d.id_woo AS cod,
                         b._id AS id_lotes_detalles,
                         b.id_orden AS orden,
@@ -426,6 +428,7 @@ return function (App $app) {
     // --- 3. Consulta para empleados con COMISIÓN PORCENTAJE ---
     $sql_porcentaje = "SELECT DISTINCT
                         a._id AS id_pago,
+                        a.id_reposicion,
                         d.id_woo AS cod,
                         b._id AS id_lotes_detalles,
                         b.id_orden AS orden,
