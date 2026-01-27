@@ -1667,15 +1667,27 @@ return function (App $app) {
       $now = date('Y-m-d H:i:s');
       $nombre_departamento = 'Impresión';
 
+      // Log para depuración
+      error_log("Finalizar Impresión Lote {$id_lote}: Consumo papel recibido: " . json_encode($consumo_papel));
+
       foreach ($consumo_papel as $papel) {
         $id_insumo_papel = intval($papel['id_insumo']);
         $cantidad_total_papel = floatval($papel['cantidad_total']);
-        $localConnection->goQuery('UPDATE inventario SET cantidad = cantidad - ? WHERE _id = ?', [$cantidad_total_papel, $id_insumo_papel]);
-        foreach ($ordenes_del_lote as $order) {
-          $proporcion = intval($order['unidades_orden']) / $gran_total_unidades_lote;
-          $consumo_estimado = $cantidad_total_papel * $proporcion;
-          $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
-          $localConnection->goQuery($sql_movimiento, [$order['id_orden'], $id_empleado, $id_insumo_papel, $id_departamento, $nombre_departamento, 0, $consumo_estimado, $now]);
+
+        error_log("Procesando Papel - Lote {$id_lote}: ID Insumo {$id_insumo_papel}, Cantidad {$cantidad_total_papel}");
+
+        if ($cantidad_total_papel > 0) {
+          $localConnection->goQuery('UPDATE inventario SET cantidad = cantidad - ? WHERE _id = ?', [$cantidad_total_papel, $id_insumo_papel]);
+          foreach ($ordenes_del_lote as $order) {
+            $proporcion = intval($order['unidades_orden']) / $gran_total_unidades_lote;
+            $consumo_estimado = $cantidad_total_papel * $proporcion;
+
+            if ($consumo_estimado > 0) {
+              $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+              $localConnection->goQuery($sql_movimiento, [$order['id_orden'], $id_empleado, $id_insumo_papel, $id_departamento, $nombre_departamento, 0, $consumo_estimado, $now]);
+              error_log("Insertado movimiento impres. Orden {$order['id_orden']}, Insumo {$id_insumo_papel}, Qty {$consumo_estimado}");
+            }
+          }
         }
       }
 
@@ -2993,8 +3005,7 @@ return function (App $app) {
                 (SELECT MAX(_id) FROM inventario WHERE id_catalogo = cip._id) AS id_insumo, -- ID del insumo específico (cualquiera para referencia)
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
-                pia.id_departamento,
-
+                
                 -- Consumo Estándar (Meta): Calculado desde la asignación de insumos al producto
                 SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
                 
@@ -3002,7 +3013,7 @@ return function (App $app) {
 
                 -- Consumo Real: Suma de movimientos registrados para esta orden y este tipo de insumo
                 COALESCE((
-                    SELECT SUM(im_sub.valor_inicial - im_sub.valor_final)
+                    SELECT SUM(im_sub.valor_final - im_sub.valor_inicial)
                     FROM inventario_movimientos im_sub
                     JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
                     WHERE im_sub.id_orden IN ($idsString)
@@ -3014,7 +3025,7 @@ return function (App $app) {
             JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
             
             WHERE op.id_orden IN ($idsString)
-            GROUP BY cip._id, cip.nombre, pia.id_departamento
+            GROUP BY cip._id, cip.nombre
         ";
 
     file_put_contents('debug_sql_error.log', "SQL Query:\n" . $sql . "\n", FILE_APPEND);
