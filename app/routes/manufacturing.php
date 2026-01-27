@@ -1483,10 +1483,6 @@ return function (App $app) {
 
       $now = date('Y-m-d H:i:s');
 
-      // DESHABILITADO: Creación automática de movimientos de inventario
-      // Ahora los empleados deben registrar manualmente los insumos consumidos
-      // a través del nuevo flujo de trabajo de asignación de insumos
-      /*
       if (!empty($consumos_lote)) {
         foreach ($consumos_lote as $consumo) {
           if (empty($consumo['id_insumo']) || !isset($consumo['cantidad_total']))
@@ -1510,7 +1506,6 @@ return function (App $app) {
           }
         }
       }
-      */
 
       $sql_dep_info = 'SELECT orden_proceso, departamento FROM departamentos WHERE _id = ?';
       $dep_info = $localConnection->goQuery($sql_dep_info, [$id_departamento]);
@@ -2995,35 +2990,31 @@ return function (App $app) {
 
     $sql = "
             SELECT
-                inv._id AS id_insumo, -- Agregado para el modal de consumo
+                (SELECT MAX(_id) FROM inventario WHERE id_catalogo = cip._id) AS id_insumo, -- ID del insumo específico (cualquiera para referencia)
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
-                im.id_departamento,
+                pia.id_departamento,
+
+                -- Consumo Estándar (Meta): Calculado desde la asignación de insumos al producto
+                SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
                 
-                -- Consumo Estándar: Calculado independientemente para evitar multiplicación por movimientos
+                MAX(pia.unidad) AS unidad, 
+
+                -- Consumo Real: Suma de movimientos registrados para esta orden y este tipo de insumo
                 COALESCE((
-                    SELECT SUM(op_sub.cantidad * pia_sub.cantidad)
-                    FROM ordenes_productos op_sub
-                    JOIN product_insumos_asignados pia_sub ON pia_sub.id_product = op_sub.id_woo 
-                        AND pia_sub.id_talla = op_sub.id_size
-                    WHERE op_sub.id_orden IN ($idsString)
-                      AND pia_sub.id_catalogo_insumos_productos = cip._id
-                      AND pia_sub.id_departamento = im.id_departamento
-                ), 0) AS cantidad_estandar,
+                    SELECT SUM(im_sub.valor_inicial - im_sub.valor_final)
+                    FROM inventario_movimientos im_sub
+                    JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
+                    WHERE im_sub.id_orden IN ($idsString)
+                      AND inv_sub.id_catalogo = cip._id
+                ), 0) AS cantidad_real
 
-                MAX(inv.unidad) AS unidad,
-
-                -- Consumo Real: Suma directa de movimientos (sin duplicación por joins externos)
-                SUM(im.valor_inicial - im.valor_final) AS cantidad_real
-
-            FROM inventario_movimientos im
-            JOIN inventario inv ON inv._id = im.id_insumo
-            JOIN catalogo_insumos_productos cip ON cip._id = inv.id_catalogo
-            JOIN ordenes o ON o._id = im.id_orden
+            FROM ordenes_productos op
+            JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
+            JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
             
-            WHERE im.id_orden IN ($idsString)
-              AND (im.valor_inicial - im.valor_final) > 0
-            GROUP BY inv._id, cip._id, cip.nombre, im.id_departamento
+            WHERE op.id_orden IN ($idsString)
+            GROUP BY cip._id, cip.nombre, pia.id_departamento
         ";
 
     file_put_contents('debug_sql_error.log', "SQL Query:\n" . $sql . "\n", FILE_APPEND);
