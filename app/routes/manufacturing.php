@@ -683,43 +683,84 @@ return function (App $app) {
     if ($miEmpleado['tipo'] === 'fin') {
       // Procesar REposición
       if ($miEmpleado['es_reposicion']) {
-        // Procesar el termino de la reposición aquí
-        // Terminar reposicion
-        $sqlRepo = "UPDATE reposiciones SET terminada = 1 WHERE _id = {$miEmpleado['id_reposicion']};";
-        $sqlRepo .= "DELETE FROM `ordenes_fila_reposiciones` WHERE id_reposicion = {$miEmpleado['id_reposicion']};";
+        // Check for intermediate departments
+        $repoId = $miEmpleado['id_reposicion'];
+        $repoInfo = $localConnection->goQuery("SELECT id_departamento_solicitante FROM reposiciones WHERE _id = {$repoId}");
 
-        // Also update tracking record to set finished date
-        $sqlRepo .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'terminada', `fecha_terminado` = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$miEmpleado['id_reposicion']};";
+        $passToNext = false;
 
-        $response_update_reposicion = $localConnection->goQuery($sqlRepo);
+        if (!empty($repoInfo)) {
+          $solicitorId = $repoInfo[0]['id_departamento_solicitante'];
 
-        // Emininar reposcion de orden_reposiciones
-        // Verificar si existe el departamento para actualziarlo
-      }
+          // Get OP for Current and Solicitor
+          $sqlOps = "SELECT _id, orden_proceso FROM departamentos WHERE _id IN ({$miEmpleado['id_departamento']}, {$solicitorId})";
+          $opsData = $localConnection->goQuery($sqlOps);
 
-      $current_orden_proceso = intval($miEmpleado['orden_proceso']);
+          $currentOp = 0;
+          $solicitorOp = 0;
+          foreach ($opsData as $op) {
+            if ($op['_id'] == $miEmpleado['id_departamento'])
+              $currentOp = $op['orden_proceso'];
+            if ($op['_id'] == $solicitorId)
+              $solicitorOp = $op['orden_proceso'];
+          }
 
-      // LÓGICA CORREGIDA: Buscar el siguiente departamento en la secuencia de producción
-      $sqlDep = 'SELECT _id AS id_departamento, departamento, orden_proceso
+          // Find Next Department
+          // Logic: Next department must be > current and <= solicitor
+          $sqlNext = "SELECT _id, orden_proceso FROM departamentos WHERE orden_proceso > {$currentOp} AND orden_proceso <= {$solicitorOp} ORDER BY orden_proceso ASC LIMIT 1";
+          $nextDept = $localConnection->goQuery($sqlNext);
+
+          if (!empty($nextDept)) {
+            // MOVE TO NEXT DEPARTMENT
+            $passToNext = true;
+            $nextDeptId = $nextDept[0]['_id'];
+
+            // Update reposition to next department and clear employee (Pool)
+            $sqlRepo = "UPDATE reposiciones SET id_departamento = {$nextDeptId}, id_empleado = NULL WHERE _id = {$repoId};";
+
+            // Finish current tracking
+            $sqlRepo .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'terminada', `fecha_terminado` = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$repoId};";
+
+            $localConnection->goQuery($sqlRepo);
+          }
+        }
+
+        if (!$passToNext) {
+          // Terminar reposicion (Reached destination)
+          $sqlRepo = "UPDATE reposiciones SET terminada = 1 WHERE _id = {$miEmpleado['id_reposicion']};";
+          $sqlRepo .= "DELETE FROM `ordenes_fila_reposiciones` WHERE id_reposicion = {$miEmpleado['id_reposicion']};";
+          $sqlRepo .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'terminada', `fecha_terminado` = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$miEmpleado['id_reposicion']};";
+          $localConnection->goQuery($sqlRepo);
+        }
+      } else {
+        // ONLY execute main order logic if NOT a reposition (or if we want repositions to trigger main logic, but usually not)
+        // Adjusting indentation for the else block below
+
+
+        $current_orden_proceso = intval($miEmpleado['orden_proceso']);
+
+        // LÓGICA CORREGIDA: Buscar el siguiente departamento en la secuencia de producción
+        $sqlDep = 'SELECT _id AS id_departamento, departamento, orden_proceso
                  FROM departamentos
                  WHERE asignar_numero_de_paso = 1 AND orden_proceso > ?
                  ORDER BY orden_proceso ASC
                  LIMIT 1';
-      $object['sql_select_next_departament'] = $sqlDep;
-      $response_departamentos = $localConnection->goQuery($sqlDep, [$current_orden_proceso]);
+        $object['sql_select_next_departament'] = $sqlDep;
+        $response_departamentos = $localConnection->goQuery($sqlDep, [$current_orden_proceso]);
 
-      // Verificar si existe el departamento, de no ser así indica que es el último paso.
-      if (empty($response_departamentos)) {
-        // Es el último paso debemos asignar terminado o el paso que viene despues de el último despues de producción
-        $sql5 = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = {$miEmpleado['id_orden']}; UPDATE ordenes SET `status` = 'terminado' WHERE _id = {$miEmpleado['id_orden']};";
-        // $sql5 .= "UPDATE ordenes SET `status` = 'terminado' WHERE _id = {$miEmpleado['id_orden']};";
-      } else {
-        // El paso existe, lo actualizamos para el semáforo y progressbar
-        $departmentName = $response_departamentos[0]['departamento'] ?? 'terminado';  // Usar el nombre del departamento
-        $next_department_id = $response_departamentos[0]['id_departamento'];  // Usar el ID correcto del departamento
-        $sql5 = "UPDATE lotes SET paso = '{$departmentName}', id_departamento_actual = {$next_department_id} WHERE id_orden = {$miEmpleado['id_orden']};";
-      }
-      $response_update2 = $localConnection->goQuery($sql5);
+        // Verificar si existe el departamento, de no ser así indica que es el último paso.
+        if (empty($response_departamentos)) {
+          // Es el último paso debemos asignar terminado o el paso que viene despues de el último despues de producción
+          $sql5 = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = {$miEmpleado['id_orden']}; UPDATE ordenes SET `status` = 'terminado' WHERE _id = {$miEmpleado['id_orden']};";
+          // $sql5 .= "UPDATE ordenes SET `status` = 'terminado' WHERE _id = {$miEmpleado['id_orden']};";
+        } else {
+          // El paso existe, lo actualizamos para el semáforo y progressbar
+          $departmentName = $response_departamentos[0]['departamento'] ?? 'terminado';  // Usar el nombre del departamento
+          $next_department_id = $response_departamentos[0]['id_departamento'];  // Usar el ID correcto del departamento
+          $sql5 = "UPDATE lotes SET paso = '{$departmentName}', id_departamento_actual = {$next_department_id} WHERE id_orden = {$miEmpleado['id_orden']};";
+        }
+        $response_update2 = $localConnection->goQuery($sql5);
+      } // End else !es_reposicion
 
       // Calculo de comisiones
       $sqlComisionEmpleado = 'SELECT comision, comision_tipo, comision_porcentaje, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $miEmpleado['id_empleado'];
@@ -2423,7 +2464,11 @@ return function (App $app) {
             JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
             LEFT JOIN departamentos d ON d._id = a.id_departamento
             WHERE a.terminada = 0
-                AND (a.id_empleado = {$args['id_empleado']} OR a.id_departamento_solicitante = {$args['id_departamento']})
+                AND (
+                    a.id_empleado = {$args['id_empleado']} 
+                    OR a.id_departamento_solicitante = {$args['id_departamento']}
+                    OR (a.id_departamento = {$args['id_departamento']} AND a.id_empleado IS NULL)
+                )
                 -- AND {$args['orden_proceso']} >= (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento) -- Filtramos que no se incluyan departamentos ateriores al asignado
                 -- AND {$args['orden_proceso']} <= (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento_solicitante) -- Filtramos que no se incluyan departamentos ateriores al asignado
                 AND NOT EXISTS (
