@@ -1112,17 +1112,41 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
 
         // buscar cantidad actual del producto
-        $sql_check = 'SELECT cantidad, sku FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
+        $sql_check = 'SELECT cantidad, sku, rendimiento FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
         $object['sql_cantidad_producto'] = $sql_check;
         $cantidad_producto = $localConnection->goQuery($sql_check);
         $object['cantidad_producto'] = $cantidad_producto;
 
         $cantidad_inicial = floatval($cantidad_producto[0]['cantidad']);
+        $rendimiento = floatval($cantidad_producto[0]['rendimiento']); // Obtener rendimiento
         $object['cantidad_inicial'] = $cantidad_inicial;
 
-        if ($miInsumo['departamento'] === 'Estampado' || $miInsumo['departamento'] === 'Corte') {
-            // Para Estampado y Corte, el empleado ingresa Kg directamente (la tela se pesa en Kg)
-            // No se necesita conversión porque el inventario de tela ya está en Kg
+        if ($miInsumo['departamento'] === 'Estampado') {
+            // Para Estampado, el empleado ingresa Metros
+            // La fórmula es: Kilos = Metros / Rendimiento
+            $input_metros = floatval($miInsumo['cantidad_consumida']);
+
+            // Validar rendimiento para evitar división por cero
+            if ($rendimiento <= 0) {
+                $rendimiento = 1; // Fallback 1:1 si no hay rendimiento definido
+            }
+
+            $cantidad_consumida_kg = $input_metros / $rendimiento;
+            $cantidad_consumida = floatval($cantidad_inicial) - $cantidad_consumida_kg; // Restar los kilos calculados al inventario
+
+            $object['cantidad_inicial'] = $cantidad_inicial;
+            $object['cantidad_consumida_kilos'] = $cantidad_consumida_kg;
+            $object['metros_ingresados'] = $input_metros;
+            $object['rendimiento_utilizado'] = $rendimiento;
+
+            $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $sql .= 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $update_cantidad_inventario = $localConnection->goQuery($sql);
+            $object['update_cantidad_invrntario_SQL'] = $sql;
+            $object['update_cantidad_inventario_RSP'] = $update_cantidad_inventario;
+
+        } elseif ($miInsumo['departamento'] === 'Corte') {
+            // Para Corte, se mantiene la lógica original (ingresan Kg directamente)
             $cantidad_consumida_kg = floatval($miInsumo['cantidad_consumida']);
             $cantidad_consumida = floatval($cantidad_inicial) - $cantidad_consumida_kg;
 
@@ -1134,7 +1158,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $update_cantidad_inventario = $localConnection->goQuery($sql);
             $object['update_cantidad_invrntario_SQL'] = $sql;
             $object['update_cantidad_inventario_RSP'] = $update_cantidad_inventario;
-        } else {
+
             $cantidad_consumida = floatval($cantidad_inicial) - floatval($miInsumo['cantidad_consumida']);
             $object['cantidad_consumida'] = $cantidad_consumida;
             $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
