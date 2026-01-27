@@ -1224,7 +1224,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             ? intval($miInsumo['id_catalogo'])
             : null;
 
-        if (!empty($existing_mov)) {
+        if (!empty($existing_mov) && isset($existing_mov[0]['_id'])) {
             // Ya existe, hacer UPDATE en lugar de INSERT
             $sql = 'UPDATE inventario_movimientos 
                     SET id_empleado = ?, 
