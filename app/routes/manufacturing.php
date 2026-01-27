@@ -3031,7 +3031,7 @@ return function (App $app) {
 
                 -- Consumo Real: Suma de movimientos registrados para esta orden y este tipo de insumo
                 COALESCE((
-                    SELECT SUM(im_sub.valor_final - im_sub.valor_inicial)
+                    SELECT SUM(ABS(im_sub.valor_final - im_sub.valor_inicial))
                     FROM inventario_movimientos im_sub
                     JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
                     WHERE im_sub.id_orden IN ($idsString)
