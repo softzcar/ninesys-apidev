@@ -1667,14 +1667,20 @@ return function (App $app) {
       $now = date('Y-m-d H:i:s');
       $nombre_departamento = 'Impresión';
 
-      // Log para depuración
-      error_log("Finalizar Impresión Lote {$id_lote}: Consumo papel recibido: " . json_encode($consumo_papel));
+      // Log para depuración (Archivo explicito)
+      $logFile = __DIR__ . '/debug_manufacturing.log';
+      $logData = "--------------------------------------------------\n";
+      $logData .= "Fecha: " . date('Y-m-d H:i:s') . "\n";
+      $logData .= "Lote ID: {$id_lote}\n";
+      $logData .= "Consumo Papel Raw: " . print_r($consumo_papel, true) . "\n";
+      file_put_contents($logFile, $logData, FILE_APPEND);
 
       foreach ($consumo_papel as $papel) {
         $id_insumo_papel = intval($papel['id_insumo']);
         $cantidad_total_papel = floatval($papel['cantidad_total']);
 
-        error_log("Procesando Papel - Lote {$id_lote}: ID Insumo {$id_insumo_papel}, Cantidad {$cantidad_total_papel}");
+        $logMsg = "Procesando Papel - Insumo ID: {$id_insumo_papel}, Cantidad: {$cantidad_total_papel}\n";
+        file_put_contents($logFile, $logMsg, FILE_APPEND);
 
         if ($cantidad_total_papel > 0) {
           $localConnection->goQuery('UPDATE inventario SET cantidad = cantidad - ? WHERE _id = ?', [$cantidad_total_papel, $id_insumo_papel]);
@@ -1685,9 +1691,17 @@ return function (App $app) {
             if ($consumo_estimado > 0) {
               $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
               $localConnection->goQuery($sql_movimiento, [$order['id_orden'], $id_empleado, $id_insumo_papel, $id_departamento, $nombre_departamento, 0, $consumo_estimado, $now]);
-              error_log("Insertado movimiento impres. Orden {$order['id_orden']}, Insumo {$id_insumo_papel}, Qty {$consumo_estimado}");
+
+              $logMsg = "INSERTADO movimiento para Orden {$order['id_orden']}, Qty: {$consumo_estimado}\n";
+              file_put_contents($logFile, $logMsg, FILE_APPEND);
+            } else {
+              $logMsg = "SKIPPED insert for Orden {$order['id_orden']} because consumo_estimado is 0\n";
+              file_put_contents($logFile, $logMsg, FILE_APPEND);
             }
           }
+        } else {
+          $logMsg = "SKIPPED update/insert because cantidad_total_papel is <= 0\n";
+          file_put_contents($logFile, $logMsg, FILE_APPEND);
         }
       }
 
