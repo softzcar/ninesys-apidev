@@ -3026,7 +3026,8 @@ return function (App $app) {
                 -- Consumo Estándar (Meta): Calculado desde la asignación de insumos al producto
                 SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
                 
-                MAX(pia.unidad) AS unidad, 
+                MAX(pia.unidad) AS unidad,
+                (SELECT MAX(rendimiento) FROM inventario WHERE id_catalogo = cip._id) AS rendimiento, 
 
                 -- Consumo Real: Suma de movimientos registrados para esta orden y este tipo de insumo
                 COALESCE((
