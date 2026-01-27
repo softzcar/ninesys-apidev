@@ -1163,6 +1163,20 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $object['cantidad_consumida'] = $cantidad_consumida;
             $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             $object['resp_update_cantidad'] = $localConnection->goQuery($sql);
+        } else {
+            // Comportamiento por defecto (Impresión, etc.): Resta directa
+            // Asumimos que la cantidad ingresada está en la misma unidad que el inventario
+            $consumo_real = floatval($miInsumo['cantidad_consumida']);
+            $cantidad_consumida = floatval($cantidad_inicial) - $consumo_real;
+
+            $object['cantidad_inicial'] = $cantidad_inicial;
+            $object['cantidad_consumida_real'] = $consumo_real;
+
+            $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $sql .= 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $update_cantidad_inventario = $localConnection->goQuery($sql);
+            $object['update_cantidad_invrntario_SQL'] = $sql;
+            $object['update_cantidad_inventario_RSP'] = $update_cantidad_inventario;
         }
 
         // Guardar en rendimiento
