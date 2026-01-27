@@ -2515,6 +2515,7 @@ return function (App $app) {
             AND (d.status LIKE 'En espera' OR d.status LIKE 'activa' OR d.status LIKE 'pausada')
             AND p.fisico = 1 
             AND y.id_departamento = {$args['id_departamento']} -- El filtro del departamento ahora se aplica sobre la tabla 'y'
+            AND y.fecha_terminado IS NULL -- Excluir tareas terminadas
         ORDER BY
             ofo.orden_fila ASC,
             y.id_orden DESC,
