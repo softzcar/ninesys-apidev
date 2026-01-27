@@ -826,8 +826,10 @@ return function (App $app) {
               COALESCE(inv.id_catalogo, 0) as id_catalogo
             FROM inventario_movimientos inm
             JOIN inventario inv ON inv._id = inm.id_producto
-            WHERE inm.id_orden = {$id_orden} 
-              AND inm.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+            WHERE 
+              (inm.id_reposicion = {$id_reposicion}) 
+              OR 
+              (inm.id_reposicion IS NULL AND inm.id_orden = {$id_orden} AND inm.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}))
             
             UNION ALL
 
