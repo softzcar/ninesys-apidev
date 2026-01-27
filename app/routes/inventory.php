@@ -1245,7 +1245,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $object['sql_inventario_movimientos'] = $sql;
             $object['resp_invetario_movimientos'] = $localConnection->goQuery($sql, $params);
             $object['movimiento_actualizado'] = true;
-            $object['movimiento_id'] = $existing_mov[0]['_id'];
+            $object['movimiento_id'] = isset($existing_mov[0]['_id']) ? $existing_mov[0]['_id'] : null;
         } else {
             // No existe, hacer INSERT
             $sql = 'INSERT INTO inventario_movimientos

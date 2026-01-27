@@ -824,13 +824,14 @@ return function (App $app) {
           $totalComimision = 0;
         }
 
-        // GUARDAR PAGO PARA COMISIÓN PORCENTAJE
         if ($miEmpleado['es_reposicion']) {
           $sqlUnidades = "SELECT unidades FROM reposiciones WHERE _id = {$miEmpleado['id_reposicion']}";
           $piezas = $localConnection->goQuery($sqlUnidades)[0]['unidades'];
         }
 
-        $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $miEmpleado['id_reposicion'] . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
+        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
+
+        $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
         $object['sql_pagos'][] = $sql;
         $object['resp_pagos'] = $localConnection->goQuery($sql);
       } elseif ($comisionTipo === 'fija') {
@@ -928,8 +929,10 @@ return function (App $app) {
             $totalComimision = 0;
           }
 
+          $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
+
           // GUARDAR PAGO (Reconstruido)
-          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $miEmpleado['id_reposicion'] . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", 'variable', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
+          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", 'variable', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
           $object['sql_pagos'][] = $sql;
           $localConnection->goQuery($sql);
         }
