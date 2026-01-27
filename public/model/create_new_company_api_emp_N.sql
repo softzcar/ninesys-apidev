@@ -386,6 +386,7 @@ CREATE TABLE `inventario_movimientos` (
   `departamento` varchar(20) DEFAULT NULL COMMENT 'Nombre del departamento',
   `valor_inicial` decimal(7, 2) DEFAULT NULL COMMENT 'Valor inicial del insumo',
   `valor_final` decimal(7, 2) DEFAULT NULL COMMENT 'Valor Final del insumo ',
+  `id_reposicion` int(11) DEFAULT NULL COMMENT 'ID de la reposición',
   `fecha` datetime NOT NULL DEFAULT current_timestamp() COMMENT 'fecha del registro',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de movimientos de inventario de insumos. Almacena cada consumo de material vinculado a orden, producto, empleado y departamento.';
