@@ -1098,6 +1098,9 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     // Actualizar invetario_movimientos desde módulo de empleados
     $app->post('/inventario-movimientos/empleados/update-insumo', function (Request $request, Response $response) {
         $miInsumo = $request->getParsedBody();
+        if (empty($miInsumo)) {
+            $miInsumo = json_decode($request->getBody()->getContents(), true);
+        }
         $localConnection = new LocalDB();
 
         // Verifcar si es reposicion y actualizar el campor `terminada`
