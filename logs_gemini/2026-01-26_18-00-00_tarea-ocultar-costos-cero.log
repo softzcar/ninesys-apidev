@@ -1,0 +1,11 @@
+- Solicitud del Usuario: Ocultar los registros de Mano de Obra con valor $0.00 en el Reporte de Costos de Reposición.
+- Archivos Involucrados:
+    - Backend: app/routes/production.php
+- Acción Realizada:
+    1.  Se modificó la consulta en `/reposicion-detalles/{id_reposicion}`.
+    2.  Se agregó la condición `AND p.monto_pago > 0` en el subquery que busca en la tabla `pagos`.
+- Herramienta(s) Utilizada(s): replace_file_content, git push
+- Resultado: Éxito. El reporte ahora solo muestra costos efectivos (mayores a 0), limpiando la interfaz visual sin afectar la integridad de los datos almacenados.
+- Verificación: Despliegue en VPS.
+- Observaciones de Gemini: El cálculo del Total General no se afecta porque sumar 0 no cambiaba el resultado, pero la visualización es más limpia.
+- Respuesta de Gemini: Fix implementado. Costos cero ocultos.

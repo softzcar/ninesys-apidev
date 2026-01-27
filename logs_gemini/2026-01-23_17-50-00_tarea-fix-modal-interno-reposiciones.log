@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Arreglar que el modal interno (botón del ojo dentro de la lista de productos) también muestre el detalle, ya que decía "No hay detalle".
+- Archivos Involucrados: 
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/production.php
+- Acción Realizada: 
+  - Se identificó que este modal usa un endpoint diferente (`/reposiciones/{id_ordenes_productos}/{id_orden}`).
+  - Se modificó la consulta SQL de este endpoint para incluir también la lógica `COALESCE(NULLIF(a.detalle_emisor, ''), a.detalle)` en el campo `detalle`.
+  - Se desplegaron los cambios al VPS.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command`.
+- Resultado: Solucionado - Ahora ambos modales (el principal y el interno) obtienen el dato correctamente.
+- Verificación: Despliegue exitoso.
+- Observaciones de Gemini: Es importante mantener la consistencia en las consultas SQL cuando múltiples endpoints acceden a los mismos datos con posibles anomalías.
+- Respuesta de Gemini: He aplicado la misma corrección "inteligente" (leer ambos campos) al modal interno de productos. Ya está desplegado.

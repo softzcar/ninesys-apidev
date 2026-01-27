@@ -1,8 +1,0 @@
-- Solicitud del Usuario: El usuario reportó que el botón "Iniciar Todo" estaba deshabilitado incorrectamente para la orden 3604.
-- Archivos Involucrados: /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
-- Acción Realizada: Se modificó la consulta SQL en el endpoint `/empleados/ordenes-asignadas/v2` para calcular `orden_proceso` dinámicamente basándose en las tareas terminadas en `lotes_detalles_empleados_asignados` en lugar de usar el campo estático (y desactualizado) `lotes.id_departamento_actual`.
-- Herramienta(s) Utilizada(s): `run_command` (para consultas SQL de diagnóstico y verificación), `replace_file_content` (para aplicar el fix).
-- Resultado: Éxito.
-- Verificación: Se ejecutó una consulta SQL simulando la nueva lógica para la orden 3604, confirmando que ahora devuelve el paso correcto (3, Estampado) en lugar del incorrecto (2, Impresión), lo cual habilitará el botón en el frontend.
-- Observaciones de Gemini: El problema raíz era una desincronización en la tabla `lotes`. La solución implementada es más robusta ya que se basa en el progreso real de las tareas individuales.
-- Respuesta de Gemini: Se notificó al usuario que el fix ha sido aplicado y verificado vía CLI.

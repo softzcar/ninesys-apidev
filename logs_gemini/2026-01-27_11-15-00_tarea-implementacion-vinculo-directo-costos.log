@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Arreglar el cálculo de costos en el reporte de reposiciones, implementando un vínculo directo entre reposiciones y consumo de insumos en lugar de usar fechas.
+- Archivos Involucrados:
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/inventory.php
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/production.php
+- Acción Realizada:
+    - Se agregó la columna `id_reposicion` (INT NULL) a la tabla `inventario_movimientos` en las bases de datos `api_emp_173`, `api_emp_163` y `api_emp_171`.
+    - Se modificó `inventory.php` (endpoint `/inventario-movimientos/empleados/update-insumo`) para que detecte si el consumo viene de una reposición (vía payload `id_reposicion`) e incluya este ID en la inserción o actualización el movimiento de inventario, distinguiéndolo de los movimientos normales de la orden.
+    - Se actualizó el reporte en `production.php` para hacer LEFT JOIN con `inventario_movimientos` usando `id_reposicion` cuando existe, manteniendo la lógica anterior de fechas como fallback para registros antiguos.
+- Herramienta(s) Utilizada(s): `run_command` (mysql, git), `replace_file_content`, `multi_replace_file_content`.
+- Resultado: Éxito.
+- Verificación: Se verificará creando un consumo simulado via cURL en el VPS tras el despliegue.
+- Observaciones de Gemini: La lógica de timestamps era imprecisa. El cambio estructura la base de datos para soportar trazabilidad exacta.
+- Respuesta de Gemini: Se procedió con la implementación del vínculo directo como solicitado.

@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Incluir el costo de la mano de obra en el Reporte de Costos de Reposición.
+- Archivos Involucrados:
+    - Backend: app/routes/production.php
+- Acción Realizada:
+    1.  Se modificó el endpoint `/reposicion-detalles/{id_reposicion}` en `production.php`.
+    2.  Se añadió un bloque `UNION ALL` a la consulta principal para extraer los registros de la tabla `pagos` asociados a la reposición (`id_reposicion`).
+    3.  Se formateó el concepto como "Mano de Obra - [Nombre Empleado]".
+- Herramienta(s) Utilizada(s): replace_file_content, git push
+- Resultado: Éxito. El endpoint ahora devuelve también los costos de mano de obra como parte del desglose, lo que automáticamente se refleja en el modal del frontend que suma todos los items recibidos.
+- Verificación: Despliegue en VPS y revisión de código.
+- Observaciones de Gemini: La solución reutiliza la estructura existente de "insumos", tratando la mano de obra como un insumo más con unidad "UND", simplificando la integración en el frontend.
+- Respuesta de Gemini: Funcionalidad implementada. El reporte de reposiciones ahora incluye el costo de mano de obra.

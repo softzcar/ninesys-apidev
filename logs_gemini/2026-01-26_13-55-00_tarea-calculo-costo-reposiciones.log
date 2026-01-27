@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Modificar el reporte de reposiciones para mostrar el Costo Total en Dólares en lugar de la cantidad de material consumido.
+- Archivos Involucrados: app/routes/production.php
+- Acción Realizada: 
+    1. Se modificó la consulta SQL en `/reposiciones-reporte/{estatus_orden}`.
+    2. Se reemplazó la selección simple de `(valor_inicial - valor_final)` por `SUM((inm.valor_inicial - inm.valor_final) * inv.costo)`.
+    3. Se eliminó la condición restrictiva `AND inm.id_producto = op.id_woo` para permitir sumar todos los materiales (tinta, papel, tela).
+    4. Se agregó `GROUP BY re._id` para evitar filas duplicadas y agregar correctamente.
+    5. Se cambió la unidad a '$'.
+- Herramienta(s) Utilizada(s): replace_file_content, run_command (ssh mysql check, git push, ssh pull)
+- Resultado: Éxito. La verificación en base de datos mostró costos calculados correctos (e.g., 72.00 $).
+- Verificación: Consulta manual via MySQL en VPS y despliegue exitoso.
+- Observaciones de Gemini: El reporte ahora refleja el costo económico real de la reposición.
+- Respuesta de Gemini: Backend actualizado y desplegado.

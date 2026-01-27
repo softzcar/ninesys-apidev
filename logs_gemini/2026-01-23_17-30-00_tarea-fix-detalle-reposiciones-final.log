@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Seguía mostrando `null` en el detalle.
+- Archivos Involucrados: 
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+- Acción Realizada: 
+  - Se analizó el código de creación de reposiciones (`reposicionForm.vue` y `production.php`) y se descubrió que el "Motivo" se guarda en el campo `detalle`, mientras que `detalle_emisor` queda vacío.
+  - Se modificó la consulta SQL para aliaser `a.detalle AS detalle_reposicion` (en lugar de `a.detalle_emisor`).
+  - Se desplegaron los cambios al VPS.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command`, `view_file`.
+- Resultado: Solucionado.
+- Verificación: Despliegue exitoso. Ahora el modal debe mostrar el contenido que el emisor escribió en el formulario (guardado en `detalle`).
+- Observaciones de Gemini: La confusión venía de que la lógica de backend insertaba el detalle del emisor en el campo `detalle` (generalmente usado para el receptor), dejando `detalle_emisor` vacío.
+- Respuesta de Gemini: He corregido la fuente de datos. Ahora el detalle viene del campo donde realmente se guarda la información.

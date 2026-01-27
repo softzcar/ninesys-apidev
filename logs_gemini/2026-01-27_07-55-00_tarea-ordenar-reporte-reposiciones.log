@@ -1,0 +1,15 @@
+- Solicitud del Usuario: Ordenar los items en el detalle del reporte de reposiciones, agrupando tintas y poniendo la mano de obra al final.
+- Archivos Involucrados:
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/production.php
+- Acción Realizada:
+    - Se modificó la consulta SQL en el endpoint `/reposicion-detalles/{id_reposicion}`.
+    - Se agregó `id_catalogo` al `SELECT` en todos los bloques del `UNION ALL`.
+    - Para insumos de inventario, se usó `inv.id_catalogo`.
+    - Para tintas, se usó `i.id_catalogo`.
+    - Para mano de obra (`pagos`), se asignó un `id_catalogo` sintético de `9999` para forzar su posición al final.
+    - Se actualizó el `ORDER BY` a `ORDER BY id_catalogo ASC, fecha DESC`.
+- Herramienta(s) Utilizada(s): `view_file`, `replace_file_content`.
+- Resultado: Éxito.
+- Verificación: Se verificó mediante revisión de código que la estructura de la consulta es correcta y cumple con la lógica de ordenamiento solicitada. La mano de obra siempre tendrá el ID más alto y aparecerá al final.
+- Observaciones de Gemini: Esta solución ordena los elementos en el backend, por lo que el frontend (que itera la lista recibida) mostrará los elementos en el orden correcto sin necesidad de cambios en el código Vue.
+- Respuesta de Gemini: He ordenado los items del reporte. Ahora las tintas aparecerán agrupadas (por su ID de catálogo) y la mano de obra aparecerá siempre al final de la lista.

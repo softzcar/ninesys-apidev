@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Asegurar que TODOS los insumos de una reposición (Telas, Botones, etc.) se incluyan, incluso si fueron utilizados por empleados diferentes al asignado (ej: Corte, Costura).
+- Archivos Involucrados: app/routes/production.php
+- Acción Realizada: 
+    1. Se eliminó el filtro restrictivo `AND inm.id_empleado = re.id_empleado` en los JOINs de movimientos e inventario.
+    2. Se reemplazó por un filtro temporal: `AND inm.moment >= re.moment`.
+    3. Esto asegura que cualquier material consumido para la Orden *después* de que se creó la Reposición sea contabilizado como parte del costo de reparación, sin importar qué departamento (Corte, Estampado, Costura) lo consumió.
+    4. Esto también corrige automáticamente el problema de doble conteo de materiales de la orden original, ya que estos tienen fecha anterior a la reposición.
+- Herramienta(s) Utilizada(s): multi_replace_file_content, ssh, git
+- Resultado: Éxito. La lógica ahora es robusta para flujos de trabajo multi-departamentales.
+- Verificación: La consulta de prueba en VPS muestra un costo de reposición limpio (0.282 $) que incluye Tinta + Papel nuevo, excluyendo el Papel original.
+- Observaciones de Gemini: El uso de timestamps es más fiable que el ID de empleado para agrupar trabajos secuenciales en una reposición.
+- Respuesta de Gemini: Alcance ampliado para incluir todos los insumos post-reposición.

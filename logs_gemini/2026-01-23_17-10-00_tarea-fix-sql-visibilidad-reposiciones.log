@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Las reposiciones asignadas no se ven en el dashboard del empleado receptor.
+- Archivos Involucrados: 
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+- Acción Realizada: Se identificó que la consulta SQL en el endpoint `/empleados/ordenes-asignadas/v2` filtraba incorrectamente las reposiciones:
+  1. Solo mostraba reposiciones donde `id_empleado` (autor/responsable) coincidiera con el usuario autenticado, ignorando aquellas asignadas AL departamente del usuario.
+  2. Filtraba por `orden_proceso` asumiendo un flujo siempre hacia adelante, lo cual ocultaba las reposiciones de "retroceso" (correcciones).
+  - Solución: Se modificó el `WHERE` para incluir `OR a.id_departamento_solicitante = {$args['id_departamento']}` y se comentaron los filtros restrictivos de `orden_proceso`.
+  - Se desplegaron los cambios al VPS.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command` (git, ssh).
+- Resultado: Completado
+- Verificación: El comando de despliegue remoto confirmó la actualización en `manufacturing.php`. La consulta ahora debería devolver las reposiciones pendientes asignadas al departamento.
+- Observaciones de Gemini: Esta lógica ahora permite ver tanto "Mis errores" como "Tareas de reposición asignadas a mi departamento".
+- Respuesta de Gemini: He corregido la consulta SQL en el servidor y desplegado los cambios. Ahora las reposiciones asignadas deberían aparecer en el dashboard.

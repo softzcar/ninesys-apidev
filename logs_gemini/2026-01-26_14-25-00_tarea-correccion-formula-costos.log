@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Corregir la fórmula de cálculo de costos de reposición. El campo `costo` de la base de datos es el costo TOTAL del paquete inicial, no el costo unitario.
+- Archivos Involucrados: app/routes/production.php
+- Acción Realizada: Se ajustó la consulta SQL para calcular el costo unitario dinámicamente como `(costo / cantidad_inicial)`. La fórmula final para el costo consumido es: `(consumido * (costo / cantidad_inicial))`. Se aplicó `NULLIF` para evitar división por cero.
+- Herramienta(s) Utilizada(s): multi_replace_file_content, ssh (verificación manual), git
+- Resultado: Éxito. La verificación manual con el ID 2 devolvió `0.288` (correspondiente a 0.60m y 3.00m de papel con costo unitario de 0.08), corrigiendo el valor erróneo anterior.
+- Verificación: Consulta SQL directa y despliegue.
+- Observaciones de Gemini: Es crucial siempre verificar la semántica de los campos de costos (unitario vs total) con el usuario.
+- Respuesta de Gemini: Fórmula corregida y desplegada.

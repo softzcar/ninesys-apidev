@@ -1,0 +1,72 @@
+- Solicitud del Usuario: Buenos dias vamos a revisar el consumo de CPU del VPS. Vamos a determinar qué procesos están consumiendo los recursos del CPU. El usuario reportó que el CPU estaba al 100% según un gráfico de monitoreo desde ayer a las 3 PM aproximadamente.
+
+- Archivos Involucrados:
+  * /home/ozcar/msg-ninesys/controllers/whatsappController.js (VPS)
+  
+- Acción Realizada: 
+  1. Conexión al VPS y análisis del consumo de CPU con comando `top`
+  2. Identificación de 3 procesos principales consumiendo CPU:
+     - Chrome/Puppeteer (37.5% CPU) - PID 101557
+     - Node msg-ninesys (12.5% CPU) - PID 100547
+     - MariaDB (43.8% CPU) - PID 38926
+  3. Análisis del árbol de procesos reveló que Chrome es hijo del proceso Node (servicio WhatsApp)
+  4. Revisión de logs de PM2 mostró ciclo infinito:
+     - Sistema generaba 5 QRs
+     - Alcanzaba límite y pausaba por 5 minutos
+     - Pero inmediatamente reiniciaba generación de QRs (bug)
+  5. Análisis del código fuente (`whatsappController.js`) identificó el problema:
+     - Función `sendTemplateMessage` (línea ~512) llamaba `initializeClient` sin verificar pausa
+     - Función `getSessionInfo` (línea ~590) llamaba `initializeClient` sin verificar pausa
+     - Función `initializeClient` (línea ~19) no verificaba estado `pausedUntil` antes de crear cliente
+  6. Implementación de 3 fixes:
+     - **Fix #1:** Agregada verificación de `pausedUntil` en `initializeClient` (líneas 22-36)
+       * Si sesión pausada y no es force, rechaza inicialización
+       * Si pausa expiró, limpia estado y permite continuar
+     - **Fix #2:** Agregada verificación en `sendTemplateMessage` (líneas 528-537)
+       * Retorna HTTP 503 con mensaje de pausa si sesión pausada
+     - **Fix #3:** Agregada verificación en `getSessionInfo` (líneas 616-625)
+       * Retorna objeto con status PAUSED si sesión pausada
+  7. Descarga, modificación, upload y reinicio del servicio
+
+- Herramienta(s) Utilizada(s): 
+  * run_command (ssh, top, ps, pm2, scp)
+  * view_file
+  * grep_search
+  * replace_file_content (3 veces)
+  * write_to_file
+  * task_boundary
+
+- Resultado: Éxito
+
+- Verificación:
+  1. Servicio reiniciado correctamente (PID nuevo: 204317)
+  2. Monitoreo de logs mostró:
+     - Sistema genera QRs normalmente cuando se activa
+     - Al alcanzar límite de 5 QRs, pausa correctamente
+     - NO hay reinicializaciones automáticas durante la pausa
+     - Logs confirman: "[LIMIT] Sesión 163 alcanzó límite de 5 QRs. Pausando por 5 minutos."
+     - NO aparecen nuevos intentos de QR después de la pausa
+  3. Verificación de CPU:
+     - ANTES: %Cpu(s): 87.5 us (Chrome 37.5%, Node 12.5%)
+     - DESPUÉS: %Cpu(s): 0.0 us, 6.2 sy, 93.8% IDLE
+     - Reducción de ~90% en uso de CPU
+  4. Procesos de Chrome/Puppeteer ya no aparecen consumiendo recursos constantemente
+
+- Observaciones de Gemini:
+  * El bug existía porque las funciones de API llamaban `initializeClient` sin verificar el estado de pausa
+  * El fix es no invasivo: solo agrega validaciones antes de inicializar
+  * El sistema aún puede reintentar después de 5 minutos si hay requests, pero SIN consumo de CPU durante la pausa
+  * El parámetro `force=true` permite al usuario reiniciar manualmente sin esperar la pausa
+  * MariaDB aún mostraba ~44% CPU, pero usuario indicó que era por trabajo intensivo del día anterior
+
+- Respuesta de Gemini: 
+  "✅ Fix implementado y verificado exitosamente. El ciclo infinito de generación de QRs ha sido resuelto. El consumo de CPU bajó de ~100% a ~6%. 
+
+  Comportamiento actual:
+  - Sistema genera hasta 5 QRs
+  - Al alcanzar límite, pausa por 5 minutos y destruye el cliente
+  - Durante la pausa, rechaza automáticamente intentos de reinicialización
+  - Después de 5 minutos, puede reintentar si hay requests
+  - Usuario puede forzar reinicio manual con botón 'Activar'
+  
+  El sistema ya no consumirá CPU durante los períodos de pausa."

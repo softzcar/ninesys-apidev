@@ -1169,6 +1169,11 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
 
         // --- INICIO: Verificación de duplicados antes de insertar ---
+        // Preparar el valor de id_reposicion
+        $id_reposicion = (isset($miInsumo['id_reposicion']) && $miInsumo['id_reposicion'] !== 'null' && $miInsumo['id_reposicion'] !== '')
+            ? intval($miInsumo['id_reposicion'])
+            : null;
+
         // Verificar si ya existe un movimiento para esta orden/insumo/departamento
         $sql_check_mov = 'SELECT _id FROM inventario_movimientos 
                           WHERE id_orden = ? AND id_insumo = ? AND id_departamento = ?';
@@ -1177,6 +1182,14 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $miInsumo['id_insumo'],
             $miInsumo['id_departamento']
         ];
+
+        if ($id_reposicion) {
+            $sql_check_mov .= ' AND id_reposicion = ?';
+            $check_mov_params[] = $id_reposicion;
+        } else {
+            $sql_check_mov .= ' AND id_reposicion IS NULL';
+        }
+
         $existing_mov = $localConnection->goQuery($sql_check_mov, $check_mov_params);
 
         // Preparar el valor de id_catalogo
@@ -1218,8 +1231,9 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                  id_catalogo_insumos_prodcutos,
                  departamento, 
                  valor_inicial, 
-                 valor_final)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+                 valor_final,
+                 id_reposicion)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
             $params = [
                 $miInsumo['id_orden'],
@@ -1230,7 +1244,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 $id_catalogo,
                 $miInsumo['departamento'],
                 $cantidad_inicial,
-                $cantidad_consumida
+                $cantidad_consumida,
+                $id_reposicion
             ];
 
             $object['sql_inventario_movimientos'] = $sql;

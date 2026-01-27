@@ -758,7 +758,7 @@ return function (App $app) {
             LEFT JOIN ordenes ord On ord._id = re.id_orden
             JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
             JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
-            LEFT JOIN inventario_movimientos inm ON inm.id_orden = re.id_orden AND inm.moment >= re.moment
+            LEFT JOIN inventario_movimientos inm ON (inm.id_reposicion = re._id) OR (inm.id_reposicion IS NULL AND inm.id_orden = re.id_orden AND inm.moment >= re.moment)
             LEFT JOIN inventario inv ON inv._id = inm.id_producto
             {$whereParams}
             GROUP BY re._id

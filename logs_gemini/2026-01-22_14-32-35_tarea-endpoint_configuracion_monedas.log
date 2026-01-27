@@ -1,0 +1,43 @@
+- Solicitud del Usuario: Agregar soporte CORS y manejo robusto de datos en el endpoint POST `/configuracion/monedas` para permitir actualización de tasas desde el frontend.
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/config.php
+
+- Acción Realizada:
+  1. Agregué encabezados CORS a todas las respuestas del endpoint POST `/configuracion/monedas`:
+     - `Access-Control-Allow-Origin: *`
+     - Aplicado en respuestas de éxito (200) y todas las respuestas de error (400, 404, 500)
+  
+  2. Implementé lógica robusta de parsing de request body:
+     - Intento 1: Decodificar como JSON (`json_decode($rawBody)`)
+     - Intento 2: Usar `$request->getParsedBody()` si JSON falla
+     - Intento 3: Fallback manual con `parse_str($rawBody)` si getParsedBody está vacío
+     - Manejo especial: Si `monedas` es string, decodificar como JSON (caso URLSearchParams)
+  
+  3. Mejoré mensajes de error para incluir detalles sobre formato esperado
+
+- Herramienta(s) Utilizada(s):
+  * `view_file` - Para revisar código existente del endpoint
+  * `replace_file_content` - Para agregar CORS headers
+  * `multi_replace_file_content` - Para actualizar lógica de parsing
+  * `run_command` - Para push a GitHub y actualización en VPS
+
+- Resultado: Éxito
+
+- Verificación:
+  * Creé script de prueba PHP local (`test_logic_verification.php`) que simuló ambos formatos:
+    - TEST 1 (JSON): Exitoso con payload `{"id_empleado": 123, "monedas": [...]}`
+    - TEST 2 (Form Data): Exitoso con URLSearchParams donde `monedas` es string JSON
+  * Usuario confirmó que requests desde frontend (URLSearchParams) funcionan correctamente
+  * Usuario verificó que error 400 "Bad Request" desapareció
+  * Commits verificados en GitHub:
+    - Commit "fix: add cors headers to config/monedas"
+    - Commit "fix: manual parsing for form data fallback"
+  * VPS actualizado exitosamente vía SSH con `git pull`
+
+- Observaciones de Gemini:
+  * El problema inicial de CORS 400 se debía a que Slim Framework no parseaba automáticamente el body cuando se enviaba como `application/x-www-form-urlencoded`
+  * La solución de triple fallback (JSON → getParsedBody → parse_str) garantiza compatibilidad con múltiples formatos de cliente
+  * Es importante agregar CORS headers en TODAS las respuestas, no solo en las exitosas, para que el navegador pueda leer mensajes de error
+
+- Respuesta de Gemini: Endpoint `/configuracion/monedas` actualizado exitosamente con soporte CORS completo y parsing robusto de datos. Ahora acepta tanto JSON puro como Form Data (URLSearchParams), resolviendo los errores 400 que impedían guardar las tasas desde el frontend. Cambios desplegados en VPS.

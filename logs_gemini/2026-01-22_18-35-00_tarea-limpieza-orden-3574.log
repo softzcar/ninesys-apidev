@@ -1,0 +1,30 @@
+- Solicitud del Usuario: Verificar y limpiar duplicados específicamente para la orden 3574.
+
+- Archivos Involucrados:
+  - Base de datos api_emp_163 tabla inventario_movimientos
+
+- Acción Realizada:
+  1. ANÁLISIS ESPECÍFICO (Orden 3574):
+     - Se detectaron 2 pares de movimientos duplicados:
+       * Insumo 355: IDs 476 y 477 (mismo segundo 09:45:13, pero doble descuento de valor).
+       * Insumo 716: IDs 490 y 491 (mismo segundo 11:11:14, doble descuento).
+     - Se confirmó el patrón de error: doble ejecución secuencial tan rápida que la segunda lee el valor ya actualizado por la primera.
+
+  2. LIMPIEZA DE DATOS:
+     - Se eliminaron los registros redundantes (segundos movimientos) de la orden 3574 (IDs 477, 491).
+     - Se intentó un escaneo más amplio (15 días) pero fue cancelado por lentitud en la base de datos (posible falta de índices optimize en `moment`).
+     - Se realizó una verificación rápida de los últimos 20 registros por ID.
+
+- Herramienta(s) Utilizada(s): `run_command` (MySQL).
+
+- Resultado: Éxito parcial (Limpieza orden 3574 completada, escaneo masivo histórico limitado).
+
+- Verificación:
+  - Orden 3574 limpia de duplicados.
+  - Fix de frontend ya mergeado en main (previene futuros casos).
+
+- Observaciones de Gemini:
+  - Los registros de la orden 3574 eran antiguos (15-Ene), por eso no fueron capturados en la limpieza inicial de 5 días.
+  - Es crítico desplegar el frontend para cerrar la entrada de nuevos datos erróneos.
+
+- Respuesta de Gemini: Se verificó la orden 3574 y se eliminaron 2 pares de registros duplicados encontrados. Se intentó buscar más casos históricos pero la base de datos respondió lentamente. Se recomienda proceder con el despliegue del frontend para evitar que se sigan generando estos registros.

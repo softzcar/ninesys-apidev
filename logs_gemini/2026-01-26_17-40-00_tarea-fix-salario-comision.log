@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Corregir que no se generen comisiones (pagos) para empleados cuyo tipo de compensación es 'Salario' puro.
+- Archivos Involucrados:
+    - Backend: app/routes/manufacturing.php
+- Acción Realizada:
+    1.  Se modificó la lógica de `/registrar-paso-empleado` en `manufacturing.php`.
+    2.  Se añadió la consulta del campo `salario_tipo` al obtener datos del empleado.
+    3.  Se implementó una validación en los 3 flujos de cálculo de comisión (Fija, Variable, Porcentaje): si `salario_tipo === 'Salario'`, el `totalComimision` se fuerza a 0.
+- Herramienta(s) Utilizada(s): replace_file_content, git push
+- Resultado: Éxito. Los registros de trabajo se seguirán creando (trazabilidad) pero con monto $0.00, evitando duplicidad de pagos y costos erróneos en reposiciones.
+- Verificación: Despliegue en VPS.
+- Observaciones de Gemini: Esto corrige el problema de raíz para FUTURAS tareas. Las tareas pasadas ya registradas no se modifican retroactivamente.
+- Respuesta de Gemini: Fix implementado. Empleados con Salario generarán pagos de $0.00.

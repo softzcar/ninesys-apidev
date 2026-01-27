@@ -1,0 +1,48 @@
+- Solicitud del Usuario: Investigar y corregir el filtrado de datos en la tabla "Histórico" del modal "Abono a la orden" en la página `/ordenes/activas`. El modal no mostraba los pagos históricos de algunas órdenes, parecía que había un filtro por año que solo mostraba resultados del año actual, cuando debería mostrar todos los resultados sin importar el año.
+
+- Archivos Involucrados:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/finance.php (Backend)
+  - /home/developer/Escritorio/niesys/app_multi/components/ordenes/abono.vue (Frontend - componente modal)
+  - /home/developer/Escritorio/niesys/app_multi/components/produccionsse/ordenesTodas.vue (Frontend - página que usa el modal)
+  - /home/developer/Escritorio/niesys/app_multi/components/ordenes/activas.vue (Frontend - otra página que usa el modal)
+
+- Acción Realizada:
+  1. Investigué el flujo completo de datos desde el frontend hasta el backend:
+     - El componente `ordenes-abono` recibe una prop `item` con el array de pagos filtrados
+     - Esta prop proviene del método `filterPago()` que filtra del array `pagos`
+     - El array `pagos` se carga desde el endpoint `/reporte-de-pagos`
+  
+  2. Identifiqué el problema en el endpoint `/reporte-de-pagos` (archivo `app/routes/finance.php`, línea 79):
+     - La consulta SQL tenía un filtro WHERE que excluía órdenes con status 'entregada'
+     - El filtro original era: `(ord.status = 'activa' OR ord.status = 'En espera' OR ord.status = 'terminada' OR ord.status = 'pausada')`
+     - Esto causaba que los pagos de órdenes entregadas no se devolvieran en la respuesta
+  
+  3. Verifiqué en la base de datos con la orden 3522 reportada por el usuario:
+     - La orden 3522 tiene status 'entregada'
+     - Tiene un pago de $65.00 registrado el 2026-01-22
+     - El endpoint /reporte-de-pagos no devolvía este pago porque el status no coincidía con el filtro
+  
+  4. Modifiqué la consulta SQL en `finance.php` línea 79 para incluir el status 'entregada':
+     - Nuevo filtro: `(ord.status = 'activa' OR ord.status = 'En espera' OR ord.status = 'terminada' OR ord.status = 'pausada' OR ord.status = 'entregada')`
+  
+  5. Confirmé que NO había filtros de año en la consulta SQL (las líneas de filtro por mes/año estaban comentadas)
+
+- Herramienta(s) Utilizada(s): `view_file`, `grep_search`, `find_by_name`, `run_command` (consultas SQL vía SSH), `replace_file_content`, `git commit`
+
+- Resultado: Éxito
+
+- Verificación:
+  - Modifiqué el archivo `finance.php` agregando el status 'entregada' al filtro WHERE de la consulta principal
+  - Realicé commit del cambio en Git con mensaje descriptivo
+  - Verifiqué que la consulta SQL modificada ahora incluye órdenes con status 'entregada'
+  - El cambio permitirá que el endpoint `/reporte-de-pagos` devuelva los pagos de órdenes entregadas
+  - La tabla "Histórico" en el modal ahora mostrará los pagos de todas las órdenes sin importar el año, siempre que el status de la orden esté en la lista permitida (que ahora incluye 'entregada')
+
+- Observaciones de Gemini:
+  1. El problema NO era un filtro de año como se pensaba inicialmente, sino un filtro de status de orden
+  2. La consulta SQL cuando se pasan fechas (líneas 146-147) NO tenía este filtro de status, creando una inconsistencia entre ambos modos de operación
+  3. El modal mostraba correctamente los totales calculados (abonado, resta, etc.) porque esos datos vienen del endpoint `/ordenes/abono/{id}` que NO tiene este filtro
+  4. La tabla "Histórico" estaba vacía porque la prop `item` que recibe el componente venía vacía al ser filtrada por el método `filterPago()`
+  5. Se requiere desplegar el cambio en el VPS para que los usuarios vean la corrección
+
+- Respuesta de Gemini: He identificado y corregido el problema. La tabla "Histórico" del modal "Abono a la orden" estaba vacía para órdenes con status 'entregada' porque el endpoint `/reporte-de-pagos` excluía estas órdenes del resultado. Modifiqué la consulta SQL en `finance.php` para incluir el status 'entregada' en el filtro WHERE. El cambio ya está commiteado en Git y listo para desplegar. ¿Quieres que despliegue ahora el backend al VPS?

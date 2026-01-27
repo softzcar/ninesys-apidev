@@ -1,0 +1,30 @@
+- Solicitud del Usuario: Continuar verificación de duplicados para la orden 3618 y realizar limpieza exhaustiva de registros similares.
+
+- Archivos Involucrados:
+  - Base de datos api_emp_163 tabla inventario_movimientos
+
+- Acción Realizada:
+  1. VERIFICACIÓN ADICIONAL:
+     - Detectado duplicado para Orden 3618 (Insumo 355) con diferencia de 1 segundo (IDs 604/605).
+     - Identificado que la limpieza anterior (agrupada por timestamp exacto) omitió estos casos con diferencias mínimas de tiempo.
+
+  2. LIMPIEZA EXHAUSTIVA:
+     - Ejecutada consulta avanzada para buscar pares de registros idénticos con diferencia de tiempo < 15 segundos en los últimos 5 días.
+     - Detectados 16 pares adicionales de duplicados en diversas órdenes (3582, 3584, 3590, 3593, 3597, 3599, 3607, 3608, 3611, 3619, 3623, 3628, 3634).
+     - Eliminados los registros redundantes (manteniendo el ID menor de cada par).
+
+- Herramienta(s) Utilizada(s): `run_command` (MySQL).
+
+- Resultado: Éxito.
+
+- Verificación:
+  - Se eliminó el registro 605 correspondiente a la Orden 3618.
+  - Se eliminaron 16 registros duplicados adicionales.
+  - Consulta final de verificación para los últimos 5 días retornó 0 duplicados.
+
+- Observaciones de Gemini:
+  - La causa raíz (doble llamada en Frontend) ya fue solucionada en el commit anterior. 
+  - Esta limpieza es correctiva para los datos históricos recientes afectados antes del parche.
+  - Se recomienda hacer el despliegue del frontend lo antes posible para evitar reincidencia.
+
+- Respuesta de Gemini: Se completó la limpieza profunda de la base de datos. Se eliminaron los duplicados de la orden 3618 y se detectaron y borraron otros 16 registros duplicados que tenían diferencias de tiempo menores a 15 segundos. La verificación final confirma que no quedan registros duplicados recientes.

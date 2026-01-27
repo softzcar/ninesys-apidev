@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Corregir el detalle que se muestra en el modal de reposición (botón ojo). Se estaba mostrando el mensaje de solicitud del empleado en lugar de las instrucciones de aprobación del gerente.
+- Archivos Involucrados: app/routes/manufacturing.php
+- Acción Realizada: Se modificó la consulta SQL del endpoint de empleados (`/empleados/ordenes-asignadas`). Se invirtió la prioridad del campo `detalle_reposicion` usando `COALESCE(NULLIF(a.detalle, ''), a.detalle_emisor)`, dando prioridad al campo `detalle` (instrucción del gerente) sobre `detalle_emisor` (solicitud original).
+- Herramienta(s) Utilizada(s): replace_file_content, run_command, git
+- Resultado: Éxito. Ahora los empleados verán las instrucciones que el jefe de producción escribió al aprobar la reposición.
+- Verificación: Revisión de código y despliegue.
+- Observaciones de Gemini: Es importante mantener la distinción semántica entre "emisor" (quien pide) y "encargado" (quien aprueba).
+- Respuesta de Gemini: Corrección desplegada en backend.

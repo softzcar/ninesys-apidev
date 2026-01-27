@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Incluir el consumo de tinta (Impresión) en los costos totales de la reposición.
+- Archivos Involucrados: app/routes/production.php
+- Acción Realizada: 
+    1. Se identificó que el consumo de tinta se guarda en la tabla `tintas` (CMYK separado) y se vincula por `id_orden`, `id_empleado` y fecha.
+    2. Se modificó el endpoint `/reposiciones-reporte` agregando una subconsulta que suma `(ML_Consumidos * Costo_Unitario)` para los 4 colores (C,M,Y,K).
+    3. Se modificó `/reposicion-detalles` usando `UNION ALL` para agregar 4 filas adicionales con el desglose de cada color de tinta.
+    4. Se utilizó la lógica de costo corregida `(costo / cantidad_inicial)` para las tintas también.
+- Herramienta(s) Utilizada(s): multi_replace_file_content, ssh (verificación manual), git
+- Resultado: Éxito. El costo total ahora incluye papel + tinta. Verificación manual (0.522 $) coincide con los datos reales.
+- Verificación: Consulta SQL directa y comparación con tabla `tintas` e `inventario`.
+- Observaciones de Gemini: El cruce de datos entre `tintas` y `reposiciones` requiere sincronización de timestamps para evitar contar impresiones de la orden original.
+- Respuesta de Gemini: Costos de tinta integrados y desplegados.

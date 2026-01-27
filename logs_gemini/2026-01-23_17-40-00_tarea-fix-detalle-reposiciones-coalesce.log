@@ -1,0 +1,12 @@
+- Solicitud del Usuario: El detalle seguía llegando nulo, pero la captura de pantalla mostraba que el dato estaba en `detalle_emisor` (mientras que `detalle` era nulo). Sin embargo, el formulario estándar guarda en `detalle`.
+- Archivos Involucrados: 
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+- Acción Realizada: 
+  - Se modificó la consulta para usar `COALESCE(NULLIF(a.detalle_emisor, ''), a.detalle) AS detalle_reposicion`.
+  - Esta lógica prioriza `detalle_emisor` si existe (caso de la captura), y si está vacío, usa `detalle` (caso estándar).
+  - Se desplegaron los cambios al VPS.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command`.
+- Resultado: Completado - Solución robusta para ambos casos.
+- Verificación: Despliegue exitoso.
+- Observaciones de Gemini: La discrepancia de datos (algunos registros en `detalle`, otros en `detalle_emisor`) se maneja mejor a nivel de consulta para evitar cambios complejos en la lógica de inserción o migración de datos.
+- Respuesta de Gemini: He implementado una solución "inteligente" que busca el detalle en ambos campos posibles, priorizando el del emisor si existe.
