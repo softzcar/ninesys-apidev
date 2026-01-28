@@ -818,7 +818,7 @@ return function (App $app) {
     $app->get('/insumos', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
 
-        $sql = 'SELECT * FROM inventario ORDER BY insumo ASC';
+        $sql = 'SELECT * FROM inventario WHERE cantidad > 0 ORDER BY insumo ASC';
         $object = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();
