@@ -1226,8 +1226,11 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
 
         // Logic for Remanente
-        // Case 1: Explicit remanente (Admin Manual)
-        if (isset($miInsumo['remanente']) && is_numeric($miInsumo['remanente'])) {
+        // Case 1: Explicit remanente (Admin Manual), BUT ONLY if auto_remanente is NOT active
+        // Because if auto_remanente is active, we already calculated and saved the real value above.
+        $auto_active = (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] == 'true');
+
+        if (!$auto_active && isset($miInsumo['remanente']) && is_numeric($miInsumo['remanente'])) {
             $remanente_val = floatval($miInsumo['remanente']);
             $sql_rem = 'UPDATE inventario SET remanente = ' . $remanente_val . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             $localConnection->goQuery($sql_rem);
