@@ -1144,7 +1144,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
 
             // Logic for Auto Remanente (Employee Finish)
-            if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] === 'true') {
+            if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] == 'true') {
                 $current_qty = $cantidad_consumida;
                 $sql_rem = 'UPDATE inventario SET remanente = ' . $current_qty . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
                 $localConnection->goQuery($sql_rem);
@@ -1173,7 +1173,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
 
             // Logic for Auto Remanente (Employee Finish)
-            if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] === 'true') {
+            if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] == 'true') {
                 $current_qty = $cantidad_consumida;
                 $sql_rem = 'UPDATE inventario SET remanente = ' . $current_qty . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
                 $localConnection->goQuery($sql_rem);
@@ -1202,7 +1202,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
             // Logic for Auto Remanente (Employee Finish)
             // MUST be done BEFORE zeroing out quantity if finishing
-            if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] === 'true') {
+            if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] == 'true') {
                 // At this point $cantidad_consumida holds the updated quantity (Initial - Consumption)
                 // We use THIS value as the remanente.
                 $current_qty = $cantidad_consumida;
