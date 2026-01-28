@@ -1101,6 +1101,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         if (empty($miInsumo)) {
             $miInsumo = json_decode($request->getBody()->getContents(), true);
         }
+        $object = []; // Init object
+        $object['debug_received'] = $miInsumo; // DEBUG ECHO
         $localConnection = new LocalDB();
 
         // Verifcar si es reposicion y actualizar el campor `terminada`
