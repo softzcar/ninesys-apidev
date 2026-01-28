@@ -3019,7 +3019,13 @@ return function (App $app) {
 
     $sql = "
             SELECT
-                (SELECT MAX(_id) FROM inventario WHERE id_catalogo = cip._id) AS id_insumo, -- ID del insumo específico (cualquiera para referencia)
+                COALESCE((
+                  SELECT MAX(im.id_insumo) 
+                  FROM inventario_movimientos im 
+                  JOIN inventario inv ON inv._id = im.id_insumo 
+                  WHERE im.id_orden IN ($idsString) 
+                    AND inv.id_catalogo = cip._id
+                ), (SELECT MAX(_id) FROM inventario WHERE id_catalogo = cip._id)) AS id_insumo,
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
                 
