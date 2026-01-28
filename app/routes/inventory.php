@@ -1143,15 +1143,24 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
             $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
 
+            // Logic for Auto Remanente (Employee Finish)
+            if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] === 'true') {
+                $current_qty = $cantidad_consumida;
+                $sql_rem = 'UPDATE inventario SET remanente = ' . $current_qty . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $localConnection->goQuery($sql_rem);
+                $object['remanente_updated_auto'] = $current_qty;
+            }
+
             // Check if finishing
             if (isset($miInsumo['tipo']) && $miInsumo['tipo'] === 'fin') {
                 $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             }
-
             $sql .= 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             $update_cantidad_inventario = $localConnection->goQuery($sql);
             $object['update_cantidad_invrntario_SQL'] = $sql;
             $object['update_cantidad_inventario_RSP'] = $update_cantidad_inventario;
+            $object['update_success'] = !empty($update_cantidad_inventario);
+
 
         } elseif ($miInsumo['departamento'] === 'Corte') {
             // Para Corte, se mantiene la lógica original (ingresan Kg directamente)
@@ -1163,6 +1172,14 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
             $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
 
+            // Logic for Auto Remanente (Employee Finish)
+            if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] === 'true') {
+                $current_qty = $cantidad_consumida;
+                $sql_rem = 'UPDATE inventario SET remanente = ' . $current_qty . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $localConnection->goQuery($sql_rem);
+                $object['remanente_updated_auto'] = $current_qty;
+            }
+
             // Check if finishing
             if (isset($miInsumo['tipo']) && $miInsumo['tipo'] === 'fin') {
                 $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . $miInsumo['id_insumo'] . ';';
@@ -1171,11 +1188,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $update_cantidad_inventario = $localConnection->goQuery($sql);
             $object['update_cantidad_invrntario_SQL'] = $sql;
             $object['update_cantidad_inventario_RSP'] = $update_cantidad_inventario;
-
-            $cantidad_consumida = floatval($cantidad_inicial) - floatval($miInsumo['cantidad_consumida']);
-            $object['cantidad_consumida'] = $cantidad_consumida;
-            $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
-            $object['resp_update_cantidad'] = $localConnection->goQuery($sql);
+            $object['update_success'] = !empty($update_cantidad_inventario);
         } else {
             // Comportamiento por defecto (Impresión, etc.): Resta directa
             // Asumimos que la cantidad ingresada está en la misma unidad que el inventario
