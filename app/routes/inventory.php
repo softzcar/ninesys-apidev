@@ -1144,11 +1144,14 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
 
             // Logic for Auto Remanente (Employee Finish)
-            if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] == 'true') {
+            if (isset($miInsumo['auto_remanente']) && ($miInsumo['auto_remanente'] == 'true' || $miInsumo['auto_remanente'] === true)) {
                 $current_qty = $cantidad_consumida;
-                $sql_rem = 'UPDATE inventario SET remanente = ' . $current_qty . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
-                $localConnection->goQuery($sql_rem);
+                $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Producción)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
+                $rem_result = $localConnection->goQuery($sql_rem);
+
                 $object['remanente_updated_auto'] = $current_qty;
+                $object['debug_sql_rem'] = $sql_rem;
+                $object['debug_rem_result'] = $rem_result;
             }
 
             // Check if finishing
@@ -1175,7 +1178,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             // Logic for Auto Remanente (Employee Finish)
             if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] == 'true') {
                 $current_qty = $cantidad_consumida;
-                $sql_rem = 'UPDATE inventario SET remanente = ' . $current_qty . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $current_qty = $cantidad_consumida;
+                $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Producción)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
                 $localConnection->goQuery($sql_rem);
                 $object['remanente_updated_auto'] = $current_qty;
             }
@@ -1206,7 +1210,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 // At this point $cantidad_consumida holds the updated quantity (Initial - Consumption)
                 // We use THIS value as the remanente.
                 $current_qty = $cantidad_consumida;
-                $sql_rem = 'UPDATE inventario SET remanente = ' . $current_qty . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $current_qty = $cantidad_consumida;
+                $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Producción)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
                 $localConnection->goQuery($sql_rem);
                 $object['remanente_updated_auto'] = $current_qty;
             }
@@ -1232,7 +1237,10 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
         if (!$auto_active && isset($miInsumo['remanente']) && is_numeric($miInsumo['remanente'])) {
             $remanente_val = floatval($miInsumo['remanente']);
-            $sql_rem = 'UPDATE inventario SET remanente = ' . $remanente_val . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $motivo = isset($miInsumo['motivo']) ? $miInsumo['motivo'] : 'Terminación (Manual)';
+            $observacion = isset($miInsumo['observacion']) ? $miInsumo['observacion'] : '';
+
+            $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$remanente_val}, '{$motivo}', '{$observacion}', {$miInsumo['id_empleado']}, NOW())";
             $localConnection->goQuery($sql_rem);
             $object['remanente_updated'] = $remanente_val;
         }
