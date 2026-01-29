@@ -2331,7 +2331,20 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         try {
             $localConnection = new LocalDB();
             $id_remanente = $args['id'];
-            $data = $request->getParsedBody();
+
+            // Parsear manualmente el cuerpo JSON del PUT request
+            $raw_body = (string) $request->getBody();
+            $data = json_decode($raw_body, true);
+
+            if ($data === null) {
+                $response->getBody()->write(json_encode([
+                    'success' => false,
+                    'message' => 'Datos JSON inválidos'
+                ]));
+                return $response
+                    ->withHeader('Content-Type', 'application/json')
+                    ->withStatus(400);
+            }
 
             // Validaciones
             if (!isset($data['cantidad']) || floatval($data['cantidad']) < 0) {
