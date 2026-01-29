@@ -2289,10 +2289,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             LEFT JOIN api_empresas.empresas_usuarios emp ON r.id_empleado = emp.id_usuario
             {$where_clause}
             ORDER BY {$order_by} {$order_dir}
-            LIMIT ? OFFSET ?";
-
-            $bind_params[] = $limit;
-            $bind_params[] = $offset;
+            LIMIT {$limit} OFFSET {$offset}";
 
             $remanentes = $localConnection->goQuery($sql, $bind_params);
             $localConnection->disconnect();
