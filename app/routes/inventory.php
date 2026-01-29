@@ -1141,23 +1141,36 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $object['metros_ingresados'] = $input_metros;
             $object['rendimiento_utilizado'] = $rendimiento;
 
-            $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
-
-            // Logic for Auto Remanente (Employee Finish)
+            // Logic for Auto Remanente (Employee Finish) - MUST HAPPEN BEFORE ANY UPDATE
             if (isset($miInsumo['auto_remanente']) && ($miInsumo['auto_remanente'] == 'true' || $miInsumo['auto_remanente'] === true)) {
-                $current_qty = $cantidad_consumida;
+                // Fetch current quantity BEFORE any modification
+                $current_qty = $cantidad_inicial; // This is the actual current inventory
+
+                // If we're in Estampado, convert to meters for display/logging purposes
+                if ($miInsumo['departamento'] === 'Estampado') {
+                    $current_qty_display = $current_qty * $rendimiento; // Convert Kg to Mt for logging
+                    $object['remanente_kg'] = $current_qty;
+                    $object['remanente_mt'] = $current_qty_display;
+                }
+
                 $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Empleado)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
                 $rem_result = $localConnection->goQuery($sql_rem);
 
                 $object['remanente_updated_auto'] = $current_qty;
                 $object['debug_sql_rem'] = $sql_rem;
                 $object['debug_rem_result'] = $rem_result;
+                $object['debug_auto_remanente_triggered'] = true;
             }
 
-            // Check if finishing
+            // Now update inventory based on consumption (or set to 0 if finishing)
             if (isset($miInsumo['tipo']) && $miInsumo['tipo'] === 'fin') {
+                // Set to 0 when finishing
                 $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            } else {
+                // Normal consumption update
+                $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             }
+
             $sql .= 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             $update_cantidad_inventario = $localConnection->goQuery($sql);
             $object['update_cantidad_invrntario_SQL'] = $sql;
@@ -1202,24 +1215,28 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $object['cantidad_inicial'] = $cantidad_inicial;
             $object['cantidad_consumida_real'] = $consumo_real;
 
-            $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
-
-            // Logic for Auto Remanente (Employee Finish)
-            // MUST be done BEFORE zeroing out quantity if finishing
-            if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] == 'true') {
-                // At this point $cantidad_consumida holds the updated quantity (Initial - Consumption)
-                // We use THIS value as the remanente.
-                $current_qty = $cantidad_consumida;
-                $current_qty = $cantidad_consumida;
+            // Logic for Auto Remanente (Employee Finish) - MUST HAPPEN BEFORE ANY UPDATE
+            if (isset($miInsumo['auto_remanente']) && ($miInsumo['auto_remanente'] == 'true' || $miInsumo['auto_remanente'] === true)) {
+                // Use INITIAL quantity (current in DB) as remanente, not the calculated one after consumption
+                $current_qty = $cantidad_inicial;
                 $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Empleado)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
-                $localConnection->goQuery($sql_rem);
+                $rem_result = $localConnection->goQuery($sql_rem);
+
                 $object['remanente_updated_auto'] = $current_qty;
+                $object['debug_sql_rem'] = $sql_rem;
+                $object['debug_rem_result'] = $rem_result;
+                $object['debug_auto_remanente_triggered'] = true;
             }
 
-            // Check if finishing
+            // Now update inventory based on consumption (or set to 0 if finishing)
             if (isset($miInsumo['tipo']) && $miInsumo['tipo'] === 'fin') {
+                // Set to 0 when finishing
                 $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            } else {
+                // Normal consumption update
+                $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             }
+
             $sql .= 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             $update_cantidad_inventario = $localConnection->goQuery($sql);
             $object['update_cantidad_invrntario_SQL'] = $sql;
