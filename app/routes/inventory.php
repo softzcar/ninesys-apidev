@@ -1146,7 +1146,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             // Logic for Auto Remanente (Employee Finish)
             if (isset($miInsumo['auto_remanente']) && ($miInsumo['auto_remanente'] == 'true' || $miInsumo['auto_remanente'] === true)) {
                 $current_qty = $cantidad_consumida;
-                $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Producción)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
+                $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Empleado)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
                 $rem_result = $localConnection->goQuery($sql_rem);
 
                 $object['remanente_updated_auto'] = $current_qty;
@@ -1211,7 +1211,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 // We use THIS value as the remanente.
                 $current_qty = $cantidad_consumida;
                 $current_qty = $cantidad_consumida;
-                $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Producción)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
+                $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Empleado)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
                 $localConnection->goQuery($sql_rem);
                 $object['remanente_updated_auto'] = $current_qty;
             }
@@ -1233,9 +1233,10 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         // Logic for Remanente
         // Case 1: Explicit remanente (Admin Manual), BUT ONLY if auto_remanente is NOT active
         // Because if auto_remanente is active, we already calculated and saved the real value above.
-        $auto_active = (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] == 'true');
+        $auto_active = (isset($miInsumo['auto_remanente']) && ($miInsumo['auto_remanente'] == 'true' || $miInsumo['auto_remanente'] === true));
 
-        if (!$auto_active && isset($miInsumo['remanente']) && is_numeric($miInsumo['remanente'])) {
+        // Adding strict check: remanente must be greater than 0
+        if (!$auto_active && isset($miInsumo['remanente']) && is_numeric($miInsumo['remanente']) && floatval($miInsumo['remanente']) > 0) {
             $remanente_val = floatval($miInsumo['remanente']);
             $motivo = isset($miInsumo['motivo']) ? $miInsumo['motivo'] : 'Terminación (Manual)';
             $observacion = isset($miInsumo['observacion']) ? $miInsumo['observacion'] : '';
