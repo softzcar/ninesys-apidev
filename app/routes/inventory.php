@@ -2198,6 +2198,268 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 ->withStatus(500);
         }
     });
+
+    // ============================================================================
+    // GESTIÓN DE REMANENTES
+    // ============================================================================
+
+    /**
+     * GET /api/inventario/remanentes
+     * Lista remanentes con filtros, paginación y ordenamiento
+     */
+    $app->get('/api/inventario/remanentes', function (Request $request, Response $response) {
+        try {
+            $localConnection = new LocalDB();
+            $params = $request->getQueryParams();
+
+            // Parámetros de filtrado
+            $tipo = $params['tipo'] ?? 'activos'; // 'activos', 'terminados', 'todos'
+            $busqueda = $params['busqueda'] ?? '';
+            $fecha_desde = $params['fecha_desde'] ?? null;
+            $fecha_hasta = $params['fecha_hasta'] ?? null;
+
+            // Parámetros de paginación
+            $page = isset($params['page']) ? intval($params['page']) : 1;
+            $limit = isset($params['limit']) ? intval($params['limit']) : 20;
+            $offset = ($page - 1) * $limit;
+
+            // Parámetros de ordenamiento
+            $order_by = $params['order_by'] ?? 'r.fecha';
+            $order_dir = $params['order_dir'] ?? 'DESC';
+
+            // Construir WHERE clause
+            $where_conditions = [];
+            $bind_params = [];
+
+            // Filtro por tipo
+            if ($tipo === 'activos') {
+                $where_conditions[] = "i.cantidad > 0";
+            } elseif ($tipo === 'terminados') {
+                $where_conditions[] = "i.cantidad = 0";
+            }
+            // 'todos' no agrega condición
+
+            // Filtro por búsqueda (ID insumo, SKU, nombre empleado)
+            if (!empty($busqueda)) {
+                $where_conditions[] = "(i._id = ? OR i.sku LIKE ? OR i.insumo LIKE ? OR emp.nombre LIKE ?)";
+                $bind_params[] = $busqueda;
+                $bind_params[] = "%{$busqueda}%";
+                $bind_params[] = "%{$busqueda}%";
+                $bind_params[] = "%{$busqueda}%";
+            }
+
+            // Filtro por rango de fechas
+            if ($fecha_desde) {
+                $where_conditions[] = "r.fecha >= ?";
+                $bind_params[] = $fecha_desde;
+            }
+            if ($fecha_hasta) {
+                $where_conditions[] = "r.fecha <= ?";
+                $bind_params[] = $fecha_hasta . ' 23:59:59';
+            }
+
+            $where_clause = !empty($where_conditions) ? 'WHERE ' . implode(' AND ', $where_conditions) : '';
+
+            // Consulta de conteo total
+            $sql_count = "SELECT COUNT(*) as total
+                FROM inventario_remanentes r
+                INNER JOIN inventario i ON r.id_insumo = i._id
+                LEFT JOIN api_empresas.empresas_usuarios emp ON r.id_empleado = emp.id_usuario
+                {$where_clause}";
+
+            $count_result = $localConnection->goQuery($sql_count, $bind_params);
+            $total = $count_result[0]['total'] ?? 0;
+
+            // Consulta principal
+            $sql = "SELECT 
+                r._id as id_remanente,
+                r.id_insumo,
+                r.cantidad as cantidad_remanente,
+                r.motivo,
+                r.observacion,
+                r.fecha,
+                i.sku,
+                i.insumo as nombre_insumo,
+                i.cantidad as stock_actual,
+                i.unidad,
+                emp.id_usuario as id_empleado,
+                emp.nombre as nombre_empleado
+            FROM inventario_remanentes r
+            INNER JOIN inventario i ON r.id_insumo = i._id
+            LEFT JOIN api_empresas.empresas_usuarios emp ON r.id_empleado = emp.id_usuario
+            {$where_clause}
+            ORDER BY {$order_by} {$order_dir}
+            LIMIT ? OFFSET ?";
+
+            $bind_params[] = $limit;
+            $bind_params[] = $offset;
+
+            $remanentes = $localConnection->goQuery($sql, $bind_params);
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'data' => $remanentes ?? [],
+                'total' => intval($total),
+                'page' => $page,
+                'limit' => $limit,
+                'total_pages' => ceil($total / $limit)
+            ], JSON_NUMERIC_CHECK));
+
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(200);
+
+        } catch (\Exception $e) {
+            if (isset($localConnection)) {
+                $localConnection->disconnect();
+            }
+
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'Error al obtener remanentes',
+                'error' => $e->getMessage()
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(500);
+        }
+    });
+
+    /**
+     * PUT /api/inventario/remanentes/{id}
+     * Edita un remanente existente
+     */
+    $app->put('/api/inventario/remanentes/{id}', function (Request $request, Response $response, array $args) {
+        try {
+            $localConnection = new LocalDB();
+            $id_remanente = $args['id'];
+            $data = $request->getParsedBody();
+
+            // Validaciones
+            if (!isset($data['cantidad']) || floatval($data['cantidad']) < 0) {
+                $response->getBody()->write(json_encode([
+                    'success' => false,
+                    'message' => 'La cantidad debe ser mayor o igual a 0'
+                ]));
+                return $response
+                    ->withHeader('Content-Type', 'application/json')
+                    ->withStatus(400);
+            }
+
+            $cantidad = floatval($data['cantidad']);
+            $motivo = $data['motivo'] ?? '';
+            $observacion = $data['observacion'] ?? '';
+
+            // Actualizar remanente
+            $sql = "UPDATE inventario_remanentes 
+                SET cantidad = ?, motivo = ?, observacion = ?
+                WHERE _id = ?";
+
+            $localConnection->goQuery($sql, [$cantidad, $motivo, $observacion, $id_remanente]);
+
+            // Obtener el registro actualizado
+            $sql_select = "SELECT 
+                r._id as id_remanente,
+                r.id_insumo,
+                r.cantidad as cantidad_remanente,
+                r.motivo,
+                r.observacion,
+                r.fecha,
+                i.sku,
+                i.insumo as nombre_insumo,
+                i.cantidad as stock_actual,
+                i.unidad,
+                emp.id_usuario as id_empleado,
+                emp.nombre as nombre_empleado
+            FROM inventario_remanentes r
+            INNER JOIN inventario i ON r.id_insumo = i._id
+            LEFT JOIN api_empresas.empresas_usuarios emp ON r.id_empleado = emp.id_usuario
+            WHERE r._id = ?";
+
+            $updated = $localConnection->goQuery($sql_select, [$id_remanente]);
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'message' => 'Remanente actualizado correctamente',
+                'data' => $updated[0] ?? null
+            ], JSON_NUMERIC_CHECK));
+
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(200);
+
+        } catch (\Exception $e) {
+            if (isset($localConnection)) {
+                $localConnection->disconnect();
+            }
+
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'Error al actualizar remanente',
+                'error' => $e->getMessage()
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(500);
+        }
+    });
+
+    /**
+     * DELETE /api/inventario/remanentes/{id}
+     * Elimina un remanente
+     */
+    $app->delete('/api/inventario/remanentes/{id}', function (Request $request, Response $response, array $args) {
+        try {
+            $localConnection = new LocalDB();
+            $id_remanente = $args['id'];
+
+            // Verificar que el remanente existe
+            $sql_check = "SELECT _id FROM inventario_remanentes WHERE _id = ?";
+            $exists = $localConnection->goQuery($sql_check, [$id_remanente]);
+
+            if (empty($exists)) {
+                $localConnection->disconnect();
+                $response->getBody()->write(json_encode([
+                    'success' => false,
+                    'message' => 'Remanente no encontrado'
+                ]));
+                return $response
+                    ->withHeader('Content-Type', 'application/json')
+                    ->withStatus(404);
+            }
+
+            // Eliminar remanente
+            $sql_delete = "DELETE FROM inventario_remanentes WHERE _id = ?";
+            $localConnection->goQuery($sql_delete, [$id_remanente]);
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'message' => 'Remanente eliminado correctamente'
+            ]));
+
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(200);
+
+        } catch (\Exception $e) {
+            if (isset($localConnection)) {
+                $localConnection->disconnect();
+            }
+
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'Error al eliminar remanente',
+                'error' => $e->getMessage()
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(500);
+        }
+    });
+
     /** FIN INVENTARIO */
 
 }; // Fin de la función que envuelve las rutas
