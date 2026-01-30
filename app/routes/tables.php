@@ -347,7 +347,6 @@ return function (App $app) {
             LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
             WHERE
                 (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
-                AND ord.status != 'entregada'
                 AND ord.status != 'cancelada'
 
             ORDER BY
@@ -398,7 +397,6 @@ return function (App $app) {
             WHERE
                 ord.responsable = '{$args['id_empleado']}' 
                 AND (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
-                AND ord.status != 'entregada'
                 AND ord.status != 'cancelada'
 
             ORDER BY
