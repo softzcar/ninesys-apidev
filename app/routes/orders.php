@@ -2580,7 +2580,81 @@ $object['sales_commission_ISSET'][] = false;
     $id_wp_sql = "NULL";
     if (!empty($id_wp_val) && is_numeric($id_wp_val)) {
       $id_wp_sql = "'" . $id_wp_val . "'";
+    } else {
+      // NUEVO: Si no hay id_wp, crear o actualizar el cliente automáticamente
+      error_log("id_wp vacío detectado, creando/actualizando cliente automáticamente");
+
+      $cliente_nombre = addslashes($arr['nombre'] ?? '');
+      $cliente_apellido = addslashes($arr['apellido'] ?? '');
+      $cliente_cedula = addslashes($arr['cedula'] ?? '');
+      $cliente_telefono = addslashes($arr['telefono'] ?? '');
+      $cliente_email = addslashes($arr['email'] ?? '');
+      $cliente_direccion = addslashes($arr['direccion'] ?? 'none');
+
+      // Generar email si está vacío
+      if (empty($cliente_email) || $cliente_email === 'none') {
+        $randomString = substr(str_shuffle('abcdefghijklmnopqrstuvwxyz0123456789'), 0, 8);
+        $cliente_email = strtolower(substr($cliente_nombre, 0, 1)) . $randomString . '@email.com';
+      }
+
+      // Buscar si ya existe un cliente con esa cédula o teléfono
+      $sqlCheckCustomer = "SELECT _id FROM customers WHERE ";
+      $conditions = [];
+
+      if (!empty($cliente_cedula) && $cliente_cedula !== 'none') {
+        $conditions[] = "cedula = '$cliente_cedula'";
+      }
+
+      if (!empty($cliente_telefono) && $cliente_telefono !== 'none') {
+        $conditions[] = "phone = '$cliente_telefono'";
+      }
+
+      if (!empty($conditions)) {
+        $sqlCheckCustomer .= '(' . implode(' OR ', $conditions) . ') LIMIT 1';
+        $existingCustomer = $localConnection->goQuery($sqlCheckCustomer);
+
+        if (!empty($existingCustomer)) {
+          // Cliente ya existe, ACTUALIZAR sus datos
+          $customer_id = $existingCustomer[0]['_id'];
+          $sqlUpdateCustomer = "UPDATE customers SET 
+                                  first_name = '$cliente_nombre', 
+                                  last_name = '$cliente_apellido', 
+                                  cedula = '$cliente_cedula', 
+                                  phone = '$cliente_telefono', 
+                                  email = '$cliente_email', 
+                                  address = '$cliente_direccion' 
+                                WHERE _id = $customer_id";
+          $localConnection->goQuery($sqlUpdateCustomer);
+          $id_wp_sql = "'" . $customer_id . "'";
+          error_log("Cliente existente actualizado con ID: $customer_id");
+        } else {
+          // Cliente no existe, CREAR nuevo
+          $sqlCreateCustomer = "INSERT INTO customers (first_name, last_name, cedula, phone, email, address) 
+                                VALUES ('$cliente_nombre', '$cliente_apellido', '$cliente_cedula', '$cliente_telefono', '$cliente_email', '$cliente_direccion')";
+          $createResult = $localConnection->goQuery($sqlCreateCustomer);
+
+          if (isset($createResult['insert_id'])) {
+            $id_wp_sql = "'" . $createResult['insert_id'] . "'";
+            error_log("Nuevo cliente creado con ID: " . $createResult['insert_id']);
+          } else {
+            error_log("Error al crear cliente: id_wp quedará NULL");
+          }
+        }
+      } else {
+        // No hay cédula ni teléfono para buscar, crear cliente nuevo directamente
+        $sqlCreateCustomer = "INSERT INTO customers (first_name, last_name, cedula, phone, email, address) 
+                              VALUES ('$cliente_nombre', '$cliente_apellido', '$cliente_cedula', '$cliente_telefono', '$cliente_email', '$cliente_direccion')";
+        $createResult = $localConnection->goQuery($sqlCreateCustomer);
+
+        if (isset($createResult['insert_id'])) {
+          $id_wp_sql = "'" . $createResult['insert_id'] . "'";
+          error_log("Nuevo cliente creado con ID: " . $createResult['insert_id']);
+        } else {
+          error_log("Error al crear cliente: id_wp quedará NULL");
+        }
+      }
     }
+
 
     // ========== INICIAR TRANSACCIÓN ==========
     $localConnection->beginTransaction();
