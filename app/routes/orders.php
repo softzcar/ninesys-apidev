@@ -2956,9 +2956,15 @@ $object['sales_commission_ISSET'][] = false;
 
       // WhatsApp se envía DESPUÉS del commit (no es crítico si falla)
       if ($sendWhatsApp) {
-        $infoSql = 'SELECT b.phone FROM ordenes a LEFT JOIN customers b ON b._id = a.id_wp WHERE a._id = ' . $last_id;
-        $contactInfo = $localConnection->goQuery($infoSql)[0] ?? [];
-        $clientPhone = $contactInfo['phone'] ?? null;
+        // Usar el teléfono que viene del formulario directamente
+        $clientPhone = $arr['telefono'] ?? null;
+
+        // Fallback: si no viene del formulario, intentar obtener de customers
+        if (empty($clientPhone)) {
+          $infoSql = 'SELECT b.phone FROM ordenes a LEFT JOIN customers b ON b._id = a.id_wp WHERE a._id = ' . $last_id;
+          $contactInfo = $localConnection->goQuery($infoSql)[0] ?? [];
+          $clientPhone = $contactInfo['phone'] ?? null;
+        }
 
         if (empty($clientPhone)) {
           $object['ws_response'] = 'Envío de WhatsApp omitido: No se encontró un número de teléfono para el cliente.';
