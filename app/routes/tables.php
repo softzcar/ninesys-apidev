@@ -354,6 +354,8 @@ return function (App $app) {
                         (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) = 0
                         AND ord.status != 'entregada'
                     )
+                    OR
+                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) < 0
                 )
 
             ORDER BY
@@ -411,6 +413,8 @@ return function (App $app) {
                         (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) = 0
                         AND ord.status != 'entregada'
                     )
+                    OR
+                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) < 0
                 )
 
             ORDER BY
