@@ -346,8 +346,15 @@ return function (App $app) {
             JOIN customers cus ON ord.id_wp = cus._id
             LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
             WHERE
-                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
-                AND ord.status != 'cancelada'
+                ord.status != 'cancelada'
+                AND (
+                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
+                    OR 
+                    (
+                        (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) = 0
+                        AND ord.status != 'entregada'
+                    )
+                )
 
             ORDER BY
                 ord._id
@@ -395,9 +402,16 @@ return function (App $app) {
             JOIN customers cus ON ord.id_wp = cus._id
             LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
             WHERE
-                ord.responsable = '{$args['id_empleado']}' 
-                AND (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
+                ord.responsable = '{$args['id_empleado']}'
                 AND ord.status != 'cancelada'
+                AND (
+                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
+                    OR 
+                    (
+                        (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) = 0
+                        AND ord.status != 'entregada'
+                    )
+                )
 
             ORDER BY
                 ord._id
