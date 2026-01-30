@@ -303,7 +303,7 @@ return function (App $app) {
 
     $localConnection = new LocalDB();
 
-    if ($departamento === 'Administración') {
+    if (strpos($departamento, 'Admin') !== false) {
       $sql = "SELECT
                 ord.responsable,
                 ord._id orden,
@@ -339,20 +339,14 @@ return function (App $app) {
                         op.id_orden = ord._id
                 ) AS product_categories,
                 (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
+                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) AS saldo_pendiente,
                 ord.status estatus
             FROM
                 ordenes ord
             JOIN customers cus ON ord.id_wp = cus._id
             LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
             WHERE
-                (ord.status
-                    = 'activa' OR
-                ord.status
-                    = 'En espera' OR
-                ord.status
-                    = 'terminada' OR
-                ord.status
-                    = 'pausada')
+                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
 
             ORDER BY
                 ord._id
@@ -393,22 +387,15 @@ return function (App $app) {
                         op.id_orden = ord._id
                 ) AS product_categories,
                 (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
-                ord.status estaus
+                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) AS saldo_pendiente,
+                ord.status estatus
             FROM
                 ordenes ord
             JOIN customers cus ON ord.id_wp = cus._id
             LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
             WHERE
-                ord.responsable = '{$args['id_empleado']}' AND(
-                ord.status
-                    = 'activa' OR
-                ord.status
-                    = 'En espera' OR
-                ord.status
-                    = 'terminada' OR
-                ord.status
-                    = 'pausada'
-            ) AND ord.pago_comision = 'pendiente'
+                ord.responsable = '{$args['id_empleado']}' 
+                AND (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
 
             ORDER BY
                 ord._id
