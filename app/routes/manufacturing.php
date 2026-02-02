@@ -818,6 +818,7 @@ return function (App $app) {
         // Para comisión por porcentaje: calcular basado en precio del producto
         $sql = "SELECT
               a._id AS id_lotes_detalles,
+              a.procentaje_comision,
               SUM(c.cantidad) AS total_productos_empleado,
               SUM(c.cantidad * c.precio_unitario * ($comisionValue / 100)) AS total_comision_porcentaje
           FROM
@@ -843,6 +844,13 @@ return function (App $app) {
         $id_lotes_detalles = $respComision[0]['id_lotes_detalles'];
         $comimision = $comisionValue; // El porcentaje
         $totalComimision = $respComision[0]['total_comision_porcentaje'];
+
+        // CORRECCIÓN: Aplicar porcentaje asignado (si trabajan 2 personas al 50%, se paga 50%)
+        $porcentajeAsignado = floatval($respComision[0]['procentaje_comision']);
+        if ($porcentajeAsignado <= 0)
+          $porcentajeAsignado = 100; // Legacy support
+
+        $totalComimision = $totalComimision * ($porcentajeAsignado / 100);
 
         // CORRECCIÓN: Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
         if ($salarioTipo === 'Salario') {
@@ -872,7 +880,7 @@ return function (App $app) {
               a.procentaje_comision,
               b.comision AS comision_fija,
               SUM(c.cantidad) AS total_productos_empleado,
-              SUM(c.cantidad) * b.comision AS total_comision_fija
+              (SUM(c.cantidad) * b.comision) * (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100) AS total_comision_fija
           FROM
               lotes_detalles_empleados_asignados a
           JOIN
@@ -929,6 +937,7 @@ return function (App $app) {
         // Para comisión variable: consulta por producto individual usando comisión por departamento
         $sql = "SELECT
               a._id AS id_lotes_detalles,
+              a.procentaje_comision,
               c.cantidad,
               IFNULL(pc.comision, 0) AS comision_producto,
               1 AS factor_empleado, -- Factor fijo 1 para variable
@@ -961,6 +970,13 @@ return function (App $app) {
           $id_lotes_detalles = $producto['id_lotes_detalles'];
           $comimision = $producto['comision_producto'];  // Comisión del producto
           $totalComimision = $producto['monto_comision_por_producto'];  // Monto calculado con factor del empleado
+
+          // CORRECCIÓN: Aplicar porcentaje asignado (variable)
+          $porcentajeAsignado = floatval($producto['procentaje_comision']);
+          if ($porcentajeAsignado <= 0)
+            $porcentajeAsignado = 100;
+
+          $totalComimision = $totalComimision * ($porcentajeAsignado / 100);
 
           // CORRECCIÓN: Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
           if ($salarioTipo === 'Salario') {
