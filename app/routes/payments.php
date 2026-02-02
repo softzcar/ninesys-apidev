@@ -353,7 +353,8 @@ return function (App $app) {
                     DATE_FORMAT(b.fecha_terminado, '%v') AS semana,
                     DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
                     a.fecha_pago,
-                    TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido
+                    TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
+                    (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = b.id_orden) as cantidad_productos
                 FROM
                     pagos a
                 JOIN
@@ -399,7 +400,8 @@ return function (App $app) {
                         DATE_FORMAT(b.fecha_terminado, '%v') AS semana,
                         DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
                         a.fecha_pago,
-                        TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido
+                        TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
+                        (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = b.id_orden) as cantidad_productos
                     FROM
                         pagos a
                     JOIN
@@ -448,7 +450,8 @@ return function (App $app) {
                         DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
                         a.fecha_pago,
                         TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
-                        d.precio_unitario AS precio_producto
+                        d.precio_unitario AS precio_producto,
+                        (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = b.id_orden) as cantidad_productos
                     FROM
                         pagos a
                     JOIN
