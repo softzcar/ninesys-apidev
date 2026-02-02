@@ -734,32 +734,57 @@ return function (App $app) {
         }
       } else {
         // ONLY execute main order logic if NOT a reposition (or if we want repositions to trigger main logic, but usually not)
-        // Adjusting indentation for the else block below
 
+        // --- VERIFICAR SI HAY OTROS EMPLEADOS PENDIENTES ---
+        // Antes de avanzar el paso de la orden, verificamos si hay otros empleados asignados a este departamento
+        // que aún no han terminado su tarea.
+        $sqlCheckPending = "SELECT COUNT(*) as pending 
+                            FROM lotes_detalles_empleados_asignados 
+                            WHERE id_orden = {$miEmpleado['id_orden']} 
+                            AND id_departamento = {$miEmpleado['id_departamento']} 
+                            AND (progreso != 'terminada' AND progreso != 'terminado')
+                            AND id_empleado != {$miEmpleado['id_empleado']}";
+        // Eliminamos filtros de reposición para asegurar que contamos tareas principales si estamos en flujo principal
+        // Opcional: AND (id_reposicion IS NULL OR id_reposicion = 0)
 
-        $current_orden_proceso = intval($miEmpleado['orden_proceso']);
-
-        // LÓGICA CORREGIDA: Buscar el siguiente departamento en la secuencia de producción
-        $sqlDep = 'SELECT _id AS id_departamento, departamento, orden_proceso
-                 FROM departamentos
-                 WHERE asignar_numero_de_paso = 1 AND orden_proceso > ?
-                 ORDER BY orden_proceso ASC
-                 LIMIT 1';
-        $object['sql_select_next_departament'] = $sqlDep;
-        $response_departamentos = $localConnection->goQuery($sqlDep, [$current_orden_proceso]);
-
-        // Verificar si existe el departamento, de no ser así indica que es el último paso.
-        if (empty($response_departamentos)) {
-          // Es el último paso debemos asignar terminado o el paso que viene despues de el último despues de producción
-          $sql5 = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = {$miEmpleado['id_orden']}; UPDATE ordenes SET `status` = 'terminado' WHERE _id = {$miEmpleado['id_orden']};";
-          // $sql5 .= "UPDATE ordenes SET `status` = 'terminado' WHERE _id = {$miEmpleado['id_orden']};";
-        } else {
-          // El paso existe, lo actualizamos para el semáforo y progressbar
-          $departmentName = $response_departamentos[0]['departamento'] ?? 'terminado';  // Usar el nombre del departamento
-          $next_department_id = $response_departamentos[0]['id_departamento'];  // Usar el ID correcto del departamento
-          $sql5 = "UPDATE lotes SET paso = '{$departmentName}', id_departamento_actual = {$next_department_id} WHERE id_orden = {$miEmpleado['id_orden']};";
+        $checkResults = $localConnection->goQuery($sqlCheckPending);
+        $pendingCount = 0;
+        if (!empty($checkResults) && isset($checkResults[0]['pending'])) {
+          $pendingCount = intval($checkResults[0]['pending']);
         }
-        $response_update2 = $localConnection->goQuery($sql5);
+
+        if ($pendingCount > 0) {
+          // Hay otros empleados pendientes. NO avanzamos el lote.
+          // Solo se registrará el fin de tarea del empleado actual (más abajo en el código) y su pago.
+          $object['msg_extra'] = "Orden no avanzada. Quedan $pendingCount empleados pendientes en este paso.";
+          $response_update2 = null;
+        } else {
+          // Todos han terminado (o este es el último). Avanzamos el paso.
+
+          $current_orden_proceso = intval($miEmpleado['orden_proceso']);
+
+          // LÓGICA CORREGIDA: Buscar el siguiente departamento en la secuencia de producción
+          $sqlDep = 'SELECT _id AS id_departamento, departamento, orden_proceso
+                     FROM departamentos
+                     WHERE asignar_numero_de_paso = 1 AND orden_proceso > ?
+                     ORDER BY orden_proceso ASC
+                     LIMIT 1';
+          $object['sql_select_next_departament'] = $sqlDep;
+          $response_departamentos = $localConnection->goQuery($sqlDep, [$current_orden_proceso]);
+
+          // Verificar si existe el departamento, de no ser así indica que es el último paso.
+          if (empty($response_departamentos)) {
+            // Es el último paso debemos asignar terminado o el paso que viene despues de el último despues de producción
+            $sql5 = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = {$miEmpleado['id_orden']}; UPDATE ordenes SET `status` = 'terminado' WHERE _id = {$miEmpleado['id_orden']};";
+            // $sql5 .= "UPDATE ordenes SET `status` = 'terminado' WHERE _id = {$miEmpleado['id_orden']};";
+          } else {
+            // El paso existe, lo actualizamos para el semáforo y progressbar
+            $departmentName = $response_departamentos[0]['departamento'] ?? 'terminado';  // Usar el nombre del departamento
+            $next_department_id = $response_departamentos[0]['id_departamento'];  // Usar el ID correcto del departamento
+            $sql5 = "UPDATE lotes SET paso = '{$departmentName}', id_departamento_actual = {$next_department_id} WHERE id_orden = {$miEmpleado['id_orden']};";
+          }
+          $response_update2 = $localConnection->goQuery($sql5);
+        }
       } // End else !es_reposicion
 
       // Calculo de comisiones
@@ -831,9 +856,15 @@ return function (App $app) {
 
         $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
 
-        $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
-        $object['sql_pagos'][] = $sql;
-        $object['resp_pagos'] = $localConnection->goQuery($sql);
+        // CHECK DUPLICATE BEFORE INSERT
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
+        $check = $localConnection->goQuery($sqlCheck);
+
+        if (empty($check)) {
+          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
+          $object['sql_pagos'][] = $sql;
+          $object['resp_pagos'] = $localConnection->goQuery($sql);
+        }
       } elseif ($comisionTipo === 'fija') {
         // Para comisión fija: consulta agrupada para obtener total
         $sql = "SELECT
@@ -884,9 +915,16 @@ return function (App $app) {
         }
 
         $id_reposicion_val = isset($miEmpleado['id_reposicion']) ? $miEmpleado['id_reposicion'] : 'NULL';
-        $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
-        $object['sql_pagos'][] = $sql;
-        $object['resp_pagos'] = $localConnection->goQuery($sql);
+
+        // CHECK DUPLICATE BEFORE INSERT
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
+        $check = $localConnection->goQuery($sqlCheck);
+
+        if (empty($check)) {
+          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
+          $object['sql_pagos'][] = $sql;
+          $object['resp_pagos'] = $localConnection->goQuery($sql);
+        }
       } else {
         // Para comisión variable: consulta por producto individual usando comisión por departamento
         $sql = "SELECT
@@ -932,9 +970,15 @@ return function (App $app) {
           $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
 
           // GUARDAR PAGO (Reconstruido)
-          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", 'variable', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
-          $object['sql_pagos'][] = $sql;
-          $localConnection->goQuery($sql);
+          // CHECK DUPLICATE BEFORE INSERT
+          $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
+          $check = $localConnection->goQuery($sqlCheck);
+
+          if (empty($check)) {
+            $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", 'variable', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
+            $object['sql_pagos'][] = $sql;
+            $localConnection->goQuery($sql);
+          }
         }
       }
 
