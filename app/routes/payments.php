@@ -196,7 +196,7 @@ return function (App $app) {
                 p.id_empleado,
                 p.fecha_pago,
                 (SELECT numero_semana FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = p.id_empleado ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
-                (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = p.id_orden) as cantidad_productos,
+                (SELECT IF(p.id_reposicion > 0, (SELECT unidades FROM reposiciones WHERE _id = p.id_reposicion), (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = p.id_orden))) as cantidad_productos,
                 (
                 SELECT
                     departamento
@@ -355,7 +355,7 @@ return function (App $app) {
                     DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
                     a.fecha_pago,
                     TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
-                    (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = b.id_orden) as cantidad_productos
+                    (SELECT IF(b.id_reposicion > 0, (SELECT unidades FROM reposiciones WHERE _id = b.id_reposicion), (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = b.id_orden))) as cantidad_productos
                 FROM
                     pagos a
                 JOIN
@@ -402,7 +402,7 @@ return function (App $app) {
                         DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
                         a.fecha_pago,
                         TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
-                        (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = b.id_orden) as cantidad_productos
+                        (SELECT IF(b.id_reposicion > 0, (SELECT unidades FROM reposiciones WHERE _id = b.id_reposicion), (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = b.id_orden))) as cantidad_productos
                     FROM
                         pagos a
                     JOIN
@@ -452,7 +452,7 @@ return function (App $app) {
                         a.fecha_pago,
                         TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
                         d.precio_unitario AS precio_producto,
-                        (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = b.id_orden) as cantidad_productos
+                        (SELECT IF(b.id_reposicion > 0, (SELECT unidades FROM reposiciones WHERE _id = b.id_reposicion), (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = b.id_orden))) as cantidad_productos
                     FROM
                         pagos a
                     JOIN
@@ -525,7 +525,7 @@ return function (App $app) {
                 a.fecha_pago,
                 (SELECT numero_semana FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_empleado ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
                 DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago,
-                (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = a.id_orden) as cantidad_productos
+                (SELECT IF(a.id_reposicion > 0, (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion), (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = a.id_orden))) as cantidad_productos
             FROM
                 pagos a
             JOIN abonos b ON
@@ -580,7 +580,7 @@ return function (App $app) {
                 e.tipo_de_pago,
                 a.fecha_pago,
                 DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago,
-                (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = a.id_orden) as cantidad_productos
+                (SELECT IF(a.id_reposicion > 0, (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion), (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = a.id_orden))) as cantidad_productos
             FROM
                 pagos a
             JOIN abonos b ON
