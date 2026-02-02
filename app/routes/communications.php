@@ -425,13 +425,11 @@ return function (App $app) {
           "{$orden['id_orden']}",
           "{$orden['fecha_entrega']}",
           "{$productos_string}",
-          "{$config_data[0]['pago_total']}",
-          "{$config_data[0]['total_abonos']}",
-          "{$config_data[0]['total_descuentos']}",
-          "{$config_data[0]['deuda']}",
+          number_format(floatval($config_data[0]['pago_total']), 2, '.', ''),
+          number_format(floatval($config_data[0]['total_abonos']), 2, '.', ''),
+          number_format(floatval($config_data[0]['total_descuentos']), 2, '.', ''),
+          number_format(floatval($config_data[0]['deuda']), 2, '.', ''),
           $productos_string,
-          // CORRECCIÓN: Convertir la cadena a float antes de formatear
-          // number_format(floatval($orden['pago_total']), 2, '.', ',')
         ];
       } else if ($tipo === 'custom') {
         $mensaje_plantilla = $dataMensaje['message'];
