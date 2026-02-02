@@ -30,7 +30,7 @@ return function (App $app) {
             a.dni,
             a.fecha_ingreso,
             a.id_seguridad_social,
-            (SELECT numero_semana FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+            (SELECT numero_semana FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_usuario ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
             IFNULL(CONCAT("[", GROUP_CONCAT(
                 DISTINCT CONCAT("{\"id\":", b.id_departamento, ",\"nombre\":\"", c.departamento, "\"}")
                 SEPARATOR ","), "]"), "[]") AS departamentos,

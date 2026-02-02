@@ -2424,10 +2424,16 @@ $object['sales_commission_ISSET'][] = false;
 
       // Calcular comisión SOLO sobre el nuevo abono
       if ($arr['sales_commission'] === true) {
-        $sql_comision = 'SELECT comision, comision_tipo FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $arr['responsable'];
+        $sql_comision = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $arr['responsable'];
         $respComision = $localConnection->goQuery($sql_comision)[0];
-        $comisionFloat = floatval($respComision['comision']);
-        $comision = number_format($comisionFloat, 2);
+        $comisionTipo = $respComision['comision_tipo'];
+
+        if ($comisionTipo === 'porcentaje') {
+          $comision = floatval($respComision['comision_porcentaje']);
+        } else {
+          $comisionFloat = floatval($respComision['comision']);
+          $comision = number_format($comisionFloat, 2);
+        }
 
         $pago_vendedor = floatval($arr['abono']) * $comision / 100;
         $pago_vendedor = number_format($pago_vendedor, 2);
