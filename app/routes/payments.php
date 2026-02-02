@@ -195,7 +195,8 @@ return function (App $app) {
                 p.monto_pago pago,
                 p.id_empleado,
                 p.fecha_pago,
-                (SELECT numero_semana FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+                (SELECT numero_semana FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = p.id_empleado ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+                (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = p.id_orden) as cantidad_productos,
                 (
                 SELECT
                     departamento
