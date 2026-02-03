@@ -235,8 +235,8 @@ return function (App $app) {
             FROM
                 pagos p
             JOIN revisiones r ON
-                p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado 
-            WHERE p.fecha_pago IS  NULL AND p.detalle IN ("Diseño", "ajuste", "personalización")
+                p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado AND r.estatus = "Aprobado"
+            WHERE p.fecha_pago IS NULL AND p.detalle IN ("Diseño", "ajuste", "personalización")
             GROUP BY p._id
         ';
     $object['data']['diseno'] = $localConnection->goQuery($sql);
