@@ -299,7 +299,7 @@ return function (App $app) {
       return ApiResponse::validationError($response, 'Error: ID de orden inválido');
     }
 
-    $abono_val = floatval($datosAbono['abono'] ?? 0);
+    $abono_val = round(floatval($datosAbono['abono'] ?? 0), 2);
     $descuento_val = floatval($datosAbono['descuento'] ?? 0);
 
     if ($abono_val <= 0 && $descuento_val <= 0) {

@@ -339,7 +339,7 @@ return function (App $app) {
                         op.id_orden = ord._id
                 ) AS product_categories,
                 (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
-                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) AS saldo_pendiente,
+                ROUND(ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0), 2) AS saldo_pendiente,
                 ord.status estatus
             FROM
                 ordenes ord
@@ -348,14 +348,14 @@ return function (App $app) {
             WHERE
                 ord.status != 'cancelada'
                 AND (
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
+                    ROUND(ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0), 2) > 0
                     OR 
                     (
-                        (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) = 0
+                        ROUND(ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0), 2) = 0
                         AND ord.status != 'entregada'
                     )
                     OR
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) < 0
+                    ROUND(ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0), 2) < 0
                 )
 
             ORDER BY
@@ -397,7 +397,7 @@ return function (App $app) {
                         op.id_orden = ord._id
                 ) AS product_categories,
                 (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
-                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) AS saldo_pendiente,
+                ROUND(ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0), 2) AS saldo_pendiente,
                 ord.status estatus
             FROM
                 ordenes ord
@@ -407,14 +407,14 @@ return function (App $app) {
                 ord.responsable = '{$args['id_empleado']}'
                 AND ord.status != 'cancelada'
                 AND (
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
+                    ROUND(ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0), 2) > 0
                     OR 
                     (
-                        (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) = 0
+                        ROUND(ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0), 2) = 0
                         AND ord.status != 'entregada'
                     )
                     OR
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) < 0
+                    ROUND(ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0), 2) < 0
                 )
 
             ORDER BY
