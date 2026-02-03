@@ -14,8 +14,8 @@ CREATE TABLE `abonos` (
   `_id` int(11) NOT NULL COMMENT 'ID de la talba',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del empleado',
-  `abono` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT 'monto del abono',
-  `descuento` decimal(10, 2) DEFAULT 0.00 COMMENT 'Descuento del abono',
+  `abono` decimal(12, 4) NOT NULL DEFAULT 0.0000 COMMENT 'monto del abono',
+  `descuento` decimal(12, 4) DEFAULT 0.0000 COMMENT 'Descuento del abono',
   `detalle` varchar(60) DEFAULT NULL COMMENT 'Descripción del abono',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha del abono'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Abonos realizados a órdenes. Registra pagos parciales efectuados por clientes para reducir el saldo pendiente de una orden.';
@@ -403,6 +403,17 @@ CREATE TABLE `inventario_movimientos_historial` (
   INDEX `idx_movimiento` (`id_movimiento`),
   INDEX `idx_fecha` (`fecha_modificacion`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Historial de cambios en inventario_movimientos. Registra modificaciones de material_consumido para auditoría y trazabilidad.';
+CREATE TABLE `inventario_remanentes` (
+  `_id` int(11) NOT NULL AUTO_INCREMENT,
+  `id_insumo` int(11) NOT NULL,
+  `cantidad` decimal(10,2) NOT NULL,
+  `motivo` varchar(255) NOT NULL DEFAULT 'Terminación',
+  `observacion` text,
+  `id_empleado` int(11) DEFAULT NULL,
+  `fecha` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`_id`),
+  KEY `id_insumo` (`id_insumo`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Historial de remanentes (retazos/sobrantes) de insumos al ser terminados.';
 CREATE TABLE `lotes` (
   `_id` int(11) NOT NULL COMMENT 'ID Autonumérico',
   `lote` mediumtext DEFAULT NULL COMMENT 'Código del Lote',
@@ -488,7 +499,7 @@ CREATE TABLE `metodos_de_pago` (
   `detalle` varchar(140) DEFAULT NULL COMMENT 'Detalle en caso de que el tipo de pago sea abonos u otros',
   `tipo_de_pago` varchar(13) NOT NULL DEFAULT 'Orden nueva' COMMENT 'Procedencia del pago para identificar el tipo de ingreso',
   `monto` decimal(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Monto cancelado en cada metodo de pago',
-  `tasa` decimal(12, 0) DEFAULT NULL COMMENT 'Tasa de conversion con relacion al dolar',
+  `tasa` decimal(12, 2) DEFAULT NULL COMMENT 'Tasa de conversion con relacion al dolar',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de transacciones de pago asociadas a órdenes. Almacena método, moneda, monto, tasa de conversión y referencia al cierre de caja.';
 CREATE TABLE `ordenes` (
@@ -726,9 +737,9 @@ CREATE TABLE `presupuestos` (
   `observaciones` longtext DEFAULT NULL COMMENT 'Detalles de la orden',
   `fecha_creacion` date DEFAULT NULL,
   `token` varchar(45) DEFAULT NULL COMMENT 'Token random',
-  `pago_descuento` decimal(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Descuento sobre le monto de la orden',
-  `pago_total` decimal(12, 2) DEFAULT 0.00 COMMENT 'Montototal de la orden',
-  `pago_abono` decimal(12, 2) DEFAULT 0.00 COMMENT 'Monto abonado',
+  `pago_descuento` decimal(12, 4) NOT NULL DEFAULT 0.0000 COMMENT 'Descuento sobre le monto de la orden',
+  `pago_total` decimal(12, 4) DEFAULT 0.0000 COMMENT 'Montototal de la orden',
+  `pago_abono` decimal(12, 4) DEFAULT 0.0000 COMMENT 'Monto abonado',
   `pago_comision` varchar(9) NOT NULL DEFAULT 'pendiente' COMMENT 'Los valores puedes ser pendiente: cuando aun no se ha pagado el total de la orden al vendedor, pagado, cuando se ha  terminado de pagar la totalidad de comisiones al vendedor, anulado, cuando por algun motivo no se terminará de pagar el vanededor y el administrador decide anular los pagos de esta orden',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Creación del registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
