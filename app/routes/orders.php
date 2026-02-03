@@ -2211,9 +2211,9 @@ $object['sales_commission_ISSET'][] = false;
 
     // 1. OBTENER EL ID DE LA ORDEN A EDITAR. ¡ESTO ES CRÍTICO!
     // El frontend DEBE enviar 'id_orden_edit' en el payload.
-    if (!isset($newJson['id_orden_edit']) || empty($newJson['id_orden_edit'])) {
+    if (!isset($newJson['id_orden_edit']) || empty($newJson['id_orden_edit']) || !is_numeric($newJson['id_orden_edit'])) {
       $object['response']['status'] = 'error';
-      $object['response']['message'] = 'No se proporcionó el ID de la orden para editar.';
+      $object['response']['message'] = 'No se proporcionó un ID de orden válido para editar.';
       $response->getBody()->write(json_encode($object));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
