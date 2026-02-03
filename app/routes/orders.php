@@ -121,7 +121,7 @@ return function (App $app) {
       $sql = 'SELECT id_wp_order FROM ordenes WHERE _id = ' . $order['id'];
       $data = $localConnection->goQuery($sql);
 
-      if (!is_null($data[0]['id_wp_order'])) {
+      if (!empty($data) && isset($data[0]['id_wp_order']) && !is_null($data[0]['id_wp_order'])) {
         $woo = new WooMe();
 
         if ($order['estado'] === 'terminada') {
@@ -2247,18 +2247,18 @@ $object['sales_commission_ISSET'][] = false;
 
     // 2. PROCESAR DATOS DEL PAYLOAD (similar al endpoint original)
     $arr = [];
-    $arr['id_wp'] = $newJson['id'];
-    $arr['fechaEntrega'] = $newJson['fechaEntrega'];
-    $arr['obs'] = $newJson['obs'] !== null ? addslashes($newJson['obs']) : '';
-    $arr['total'] = floatval($newJson['total']);  // Nuevo total recalculado en el frontend
-    $arr['abono'] = floatval($newJson['abono']);  // ¡IMPORTANTE! Este debe ser SOLO el nuevo abono, no el total histórico.
-    $arr['descuento'] = floatval($newJson['descuento']);  // Descuento total actualizado
-    $arr['descuentoDetalle'] = $newJson['descuentoDetalle'];
-    $arr['responsable'] = intval($newJson['responsable']);
-    $arr['sales_commission'] = ($newJson['sales_commission'] === 'true');
-    $arr['tasa_dolar'] = floatval($newJson['tasa_dolar']);
-    $arr['tasa_peso'] = floatval($newJson['tasa_peso']);
-    $nuevos_productos = json_decode($newJson['productos'], true);
+    $arr['id_wp'] = $newJson['id'] ?? null;
+    $arr['fechaEntrega'] = $newJson['fechaEntrega'] ?? date('Y-m-d');
+    $arr['obs'] = isset($newJson['obs']) && $newJson['obs'] !== null ? addslashes($newJson['obs']) : '';
+    $arr['total'] = floatval($newJson['total'] ?? 0);
+    $arr['abono'] = floatval($newJson['abono'] ?? 0);
+    $arr['descuento'] = floatval($newJson['descuento'] ?? 0);
+    $arr['descuentoDetalle'] = $newJson['descuentoDetalle'] ?? '';
+    $arr['responsable'] = intval($newJson['responsable'] ?? 0);
+    $arr['sales_commission'] = (($newJson['sales_commission'] ?? 'false') === 'true');
+    $arr['tasa_dolar'] = floatval($newJson['tasa_dolar'] ?? 1);
+    $arr['tasa_peso'] = floatval($newJson['tasa_peso'] ?? 1);
+    $nuevos_productos = json_decode($newJson['productos'] ?? '[]', true);
 
     // 3. MANEJO DE PRODUCTOS (INSERT, UPDATE, DELETE)
     // 3.1. Obtener productos actuales de la base de datos para comparar
