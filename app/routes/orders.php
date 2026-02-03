@@ -622,7 +622,7 @@ return function (App $app) {
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
             JOIN pagos d ON d.id_lotes_detalles = a._id
             LEFT JOIN api_empresas.empresas_usuarios eu ON a.id_empleado = eu.id_usuario
-            WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} ORDER BY a.id_orden ASC
+            WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND a.fecha_terminado IS NOT NULL AND d.fecha_pago IS NULL ORDER BY a.id_orden ASC
             
         ";
     $object['sql_terminadas'] = $sql;
@@ -805,7 +805,7 @@ return function (App $app) {
       ";
     $reficiencia_insumos = $localConnection->goQuery($sql);
     $object['sql_eficiencia_insumos'] = $sql;
-    $object['eficiencia_inusmos'] = $reficiencia_insumos;
+    $object['eficiencia_insumos'] = $reficiencia_insumos;
 
     $localConnection->disconnect();
 
