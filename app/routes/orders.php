@@ -2219,6 +2219,32 @@ $object['sales_commission_ISSET'][] = false;
     }
     $id_orden_a_editar = intval($newJson['id_orden_edit']);
 
+    // Identificar si es una orden o un presupuesto
+    $table_principal = 'ordenes';
+    $table_productos = 'ordenes_productos';
+    $is_presupuesto = false;
+
+    $sql_check = "SELECT pago_abono FROM ordenes WHERE _id = {$id_orden_a_editar}";
+    $res_check = $localConnection->goQuery($sql_check);
+
+    if (empty($res_check)) {
+      $sql_check_pres = "SELECT pago_abono FROM presupuestos WHERE _id = {$id_orden_a_editar}";
+      $res_check = $localConnection->goQuery($sql_check_pres);
+      if (!empty($res_check)) {
+        $table_principal = 'presupuestos';
+        $table_productos = 'presupuestos_productos';
+        $is_presupuesto = true;
+      }
+    }
+
+    if (empty($res_check)) {
+      $object['response']['status'] = 'error';
+      $object['response']['message'] = "No se encontró la orden o presupuesto con ID {$id_orden_a_editar}.";
+      $response->getBody()->write(json_encode($object));
+      $localConnection->disconnect();
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+    }
+
     // 2. PROCESAR DATOS DEL PAYLOAD (similar al endpoint original)
     $arr = [];
     $arr['id_wp'] = $newJson['id'];
@@ -2236,7 +2262,7 @@ $object['sales_commission_ISSET'][] = false;
 
     // 3. MANEJO DE PRODUCTOS (INSERT, UPDATE, DELETE)
     // 3.1. Obtener productos actuales de la base de datos para comparar
-    $sql_productos_actuales = "SELECT _id, _id cod, cantidad, precio_unitario, talla, tela, corte, id_products_attributes FROM ordenes_productos WHERE id_orden = {$id_orden_a_editar}";
+    $sql_productos_actuales = "SELECT _id, _id cod, cantidad, precio_unitario, talla, tela, corte, id_products_attributes FROM {$table_productos} WHERE id_orden = {$id_orden_a_editar}";
     $productos_actuales_db = $localConnection->goQuery($sql_productos_actuales);
 
     $map_productos_actuales = [];
@@ -2261,11 +2287,14 @@ $object['sales_commission_ISSET'][] = false;
     foreach ($map_productos_actuales as $id_actual => $p_actual) {
       if (!isset($map_productos_nuevos[$id_actual])) {
         // Este producto ya no está en la lista del frontend, hay que borrarlo.
-        $sql_delete_prod = "DELETE FROM ordenes_productos WHERE _id = {$id_actual}";
+        $sql_delete_prod = "DELETE FROM {$table_productos} WHERE _id = {$id_actual}";
         $localConnection->goQuery($sql_delete_prod);
-        // También borrar sus detalles de lote
-        $sql_delete_lote = "DELETE FROM lotes_detalles WHERE id_ordenes_productos = {$id_actual}";
-        $localConnection->goQuery($sql_delete_lote);
+
+        if (!$is_presupuesto) {
+          // También borrar sus detalles de lote (solo para órdenes)
+          $sql_delete_lote = "DELETE FROM lotes_detalles WHERE id_ordenes_productos = {$id_actual}";
+          $localConnection->goQuery($sql_delete_lote);
+        }
       }
     }
 
@@ -2283,7 +2312,7 @@ $object['sales_commission_ISSET'][] = false;
           ($p_actual['corte'] ?? null) != ($p_nuevo['corte'] ?? null) ||
           ($p_actual['id_products_attributes'] ?? null) != ($p_nuevo['atributo'] ?? null)
         ) {
-          $sql_update_prod = "UPDATE ordenes_productos SET
+          $sql_update_prod = "UPDATE {$table_productos} SET
                     cantidad = {$p_nuevo['cantidad']},
                     precio_unitario = {$p_nuevo['precio']},
                     corte = '{$p_nuevo['corte']}',
@@ -2337,7 +2366,7 @@ $object['sales_commission_ISSET'][] = false;
 
         $id_products_attributes = (isset($decodedObj['atributo']) && !is_null($decodedObj['atributo'])) ? intval($decodedObj['atributo']) : 'NULL';
 
-        $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes) VALUES (' . $values . ', ' . $id_products_attributes . ')';
+        $sql2 = "INSERT INTO {$table_productos} (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes) VALUES (" . $values . ', ' . $id_products_attributes . ')';
 
         $res_insert = $localConnection->goQuery($sql2);
         $object['sql_insert_new_product'] = $sql2;
@@ -2351,21 +2380,19 @@ $object['sales_commission_ISSET'][] = false;
 
         // $last_id_ordenes_productos = $res_insert['insert_id'];
 
-        // Lógica para insertar en lotes_detalles para el nuevo producto
+        // Lógica para insertar en lotes_detalles para el nuevo producto (solo para órdenes)
         // ... (copiar la lógica de lotes_detalles del endpoint original) ...
       }
     }
 
     // 4. ACTUALIZAR LA ORDEN PRINCIPAL
     // Primero, obtener el abono actual para sumarle el nuevo
-    $sql_abono_actual = "SELECT pago_abono FROM ordenes WHERE _id = {$id_orden_a_editar}";
-    $res_abono = $localConnection->goQuery($sql_abono_actual);
-    $abono_historico = $res_abono[0]['pago_abono'];
+    $abono_historico = floatval($res_check[0]['pago_abono'] ?? 0);
     $nuevo_abono_total = $abono_historico + $arr['abono'];
 
     // Se elimina el campo `observaciones` de la actualización principal
-    $sql_update_orden = 'UPDATE ordenes SET
-        pago_total = ' . $arr['total'] . ',
+    $sql_update_orden = "UPDATE {$table_principal} SET
+        pago_total = " . $arr['total'] . ',
         pago_abono = ' . $nuevo_abono_total . ',
         pago_descuento = pago_descuento + ' . $arr['descuento'] . ",
         fecha_entrega = '" . $arr['fechaEntrega'] . "'
@@ -2373,14 +2400,19 @@ $object['sales_commission_ISSET'][] = false;
     $localConnection->goQuery($sql_update_orden);
     $object['sql_update_orden'] = $sql_update_orden;
 
-    // NUEVO: Lógica para insertar o actualizar las observaciones en la tabla dedicada
-    $sql_check_obs = "SELECT _id FROM ordenes_observaciones WHERE id_orden = {$id_orden_a_editar}";
-    $obs_existente = $localConnection->goQuery($sql_check_obs);
-
-    if (empty($obs_existente)) {
-      $sql_obs = "INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES ({$id_orden_a_editar}, '{$arr['obs']}')";
+    // Lógica para insertar o actualizar las observaciones
+    if ($is_presupuesto) {
+      $sql_obs = "UPDATE presupuestos SET observaciones = '{$arr['obs']}' WHERE _id = {$id_orden_a_editar}";
     } else {
-      $sql_obs = "UPDATE ordenes_observaciones SET observaciones = '{$arr['obs']}' WHERE id_orden = {$id_orden_a_editar}";
+      // NUEVO: Lógica para insertar o actualizar las observaciones en la tabla dedicada para órdenes
+      $sql_check_obs = "SELECT _id FROM ordenes_observaciones WHERE id_orden = {$id_orden_a_editar}";
+      $obs_existente = $localConnection->goQuery($sql_check_obs);
+
+      if (empty($obs_existente)) {
+        $sql_obs = "INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES ({$id_orden_a_editar}, '{$arr['obs']}')";
+      } else {
+        $sql_obs = "UPDATE ordenes_observaciones SET observaciones = '{$arr['obs']}' WHERE id_orden = {$id_orden_a_editar}";
+      }
     }
     $localConnection->goQuery($sql_obs);
     $object['sql_observaciones'] = $sql_obs;
