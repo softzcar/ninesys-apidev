@@ -2334,13 +2334,13 @@ $object['sales_commission_ISSET'][] = false;
         $cat_name = 'Uncatagorized';  // Valor por defecto
 
         $values = "'" . date('Y-m-d H:i:s') . "',";
-        $values .= $decodedObj['precio'] . ',';
-        $values .= "'" . $decodedObj['precio'] . "',";  // precio_woo
+        $values .= floatval($decodedObj['precio'] ?? 0) . ',';
+        $values .= "'" . floatval($decodedObj['precio'] ?? 0) . "',";  // precio_woo
         $values .= "'" . addslashes($decodedObj['producto'] ?? '') . "',";
         $values .= $id_orden_a_editar . ',';
-        $values .= $decodedObj['cod'] . ',';
-        $values .= $decodedObj['cantidad'] . ',';
-        $values .= $decodedObj['categoria'] . ',';
+        $values .= intval($decodedObj['cod'] ?? 0) . ',';
+        $values .= floatval($decodedObj['cantidad'] ?? 0) . ',';
+        $values .= intval($decodedObj['categoria'] ?? 0) . ',';
         $values .= "'" . $cat_name . "',";
 
         // Talla
