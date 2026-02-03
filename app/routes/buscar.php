@@ -22,19 +22,29 @@ return function (App $app) {
       // Buscar datos del cliente en Woocommerce
       $sql = 'SELECT id_wp FROM ordenes WHERE _id = ' . $id;
       $id_wp = $localConnection->goQuery($sql);
-      $id_customer = $id_wp[0]['id_wp'];
-      $id_customer = $id_wp[0]['id_wp'];
+      $id_customer = $id_wp[0]['id_wp'] ?? null;
 
-      $woo = new WooMe();
-      $data = $woo->getCustomerByIdWP($id_customer);
-      $customer = json_decode(json_encode($data), true);
-      $object['customer']['data'] = $customer;
+      $object['customer']['data'] = [];
+      $object['customer']['nombre'] = '';
+      $object['customer']['direccion'] = '';
+      $object['customer']['email'] = '';
+      $object['customer']['cedula'] = '';
+      $object['customer']['telefono'] = '';
 
-      $object['customer']['nombre'] = ($customer[0]['billing_first_name'] ?? '') . ' ' . ($customer[0]['billing_last_name'] ?? '');
-      $object['customer']['direccion'] = $customer[0]['billing_address_1'] ?? '';
-      $object['customer']['email'] = $customer[0]['billing_email'] ?? '';
-      $object['customer']['cedula'] = $customer[0]['billing_postcode'] ?? '';
-      $object['customer']['telefono'] = $customer[0]['billing_phone'] ?? '';
+      if (!empty($id_customer) && is_numeric($id_customer) && $id_customer > 0) {
+        $woo = new WooMe();
+        $data = $woo->getCustomerByIdWP($id_customer);
+        $customer = json_decode(json_encode($data), true);
+        $object['customer']['data'] = $customer;
+
+        if (isset($customer[0])) {
+          $object['customer']['nombre'] = ($customer[0]['billing_first_name'] ?? '') . ' ' . ($customer[0]['billing_last_name'] ?? '');
+          $object['customer']['direccion'] = $customer[0]['billing_address_1'] ?? '';
+          $object['customer']['email'] = $customer[0]['billing_email'] ?? '';
+          $object['customer']['cedula'] = $customer[0]['billing_postcode'] ?? '';
+          $object['customer']['telefono'] = $customer[0]['billing_phone'] ?? '';
+        }
+      }
 
       // Buscar datos de la orden!
       // CONSULTA CORREGIDA: Se eliminaron las líneas comentadas que causaban el error.
@@ -49,7 +59,7 @@ return function (App $app) {
             a.pago_total
           FROM
             ordenes a
-          JOIN customers b ON a.id_wp = b._id
+          LEFT JOIN customers b ON a.id_wp = b._id
           LEFT JOIN api_empresas.empresas_usuarios c ON c.id_usuario = a.responsable
           WHERE
             a._id = ' . $id;
