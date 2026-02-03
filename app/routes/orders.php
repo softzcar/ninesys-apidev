@@ -1908,7 +1908,7 @@ $object['sales_commission_ISSET'][] = false;
     $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
     $object['resultBuscar'] = $resultBuscar['object'];
 
-    $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $args['id_orden']);
+    $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . ($args['id_orden'] ?? $args['id']));
     $testResp = $msgApi->sendMessage(ID_EMPRESA, $last_id, 'welcome', $resultBuscar);
     /* $result = $woo->sendMail($orderWC->id, $resultBuscar["object"]);
         $object["sendMail"] = $result; */
@@ -2479,18 +2479,67 @@ $object['sales_commission_ISSET'][] = false;
       }
     }
 
-    // 6. GUARDAR NUEVOS METODOS DE PAGO (La lógica original sirve, ya que solo inserta lo que recibe)
+    // 6. GUARDAR NUEVOS METODOS DE PAGO
     $sql_metodos_pago = '';
-    // ... Aquí va exactamente el mismo bloque de código que verifica cada 'monto...' y crea los INSERTs ...
-    // Ejemplo:
-    if (intval($newJson['montoDolaresEfectivo']) > 0) {
-      $monto = intval($newJson['montoDolaresEfectivo']);
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $id_orden_a_editar . "', 'Dólares', 'Efectivo',
-       '{$monto}', '1', '');";
-      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('{$monto}', 'Dólares', 1, 'abono_orden', '" . $arr['responsable']
-        . "', 'Abono a Orden #{$id_orden_a_editar}');";
+
+    if (floatval($newJson['montoDolaresEfectivo'] ?? 0) > 0) {
+      $monto = floatval($newJson['montoDolaresEfectivo']);
+      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $id_orden_a_editar . "', 'Dólares', 'Efectivo', '{$monto}', '1', '');";
+      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('{$monto}', 'Dólares', 1, 'abono_orden', '" . $arr['responsable'] . "', 'Abono a Orden #{$id_orden_a_editar}');";
     }
-    // ... Repetir para Zelle, Pesos, Bolívares, etc.
+
+    if (floatval($newJson['montoDolaresZelle'] ?? 0) > 0) {
+      $monto = floatval($newJson['montoDolaresZelle']);
+      $detalle = addslashes($newJson['montoDolaresZelleDetalle'] ?? '');
+      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $id_orden_a_editar . "', 'Dólares', 'Zelle', '{$monto}', '1', '{$detalle}');";
+    }
+
+    if (floatval($newJson['montoDolaresPanama'] ?? 0) > 0) {
+      $monto = floatval($newJson['montoDolaresPanama']);
+      $detalle = addslashes($newJson['montoDolaresPanamaDetalle'] ?? '');
+      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $id_orden_a_editar . "', 'Dólares', 'Panamá', '{$monto}', '1', '{$detalle}');";
+    }
+
+    if (floatval($newJson['montoPesosEfectivo'] ?? 0) > 0) {
+      $monto = floatval($newJson['montoPesosEfectivo']);
+      $tasa = floatval($newJson['tasa_peso'] ?? 1);
+      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $id_orden_a_editar . "', 'Pesos', 'Efectivo', '{$monto}', '{$tasa}', '');";
+      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('{$monto}', 'Pesos', '{$tasa}', 'abono_orden', '" . $arr['responsable'] . "', 'Abono a Orden #{$id_orden_a_editar}');";
+    }
+
+    if (floatval($newJson['montoPesosTransferencia'] ?? 0) > 0) {
+      $monto = floatval($newJson['montoPesosTransferencia']);
+      $tasa = floatval($newJson['tasa_peso'] ?? 1);
+      $detalle = addslashes($newJson['montoPesosTransferenciaDetalle'] ?? '');
+      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $id_orden_a_editar . "', 'Pesos', 'Transferencia', '{$monto}', '{$tasa}', '{$detalle}');";
+    }
+
+    if (floatval($newJson['montoBolivaresEfectivo'] ?? 0) > 0) {
+      $monto = floatval($newJson['montoBolivaresEfectivo']);
+      $tasa = floatval($newJson['tasa_dolar'] ?? 1);
+      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $id_orden_a_editar . "', 'Bolívares', 'Efectivo', '{$monto}', '{$tasa}', '');";
+      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('{$monto}', 'Bolívares', '{$tasa}', 'abono_orden', '" . $arr['responsable'] . "', 'Abono a Orden #{$id_orden_a_editar}');";
+    }
+
+    if (floatval($newJson['montoBolivaresPunto'] ?? 0) > 0) {
+      $monto = floatval($newJson['montoBolivaresPunto']);
+      $tasa = floatval($newJson['tasa_dolar'] ?? 1);
+      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $id_orden_a_editar . "', 'Bolívares', 'Punto', '{$monto}', '{$tasa}', '');";
+    }
+
+    if (floatval($newJson['montoBolivaresPagomovil'] ?? 0) > 0) {
+      $monto = floatval($newJson['montoBolivaresPagomovil']);
+      $tasa = floatval($newJson['tasa_dolar'] ?? 1);
+      $detalle = addslashes($newJson['montoBolivaresPagomovilDetalle'] ?? '');
+      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $id_orden_a_editar . "', 'Bolívares', 'Pagomovil', '{$monto}', '{$tasa}', '{$detalle}');";
+    }
+
+    if (floatval($newJson['montoBolivaresTransferencia'] ?? 0) > 0) {
+      $monto = floatval($newJson['montoBolivaresTransferencia']);
+      $tasa = floatval($newJson['tasa_dolar'] ?? 1);
+      $detalle = addslashes($newJson['montoBolivaresTransferenciaDetalle'] ?? '');
+      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $id_orden_a_editar . "', 'Bolívares', 'Transferencia', '{$monto}', '{$tasa}', '{$detalle}');";
+    }
 
     if ($sql_metodos_pago != '') {
       $object['metodos_pago_response'] = $localConnection->goQuery($sql_metodos_pago);
