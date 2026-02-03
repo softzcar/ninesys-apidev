@@ -1268,7 +1268,7 @@ return function (App $app) {
       $object['customer']['cedula'] = '';
       $object['customer']['telefono'] = '';
 
-      if ($id_customer) {
+      if (!empty($id_customer) && is_numeric($id_customer) && $id_customer > 0) {
         $woo = new WooMe();
         $data = $woo->getCustomerByIdWP($id_customer);
         $customer = json_decode(json_encode($data), true);
