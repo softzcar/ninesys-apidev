@@ -791,7 +791,7 @@ return function (App $app) {
                   SUM((im.valor_inicial - im.valor_final) * COALESCE(inv.rendimiento, 1)) AS consumo_real_total
               FROM
                   inventario_movimientos im
-              JOIN inventario inv ON im.id_insumo = inv._id
+              LEFT JOIN inventario inv ON im.id_insumo = inv._id
               WHERE
                   im.id_empleado = {$args['id_empleado']}
                   AND im.id_departamento = {$args['id_departamento']}
