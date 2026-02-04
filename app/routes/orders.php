@@ -776,6 +776,7 @@ return function (App $app) {
               WHERE
                   ldea.id_empleado = {$args['id_empleado']}
                   AND ldea.id_departamento = {$args['id_departamento']}
+                  AND pia.id_catalogo_insumos_productos IS NOT NULL
               GROUP BY
                   ldea.id_orden, ldea.id_empleado, ldea.id_departamento,
                   cip.nombre, pia.id_catalogo_insumos_productos,
