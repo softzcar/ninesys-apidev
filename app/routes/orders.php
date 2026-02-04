@@ -753,8 +753,8 @@ return function (App $app) {
                   op.id_orden,
                   ldea.id_empleado,
                   ldea.id_departamento,
-                  p.product AS nombre_producto,
-                  s.nombre AS talla,
+                  GROUP_CONCAT(DISTINCT p.product SEPARATOR ', ') AS nombre_producto,
+                  GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') AS talla,
                   cip.nombre AS nombre_insumo,
                   pia.id_catalogo_insumos_productos,
                   SUM(op.cantidad) AS cantidad_piezas,
@@ -778,7 +778,7 @@ return function (App $app) {
                   AND ldea.id_departamento = {$args['id_departamento']}
               GROUP BY
                   ldea.id_orden, ldea.id_empleado, ldea.id_departamento,
-                  p.product, s.nombre, cip.nombre, pia.id_catalogo_insumos_productos,
+                  cip.nombre, pia.id_catalogo_insumos_productos,
                   eu.nombre, dep.departamento, ldea.fecha_inicio
           ) AS est
       LEFT JOIN
