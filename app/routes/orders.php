@@ -595,7 +595,7 @@ return function (App $app) {
     $sql = "SELECT DISTINCT
                 a._id id_lote_detalles,
                 a.id_orden,
-                e.product,
+                GROUP_CONCAT(DISTINCT e.product SEPARATOR ', ') as product,
                 (SELECT cliente_nombre FROM ordenes WHERE _id = a.id_orden) cliente,
                 a.fecha_inicio,
                 a.fecha_terminado,
@@ -607,14 +607,13 @@ return function (App $app) {
                 eu.salario_monto,
                 eu.salario_periodo,
                 TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) AS tiempo_empleado,
-                c.tiempo tiempo_estimado_de_produccion,
-                (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - c.tiempo) rendimiento,
-                b.cantidad unidades,
+                SUM(c.tiempo * b.cantidad) AS tiempo_estimado_de_produccion,
+                (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - SUM(c.tiempo * b.cantidad)) rendimiento,
+                SUM(b.cantidad) unidades,
                 (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$args['id_departamento']}) cantidad_empleados_asigandos,
-                b.id_woo id_producto,
-                e.product,
+                GROUP_CONCAT(DISTINCT b.id_woo) id_producto,
                 'EficienciaInsumos' eficiencia_insumos,
-                b.talla
+                GROUP_CONCAT(DISTINCT b.talla SEPARATOR ', ') as talla
             FROM
                 lotes_detalles_empleados_asignados a
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
@@ -622,7 +621,9 @@ return function (App $app) {
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
             JOIN pagos d ON d.id_lotes_detalles = a._id
             LEFT JOIN api_empresas.empresas_usuarios eu ON a.id_empleado = eu.id_usuario
-            WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND a.fecha_terminado IS NOT NULL AND d.fecha_pago IS NULL ORDER BY a.id_orden ASC
+            WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND a.fecha_terminado IS NOT NULL AND d.fecha_pago IS NULL 
+            GROUP BY a.id_orden
+            ORDER BY a.id_orden ASC
             
         ";
     $object['sql_terminadas'] = $sql;
