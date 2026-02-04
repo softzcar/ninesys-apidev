@@ -624,7 +624,7 @@ return function (App $app) {
             WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND a.fecha_terminado IS NOT NULL AND d.fecha_pago IS NULL 
             GROUP BY a.id_orden
             ORDER BY a.id_orden ASC
-            
+            -- Fix: Agrupación por orden
         ";
     $object['sql_terminadas'] = $sql;
 
