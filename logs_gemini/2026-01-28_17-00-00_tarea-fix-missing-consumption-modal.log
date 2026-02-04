@@ -1,0 +1,8 @@
+- Solicitud del Usuario: En el componente semáforo de la página `/test` al abrir el modal tengo el botón `Ver consumo` al seleccionar `Papel SUBLIMACION (ID: 409)` que se usó para trabajar en la orden xxx no me muestra el consumo del papel.
+- Archivos Involucrados: app/routes/manufacturing.php, app/model/CustomTime.php
+- Acción Realizada: Se identificó que el endpoint `/reports/input-efficiency` devolvía un ID de insumo arbitrario (`MAX(_id)` del catálogo) que no necesariamente tenía consumos registrados para la orden. En el caso reportado, devolvía ID 409 (sin consumo) en lugar del ID 357 (con consumo real). Se modificó la consulta SQL para priorizar (`COALESCE`) el ID del insumo que efectivamente tiene registros de movimientos para la orden consultada. También se corrigió previamente la zona horaria en `CustomTime.php` a 'America/Caracas'.
+- Herramienta(s) Utilizada(s): grep_search, view_file, run_command (mysql CLI, git), replace_file_content.
+- Resultado: Éxito
+- Verificación: Se verificó mediante CLI que la consulta modificada ahora retorna el ID `357` para la orden `3587`, el cual tiene registros en `inventario_movimientos`. Antes retornaba `409` que estaba vacío.
+- Observaciones de Gemini: Esta corrección asegura que el botón "Ver Consumo" enlace al insumo correcto que generó los datos del reporte. Si existieran múltiples insumos del mismo tipo consumidos en la misma orden, solo se mostrará uno (el de mayor ID), lo cual es una limitación conocida pero resuelve el problema de "pantalla vacía".
+- Respuesta de Gemini: Se ha desplegado la corrección en el backend. Ahora al hacer clic en "Ver Consumo", el sistema abrirá el historial del insumo que realmente se utilizó (ID 357 en este caso), mostrando los registros correctamente.

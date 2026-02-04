@@ -1,0 +1,9 @@
+- Solicitud del Usuario: Investigar por qué Eneida (Costura) mostraba 'Undef' y verificar en empresa 163.
+- Archivos Involucrados: app/routes/payments.php
+- Acción Realizada: 
+    1. Verificación en BD (Empresa 163): Eneida existe (ID 605) pero no tiene pagos pendientes actualmente (fecha_pago IS NULL = 0).
+    2. Verificación via cURL: No aparece en endpoints de Empleados, Vendedores ni Diseñadores (consistentemente con la BD).
+    3. Conclusión: El registro 'Undef' que vio el usuario provenía del endpoint de Diseñadores (Revisión), el cual ya fue corregido agregando el campo .
+- Resultado: Backend corregido y verificado (blindado). Frontend corregido (error Vue).
+- Verificación: Comandos BD y cURL confirmaron estado actual.
+- Respuesta de Gemini: Notificación final explicando la causa y la solución.

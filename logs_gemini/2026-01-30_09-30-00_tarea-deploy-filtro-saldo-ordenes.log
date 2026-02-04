@@ -1,0 +1,17 @@
+- Solicitud del Usuario: Investigar por qué la orden 3565 de la empresa 163 (con deuda de $50) no aparecía en la lista de órdenes activas para administradores. Identificar el problema y solucionarlo.
+- Archivos Involucrados: `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/tables.php`
+- Acción Realizada:
+    1. Se investigó la orden 3565 directamente en base de datos y se confirmó que tiene pago_total de $220, abonos de $170, y saldo pendiente de $50.
+    2. Se verificó que el query SQL modificado funcionaba correctamente cuando se ejecutaba directamente en MySQL.
+    3. Se identificó que el problema era que **los cambios NO estaban desplegados en el VPS** - el servidor seguía usando la versión anterior del código con filtro por status.
+    4. Se hizo commit de los cambios: `git commit -m "Filtrar órdenes activas por saldo pendiente en lugar de status"`.
+    5. Se hizo push a la rama `refactor/modular-routes`: `git push origin refactor/modular-routes`.
+    6. Se desplegó en el VPS: `ssh vps-ninesys "cd /home/apidev.nineteengreen.com/public_html && git fetch origin && git checkout refactor/modular-routes && git pull origin refactor/modular-routes"`.
+- Herramienta(s) Utilizada(s): `run_command` (ssh, mysql, curl, git), `replace_file_content`, `task_boundary`.
+- Resultado: Éxito
+- Verificación: 
+    - Se verificó mediante `curl -H "Authorization: 163" "https://apidev.nineteengreen.com/table/ordenes-activas/10"` que la orden 3565 ahora aparece correctamente en la respuesta.
+    - La respuesta muestra: `{"orden": 3565, "cliente_nombre": "LABORATORIO PLUSANDES", "total": 220, "saldo_pendiente": 50, "estatus": "terminado"}`.
+    - El endpoint ahora retorna 207 órdenes con deuda (antes retornaba 99 con el filtro de status).
+- Observaciones de Gemini: El problema inicial era de deployment, no del código. Es importante siempre verificar que los cambios estén desplegados cuando se trabaja con APIs remotas.
+- Respuesta de Gemini: El problema estaba en que los cambios no habían sido desplegados al VPS. Se hizo commit, push y deploy exitoso. La orden 3565 ahora aparece correctamente con saldo pendiente de $50.

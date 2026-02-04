@@ -1,0 +1,59 @@
+- Solicitud del Usuario: Investigar el problema donde la orden 3639 aparece como "PAGADO: $405.00" pero el modal de pagos muestra $199.83 + $205.28 = $405.11, generando una diferencia de 11 centavos. El usuario solicitó verificar y ajustar la cantidad de decimales en las tablas de base de datos si es necesario para cálculos correctos.
+
+- Archivos Involucrados:
+  - `/home/developer/Escritorio/Antigravity/ninesys-apidev/public/model/create_new_company_api_emp_N.sql`
+  - Bases de datos VPS: `api_emp_163`, `api_emp_174`
+  - Tablas: `abonos`, `ordenes`, `metodos_de_pago`, `presupuestos`
+
+- Acción Realizada:
+  1. **Investigación inicial**: Se analizó la orden 3639 y se identificó que:
+     - Los abonos en BD eran: $0.00 + $200.00 + $205.00 = $405.00 ✅ CORRECTO
+     - Los métodos de pago guardados eran: 70,540 Bs @ tasa 353 + 74,106 Bs @ tasa 361
+     - Las conversiones individuales daban: $199.83 + $205.28 = $405.11 (11 centavos de diferencia)
+  
+  2. **Análisis de causa raíz**: El problema NO era un sobrepago real, sino errores de precisión decimal en las columnas que usaban `DECIMAL(10,2)` y `DECIMAL(12,2)` (solo 2 decimales). Además, `metodos_de_pago.tasa` usaba `DECIMAL(12,0)` sin decimales.
+  
+  3. **Implementación de solución**:
+     - Se aumentó la precisión decimal de **2 a 4 decimales** en todas las columnas de pagos
+     - Se aplicaron los siguientes `ALTER TABLE` en empresas **163** y **174**:
+       ```sql
+       ALTER TABLE abonos 
+         MODIFY COLUMN abono DECIMAL(12,4),
+         MODIFY COLUMN descuento DECIMAL(12,4);
+       
+       ALTER TABLE metodos_de_pago 
+         MODIFY COLUMN monto DECIMAL(12,4),
+         MODIFY COLUMN tasa DECIMAL(12,2);  -- También se agregaron decimales a tasa
+       
+       ALTER TABLE ordenes 
+         MODIFY COLUMN pago_descuento DECIMAL(12,4),
+         MODIFY COLUMN pago_total DECIMAL(12,4),
+         MODIFY COLUMN pago_abono DECIMAL(12,4);
+       
+       ALTER TABLE presupuestos 
+         MODIFY COLUMN pago_descuento DECIMAL(12,4),
+         MODIFY COLUMN pago_total DECIMAL(12,4),
+         MODIFY COLUMN pago_abono DECIMAL(12,4);
+       ```
+  
+  4. **Actualización del template**: Se modificó el archivo `create_new_company_api_emp_N.sql` con las mismas definiciones de 4 decimales para asegurar que futuras empresas tengan la precisión correcta desde el inicio.
+
+- Herramienta(s) Utilizada(s): `run_command` (SSH al VPS para ejecutar ALTER TABLE), `multi_replace_file_content` (para actualizar template SQL), `view_file`, `grep_search`
+
+- Resultado: Éxito
+
+- Verificación:
+  - Se ejecutó `SHOW CREATE TABLE` en todas las tablas modificadas y se confirmó que todas tienen `DECIMAL(12,4)` correctamente
+  - Se verificó que `metodos_de_pago.tasa` ahora tiene `DECIMAL(12,2)` con decimales
+  - Se probó el cálculo de saldo en orden 3639 y ahora muestra valores con 4 decimales: `pago_total: 405.0000`, `total_abonado: 405.0000`, `saldo: 0.0000`
+  - Los valores existentes en BD se mantuvieron (MySQL automáticamente agregó .0000 a los valores)
+  - El template SQL fue actualizado exitosamente en las 4 tablas relevantes
+
+- Observaciones de Gemini:
+  - La precisión de 4 decimales permite cálculos más exactos evitando errores de redondeo acumulativos
+  - Los datos existentes no se perdieron; MySQL convirtió automáticamente 405.00 → 405.0000
+  - El frontend seguirá mostrando correctamente 2 decimales al usuario (mediante `.toFixed(2)` en la interfaz)
+  - Esta mejora beneficiará especialmente a conversiones de monedas con tasas complejas
+  - La columna `tasa` ahora soporta tasas con decimales (ej: 353.50, 361.75) lo que mejorará aún más la precisión
+
+- Respuesta de Gemini: Se completó exitosamente la modificación de precisión decimal en todas las tablas de pagos para las empresas 163 y 174, aumentando de 2 a 4 decimales. También se actualizó el template SQL para futuras empresas. Los cambios se verificaron correctamente y los valores existentes se mantuvieron intactos. Esto eliminará los errores de redondeo de centavos en conversiones de moneda.

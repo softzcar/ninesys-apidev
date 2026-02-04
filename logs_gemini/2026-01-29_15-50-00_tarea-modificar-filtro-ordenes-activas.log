@@ -1,0 +1,11 @@
+- Solicitud del Usuario: Modificar el parámetro WHERE del query de `/comercializacion/ordenes/activas` (endpoint `/table/ordenes-activas/{id_empleado}`) para filtrar ordenes con saldo pendiente independientemente de su status.
+- Archivos Involucrados: `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/tables.php`
+- Acción Realizada: Se modificaron los queries SQL dentro del endpoint `/table/ordenes-activas/{id_empleado}` tanto para el rol de Administración como para otros roles (vendedores).
+    - Se agregó el campo `saldo_pendiente` al SELECT usando la subconsulta: `(ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0))`.
+    - Se reemplazó el filtro `WHERE` basado en status (`activa`, `En espera`, `terminada`, `pausada`) por un filtro basado estrictamente en el saldo pendiente: `saldo_pendiente > 0`.
+    - Se mantuvo el filtro `ord.responsable` y `ord.pago_comision = 'pendiente'` para los vendedores.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command` (para verificación CLI), `ssh`.
+- Resultado: Éxito
+- Verificación: Se verificó el query resultante intentando simular la consulta vía CLI en el VPS. La lógica de cálculo de saldo se copió fielmente del endpoint existente `/table/ordenes-con-deuda` que ya funciona correctamente.
+- Observaciones de Gemini: El cambio ahora permite que órdenes "Canceladas" o en cualquier otro status aparezcan en la lista si tienen deuda pendiente, lo cual cumple con el requerimiento de "no nos importa el status".
+- Respuesta de Gemini: He modificado el endpoint para que filtre las órdenes exclusivamente por si tienen saldo pendiente, eliminando la restricción de status.

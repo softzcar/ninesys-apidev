@@ -1,0 +1,11 @@
+- Solicitud del Usuario: El usuario reportó que, aunque el monto total aparecía en el reporte, el modal de detalles ("Desglose de Costos") estaba vacío para la orden 10.
+- Archivos Involucrados:
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/production.php
+- Acción Realizada:
+    - Se identificó que el endpoint `/reposicion-detalles/{id_reposicion}` no estaba utilizando el nuevo campo `id_reposicion` para vincular los movimientos de inventario.
+    - Se actualizó la consulta SQL en este endpoint para incluir la condición `OR (inm.id_reposicion = {$id_reposicion})`, permitiendo recuperar los datos vinculados directamente.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command` (git, ssh/curl).
+- Resultado: Éxito.
+- Verificación: Se ejecutó `curl` contra el endpoint en el VPS para la reposición 14 (test anterior), confirmando que ahora devuelve el array con los insumos consumidos en lugar de un array vacío.
+- Observaciones de Gemini: Es crucial actualizar todos los endpoints relacionados cuando se cambia la lógica de vinculación de datos (reporte general vs detalles).
+- Respuesta de Gemini: Se notificó al usuario que el problema del modal ha sido resuelto.

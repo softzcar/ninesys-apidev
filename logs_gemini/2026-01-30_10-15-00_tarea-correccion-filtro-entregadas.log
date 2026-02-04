@@ -1,0 +1,19 @@
+- Solicitud del Usuario: Corregir los filtros de órdenes activas según las especificaciones correctas: 1) Pendientes: saldo > 0 AND status != 'cancelada', 2) Pagadas: saldo = 0 AND status != 'cancelada' AND status != 'entregada', 3) Sobrepagadas: saldo < 0 AND status != 'cancelada'. Se debe permitir que órdenes entregadas con saldo pendiente aparezcan en la lista.
+- Archivos Involucrados: `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/tables.php`
+- Acción Realizada:
+    1. Se eliminó el filtro `AND ord.status != 'entregada'` del query de Administración (línea 350).
+    2. Se eliminó el filtro `AND ord.status != 'entregada'` del query de vendedores (línea 400).
+    3. Se mantuvo únicamente el filtro `AND ord.status != 'cancelada'` en ambos queries.
+    4. Se verificó el impacto: la consulta retorna 98 órdenes, incluyendo 22 con status "entregada" que tienen saldo pendiente.
+    5. Se hizo commit: `git commit -m "Permitir órdenes entregadas con saldo pendiente en filtro de activas"`.
+    6. Se hizo push: `git push origin refactor/modular-routes`.
+    7. Se desplegó en VPS: `ssh vps-ninesys "cd /home/apidev.nineteengreen.com/public_html && git pull origin refactor/modular-routes"`.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command` (git, ssh, curl, mysql).
+- Resultado: Éxito
+- Verificación:
+    - El endpoint retorna 98 órdenes (vs 76 anteriores).
+    - Desglose por status: 23 activas, 13 En espera, 22 entregadas, 37 terminadas, 3 terminado.
+    - Se confirmó que órdenes entregadas con saldo aparecen correctamente (ej: orden 3690 con saldo $50).
+    - No aparecen órdenes canceladas en los resultados.
+- Observaciones de Gemini: El filtro ahora permite que órdenes entregadas pero con saldo pendiente aparezcan en la lista de "Pendientes", lo cual tiene sentido desde el punto de vista de gestión de cobros.
+- Respuesta de Gemini: Se corrigió el filtro para permitir órdenes entregadas con saldo pendiente. Ahora solo se excluyen órdenes canceladas, según las especificaciones correctas.

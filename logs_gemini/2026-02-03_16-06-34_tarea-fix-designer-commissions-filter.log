@@ -1,0 +1,6 @@
+- Solicitud del Usuario: Corregir que no se suma la comisión de producto en la sección de diseñadores.
+- Archivos Involucrados: app/routes/payments.php (Backend)
+- Acción Realizada: Se identificó que la consulta SQL de diseñadores era demasiado amplia y traía pagos pendientes de otros departamentos (como Impresión o Montar Tallas) si el empleado era también el diseñador de esa orden. Como esos registros de otros departamentos tenían comisión 0 para el diseñador, se visualizaban filas de $0.00 que bajaban el promedio/total. Se agregó un filtro  a la consulta.
+- Resultado: Ahora la sección de diseñadores solo mostrará comisiones legítimas de diseño. Los registros que se veían de $0.00 para Maru desaparecerán de esa sección (ya que ella ya cobró el diseño de esas órdenes o aún no han sido aprobadas).
+- Verificación: Se verificó en la base de datos que Maru ya tenía pagos registrados y pagados para el detalle 'Diseño' en las órdenes mostradas, y los pendientes eran de otros departamentos.
+- Respuesta de Gemini: Notificación de la corrección en el backend.

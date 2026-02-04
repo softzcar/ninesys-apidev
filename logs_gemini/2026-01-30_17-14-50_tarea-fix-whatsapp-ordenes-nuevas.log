@@ -1,0 +1,43 @@
+- Solicitud del Usuario: En la página `/comercializacion/ordenes` tengo mi formulario para crear una nueva orden, en último paso tengo un check donde indico si quiero enviar un mensaje WhatsApp automatizado al cliente o no, si marco el Check debe enviarse el mensaje pero no lo está enviando. En este caso es la empresa ID 163 cuyo dispositivo está correctamente vinculado con el servicio de WhatsApp. Vamos a ver que sucede, ¿Por qué no se envían los mensajes?
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php (líneas 2957-2972)
+  * /home/developer/Escritorio/niesys/app_multi/components/ordenes/presupuesto.vue (línea 2470)
+
+- Acción Realizada:
+  Identificado y corregido el problema en el endpoint `/ordenes/nueva/custom` del backend. El código intentaba obtener el teléfono del cliente desde la tabla `customers` mediante un LEFT JOIN:
+  
+  ```php
+  $infoSql = 'SELECT b.phone FROM ordenes a LEFT JOIN customers b ON b._id = a.id_wp WHERE a._id = ' . $last_id;
+  ```
+  
+  Sin embargo, cuando se crea una orden nueva, el teléfono se ingresa directamente en el formulario pero NO se guarda en la tabla `ordenes`, y si el cliente no existe previamente en la tabla `customers`, la consulta devolvía NULL y el mensaje no se enviaba.
+  
+  Modifiqué la lógica para usar directamente el teléfono que viene del formulario (`$arr['telefono']`), con fallback a la consulta original si el teléfono no viene en el payload.
+
+- Herramienta(s) Utilizada(s): view_file, grep_search, replace_file_content, run_command
+
+- Resultado: Éxito
+
+- Verificación:
+  1. Commit creado: "fix: Usar teléfono del formulario para envío de WhatsApp en órdenes nuevas" (8255aea)
+  2. Push a GitHub exitoso en rama refactor/modular-routes
+  3. Despliegue en VPS realizado manualmente desde consola web (debido a problemas de conectividad SSH)
+  4. El código ahora usa `$arr['telefono']` directamente del formulario antes de intentar buscar en la base de datos
+  
+  **Nota:** Durante esta tarea se detectó un problema de conectividad SSH al VPS (194.195.86.253):
+  - Ping directo a IP: 100% packet loss
+  - SSH: Connection timeout
+  - Dentro del VPS: SSH corriendo correctamente en puerto 22, firewall OK, red OK
+  - Diagnóstico: El dominio apidev.nineteengreen.com está configurado en Cloudflare (proxy), por lo que HTTP/HTTPS funciona pero SSH no es accesible directamente desde fuera
+  - Solución temporal: Uso de consola web de Hostinger para despliegue
+
+- Observaciones de Gemini:
+  El problema raíz es que el sistema no guarda el teléfono del cliente en la tabla `ordenes` cuando se crea una nueva orden, solo guarda `cliente_cedula` y `cliente_nombre`. Esto puede representar una limitación si se necesita acceder al teléfono del cliente posteriormente sin tener que buscarlo en la tabla `customers`.
+  
+  Adicionalmente, el usuario mencionó que `id_wp` no debería ser NULL en las órdenes, lo cual quedó pendiente de revisar como un posible bug.
+
+- Respuesta de Gemini:
+  He identificado y solucionado el problema del envío de WhatsApp. El sistema ahora usa el teléfono ingresado directamente en el formulario para enviar los mensajes, en lugar de buscarlo en la base de datos. El cambio ha sido desplegado en producción. Puedes probar creando una nueva orden en `/comercializacion/ordenes` para la empresa ID 163, marcando el checkbox de WhatsApp y verificando que el mensaje se envíe correctamente.
+  
+  Queda pendiente revisar el tema de `id_wp` NULL como posible bug, y solucionar el problema de acceso SSH directo al VPS.

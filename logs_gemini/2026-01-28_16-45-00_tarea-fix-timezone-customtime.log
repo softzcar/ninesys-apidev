@@ -1,0 +1,8 @@
+- Solicitud del Usuario: en la pagina `/test` en el componente semaforo me muestra que el departamento estampado ha inicaido la tarea en el futuro hoy es 28/10/2026 per son las 4:29 ene ste moemnto muetra que comenzo hoy por la noche en la empresa ID 163
+- Archivos Involucrados: app/model/CustomTime.php
+- Acción Realizada: Se identificó que la clase `CustomTime` forzaba la zona horaria a 'UTC', provocando que las fechas insertadas en la base de datos estuvieran adelantadas 4 horas respecto a la hora local de Venezuela (America/Caracas). Se modificó el constructor de la clase para utilizar 'America/Caracas' en lugar de 'UTC'.
+- Herramienta(s) Utilizada(s): replace_file_content, run_command (para verificación), grep_search, view_file
+- Resultado: Éxito
+- Verificación: Se ejecutó un script PHP independiente (`php -r "..."`) invocando `CustomTime->today()`. Antes del cambio retornaba la hora UTC (~20:45), después del cambio retornó la hora local correcta (~16:45), coincidiendo con la hora del sistema.
+- Observaciones de Gemini: Las fechas ya registradas en la base de datos permanecerán con el error (futuro) hasta que sean corregidas manualmente o sobreescritas por nuevos eventos, pero los nuevos registros tendrán la fecha correcta.
+- Respuesta de Gemini: Se ha corregido la configuración de zona horaria en el backend. Ahora el sistema registrará las fechas usando la hora de Venezuela (America/Caracas), resolviendo el problema de tareas que aparecen "en el futuro".

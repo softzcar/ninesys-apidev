@@ -1,0 +1,18 @@
+- Solicitud del Usuario: Modificar la consulta de órdenes activas para que NO muestre órdenes pagadas ni sobrepagadas. Estas órdenes deben cumplir que NO estén entregadas o canceladas. Aplicar tanto para consulta de Administración como para otros departamentos.
+- Archivos Involucrados: `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/tables.php`
+- Acción Realizada:
+    1. Se agregaron filtros adicionales en el WHERE clause para ambos queries (Administración y vendedores).
+    2. Query de Administración (línea 348-351): Se agregó `AND ord.status != 'entregada' AND ord.status != 'cancelada'`.
+    3. Query de vendedores (línea 396-401): Se agregó `AND ord.status != 'entregada' AND ord.status != 'cancelada'`.
+    4. Se verificó el query vía CLI en empresa 163 y funcionó correctamente.
+    5. Se hizo commit: `git commit -m "Excluir órdenes entregadas/canceladas del filtro de órdenes activas"`.
+    6. Se hizo push: `git push origin refactor/modular-routes`.
+    7. Se desplegó en VPS: `ssh vps-ninesys "cd /home/apidev.nineteengreen.com/public_html && git pull origin refactor/modular-routes"`.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command` (git, ssh, curl, mysql).
+- Resultado: Éxito
+- Verificación:
+    - El endpoint ahora retorna 76 órdenes (antes retornaba 207 con solo el filtro de saldo).
+    - Se verificó que NO hay órdenes con status "entregada" o "cancelada" en los resultados: `curl -H "Authorization: 163" "https://apidev.nineteengreen.com/table/ordenes-activas/10" | jq '.items[] | select(.estatus == "entregada" or .estatus == "cancelada")'` retornó vacío.
+    - Todas las órdenes retornadas tienen saldo_pendiente > 0.
+- Observaciones de Gemini: El filtro combinado (saldo > 0 AND status != 'entregada' AND status != 'cancelada') asegura que solo se muestren órdenes activamente en curso con deuda pendiente.
+- Respuesta de Gemini: Se agregaron filtros para excluir órdenes entregadas/canceladas. El endpoint ahora solo muestra órdenes con saldo pendiente > 0 que NO estén entregadas ni canceladas.

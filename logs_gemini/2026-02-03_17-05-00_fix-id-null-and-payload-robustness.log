@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Seguimos recibiendo error, en esta ocasión: `{"response":{"status":"error","message":"No se encontró la orden o presupuesto con ID 0."}}` donde hemos enviado el payload con id_orden_edit=null. También probar con el ID 3772.
+- Archivos Involucrados: [app/routes/orders.php](file:///home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php), [components/ordenes/nueva.vue](file:///home/developer/Escritorio/niesys/app_multi/components/ordenes/nueva.vue)
+- Acción Realizada: 
+    1. Se corrigió el frontend para que el formulario resetee el `endpoint` a la ruta de creación al limpiar o iniciar una nueva orden.
+    2. Se endureció el backend para validar que `id_orden_edit` sea numérico y no acepte strings como `"null"`.
+    3. Se implementó una estrategia de mapeo robusta usando el operador `??` en todos los campos de productos y métodos de pago recibidos, evitando errores 500 ante payloads parciales.
+    4. Se corrigieron errores de lint previos en `orders.php`.
+- Herramienta(s) Utilizada(s): `multi_replace_file_content`, `run_command`, `git`, `curl`
+- Resultado: Éxito
+- Verificación: Se ejecutó un comando `curl` directo al VPS para la empresa 163 editando la orden 3772 con un payload simplificado. El servidor respondió satisfactoriamente (HTTP 200) y procesó los datos correctamente.
+- Observaciones de Gemini: El sistema ahora es mucho más resistente a inconsistencias en los datos enviados desde el cliente y maneja correctamente la transición entre estados de edición y creación.
+- Respuesta de Gemini: ¡Solucionado! He corregido tanto el fallo del ID nulo como las vulnerabilidades ante datos faltantes en el payload. He verificado personalmente la orden 3772 mediante curl y el backend ha respondido correctamente. Los cambios están desplegados tanto en el frontend como en el backend.

@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Revisar por qué el filtro de órdenes con deuda no funcionaba para el perfil de Administración en la empresa 163, aunque sí para vendedores.
+- Archivos Involucrados: `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/tables.php`
+- Acción Realizada: Se identificó que la comparación `$departamento === 'Administración'` podía estar fallando debido a discrepancias de codificación de caracteres (tildes) entre la base de datos y el script PHP. Se cambió la condición a `strpos($departamento, 'Admin') !== false` para hacerla más robusta.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command` (para análisis de datos).
+- Resultado: Éxito (teórico, pendiente de confirmación de usuario).
+- Verificación: Se verificó en BD que 'Administración' es el único departamento que comienza con 'Admin', asegurando que el cambio no introduce falsos positivos. Se verificó que el query SQL subyacente funciona correctamente vía CLI.
+- Observaciones de Gemini: Los problemas de encoding UTF-8 vs ISO son comunes en entornos legacy/mixtos. Usar comparaciones parciales es una buena estrategia defensiva.
+- Respuesta de Gemini: He corregido la lógica de detección del departamento 'Administración' para que sea insensible a problemas de codificación (tildes), lo que debería resolver el problema de visualización.

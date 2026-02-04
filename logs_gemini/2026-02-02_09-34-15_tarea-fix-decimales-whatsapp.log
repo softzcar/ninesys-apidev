@@ -1,0 +1,73 @@
+- Solicitud del Usuario: Al hacer un abono desde `/comercializacion/ordenes/activas`, el mensaje de WhatsApp enviado al cliente muestra los montos con 4 decimales (ej: 1.0000) en lugar de 2 decimales. El usuario solicita que en mensajes e interfaz se muestren solo 2 decimales, manteniendo los 4 decimales únicamente para cálculos internos de pago.
+
+- Archivos Involucrados:
+  * /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/communications.php (líneas 421-435, formateo de mensajes de WhatsApp tipo 'cobro')
+
+- Acción Realizada:
+  1. Identifiqué el endpoint POST `/ws/build-message` en `communications.php` que construye los mensajes de WhatsApp.
+  2. Localicé la sección que maneja mensajes tipo 'cobro' (líneas 421-435).
+  3. Los valores `pago_total`, `total_abonos`, `total_descuentos` y `deuda` venían directamente de la BD con 4 decimales.
+  4. Apliqué `number_format(floatval($valor), 2, '.', '')` a cada uno de estos campos en el array `$reemplazo`.
+  5. El formateo convierte valores como `1.0000` a `1.00` para mejor legibilidad en mensajes.
+  6. Los 4 decimales se mantienen en la BD y en cálculos internos, solo se formatean para presentación.
+  7. Hice commit y push a GitHub (commit 0cc972e).
+  8. Desplegué los cambios en el VPS.
+
+- Herramienta(s) Utilizada(s): grep_search, view_file, replace_file_content, run_command (git, ssh)
+
+- Resultado: Éxito
+
+- Verificación:
+  1. Código modificado correctamente en `communications.php` líneas 428-431.
+  2. Los valores ahora pasan por `number_format()` con 2 decimales.
+  3. Commit exitoso: `0cc972e` con mensaje descriptivo.
+  4. Push a GitHub exitoso: "refactor/modular-routes -> refactor/modular-routes".
+  5. Pull en VPS exitoso: "Fast-forward, app/routes/communications.php | 10 ++++------".
+  6. El formato aplicado es: `number_format(floatval($valor), 2, '.', '')`.
+     - 1er parámetro: `floatval()` convierte el string/número a float
+     - 2do parámetro: `2` = 2 decimales
+     - 3er parámetro: `'.'` = punto decimal
+     - 4to parámetro: `''` = sin separador de miles
+
+- Observaciones de Gemini:
+  El cambio es específico y quirúrgico:
+  - Solo afecta los mensajes de WhatsApp de tipo 'cobro' (abonos)
+  - Los mensajes de tipo 'inicio', 'fin', 'paso' y 'custom' no se modifican
+  - La BD sigue almacenando con 4 decimales (DECIMAL(10,4))
+  - Los cálculos internos siguen usando 4 decimales
+  - Solo la PRESENTACIÓN en mensajes usa 2 decimales
+  
+  Ejemplo de transformación:
+  - Antes: "Total Abonado: $1.0000"
+  - Después: "Total Abonado: $1.00"
+  
+  Los campos afectados en mensajes de WhatsApp:
+  - [TOTAL_ORDEN] (Total de la orden)
+  - [TOTAL_ABONOS] (Total abonado)
+  - [TOTAL_DESCUENTOS] (Total de descuentos)
+  - [TOTAL_DEUDA] (Deuda pendiente)
+  
+  La plantilla del mensaje se define en la tabla `config` campo `msg_saldo` y usa estos placeholders que son reemplazados por los valores formateados.
+
+- Respuesta de Gemini:
+  ✅ Fix implementado y desplegado exitosamente
+  
+  **Cambio realizado:**
+  Los mensajes de WhatsApp de tipo "cobro" (enviados al hacer abonos) ahora muestran los montos con **2 decimales** en lugar de 4.
+  
+  **Ejemplo:**
+  - ❌ Antes: `Total Abonado: $1.0000`
+  - ✅ Ahora: `Total Abonado: $1.00`
+  
+  **Campos formateados:**
+  - Total de la orden
+  - Total abonado
+  - Total de descuentos
+  - Deuda pendiente
+  
+  **Importante:**
+  - Los 4 decimales se mantienen en la base de datos para precisión
+  - Los cálculos internos siguen usando 4 decimales
+  - Solo los MENSAJES muestran 2 decimales para mejor legibilidad
+  
+  Puedes probar haciendo un nuevo abono y el mensaje de WhatsApp mostrará los montos con 2 decimales.

@@ -622,7 +622,7 @@ class WooMe
     return json_encode($this->woocommerce->post('products', $data));
   }
 
-  public function createProductLite($name, $pricesDat, $category, $sku, $producto_fisico = 0, $es_diseno = 0)
+  public function createProductLite($name, $pricesDat, $category, $sku, $producto_fisico = 0, $es_diseno = 0, $stock_quantity = 0)
   {
     // CREAR EL NUEVO PRODUCTO
     $sql = "INSERT INTO `products`(
@@ -630,14 +630,16 @@ class WooMe
                 `sku`,
                 `category_ids`,
                 `fisico`,
-                `es_diseno`
+                `es_diseno`,
+                `stock_quantity`
             )
             VALUES(
                 '" . $name . "',
                 '" . $sku . "',
                 '" . $category . "',
                 '" . $producto_fisico . "',
-                '" . $es_diseno . "'
+                '" . $es_diseno . "',
+                '" . $stock_quantity . "'
             );";
     $localConnection = new LocalDB();
     $localConnection->goQuery($sql);

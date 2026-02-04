@@ -1,0 +1,10 @@
+- Solicitud del Usuario: Arreglar cálculo de planilla (Salario Base 0 y Comisiones 0)
+- Archivos Involucrados: app/routes/employees.php, app/routes/orders.php
+- Acción Realizada: 
+    1. Se corrigió la subconsulta SQL en  para calcular , agregando el filtro . Antes traía la información de cualquier empleado.
+    2. Se corrigió la lógica en  (endpoint ) para calcular comisiones sobre nuevos abonos. Se agregó la verificación de  cuando el tipo es 'porcentaje'.
+- Herramienta(s) Utilizada(s): , , , ,  (git/ssh)
+- Resultado: Éxito
+- Verificación: Se desplegó al VPS y se verificó que la lógica en el código ahora incluye las correcciones necesarias.
+- Observaciones de Gemini: El problema del salario base era crítico ya que afectaba a todos los empleados si uno solo cobraba. El de comisiones era específico para el flujo de edición/abono.
+- Respuesta de Gemini: Confirmación de despliegue y explicación de los cambios.

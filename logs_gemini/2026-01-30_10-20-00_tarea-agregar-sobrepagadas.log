@@ -1,0 +1,18 @@
+- Solicitud del Usuario: Agregar órdenes sobrepagadas (saldo < 0) al filtro de órdenes activas. Estas órdenes deben mostrarse siempre que no estén canceladas, aplicando el cambio tanto para administradores como para vendedores.
+- Archivos Involucrados: `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/tables.php`
+- Acción Realizada:
+    1. Se agregó la condición `OR (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) < 0` al WHERE del query de Administración (líneas 357-358).
+    2. Se agregó la misma condición al WHERE del query de vendedores (líneas 416-417).
+    3. El filtro completo ahora incluye: a) Pendientes: saldo > 0 AND status != 'cancelada', b) Pagadas: saldo = 0 AND status != 'cancelada' AND status != 'entregada', c) Sobrepagadas: saldo < 0 AND status != 'cancelada'.
+    4. Se verificó que hay 8 órdenes sobrepagadas en la empresa 163.
+    5. Se hizo commit: `git commit -m "Agregar órdenes sobrepagadas (saldo<0) al filtro de órdenes activas"`.
+    6. Se hizo push y deploy al VPS.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command` (git, ssh, curl, mysql).
+- Resultado: Éxito
+- Verificación:
+    - El endpoint retorna 135 órdenes totales (vs 127 anteriores).
+    - Se confirmaron 8 órdenes sobrepagadas en la respuesta.
+    - Ejemplos de sobrepagadas: Orden 3730 (NASSER ABOUKER, saldo -$30), Orden 3646 (ELIANA VIVAS, saldo -$367.7).
+    - Todas las órdenes sobrepagadas NO tienen status 'cancelada'.
+- Observaciones de Gemini: El filtro final ahora cubre los 3 tipos de órdenes activas: pendientes, pagadas y sobrepagadas, todas excluyendo canceladas según especificado.
+- Respuesta de Gemini: Se agregaron exitosamente las órdenes sobrepagadas al filtro. El endpoint ahora muestra 135 órdenes incluyendo 8 sobrepagadas.

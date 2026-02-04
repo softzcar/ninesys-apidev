@@ -1,0 +1,9 @@
+- Solicitud del Usuario: Corregir cálculo de pagos para tareas multi-empleado (aplicar porcentaje asignado).
+- Archivos Involucrados: app/routes/manufacturing.php
+- Acción Realizada: Se modificó la lógica de cálculo en backend para los 3 tipos de comisión (Porcentaje, Fija, Variable). 
+  - Ahora se lee el campo  asignado en el lote.
+  - El pago final se multiplica por .
+  - Se agregó fallback a 100% si el valor es 0/null.
+- Resultado: Si se asigna 50% a Maru y 50% a Yamir, el sistema pagará la mitad a cada uno al completar la tarea.
+- Verificación: Despliegue en VPS completado.
+- Respuesta de Gemini: Notificación de despliegue.

@@ -1,0 +1,6 @@
+- Solicitud del Usuario: Mostrar unicamente las revisiones aprobadas y no pagadas en la planilla de diseñadores.
+- Archivos Involucrados: app/routes/payments.php (Backend)
+- Acción Realizada: Se actualizó la consulta SQL de diseñadores para incluir un filtro por  en la tabla de .
+- Resultado: Ahora solo se visualizan los diseños que han pasado por el proceso de aprobación y cuya comisión está pendiente de pago.
+- Verificación: Se confirmó en la base de datos que registros no aprobados (ej. 'Esperando Respuesta') son excluidos, mientras que los aprobados y no pagados se mantienen.
+- Respuesta de Gemini: Notificación de la implementación del filtro por estatus.

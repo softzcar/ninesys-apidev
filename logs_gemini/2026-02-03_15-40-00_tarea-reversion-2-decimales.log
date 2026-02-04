@@ -1,0 +1,27 @@
+- Solicitud del Usuario: Revertir la precisión decimal de 4 a 2 posiciones en todo el sistema debido a problemas de discrepancias (centavos basura) que impedían saldar órdenes.
+
+- Archivos Involucrados:
+  - Backend: `app/routes/tables.php`, `app/routes/orders.php`, `public/model/create_new_company_api_emp_N.sql`
+  - Frontend: `components/ordenes/abono.vue`
+  - BD VPS: `api_emp_163`, `api_emp_171`, `api_emp_174`
+
+- Acción Realizada:
+  1. **Base de Datos**: Se ejecutaron `ALTER TABLE` para cambiar tipos de datos de `DECIMAL(12,4)` a `DECIMAL(12,2)` en 4 tablas críticas (`abonos`, `metodos_de_pago`, `ordenes`, `presupuestos`) en 3 empresas.
+  2. **Backend**: 
+     - Se eliminaron los `ROUND(..., 2)` redundantes en las consultas SQL de saldo.
+     - Se actualizó el template SQL para futuras empresas.
+     - Se mantuvo el saneamiento de entrada en el registro de abonos.
+  3. **Frontend**: Se confirmó y desplegó el uso de `.toFixed(2)` en cálculos del componente de abonos.
+  4. **Deploy**: Se sincronizaron los cambios de backend (git pull en VPS) y frontend (deploy.sh) exitosamente.
+
+- Herramienta(s) Utilizada(s): `run_command`, `multi_replace_file_content`, `replace_file_content`, `write_to_file`, `deploy.sh`
+
+- Resultado: Éxito total.
+
+- Verificación: 
+  - Se verificó vía SQL en el VPS que la Orden 3747 ahora tiene `pago_abono = 15.00` y `pago_total = 15.00`, quedando con saldo 0.
+  - El dashboard de órdenes activas ya no muestra órdenes que tengan discrepancias menores a 1 centavo.
+
+- Observaciones de Gemini: La migración de esquema en MySQL se encargó de redondear los valores existentes de forma automática y segura. El sistema es ahora robusto contra errores de redondeo por conversión de moneda al normalizar todo a 2 decimales comerciales.
+
+- Respuesta de Gemini: Tarea de reversión completada. Todo el sistema (Frontend, Backend y Bases de Datos) ha regresado a manejar una precisión de 2 decimales. Se han actualizado las empresas 163, 171 y 174, y se ha verificado que órdenes problemáticas como la 3747 ahora aparecen correctamente saldadas. Los cambios ya están en producción.

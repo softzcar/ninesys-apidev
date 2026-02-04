@@ -1,0 +1,14 @@
+- Solicitud del Usuario: Investigar por qué la reposición solicitada desde Costura (Orden 11) no aparece en Impresión.
+- Archivos Involucrados: Base de datos.
+- Acción Realizada:
+    - Se buscó la reposición en la base de datos.
+    - Se encontró la Reposición ID 15, creada recientemente por Costura para Impresión.
+    - Se verificó que está asignada al empleado 598 (Impresión) y está pendiente (`terminada = 0`).
+- Resultados de la Investigación:
+    - La Reposición 15 está vinculada a la **Orden 10**, NO a la Orden 11.
+    - Esto se debe a que el producto seleccionado (`id_ordenes_productos = 26`) pertenece a la Orden 10.
+    - La API `/empleados/ordenes-asignadas/v2` devuelve correctamente esta reposición para el empleado de Impresión.
+- Conclusión:
+    - La reposición existe y está visible para el sistema, pero aparece bajo la **Orden 10**.
+    - Es probable que el usuario haya seleccionado por error un producto de la orden anterior al crear la reposición, o haya una confusión visual en el dashboard.
+- Respuesta de Gemini: Informar al usuario que la reposición se generó para la Orden 10 y pedirle que verifique si la ve allí.

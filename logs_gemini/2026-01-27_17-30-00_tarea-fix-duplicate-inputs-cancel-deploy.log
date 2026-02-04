@@ -1,0 +1,10 @@
+- Solicitud del Usuario: "No despliegues la app... estamos viendo esto en la interfaz... datos errones de insumos". (Usuario confundido por duplicados y datos de Meta en orden nueva, pidió detener despliegue).
+- Archivos Involucrados: app/routes/manufacturing.php, frontend deployment script.
+- Acción Realizada: 
+    1. Se interrumpió el script de despliegue del frontend (`./deploy.sh`) que estaba en ejecución.
+    2. Se modificó la consulta SQL en `manufacturing.php` (endpoint input-efficiency) para eliminar `pia.id_departamento` del `GROUP BY`. Esto consolida las filas duplicadas (ej. Tela Algodón aparecía dos veces por estar asignada a dos departamentos, ahora aparecerá sumada en una sola fila).
+- Herramienta(s) Utilizada(s): `send_command_input` (Terminate), `view_file`, `replace_file_content`.
+- Resultado: Backend corregido (sin desplegar aun). Despliegue frontend cancelado.
+- Verificación: Se verificó el código SQL modificado. La consolidación evitará la confusión visual de duplicados.
+- Observaciones de Gemini: El usuario interpretó la existencia de datos "Meta" (Planificados) como un error porque la orden no ha iniciado. Se explicará que es el plan de consumo, pero se limpió la vista para evitar duplicados que generaban desconfianza.
+- Respuesta de Gemini: Se notificará al usuario que el despliegue se detuvo y que se corrigieron los duplicados en el backend, explicando la diferencia entre Meta (Plan) y Real (Consumo), y solicitando permiso para desplegar ambos arreglos.

@@ -1,0 +1,15 @@
+- Solicitud del Usuario: Investigar por qué el consumo de papel y tinta no aparece en el reporte de la reposición 14 (Orden 10), a pesar de que "se imprimió antes de usar la tela".
+- Archivos Involucrados: Base de datos.
+- Acción Realizada:
+    - Se consultaron las tablas `reposiciones`, `tintas` y `inventario_movimientos` para la Orden 10.
+    - Se compararon los timestamps (`moment`).
+- Resultados de la Investigación:
+    - **Reposición 14:** Creada el `2026-01-27 13:32:03`.
+    - **Consumo de Tintas:** Ocurrieron entre las `09:01` y las `10:21` del mismo día.
+    - **Consumo de Papel (ID 8):** Ocurrió a las `10:21:19`.
+    - **Consumo de Tela (ID 10):** Ocurrió a las `10:59:14`. (Este aparece porque fue insertado manualmente con `id_reposicion = 14`).
+- Conclusión:
+    - Los consumos de papel y tinta ocurrieron **ANTES** de la creación de la reposición (13:32).
+    - El sistema está diseñado para capturar costos generados *a partir* del momento en que se solicita la reposición.
+    - Como estos movimientos son anteriores y no tienen el vínculo explícito (`id_reposicion` es NULL), el reporte los excluye correctamente para evitar duplicar costos de la orden original o de intentos previos.
+- Respuesta de Gemini: Se explicará al usuario que los registros existen pero son anteriores a la reposición, por lo que lógicamente no pertenecen a ella según el sistema.
