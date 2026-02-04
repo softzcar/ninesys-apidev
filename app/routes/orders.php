@@ -756,6 +756,7 @@ return function (App $app) {
                   p.product AS nombre_producto,
                   s.nombre AS talla,
                   cip.nombre AS nombre_insumo,
+                  pia.id_catalogo_insumos_productos,
                   SUM(op.cantidad) AS cantidad_piezas,
                   SUM(op.cantidad * COALESCE(pia.cantidad, 0)) AS consumo_estimado_total,
                   eu.nombre AS nombre_empleado,
@@ -773,35 +774,33 @@ return function (App $app) {
               LEFT JOIN sizes s ON op.id_size = s._id
               LEFT JOIN catalogo_insumos_productos cip ON pia.id_catalogo_insumos_productos = cip._id
               WHERE
-                  -- ldea.id_orden = 2008
                   ldea.id_empleado = {$args['id_empleado']}
                   AND ldea.id_departamento = {$args['id_departamento']}
               GROUP BY
                   ldea.id_orden, ldea.id_empleado, ldea.id_departamento,
-                  p.product, s.nombre, cip.nombre,
+                  p.product, s.nombre, cip.nombre, pia.id_catalogo_insumos_productos,
                   eu.nombre, dep.departamento, ldea.fecha_inicio
           ) AS est
       LEFT JOIN
           (
               SELECT
-                  id_orden,
-                  id_departamento,
-                  id_empleado,
-                  -- Agrupamos todo el consumo real, sin importar el insumo específico
-                  SUM(valor_inicial - valor_final) AS consumo_real_total
+                  im.id_orden,
+                  im.id_departamento,
+                  im.id_empleado,
+                  im.id_catalogo_insumos_prodcutos,
+                  SUM((im.valor_inicial - im.valor_final) * COALESCE(inv.rendimiento, 1)) AS consumo_real_total
               FROM
-                  inventario_movimientos
+                  inventario_movimientos im
+              JOIN inventario inv ON im.id_insumo = inv._id
               WHERE
-                  -- id_orden = 2008
-                  id_empleado = {$args['id_empleado']}
-                  AND id_departamento = {$args['id_departamento']}
+                  im.id_empleado = {$args['id_empleado']}
+                  AND im.id_departamento = {$args['id_departamento']}
               GROUP BY
-                  -- Quitamos id_catalogo_insumos_prodcutos del GROUP BY
-                  id_orden, id_departamento, id_empleado
+                  im.id_orden, im.id_departamento, im.id_empleado, im.id_catalogo_insumos_prodcutos
           ) AS consumo_r ON est.id_orden = consumo_r.id_orden
                         AND est.id_departamento = consumo_r.id_departamento
-                        AND est.id_empleado = consumo_r.id_empleado;
-                        -- Se elimina la condición de 'id_catalogo_insumos_productos' del JOIN final
+                        AND est.id_empleado = consumo_r.id_empleado
+                        AND est.id_catalogo_insumos_productos = consumo_r.id_catalogo_insumos_prodcutos;
       ";
     $reficiencia_insumos = $localConnection->goQuery($sql);
     $object['sql_eficiencia_insumos'] = $sql;

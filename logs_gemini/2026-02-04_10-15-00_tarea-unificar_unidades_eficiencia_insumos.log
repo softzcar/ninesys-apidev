@@ -1,0 +1,15 @@
+- Solicitud del Usuario: En la página `/reporte-eficiencia-empleados` después de seleccionar un empelado nos carga sustareas correctametne, al seleccionar la pestaña "TERMNADOS" tenemos la posibilidad de hacer Click en el porcentaje de la columna "EFICIENCIA INSUMOS" y nos abre un modal llamado "Detalle de Eficiencia de Insumos" alli tenemos una discrepancia con las unidades de medida. Resulta que el `consumo Real:` lo estamos mostrando en Kilos y el `Consumo Estimado:` en Metros, la forma correcta de mostrar los datos en este modal es en Metros. Vamos a analizar la situación y determinamos la manera correcta de convertir estos kilos que nos está enseñado de la manera correcta.
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php
+    - /home/developer/Escritorio/niesys/app_multi/components/EficienciaInsumosDetalleModal.vue
+- Acción Realizada: 
+    - Se analizó la consulta SQL en el backend (`orders.php`) que calcula la eficiencia de insumos.
+    - Se identificó que `consumo_real_total` se extraía de `inventario_movimientos` sin considerar el rendimiento del material (que convierte peso a longitud).
+    - Se modificó la consulta SQL para realizar un JOIN con la tabla `inventario` y multiplicar la diferencia de valores por el campo `rendimiento`.
+    - Se restauró la agrupación por `id_catalogo_insumos_prodcutos` para asegurar que el emparejamiento entre consumo estimado y real sea preciso por material.
+    - En el frontend (`EficienciaInsumosDetalleModal.vue`), se actualizaron las etiquetas de visualización para añadir el sufijo " m" y formatear los números a 2 decimales usando `toFixed(2)`.
+- Herramienta(s) Utilizada(s): `view_file`, `replace_file_content`, `multi_replace_file_content`, `run_command`, `write_to_file`
+- Resultado: Éxito
+- Verificación: Se validó técnicamente que la fórmula aplicada en el SQL (`SUM((im.valor_inicial - im.valor_final) * COALESCE(inv.rendimiento, 1))`) es la correcta para convertir kilogramos a metros basándose en el rendimiento configurado. Se verificó el esquema de las tablas implicadas (`rendimiento`, `inventario`, `inventario_movimientos`) vía SSH.
+- Observaciones de Gemini: Se detectó un typo en el nombre de la columna de la base de datos (`id_catalogo_insumos_prodcutos`) el cual se respetó en la consulta para evitar errores de ejecución. La lógica ahora permite distinguir entre diferentes insumos dentro de una misma orden y departamento.
+- Respuesta de Gemini: He completado la unificación de las unidades de medida para el reporte de eficiencia de insumos. Tanto el backend como el frontend han sido actualizados para operar consistentemente en metros, aplicando el factor de rendimiento correspondiente a cada material. He documentado los cambios en el walkthrough adjunto.
