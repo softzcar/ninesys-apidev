@@ -3114,26 +3114,32 @@ return function (App $app) {
                 COALESCE((
                   SELECT MAX(im.id_insumo) 
                   FROM inventario_movimientos im 
-                  JOIN inventario inv ON inv._id = im.id_insumo 
+                  LEFT JOIN inventario inv ON inv._id = im.id_insumo 
                   WHERE im.id_orden IN ($idsString) 
-                    AND inv.id_catalogo = cip._id
+                    AND (inv.id_catalogo = cip._id OR im.id_catalogo_insumos_prodcutos = cip._id)
                 ), (SELECT MAX(_id) FROM inventario WHERE id_catalogo = cip._id)) AS id_insumo,
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
+                cip.id_departamento,
                 
                 -- Consumo Estándar (Meta): Calculado desde la asignación de insumos al producto
                 SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
                 
-                MAX(pia.unidad) AS unidad,
-                (SELECT MAX(rendimiento) FROM inventario WHERE id_catalogo = cip._id) AS rendimiento, 
+                -- Limpieza de unidad: Evitar 'null' string
+                MAX(CASE WHEN pia.unidad IS NULL OR pia.unidad = 'null' THEN 'Und' ELSE pia.unidad END) AS unidad,
+                
+                -- Rendimiento: Ahora retornamos 1 porque el cálculo real ya viene convertido a la unidad destino (Metros)
+                -- Esto asegura compatibilidad con componentes que multipliquen y corrige los que no lo hacían.
+                1.0 AS rendimiento, 
 
-                -- Consumo Real: Suma de movimientos registrados para esta orden y este tipo de insumo
+                -- Consumo Real: Suma de movimientos registrados, multiplicados por el rendimiento ESPECIFICO del rollo/item usado.
+                -- Esto resuelve el problema de usar el MAX(rendimiento) del catálogo.
                 COALESCE((
-                    SELECT SUM(ABS(im_sub.valor_final - im_sub.valor_inicial))
+                    SELECT SUM(ABS(im_sub.valor_final - im_sub.valor_inicial) * COALESCE(inv_sub.rendimiento, 1))
                     FROM inventario_movimientos im_sub
-                    JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
+                    LEFT JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
                     WHERE im_sub.id_orden IN ($idsString)
-                      AND inv_sub.id_catalogo = cip._id
+                      AND (inv_sub.id_catalogo = cip._id OR im_sub.id_catalogo_insumos_prodcutos = cip._id)
                 ), 0) AS cantidad_real
 
             FROM ordenes_productos op
@@ -3141,7 +3147,7 @@ return function (App $app) {
             JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
             
             WHERE op.id_orden IN ($idsString)
-            GROUP BY cip._id, cip.nombre
+            GROUP BY cip._id, cip.nombre, cip.id_departamento
         ";
 
     file_put_contents('debug_sql_error.log', "SQL Query:\n" . $sql . "\n", FILE_APPEND);
@@ -3223,7 +3229,7 @@ return function (App $app) {
       } else {
         // Default logic: Priority to Lote (Department) time, fallback to sum of all employees
         $realTimeCalculation = "
-            CASE 
+            (CASE 
                 -- Caso 1: Lote terminado
                 WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
                     TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
@@ -3248,6 +3254,8 @@ return function (App $app) {
                         0
                     )
             END
+            / 
+            (SELECT COUNT(*) FROM lotes_detalles ld_div WHERE ld_div.id_orden = ld.id_orden AND ld_div.id_departamento = ld.id_departamento))
           ";
       }
 
@@ -3397,7 +3405,7 @@ return function (App $app) {
             o.status,
             op.name AS producto,
             op.cantidad,
-            COALESCE(tc.tiempo_total_calculado, 0) AS tiempo_total_segundos,
+            COALESCE(tc.tiempo_total_calculado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
             COALESCE(pf.tiempo_unitario_total * op.cantidad, 0) AS tiempo_proyectado_segundos,
             (
                 SELECT MIN(fecha_inicio)
