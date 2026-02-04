@@ -2437,9 +2437,9 @@ return function (App $app) {
 
     // --- INICIO DE LA SEGUNDA CORRECCIÓN ---
     $sql = "
-        -- Versión 3: Consulta robusta con CTE para pre-agregar datos de asignación
+        -- Versión 4: Consulta robusta con CTE + UNION para cubrir tareas proyectadas y tareas extra/ad-hoc
         WITH AssignmentData AS (
-            -- Primero, consolidamos todo lo de la tabla de asignaciones en una sola fila por tarea
+            -- Consolidamos asignaciones por tarea (orden + departamento)
             SELECT
                 ldea.id_orden,
                 ldea.id_departamento,
@@ -2455,45 +2455,77 @@ return function (App $app) {
                 ldea.id_orden,
                 ldea.id_departamento
         )
-        -- Consulta principal que ahora une los datos pre-agregados
-        SELECT
-            a.id_orden,
-            c.status,
-            d.id_departamento,
-            dep.departamento AS nombre_departamento,
-            ad.fecha_inicio_agregada AS fecha_inicio,
-            ad.fecha_terminado_agregada AS fecha_terminado,
-            c.fecha_entrega AS fecha_entrega_de_la_orden,
-            (SELECT CONCAT(o.fecha_entrega, ' 08:30:00') FROM ordenes o WHERE o._id = a.id_orden) AS fecha_entrega_orden,
-            SUM(a.cantidad) AS total_unidades,
-            -- La división ahora usa el conteo pre-calculado del CTE
-            (SUM(d.tiempo * a.cantidad) / COALESCE(ad.numero_de_empleados, 1)) AS tiempo_total_orden_depto,
-            ofo.orden_fila AS orden_fila_orden,
-            dep.orden_proceso AS orden_proceso_departamento
-        FROM
-            ordenes_productos a
-        -- Unimos las tablas principales
-        JOIN
-            products_tiempos_de_produccion d ON d.id_product = a.id_woo
-        JOIN
-            departamentos dep ON dep._id = d.id_departamento
-        JOIN
-            ordenes c ON c._id = a.id_orden
-        -- Hacemos LEFT JOIN a nuestros datos de asignación ya consolidados
-        RIGHT JOIN
-            AssignmentData ad ON ad.id_orden = a.id_orden AND ad.id_departamento = d.id_departamento
-        LEFT JOIN
-            ordenes_fila_orden ofo ON ofo.id_orden = a.id_orden
-        WHERE
-            (c.status LIKE 'En espera' OR c.status LIKE 'activa' OR c.status LIKE 'pausada')
-        -- Agrupamos por la tarea (orden y departamento)
-        GROUP BY
-            a.id_orden,
-            d.id_departamento
+        SELECT * FROM (
+            -- PARTE A: Tareas Proyectadas (Configuradas en el producto)
+            -- Se muestran existan o no asignaciones reales (LEFT JOIN AssignmentData)
+            SELECT
+                a.id_orden,
+                c.status,
+                d.id_departamento,
+                dep.departamento AS nombre_departamento,
+                ad.fecha_inicio_agregada AS fecha_inicio,
+                ad.fecha_terminado_agregada AS fecha_terminado,
+                c.fecha_entrega AS fecha_entrega_de_la_orden,
+                (SELECT CONCAT(o.fecha_entrega, ' 08:30:00') FROM ordenes o WHERE o._id = a.id_orden) AS fecha_entrega_orden,
+                SUM(a.cantidad) AS total_unidades,
+                (SUM(d.tiempo * a.cantidad) / COALESCE(ad.numero_de_empleados, 1)) AS tiempo_total_orden_depto,
+                ofo.orden_fila AS orden_fila_orden,
+                dep.orden_proceso AS orden_proceso_departamento
+            FROM
+                ordenes_productos a
+            JOIN
+                products_tiempos_de_produccion d ON d.id_product = a.id_woo
+            JOIN
+                departamentos dep ON dep._id = d.id_departamento
+            JOIN
+                ordenes c ON c._id = a.id_orden
+            LEFT JOIN
+                AssignmentData ad ON ad.id_orden = a.id_orden AND ad.id_departamento = d.id_departamento
+            LEFT JOIN
+                ordenes_fila_orden ofo ON ofo.id_orden = a.id_orden
+            WHERE
+                (c.status LIKE 'En espera' OR c.status LIKE 'activa' OR c.status LIKE 'pausada')
+            GROUP BY
+                a.id_orden,
+                d.id_departamento
+
+            UNION ALL
+
+            -- PARTE B: Tareas Extra/Ad-hoc (Asignaciones reales SIN configuración de producto)
+            -- Se muestran solo si NO existen en la Parte A (NOT EXISTS)
+            SELECT
+                ad.id_orden,
+                c.status,
+                ad.id_departamento,
+                dep.departamento AS nombre_departamento,
+                ad.fecha_inicio_agregada AS fecha_inicio,
+                ad.fecha_terminado_agregada AS fecha_terminado,
+                c.fecha_entrega AS fecha_entrega_de_la_orden,
+                (SELECT CONCAT(o.fecha_entrega, ' 08:30:00') FROM ordenes o WHERE o._id = ad.id_orden) AS fecha_entrega_orden,
+                (SELECT SUM(op.cantidad) FROM ordenes_productos op WHERE op.id_orden = ad.id_orden) AS total_unidades,
+                0 AS tiempo_total_orden_depto, -- No hay tiempo estimado configurado
+                ofo.orden_fila AS orden_fila_orden,
+                dep.orden_proceso AS orden_proceso_departamento
+            FROM
+                AssignmentData ad
+            JOIN
+                ordenes c ON c._id = ad.id_orden
+            JOIN
+                departamentos dep ON dep._id = ad.id_departamento
+            LEFT JOIN
+                ordenes_fila_orden ofo ON ofo.id_orden = ad.id_orden
+            WHERE
+                NOT EXISTS (
+                    SELECT 1
+                    FROM ordenes_productos a
+                    JOIN products_tiempos_de_produccion d ON d.id_product = a.id_woo
+                    WHERE a.id_orden = ad.id_orden AND d.id_departamento = ad.id_departamento
+                )
+        ) AS UnifiedResults
         ORDER BY
-            ofo.orden_fila ASC,
-            a.id_orden ASC,
-            dep.orden_proceso ASC;
+            orden_fila_orden ASC,
+            id_orden ASC,
+            orden_proceso_departamento ASC;
     ";
     // --- FIN DE LA SEGUNDA CORRECCIÓN ---
 
