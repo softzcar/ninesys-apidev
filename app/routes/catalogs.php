@@ -179,6 +179,8 @@ return function (App $app) {
                 a._id id_product_insumos_asignados,
                 b._id id_product,
                 d._id id_departamento,
+                c._id id_catalogo_insumos_productos,
+                a.id_talla,
                 b.product producto,
                 c.nombre insumo,
                 d.departamento,
