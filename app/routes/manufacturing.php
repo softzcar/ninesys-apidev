@@ -2470,7 +2470,8 @@ return function (App $app) {
                 SUM(a.cantidad) AS total_unidades,
                 (SUM(d.tiempo * a.cantidad) / COALESCE(ad.numero_de_empleados, 1)) AS tiempo_total_orden_depto,
                 ofo.orden_fila AS orden_fila_orden,
-                dep.orden_proceso AS orden_proceso_departamento
+                dep.orden_proceso AS orden_proceso_departamento,
+                COALESCE(ad.numero_de_empleados, 0) AS cant_empleados
             FROM
                 ordenes_productos a
             JOIN
@@ -2505,7 +2506,8 @@ return function (App $app) {
                 (SELECT SUM(op.cantidad) FROM ordenes_productos op WHERE op.id_orden = ad.id_orden) AS total_unidades,
                 0 AS tiempo_total_orden_depto, -- No hay tiempo estimado configurado
                 ofo.orden_fila AS orden_fila_orden,
-                dep.orden_proceso AS orden_proceso_departamento
+                dep.orden_proceso AS orden_proceso_departamento,
+                ad.numero_de_empleados AS cant_empleados
             FROM
                 AssignmentData ad
             JOIN
