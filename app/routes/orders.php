@@ -345,6 +345,20 @@ return function (App $app) {
 
       $detalleAbono = isset($datosAbono['tipoAbono']) ? $datosAbono['tipoAbono'] : '';
 
+      // VERIFICAR SI YA EXISTE UN ABONO IDÉNTICO RECIENTE (últimos 10 segundos)
+      // Esto previene duplicados por doble clic o reintentos rápidos
+      $sql_check_duplicate = "SELECT COUNT(*) as count FROM abonos 
+        WHERE id_orden = " . intval($datosAbono['id']) . "
+        AND id_empleado = " . intval($datosAbono['empleado']) . "
+        AND ABS(abono - " . $abono_val . ") < 0.01
+        AND ABS(descuento - " . $descuento_val . ") < 0.01
+        AND moment > DATE_SUB(NOW(), INTERVAL 10 SECOND)";
+      $check_result = $localConnection->goQuery($sql_check_duplicate);
+
+      if (!empty($check_result) && $check_result[0]['count'] > 0) {
+        throw new Exception('Ya existe un abono idéntico registrado hace menos de 10 segundos. Evite hacer doble clic en el botón.');
+      }
+
       // INSERT EN ABONOS (operación principal)
       $values = "'" . $now . "',";
       $values .= "'" . intval($datosAbono['id']) . "',";
