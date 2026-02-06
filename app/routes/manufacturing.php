@@ -3419,6 +3419,8 @@ return function (App $app) {
             ordenes o
         JOIN 
             ordenes_productos op ON op.id_orden = o._id
+        JOIN
+            products p_main ON p_main._id = op.id_woo AND p_main.fisico = 1
         LEFT JOIN 
             TiemposCalculados tc ON tc.id_orden = o._id
         LEFT JOIN
