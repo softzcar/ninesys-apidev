@@ -3414,7 +3414,14 @@ return function (App $app) {
                 SELECT MIN(fecha_inicio)
                 FROM lotes_detalles_empleados_asignados ldea_start
                 WHERE ldea_start.id_orden = o._id
-            ) AS fecha_inicio_primer_proceso
+            ) AS fecha_inicio_primer_proceso,
+            (
+                SELECT IF(COUNT(*) > 0 AND COUNT(*) = SUM(IF(fecha_terminado IS NOT NULL, 1, 0)), 1, 0)
+                FROM lotes_detalles_empleados_asignados ldea_check
+                WHERE ldea_check.id_orden = o._id
+                  AND ldea_check.fecha_inicio IS NOT NULL
+                  " . ($id_empleado ? "AND ldea_check.id_empleado = $id_empleado" : "") . "
+            ) AS tarea_terminada
         FROM 
             ordenes o
         JOIN 
