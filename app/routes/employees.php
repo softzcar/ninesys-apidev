@@ -747,7 +747,7 @@ return function (App $app) {
 
                 // 2. EFICIENCIA DE TIEMPO
                 $sqlEficiencia = "
-                    WITH TiemposCalculados AS (
+                    WITH TiemposReales AS (
                         SELECT 
                             sub_ldea.id_orden,
                             SUM(
@@ -758,34 +758,40 @@ return function (App $app) {
                                         TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
                                     ELSE 0 
                                 END
-                            ) AS tiempo_total_calculado
+                            ) AS tiempo_real_orden
                         FROM lotes_detalles_empleados_asignados sub_ldea
-                        WHERE sub_ldea.id_empleado = $id_empleado AND sub_ldea.id_departamento = $id_departamento
+                        WHERE sub_ldea.id_empleado = $id_empleado 
+                          AND sub_ldea.id_departamento = $id_departamento
+                          AND sub_ldea.fecha_inicio IS NOT NULL
                         GROUP BY sub_ldea.id_orden
                     ),
-                    ProyeccionFiltrada AS (
+                    TiemposEstimados AS (
                         SELECT 
-                            ptp.id_product,
-                            SUM(ptp.tiempo) as tiempo_unitario_total
-                        FROM products_tiempos_de_produccion ptp
-                        WHERE ptp.id_departamento = $id_departamento
-                        GROUP BY ptp.id_product
+                            op.id_orden,
+                            SUM(ptp.tiempo * op.cantidad) AS tiempo_estimado_orden
+                        FROM ordenes_productos op
+                        INNER JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_orden = op.id_orden
+                        INNER JOIN products p ON p._id = op.id_woo AND p.fisico = 1
+                        INNER JOIN products_tiempos_de_produccion ptp 
+                            ON ptp.id_product = op.id_woo 
+                            AND ptp.id_departamento = $id_departamento
+                        WHERE ldea.id_empleado = $id_empleado
+                          AND ldea.id_departamento = $id_departamento
+                          AND ldea.fecha_inicio IS NOT NULL
+                        GROUP BY op.id_orden
                     )
                     SELECT 
-                        SUM(COALESCE(tc.tiempo_total_calculado, 0)) AS total_tiempo_real,
-                        SUM(COALESCE(pf.tiempo_unitario_total * op.cantidad, 0)) AS total_tiempo_estimado
-                    FROM 
-                        lotes_detalles_empleados_asignados ldea
-                    JOIN 
-                        ordenes_productos op ON op.id_orden = ldea.id_orden
-                    LEFT JOIN 
-                        TiemposCalculados tc ON tc.id_orden = ldea.id_orden
-                    LEFT JOIN
-                        ProyeccionFiltrada pf ON pf.id_product = op.id_woo
-                    WHERE 
-                        ldea.id_empleado = $id_empleado 
-                        AND ldea.id_departamento = $id_departamento
-                        AND ldea.fecha_inicio IS NOT NULL
+                        COALESCE(SUM(tr.tiempo_real_orden), 0) AS total_tiempo_real,
+                        COALESCE(SUM(te.tiempo_estimado_orden), 0) AS total_tiempo_estimado
+                    FROM (
+                        SELECT DISTINCT id_orden 
+                        FROM lotes_detalles_empleados_asignados
+                        WHERE id_empleado = $id_empleado
+                          AND id_departamento = $id_departamento
+                          AND fecha_inicio IS NOT NULL
+                    ) ordenes
+                    LEFT JOIN TiemposReales tr ON tr.id_orden = ordenes.id_orden
+                    LEFT JOIN TiemposEstimados te ON te.id_orden = ordenes.id_orden
                 ";
 
                 $eficienciaResult = $localConnection->goQuery($sqlEficiencia);
