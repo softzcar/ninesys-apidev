@@ -3393,6 +3393,7 @@ return function (App $app) {
                 ptp.id_product,
                 SUM(ptp.tiempo) as tiempo_unitario_total
              FROM products_tiempos_de_produccion ptp
+             INNER JOIN products p ON p._id = ptp.id_product AND p.fisico = 1
              WHERE 1=1 " . ($id_empleado ? "
                 AND ptp.id_departamento IN (
                     SELECT DISTINCT ldea_emp.id_departamento 
@@ -3407,7 +3408,7 @@ return function (App $app) {
             o.status,
             op.name AS producto,
             op.cantidad,
-            COALESCE(tc.tiempo_total_calculado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
+            COALESCE(tc.tiempo_total_calculado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
             COALESCE(pf.tiempo_unitario_total * op.cantidad, 0) AS tiempo_proyectado_segundos,
             (
                 SELECT MIN(fecha_inicio)
