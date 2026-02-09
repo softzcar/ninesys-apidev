@@ -282,9 +282,9 @@ return function (App $app) {
 
     // 9. REGISTRAR EN AUDITORÍA (si es cancelada o terminada manual)
     if ($order['estado'] === 'cancelada' || $order['estado'] === 'terminada') {
-      $motivoEscaped = $localConnection->escape(trim($order['motivo']));
+      $motivoEscaped = addslashes(trim($order['motivo']));
       $idAdmin = isset($order['id_admin']) ? intval($order['id_admin']) : 0;
-      $nombreAdmin = isset($order['nombre_admin']) ? $localConnection->escape($order['nombre_admin']) : 'Desconocido';
+      $nombreAdmin = isset($order['nombre_admin']) ? addslashes($order['nombre_admin']) : 'Desconocido';
 
       $sqlAudit = "INSERT INTO ordenes_auditoria (id_orden, accion, id_admin, nombre_admin, motivo) 
                    VALUES (" . intval($order['id']) . ", 
