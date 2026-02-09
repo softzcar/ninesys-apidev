@@ -113,12 +113,57 @@ return function (App $app) {
     $order = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $sql = "UPDATE ordenes SET status = '" . $order['estado'] . "' WHERE _id = " . $order['id'];
+    // 1. OBTENER ESTADO ACTUAL DE LA ORDEN
+    $sqlActual = "SELECT status FROM ordenes WHERE _id = " . intval($order['id']);
+    $resActual = $localConnection->goQuery($sqlActual);
+    $estadoActual = !empty($resActual) ? $resActual[0]['status'] : null;
+
+    if (!$estadoActual) {
+      $localConnection->disconnect();
+      return ApiResponse::validationError($response, 'Orden no encontrada');
+    }
+
+    // 2. VALIDACIÓN "ENTREGADA" (Solo si el estatus actual es "terminada")
+    if ($order['estado'] === 'entregada' && $estadoActual !== 'terminada') {
+      $localConnection->disconnect();
+      return ApiResponse::validationError($response, 'La orden debe estar en estatus "Terminada" para poder marcarla como "Entregada"');
+    }
+
+    // 3. VALIDACIÓN "TERMINADA" (Revisar tareas de empleados asignados)
+    if ($order['estado'] === 'terminada') {
+      $sqlPendientes = "
+          SELECT 
+              dep.departamento,
+              eu.nombre as empleado,
+              CASE 
+                  WHEN ldea.fecha_inicio IS NULL THEN 'Por iniciar'
+                  ELSE 'En curso'
+              END as status_tarea
+          FROM lotes_detalles_empleados_asignados ldea
+          JOIN departamentos dep ON ldea.id_departamento = dep._id
+          JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
+          WHERE ldea.id_orden = " . intval($order['id']) . "
+            AND ldea.fecha_terminado IS NULL
+      ";
+      $tareasPendientes = $localConnection->goQuery($sqlPendientes);
+
+      if (!empty($tareasPendientes)) {
+        $localConnection->disconnect();
+        $response->getBody()->write(json_encode([
+          'error' => 'Existen tareas asignadas inconclusas. Se deben terminar primero o eliminar la asignación.',
+          'tareas_pendientes' => $tareasPendientes
+        ]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
+    }
+
+    // 4. SI PASA LAS VALIDACIONES, ACTUALIZAR
+    $sql = "UPDATE ordenes SET status = '" . $order['estado'] . "' WHERE _id = " . intval($order['id']);
     $data = $localConnection->goQuery($sql);
 
     // Generar el regstro en Woocomemrce si la orden está terminada
     if ($order['estado'] === 'terminada' || $order['estado'] === 'entregada') {
-      $sql = 'SELECT id_wp_order FROM ordenes WHERE _id = ' . $order['id'];
+      $sql = 'SELECT id_wp_order FROM ordenes WHERE _id = ' . intval($order['id']);
       $data = $localConnection->goQuery($sql);
 
       if (!empty($data) && isset($data[0]['id_wp_order']) && !is_null($data[0]['id_wp_order'])) {
@@ -127,33 +172,29 @@ return function (App $app) {
         if ($order['estado'] === 'terminada') {
           // UPDATE PRODUCTS QUANTITY
           // Buscar cantidades de productos en ninesys
-          $sql = 'SELECT id_woo, cantidad FROM `ordenes_productos` WHERE id_orden = ' . $order['id'];
+          $sql = 'SELECT id_woo, cantidad FROM `ordenes_productos` WHERE id_orden = ' . intval($order['id']);
           $productos = $localConnection->goQuery($sql);
-
-          // $data['prod_ninesys'] = $productos;
 
           foreach ($productos as $key => $producto) {
             // Buscar existencia de productos en WC
             $tmpProd = $woo->getProductById($producto['id_woo']);
 
             // Sumar cantidades de ambas fuentes
-            $tmpCantidad = $tmpProd->stock_quantity + $producto['cantidad'];
+            $tmpCantidad = (isset($tmpProd->stock_quantity) ? $tmpProd->stock_quantity : 0) + $producto['cantidad'];
 
             $woo->updateProductQuantity($producto['id_woo'], $tmpCantidad);
           }
         }
 
         if ($order['estado'] === 'entregada') {
-          $r = $woo->updateOrderStatus(intval($data[0]['id_wp_order']), 'completed');
+          $woo->updateOrderStatus(intval($data[0]['id_wp_order']), 'completed');
         }
-      } else {
-        $r['wc'] = 'La orden no tiene ID de pedido de Woocomemrce';
       }
     }
 
     $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode($data));
+    $response->getBody()->write(json_encode(['status' => 'success', 'data' => $data]));
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
