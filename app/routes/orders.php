@@ -1591,6 +1591,9 @@ return function (App $app) {
       $object['productos_count'] = count($object['productos']);
       $object['conterwoo'] = count($object['productos']);
 
+      // TEST: Campo hardcodeado para verificar que podemos agregar datos
+      $object['TEST_HARDCODED'] = 'THIS_IS_A_TEST_VALUE';
+
       // Consultar datos de auditoría (cancelaciones y terminaciones manuales)
       $sqlAuditoria = "SELECT accion, id_admin, nombre_admin, motivo, fecha 
                        FROM ordenes_auditoria 
