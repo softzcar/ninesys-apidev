@@ -229,7 +229,17 @@ return function (App $app) {
       $eliminadas = count($idsPendientes ?: []);
     }
 
-    // 5. VALIDACIÓN "REACTIVAR CANCELADA" (Advertir si no hay asignaciones)
+    // 5. VALIDACIÓN "CANCELADA → TERMINADA" (Bloquear cambio ilógico)
+    if ($estadoActual === 'cancelada' && $order['estado'] === 'terminada') {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode([
+        'success' => false,
+        'message' => 'No se puede marcar como terminada una orden cancelada. Si desea completar esta orden, reactívela primero.'
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    // 6. VALIDACIÓN "REACTIVAR CANCELADA" (Advertir si no hay asignaciones)
     $forzarReactivacion = isset($order['forzar_reactivacion']) ? intval($order['forzar_reactivacion']) : 0;
 
     if ($estadoActual === 'cancelada' && $order['estado'] !== 'cancelada' && !$forzarReactivacion) {
@@ -251,7 +261,7 @@ return function (App $app) {
       }
     }
 
-    // 6. SI PASA LAS VALIDACIONES, ACTUALIZAR
+    // 7. SI PASA LAS VALIDACIONES, ACTUALIZAR
     $sql = "UPDATE ordenes SET status = '" . $order['estado'] . "' WHERE _id = " . intval($order['id']);
     $data = $localConnection->goQuery($sql);
 
