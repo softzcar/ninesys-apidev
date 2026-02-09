@@ -150,7 +150,8 @@ return function (App $app) {
       if (!empty($tareasPendientes)) {
         $localConnection->disconnect();
         $response->getBody()->write(json_encode([
-          'error' => 'Existen tareas asignadas inconclusas. Se deben terminar primero o eliminar la asignación.',
+          'success' => false,
+          'message' => 'Existen tareas asignadas inconclusas. Se deben terminar primero o eliminar la asignación.',
           'tareas_pendientes' => $tareasPendientes
         ]));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
