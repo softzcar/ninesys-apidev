@@ -136,7 +136,7 @@ return function (App $app) {
         JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
         WHERE ldea.id_orden = $idOrden
           AND ldea.fecha_terminado IS NULL
-        ORDER BY dep.orden ASC
+        ORDER BY dep.orden_proceso ASC
     ";
     $tareasPendientes = $localConnection->goQuery($sqlPendientes);
 
