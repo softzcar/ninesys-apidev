@@ -108,6 +108,48 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  // ============================================================
+  // PREVIA CANCELACIÓN - Obtener tareas pendientes antes de cancelar
+  // ============================================================
+  $app->post('/orden/previa-cancelacion', function (Request $request, Response $response, $args) {
+    $body = $request->getParsedBody();
+    $idOrden = isset($body['id']) ? intval($body['id']) : 0;
+
+    if ($idOrden <= 0) {
+      return ApiResponse::validationError($response, 'ID de orden inválido');
+    }
+
+    $localConnection = new LocalDB();
+
+    // Consultar tareas pendientes (fecha_terminado IS NULL)
+    $sqlPendientes = "
+        SELECT 
+            ldea._id as id_asignacion,
+            dep.departamento,
+            eu.nombre as empleado,
+            CASE 
+                WHEN ldea.fecha_inicio IS NULL THEN 'Por iniciar'
+                ELSE 'En curso'
+            END as status_tarea
+        FROM lotes_detalles_empleados_asignados ldea
+        JOIN departamentos dep ON ldea.id_departamento = dep._id
+        JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
+        WHERE ldea.id_orden = $idOrden
+          AND ldea.fecha_terminado IS NULL
+        ORDER BY dep.orden ASC
+    ";
+    $tareasPendientes = $localConnection->goQuery($sqlPendientes);
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode([
+      'success' => true,
+      'puede_cancelar' => true,
+      'tareas_pendientes' => $tareasPendientes ?: []
+    ]));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
   // Actualizar estado de la orden
   $app->post('/orden/actualizar-estado', function (Request $request, Response $response, $args) {
     $order = $request->getParsedBody();
@@ -158,7 +200,36 @@ return function (App $app) {
       }
     }
 
-    // 4. SI PASA LAS VALIDACIONES, ACTUALIZAR
+    // 4. LÓGICA "CANCELADA" (Eliminar asignaciones pendientes antes de cancelar)
+    $eliminadas = 0;
+    if ($order['estado'] === 'cancelada') {
+      // 4a. Obtener IDs de asignaciones pendientes para eliminar sus pausas
+      $sqlIdsPendientes = "SELECT _id FROM lotes_detalles_empleados_asignados 
+                           WHERE id_orden = " . intval($order['id']) . " 
+                           AND fecha_terminado IS NULL";
+      $idsPendientes = $localConnection->goQuery($sqlIdsPendientes);
+
+      if (!empty($idsPendientes) && is_array($idsPendientes)) {
+        $idsArray = array_column($idsPendientes, '_id');
+        if (!empty($idsArray)) {
+          $idsStr = implode(',', $idsArray);
+
+          // 4b. Eliminar pausas de las asignaciones que serán eliminadas
+          $sqlDeletePausas = "DELETE FROM lotes_detalles_empleados_asignados_pausas 
+                              WHERE id_asignacion IN ($idsStr)";
+          $localConnection->goQuery($sqlDeletePausas);
+        }
+      }
+
+      // 4c. Eliminar asignaciones pendientes (fecha_terminado IS NULL)
+      $sqlDeleteAsignaciones = "DELETE FROM lotes_detalles_empleados_asignados 
+                                WHERE id_orden = " . intval($order['id']) . " 
+                                AND fecha_terminado IS NULL";
+      $localConnection->goQuery($sqlDeleteAsignaciones);
+      $eliminadas = count($idsPendientes ?: []);
+    }
+
+    // 5. SI PASA LAS VALIDACIONES, ACTUALIZAR
     $sql = "UPDATE ordenes SET status = '" . $order['estado'] . "' WHERE _id = " . intval($order['id']);
     $data = $localConnection->goQuery($sql);
 
