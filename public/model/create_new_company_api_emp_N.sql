@@ -683,6 +683,17 @@ CREATE TABLE `ordenes_productos` (
   `precio_woo` decimal(10, 2) DEFAULT NULL COMMENT 'Precio de Woocommerce',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Productos incluidos en cada orden. Detalla cada ítem con cantidad, talla, corte, tela, precio unitario y categoría.';
+CREATE TABLE `ordenes_auditoria` (
+  `_id` INT AUTO_INCREMENT PRIMARY KEY COMMENT 'ID único del registro',
+  `id_orden` INT NOT NULL COMMENT 'ID de la orden',
+  `accion` ENUM('cancelada', 'terminada') NOT NULL COMMENT 'Tipo de acción manual',
+  `id_admin` INT NOT NULL COMMENT 'ID del administrador',
+  `nombre_admin` VARCHAR(255) NOT NULL COMMENT 'Nombre del administrador',
+  `motivo` TEXT NOT NULL COMMENT 'Motivo detallado',
+  `fecha` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de la acción',
+  INDEX `idx_orden` (`id_orden`),
+  INDEX `idx_admin` (`id_admin`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Auditoría de cancelaciones y terminaciones manuales. Registra administrador y motivo cuando se interrumpe el proceso normal de producción.';
 CREATE TABLE `ordenes_tmp` (
   `_id` int(11) NOT NULL COMMENT 'Clave primaria',
   `form` longtext DEFAULT NULL COMMENT 'Datos del formulario',

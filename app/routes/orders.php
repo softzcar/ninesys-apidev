@@ -261,9 +261,39 @@ return function (App $app) {
       }
     }
 
-    // 7. SI PASA LAS VALIDACIONES, ACTUALIZAR
+    // 7. VALIDACIÓN DE MOTIVO para Administración (Cancelada o Terminada manual)
+    // Solo pedir motivo si es un Admin cambiando a cancelada o terminada
+    if (($order['estado'] === 'cancelada' || $order['estado'] === 'terminada')) {
+      // Verificar que se envió el motivo
+      if (!isset($order['motivo']) || trim($order['motivo']) === '') {
+        $localConnection->disconnect();
+        $response->getBody()->write(json_encode([
+          'success' => false,
+          'requiere_motivo' => true,
+          'message' => 'Debe proporcionar un motivo para esta acción'
+        ]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
+    }
+
+    // 8. SI PASA LAS VALIDACIONES, ACTUALIZAR
     $sql = "UPDATE ordenes SET status = '" . $order['estado'] . "' WHERE _id = " . intval($order['id']);
     $data = $localConnection->goQuery($sql);
+
+    // 9. REGISTRAR EN AUDITORÍA (si es cancelada o terminada manual)
+    if ($order['estado'] === 'cancelada' || $order['estado'] === 'terminada') {
+      $motivoEscaped = $localConnection->escape(trim($order['motivo']));
+      $idAdmin = isset($order['id_admin']) ? intval($order['id_admin']) : 0;
+      $nombreAdmin = isset($order['nombre_admin']) ? $localConnection->escape($order['nombre_admin']) : 'Desconocido';
+
+      $sqlAudit = "INSERT INTO ordenes_auditoria (id_orden, accion, id_admin, nombre_admin, motivo) 
+                   VALUES (" . intval($order['id']) . ", 
+                           '" . $order['estado'] . "', 
+                           $idAdmin, 
+                           '$nombreAdmin', 
+                           '$motivoEscaped')";
+      $localConnection->goQuery($sqlAudit);
+    }
 
     // Generar el regstro en Woocomemrce si la orden está terminada
     if ($order['estado'] === 'terminada' || $order['estado'] === 'entregada') {
@@ -1561,6 +1591,15 @@ return function (App $app) {
       $object['productos_count'] = count($object['productos']);
       $object['conterwoo'] = count($object['productos']);
     }
+
+    // Consultar datos de auditoría (cancelaciones y terminaciones manuales)
+    $sqlAuditoria = "SELECT accion, id_admin, nombre_admin, motivo, fecha 
+                     FROM ordenes_auditoria 
+                     WHERE id_orden = " . $id . " 
+                     ORDER BY fecha DESC 
+                     LIMIT 1";
+    $auditoria = $localConnection->goQuery($sqlAuditoria);
+    $object['auditoria'] = !empty($auditoria) ? $auditoria[0] : null;
 
     $localConnection->disconnect();
 
