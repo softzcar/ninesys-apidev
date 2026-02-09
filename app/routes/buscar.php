@@ -238,6 +238,15 @@ return function (App $app) {
       $object['productos'] = $data;
       $object['productos_count'] = count($object['productos']);
       $object['conterwoo'] = count($object['productos']);
+
+      // Consultar datos de auditoría (cancelaciones y terminaciones manuales)
+      $sqlAuditoria = "SELECT accion, id_admin, nombre_admin, motivo, fecha 
+                       FROM ordenes_auditoria 
+                       WHERE id_orden = " . $id . " 
+                       ORDER BY fecha DESC 
+                       LIMIT 1";
+      $auditoria = $localConnection->goQuery($sqlAuditoria);
+      $object['auditoria'] = !empty($auditoria) ? $auditoria[0] : null;
     }
 
     $localConnection->disconnect();
