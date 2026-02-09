@@ -229,7 +229,29 @@ return function (App $app) {
       $eliminadas = count($idsPendientes ?: []);
     }
 
-    // 5. SI PASA LAS VALIDACIONES, ACTUALIZAR
+    // 5. VALIDACIÓN "REACTIVAR CANCELADA" (Advertir si no hay asignaciones)
+    $forzarReactivacion = isset($order['forzar_reactivacion']) ? intval($order['forzar_reactivacion']) : 0;
+
+    if ($estadoActual === 'cancelada' && $order['estado'] !== 'cancelada' && !$forzarReactivacion) {
+      // Contar asignaciones activas (cualquier asignación, terminada o no)
+      $sqlAsignaciones = "SELECT COUNT(*) as total 
+                          FROM lotes_detalles_empleados_asignados 
+                          WHERE id_orden = " . intval($order['id']);
+      $resAsignaciones = $localConnection->goQuery($sqlAsignaciones);
+      $totalAsignaciones = !empty($resAsignaciones) ? intval($resAsignaciones[0]['total']) : 0;
+
+      if ($totalAsignaciones === 0) {
+        $localConnection->disconnect();
+        $response->getBody()->write(json_encode([
+          'success' => false,
+          'advertencia_reactivacion' => true,
+          'message' => 'Esta orden fue cancelada y no tiene personal asignado. Deberá reasignar empleados manualmente.'
+        ]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
+    }
+
+    // 6. SI PASA LAS VALIDACIONES, ACTUALIZAR
     $sql = "UPDATE ordenes SET status = '" . $order['estado'] . "' WHERE _id = " . intval($order['id']);
     $data = $localConnection->goQuery($sql);
 
