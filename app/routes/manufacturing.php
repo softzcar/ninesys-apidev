@@ -1553,19 +1553,33 @@ return function (App $app) {
 
           $id_insumo_actual = intval($consumo['id_insumo']);
           $cantidad_total_consumida = floatval($consumo['cantidad_total']);
+          $id_ordenes_especificas = $consumo['id_ordenes'] ?? [];
 
           $sql_update_inventario = 'UPDATE inventario SET cantidad = cantidad - ? WHERE _id = ?';
           $localConnection->goQuery($sql_update_inventario, [$cantidad_total_consumida, $id_insumo_actual]);
 
-          foreach ($ordenes_del_lote as $order) {
-            $id_orden_actual = $order['id_orden'];
-            $unidades_orden = intval($order['unidades_orden']);
-            $proporcion = $unidades_orden / $gran_total_unidades_lote;
-            $consumo_estimado_orden = $cantidad_total_consumida * $proporcion;
+          // Determinar qué órdenes cargarán con este consumo
+          if (!empty($id_ordenes_especificas) && is_array($id_ordenes_especificas)) {
+            $ordenes_para_distribuir = array_filter($ordenes_del_lote, function ($o) use ($id_ordenes_especificas) {
+              return in_array($o['id_orden'], $id_ordenes_especificas);
+            });
+            $total_unidades_segmento = array_sum(array_column($ordenes_para_distribuir, 'unidades_orden'));
+          } else {
+            $ordenes_para_distribuir = $ordenes_del_lote;
+            $total_unidades_segmento = $gran_total_unidades_lote;
+          }
 
-            $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, (SELECT departamento FROM departamentos WHERE _id = ?), ?, ?, ?)';
-            $params_movimiento = [$id_orden_actual, $id_empleado, $id_insumo_actual, $id_departamento, $id_departamento, 0, $consumo_estimado_orden, $now];
-            $localConnection->goQuery($sql_movimiento, $params_movimiento);
+          if ($total_unidades_segmento > 0) {
+            foreach ($ordenes_para_distribuir as $order) {
+              $id_orden_actual = $order['id_orden'];
+              $unidades_orden = intval($order['unidades_orden']);
+              $proporcion = $unidades_orden / $total_unidades_segmento;
+              $consumo_estimado_orden = $cantidad_total_consumida * $proporcion;
+
+              $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, (SELECT departamento FROM departamentos WHERE _id = ?), ?, ?, ?)';
+              $params_movimiento = [$id_orden_actual, $id_empleado, $id_insumo_actual, $id_departamento, $id_departamento, 0, $consumo_estimado_orden, $now];
+              $localConnection->goQuery($sql_movimiento, $params_movimiento);
+            }
           }
         }
       }
@@ -1741,25 +1755,37 @@ return function (App $app) {
       foreach ($consumo_papel as $papel) {
         $id_insumo_papel = intval($papel['id_insumo']);
         $cantidad_total_papel = floatval($papel['cantidad_total']);
+        $id_ordenes_especificas = $papel['id_ordenes'] ?? [];
 
         $logMsg = "Procesando Papel - Insumo ID: {$id_insumo_papel}, Cantidad: {$cantidad_total_papel}\n";
         file_put_contents($logFile, $logMsg, FILE_APPEND);
 
         if ($cantidad_total_papel > 0) {
           $localConnection->goQuery('UPDATE inventario SET cantidad = cantidad - ? WHERE _id = ?', [$cantidad_total_papel, $id_insumo_papel]);
-          foreach ($ordenes_del_lote as $order) {
-            $proporcion = intval($order['unidades_orden']) / $gran_total_unidades_lote;
-            $consumo_estimado = $cantidad_total_papel * $proporcion;
 
-            if ($consumo_estimado > 0) {
-              $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
-              $localConnection->goQuery($sql_movimiento, [$order['id_orden'], $id_empleado, $id_insumo_papel, $id_departamento, $nombre_departamento, 0, $consumo_estimado, $now]);
+          // Determinar qué órdenes cargarán con este papel
+          if (!empty($id_ordenes_especificas) && is_array($id_ordenes_especificas)) {
+            $ordenes_para_distribuir = array_filter($ordenes_del_lote, function ($o) use ($id_ordenes_especificas) {
+              return in_array($o['id_orden'], $id_ordenes_especificas);
+            });
+            $total_unidades_segmento = array_sum(array_column($ordenes_para_distribuir, 'unidades_orden'));
+          } else {
+            $ordenes_para_distribuir = $ordenes_del_lote;
+            $total_unidades_segmento = $gran_total_unidades_lote;
+          }
 
-              $logMsg = "INSERTADO movimiento para Orden {$order['id_orden']}, Qty: {$consumo_estimado}\n";
-              file_put_contents($logFile, $logMsg, FILE_APPEND);
-            } else {
-              $logMsg = "SKIPPED insert for Orden {$order['id_orden']} because consumo_estimado is 0\n";
-              file_put_contents($logFile, $logMsg, FILE_APPEND);
+          if ($total_unidades_segmento > 0) {
+            foreach ($ordenes_para_distribuir as $order) {
+              $proporcion = intval($order['unidades_orden']) / $total_unidades_segmento;
+              $consumo_estimado = $cantidad_total_papel * $proporcion;
+
+              if ($consumo_estimado > 0) {
+                $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+                $localConnection->goQuery($sql_movimiento, [$order['id_orden'], $id_empleado, $id_insumo_papel, $id_departamento, $nombre_departamento, 0, $consumo_estimado, $now]);
+
+                $logMsg = "INSERTADO movimiento para Orden {$order['id_orden']}, Qty: {$consumo_estimado}\n";
+                file_put_contents($logFile, $logMsg, FILE_APPEND);
+              }
             }
           }
         } else {
@@ -1900,27 +1926,39 @@ return function (App $app) {
         $id_insumo_actual = intval($consumo['id_insumo']);
         $cantidad_total_consumida = floatval($consumo['cantidad_total']);
         $desperdicio_total = floatval($consumo['desperdicio_total']);
+        $id_ordenes_especificas = $consumo['id_ordenes'] ?? [];
 
         // 3a. Actualizar stock del insumo
         $localConnection->goQuery('UPDATE inventario SET cantidad = cantidad - ? WHERE _id = ?', [$cantidad_total_consumida, $id_insumo_actual]);
 
+        // Determinar qué órdenes cargarán con este consumo y desperdicio
+        if (!empty($id_ordenes_especificas) && is_array($id_ordenes_especificas)) {
+          $ordenes_para_distribuir = array_filter($ordenes_del_lote, function ($o) use ($id_ordenes_especificas) {
+            return in_array($o['id_orden'], $id_ordenes_especificas);
+          });
+          $total_unidades_segmento = array_sum(array_column($ordenes_para_distribuir, 'unidades_orden'));
+        } else {
+          $ordenes_para_distribuir = $ordenes_del_lote;
+          $total_unidades_segmento = $gran_total_unidades_lote;
+        }
+
         // 3b. Bucle interno para distribuir consumo y desperdicio
-        foreach ($ordenes_del_lote as $order) {
-          $id_orden_actual = $order['id_orden'];
-          $unidades_orden = intval($order['unidades_orden']);
-          $proporcion = $unidades_orden / $gran_total_unidades_lote;
+        if ($total_unidades_segmento > 0) {
+          foreach ($ordenes_para_distribuir as $order) {
+            $id_orden_actual = $order['id_orden'];
+            $unidades_orden = intval($order['unidades_orden']);
+            $proporcion = $unidades_orden / $total_unidades_segmento;
 
-          // Distribuir y registrar consumo
-          $consumo_estimado = $cantidad_total_consumida * $proporcion;
-          $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
-          $localConnection->goQuery($sql_movimiento, [$id_orden_actual, $id_empleado, $id_insumo_actual, $id_departamento, $nombre_departamento, 0, $consumo_estimado, $now]);
+            // Distribuir y registrar consumo
+            $consumo_estimado = $cantidad_total_consumida * $proporcion;
+            $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+            $localConnection->goQuery($sql_movimiento, [$id_orden_actual, $id_empleado, $id_insumo_actual, $id_departamento, $nombre_departamento, 0, $consumo_estimado, $now]);
 
-          // Distribuir y registrar desperdicio en la tabla `rendimiento`
-          $desperdicio_estimado = $desperdicio_total * $proporcion;
-          // Se asume que el campo para desperdicio en la tabla rendimiento se llama 'desperdicio'
-          // y que el campo para el empleado de corte es 'id_empleado_corte'
-          $sql_rendimiento = 'INSERT INTO rendimiento (id_orden, id_empleado_corte, desperdicio, id_insumo, metros) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE desperdicio = desperdicio + VALUES(desperdicio), metros = metros + VALUES(metros);';
-          $localConnection->goQuery($sql_rendimiento, [$id_orden_actual, $id_empleado, $desperdicio_estimado, $id_insumo_actual, $consumo_estimado]);
+            // Distribuir y registrar desperdicio en la tabla `rendimiento`
+            $desperdicio_estimado = $desperdicio_total * $proporcion;
+            $sql_rendimiento = 'INSERT INTO rendimiento (id_orden, id_empleado_corte, desperdicio, id_insumo, metros) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE desperdicio = desperdicio + VALUES(desperdicio), metros = metros + VALUES(metros);';
+            $localConnection->goQuery($sql_rendimiento, [$id_orden_actual, $id_empleado, $desperdicio_estimado, $id_insumo_actual, $consumo_estimado]);
+          }
         }
       }
 
@@ -2175,14 +2213,21 @@ return function (App $app) {
           $object['product_woo'] = $prod_woo;
 
           // $object["product-attributes"] = $prod_woo->attributes;
-          if (empty($prod_woo->attributes)) {
+          if (!is_object($prod_woo) || empty($prod_woo->attributes)) {
             $monto_pago = 0;
             $object['product-attributes-vacio'] = true;
           } else {
             $object['product-attributes-vacio'] = false;
             $object['procesar_pago']['unidades'] = $respLotesDetalles[0]['unidades'];
-            $object['procesar_pago']['comison_woo'] = floatval($prod_woo->attributes[0]->options[0]);
-            $calculo_pago = intval($respLotesDetalles[0]['unidades']) * floatval($prod_woo->attributes[0]->options[0]);
+
+            // Acceso seguro a atributos de producto de WooCommerce
+            $comision_valor = 0;
+            if (isset($prod_woo->attributes[0]->options[0])) {
+              $comision_valor = floatval($prod_woo->attributes[0]->options[0]);
+            }
+
+            $object['procesar_pago']['comison_woo'] = $comision_valor;
+            $calculo_pago = intval($respLotesDetalles[0]['unidades']) * $comision_valor;
             $monto_pago = number_format($calculo_pago, 2);
             $object['procesar_pago']['monto_pago'] = $monto_pago;
           }
@@ -3124,18 +3169,28 @@ return function (App $app) {
                 cip.nombre AS nombre_insumo,
                 cip.id_departamento,
                 
-                -- Consumo Estándar (Meta): Calculado desde la asignación de insumos al producto
-                SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
+                -- Consumo Estándar (Meta): SOLO sumamos la meta si hay consumo real registrado para esta orden e insumo.
+                -- Esto evita inflar la meta con órdenes en las que el empleado aún no ha trabajado o consumido material.
+                SUM(
+                  CASE 
+                    WHEN (
+                      SELECT COUNT(*) 
+                      FROM inventario_movimientos im_check 
+                      LEFT JOIN inventario inv_check ON inv_check._id = im_check.id_insumo
+                      WHERE im_check.id_orden = op.id_orden 
+                      AND (im_check.id_catalogo_insumos_prodcutos = cip._id OR inv_check.id_catalogo = cip._id)
+                    ) > 0 THEN op.cantidad * pia.cantidad 
+                    ELSE 0 
+                  END
+                ) AS cantidad_estandar,
                 
                 -- Limpieza de unidad: Evitar 'null' string
                 MAX(CASE WHEN pia.unidad IS NULL OR pia.unidad = 'null' THEN 'Und' ELSE pia.unidad END) AS unidad,
                 
                 -- Rendimiento: Ahora retornamos 1 porque el cálculo real ya viene convertido a la unidad destino (Metros)
-                -- Esto asegura compatibilidad con componentes que multipliquen y corrige los que no lo hacían.
                 1.0 AS rendimiento, 
 
-                -- Consumo Real: Suma de movimientos registrados, multiplicados por el rendimiento ESPECIFICO del rollo/item usado.
-                -- Esto resuelve el problema de usar el MAX(rendimiento) del catálogo.
+                -- Consumo Real: Suma de movimientos registrados
                 COALESCE((
                     SELECT SUM(ABS(im_sub.valor_final - im_sub.valor_inicial) * COALESCE(inv_sub.rendimiento, 1))
                     FROM inventario_movimientos im_sub
@@ -3200,15 +3255,34 @@ return function (App $app) {
 
       // Define Real Time Calculation Logic
       if ($id_empleado) {
-        // If filtering by employee, ONLY count that employee's time from assignments
-        // FIX: Handle "Orphan" assignments (linked only by Order/Dept) by dividing their time
-        // across the number of products in that department to avoid duplication in the final sum.
-        $realTimeCalculation = "
+        $realTimeCalculationTerminado = "
             COALESCE(
                  (SELECT SUM(
                     CASE 
                         WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                        ELSE 0 
+                    END
+                    / 
+                    CASE 
+                        WHEN sub_ldea.id_lotes_detalles IS NULL THEN 
+                            (SELECT COUNT(*) FROM lotes_detalles ld_count WHERE ld_count.id_orden = sub_ldea.id_orden AND ld_count.id_departamento = sub_ldea.id_departamento)
+                        ELSE 1
+                    END
+                 )
+                 FROM lotes_detalles_empleados_asignados sub_ldea 
+                 WHERE (sub_ldea.id_lotes_detalles = ld._id 
+                    OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento))
+                 AND sub_ldea.id_empleado = $id_empleado
+                 ), 
+                0
+            )
+          ";
+
+        $realTimeCalculationEnCurso = "
+            COALESCE(
+                 (SELECT SUM(
+                    CASE 
                         WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
                         ELSE 0 
@@ -3229,22 +3303,37 @@ return function (App $app) {
             )
           ";
       } else {
-        // Default logic: Priority to Lote (Department) time, fallback to sum of all employees
-        $realTimeCalculation = "
+        $realTimeCalculationTerminado = "
             (CASE 
-                -- Caso 1: Lote terminado
                 WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
                     TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
-                -- Caso 2: Lote en curso (activo)
-                WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
-                    TIMESTAMPDIFF(SECOND, ld.fecha_inicio, NOW())
-                -- Caso 3: Sumar tiempos de empleados (si no hay tiempo de lote directo)
                 ELSE 
                     COALESCE(
                          (SELECT SUM(
                             CASE 
                                 WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
                                     TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                                ELSE 0 
+                            END
+                         )
+                         FROM lotes_detalles_empleados_asignados sub_ldea 
+                         WHERE sub_ldea.id_lotes_detalles = ld._id 
+                            OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
+                        0
+                    )
+            END
+            / 
+            (SELECT COUNT(*) FROM lotes_detalles ld_div WHERE ld_div.id_orden = ld.id_orden AND ld_div.id_departamento = ld.id_departamento))
+          ";
+
+        $realTimeCalculationEnCurso = "
+            (CASE 
+                WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
+                    TIMESTAMPDIFF(SECOND, ld.fecha_inicio, NOW())
+                ELSE 
+                    COALESCE(
+                         (SELECT SUM(
+                            CASE 
                                 WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
                                     TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
                                 ELSE 0 
@@ -3272,13 +3361,52 @@ return function (App $app) {
                   op.cantidad,
                   
                   -- Tiempo Real
-                SUM($realTimeCalculation) AS tiempo_total_segundos,
+                  SUM($realTimeCalculationTerminado) AS totalRealTerminadas,
+                  SUM($realTimeCalculationEnCurso) AS totalRealEnCurso,
+                  (SUM($realTimeCalculationTerminado) + SUM($realTimeCalculationEnCurso)) AS tiempo_total_segundos,
                 
-                -- Tiempo Promedio Real
-                (SUM($realTimeCalculation) / op.cantidad) AS tiempo_promedio_por_unidad,
-  
-                  -- Tiempo Proyectado (Estimado)
-                  -- Se calcula sumando el tiempo estimado de los departamentos ASIGNADOS
+                  -- Tiempo Proyectado (Estimado) - Tareas Terminadas
+                  (
+                      SELECT COALESCE(SUM(ptp.tiempo * op.cantidad), 0)
+                      FROM products_tiempos_de_produccion ptp
+                      WHERE ptp.id_product = op.id_woo
+                      AND ptp.id_departamento IN (
+                          SELECT DISTINCT ld_sub.id_departamento
+                          FROM lotes_detalles ld_sub
+                          " . ($id_empleado ? "
+                            JOIN lotes_detalles_empleados_asignados ldea_sub ON 
+                                ldea_sub.id_empleado = $id_empleado AND (
+                                    ldea_sub.id_lotes_detalles = ld_sub._id 
+                                    OR (ldea_sub.id_lotes_detalles IS NULL AND ldea_sub.id_orden = o._id AND ldea_sub.id_departamento = ld_sub.id_departamento)
+                                )
+                          " : "") . "
+                          WHERE ld_sub.id_ordenes_productos = op._id
+                          AND ld_sub.fecha_terminado IS NOT NULL
+                      )
+                  ) AS totalProjectedTerminadas,
+
+                  -- Tiempo Proyectado (Estimado) - Tareas En Curso
+                  (
+                      SELECT COALESCE(SUM(ptp.tiempo * op.cantidad), 0)
+                      FROM products_tiempos_de_produccion ptp
+                      WHERE ptp.id_product = op.id_woo
+                      AND ptp.id_departamento IN (
+                          SELECT DISTINCT ld_sub.id_departamento
+                          FROM lotes_detalles ld_sub
+                          " . ($id_empleado ? "
+                            JOIN lotes_detalles_empleados_asignados ldea_sub ON 
+                                ldea_sub.id_empleado = $id_empleado AND (
+                                    ldea_sub.id_lotes_detalles = ld_sub._id 
+                                    OR (ldea_sub.id_lotes_detalles IS NULL AND ldea_sub.id_orden = o._id AND ldea_sub.id_departamento = ld_sub.id_departamento)
+                                )
+                          " : "") . "
+                          WHERE ld_sub.id_ordenes_productos = op._id
+                          AND ld_sub.fecha_terminado IS NULL
+                          AND ld_sub.fecha_inicio IS NOT NULL
+                      )
+                  ) AS totalProjectedEnCurso,
+
+                  -- Tiempo Proyectado Total (Compatibilidad)
                   (
                       SELECT COALESCE(SUM(ptp.tiempo * op.cantidad), 0)
                       FROM products_tiempos_de_produccion ptp
@@ -3351,6 +3479,7 @@ return function (App $app) {
       // Limit max IDs to prevent heavy queries
       $maxIds = 100;
 
+
       if (!$id_ordenes || !is_array($id_ordenes) || count($id_ordenes) === 0) {
         $response->getBody()->write(json_encode(['error' => 'id_ordenes array is required']));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
@@ -3361,6 +3490,18 @@ return function (App $app) {
       $idsStr = implode(',', $ids);
 
       $whereClause = "WHERE o._id IN ($idsStr)";
+
+      // OPTIMIZACIÓN: Si se filtra por empleado, incluir también las órdenes que terminó HOY
+      // para que aparezcan en el reporte de eficiencia aunque ya no estén "activas" en su lista.
+      if ($id_empleado) {
+        $whereClause = "WHERE (o._id IN ($idsStr) OR o._id IN (
+            SELECT DISTINCT id_orden 
+            FROM lotes_detalles_empleados_asignados 
+            WHERE id_empleado = $id_empleado 
+            AND DATE(fecha_terminado) = CURDATE()
+            AND id_departamento = (SELECT id_departamento FROM lotes_detalles_empleados_asignados WHERE id_orden IN ($idsStr) LIMIT 1)
+        ))";
+      }
 
       // --- OPTIMIZACIÓN: Usar CTE y evitar subconsultas correlacionadas ---
 
@@ -3376,40 +3517,76 @@ return function (App $app) {
                 sub_ldea.id_orden,
                 SUM(
                     CASE 
-                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND DATE(sub_ldea.fecha_terminado) = CURDATE() THEN 
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                        ELSE 0 
+                    END
+                ) AS tiempo_terminado,
+                SUM(
+                    CASE 
                         WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
                         ELSE 0 
                     END
-                ) AS tiempo_total_calculado
+                ) AS tiempo_en_curso
             FROM lotes_detalles_empleados_asignados sub_ldea
             WHERE sub_ldea.id_orden IN ($idsStr)
             $empleadoCondition
             GROUP BY sub_ldea.id_orden
-        ),
-        ProyeccionFiltrada AS (
-             SELECT 
-                ptp.id_product,
-                SUM(ptp.tiempo) as tiempo_unitario_total
-             FROM products_tiempos_de_produccion ptp
-             INNER JOIN products p ON p._id = ptp.id_product AND p.fisico = 1
-             WHERE 1=1 " . ($id_empleado ? "
-                AND ptp.id_departamento IN (
-                    SELECT DISTINCT ldea_emp.id_departamento 
-                    FROM lotes_detalles_empleados_asignados ldea_emp
-                    WHERE ldea_emp.id_empleado = $id_empleado
-                )
-             " : "") . "
-             GROUP BY ptp.id_product
         )
         SELECT 
             o._id AS id_orden,
             o.status,
             op.name AS producto,
             op.cantidad,
-            COALESCE(tc.tiempo_total_calculado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
-            COALESCE(pf.tiempo_unitario_total * op.cantidad, 0) AS tiempo_proyectado_segundos,
+            
+            -- Tiempos Reales (divididos por productos físicos para balancear la suma agrupada)
+            COALESCE(tc.tiempo_terminado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealTerminadas,
+            COALESCE(tc.tiempo_en_curso, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealEnCurso,
+            
+            -- Tiempos Proyectados (Correlacionados por producto y estado real de la tarea)
+            (
+                SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                FROM products_tiempos_de_produccion ptp_sub
+                WHERE ptp_sub.id_product = op.id_woo
+                AND ptp_sub.id_departamento IN (
+                    SELECT DISTINCT ldea_sub.id_departamento
+                    FROM lotes_detalles_empleados_asignados ldea_sub
+                    WHERE ldea_sub.id_orden = o._id
+                    AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
+                    AND ldea_sub.fecha_terminado IS NOT NULL
+                    AND DATE(ldea_sub.fecha_terminado) = CURDATE()
+                )
+            ) AS totalProjectedTerminadas,
+
+            (
+                SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                FROM products_tiempos_de_produccion ptp_sub
+                WHERE ptp_sub.id_product = op.id_woo
+                AND ptp_sub.id_departamento IN (
+                    SELECT DISTINCT ldea_sub.id_departamento
+                    FROM lotes_detalles_empleados_asignados ldea_sub
+                    WHERE ldea_sub.id_orden = o._id
+                    AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
+                    AND ldea_sub.fecha_terminado IS NULL
+                    AND ldea_sub.fecha_inicio IS NOT NULL
+                )
+            ) AS totalProjectedEnCurso,
+            
+            -- Legacy / Totales
+            (COALESCE(tc.tiempo_terminado, 0) + COALESCE(tc.tiempo_en_curso, 0)) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
+            (
+                SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                FROM products_tiempos_de_produccion ptp_sub
+                WHERE ptp_sub.id_product = op.id_woo
+                AND ptp_sub.id_departamento IN (
+                    SELECT DISTINCT ldea_sub.id_departamento
+                    FROM lotes_detalles_empleados_asignados ldea_sub
+                    WHERE ldea_sub.id_orden = o._id
+                    AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
+                )
+            ) AS tiempo_proyectado_segundos,
+
             (
                 SELECT MIN(fecha_inicio)
                 FROM lotes_detalles_empleados_asignados ldea_start
@@ -3430,8 +3607,6 @@ return function (App $app) {
             products p_main ON p_main._id = op.id_woo AND p_main.fisico = 1
         LEFT JOIN 
             TiemposCalculados tc ON tc.id_orden = o._id
-        LEFT JOIN
-            ProyeccionFiltrada pf ON pf.id_product = op.id_woo
         $whereClause
         ORDER BY 
             o._id DESC
@@ -3453,6 +3628,35 @@ return function (App $app) {
       $localConnection->disconnect();
       $errorMsg = ['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()];
       $response->getBody()->write(json_encode($errorMsg));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    }
+  });
+
+  // Obtener IDs de órdenes terminadas HOY por el empleado  
+  $app->get('/empleados/terminadas-hoy/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+    try {
+      $sql = "SELECT DISTINCT
+                  id_orden
+              FROM lotes_detalles_empleados_asignados
+              WHERE id_empleado = {$args['id_empleado']}
+                AND id_departamento = {$args['id_departamento']}
+                AND DATE(fecha_terminado) = CURDATE()";
+
+      $result = $localConnection->goQuery($sql);
+      $ids = [];
+      if (is_array($result)) {
+        foreach ($result as $row) {
+          $ids[] = intval($row['id_orden']);
+        }
+      }
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode($ids));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    } catch (Exception $e) {
+      if (isset($localConnection))
+        $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     }
   });
