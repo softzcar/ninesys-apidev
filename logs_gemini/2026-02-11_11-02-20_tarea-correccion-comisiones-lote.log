@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Investigar y corregir error de cálculo de comisiones por lote ($200 vs $9). Replicar lógica del botón "Terminar Todo" para unificar criterios.
+- Archivos Involucrados: [/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php]
+- Acción Realizada: Se modificó el endpoint `/lotes/{id}/finalizar-departamento` en `manufacturing.php`. Se implementó:
+    1. Filtrado de productos para incluir solo aquellos con `fisico = 1` y excluir `es_diseno = 1`.
+    2. Identificación del tipo de comisión del empleado (Fija, Porcentaje, Variable).
+    3. Cálculo granular del pago (Suma de cantidad * comisión) agrupado por tipo de comisión.
+    4. Asignación automática "al vuelo" del empleado finalizador en la tabla `lotes_detalles_empleados_asignados` si no existía asignación previa.
+    5. Validación de duplicados de pago antes de la inserción.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command`, `grep_search`
+- Resultado: Éxito
+- Verificación: Se comparó la lógica implementada con la del endpoint `/registrar-paso-empleado` (usado por "Terminar Todo"). Se verificó mediante simulación SQL que el filtrado de productos no manufacturables es el factor que reduce el monto de $200 a los $9 esperados.
+- Observaciones de Gemini: La discrepancia ocurría porque el proceso de lotes intentaba realizar una suma global sin filtrar ítems de diseño/servicio y no respetaba el tipo de comisión configurado para el empleado.
+- Respuesta de Gemini: He unificado la lógica de pagos en el backend. Ahora, al finalizar un lote, el sistema aplica exactamente los mismos filtros y cálculos que en la finalización individual, asegurando que el cobro sea correcto (aprox. $9 según tus pruebas) y se asigne a quien termina la tarea.

@@ -1600,22 +1600,63 @@ return function (App $app) {
           $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
         }
 
-        $sql_comision_empleado = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
-        $resp_comision_empleado = $localConnection->goQuery($sql_comision_empleado, [$id_empleado]);
-        $comision_tipo = $resp_comision_empleado[0]['comision_tipo'] ?? 'fija';
-        if ($comision_tipo === 'porcentaje') {
-          $comision_valor = floatval($resp_comision_empleado[0]['comision_porcentaje'] ?? 0);
-        } else {
-          $comision_valor = floatval($resp_comision_empleado[0]['comision'] ?? 0);
-        }
-        $sql_calculo_pago = 'SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable, ((SUM(c.cantidad) * eu.comision) * a.procentaje_comision / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? GROUP BY a._id, a.procentaje_comision';
-        $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
+        // UNIFICACIÓN DE LÓGICA DE PAGO (Replicando registrar-paso-empleado)
 
-        if (!empty($resp_comision)) {
-          $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
-          $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-          $params_pago = [$id_orden_actual, 0, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
-          $localConnection->goQuery($sql_pago, $params_pago);
+        // 1. Asegurar que el empleado que termina tenga una asignación registrada para esta orden/paso
+        $sql_check_assign = "SELECT _id, procentaje_comision FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? LIMIT 1";
+        $check_assign = $localConnection->goQuery($sql_check_assign, [$id_orden_actual, $id_empleado, $id_departamento]);
+
+        if (empty($check_assign)) {
+          $sql_insert_assign = "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, fecha_terminado, procentaje_comision) VALUES (?, ?, ?, 'terminada', ?, ?, 100)";
+          $res_ins = $localConnection->goQuery($sql_insert_assign, [$id_orden_actual, $id_empleado, $id_departamento, $now, $now, 100]);
+          $id_lotes_detalles = $res_ins['insert_id'];
+          $procentaje_comision_asignado = 100;
+        } else {
+          $id_lotes_detalles = $check_assign[0]['_id'];
+          $procentaje_comision_asignado = floatval($check_assign[0]['procentaje_comision']);
+        }
+
+        // 2. Obtener tipo de comisión del empleado
+        $sql_comision_emp = 'SELECT comision, comision_tipo, comision_porcentaje, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+        $resp_emp = $localConnection->goQuery($sql_comision_emp, [$id_empleado]);
+
+        $comision_tipo = $resp_emp[0]['comision_tipo'] ?? 'fija';
+        $salario_tipo = $resp_emp[0]['salario_tipo'] ?? '';
+        $comision_value_emp = ($comision_tipo === 'porcentaje') ? floatval($resp_emp[0]['comision_porcentaje'] ?? 0) : floatval($resp_emp[0]['comision'] ?? 0);
+
+        // 3. Calcular monto según tipo de comisión (Filtrando productos no manufacturables)
+        $total_monto_pago = 0;
+        $cantidad_piezas = 0;
+
+        if ($comision_tipo === 'porcentaje') {
+          $sql_calc = "SELECT SUM(c.cantidad) as total_piezas, SUM(c.cantidad * c.precio_unitario * ($comision_value_emp / 100)) AS total_monto FROM ordenes_productos c JOIN products p ON c.id_woo = p._id WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+          $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual]);
+          $cantidad_piezas = $res_calc[0]['total_piezas'] ?? 0;
+          $total_monto_pago = ($res_calc[0]['total_monto'] ?? 0) * ($procentaje_comision_asignado / 100);
+        } elseif ($comision_tipo === 'fija') {
+          $sql_calc = "SELECT SUM(c.cantidad) as total_piezas FROM ordenes_productos c JOIN products p ON c.id_woo = p._id WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+          $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual]);
+          $cantidad_piezas = $res_calc[0]['total_piezas'] ?? 0;
+          $total_monto_pago = ($cantidad_piezas * $comision_value_emp) * ($procentaje_comision_asignado / 100);
+        } else { // Variable (por producto)
+          $sql_calc = "SELECT c.cantidad, IFNULL(pc.comision, 0) AS com_prod FROM ordenes_productos c JOIN products p ON c.id_woo = p._id LEFT JOIN products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = ? WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+          $res_calc = $localConnection->goQuery($sql_calc, [$id_departamento, $id_orden_actual]);
+          foreach ($res_calc as $prod) {
+            $cantidad_piezas += $prod['cantidad'];
+            $total_monto_pago += ($prod['cantidad'] * $prod['com_prod']) * ($procentaje_comision_asignado / 100);
+          }
+        }
+
+        if ($salario_tipo === 'Salario')
+          $total_monto_pago = 0;
+
+        // 4. Registrar Pago
+        $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = 0 LIMIT 1";
+        $check_pago = $localConnection->goQuery($sql_check_pago, [$id_orden_actual, $id_empleado, $id_departamento]);
+
+        if (empty($check_pago)) {
+          $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, 0, ?, ?, ?, ?, ?, "aprobado", ?, ?, ?)';
+          $localConnection->goQuery($sql_pago, [$id_orden_actual, $id_departamento, $comision_value_emp, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, $total_monto_pago, $id_empleado, $nombre_departamento]);
         }
 
         $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ?", [$now, $id_departamento, $id_orden_actual]);
