@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Investigar y prevenir la creación de registros "Zombie" al cambiar el estatus de la orden manualmente. Validar que no se pueda marcar como "Terminada" si hay tareas pendientes y que "Entregada" solo sea posible si ya está "Terminada".
+- Archivos Involucrados: 
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php
+  - /home/developer/Escritorio/niesys/app_multi/components/ordenes/editar.vue
+- Acción Realizada: 
+  - Backend: Se modificó el endpoint `POST /orden/actualizar-estado` para incluir validaciones estrictas. Se agregó lógica para consultar la tabla `ordenes` (estatus actual) y `lotes_detalles_empleados_asignados` (tareas pendientes). Si hay tareas inconclusas, se retorna un error 400 con los detalles.
+  - Frontend: Se adaptó `editar.vue` para manejar errores 400, mostrar una alerta con el mensaje de error y renderizar una tabla con las tareas pendientes (Dpto, Empleado, Status) si el backend las proporciona.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `multi_replace_file_content`, `run_command` (CURL), `git`
+- Resultado: Éxito
+- Verificación: Se realizaron pruebas con CURL al VPS (Empresa 174, Orden #1). El sistema bloqueó el cambio a "Terminada" devolviendo el JSON con 3 tareas pendientes. También bloqueó el cambio a "Entregada" por no estar la orden terminada.
+- Observaciones de Gemini: Las validaciones aseguran que el flujo operacional se respete y evitan la acumulación de horas ficticias en los reportes de eficiencia.
+- Respuesta de Gemini: (Ver mensaje final al usuario)

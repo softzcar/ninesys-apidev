@@ -1,0 +1,15 @@
+- Solicitud del Usuario: Unificar el diseño de los modales de lotes y tareas individuales para que sean coherentes y mover el botón de añadir material a la parte superior.
+- Archivos Involucrados: 
+    - `/home/developer/Escritorio/niesys/app_multi/components/empleados/FinalizarLoteModal.vue`
+    - `/home/developer/Escritorio/niesys/app_multi/components/empleados/SseOrdenesAsignadasModalExtra.vue`
+- Acción Realizada:
+    - Se refactorizó `FinalizarLoteModal.vue` para mover el botón de añadir material a una cabecera dentro de la sección de cada orden. Se mejoró la alineación de las filas y se usaron iconos rellenados para una estética más premium.
+    - Se rediseñó completamente la sección de materiales en `SseOrdenesAsignadasModalExtra.vue`, reemplazando la tabla por un sistema de filas (cards con sombra) que imita el diseño del modal de lotes.
+    - Se movió el botón (+) a la parte superior en ambos modales.
+    - Se unificó la visualización de validaciones y el estilo del checkbox "Terminar Material".
+    - Se mejoró la presentación del campo de desperdicio en el modal de tareas individuales, encerrándolo en un card con bordes destacados.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `multi_replace_file_content`
+- Resultado: Éxito
+- Verificación: Revisión de los componentes Vue. Se confirmó que ambos componentes ahora comparten el mismo lenguaje visual y estructura jerárquica para la selección de materiales.
+- Observaciones de Gemini: La unificación no solo mejora la estética sino que reduce la carga cognitiva del usuario al encontrar controles idénticos en diferentes partes del flujo de trabajo.
+- Respuesta de Gemini: He unificado el diseño de ambos modales. Ahora ambos lucen idénticos, con el botón de añadir material en la parte superior y un diseño de filas mucho más limpio y profesional.

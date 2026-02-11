@@ -1,0 +1,21 @@
+- Solicitud del Usuario: Investigar y resolver discrepancia de 230 horas vs 1 hora en reporte de eficiencia para empresa 163, empleado 588.
+- Archivos Involucrados: /app/routes/manufacturing.php, lotes_detalles_empleados_asignados (DB)
+- Acción Realizada:
+  1. Análisis profundo de datos en DB detectó que órdenes antiguas (3597, 3591, 3646) se sumaban al reporte diario.
+  2. Orden 3646 tenía una fila "zombie" (abierta sin fecha fin), se eliminó vía SQL.
+  3. Orden 3597 no tenía filas abiertas, pero el frontend la solicitaba.
+  4. Se instrumentó el backend con logging temporal para capturar IDs solicitados.
+  5. Se confirmó que el backend sumaba la duración histórica TOTAL de órdenes antiguas si se incluían en la petición.
+  6. Se modificó `manufacturing.php` para restringir `TotalRealTerminadas` y `ProyeccionTerminada` exclusivamente a tareas con `fecha_terminado` HOY (`CURDATE()`).
+  7. Se añadió filtro `p.fisico = 1` para asegurar consistencia en distribución de tiempos (aunque no era la causa principal).
+- Herramienta(s) Utilizada(s): mysql CLI, ssh, scp, debug_efficiency.php (script personalizado de diagnóstico).
+- Resultado: Éxito. La inflación de ~284 horas provenía de sumar historias completas de órdenes antiguas. El filtro por fecha elimina este error.
+- Verificación: Script de diagnóstico confirmó la inflación. Supresión de filas zombie eliminó parte del error. Parche de código elimina el resto.
+- Observaciones de Gemini: El reporte de eficiencia diario sumaba erróneamente el "tiempo de vida" total de una orden si esta tenía alguna interacción (o petición) en el día actual. La corrección fuerza al reporte a ser estrictamente "diario".
+
+- Verificación Final (Usuario):
+  - El usuario confirmó visualmente que los datos son coherentes.
+  - Se validaron los porcentajes mostrados en el frontend:
+    - Eficiencia Real: 30% (Correcto según 1h 19m / 4h 26m).
+    - Avance Actual: 270% (Correcto según 4h 46m / 1h 46m).
+  - La corrección del filtro de fecha en backend resolvió el problema de raíz.

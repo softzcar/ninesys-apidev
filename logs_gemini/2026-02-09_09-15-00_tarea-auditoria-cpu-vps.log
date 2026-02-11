@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Auditoría de consumo excesivo de CPU en el VPS (06-02 18:00 al 07-02 14:30).
+- Archivos Involucrados: app/routes/employees.php, app/routes/manufacturing.php, public/debug_efficiency.php, /usr/local/lsws/logs/stderr.log, /var/log/sa/sa07.
+- Acción Realizada:
+  1. Análisis de historial de CPU con `sar`: Se confirmó un pico del 95% de uso (`%user`) sostenido desde las 18:00 del 06-02 hasta el reinicio forzado a las 14:08 del 07-02.
+  2. Identificación de procesos con `atop`: Los procesos responsables fueron `lsphp` (PHP de LiteSpeed), descartando procesos de sistema, I/O o ataques externos de red.
+  3. Correlación de eventos: El pico coincidió exactamente con la implementación y depuración de la lógica de "Eficiencia de Empleados".
+  4. Análisis de logs de servidor: `stderr.log` de LiteSpeed mostró saturación de procesos hijos (`Reached max children process limit: 10`), lo que indica que las consultas PHP se quedaban colgadas consumiendo CPU.
+  5. Revisión de código: Se detectaron consultas SQL complejas con múltiples `JOIN`s y subconsultas en el `SELECT` dentro de las rutas de eficiencia que, al ser invocadas, saturaban el único núcleo del VPS.
+- Herramienta(s) Utilizada(s): `sar`, `atop`, `journalctl`, `mysql CLI`, `grep`.
+- Resultado: Éxito (Diagnóstico completado).
+- Verificación: Los datos de `sar -u` y `sar -q` confirman la saturación de CPU por procesos de usuario y la recuperación inmediata tras el reinicio y la posterior limpieza de órdenes "zombie".
+- Observaciones de Gemini: El servidor (1 CPU, 4GB RAM) es vulnerable a consultas PHP pesadas. La lógica de eficiencia actual es demasiado costosa para ejecutarse en tiempo real en el dashboard sin una caché o mayor optimización de índices.
+- Respuesta de Gemini: El pico de CPU fue causado por procesos de PHP intentando calcular la eficiencia de los empleados con consultas SQL ineficientes o datos inflados, lo que saturó el servidor LiteSpeed hasta el reinicio.

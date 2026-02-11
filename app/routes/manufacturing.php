@@ -1579,6 +1579,28 @@ return function (App $app) {
               $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, (SELECT departamento FROM departamentos WHERE _id = ?), ?, ?, ?)';
               $params_movimiento = [$id_orden_actual, $id_empleado, $id_insumo_actual, $id_departamento, $id_departamento, 0, $consumo_estimado_orden, $now];
               $localConnection->goQuery($sql_movimiento, $params_movimiento);
+
+              // REGISTRO DE DESPERDICIO (Opcional, mayormente para Corte)
+              if (isset($consumo['desperdicio_total']) && floatval($consumo['desperdicio_total']) > 0) {
+                $desperdicio_total = floatval($consumo['desperdicio_total']);
+                $desperdicio_estimado = $desperdicio_total * $proporcion;
+
+                $sql_rendimiento = 'INSERT INTO rendimiento (id_orden, id_empleado_corte, desperdicio, id_insumo, metros) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE desperdicio = desperdicio + VALUES(desperdicio), metros = metros + VALUES(metros);';
+                $localConnection->goQuery($sql_rendimiento, [$id_orden_actual, $id_empleado, $desperdicio_estimado, $id_insumo_actual, 0]);
+              }
+            }
+          }
+
+          // LÓGICA DE TERMINAR MATERIAL (REMANENTES)
+          if (isset($consumo['terminar_material']) && ($consumo['terminar_material'] === true || $consumo['terminar_material'] === 1)) {
+            $res_current = $localConnection->goQuery("SELECT cantidad FROM inventario WHERE _id = ?", [$id_insumo_actual]);
+            if (!empty($res_current)) {
+              $remanente_qty = floatval($res_current[0]['cantidad']);
+              if ($remanente_qty > 0) {
+                $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES (?, ?, 'Terminación (Lote)', 'Generado automáticamente desde Lote', ?, NOW())";
+                $localConnection->goQuery($sql_rem, [$id_insumo_actual, $remanente_qty, $id_empleado]);
+                $localConnection->goQuery("UPDATE inventario SET cantidad = 0 WHERE _id = ?", [$id_insumo_actual]);
+              }
             }
           }
         }
@@ -2646,6 +2668,7 @@ return function (App $app) {
                 a.id_ordenes_productos,
                 a.unidades,
                 c.tela,
+                (SELECT tela FROM catalogo_telas WHERE _id = c.id_tela) AS tela_vendedor,
                 a.detalle AS detalle_empleado,
                 a.detalle_emisor,
                 COALESCE(NULLIF(a.detalle, ''), a.detalle_emisor) AS detalle_reposicion,
@@ -2739,6 +2762,7 @@ return function (App $app) {
             (SELECT nombre FROM sizes WHERE _id = a.id_size) AS talla,
             a.corte,
             a.tela,
+            (SELECT tela FROM catalogo_telas WHERE _id = a.id_tela) AS tela_vendedor,
             tp.tiempo AS tiempo_produccion,
             y.procentaje_comision,
             c.paso,
@@ -2847,6 +2871,7 @@ return function (App $app) {
                 r.detalle detalle_reposicion,
                 a.cantidad,
                 a.tela,
+                (SELECT tela FROM catalogo_telas WHERE _id = a.id_tela) AS tela_vendedor,
                 a.corte
             FROM
                 ordenes_productos a

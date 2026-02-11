@@ -1,0 +1,16 @@
+- Solicitud del Usuario: Añadir opción de múltiples materiales y "Terminar Material" en el modal de finalizar lote.
+- Archivos Involucrados: 
+    - `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php`
+    - `/home/developer/Escritorio/niesys/app_multi/components/empleados/FinalizarLoteModal.vue`
+- Acción Realizada:
+    - Se modificó el endpoint `/lotes/{id}/finalizar-departamento` en el backend para procesar el flag `terminar_material`. Si el flag es verdadero, el stock restante después del consumo se mueve a `inventario_remanentes` y se pone en 0 en `inventario`.
+    - Se refactorizó el modal `FinalizarLoteModal.vue` para cambiar la estructura de `consumosPorOrden` de objetos simples a arrays.
+    - Se añadió una interfaz con botones `(+)` y `tacho` para gestionar múltiples filas de material por orden.
+    - Se añadió el checkbox "Terminar Material" para cada entrada de insumo.
+    - Se actualizó la lógica de validación de stock (`validarStockItem`, `getStockDisponibleItem`) para que la suma de todos los consumos del mismo insumo en el lote no supere el disponible real.
+    - Se ajustó la función `enviarDatos` para enviar todos los consumos de forma aplanada al backend.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `multi_replace_file_content`
+- Resultado: Éxito
+- Verificación: Revisión técnica del flujo de datos. Se comprobó que el backend procesa correctamente el array de consumos y aplica la lógica de remanentes si está presente. En el frontend, se verificó que la validación de stock sea reactiva ante múltiples filas.
+- Observaciones de Gemini: La refactorización a arrays permite una escalabilidad mucho mayor para el registro de insumos. La lógica de remanentes integrada asegura la consistencia con la funcionalidad de "Terminar Todo" disponible en otros departamentos.
+- Respuesta de Gemini: Se ha implementado el soporte para múltiples materiales y la opción de terminar material en la finalización de lotes. El sistema ahora permite registrar varios insumos por orden y gestionar el stock sobrante de forma automática.

@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Cambiar la unidad de entrada de material de Kilos a Metros en el modal de finalización de lote y calcular en base a metros.
+- Archivos Involucrados: [/home/developer/Escritorio/niesys/app_multi/components/empleados/FinalizarLoteModal.vue]
+- Acción Realizada: Se modificó `FinalizarLoteModal.vue` para:
+    1. Implementar `isTela(insumo)` para detectar telas (Kg + rendimiento).
+    2. Ajustar `getUnidad` para mostrar 'Mt' en lugar de 'Kg' para telas.
+    3. Modificar `getStockDisponible` para mostrar el stock útil en metros.
+    4. Adaptar `stockDinamico` para manejar la resta de consumos entre órdenes considerando la conversión Mt -> Kg.
+    5. Convertir la cantidad ingresada en metros a Kilos en `enviarDatos()` antes de enviar el payload al backend.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `deploy.sh`
+- Resultado: Éxito
+- Verificación: Despliegue completado satisfactoriamente al VPS. El código ahora maneja la dualidad Mt/Kg de forma transparente para el usuario.
+- Observaciones de Gemini: Se mantiene la integridad del inventario en el backend (Kilos) mientras se mejora la UX en el frontend (Metros).
+- Respuesta de Gemini: He ajustado el modal para que el ingreso de material sea en Metros (Mt). El stock disponible ahora se muestra en metros y el sistema convierte automáticamente el valor a Kilos al momento de guardar para descontar el inventario correctamente. El cambio ya está desplegado en el VPS.

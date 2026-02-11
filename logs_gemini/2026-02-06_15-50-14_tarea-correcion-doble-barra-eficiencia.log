@@ -1,0 +1,18 @@
+- Solicitud del Usuario: Corregir el cálculo de tiempos en las barras de eficiencia (6h vs 3h) y asegurar que las órdenes terminadas aparezcan en la barra superior del empleado.
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+    - /home/developer/Escritorio/niesys/app_multi/components/empleados/SseOrdenesAsignadasV4.vue
+    - /home/developer/Escritorio/niesys/app_multi/components/empleados/RendimientoGeneral.vue
+- Acción Realizada: 
+    - Corregida lógica SQL en `manufacturing.php` (POST) para correlacionar proyecciones por producto/orden y evitar duplicidad (error de las 6h).
+    - Agregado endpoint `terminadas-hoy` para recuperar órdenes finalizadas recientemente.
+    - Modificado `whereClause` en reporte de manufactura para incluir automáticamente lo terminado hoy si hay `id_empleado`.
+    - Ajustada lógica de eficiencia de insumos para filtrar la meta (estimado) según órdenes con consumo real (evita error de 300% de eficiencia).
+    - Actualizado `fetchEfficiencyData` en frontend para combinar órdenes activas y terminadas del día.
+    - Mejorada UI de `RendimientoGeneral.vue` para mostrar título dual (Eficiencia | Avance).
+    - Depuración de lints en `manufacturing.php`.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command` (scp/ssh), `write_to_file`, `view_file`.
+- Resultado: Éxito
+- Verificación: Desplegado en VPS y verificado que la lógica SQL ahora separa correctamente los estados sin sumar proyecciones de departamentos ajenos al estado actual del producto.
+- Observaciones de Gemini: El problema de las 6h se debía a una consulta CTE muy amplia que no filtraba por el estado real de la tarea para el producto solicitado. Al centralizar la lógica y correlacionarla, los datos ahora son consistentes.
+- Respuesta de Gemini: Se ha implementado la doble barra de eficiencia corregida. Ahora muestra la Orden 1 (terminada) con su eficiencia real y la Orden 2 (en curso) con su progreso exacto (3h proyectadas), eliminando la suma incorrecta de 6h.

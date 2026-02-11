@@ -441,12 +441,20 @@ return function (App $app) {
                     continue;
                 }
 
-                // === INICIO DE CAMBIOS: Obtener el ID del catálogo ===
+                // === INICIO DE CAMBIOS: Obtener el ID del catálogo y determinar el tipo de insumo ===
                 $id_catalogo = $catalogo_insumo_map[$nombre_catalogo_excel] ?? null;
 
                 if ($id_catalogo === null) {
                     $error_list[] = "Insumo de catálogo '{$nombre_catalogo_excel}' no encontrado para el SKU {$sku}. Se omitió.";
                     continue;
+                }
+
+                // Determinar tipo de insumo automáticamente para la carga masiva
+                $tipo_insumo = 'general';
+                if ($unidad === 'Kg' && floatval($rendimiento) > 1) {
+                    $tipo_insumo = 'tela';
+                } elseif (stripos($nombre_inventario, 'Tinta') !== false) {
+                    $tipo_insumo = 'tinta';
                 }
                 // === FIN DE CAMBIOS ===
 
@@ -464,34 +472,36 @@ return function (App $app) {
                 if ($existing_item) {
                     // Lógica de ACTUALIZACIÓN
                     $item_id = $existing_item[0]['_id'];
-                    // === INICIO DE CAMBIOS: Añadimos id_catalogo a la sentencia UPDATE ===
-                    $update_sql = 'UPDATE inventario SET id_catalogo = ?, insumo = ?, unidad = ?, costo = ?, rendimiento = ?, cantidad = ?, departamento = ?, sku = ? WHERE _id = ?';
+                    // === INICIO DE CAMBIOS: Añadimos id_catalogo y tipo_insumo a la sentencia UPDATE ===
+                    $update_sql = 'UPDATE inventario SET id_catalogo = ?, tipo_insumo = ?, insumo = ?, unidad = ?, costo = ?, rendimiento = ?, cantidad = ?, departamento = ?, sku = ? WHERE _id = ?';
                     $db->goQuery($update_sql, [
-                        $id_catalogo,  // Nuevo: ID del catálogo
-                        $nombre_inventario,  // Nombre de inventario (columna 'insumo')
+                        $id_catalogo,
+                        $tipo_insumo,
+                        $nombre_inventario,
                         $unidad,
                         $costo,
                         $rendimiento,
                         $cantidad,
-                        $departamento_nombre_excel,  // Nombre del departamento (columna 'departamento')
-                        $sku,  // SKU original del Excel
+                        $departamento_nombre_excel,
+                        $sku,
                         $item_id
                     ]);
                     // === FIN DE CAMBIOS ===
                 } else {
                     // Lógica de INSERCIÓN
-                    // === INICIO DE CAMBIOS: Añadimos id_catalogo a la sentencia INSERT y los valores ===
+                    // === INICIO DE CAMBIOS: Añadimos id_catalogo y tipo_insumo a la sentencia INSERT y los valores ===
                     // Asegúrate de que el número de placeholders (?) coincida con el número de valores.
-                    $insert_sql = 'INSERT INTO inventario (id_catalogo, insumo, unidad, costo, rendimiento, cantidad, departamento, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
-                    $response_insert = $db->goQuery($insert_sql, [
-                        $id_catalogo,  // Nuevo: ID del catálogo
-                        $nombre_inventario,  // Nombre de inventario (columna 'insumo')
+                    $insert_sql = 'INSERT INTO inventario (id_catalogo, tipo_insumo, insumo, unidad, costo, rendimiento, cantidad, departamento, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+                    $db->goQuery($insert_sql, [
+                        $id_catalogo,
+                        $tipo_insumo,
+                        $nombre_inventario,
                         $unidad,
                         $costo,
                         $rendimiento,
                         $cantidad,
-                        $departamento_nombre_excel,  // Nombre del departamento (columna 'departamento')
-                        $sku  // SKU original del Excel
+                        $departamento_nombre_excel,
+                        $sku
                     ]);
                     // === FIN DE CAMBIOS ===
                     $item_id = $db->getLastID();  // Se asume que LocalDB tiene un método para obtener el último ID
@@ -863,8 +873,9 @@ return function (App $app) {
                         ? "'" . $miInsumo['id_catalogo_producto'] . "'"
                         : "NULL";
 
-                    $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$currentCantidad}, '{$miInsumo['sku']}', {$id_catalogo})";
-                    $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo) VALUES ' . $values;
+                    $tipo_insumo = $miInsumo['tipo_insumo'] ?? 'general';
+                    $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$currentCantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}')";
+                    $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo, tipo_insumo) VALUES ' . $values;
                     $result = $localConnection->goQuery($sql);
                     $lastId = $localConnection->getLastID();
 
@@ -887,8 +898,9 @@ return function (App $app) {
                     ? "'" . $miInsumo['id_catalogo_producto'] . "'"
                     : "NULL";
 
-                $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$cantidad}, '{$miInsumo['sku']}', {$id_catalogo})";
-                $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo) VALUES ' . $values;
+                $tipo_insumo = $miInsumo['tipo_insumo'] ?? 'general';
+                $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$cantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}')";
+                $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo, tipo_insumo) VALUES ' . $values;
                 $result = $localConnection->goQuery($sql);
                 $lastId = $localConnection->getLastID();
 
@@ -943,7 +955,8 @@ return function (App $app) {
             ? "'" . $miInsumo['id_catalogo_producto'] . "'"
             : ((isset($miInsumo['id_catalogo']) && $miInsumo['id_catalogo'] !== 'null' && $miInsumo['id_catalogo'] !== '') ? "'" . $miInsumo['id_catalogo'] . "'" : 'NULL');
 
-        $values .= "id_catalogo=" . $id_catalogo;
+        $values .= "id_catalogo=" . $id_catalogo . ",";
+        $values .= "tipo_insumo='" . ($miInsumo['tipo_insumo'] ?? 'general') . "'";
 
         $sql = 'UPDATE inventario SET ' . $values . ' WHERE _id = ' . $miInsumo['_id'];
         $object['sql'] = $sql;
@@ -1046,11 +1059,8 @@ return function (App $app) {
             $result = json_encode($localConnection->goQuery($sql));
 
             $sql = '';
-            if (count($result) > 0) {
-                // UPDATE
-            } {
-                // INSERT
-            }
+            // El código anterior parece ser un borrador o estar incompleto. 
+            // Se elimina la llamada a count() sobre un string para evitar errores de linter.
 
             // $sql = "INSERT INTO inventario_movimientos (moment, departamento, id_empleado, id_insumo, id_orden, valor_inicial, id_producto) VALUES (" . $values . ");";
             $object['sql'] = $sql;
@@ -1114,7 +1124,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
 
         // buscar cantidad actual del producto
-        $sql_check = 'SELECT cantidad, sku, rendimiento FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
+        $sql_check = 'SELECT cantidad, sku, rendimiento, tipo_insumo FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
         $object['sql_cantidad_producto'] = $sql_check;
         $cantidad_producto = $localConnection->goQuery($sql_check);
         $object['cantidad_producto'] = $cantidad_producto;
@@ -1123,9 +1133,12 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         $rendimiento = floatval($cantidad_producto[0]['rendimiento']); // Obtener rendimiento
         $object['cantidad_inicial'] = $cantidad_inicial;
 
-        if ($miInsumo['departamento'] === 'Estampado') {
-            // Para Estampado, el empleado ingresa Metros
-            // La fórmula es: Kilos = Metros / Rendimiento
+        $tipo_insumo = $cantidad_producto[0]['tipo_insumo'];
+        $object['tipo_insumo'] = $tipo_insumo;
+
+        if ($tipo_insumo === 'tela') {
+            // Unificado para cualquier departamento que use Telas
+            // El empleado ingresa Metros, convertimos a Kilos para el inventario
             $input_metros = floatval($miInsumo['cantidad_consumida']);
 
             // Validar rendimiento para evitar división por cero
@@ -1147,7 +1160,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 $current_qty = $cantidad_inicial; // This is the actual current inventory
 
                 // If we're in Estampado, convert to meters for display/logging purposes
-                if ($miInsumo['departamento'] === 'Estampado') {
+                if ($tipo_insumo === 'tela') {
                     $current_qty_display = $current_qty * $rendimiento; // Convert Kg to Mt for logging
                     $object['remanente_kg'] = $current_qty;
                     $object['remanente_mt'] = $current_qty_display;
@@ -1178,8 +1191,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $object['update_success'] = !empty($update_cantidad_inventario);
 
 
-        } elseif ($miInsumo['departamento'] === 'Corte') {
-            // Para Corte, se mantiene la lógica original (ingresan Kg directamente)
+        } elseif ($miInsumo['departamento'] === 'Corte' && $tipo_insumo !== 'tela') {
+            // Para Corte (si no es tela, por ej. hilos o algo raro), se mantiene la lógica original
             $cantidad_consumida_kg = floatval($miInsumo['cantidad_consumida']);
             $cantidad_consumida = floatval($cantidad_inicial) - $cantidad_consumida_kg;
 
@@ -1269,25 +1282,27 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $sql = 'SELECT COUNT(id_orden) FROM rendimiento WHERE id_orden = ' . $miInsumo['id_orden'];
             $exist = $localConnection->goQuery($sql);
 
-            if ($exist > 0) {
-                // 0- Preparar datos
-                /** De momento estamos asumiendo que el departamento por defecto es corte, en realidad es estampado, debemos programar que se pueda determinar el departamento de alguna manera */
-                if ($miInsumo['departamento'] === 'Impresión') {
-                    $campo_valor = 'metros';
-                    $campo_empleado = 'id_empleado_impresion';
-                }
-                if ($miInsumo['departamento'] === 'Estampado') {
-                    $campo_valor = 'id_insumo';
-                    $campo_empleado = 'id_empleado_estampado';
-                }
-                if ($miInsumo['departamento'] === 'Corte') {
-                    $campo_valor = 'desperdicio';
-                    $campo_empleado = 'id_empleado_corte';
-                }
+            // Inicialización por defecto para evitar errores de linter
+            $campo_valor = 'desperdicio';
+            $campo_empleado = 'id_empleado_corte';
 
-                $sql = "INSERT INTO rendimiento (id_orden, $campo_empleado, $campo_valor, id_insumo, metros) VALUES ({$miInsumo['id_orden']}, {$miInsumo['id_empleado']}, {$miInsumo['valor']}, {$miInsumo['id_insumo']}, {$miInsumo['cantidad_consumida']});";
-            } else {
+            if ($miInsumo['departamento'] === 'Impresión') {
+                $campo_valor = 'metros';
+                $campo_empleado = 'id_empleado_impresion';
+            } elseif ($miInsumo['departamento'] === 'Estampado') {
+                $campo_valor = 'id_insumo';
+                $campo_empleado = 'id_empleado_estampado';
+            } elseif ($miInsumo['departamento'] === 'Corte') {
+                $campo_valor = 'desperdicio';
+                $campo_empleado = 'id_empleado_corte';
+            }
+
+            // Si exist > 0, es un registro existente -> UPDATE
+            if ($exist[0]['COUNT(id_orden)'] > 0) {
                 $sql = "UPDATE rendimiento SET id_insumo = {$miInsumo['id_insumo']}, metros = {$miInsumo['cantidad_consumida']}, $campo_empleado = {$miInsumo['id_empleado']}, $campo_valor  = {$miInsumo['valor']} WHERE id_orden = {$miInsumo['id_orden']};";
+            } else {
+                // Si no existe -> INSERT
+                $sql = "INSERT INTO rendimiento (id_orden, $campo_empleado, $campo_valor, id_insumo, metros) VALUES ({$miInsumo['id_orden']}, {$miInsumo['id_empleado']}, {$miInsumo['valor']}, {$miInsumo['id_insumo']}, {$miInsumo['cantidad_consumida']});";
             }
 
             $object['response_rendimiento'] = json_encode($localConnection->goQuery($sql));
@@ -1700,7 +1715,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         $object['fields'][7]['key'] = '_id';
         $object['fields'][7]['sortable'] = false;
 
-        $response->getBody()->write(json_encode($object));
+        $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
 
         return $response
             ->withHeader('Content-Type', 'application/json')
@@ -1779,6 +1794,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                       a.name producto,
                       (SELECT nombre FROM sizes WHERE _id = a.talla) talla,
                       a.cantidad unidades,
+                      (SELECT tela FROM catalogo_telas WHERE _id = a.id_tela) AS tela_vendedor,
                       b.id_departamento,
                       (SELECT departamento FROM departamentos WHERE _id = b.id_departamento) departamento,
                       b.cantidad cantidad_estimada_de_consumo,

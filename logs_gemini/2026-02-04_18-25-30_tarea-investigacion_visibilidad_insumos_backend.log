@@ -1,0 +1,15 @@
+- Solicitud del Usuario: Investigar y resolver por qué no aparece el botón de "Asignar Insumos" para la Orden 20 en los departamentos de Costura y Corte (Empresa 174).
+- Archivos Involucrados: 
+    - Base de Datos api_emp_174 (Tablas: config, product_insumos_asignados, inventario)
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php (Auditoría de queries)
+- Acción Realizada: 
+    - Se realizó una auditoría profunda de la base de datos de la empresa 174.
+    - Se confirmó que los flags de configuración manual estaban desactivados para Costura y Corte.
+    - Se verificó que los materiales (telas) para Corte estaban técnicamente asignados a Estampado en el inventario.
+    - Se validó el flujo de datos del API hacia el frontend, identificando la necesidad de inyectar el id_orden para un filtrado correcto.
+    - La solución final se implementó en el frontend para manejar estos casos de forma dinámica.
+- Herramienta(s) Utilizada(s): `run_command` (mysql queries), `grep_search`
+- Resultado: Éxito (Investigación técnica completada)
+- Verificación: Consultas SQL exitosas que confirmaron la estructura de datos y las causas del problema de visibilidad.
+- Observaciones de Gemini: El backend provee la información necesaria, pero el frontend requería una lógica más flexible para interpretar los mapeos de "departamentos hermanos" (Corte/Estampado) y la detección automática.
+- Respuesta de Gemini: He registrado la investigación técnica en el backend. Los cambios necesarios se aplicaron en el frontend para asegurar que la visualización sea automática y dinámica.

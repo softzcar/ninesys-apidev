@@ -1,0 +1,14 @@
+- Solicitud del Usuario: Extender la lógica de registro de insumos por orden a todos los departamentos y unificar el flujo de lotes.
+- Archivos Involucrados:
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+    - /home/developer/Escritorio/niesys/app_multi/components/empleados/FinalizarLoteModal.vue
+    - /home/developer/Escritorio/niesys/app_multi/components/empleados/SseOrdenesAsignadasV4.vue
+- Acción Realizada:
+    - Backend: Se actualizó el endpoint `/finalizar-departamento` para procesar desperdicios y registrarlos en la tabla `rendimiento`.
+    - Modal: Se dinamizó `FinalizarLoteModal.vue` para detectar órdenes que requieren insumos y añadir campo de desperdicio para Corte.
+    - Principal: Se refactorizó `SseOrdenesAsignadasV4.vue` para usar el modal unificado en todos los departamentos (excepto Impresión).
+- Herramienta(s) Utilizada(s): `replace_file_content`, `multi_replace_file_content`, `write_to_file`
+- Resultado: Éxito
+- Verificación: Se confirmó la correcta estructura de los payloads y la lógica de filtrado dinámico en el frontend. El backend ahora maneja desperdicios proporcionalmente por lote.
+- Observaciones de Gemini: La unificación reduce la deuda técnica al eliminar modales duplicados y centralizar la lógica de insumos.
+- Respuesta de Gemini: Tarea completada. El flujo de finalización de lotes ahora es universal y soporta desperdicios en Corte.

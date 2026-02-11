@@ -1,0 +1,11 @@
+- Solicitud del Usuario: Corregir visibilidad del semáforo para órdenes "Por Asignar" y evitar que afecten el cronograma global.
+- Archivos Involucrados: /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php, /home/developer/Escritorio/niesys/app_multi/mixins/procesamientoOrdenes.js
+- Acción Realizada: 
+    - [Backend] Añadido campo `cant_empleados` al endpoint `/ordenes/proyeccion-entrega`.
+    - [Mixin] Implementado filtro en `procesarColaProduccion` para omitir tareas sin empleados asignados. Esto restaura el estado "POR ASIGNAR" en el botón y muestra la alerta informativa correcta en el modal.
+    - [Infra] Actualizada la API en el VPS.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command`, `git`, `ssh`
+- Resultado: Éxito
+- Verificación: Se confirmó que al filtrar las tareas en el mixin, el componente `progreso-tiempo-semaforo.vue` detecta `ordenReactiva` como nulo para órdenes sin personal, activando el flujo de visualización correcto solicitado por el usuario.
+- Observaciones de Gemini: La unificación de lógicas de proyección mixta (teórica vs real) requería este indicador explícito de asignación para no contaminar el cronograma de producción activo.
+- Respuesta de Gemini: Se ha corregido la visibilidad del semáforo. Ahora las órdenes sin personal asignado muestran correctamente el estado "POR ASIGNAR", ocultan el resumen de tareas vacío y no afectan los tiempos de entrega de las órdenes posteriores.

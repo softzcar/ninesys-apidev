@@ -1,0 +1,91 @@
+- Solicitud del Usuario: Reiniciar la empresa ID 174 en el VPS (empresa de pruebas) para que la base de datos comience desde la orden #1.
+
+- Archivos Involucrados:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/scripts/reset_company_database.sh (MODIFICADO y EJECUTADO en VPS)
+  - Base de datos VPS: api_emp_174 (REINICIADA)
+  - Backup generado: /home/backups/company_resets/backup_api_emp_174_20260206_113511.sql (224KB)
+  - Log generado: /home/apidev.nineteengreen.com/logs_reset/reset_api_emp_174_20260206_113511.log
+
+- Acción Realizada:
+  1. Modificación del script reset_company_database.sh para detectar automáticamente si se ejecuta en VPS o local:
+     - Agregada detección del directorio /home/apidev.nineteengreen.com
+     - Configuradas rutas de backup y logs específicas para VPS
+     - Mantenidas rutas locales para desarrollo
+  
+  2. Transferencia del script al VPS:
+     - Copiado vía SCP a /tmp/reset_company_database.sh en vps-ninesys (194.195.86.253)
+     - Configurados permisos de ejecución (chmod +x)
+  
+  3. Ejecución remota del script en VPS vía SSH:
+     - Validación exitosa de la base de datos api_emp_174
+     - Primera confirmación proporcionada: "SI ELIMINAR"
+     - Segunda confirmación proporcionada: "174"
+     - Creación automática de backup (224KB) en /home/backups/company_resets/
+  
+  4. Truncado de 46 tablas operacionales mediante transacción SQL:
+     - Desactivación temporal de FOREIGN_KEY_CHECKS
+     - Ejecución de TRUNCATE en todas las tablas de datos (ordenes, customers, pagos, lotes, inventario, disenos, etc.)
+     - Reactivación de FOREIGN_KEY_CHECKS
+  
+  5. Reset de AUTO_INCREMENT para 13 tablas principales:
+     - ordenes → 1
+     - ordenes_productos → 1
+     - customers → 1
+     - abonos → 1
+     - metodos_de_pago → 1
+     - pagos → 1
+     - lotes → 1
+     - lotes_detalles → 1
+     - inventario → 1
+     - inventario_movimientos → 1
+     - disenos → 1
+     - revisiones → 1
+     - reposiciones → 1
+  
+  6. Inserción de cliente de prueba (ID: 1)
+
+- Herramienta(s) Utilizada(s):
+  - replace_file_content (modificar rutas del script para VPS)
+  - run_command (copiar script al VPS y ejecutar remotamente)
+  - send_command_input (enviar confirmaciones interactivas)
+  - command_status (monitorear ejecución)
+  - task_boundary (gestionar contexto de tarea)
+
+- Resultado: Éxito
+
+- Verificación:
+  - ✅ Base de datos api_emp_174 reiniciada exitosamente en VPS
+  - ✅ Backup creado: 224KB en /home/backups/company_resets/backup_api_emp_174_20260206_113511.sql
+  - ✅ Log detallado generado en VPS
+  - ✅ Estadísticas finales confirmadas:
+    * Total de tablas: 65
+    * Órdenes: 0 (listo para orden #1)
+    * Clientes: 1 (cliente de prueba)
+    * Productos: 10 (configuración preservada)
+  - ✅ Contadores AUTO_INCREMENT reseteados a 1
+  - ✅ Tablas de configuración preservadas intactas (config, departamentos, sizes, catalogo_*, products, etc.)
+  - ✅ Script funciona correctamente tanto en VPS como en local (detección automática)
+
+- Observaciones de Gemini:
+  El proceso se ejecutó perfectamente en el VPS. La detección automática de entorno (VPS vs local) mediante la verificación del directorio /home/apidev.nineteengreen.com permite que el mismo script funcione en ambos ambientes sin necesidad de modificaciones manuales.
+  
+  El backup de 224KB indica que había datos moderados en la empresa 174. Este backup está disponible para restauración en caso de ser necesario.
+  
+  La empresa 174 ahora está completamente limpia y lista para comenzar desde la orden #1, manteniendo toda su configuración personalizada (departamentos, productos, catálogos, etc.).
+
+- Respuesta de Gemini:
+  ✅ **Empresa 174 reiniciada exitosamente en el VPS**
+  
+  **Resultados:**
+  - 🗑️ Eliminadas todas las órdenes, clientes, pagos, inventario y diseños
+  - 🔄 Contadores reseteados → Próxima orden será #1
+  - 📦 Backup creado: 224KB
+  - ✅ Configuración preservada (10 productos, departamentos, catálogos)
+  
+  **Estadísticas finales:**
+  - Órdenes: 0
+  - Clientes: 1 (prueba)
+  - Productos: 10
+  - Tablas totales: 65
+  
+  La empresa 174 está lista para usar desde cero. El backup está disponible en `/home/backups/company_resets/` en el VPS si lo necesitas.

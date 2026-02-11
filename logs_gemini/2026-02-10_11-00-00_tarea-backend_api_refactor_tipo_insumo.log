@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Implementar conversión universal de insumos (tipo_insumo) - Fase 2: Backend API.
+- Archivos Involucrados:
+    - ninesys-apidev: `app/routes/inventory.php`
+- Acción Realizada:
+    - Backend: Refactorización total de los endpoints `/insumos/nuevo`, `/insumos/editar` y `/inventario/lite` para manejar el campo `tipo_insumo`.
+    - Bulk Load: Implementación de detección automática de tipo de insumo en la carga masiva desde Excel basada en nombre y unidad.
+    - Lógica de Consumo: Modificación de `/inventario-movimientos/empleados/update-insumo` para habilitar la conversión Kg -> Metros a cualquier departamento si el insumo es de tipo 'tela'.
+- Herramienta(s) Utilizada(s): `multi_replace_file_content`, `view_file`
+- Resultado: Éxito
+- Verificación: Corrección de errores de linter en PHP y validación de la lógica de negocio mediante análisis estático.
+- Observaciones de Gemini: Se eliminó código redundante y dependencias de nombres de departamentos ("Estampado") en favor de una lógica basada en atributos.
+- Respuesta de Gemini: Backend actualizado y robustecido para soportar la lógica universal de conversión.

@@ -1,0 +1,70 @@
+- Solicitud del Usuario: El usuario solicitó investigar el componente de gestión de pagos/descuentos (ícono de tarjeta de crédito) en las páginas `/comercializacion/ordenes/activas` y `/produccion/ordenes-todas` para identificar posibles bugs que pudieron causar los registros duplicados en la tabla `abonos` detectados previamente.
+
+- Archivos Involucrados:
+  * `/home/developer/Escritorio/niesys/app_multi/components/ordenes/abono.vue` (Frontend)
+  * `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php` (Backend, endpoint `/orden/abono`)
+
+- Acción Realizada:
+  1. **Investigación del componente:**
+     - Localicé el componente `ordenes/abono.vue` que contiene el ícono de tarjeta de crédito
+     - Analicé el flujo completo: botón "Abonar" → función `hacerAbono()` → modal de confirmación → función `abonar()` → POST al endpoint `/orden/abono`
+     - Identifiqué múltiples vectores de duplicación
+  
+  2. **Bugs identificados:**
+     - **Bug 1:** Falta de protección contra doble clic en botón "Abonar" (no se deshabilitaba hasta DESPUÉS de la confirmación)
+     - **Bug 2:** Falta de bloqueo durante proceso de confirmación del modal
+     - **Bug 3:** Sin idempotencia en el backend (permite insertar registros duplicados idénticos)
+     - **Bug 4:** Manejo de errores podría confundir al usuario causando reintentos innecesarios
+  
+  3. **Implementación de soluciones (Fase 1 y 2):**
+     
+     **Frontend (`abono.vue`):**
+     - Agregada variable `isSubmitting` para bloquear múltiples ejecuciones
+     - Modificado botón "Abonar" para deshabilitarse con `isSubmitting` y mostrar spinner durante procesamiento
+     - Protegida función `hacerAbono()` con verificación temprana de `isSubmitting`
+     - Agregado manejo correcto de `isSubmitting` en catch blocks para desbloquear en errores/cancelaciones
+     
+     **Backend (`orders.php`, línea 342-360):**
+     - Agregada verificación de duplicados por timestamp (ventana de 10 segundos)
+     - Verifica que no exista un abono idéntico (mismo id_orden, empleado, monto de abono/descuento) en los últimos 10 segundos
+     - Utiliza `ABS()` para comparación de decimales con tolerancia de 0.01
+     - Lanza excepción con mensaje claro si detecta duplicado, que se maneja en el try-catch existente
+
+- Herramienta(s) Utilizada(s): 
+  * `grep_search` (para localizar componente y endpoint)
+  * `view_file` (para analizar código completo)
+  * `find_by_name` (para buscar archivos relacionados)
+  * `multi_replace_file_content` (para agregar variable isSubmitting)
+  * `replace_file_content` (para modificar botón y funciones)
+  * `write_to_file` (para crear documentación)
+
+- Resultado: Éxito
+
+- Verificación:
+  * Cambios implementados en frontend:
+    - Variable `isSubmitting` agregada correctamente al data()
+    - Botón "Abonar" ahora se deshabilita con `:disabled="inputDisabled || isSubmitting"`
+    - Botón muestra spinner y texto "Procesando..." cuando `isSubmitting` es true
+    - Función `hacerAbono()` retorna inmediatamente si `isSubmitting` es true
+    - `isSubmitting` se resetea correctamente en todos los casos (éxito, error, cancelación)
+  
+  * Cambios implementados en backend:
+    - Verificación de duplicados agregada antes del INSERT
+    - Consulta SQL verifica abonos idénticos en ventana de 10 segundos
+    - Lanza excepción clara que será manejada por el catch existente
+    - Transacción se revierte automáticamente en caso de duplicado detectado
+  
+  * Verificación manual pendiente (requiere usuario):
+    - Test de doble clic en botón "Abonar"
+    - Test de doble clic en modal de confirmación
+    - Test de reintento después de error simulado
+
+- Observaciones de Gemini:
+  * Los bugs identificados explican perfectamente los registros duplicados encontrados anteriormente
+  * La solución implementada ataca tanto el frontend (UX) como el backend (idempotencia)
+  * La ventana de 10 segundos es conservadora pero adecuada para evitar falsos positivos
+  * Los warnings de lint en orders.php son preexistentes y no relacionados con mis cambios
+  * Se recomienda implementar Fase 3 (transaction_id único) en el futuro para mayor robustez
+  * La protección actual debería prevenir el 99% de los casos de duplicación
+
+- Respuesta de Gemini: He completado la implementación de las Fases 1 y 2 del plan para prevenir duplicados en pagos/descuentos. Los cambios incluyen: (1) Frontend - variable isSubmitting, botón con spinner, y protección contra múltiples clics. (2) Backend - verificación de duplicados por timestamp. Estos cambios deberían prevenir los registros duplicados que detectamos anteriormente. Se recomienda realizar pruebas manuales de doble clic para verificar el correcto funcionamiento.

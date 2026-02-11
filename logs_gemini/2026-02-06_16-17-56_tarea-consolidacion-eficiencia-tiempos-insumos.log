@@ -1,0 +1,17 @@
+- Solicitud del Usuario: Corregir el cálculo de tiempos en las barras de eficiencia (6h vs 3h), incluir órdenes terminadas hoy y corregir la eficiencia de insumos (error del 300%).
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+    - /home/developer/Escritorio/niesys/app_multi/components/empleados/SseOrdenesAsignadasV4.vue
+    - /home/developer/Escritorio/niesys/app_multi/components/empleados/RendimientoGeneral.vue
+- Acción Realizada: 
+    - **Backend (Tiempos)**: Corregida lógica SQL en `manufacturing.php` (POST) para correlacionar proyecciones por producto/orden, eliminando la duplicidad (error de las 6h).
+    - **Backend (Insumos)**: Modificado cálculo de 'Estimado' en insumos para que solo sume la meta de órdenes con consumo real (elimina error del 300%).
+    - **Backend (Endpoints)**: Creado endpoint `terminadas-hoy` e integrada lógica de inclusión automática de tareas finalizadas en el reporte de manufactura.
+    - **Frontend (Lógica)**: Actualizado `SseOrdenesAsignadasV4.vue` para recuperar órdenes terminadas hoy y enviarlas en los reportes de eficiencia.
+    - **Frontend (UI)**: Mejorado `RendimientoGeneral.vue` con título dual (✓ Eficiencia | ⏳ Avance) y sistema de colores por "Estado más Crítico".
+    - **Calidad**: Depuración de lints y validaciones de seguridad en backend.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command` (scp/ssh), `write_to_file`, `multi_replace_file_content`.
+- Resultado: Éxito
+- Verificación: Desplegado en VPS. Verificado que el cálculo de proyección ahora es de 3h exactas por producto y que la eficiencia de insumos marca 100% cuando el consumo es igual a la meta real.
+- Observaciones de Gemini: La clave fue pasar de una "visión global por empleado" a una "visión acumulada por producto" en el backend. Esto permite que el sistema sea escalable y preciso sin importar cuántas órdenes tenga activas o terminadas el trabajador.
+- Respuesta de Gemini: Se ha completado la consolidación total de las barras de eficiencia. Los tiempos son precisos, las órdenes terminadas ya se incluyen automáticamente y el cálculo de insumos refleja la realidad del consumo.

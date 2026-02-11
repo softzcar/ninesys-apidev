@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Implementar funcionalidad de cancelación de órdenes que elimine automáticamente las asignaciones de empleados no terminadas, mostrando previamente un modal de confirmación con la lista de tareas que serán eliminadas.
+- Archivos Involucrados: 
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php
+  - /home/developer/Escritorio/niesys/app_multi/components/ordenes/editar.vue
+- Acción Realizada: 
+  - Backend: Se creó el endpoint `POST /orden/previa-cancelacion` que consulta las tareas pendientes de una orden. Se modificó `POST /orden/actualizar-estado` para que al recibir estado='cancelada' elimine primero las pausas huérfanas y luego las asignaciones con `fecha_terminado IS NULL`.
+  - Frontend: Se reescribió `editar.vue` para interceptar la selección de "Cancelada", llamar al nuevo endpoint, mostrar un modal de confirmación con la lista de tareas, y proceder solo si el usuario confirma.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `write_to_file`, `run_command` (CURL, SSH), `git`
+- Resultado: Éxito
+- Verificación: Se ejecutó CURL al VPS (Empresa 174, Orden #1). El endpoint `/orden/previa-cancelacion` retornó correctamente 3 tareas pendientes: Estampado, Corte y Costura. El campo `puede_cancelar: true` indica que el flujo puede continuar.
+- Observaciones de Gemini: Se corrigió un error inicial en el ORDER BY (`dep.orden` → `dep.orden_proceso`). Las tareas ya completadas (`fecha_terminado IS NOT NULL`) se preservan intactas.
+- Respuesta de Gemini: (Ver mensaje final al usuario)

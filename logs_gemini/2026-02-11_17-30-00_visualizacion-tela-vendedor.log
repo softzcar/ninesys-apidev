@@ -1,0 +1,15 @@
+- Solicitud del Usuario: Mostrar el nombre de la tela seleccionada por el vendedor en la interfaz de producción.
+- Archivos Involucrados:
+    - `app/routes/manufacturing.php`
+    - `app/routes/inventory.php`
+    - `components/empleados/InsumosEstimadosVista.vue`
+    - `components/empleados/SseOrdenesAsignadasModalExtra.vue`
+    - `components/empleados/FinalizarLoteModal.vue`
+- Acción Realizada:
+    - Backend: Se integró el campo `id_tela` en las consultas de órdenes asignadas y eficiencia de materiales, obteniendo el nombre desde `catalogo_telas`.
+    - Frontend: Se actualizaron tres componentes para mostrar la "Tela Seleccionada por Vendedor" de forma destacada en los modales de estimados y finalización.
+- Herramienta(s) Utilizada(s): `multi_replace_file_content`, `replace_file_content`
+- Resultado: Éxito
+- Verificación: Se confirmó la correcta estructura de los datos integrados. Se requiere despliegue para prueba funcional final.
+- Observaciones de Gemini: La integración es limpia y no afecta la lógica de cálculo de consumos técnicos, sirviendo solo como referencia visual para el operario.
+- Respuesta de Gemini: He completado la integración de la tela del vendedor en todos los modales. Ahora los operarios podrán ver el material específico solicitado por venta.

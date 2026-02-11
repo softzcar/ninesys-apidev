@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Implementar conversión universal de insumos (tipo_insumo) independiente del departamento.
+- Archivos Involucrados:
+    - ninesys-apidev: `public/model/create_new_company_api_emp_N.sql`, `app/routes/inventory.php`
+    - app_multi: `components/inventario/InsumoNuevo.vue`, `components/inventario/InsumoEditar.vue`, `components/empleados/SseOrdenesAsignadasModalExtra.vue`
+- Acción Realizada:
+    - DB: Añadido campo `tipo_insumo` a tabla `inventario` en VPS (API_EMP_163/174).
+    - Backend: Refactorizado `inventory.php` para usar `tipo_insumo === 'tela'` en lugar de `departamento === 'Estampado'`. Actualizados CRUDs y Bulk Load.
+    - Frontend: Implementado selector de `tipo_insumo` en gestión de insumos y refactorizado el modal de empleados para validaciones y visualización dinámica.
+- Herramienta(s) Utilizada(s): `run_command`, `replace_file_content`, `multi_replace_file_content`, `view_file`
+- Resultado: Éxito
+- Verificación: Se verificó la consistencia del código backend y la correcta integración de los componentes Vue. Se corrigieron errores de linter en el backend.
+- Observaciones de Gemini: La lógica ahora es completamente dinámica y permite que cualquier departamento maneje telas correctamente si el insumo está bien categorizado.
+- Respuesta de Gemini: He completado la implementación de la Categorización Universal de Insumos. Los cambios ya están aplicados en el código local y en la estructura de la base de datos del VPS.

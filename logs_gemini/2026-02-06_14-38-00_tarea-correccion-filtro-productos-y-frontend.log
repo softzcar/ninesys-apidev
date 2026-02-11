@@ -1,0 +1,107 @@
+- Solicitud del Usuario: Estos son los resultados en la interfaz después de tus cambios (imagen mostrando Real: 1h 0m, Meta: 0h 45m, Eficiencia: 75%)
+
+- Contexto: El usuario reportó que después de las correcciones anteriores, el dashboard seguía mostrando "Meta: 0h 45m" en lugar de "Meta: 3h 0m". Investigué y encontré dos problemas adicionales:
+  1. El endpoint seguía devolviendo el Diseño Gráfico (aunque con tiempo_proyectado=0)
+  2. El frontend aplicaba Math.min(real, projected) reduciendo el tiempo proyectado
+
+- Archivos Involucrados:
+  - `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php` (línea 3418-3426)
+  - `/home/developer/Escritorio/niesys/app_multi/components/empleados/SseOrdenesAsignadasV4.vue` (línea 1562-1573)
+
+- Acción Realizada:
+  1. **Diagnóstico con curl al endpoint:**
+     ```bash
+     curl -s 'https://apidev.nineteengreen.com/reports/manufacturing-time' \
+       -H 'Content-Type: application/json' \
+       -H 'Authorization: 174' \
+       -X POST \
+       -d '{"id_ordenes":[1],"id_empleado":607}'
+     ```
+     
+     **Resultado inicial**: Devolvía 4 productos (incluido Diseño Gráfico con tiempo_proyectado=0)
+     
+  2. **Corrección 1 - Backend (línea 3418-3426 manufacturing.php):**
+     - Agregado `JOIN products p_main ON p_main._id = op.id_woo AND p_main.fisico = 1`
+     - Esto filtra en el SELECT principal para que NO devuelva productos no físicos
+     - Ahora el endpoint devuelve solo 3 productos (sin Diseño Gráfico)
+     
+  3. **Corrección 2 - Frontend (línea 1562-1573 SseOrdenesAsignadasV4.vue):**
+     - **ANTES**: Usaba `Math.min(real, projected)` para órdenes no terminadas
+     - **PROBLEMA**: Si real=982s y projected=3600s, usaba 982s como "proyectado"
+     - **DESPUÉS**: Simplificado a sumar directamente `tiempo_proyectado_segundos`
+     
+     ```javascript
+     // ANTES (INCORRECTO):
+     const totalProjected = timeResponse.data.reduce((acc, item) => {
+       if ((item.tiempo_total_segundos && item.tiempo_total_segundos > 0) || item.fecha_inicio_primer_proceso) {
+         const projected = parseFloat(item.tiempo_proyectado_segundos || 0);
+         const real = parseFloat(item.tiempo_total_segundos || 0);
+         if (item.status === 'terminado' || item.prioridad === 'Completado') {
+           return acc + projected;
+         } else {
+           return acc + Math.min(real, projected);  // ❌ PROBLEMA
+         }
+       }
+       return acc;
+     }, 0);
+     
+     // DESPUÉS (CORRECTO):
+     const totalProjected = timeResponse.data.reduce((acc, item) => {
+       const projected = parseFloat(item.tiempo_proyectado_segundos || 0);
+       return acc + projected;  // ✅ CORRECTO
+     }, 0);
+     ```
+     
+  4. **Despliegue:**
+     - Backend commit: `0edba6b` - "fix: Filtrar productos no físicos en SELECT principal de manufacturing-time"
+     - Frontend: Modificado `SseOrdenesAsignadasV4.vue`
+     - Pull en VPS completado exitosamente
+
+- Herramienta(s) Utilizada(s):
+  - `run_command` (curl para probar endpoint, SSH, git)
+  - `view_file` (revisar código frontend y backend)
+  - `replace_file_content` (2 correcciones: 1 backend, 1 frontend)
+  - `write_to_file` (para logs)
+
+- Resultado: Éxito
+
+- Verificación:
+  - Endpoint verificado con curl, devuelve solo 3 productos:
+    ```json
+    [
+      {
+        "id_orden": 1,
+        "producto": "Producto de pruebas 03",
+        "cantidad": 5,
+        "tiempo_total_segundos": 982.3333,
+        "tiempo_proyectado_segundos": 3600
+      },
+      // ... 2 más iguales
+    ]
+    ```
+  - Frontend ahora suma: 3 × 3600 = 10,800 segundos (3 horas) ✅
+  - Diseño Gráfico completamente excluido ✅
+  - Sin Math.min() que reduzca el tiempo proyectado ✅
+
+- Observaciones de Gemini:
+  - El bug era triple:  
+    a) Backend (employees.php): duplicación + no filtrar fisico
+    b) Backend (manufacturing.php): no filtrar fisico en CTE + SELECT principal + división incorrecta
+    c) Frontend (SseOrdenesAsignadasV4.vue): Math.min() reducía tiempo proyectado
+  - La lógica de Math.min() era conceptualmente incorrecta porque asumía que el "tiempo proyectado" de una orden en curso debía  ser igual al tiempo ya trabajado, lo cual no tiene sentido para calcular eficiencia
+  - El filtro fisico=1 debe aplicarse en TRES lugares del endpoint manufacturing-time:
+    1. CTE ProyeccionFiltrada (para calcular tiempos unitarios)
+    2. Subconsulta COUNT (para dividir tiempo real)
+    3. SELECT principal (para no devolver productos no físicos)
+
+- Respuesta de Gemini: He encontrado y corregido dos problemas adicionales:
+
+  **1. Backend**: El endpoint devolvía el Diseño Gráfico (aunque con tiempo=0). Agregué filtro en el SELECT principal.
+  
+  **2. Frontend**: Usaba `Math.min(real, projected)` reduciendo el tiempo de 3h a 45min. Lo simplifiqué para que sume directamente el tiempo proyectado.
+  
+  Ahora el cálculo es correcto:
+  - Endpoint devuelve solo 3 productos físicos
+  - Frontend suma: 3 × 3600s = 10,800s (3 horas)
+  
+  **Recarga la página** para ver Meta: 3h 0m ✅

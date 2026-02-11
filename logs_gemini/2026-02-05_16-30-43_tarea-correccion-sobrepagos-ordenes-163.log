@@ -1,0 +1,54 @@
+- Solicitud del Usuario: El usuario reportó que 6 órdenes en la empresa ID 163 aparecen con sobrepago en la página `/comercializacion/ordenes/activas` del vendedor Sayerlin ID 10. Las órdenes tienen saldo CERO pero no se registraron correctamente en el sistema.
+
+- Archivos Involucrados:
+  * `/home/developer/Escritorio/Antigravity/ninesys-apidev/sql_scripts/fix_sobrepago_ordenes_163.sql`
+  * `/home/developer/Escritorio/Antigravity/ninesys-apidev/sql_scripts/fix_sobrepago_ordenes_163_part2.sql`
+  * `/home/developer/Escritorio/Antigravity/ninesys-apidev/sql_scripts/fix_sobrepago_orden_2024.sql`
+  * Base de datos `api_emp_163` en VPS (tablas: `abonos`, `metodos_de_pago`, `ordenes`)
+
+- Acción Realizada:
+  1. **Investigación del problema:**
+     - Revisé la imagen con las 6 órdenes afectadas (2366, 2123, 2092, 2024, 1948, 1788)
+     - Consulté las tablas `abonos`, `metodos_de_pago` y `ordenes` en la base de datos `api_emp_163`
+     - Identifiqué que había **registros duplicados** en la tabla `abonos` para descuentos
+  
+  2. **Diagnóstico:**
+     - Los descuentos estaban duplicados en la tabla `abonos`, causando que el sistema calculara sobrepago
+     - Ejemplo: Orden 2366 tenía 2 registros de descuento de $34.00 (IDs: 5292, 5293)
+     - El sistema sumaba ambos: $34 + $34 = $68 de sobrepago cuando debería ser solo $34
+  
+  3. **Implementación de la solución:**
+     - Creé 3 scripts SQL para eliminar registros duplicados
+     - Eliminé registros duplicados en tabla `abonos` (IDs: 3928, 4141, 4142, 4319, 4919, 4920, 4921, 4752, 5293, 5292)
+     - Actualicé campos `pago_abono` y `pago_descuento` en tabla `ordenes` para las 6 órdenes
+     - Ejecuté scripts en VPS vía SSH con mysql
+
+- Herramienta(s) Utilizada(s): 
+  * `run_command` (para ejecutar consultas SQL via SSH en VPS)
+  * `write_to_file` (para crear scripts SQL y documentación)
+  * `multi_replace_file_content` (para actualizar task.md)
+  * `grep_search` (para buscar lógica de cálculo de sobrepagos)
+  * `view_file` (para revisar imagen y contexto)
+
+- Resultado: Éxito
+
+- Verificación:
+  * Ejecuté consultas SQL de verificación en la base de datos
+  * Confirmé que las 6 órdenes ahora muestran saldo pendiente de $0.00:
+    - Orden 2366: Total $122.00, Abonado $122.00, Descuento $0.00, Saldo $0.00 ✅
+    - Orden 2123: Total $75.00, Abonado $57.00, Descuento $18.00, Saldo $0.00 ✅
+    - Orden 2092: Total $205.00, Abonado $205.00, Descuento $0.00, Saldo $0.00 ✅
+    - Orden 2024: Total $46.00, Abonado $35.11, Descuento $10.89, Saldo $0.00 ✅
+    - Orden 1948: Total $33.00, Abonado $25.00, Descuento $8.00, Saldo $0.00 ✅
+    - Orden 1788: Total $45.00, Abonado $0.00, Descuento $45.00, Saldo $0.00 ✅
+  * Los registros duplicados fueron eliminados correctamente de la tabla `abonos`
+  * Verificación manual pendiente por parte del usuario en la interfaz web
+
+- Observaciones de Gemini:
+  * El problema fue causado por un bug en el sistema que registra descuentos duplicados en la tabla `abonos`
+  * Inicialmente confundí las tablas: la tabla `pagos` se refiere a pagos a empleados, no a pagos de órdenes
+  * Los pagos de órdenes se registran en las tablas `abonos` y `metodos_de_pago`
+  * La corrección requirió 3 iteraciones de scripts SQL para eliminar todos los duplicados correctamente
+  * Se recomienda investigar la causa raíz del bug que genera estos duplicados para prevenir futuras ocurrencias
+
+- Respuesta de Gemini: He completado la corrección de las 6 órdenes que mostraban sobrepago incorrecto en la empresa ID 163. El problema fue causado por registros duplicados en la tabla `abonos`. Todos los duplicados han sido eliminados y las órdenes ahora muestran correctamente saldo pendiente de $0.00 en la base de datos. Te recomiendo verificar en la página `/comercializacion/ordenes/activas` que las órdenes ya no muestren sobrepago. He creado documentación detallada del proceso en el walkthrough.

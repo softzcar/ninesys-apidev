@@ -1,0 +1,18 @@
+- Solicitud del Usuario: Bloquear cambio cancelada→terminada e incluir "pausada" en advertencia de reactivación. El usuario reportó que la advertencia de reactivación no se muestra en el frontend.
+- Archivos Involucrados: 
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php
+  - /home/developer/Escritorio/niesys/app_multi/components/ordenes/editar.vue
+- Acción Realizada:
+  - Backend: Agregué validación para bloquear cambio de "cancelada" → "terminada" con mensaje: "No se puede marcar como terminada una orden cancelada. Si desea completar esta orden, reactívela primero."
+  - La validación de reactivación ya existía y funciona correctamente: solo advierte cuando la orden no tiene asignaciones (count = 0).
+  - Frontend: El código de modal de reactivación ya está implementado en editar.vue desde el commit anterior.
+- Herramienta(s) Utilizada(s): `multi_replace_file_content`, `run_command`, `git`, CURL (testing)
+- Resultado: Éxito (Backend)
+- Verificación:
+  - Probado con CURL en VPS (Empresa 174, Orden #1):
+    * Cancelada → Terminada: Bloqueado ✅ {"success":false,"message":"No se puede marcar como terminada..."}
+    * Cancelada → Activa: Permitido ✅ (porque la orden tiene 1 asignación completada, count=1, no activa la advertencia)
+  - Para activar la advertencia, se necesita una orden cancelada SIN asignaciones (ni terminadas ni pendientes).
+  - El frontend requiere recarga/despliegue de Nuxt para que el usuario vea el modal de reactivación.
+- Observaciones de Gemini: La lógica de advertencia funciona correctamente: advierte solo cuando NO hay asignaciones. El usuario debe probar con una orden que fue cancelada ANTES de asignar personal, o eliminar manualmente las asignaciones terminadas para testing.
+- Respuesta de Gemini: (Ver mensaje final al usuario)

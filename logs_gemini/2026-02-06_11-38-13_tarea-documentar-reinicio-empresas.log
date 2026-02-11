@@ -1,0 +1,58 @@
+- Solicitud del Usuario: Agregar las instrucciones de cómo reiniciar una empresa al archivo GEMINI.md para que en futuras tareas pueda solicitar el reinicio cuando lo necesite.
+
+- Archivos Involucrados:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/GEMINI.md (MODIFICADO)
+
+- Acción Realizada:
+  Agregada nueva sección completa "Reinicio de Empresas (Database Reset)" al archivo GEMINI.md del backend con toda la información necesaria para reiniciar empresas en futuras conversaciones:
+  
+  1. Advertencia sobre la operación crítica
+  2. Ubicación del script y documentación
+  3. Procedimiento completo en 3 pasos:
+     - Paso 1: Copiar script al VPS via SCP
+     - Paso 2: Ejecutar en VPS via SSH con el ID de empresa
+     - Paso 3: Proporcionar las dos confirmaciones de seguridad
+  4. Ejemplos concretos para empresas 174 y 163
+  5. Proceso automático del script (6 pasos)
+  6. Lista detallada de qué datos se eliminan (7 categorías)
+  7. Lista detallada de qué configuración se mantiene (8 elementos)
+  8. Tabla de empresas disponibles (163, 171, 174)
+  9. Instrucciones de recuperación de datos desde backup
+  10. 5 notas importantes sobre el uso del script
+  
+  La sección fue insertada antes de "Despliegue en Producción" para mantener una estructura lógica del documento.
+
+- Herramienta(s) Utilizada(s):
+  - view_file (leer archivo GEMINI.md existente)
+  - replace_file_content (agregar nueva sección)
+
+- Resultado: Éxito
+
+- Verificación:
+  - ✅ Sección agregada exitosamente al GEMINI.md
+  - ✅ Documentación completa con 107 líneas nuevas
+  - ✅ Incluye comandos exactos para copiar y ejecutar
+  - ✅ Ejemplos específicos para empresa 174 (pruebas) y 163 (producción)
+  - ✅ Referencias a documentación adicional (README_RESET_DATABASE.md)
+  - ✅ Tabla markdown con empresas disponibles formateada correctamente
+  - ✅ Instrucciones de recuperación desde backup
+  - ✅ Warnings y precauciones claramente marcados con emojis
+  - ✅ Documento mantiene formato consistente con el resto del archivo
+
+- Observaciones de Gemini:
+  La documentación ahora está centralizada en el archivo GEMINI.md que es consultado en cada conversación. Esto garantiza que en futuras tareas pueda acceder a estas instrucciones sin necesidad de buscar en conversaciones pasadas. La información está estructurada de manera clara y concisa, con comandos listos para copiar y pegar.
+
+- Respuesta de Gemini:
+  ✅ Documentación agregada exitosamente al archivo GEMINI.md
+  
+  **Nueva sección agregada:** "Reinicio de Empresas (Database Reset)"
+  
+  **Contenido incluido:**
+  - ⚠️ Advertencias de operación crítica
+  - 📋 Procedimiento completo en 3 pasos
+  - 💻 Comandos exactos para VPS
+  - 📊 Tabla de empresas disponibles
+  - 🔄 Instrucciones de recuperación
+  - ✅ Qué se elimina / qué se preserva
+  
+  Ahora en futuras conversaciones podré consultar esta información directamente desde GEMINI.md para ayudarte a reiniciar empresas cuando lo necesites.

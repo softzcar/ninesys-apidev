@@ -1,0 +1,30 @@
+- Solicitud del Usuario: Debug final - endpoint de auditoría retorna null a pesar del despliegue correcto
+- Archivos Involucrados:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php
+  
+- Acción Realizada:
+  1. Identificado el problema crítico: código de auditoría estaba FUERA del bloque else (solo se ejecutaba cuando orden NO existía)
+  2. Movido código de auditoría DENTRO del bloque else (líneas 1590-1602)
+  3. Desplegado commit 454e9b4 al VPS
+  4. Reiniciado PHP para limpiar OPcache
+  5. Descubierto que el header correcto es "Authorization: 174" no "id_empresa: 174"
+  6. PROBLEMA PERSISTENTE: endpoint sigue retornando null para campo auditoria
+
+- Herramienta(s) Utilizada(s): multi_replace_file_content, run_command (git, ssh, curl)
+
+- Resultado: Parcial (código desplegado pero no funciona)
+
+- Verificación: 
+  - Código confirmado en VPS (sed muestra código correcto)
+  - Consulta SQL funciona en MySQL (retorna datos correctos)
+  - PHP reiniciado
+  - Endpoint retorna null incluso con header "Authorization: 174"
+  - PENDIENTE: Determinar por qué goQuery() no retorna datos
+
+- Observaciones de Gemini: 
+  - El código está correctamente ubicado ahora dentro del bloque else
+  - La consulta SQL es correcta y retorna datos cuando se ejecuta directamente
+  - Posible problema: goQuery() podría no estar funcionando o $id no tiene el valor correcto
+  - Necesito verificar si hay algún middleware o caché intermedio
+
+- Respuesta de Gemini: Código desplegado pero endpoint sigue retornando null. Investigando causa raíz.

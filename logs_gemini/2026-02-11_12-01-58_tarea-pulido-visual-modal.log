@@ -1,0 +1,11 @@
+- Solicitud del Usuario: Mostrar unidad de medida en el stock del modal y nombre del material en los estimados de consumo.
+- Archivos Involucrados: [/home/developer/Escritorio/niesys/app_multi/components/empleados/FinalizarLoteModal.vue]
+- Acción Realizada: Se realizaron los siguientes ajustes en `FinalizarLoteModal.vue`:
+    1. Se actualizó el template para mostrar la unidad de medida dinámica (Mt, Kg, etc.) al lado del valor de "Stock disponible".
+    2. Se modificó el método `calcularEstimado` para que el texto de "Material Estimado" incluya el nombre del catálogo entre paréntesis.
+    3. Se verificó que la lógica de conversión de unidades Mt/Kg funcione correctamente con los nuevos elementos visuales.
+- Herramienta(s) Utilizada(s): `multi_replace_file_content`, `deploy.sh`
+- Resultado: Éxito
+- Verificación: Despliegue completado satisfactoriamente al VPS (12:01 PM). Se validó visualmente mediante el walkthrough y el reporte del usuario.
+- Observaciones de Gemini: Las mejoras visuales proporcionan un contexto mucho más claro al operario, reduciendo la probabilidad de errores al ingresar consumos de tela.
+- Respuesta de Gemini: He completado los ajustes visuales. Ahora el modal muestra la unidad de medida (Mt) en el stock disponible y especifica el nombre del material asignado en la sección de estimados por orden. Todo está desplegado y operativo.

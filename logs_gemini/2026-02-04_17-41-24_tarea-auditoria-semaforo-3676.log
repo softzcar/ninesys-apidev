@@ -1,0 +1,10 @@
+- Solicitud del Usuario: Auditar componente Semáforo para orden 3676 (Empresa 163). Eficiencia 0% en Papel, discrepancia en tiempos y consumos de insumos.
+- Archivos Involucrados: /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/manufacturing.php
+- Acción Realizada: 
+    - Corregido `/reports/input-efficiency`: Se cambió a LEFT JOIN para soportar insumos eliminados, se corrigió el cálculo de rendimiento para usar el valor específico de los ítems consumidos en lugar del máximo del catálogo, y se normalizaron las unidades.
+    - Corregido `/reports/manufacturing-time`: Se añadió divisor por conteo de productos para normalizar tiempos compartidos en asignaciones huérfanas o compartidas, evitando la duplicación de horas en el reporte general.
+- Herramienta(s) Utilizada(s): `view_file`, `run_command`, `replace_file_content`, `ssh`
+- Resultado: Éxito
+- Verificación: Auditoría manual de SQL en VPS confirmó que el rendimiento de 7.0 (incorrecto) provenía de un ítem no usado en la orden, mientras que el real era 3.0. Se confirmó que 1294 horas era el resultado de multiplicar 118 horas por 9 líneas de producto + tiempo en curso. Los cambios normalizan matemáticamente estos valores.
+- Observaciones de Gemini: El sistema de reportes tenía fallas de lógica en el manejo de trabajos compartidos (batch processing) y en la agregación de datos de catálogo vs datos de movimientos reales.
+- Respuesta de Gemini: Se han corregido los endpoints de manufactura en el backend. Ahora los tiempos se normalizan por cantidad de productos y el consumo real de insumos utiliza el rendimiento específico de los materiales usados. Los cambios han sido desplegados y verificados en el VPS.
