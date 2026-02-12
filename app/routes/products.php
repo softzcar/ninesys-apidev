@@ -1193,13 +1193,11 @@ return function (App $app) {
   $app->post('/lotes/empleados/reasignar-masiva', function (Request $request, Response $response, $args) {
     $data = $request->getParsedBody();
 
-    // Forzar decodificación si se enviaron como strings JSON vía URLSearchParams
     $id_ordenes = isset($data['id_ordenes']) ? json_decode($data['id_ordenes'], true) : [];
-    $id_departamento = $data['id_departamento'] ?? null;
-    $empleados = isset($data['empleados']) ? json_decode($data['empleados'], true) : [];
+    $asignaciones = isset($data['asignaciones']) ? json_decode($data['asignaciones'], true) : [];
 
-    if (empty($id_ordenes) || empty($id_departamento) || empty($empleados)) {
-      $response->getBody()->write(json_encode(['error' => 'Faltan parámetros requeridos: id_ordenes, id_departamento y empleados son obligatorios.']));
+    if (empty($id_ordenes) || empty($asignaciones)) {
+      $response->getBody()->write(json_encode(['error' => 'Faltan parámetros requeridos: id_ordenes y asignaciones son obligatorios.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
@@ -1209,67 +1207,95 @@ return function (App $app) {
     try {
       $localConnection->beginTransaction();
 
-      // BUSCAR NOMBRE DEL DEPARTAMENTO
-      $sqlDep = "SELECT departamento, orden_proceso FROM departamentos WHERE _id = {$id_departamento}";
-      $respDep = $localConnection->goQuery($sqlDep);
-      if (empty($respDep)) {
-        throw new Exception("Departamento no encontrado: {$id_departamento}");
-      }
-      $nombreDepartamento = $respDep[0]['departamento'];
-      $nuevo_orden_proceso = $respDep[0]['orden_proceso'];
+      // Mapeo para cachear información de departamentos y evitar múltiples queries redundantes
+      $deptCache = [];
 
       foreach ($id_ordenes as $id_orden) {
         $id_orden = intval($id_orden);
 
-        // 1. CALCULAR CANTIDAD DE UNIDADES SOLICITADAS
+        // 1. CALCULAR CANTIDAD DE UNIDADES SOLICITADAS (una vez por orden)
         $sqlCant = "SELECT SUM(cantidad) total_cantidad FROM ordenes_productos WHERE id_orden = {$id_orden}";
         $total_cantidad_res = $localConnection->goQuery($sqlCant);
         $total_cantidad = $total_cantidad_res[0]['total_cantidad'] ?? 0;
 
-        // 2. ACTUALIZAR REGISTRO EN lotes_detalles
-        $valuesLote = "id_departamento = '{$id_departamento}', departamento = '{$nombreDepartamento}', unidades_solicitadas = '{$total_cantidad}'";
-        $sqlUpLote = "UPDATE lotes_detalles SET {$valuesLote} WHERE id_departamento = '{$id_departamento}' AND id_orden = {$id_orden}";
-        $localConnection->goQuery($sqlUpLote);
+        foreach ($asignaciones as $asig) {
+          $id_departamento = intval($asig['id_departamento']);
+          $empleados = $asig['empleados'];
 
-        // 3. ASIGNAR EMPLEADOS
-        // Primero eliminamos asignaciones previas de este depto para esta orden
-        $sqlDel = "DELETE FROM lotes_detalles_empleados_asignados WHERE id_orden = {$id_orden} AND id_departamento = {$id_departamento}";
-        $localConnection->goQuery($sqlDel);
+          if (!isset($deptCache[$id_departamento])) {
+            $sqlDep = "SELECT departamento, orden_proceso FROM departamentos WHERE _id = {$id_departamento}";
+            $respDep = $localConnection->goQuery($sqlDep);
+            if (empty($respDep)) {
+              throw new Exception("Departamento no encontrado: {$id_departamento}");
+            }
+            $deptCache[$id_departamento] = [
+              'nombre' => $respDep[0]['departamento'],
+              'orden' => $respDep[0]['orden_proceso']
+            ];
+          }
 
-        foreach ($empleados as $emp) {
-          $id_emp = intval($emp['id_empleado']);
-          $porcentaje = floatval($emp['porcentaje']);
+          $nombreDepartamento = $deptCache[$id_departamento]['nombre'];
+          $nuevo_orden_proceso = $deptCache[$id_departamento]['orden'];
 
-          $sqlIns = "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_departamento, id_empleado, procentaje_comision) 
-                     VALUES ({$id_orden}, {$id_departamento}, {$id_emp}, {$porcentaje})";
-          $localConnection->goQuery($sqlIns);
-        }
+          // 2. ACTUALIZAR O INSERTAR REGISTRO EN lotes_detalles
+          $sqlCheckDetail = "SELECT _id FROM lotes_detalles WHERE id_departamento = '{$id_departamento}' AND id_orden = {$id_orden}";
+          $detailExists = $localConnection->goQuery($sqlCheckDetail);
 
-        // 4. ACTUALIZAR id_departamento_actual EN LOTES
-        $sql_check = "SELECT id_departamento_actual FROM lotes WHERE id_orden = {$id_orden}";
-        $current_dept = $localConnection->goQuery($sql_check);
-
-        if (!empty($current_dept)) {
-          $current_dept_id = $current_dept[0]['id_departamento_actual'];
-
-          if ($current_dept_id === null || $current_dept_id === 0 || $current_dept_id === '0') {
-            $sql_update_lote = "UPDATE lotes SET id_departamento_actual = {$id_departamento}, paso = '{$nombreDepartamento}' WHERE id_orden = {$id_orden}";
-            $localConnection->goQuery($sql_update_lote);
+          if (empty($detailExists)) {
+            $sqlInsDetail = "INSERT INTO lotes_detalles (id_orden, id_departamento, departamento, unidades_solicitadas, estatus) 
+                             VALUES ({$id_orden}, '{$id_departamento}', '{$nombreDepartamento}', '{$total_cantidad}', 'por iniciar')";
+            $localConnection->goQuery($sqlInsDetail);
           } else {
-            // Verificar si el nuevo departamento tiene menor o igual orden_proceso
-            $sql_orden_comp = "SELECT orden_proceso FROM departamentos WHERE _id = {$current_dept_id}";
-            $actual_orden_res = $localConnection->goQuery($sql_orden_comp);
+            $sqlUpLote = "UPDATE lotes_detalles SET departamento = '{$nombreDepartamento}', unidades_solicitadas = '{$total_cantidad}' 
+                          WHERE id_departamento = '{$id_departamento}' AND id_orden = {$id_orden}";
+            $localConnection->goQuery($sqlUpLote);
+          }
 
-            if (!empty($actual_orden_res)) {
-              $actual_orden = $actual_orden_res[0]['orden_proceso'];
-              if ($nuevo_orden_proceso <= $actual_orden) {
-                $sql_update_lote = "UPDATE lotes SET id_departamento_actual = {$id_departamento}, paso = '{$nombreDepartamento}' WHERE id_orden = {$id_orden}";
-                $localConnection->goQuery($sql_update_lote);
+          // 3. ASIGNAR EMPLEADOS
+          $sqlDel = "DELETE FROM lotes_detalles_empleados_asignados WHERE id_orden = {$id_orden} AND id_departamento = {$id_departamento}";
+          $localConnection->goQuery($sqlDel);
+
+          foreach ($empleados as $emp) {
+            $id_emp = intval($emp['id_empleado']);
+            $porcentaje = floatval($emp['porcentaje']);
+
+            $sqlIns = "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_departamento, id_empleado, procentaje_comision) 
+                       VALUES ({$id_orden}, {$id_departamento}, {$id_emp}, {$porcentaje})";
+            $localConnection->goQuery($sqlIns);
+          }
+
+          // 4. ACTUALIZAR id_departamento_actual EN LOTES (si corresponde)
+          $sql_check = "SELECT id_departamento_actual FROM lotes WHERE id_orden = {$id_orden}";
+          $current_dept_res = $localConnection->goQuery($sql_check);
+
+          if (!empty($current_dept_res)) {
+            $current_dept_id = $current_dept_res[0]['id_departamento_actual'];
+
+            if ($current_dept_id === null || $current_dept_id === 0 || $current_dept_id === '0') {
+              $sql_update_lote = "UPDATE lotes SET id_departamento_actual = {$id_departamento}, paso = '{$nombreDepartamento}' WHERE id_orden = {$id_orden}";
+              $localConnection->goQuery($sql_update_lote);
+            } else {
+              if (!isset($deptCache[$current_dept_id])) {
+                $sql_orden_comp = "SELECT departamento, orden_proceso FROM departamentos WHERE _id = {$current_dept_id}";
+                $actual_orden_res = $localConnection->goQuery($sql_orden_comp);
+                if (!empty($actual_orden_res)) {
+                  $deptCache[$current_dept_id] = [
+                    'nombre' => $actual_orden_res[0]['departamento'],
+                    'orden' => $actual_orden_res[0]['orden_proceso']
+                  ];
+                }
+              }
+
+              if (isset($deptCache[$current_dept_id])) {
+                $actual_orden = $deptCache[$current_dept_id]['orden'];
+                if ($nuevo_orden_proceso <= $actual_orden) {
+                  $sql_update_lote = "UPDATE lotes SET id_departamento_actual = {$id_departamento}, paso = '{$nombreDepartamento}' WHERE id_orden = {$id_orden}";
+                  $localConnection->goQuery($sql_update_lote);
+                }
               }
             }
           }
         }
-
         $object['results'][] = ['id_orden' => $id_orden, 'status' => 'ok'];
       }
 
