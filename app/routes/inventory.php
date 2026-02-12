@@ -2060,8 +2060,15 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $valor_inicial = $current_data[0]['valor_inicial'];
             $id_insumo = $current_data[0]['id_insumo'];
 
-            // Calcular nuevo valor_final
+            // Calcular nuevo valor_final para el movimiento actual
             $nuevo_valor_final = $valor_inicial - $nuevo_valor;
+
+            // Calcular el delta (diferencia que afectará a todos los movimientos posteriores y al stock)
+            // Si el valor_final anterior era 5.96 y el nuevo es 3.96, el delta es -2.00
+            $sql_get_previous_final = "SELECT valor_final FROM inventario_movimientos WHERE _id = ?";
+            $prev_data = $localConnection->goQuery($sql_get_previous_final, [$id_movimiento]);
+            $antiguo_valor_final = $prev_data[0]['valor_final'];
+            $delta = $nuevo_valor_final - $antiguo_valor_final;
 
             // Registrar en historial si hubo cambio
             if ($valor_anterior != $nuevo_valor) {
@@ -2078,12 +2085,25 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 ]);
             }
 
-            // Actualizar valor_final en inventario_movimientos
+            // 1. Actualizar el movimiento actual
             $sql_update = "UPDATE inventario_movimientos 
                 SET valor_final = ? 
                 WHERE _id = ?";
-
             $localConnection->goQuery($sql_update, [$nuevo_valor_final, $id_movimiento]);
+
+            // 2. Propagar el cambio a los movimientos posteriores del mismo insumo
+            // Usamos el _id para asegurar el orden cronológico de inserción si el moment es idéntico
+            $sql_propagate = "UPDATE inventario_movimientos 
+                SET valor_inicial = valor_inicial + ?, 
+                    valor_final = valor_final + ? 
+                WHERE id_insumo = ? AND _id > ?";
+            $localConnection->goQuery($sql_propagate, [$delta, $delta, $id_insumo, $id_movimiento]);
+
+            // 3. Actualizar el stock total en la tabla inventario
+            $sql_update_inv = "UPDATE inventario 
+                SET cantidad = cantidad + ? 
+                WHERE _id = ?";
+            $localConnection->goQuery($sql_update_inv, [$delta, $id_insumo]);
 
             // Confirmar transacción
             $localConnection->commit();
