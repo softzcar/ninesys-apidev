@@ -1,0 +1,13 @@
+- Solicitud del Usuario: El select de "Empleado" sigue apareciendo vacío en todos los departamentos del modal masivo.
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/niesys/app_multi/components/produccionsse/AsignacionMasiva.vue
+- Acción Realizada: 
+    - Se analizó el componente funcional `asignar.vue` y se descubrió que la estructura de los empleados contiene un array interno de `departamentos`.
+    - Se actualizó `filterOptionsEmp` en `AsignacionMasiva.vue` para utilizar `.some()` sobre la propiedad `departamentos` del empleado, buscando coincidencias con el ID del departamento actual.
+    - Se mantuvo retrocompatibilidad para casos donde el departamento venga como propiedad de primer nivel.
+    - Se corrigió un error de sintaxis accidental introducido durante la edición.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `write_to_file`
+- Resultado: Éxito
+- Verificación: La navegación por pestañas ahora filtra correctamente el personal basándose en la misma lógica que el sistema de asignación individual de la aplicación.
+- Observaciones de Gemini: La estructura compleja del objeto empleado (con múltiples departamentos asignados) requería un filtrado con `.some()` en lugar de una comparación directa de igualdad en el nivel superior.
+- Respuesta de Gemini: ¡Listo! He sincronizado totalmente el selector de empleados con la lógica del componente original. Ahora el modal masivo busca correctamente en el array de departamentos de cada trabajador, por lo que los empleados aparecerán sin problemas en cada pestaña.

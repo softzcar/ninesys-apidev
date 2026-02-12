@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Corregir el filtro de órdenes en el modal de asignación masiva para que no muestre órdenes que ya tienen personal asignado (como las IDs 1, 2 y 3).
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/niesys/app_multi/components/produccionsse/controlDeProduccionPro.vue
+    - /home/developer/Escritorio/niesys/app_multi/components/produccionsse/AsignacionMasiva.vue
+- Acción Realizada: 
+    - Se pasó el array `ordenesProyectadas2` como prop al componente `AsignacionMasiva.vue`.
+    - Se actualizó la lógica computada `unassignedOrders` para filtrar las órdenes basándose en su existencia en `ordenesProyectadas`, sincronizando el comportamiento con el componente semáforo que muestra "POR ASIGNAR" cuando una orden no está en dicho array.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `write_to_file`
+- Resultado: Éxito
+- Verificación: La lógica ahora utiliza el mismo origen de datos que el semáforo para determinar la falta de asignación, garantizando consistencia en la interfaz.
+- Observaciones de Gemini: Esta sincronización evita confusiones al usuario mostrando solo órdenes que realmente requieren intervención de asignación inicial.
+- Respuesta de Gemini: Se ha corregido el filtro. Ahora el modal de asignación masiva solo mostrará las órdenes que aparecen como "POR ASIGNAR", excluyendo aquellas que ya tienen personal configurado en algún departamento.

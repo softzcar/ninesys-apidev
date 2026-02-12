@@ -1192,9 +1192,11 @@ return function (App $app) {
 
   $app->post('/lotes/empleados/reasignar-masiva', function (Request $request, Response $response, $args) {
     $data = $request->getParsedBody();
-    $id_ordenes = $data['id_ordenes'] ?? []; // Array de IDs de órdenes
-    $id_departamento = $data['id_departamento'];
-    $empleados = $data['empleados'] ?? []; // Array de { id_empleado, porcentaje }
+
+    // Forzar decodificación si se enviaron como strings JSON vía URLSearchParams
+    $id_ordenes = isset($data['id_ordenes']) ? json_decode($data['id_ordenes'], true) : [];
+    $id_departamento = $data['id_departamento'] ?? null;
+    $empleados = isset($data['empleados']) ? json_decode($data['empleados'], true) : [];
 
     if (empty($id_ordenes) || empty($id_departamento) || empty($empleados)) {
       $response->getBody()->write(json_encode(['error' => 'Faltan parámetros requeridos: id_ordenes, id_departamento y empleados son obligatorios.']));
