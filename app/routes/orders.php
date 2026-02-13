@@ -421,7 +421,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     //  Verificar existencia de la orden
-    $sql = 'SELECT a.id_orden, SUM(a.abono) abono, SUM(a.descuento) descuento, b.pago_total total, SUM(a.abono) + SUM(a.descuento) total_abono_descuento, a.detalle, a.moment  FROM abonos a JOIN ordenes b ON a.id_orden = b._id WHERE a.id_orden = ' . $args['id'];
+    $sql = 'SELECT a.id_orden, SUM(a.abono) abono, SUM(a.descuento) descuento, SUM(a.nota_credito) nota_credito, b.pago_total total, SUM(a.abono) + SUM(a.descuento) total_abono_descuento, a.detalle, a.moment  FROM abonos a JOIN ordenes b ON a.id_orden = b._id WHERE a.id_orden = ' . $args['id'];
     $datosAbono = $localConnection->goQuery($sql);
 
     $object['sql'] = $sql;
@@ -476,9 +476,10 @@ return function (App $app) {
 
     $abono_val = round(floatval($datosAbono['abono'] ?? 0), 2);
     $descuento_val = floatval($datosAbono['descuento'] ?? 0);
+    $nota_credito_val = floatval($datosAbono['notaCredito'] ?? 0);
 
-    if ($abono_val <= 0 && $descuento_val <= 0) {
-      return ApiResponse::validationError($response, 'Error: Debe especificar un monto de abono o descuento mayor a 0');
+    if ($abono_val <= 0 && $descuento_val <= 0 && $nota_credito_val <= 0) {
+      return ApiResponse::validationError($response, 'Error: Debe especificar un monto de abono, descuento o nota de crédito mayor a 0');
     }
 
     if (empty($datosAbono['empleado']) || !is_numeric($datosAbono['empleado'])) {
@@ -535,14 +536,19 @@ return function (App $app) {
       }
 
       // INSERT EN ABONOS (operación principal)
+      $detalleNotaCredito = isset($datosAbono['notaCreditoDetalle']) ? $datosAbono['notaCreditoDetalle'] : '';
+      // Si hay nota de crédito, usar su detalle; si no, usar el detalle del abono
+      $detalleFinal = $nota_credito_val > 0 ? $detalleNotaCredito : $detalleAbono;
+
       $values = "'" . $now . "',";
       $values .= "'" . intval($datosAbono['id']) . "',";
       $values .= "'" . $abono_val . "',";
       $values .= "'" . $descuento_val . "',";
+      $values .= "'" . $nota_credito_val . "',";
       $values .= "'" . intval($datosAbono['empleado']) . "',";
-      $values .= "'" . addslashes($detalleAbono) . "'";
+      $values .= "'" . addslashes($detalleFinal) . "'";
 
-      $sql = 'INSERT INTO abonos(moment, id_orden, abono, descuento, id_empleado, detalle) VALUES (' . $values . ')';
+      $sql = 'INSERT INTO abonos(moment, id_orden, abono, descuento, nota_credito, id_empleado, detalle) VALUES (' . $values . ')';
       $resultAbono = $localConnection->goQuery($sql);
 
       if (isset($resultAbono['status']) && $resultAbono['status'] === 'error') {
@@ -620,10 +626,11 @@ return function (App $app) {
       }
 
       // ACTUALIZAR TOTALES EN ORDENES
-      if ($abono_val > 0 || $descuento_val > 0) {
+      if ($abono_val > 0 || $descuento_val > 0 || $nota_credito_val > 0) {
         $sql_update_totales = "UPDATE ordenes SET 
               pago_abono = pago_abono + {$abono_val},
-              pago_descuento = pago_descuento + {$descuento_val}
+              pago_descuento = pago_descuento + {$descuento_val},
+              pago_nota_credito = pago_nota_credito + {$nota_credito_val}
               WHERE _id = " . intval($datosAbono['id']);
         $resultUpdate = $localConnection->goQuery($sql_update_totales);
 
@@ -646,14 +653,23 @@ return function (App $app) {
       $localConnection->disconnect();
 
       // Preparar mensaje de éxito
-      $tipoOperacion = $abono_val > 0 ? 'Abono' : 'Descuento';
-      $montoOperacion = $abono_val > 0 ? $abono_val : $descuento_val;
+      if ($nota_credito_val > 0) {
+        $tipoOperacion = 'Nota de crédito';
+        $montoOperacion = $nota_credito_val;
+      } elseif ($abono_val > 0) {
+        $tipoOperacion = 'Abono';
+        $montoOperacion = $abono_val;
+      } else {
+        $tipoOperacion = 'Descuento';
+        $montoOperacion = $descuento_val;
+      }
       $mensaje = $tipoOperacion . ' de $' . number_format($montoOperacion, 2) . ' registrado correctamente para la orden #' . $datosAbono['id'];
 
       return ApiResponse::success($response, $mensaje, [
         'id_orden' => intval($datosAbono['id']),
         'abono' => $abono_val,
-        'descuento' => $descuento_val
+        'descuento' => $descuento_val,
+        'nota_credito' => $nota_credito_val
       ]);
 
     } catch (\Throwable $e) {
@@ -701,8 +717,16 @@ return function (App $app) {
     $object['fields'][2]['key'] = 'descuento';
     $object['fields'][2]['label'] = 'Descuento';
     $object['fields'][2]['sortable'] = true;
+
+    $object['fields'][3]['key'] = 'nota_credito';
+    $object['fields'][3]['label'] = 'Nota de Crédito';
+    $object['fields'][3]['sortable'] = true;
+
+    $object['fields'][4]['key'] = 'detalle';
+    $object['fields'][4]['label'] = 'Detalle';
+    $object['fields'][4]['sortable'] = false;
     //  Verificar existencia de la orden
-    $sql = 'SELECT _id id_abono, abono, descuento, moment FROM abonos  WHERE id_orden = ' . $args['id'] . ' GROUP BY _id, id_orden';
+    $sql = 'SELECT _id id_abono, abono, descuento, nota_credito, detalle, moment FROM abonos  WHERE id_orden = ' . $args['id'] . ' GROUP BY _id, id_orden';
     $datosAbono = $localConnection->goQuery($sql);
     $object['items'] = $datosAbono;
 

@@ -285,13 +285,13 @@ return function (App $app) {
       $result['error'] = 'Faltan parámetros requeridos: tipo o id_orden.';
       $localConnection->disconnect();  // Asegúrate de desconectar incluso en caso de error temprano
 
+      $response->getBody()->write(json_encode($result, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE));
       return $response
         ->withHeader('Access-Control-Allow-Origin', '*')
         ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-        ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')  // Eliminado el duplicado 'Access-Control-Allow-Headers'
+        ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
         ->withHeader('Content-Type', 'application/json')
-        ->withStatus(400)  // Bad Request si faltan parámetros
-        ->write(json_encode($result, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE));
+        ->withStatus(400);
     }
 
     $tipo = $dataMensaje['tipo'];
@@ -309,7 +309,7 @@ return function (App $app) {
         a.pago_descuento,
         a.pago_abono,
         a.pago_total,
-        ((a.pago_total -  a.pago_descuento) - a.pago_abono) monto_pendiente,
+        ((a.pago_total -  a.pago_descuento) - a.pago_abono + a.pago_nota_credito) monto_pendiente,
         DATE_FORMAT(a.fecha_entrega, '%d/%m/%Y') fecha_entrega
         FROM
             ordenes a
@@ -321,13 +321,13 @@ return function (App $app) {
     if (empty($orden_data)) {
       $result['error'] = "Orden con ID {$id_orden} no encontrada.";
       $localConnection->disconnect();
+      $response->getBody()->write(json_encode($result, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE));
       return $response
         ->withHeader('Access-Control-Allow-Origin', '*')
         ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
         ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
         ->withHeader('Content-Type', 'application/json')
-        ->withStatus(404)  // Not Found
-        ->write(json_encode($result, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE));
+        ->withStatus(404);
     }
     $orden = $orden_data[0];  // Asumimos que _id es único y siempre devuelve un solo registro si existe
 
@@ -377,7 +377,7 @@ return function (App $app) {
                     a.pago_total,        
                     (SUM(b.abono)) total_abonos,
                     (SUM(b.descuento)) total_descuentos,
-                    (a.pago_total - (SUM(b.descuento)) - SUM(b.abono))  deuda,
+                    (a.pago_total - (SUM(b.descuento)) - SUM(b.abono) + SUM(b.nota_credito))  deuda,
                     (SELECT msg_saldo FROM config WHERE _id = 1) msg
                 FROM
                     ordenes a
@@ -393,19 +393,20 @@ return function (App $app) {
       if (empty($config_data) || !isset($config_data[0]['msg'])) {
         $result['error'] = 'Mensaje configurado en la base de datos.';
         $localConnection->disconnect();
+        $response->getBody()->write(json_encode($result, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE));
         return $response
           ->withHeader('Access-Control-Allow-Origin', '*')
           ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
           ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
           ->withHeader('Content-Type', 'application/json')
-          ->withStatus(500)  // Error del servidor: configuración faltante
-          ->write(json_encode($result, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE));
+          ->withStatus(500);
       }
       $mensaje_plantilla = $config_data[0]['msg'];
 
       // Importante: Si la plantilla `msg_welcome` de la BD también tiene '\n' literales,
       // necesitarás reemplazarlos también.
       // Ejemplo: $mensaje_plantilla = str_replace('\n', "\n", $mensaje_plantilla);
+      $busqueda = [];
       $reemplazo = [];
 
       if ($tipo === 'inicio' || $tipo === 'fin' || $tipo === 'paso') {
@@ -415,8 +416,7 @@ return function (App $app) {
           "{$orden['id_orden']}",
           "{$orden['fecha_entrega']}",
           $productos_string,
-          // CORRECCIÓN: Convertir la cadena a float antes de formatear
-          // number_format(floatval($orden['pago_total']), 2, '.', ',')
+          number_format(floatval($orden['pago_total']), 2, '.', ',')
         ];
       } else if ($tipo === 'cobro') {
         $busqueda = ['[CLIENTE]', '[ORDEN_ID]', '[FECHA_ENTREGA]', '[PRODUCTOS]', '[TOTAL_ORDEN]', '[TOTAL_ABONOS]', '[TOTAL_DESCUENTOS]', '[TOTAL_DEUDA]'];
@@ -428,8 +428,7 @@ return function (App $app) {
           number_format(floatval($config_data[0]['pago_total']), 2, '.', ''),
           number_format(floatval($config_data[0]['total_abonos']), 2, '.', ''),
           number_format(floatval($config_data[0]['total_descuentos']), 2, '.', ''),
-          number_format(floatval($config_data[0]['deuda']), 2, '.', ''),
-          $productos_string,
+          number_format(floatval($config_data[0]['deuda']), 2, '.', '')
         ];
       } else if ($tipo === 'custom') {
         $mensaje_plantilla = $dataMensaje['message'];
@@ -448,13 +447,13 @@ return function (App $app) {
       // Manejar el caso donde ID_EMPRESA no está definida
       $result['error_envio'] = 'ID_EMPRESA no está definida. No se puede enviar el mensaje.';
       $localConnection->disconnect();
+      $response->getBody()->write(json_encode($result, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE));
       return $response
         ->withHeader('Access-Control-Allow-Origin', '*')
         ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
         ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
         ->withHeader('Content-Type', 'application/json')
-        ->withStatus(500)
-        ->write(json_encode($result, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE));
+        ->withStatus(500);
     }
 
     // La URL base del API de WhatsApp debería ser idealmente una constante o configuración
@@ -621,7 +620,7 @@ return function (App $app) {
     $response = $response
       ->withHeader('Access-Control-Allow-Origin', '*')
       ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-      ->withHeader('Access-Control-Allow-Headers', 'Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
+      ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
 

@@ -16,6 +16,7 @@ CREATE TABLE `abonos` (
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del empleado',
   `abono` decimal(12, 4) NOT NULL DEFAULT 0.0000 COMMENT 'monto del abono',
   `descuento` decimal(12, 4) DEFAULT 0.0000 COMMENT 'Descuento del abono',
+  `nota_credito` decimal(12, 2) DEFAULT 0.00 COMMENT 'Nota de crédito (devolución al cliente)',
   `detalle` varchar(60) DEFAULT NULL COMMENT 'Descripción del abono',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha del abono'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Abonos realizados a órdenes. Registra pagos parciales efectuados por clientes para reducir el saldo pendiente de una orden.';
@@ -353,6 +354,7 @@ CREATE TABLE `inventario` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico',
   `sku` varchar(128) DEFAULT NULL COMMENT 'SKU del Item de inventario',
   `id_catalogo` int(11) DEFAULT NULL COMMENT 'ID de catalogo_insumos_productos',
+  `tipo_insumo` enum('general','tela','tinta') NOT NULL DEFAULT 'general' COMMENT 'Categoría de insumo para lógica de consumo',
   `insumo` varchar(45) DEFAULT NULL COMMENT 'Nombre del insumo',
   `unidad` varchar(6) DEFAULT NULL COMMENT 'Unidd de medida del articulo CD, LTS, ML UND',
   `costo` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio de costo del insumo',
@@ -367,14 +369,14 @@ CREATE TABLE `inventario` (
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de insumos disponibles en inventario. Almacena materiales de producción con SKU, cantidad actual e inicial, costo, unidad de medida y departamento asignado.';
 
-INSERT INTO `inventario` (`_id`, `sku`, `id_catalogo`, `insumo`, `unidad`, `costo`, `rendimiento`, `cantidad`, `cantidad_inicial`, `color`, `ancho`, `elongacion`, `detalles`, `departamento`, `moment`) VALUES
-(1, 'PAP_001', 1, 'Papel de pruebas', 'Mts', 20.00, 1.0, 250.00, 250.00, 'BLANCO', 0.90, NULL, 'Papel para pruebas de impresión', 'Impresión', CURRENT_TIMESTAMP),
-(2, 'TEL_001', 6, 'Tela de pruebas', 'Kg', 80.00, 3.96, 24.00, 24.00, 'BLANCO', 1.50, 'HORIZONTAL', 'Tela para pruebas de estampado', 'Estampado', CURRENT_TIMESTAMP),
-(3, 'TIN_C_001', 4, 'Tinta Cyan', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'CYAN', NULL, NULL, 'Tinta cyan para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(4, 'TIN_M_001', 4, 'Tinta Magenta', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'MAGENTA', NULL, NULL, 'Tinta magenta para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(5, 'TIN_Y_001', 4, 'Tinta Yellow', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'YELLOW', NULL, NULL, 'Tinta yellow para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(6, 'TIN_K_001', 4, 'Tinta Black', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'BLACK', NULL, NULL, 'Tinta negra para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(7, 'BOT_001', 3, 'Botones blancos', 'Und', 0.50, 1.0, 1000.00, 1000.00, 'BLANCO', NULL, NULL, 'Botones blancos para prendas', 'Costura', CURRENT_TIMESTAMP);
+INSERT INTO `inventario` (`_id`, `sku`, `id_catalogo`, `tipo_insumo`, `insumo`, `unidad`, `costo`, `rendimiento`, `cantidad`, `cantidad_inicial`, `color`, `ancho`, `elongacion`, `detalles`, `departamento`, `moment`) VALUES
+(1, 'PAP_001', 1, 'general', 'Papel de pruebas', 'Mts', 20.00, 1.0, 250.00, 250.00, 'BLANCO', 0.90, NULL, 'Papel para pruebas de impresión', 'Impresión', CURRENT_TIMESTAMP),
+(2, 'TEL_001', 6, 'tela', 'Tela de pruebas', 'Kg', 80.00, 3.96, 24.00, 24.00, 'BLANCO', 1.50, 'HORIZONTAL', 'Tela para pruebas de estampado', 'Estampado', CURRENT_TIMESTAMP),
+(3, 'TIN_C_001', 4, 'tinta', 'Tinta Cyan', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'CYAN', NULL, NULL, 'Tinta cyan para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(4, 'TIN_M_001', 4, 'tinta', 'Tinta Magenta', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'MAGENTA', NULL, NULL, 'Tinta magenta para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(5, 'TIN_Y_001', 4, 'tinta', 'Tinta Yellow', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'YELLOW', NULL, NULL, 'Tinta yellow para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(6, 'TIN_K_001', 4, 'tinta', 'Tinta Black', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'BLACK', NULL, NULL, 'Tinta negra para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(7, 'BOT_001', 3, 'general', 'Botones blancos', 'Und', 0.50, 1.0, 1000.00, 1000.00, 'BLANCO', NULL, NULL, 'Botones blancos para prendas', 'Costura', CURRENT_TIMESTAMP);
 CREATE TABLE `inventario_movimientos` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la  orden - lote',
@@ -517,6 +519,7 @@ CREATE TABLE `ordenes` (
   `fecha_creacion` date DEFAULT NULL,
   `token` varchar(45) DEFAULT NULL,
   `pago_descuento` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `pago_nota_credito` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'Total acumulado de notas de crédito',
   `pago_total` decimal(12,2) DEFAULT 0.00,
   `pago_abono` decimal(12,2) DEFAULT 0.00,
   `pago_comision` varchar(9) NOT NULL DEFAULT 'pendiente',

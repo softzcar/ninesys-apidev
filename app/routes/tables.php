@@ -90,7 +90,7 @@ return function (App $app) {
         a.pago_abono abono,
         a.pago_descuento descuento,
         b.nombre empleado,
-        (a.pago_total - a.pago_descuento) - a.pago_abono AS total_pendiente
+        (a.pago_total - a.pago_descuento) - a.pago_abono + a.pago_nota_credito AS total_pendiente
         FROM
         ordenes a
         JOIN empleados b ON a.responsable = b._id
@@ -110,7 +110,7 @@ return function (App $app) {
     }
 
     $sql = 'SELECT
-        (SUM(pago_total) - SUM(pago_descuento)) - SUM(pago_abono) total_credito
+        (SUM(pago_total) - SUM(pago_descuento)) - SUM(pago_abono) + SUM(pago_nota_credito) total_credito
         FROM ordenes 
         WHERE
         WEEK(moment) = ' . $week . ' ORDER BY _id ASC';
@@ -339,7 +339,7 @@ return function (App $app) {
                         op.id_orden = ord._id
                 ) AS product_categories,
                 (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
-                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) AS saldo_pendiente,
+                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) AS saldo_pendiente,
                 ord.status estatus
             FROM
                 ordenes ord
@@ -348,14 +348,14 @@ return function (App $app) {
             WHERE
                 ord.status != 'cancelada'
                 AND (
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
+                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) > 0
                     OR 
                     (
-                        (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) = 0
+                        (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) = 0
                         AND ord.status != 'entregada'
                     )
                     OR
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) < 0
+                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) < 0
                 )
 
             ORDER BY
@@ -397,7 +397,7 @@ return function (App $app) {
                         op.id_orden = ord._id
                 ) AS product_categories,
                 (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
-                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) AS saldo_pendiente,
+                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) AS saldo_pendiente,
                 ord.status estatus
             FROM
                 ordenes ord
@@ -407,14 +407,14 @@ return function (App $app) {
                 ord.responsable = '{$args['id_empleado']}'
                 AND ord.status != 'cancelada'
                 AND (
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) > 0
+                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) > 0
                     OR 
                     (
-                        (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) = 0
+                        (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) = 0
                         AND ord.status != 'entregada'
                     )
                     OR
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = ord._id), 0)) < 0
+                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) < 0
                 )
 
             ORDER BY
@@ -571,7 +571,7 @@ DESC;";
       (SELECT cus.phone FROM customers cus WHERE cus._id = a.id_wp) phone,
       (
        SELECT
-       d.pago_total - SUM(c.abono) - SUM(c.descuento) AS total_deuda
+       d.pago_total - SUM(c.abono) - SUM(c.descuento) + SUM(c.nota_credito) AS total_deuda
        FROM
        abonos c
        JOIN ordenes d ON
@@ -646,7 +646,7 @@ DESC;";
         DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
         (
          SELECT
-         d.pago_total - SUM(c.abono) - SUM(c.descuento) AS total_deuda
+         d.pago_total - SUM(c.abono) - SUM(c.descuento) + SUM(c.nota_credito) AS total_deuda
          FROM
          abonos c
          JOIN ordenes d ON
@@ -660,7 +660,7 @@ DESC;";
         a.status!= 'cancelada' AND 
         (
          SELECT
-         d.pago_total - SUM(c.abono) - SUM(c.descuento) AS total_deuda
+         d.pago_total - SUM(c.abono) - SUM(c.descuento) + SUM(c.nota_credito) AS total_deuda
          FROM
          abonos c
          JOIN ordenes d ON

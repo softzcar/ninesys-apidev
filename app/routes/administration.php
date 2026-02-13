@@ -136,11 +136,11 @@ return function ($app) {
                  WHERE YEAR(fecha_creacion) = YEAR(CURDATE()) 
                    AND MONTH(fecha_creacion) = MONTH(CURDATE())
                 ) as cobrado_mes,
-                (SELECT COALESCE(SUM(pago_total - pago_abono), 0) 
+                (SELECT COALESCE(SUM(pago_total - pago_abono - pago_descuento + pago_nota_credito), 0) 
                  FROM ordenes 
                  WHERE YEAR(fecha_creacion) = YEAR(CURDATE()) 
                    AND MONTH(fecha_creacion) = MONTH(CURDATE())
-                   AND (pago_total - pago_abono) > 0
+                   AND (pago_total - pago_abono - pago_descuento + pago_nota_credito) > 0
                 ) as saldo_por_cobrar";
 
             $ventasVsSaldoResult = $localConnection->goQuery($sqlVentasVsSaldo);

@@ -1,0 +1,44 @@
+- Solicitud del Usuario: Implementar funcionalidad de "Nota de Crédito" (débito) en el modal de Abono a la Orden. La nota de crédito aumenta el saldo pendiente de la orden.
+
+- Archivos Involucrados:
+  Backend:
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/public/model/create_new_company_api_emp_N.sql
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/buscar.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/tables.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/communications.php
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/administration.php
+
+- Acción Realizada:
+  1. Base de datos:
+     - Añadida columna `nota_credito` DECIMAL(12,2) DEFAULT 0.00 a tabla `abonos` (aplicado en api_emp_163, api_emp_171, api_emp_174)
+     - Añadida columna `pago_nota_credito` DECIMAL(12,2) DEFAULT 0.00 a tabla `ordenes` (aplicado en api_emp_163, api_emp_171, api_emp_174)
+     - Actualizado SQL template `create_new_company_api_emp_N.sql` para incluir ambas columnas
+  
+  2. orders.php:
+     - GET /ordenes/abono/{id}: Añadido SUM(a.nota_credito) nota_credito al query
+     - POST /orden/abono: Recibe notaCredito y notaCreditoDetalle, los inserta en abonos y actualiza ordenes.pago_nota_credito
+     - GET /ordenes/abono-detale/{id}: Incluye nota_credito y detalle en historial
+  
+  3. buscar.php: Actualizado query de totales para incluir SUM(nota_credito), añadido pago_nota_credito al response
+  
+  4. tables.php: Actualizadas 9 queries de cálculo de saldo:
+     - /table/ordenes-semanal: saldo_pendiente, total_deuda, SUM queries
+     - /table/ordenes-activas: saldo_pendiente, total_deuda, SUM queries
+     - /table/ordenes-inactivas: saldo_pendiente
+  
+  5. communications.php: 
+     - Actualizado monto_pendiente: ((a.pago_total - a.pago_descuento) - a.pago_abono + a.pago_nota_credito)
+     - Actualizado cobro query: deuda incluye SUM(b.nota_credito)
+  
+  6. administration.php: Actualizado saldo_por_cobrar con pago_nota_credito
+
+- Herramienta(s) Utilizada(s): replace_file_content, multi_replace_file_content, run_command (SSH para ALTER TABLE)
+
+- Resultado: Éxito
+
+- Verificación: Revisión de código y análisis de consistencia en todas las queries de cálculo de saldo. La fórmula es consistente: saldo = total - descuento - abono + nota_credito.
+
+- Observaciones de Gemini: Los errores de lint existentes en orders.php son preexistentes y no fueron causados por estos cambios. La nota de crédito se implementó de manera análoga al descuento pero con operación inversa (suma en lugar de resta al saldo).
+
+- Respuesta de Gemini: Se completó la implementación backend de las notas de crédito en todos los archivos necesarios.

@@ -69,6 +69,7 @@ return function (App $app) {
       $sql_abonos = "SELECT 
                         SUM(abono) AS total_abonos, 
                         SUM(descuento) AS total_descuentos,
+                        SUM(nota_credito) AS total_notas_credito,
                         GROUP_CONCAT(CASE WHEN descuento > 0 THEN detalle ELSE NULL END SEPARATOR ', ') AS descuento_detalle
                      FROM abonos 
                      WHERE id_orden = " . $id;
@@ -77,6 +78,7 @@ return function (App $app) {
       if (isset($object['orden'][0])) {
         $object['orden'][0]['pago_abono'] = (float) ($totales_abonos[0]['total_abonos'] ?? 0);
         $object['orden'][0]['pago_descuento'] = (float) ($totales_abonos[0]['total_descuentos'] ?? 0);
+        $object['orden'][0]['pago_nota_credito'] = (float) ($totales_abonos[0]['total_notas_credito'] ?? 0);
         $object['orden'][0]['descuento_detalle'] = $totales_abonos[0]['descuento_detalle'] ?? '';
       }
       // --- FIN: CÁLCULO DE ABONOS Y DESCUENTOS ACTUALIZADOS ---
