@@ -51,6 +51,19 @@ return function (App $app) {
         $object['sql'] = $sql;
         $items = $localConnection->goQuery($sql);
 
+        if (isset($items['status']) && $items['status'] === 'error') {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode([
+                'statusCode' => 500,
+                'error' => [
+                    'type' => 'SERVER_ERROR',
+                    'description' => $items['message'],
+                    'sql' => $sql
+                ]
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
         // Decodificar el campo `departamentos` y `carga_familiar`
         foreach ($items as &$item) {
             if (!empty($item['departamentos'])) {
