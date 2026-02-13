@@ -138,11 +138,25 @@ return function (App $app) {
           $resultUsuario = $localConnection->goQuery($sql, [$idEmpleado]);
           $periodo = isset($resultUsuario[0]['salario_periodo']) ? $resultUsuario[0]['salario_periodo'] : 'semanal';
 
+          // Calcular el índice del periodo según la frecuencia para el histórico
+          $numeroPeriodo = intval(date('W')); // Default: semana
+          if ($periodo === 'quincenal') {
+            $dia = intval(date('d'));
+            $mes = intval(date('n')) - 1; // 0-11
+            $anio = intval(date('Y'));
+            $periodoMes = $dia <= 15 ? 1 : 2;
+            $numeroPeriodo = $anio * 24 + $mes * 2 + $periodoMes;
+          } elseif ($periodo === 'mensual') {
+            $mes = intval(date('n')) - 1; // 0-11
+            $anio = intval(date('Y'));
+            $numeroPeriodo = $anio * 12 + $mes;
+          }
+
           // Dividir el salario entre la cantidad de pagos
           $salarioPorPago = $salario / $cantidadDePagos;
           foreach ($listaDeIdPagos as $idPago) {
             $sql = "INSERT INTO pagos_salarios (id_pago, tipo_salario, numero_semana, monto) VALUES (?, ?, ?, ?)";
-            $localConnection->goQuery($sql, [$idPago, $periodo, date('W'), $salarioPorPago]);
+            $localConnection->goQuery($sql, [$idPago, $periodo, $numeroPeriodo, $salarioPorPago]);
           }
         }
       }
@@ -199,6 +213,7 @@ return function (App $app) {
                 p.id_empleado,
                 p.fecha_pago,
                 (SELECT numero_semana FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = p.id_empleado ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+                (SELECT YEAR(pa.moment) FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = p.id_empleado ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
                 (SELECT IF(p.id_reposicion > 0, (SELECT unidades FROM reposiciones WHERE _id = p.id_reposicion), (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = p.id_orden))) as cantidad_productos,
                 (
                 SELECT
@@ -527,6 +542,7 @@ return function (App $app) {
                 e.tipo_de_pago,
                 a.fecha_pago,
                 (SELECT numero_semana FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_empleado ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+                (SELECT YEAR(pa.moment) FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_empleado ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
                 DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago,
                 (SELECT IF(a.id_reposicion > 0, (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion), (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = a.id_orden))) as cantidad_productos
             FROM

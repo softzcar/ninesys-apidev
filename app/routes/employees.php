@@ -9,8 +9,7 @@ return function (App $app) {
 
     // Obtener los empleados activos
     $app->get('/empleados', function (Request $request, Response $response) {
-        // $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
-        $localConnection = new LocalDB();
+        $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
         $idEmp = ID_EMPRESA;
         $sql = 'SELECT
             a.id_usuario AS _id,
@@ -31,6 +30,7 @@ return function (App $app) {
             a.fecha_ingreso,
             a.id_seguridad_social,
             (SELECT numero_semana FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_usuario ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+            (SELECT YEAR(pa.moment) FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_usuario ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
             IFNULL(CONCAT("[", GROUP_CONCAT(
                 DISTINCT CONCAT("{\"id\":", b.id_departamento, ",\"nombre\":\"", c.departamento, "\"}")
                 SEPARATOR ","), "]"), "[]") AS departamentos,
@@ -339,7 +339,7 @@ return function (App $app) {
         $localConnection->disconnect();
         $localConnection2->disconnect();
 
-        $response->getBody()->write(json_encode($object), JSON_NUMERIC_CHECK);
+        $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
 
         return $response
             ->withHeader('Content-Type', 'application/json')
