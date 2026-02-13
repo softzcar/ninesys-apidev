@@ -725,8 +725,68 @@ return function (App $app) {
     $object['fields'][4]['key'] = 'detalle';
     $object['fields'][4]['label'] = 'Detalle';
     $object['fields'][4]['sortable'] = false;
-    //  Verificar existencia de la orden
-    $sql = 'SELECT _id id_abono, abono, descuento, nota_credito, detalle, moment FROM abonos  WHERE id_orden = ' . $args['id'] . ' GROUP BY _id, id_orden';
+    //  Obtener historial completo (Pagos, NC y Descuentos)
+    $sql = "SELECT 
+                CONCAT('P-', met._id) as _id, 
+                ord._id as orden, 
+                ord.responsable as id_empleado, 
+                COALESCE(emp.nombre, 'Sistema') as empleado, 
+                met.metodo_pago as metodo_pago, 
+                met.monto as monto, 
+                met.detalle as detalle, 
+                met.tasa as tasa, 
+                met.moneda as moneda, 
+                DATE_FORMAT(met.moment, '%d/%m/%Y') AS fecha, 
+                DATE_FORMAT(met.moment, '%h:%i %p') AS hora,
+                met.monto as abono, 0 as descuento, 0 as nota_credito,
+                met.moment
+            FROM metodos_de_pago met
+            JOIN ordenes ord ON met.id_orden = ord._id
+            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
+            WHERE met.id_orden = " . intval($args['id']) . "
+            
+            UNION ALL
+            
+            SELECT 
+                CONCAT('NC-', ab._id) as _id, 
+                ab.id_orden as orden, 
+                ab.id_empleado as id_empleado, 
+                COALESCE(emp.nombre, 'Sistema') as empleado, 
+                'Nota de Crédito' as metodo_pago, 
+                ab.nota_credito as monto, 
+                ab.detalle as detalle, 
+                1 as tasa, 
+                'Dólares' as moneda, 
+                DATE_FORMAT(ab.moment, '%d/%m/%Y') AS fecha, 
+                DATE_FORMAT(ab.moment, '%h:%i %p') AS hora,
+                0 as abono, 0 as descuento, ab.nota_credito as nota_credito,
+                ab.moment
+            FROM abonos ab
+            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ab.id_empleado
+            WHERE ab.id_orden = " . intval($args['id']) . " AND ab.nota_credito > 0
+            
+            UNION ALL
+            
+            SELECT 
+                CONCAT('D-', ab._id) as _id, 
+                ab.id_orden as orden, 
+                ab.id_empleado as id_empleado, 
+                COALESCE(emp.nombre, 'Sistema') as empleado, 
+                'Descuento' as metodo_pago, 
+                ab.descuento as monto, 
+                ab.detalle as detalle, 
+                1 as tasa, 
+                'Dólares' as moneda, 
+                DATE_FORMAT(ab.moment, '%d/%m/%Y') AS fecha, 
+                DATE_FORMAT(ab.moment, '%h:%i %p') AS hora,
+                0 as abono, ab.descuento as descuento, 0 as nota_credito,
+                ab.moment
+            FROM abonos ab
+            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ab.id_empleado
+            WHERE ab.id_orden = " . intval($args['id']) . " AND ab.descuento > 0
+            
+            ORDER BY moment DESC";
+
     $datosAbono = $localConnection->goQuery($sql);
     $object['items'] = $datosAbono;
 
