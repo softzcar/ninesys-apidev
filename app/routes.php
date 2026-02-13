@@ -468,9 +468,6 @@ return function (App $app) {
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
-    // Cambiar el email del administrador para incluir el ID de empresa y hacerlo único
-    $email = 'administrador@empresa' . $id_empresa . '.com';
-
     try {
       // Conexión única con setup_admin (ahora con permisos globales)
       $dsn = 'mysql:host=localhost;dbname=api_empresas';
@@ -480,6 +477,15 @@ return function (App $app) {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
       ]);
       $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+      // Obtener el id_empresa del empleado para el email
+      $stmt_id = $pdo->prepare('SELECT id_empresa FROM empresas_usuarios WHERE id_usuario = ?');
+      $stmt_id->execute([$id_empleado]);
+      $user_row = $stmt_id->fetch(PDO::FETCH_ASSOC);
+      $id_emp_val = $user_row ? $user_row['id_empresa'] : 0;
+
+      // Cambiar el email del administrador para incluir el ID de empresa y hacerlo único
+      $email = 'administrador@empresa' . $id_emp_val . '.com';
 
       // Verificar que las tablas tienen las columnas necesarias
       $stmt = $pdo->query('DESCRIBE empresas');
@@ -677,6 +683,10 @@ return function (App $app) {
         error_log("DEBUG: Otorgando privilegios a {$db_user} en {$db_name}");
         $root_pdo->exec("GRANT ALL PRIVILEGES ON `{$db_name}`.* TO '{$db_user}'@'localhost'");
         $root_pdo->exec("GRANT ALL PRIVILEGES ON `{$db_name}`.* TO '{$db_user}'@'%'");
+
+        // Otorgar permisos al usuario central en la nueva BD (necesario para consultas cruzadas en /empleados)
+        $central_user = EMPRESAS_USER;
+        $root_pdo->exec("GRANT SELECT ON `{$db_name}`.* TO '{$central_user}'@'localhost'");
 
         // Otorgar permisos de lectura en api_empresas
         error_log('DEBUG: Otorgando permisos de lectura en api_empresas');
