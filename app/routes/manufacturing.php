@@ -1606,6 +1606,35 @@ return function (App $app) {
         }
       }
 
+      // Procesar consumo de tintas (opcional, para Impresión)
+      $consumo_tintas = $data['consumo_tintas'] ?? [];
+      if (!empty($consumo_tintas) && is_array($consumo_tintas)) {
+        foreach ($consumo_tintas as $tinta) {
+          $id_orden_tinta = intval($tinta['id_orden'] ?? 0);
+          $id_impresora = intval($tinta['id_impresora'] ?? 0);
+          $tinta_c = floatval($tinta['c'] ?? 0);
+          $tinta_m = floatval($tinta['m'] ?? 0);
+          $tinta_y = floatval($tinta['y'] ?? 0);
+          $tinta_k = floatval($tinta['k'] ?? 0);
+          $tinta_w = floatval($tinta['w'] ?? 0);
+
+          if ($id_orden_tinta > 0 && $id_impresora > 0) {
+            $sql_tinta = 'INSERT INTO tintas (c, m, y, k, w, id_orden, id_empleado, id_catalogo_impresoras, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            $localConnection->goQuery($sql_tinta, [
+              $tinta_c,
+              $tinta_m,
+              $tinta_y,
+              $tinta_k,
+              $tinta_w,
+              $id_orden_tinta,
+              $id_empleado,
+              $id_impresora,
+              $now
+            ]);
+          }
+        }
+      }
+
       $sql_dep_info = 'SELECT orden_proceso, departamento FROM departamentos WHERE _id = ?';
       $dep_info = $localConnection->goQuery($sql_dep_info, [$id_departamento]);
       $nombre_departamento = $dep_info[0]['departamento'];
