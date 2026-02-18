@@ -2543,8 +2543,13 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
-      // Consultar productos de la orden
-      $sql = "SELECT _id, name, talla, cantidad, corte, tela FROM ordenes_productos WHERE id_orden = $id_orden";
+      // Consultar productos de la orden (Solo físicos y no diseños)
+      $sql = "SELECT op._id, op.name, op.talla, op.cantidad, op.corte, op.tela 
+              FROM ordenes_productos op
+              LEFT JOIN products p ON op.id_woo = p._id
+              WHERE op.id_orden = $id_orden 
+              AND p.fisico = 1 
+              AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
       $productos = $localConnection->goQuery($sql);
 
       $response->getBody()->write(json_encode([
