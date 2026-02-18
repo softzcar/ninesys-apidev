@@ -360,7 +360,7 @@ return function (App $app) {
         LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor 
         JOIN ordenes_productos c ON c._id = a.id_ordenes_productos 
         WHERE
-            (a.aprobada IS NULL OR a.aprobada = 0) AND a.id_empleado IS NULL
+            (a.aprobada IS NULL) AND a.id_empleado IS NULL
         ORDER BY d.orden_fila ASC;
         ";
       $obj['reposiciones_solicitadas'] = $localConnection->goQuery($sql);
