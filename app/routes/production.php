@@ -2544,12 +2544,22 @@ return function (App $app) {
 
     try {
       // Consultar productos de la orden (Solo físicos y no diseños)
-      $sql = "SELECT op._id, op.name, op.talla, op.cantidad, op.corte, op.tela 
+      // Se incluye la cantidad real cortada desde inventario_corte
+      $sql = "SELECT 
+                op._id, 
+                op.name, 
+                op.talla, 
+                op.cantidad, 
+                op.corte, 
+                op.tela,
+                COALESCE(SUM(ic.cantidad), 0) as cantidad_cortada
               FROM ordenes_productos op
               LEFT JOIN products p ON op.id_woo = p._id
+              LEFT JOIN inventario_corte ic ON ic.id_ordenes_productos = op._id
               WHERE op.id_orden = $id_orden 
               AND p.fisico = 1 
-              AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+              AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+              GROUP BY op._id";
       $productos = $localConnection->goQuery($sql);
 
       $response->getBody()->write(json_encode([
