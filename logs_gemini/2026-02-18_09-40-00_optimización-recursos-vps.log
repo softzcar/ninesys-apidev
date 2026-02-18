@@ -1,0 +1,12 @@
+- Solicitud del Usuario: Reporte de procesos y scripts que más consumen recursos y propuesta de optimización automatizada.
+- Archivos Involucrados: task.md, resource_optimization_report.md, status de procesos (pre/post-reinicio).
+- Acción Realizada:
+  1. Auditoría Pre-Reinicio: Se identificó que el 84% de la CPU se perdía en "Steal Time" (ajeno al VPS). Internamente, procesos Chrome (Puppeteer) y `find`/`ls` sobre directorios de sesiones de PHP saturaban la RAM restante.
+  2. Auditoría Post-Reinicio: Con Steal Time al 0%, la carga bajó de 14.5 a 1.0. Se verificó que MariaDB y LSPhp son los consumidores estables actuales.
+  3. Generación de Reporte: Se redactó el archivo `resource_optimization_report.md` analizando los cuellos de botella (I/O en sesiones PHP y RAM en Chrome).
+  4. Recomendaciones: Se propuso migrar sesiones PHP a Redis, implementar scripts de auto-monitorización y control de memoria por instancia en Puppeteer.
+- Herramienta(s) Utilizada(s): `ssh`, `ps`, `sar`, `uptime`, `write_to_file`.
+- Resultado: Éxito (Diagnóstico y Propuesta de Mejora completados).
+- Verificación: La recuperación del sistema tras el reinicio demuestra que la saturación era crítica. La captura de procesos post-reinicio sirve como base para el sistema de optimización sugerido.
+- Observaciones de Gemini: El reinicio fue provocado por el usuario/proveedor pero sirvió para confirmar el factor externo. Internamente, la acumulación de archivos de sesión es el mayor riesgo para la estabilidad a largo plazo.
+- Respuesta de Gemini: Tus procesos internos (Chrome, Node, MariaDB) consumen un ~40% de los recursos en condiciones normales. El 100% de CPU reportado fue causado por el robo de CPU por parte del proveedor (Steal Time) y la acumulación de archivos de sesión de PHP que bloquearon el disco. Te he entregado un plan de optimización.

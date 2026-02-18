@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Agregar soporte de consumo_tintas por orden en el endpoint finalizar-departamento para unificar la lógica de Impresión con los demás departamentos.
+- Archivos Involucrados:
+  - app/routes/manufacturing.php (L1608-1630 aproximadamente)
+- Acción Realizada:
+  - Agregado bloque opcional de procesamiento de consumo_tintas en el endpoint /lotes/{id}/finalizar-departamento.
+  - Cada registro de tinta contiene: id_orden, id_impresora, c, m, y, k, w.
+  - Se insertan registros directamente en la tabla 'tintas' por cada orden, sin necesidad de distribución proporcional.
+  - La lógica es idéntica a la del endpoint finalizar-impresion pero con datos ya desglosados por orden.
+- Herramienta(s) Utilizada(s): replace_file_content, run_command
+- Resultado: Éxito
+- Verificación: Código desplegado en VPS exitosamente via git pull.
+- Observaciones de Gemini: El endpoint separado /lotes/{id}/finalizar-impresion se mantiene como legacy. Se podría deprecar en el futuro cuando se confirme que el nuevo flujo funciona correctamente.
+- Respuesta de Gemini: Backend actualizado con soporte para consumo_tintas en endpoint genérico finalizar-departamento.

@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Auditoría de consumo excesivo de CPU (100%) desde el sábado 14-02 (~20:00).
+- Archivos Involucrados: /var/log/sa/sa18, /usr/local/lsws/logs/stderr.log, procesos de sistema.
+- Acción Realizada:
+  1. Verificación de carga: Se detectó un Load Average extremo de 14.57, 20.72, 22.57 en un sistema de 1 CPU.
+  2. Análisis de CPU con `sar`: Se capturaron métricas en tiempo real mostrando un **84.00% de Steal Time (%st)**. 
+  3. Diagnóstico: El consumo del 100% de CPU es de origen **EXTERNO**. El host físico del VPS está asignando el 84% de los recursos a otros clientes en el mismo nodo, dejando solo un 16% para nuestro VPS.
+  4. Identificación de procesos internos afectados: Los procesos `chrome` (WhatsApp 163) y las tareas de limpieza de sesiones de PHP (`find`) están acumuladas en la cola de ejecución debido a la falta de ciclos.
+  5. Verificación HTTP: El servidor web responde con lentitud extrema y errores 500 derivados de timeouts internos.
+- Herramienta(s) Utilizada(s): `ssh`, `sar`, `uptime`, `ps`, `curl`.
+- Resultado: Concluido (Causa externa confirmada).
+- Verificación: Los datos de `sar %st` son irrefutables. El sistema está en un estado de "hambre de CPU" (CPU starvation).
+- Observaciones de Gemini: Un 84% de Steal Time es inaceptable en cualquier servicio de hosting. Se recomienda migrar el VPS a otro nodo o contactar a soporte técnico inmediatamente, ya que el problema NO es el código del proyecto.
+- Respuesta de Gemini: El problema es externo. El VPS está sufriendo un "Steal Time" del 84%, lo que significa que el proveedor de hosting está quitando casi toda la potencia del procesador para dársela a otras cuentas en el mismo equipo físico.

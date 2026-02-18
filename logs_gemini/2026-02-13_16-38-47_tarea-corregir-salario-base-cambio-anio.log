@@ -1,0 +1,15 @@
+- Solicitud del Usuario: Investigar por qué no se muestra el salario base de un vendedor en la empresa 163 en la planilla de pagos.
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/employees.php
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/payments.php
+    - /home/developer/Escritorio/niesys/app_multi/components/admin/PagosEmpleados.vue
+- Acción Realizada: 
+    - Identificación del error en la lógica de cálculo de semanas pendientes (no contemplaba el cambio de año).
+    - Modificación del backend para retornar el año del último pago (`ultimo_anio_pagado`).
+    - Mejora en el guardado de periodos quincenales y mensuales usando índices lineales.
+    - Actualización del frontend en `PagosEmpleados.vue` para calcular semanas pendientes considerando el año actual y el año del último pago.
+- Herramienta(s) Utilizada(s): `run_command`, `replace_file_content`, `multi_replace_file_content`, `grep_search`, `view_file`
+- Resultado: Éxito
+- Verificación: Se ejecutaron consultas SQL vía SSH para confirmar que Sarahit (ID 22, Empresa 163) tiene su último pago en la semana 48 del 2025. Se validó matemáticamente que el nuevo cálculo arroja 11 semanas pendientes en lugar de 0.
+- Observaciones de Gemini: El error era crítico al inicio del año 2026. La solución implementada es robusta para futuros cambios de año.
+- Respuesta de Gemini: He corregido el error del salario base. Ahora el sistema tiene en cuenta el año del último pago para calcular correctamente las semanas o periodos pendientes. Sarahit ya debería mostrar su salario base acumulado en el modal.

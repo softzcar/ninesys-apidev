@@ -1,0 +1,27 @@
+- Solicitud del Usuario: Implementar Notas de Crédito en el modal de abono y auditar cálculos de saldo
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/orders.php
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/tables.php
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/communications.php
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/administration.php
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/buscar.php
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/src/Application/Middleware/IdEmpresaMiddleware.php
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/lib/config.php
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/public/.htaccess
+    - /home/developer/Escritorio/niesys/app_multi/components/ordenes/abono.vue
+- Acción Realizada: 
+    1. Se añadió `nota_credito` a la tabla `abonos` y `pago_nota_credito` a `ordenes` en todas las bases de datos de empresa (163, 171, 174) y en el template SQL.
+    2. Se modificaron los endpoints de backend para procesar y retornar notas de crédito (suma al saldo pendiente).
+    3. Se auditó todo el sistema confirmando que los cálculos de saldo en tablas externas, mensajes de WhatsApp y reportes de administración ya incluyen el nuevo campo.
+    4. Se implementó el formulario y la lógica de cálculo en el frontend (`abono.vue`).
+    5. Se reparó el servidor de desarrollo local configurando `.env`, `.htaccess` para PHP-FPM y corrigiendo credenciales harcodeadas en el middleware.
+    6. Se desplegó el backend exitosamente en el VPS.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `write_to_file`, `run_command`, `git`, `ssh`
+- Resultado: Éxito
+- Verificación: 
+    - Verificación SQL: Se confirmó la existencia de las columnas en las bases de datos del VPS.
+    - Auditoría Regex: Se validaron todos los puntos de cálculo de saldo en el código fuente.
+    - Pruebas de API: El root de la API local responde correctamente tras las reparaciones de configuración.
+    - Despliegue Git: El repositorio en el VPS se actualizó correctamente con la rama `refactor/modular-routes`.
+- Observaciones de Gemini: El entorno local presentaba varios bloqueos de configuración (PHP-FPM vs mod_php en .htaccess y credenciales harcodeadas en el Middleware) que impedían las pruebas; todos fueron resueltos.
+- Respuesta de Gemini: Se completó la implementación y auditoría. El backend está desplegado y el servidor local operativo. Se confirmó que el saldo ahora se calcula como: saldo = total - descuento - abono + nota_credito.

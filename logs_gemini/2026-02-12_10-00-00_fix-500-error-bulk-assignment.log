@@ -1,0 +1,14 @@
+- Solicitud del Usuario: Debugging Bulk Assignment Endpoint (Error 500 en /lotes/empleados/reasignar-masiva)
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/products.php
+    - /home/developer/Escritorio/niesys/app_multi/components/produccionsse/AsignacionMasiva.vue
+- Acción Realizada: 
+    - Identificación del error 500 debido a la falta de parsing de JSON en el backend de Slim.
+    - Adaptación del frontend `AsignacionMasiva.vue` para usar `URLSearchParams` y `JSON.stringify` enviando datos como `application/x-www-form-urlencoded`.
+    - Adaptación del backend `products.php` para usar `json_decode` explícitamente en los campos `id_ordenes` y `empleados`.
+    - Despliegue de los cambios en el VPS y verificación con `curl`.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command`, `ssh`
+- Resultado: Éxito
+- Verificación: Prueba con `curl` desde el VPS enviando `Authorization: 174` y parámetros codificados, obteniendo `{"success":true,"results":[{"id_orden":20,"status":"ok"}]}`.
+- Observaciones de Gemini: El error 500 se producía porque `getParsedBody()` era nulo al enviar JSON sin el middleware correspondiente. Al cambiar a `URLSearchParams`, se sigue el estándar del proyecto y se garantiza compatibilidad.
+- Respuesta de Gemini: El error 500 ha sido corregido en ambos lados (frontend y backend) y ya está desplegado en producción. La asignación masiva ahora funciona correctamente siguiendo los estándares del proyecto.

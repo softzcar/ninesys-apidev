@@ -1914,7 +1914,7 @@ return function (App $app) {
       }
 
       // Actualizar estado
-      $sql = "UPDATE ordenes SET status = 'terminado' WHERE _id = ?";
+      $sql = "UPDATE ordenes SET status = 'terminada' WHERE _id = ?";
       $localConnection->goQuery($sql, [$id]);
 
       // ========== CONFIRMAR TRANSACCIÓN ==========

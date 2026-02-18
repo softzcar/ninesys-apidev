@@ -1,0 +1,12 @@
+- Solicitud del Usuario: ¿puedes decirme de donde toma la unidad de medida que se muestra acá en el campo metros?
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/niesys/app_multi/pages/empleados/dashboard.vue
+    - /home/developer/Escritorio/niesys/app_multi/components/empleados/SseOrdenesAsignadasModalExtra.vue
+    - /home/developer/Escritorio/niesys/app_multi/components/empleados/SseOrdenesAsignadasV4.vue
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/inventory.php
+- Acción Realizada: Investigación exhaustiva del flujo de datos de la unidad de medida. Se identificó el componente `SseOrdenesAsignadasModalExtra.vue` y su propiedad computada `getUnidadRow` como la encargada de mostrar la unidad. Se rastreo el origen de los datos hasta la API `GET /insumos` y finalmente a la tabla `inventario` en la base de datos.
+- Herramienta(s) Utilizada(s): `view_file`, `grep_search`, `run_command`
+- Resultado: Éxito
+- Verificación: Se confirmó mediante la lectura del código fuente que la unidad proviene de la columna `unidad` de la tabla `inventario`, con una excepción lógica para el tipo 'tela' que muestra 'Metros'.
+- Observaciones de Gemini: El flujo está bien estructurado pero depende de la propiedad `tipo_insumo` para forzar la visualización de "Metros" en telas.
+- Respuesta de Gemini: Se informó al usuario detalladamente sobre el hallazgo, indicando los archivos y la lógica exacta en frontend y backend.

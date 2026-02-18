@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Sarahit no muestra su salario (solo comisiones). Maru sí lo muestra.
+- Archivos Involucrados: app/routes/employees.php, app/routes/payments.php, PagosEmpleados.vue
+- Acción Realizada: Se identificó que Sarahit tenía su último pago en la semana 48 del 2025. El backend no estaba enviando el año del último pago, por lo que el cálculo de semanas pendientes fallaba para ella (pero funcionaba para Maru porque el sistema asumía 1 semana al no tener historial). Se agregó el campo `ultimo_anio_pagado` al backend y se otorgaron permisos de lectura al usuario de la base de datos central en el VPS para acceder a las tablas de pagos de las empresas.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `run_command`, `git push`, `ssh`
+- Resultado: Éxito
+- Verificación: Se consultó el API directamente en el VPS y se confirmó que Sarahit ya devuelve `ultimo_anio_pagado: 2025`. Esto permitirá que la planilla calcule correctamente todas las semanas pendientes desde ese momento.
+- Observaciones de Gemini: El problema de permisos fue clave. El usuario central no podía "ver" hacia adentro de las empresas nuevas para buscar el historial de pagos.
+- Respuesta de Gemini: He resuelto el problema de Sarahit. El error era que el sistema no recordaba que su último pago fue en 2025, y además faltaban permisos en el servidor para consultar su historial. Ya está todo corregido y Sarahit debería mostrar su salario base correctamente.

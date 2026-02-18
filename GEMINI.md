@@ -121,6 +121,113 @@ Si el usuario solicita un reporte en formato Markdown (menos común ahora que te
 
 ---
 
+## Reinicio de Empresas (Database Reset)
+
+### ⚠️ Operación Crítica
+
+El reinicio de una empresa **elimina permanentemente** todos los datos operacionales (órdenes, clientes, pagos, inventario, diseños, lotes) pero **preserva la configuración** (departamentos, productos, catálogos, comisiones).
+
+### Script de Reinicio
+
+**Ubicación:** `/home/developer/Escritorio/Antigravity/ninesys-apidev/scripts/reset_company_database.sh`
+
+**Documentación completa:** `scripts/README_RESET_DATABASE.md`
+
+### Cómo Reiniciar una Empresa en el VPS
+
+El script debe ejecutarse **directamente en el VPS**, no en local.
+
+#### Paso 1: Copiar el script al VPS
+
+```bash
+cd /home/developer/Escritorio/Antigravity/ninesys-apidev
+scp scripts/reset_company_database.sh vps-ninesys:/tmp/reset_company_database.sh
+```
+
+#### Paso 2: Ejecutar en el VPS
+
+```bash
+ssh vps-ninesys "chmod +x /tmp/reset_company_database.sh && /tmp/reset_company_database.sh <ID_EMPRESA>"
+```
+
+**Ejemplos:**
+```bash
+# Reiniciar empresa 174 (pruebas)
+ssh vps-ninesys "chmod +x /tmp/reset_company_database.sh && /tmp/reset_company_database.sh 174"
+
+# Reiniciar empresa 163 (producción - ⚠️ usar con extrema precaución)
+ssh vps-ninesys "chmod +x /tmp/reset_company_database.sh && /tmp/reset_company_database.sh 163"
+```
+
+#### Paso 3: Proporcionar confirmaciones
+
+El script solicitará **dos confirmaciones**:
+
+1. **Primera confirmación:** Escribir `SI ELIMINAR`
+2. **Segunda confirmación:** Escribir el ID de la empresa (ej: `174`)
+
+### Proceso Automático del Script
+
+1. ✅ Verifica que la base de datos existe
+2. 📦 Crea backup automático (ej: `/home/backups/company_resets/backup_api_emp_174_YYYYMMDD_HHMMSS.sql`)
+3. 🗑️ Trunca 46 tablas operacionales
+4. 🔄 Resetea AUTO_INCREMENT a 1 (próxima orden será #1)
+5. ➕ Inserta cliente de prueba (ID: 1)
+6. 📝 Genera log detallado
+
+### Qué se Elimina
+
+- ❌ Todas las **órdenes** y sus productos
+- ❌ Todos los **clientes**
+- ❌ Todo el **inventario** y sus movimientos
+- ❌ Todos los **pagos** y abonos  
+- ❌ Todos los **diseños** y revisiones
+- ❌ Todos los **lotes** de producción
+- ❌ Todo el **historial** operacional
+
+### Qué se Mantiene
+
+- ✅ **Configuración** general (tabla `config`)
+- ✅ **Departamentos** y su orden de proceso
+- ✅ **Catálogos** (telas, insumos, impresoras)
+- ✅ **Productos** y sus configuraciones
+- ✅ **Tallas** (`sizes`)
+- ✅ **Comisiones** por producto/departamento
+- ✅ **Tiempos** de producción
+- ✅ **Insumos** asignados a productos
+
+### Empresas Disponibles
+
+Según la base de datos central `api_empresas`:
+
+| ID  | Nombre | Base de Datos | Uso |
+|-----|--------|---------------|-----|
+| 163 | NineteenCustom | `api_emp_163` | 🏭 Producción |
+| 171 | Pruebas | `api_emp_171` | 🧪 Testing |
+| 174 | Pruebas Dev | `api_emp_174` | 🔧 Desarrollo |
+
+### Recuperación de Datos
+
+Si necesitas restaurar un backup:
+
+```bash
+# Listar backups disponibles en el VPS
+ssh vps-ninesys "ls -lh /home/backups/company_resets/"
+
+# Restaurar un backup específico
+ssh vps-ninesys "mysql -u root api_emp_174 < /home/backups/company_resets/backup_api_emp_174_20260206_113511.sql"
+```
+
+### Notas Importantes
+
+1. **Siempre probar primero en empresa 171 o 174** antes de resetear empresa de producción (163)
+2. El script **detecta automáticamente** si está en VPS o local y ajusta las rutas
+3. Los backups se guardan en `/home/backups/company_resets/` en el VPS
+4. Los logs se guardan en `/home/apidev.nineteengreen.com/logs_reset/` en el VPS
+5. El reset tarda aproximadamente **10-30 segundos** dependiendo del tamaño de los datos
+
+---
+
 ## Despliegue en Producción
 
 Para actualizar la aplicación en el servidor de producción (VPS), utiliza el siguiente comando:
@@ -128,3 +235,4 @@ Para actualizar la aplicación en el servidor de producción (VPS), utiliza el s
 ```bash
 git fetch origin && git checkout refactor/modular-routes && git pull origin refactor/modular-routes
 ```
+

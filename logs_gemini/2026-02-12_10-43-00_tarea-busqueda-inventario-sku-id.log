@@ -1,0 +1,10 @@
+- Solicitud del Usuario: Modificar la página de gestión de inventario para permitir la búsqueda por SKU e ID del insumo.
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/inventory.php (investigación de datos)
+    - /home/developer/Escritorio/niesys/app_multi/pages/inventario/gestion/index.vue (implementación)
+- Acción Realizada: Se investigó el backend para confirmar la estructura del endpoint `/api/inventario/todos`. Se verificó que el campo `_id` se mapea a `rollo` en el frontend y que el `sku` está disponible. Se implementó el cambio en el frontend para permitir el filtrado por estos campos en la tabla de gestión de inventario.
+- Herramienta(s) Utilizada(s): `view_file`, `grep_search`, `multi_replace_file_content`
+- Resultado: Éxito
+- Verificación: Se confirmó que el frontend utiliza BootstrapVue `b-table` y que añadir los campos a `includedFields` activa el filtrado reactivo. Se actualizó el placeholder del input para guiar al usuario.
+- Observaciones de Gemini: El cambio fue puramente en el frontend ya que el backend ya servía los datos necesarios. Se documenta en el backend el proceso de investigación.
+- Respuesta de Gemini: He actualizado la Gestión de Inventario para permitir búsquedas por Nombre, SKU e ID, mejorando la eficiencia en la localización de insumos específicos.

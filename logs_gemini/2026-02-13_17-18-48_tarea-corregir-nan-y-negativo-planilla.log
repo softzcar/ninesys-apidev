@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Corregir $NaN en el total de pago y valores negativos en el modal de Sarahit Mojica.
+- Archivos Involucrados: 
+    - /home/developer/Escritorio/niesys/app_multi/components/admin/PagosEmpleados.vue
+- Acción Realizada: 
+    - Identificación de la causa raíz: concatenación de strings en el cálculo de índices de semanas (ej. 105000 + "48" = "10500048") y propagación de "Invalid Date" cuando no hay fecha seleccionada.
+    - Aplicación de `Number()` para forzar cálculos numéricos en `debePagarSalarioSemanal`.
+    - Implementación de fallbacks para fechas en las propiedades computadas `pagosResumen`, `pagosResumenVendedores` y `pagosResumenDiseno`.
+    - Adición de guarda `isNaN` en la lógica de semanas pendientes.
+- Herramienta(s) Utilizada(s): `replace_file_content`, `multi_replace_file_content`
+- Resultado: Éxito
+- Verificación: Revisión del flujo de datos: al asegurar que el pago total es un número válido, el modal deja de caer en el fallback negativo y muestra el salario base calculado correctamente.
+- Observaciones de Gemini: El problema de $NaN ocurría principalmente cuando el buscador de fechas estaba vacío, lo cual es el estado por defecto al cargar la página.
+- Respuesta de Gemini: He corregido el error de $NaN y los valores negativos en el modal. El problema era una mezcla de concatenación de texto y fechas no seleccionadas. Ya debería mostrarse correctamente.

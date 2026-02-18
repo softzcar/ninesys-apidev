@@ -18,9 +18,9 @@ class IdEmpresaMiddleware implements Middleware
         define('ID_EMPRESA', $id_empresa);
 
         if ($id_empresa != '0') {
-            $dsn = 'mysql:host=localhost;dbname=api_empresas';  // Ajusta estos datos si es necesario
-            $user = 'api_adminemp';
-            $password = 'rkyaFy!dAs8L5Lq8';
+            $dsn = EMPRESAS_DNS;
+            $user = EMPRESAS_USER;
+            $password = EMPRESAS_PASS;
 
             try {
                 $pdo = new PDO($dsn, $user, $password, [
@@ -44,18 +44,27 @@ class IdEmpresaMiddleware implements Middleware
                 } else {
                     define('ESTATUS', 'Cliente no existe');
                     define('LOCAL_DNS', 'mysql:host=none;dbname=none');
+                    define('EMPRESA_NOMBRE', 'None');
                     define('LOCAL_USER', 'none');
                     define('LOCAL_PASS', 'none');
                     define('LOCAL_DB', 'none');
                 }
-            } catch (PDOException $e) {
+            } catch (\PDOException $e) {
                 define('ESTATUS', 'error');
                 define('LOCAL_DNS', 'mysql:host=none;dbname=none');
+                define('EMPRESA_NOMBRE', 'Error');
                 define('LOCAL_USER', 'none');
                 define('LOCAL_PASS', 'none');
                 define('LOCAL_DB', 'none');
                 error_log('Database connection failed: ' . $e->getMessage());
             }
+        } else {
+            define('ESTATUS', 'No Empresa');
+            define('LOCAL_DNS', 'mysql:host=none;dbname=none');
+            define('EMPRESA_NOMBRE', 'None');
+            define('LOCAL_USER', 'none');
+            define('LOCAL_PASS', 'none');
+            define('LOCAL_DB', 'none');
         }
 
         return $handler->handle($request);
