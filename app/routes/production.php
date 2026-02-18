@@ -2359,5 +2359,212 @@ return function (App $app) {
     }
   });
 
+
+  /**
+   * =================================================================
+   * NUEVOS ENDPOINTS PARA FLUJO DE CORTE (EXTRA / STOCK)
+   * =================================================================
+   */
+
+  /**
+   * POST /production/corte/ajuste
+   * Registra el ajuste de cantidad a cortar definido por el jefe de producción.
+   */
+  $app->post('/production/corte/ajuste', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+    $now = date('Y-m-d H:i:s');
+
+    if (empty($data['id_orden']) || empty($data['id_ordenes_productos']) || !isset($data['cantidad_ajustada'])) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'Faltan datos requeridos.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $sql = "INSERT INTO lotes_corte_ajustes (id_orden, id_lote, id_ordenes_productos, cantidad_solicitada, cantidad_ajustada, id_empleado_ajuste, moment)
+            VALUES (?, ?, ?, ?, ?, ?, ?)";
+    $params = [
+      $data['id_orden'],
+      $data['id_lote'] ?? null,
+      $data['id_ordenes_productos'],
+      $data['cantidad_solicitada'] ?? 0,
+      $data['cantidad_ajustada'],
+      $data['id_empleado_ajuste'] ?? null,
+      $now
+    ];
+
+    $result = $localConnection->goQuery($sql, $params);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode(['status' => 'success', 'message' => 'Ajuste guardado correctamente.', 'data' => $result]));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
+  /**
+   * POST /production/corte/crear-orden-stock
+   * Crea una nueva orden interna (Stock) vinculada a la orden original con las piezas excedentes.
+   */
+  $app->post('/production/corte/crear-orden-stock', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+    $now = date('Y-m-d H:i:s');
+
+    $id_orden_original = $data['id_orden_original'];
+    $items_stock = $data['items'] ?? []; // Array de productos excedentes
+
+    if (empty($id_orden_original) || empty($items_stock)) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'No hay items para crear orden de stock.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    // 1. Obtener datos de cliente de la orden original (o asignar a Cliente Interno/Stock)
+    // Por simplicidad, clonamos la orden pero con tipo 'stock' (si la columna tipo lo permite, o status 'stock')
+    // Asumiremos tipo = 'stock' en la columna 'tipo' de ordenes (VARCHAR 6) -> 'stock' cabe.
+
+    $sqlOrder = "SELECT * FROM ordenes WHERE _id = ?";
+    $originalOrder = $localConnection->goQuery($sqlOrder, [$id_orden_original])[0];
+
+    // Crear nueva orden
+    $sqlNewOrder = "INSERT INTO ordenes (id_wp, id_wp_order, status, tipo, responsable, cliente_nombre, cliente_cedula, fecha_creacion, moment)
+                    VALUES (?, ?, 'activa', 'stock', ?, ?, ?, ?, ?)";
+    // Usamos el mismo cliente para trazabilidad, o podríamos usar un cliente genérico "STOCK".
+    // El usuario pidió "nueva orden, interna, vinculada".
+    $paramsOrder = [
+      $originalOrder['id_wp'],
+      null, // No linked WP order
+      $originalOrder['responsable'],
+      $originalOrder['cliente_nombre'] . ' (Excedente/Stock)',
+      $originalOrder['cliente_cedula'],
+      date('Y-m-d'),
+      $now
+    ];
+    $resOrder = $localConnection->goQuery($sqlNewOrder, $paramsOrder);
+    $id_new_order = $resOrder['insert_id'];
+
+    if (!$id_new_order) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'Falló creación de orden header']));
+      return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+    }
+
+    // 2. Vincular ordenes
+    $sqlLink = "INSERT INTO ordenes_vinculadas (id_father, id_child, moment) VALUES (?, ?, ?)";
+    $localConnection->goQuery($sqlLink, [$id_orden_original, $id_new_order, $now]);
+
+    // 3. Insertar items
+    foreach ($items_stock as $item) {
+      $sqlItem = "INSERT INTO ordenes_productos 
+            (id_orden, id_woo, id_tela, id_category, category_name, name, cantidad, id_size, talla, corte, rollo, tela, precio_unitario, moment)
+            SELECT ?, id_woo, id_tela, id_category, category_name, name, ?, id_size, talla, corte, rollo, tela, 0, ? 
+            FROM ordenes_productos WHERE _id = ?";
+      // Copiamos datos del producto original, ajustando cantidad y poniendo precio 0 (costo interno)
+
+      $localConnection->goQuery($sqlItem, [$id_new_order, $item['cantidad'], $now, $item['id_original_product']]);
+    }
+
+    // 4. Crear Lote para la nueva orden?
+    // Si queremos que entre en producción (o que ya esté "lista" en inventario), depende.
+    // Si son piezas CORTADAS, ya pasaron corte. Deberían ir a Inventario de Corte de la NUEVA orden.
+    // O simplemente quedar como orden activa para gestionarse.
+    // Asumiremos que se crea el lote para que aparezca en el sistema.
+    $sqlLote = "INSERT INTO lotes (lote, fecha, id_orden, prioridad, paso, moment) VALUES (?, ?, ?, 0, 'Corte', ?)";
+    $localConnection->goQuery($sqlLote, ['LOTE-STOCK-' . $id_new_order, date('Y-m-d'), $id_new_order, $now]);
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode(['status' => 'success', 'id_new_order' => $id_new_order, 'message' => 'Orden de stock creada.']));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
+  /**
+   * POST /production/corte/finalizar-tarea
+   * Finaliza la tarea de corte, registrando las piezas físicas en inventario_corte.
+   */
+  $app->post('/production/corte/finalizar-tarea', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+    $now = date('Y-m-d H:i:s');
+
+    // Data esperada: id_orden, id_lotes_detalles, id_ordenes_productos, id_empleado, cantidad_cortada, ...
+
+    // 1. Insertar en inventario_corte
+    // Nota: Recibimos un array de cortes o uno por uno? Asumiremos uno por uno o un array "cortes".
+    // Si es uno por uno:
+    $sqlInv = "INSERT INTO inventario_corte (id_orden, id_ordenes_productos, id_empleado_corte, cantidad, talla, tela, corte, fecha_corte, estado, moment)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'disponible', ?)";
+
+    $paramsInv = [
+      $data['id_orden'],
+      $data['id_ordenes_productos'],
+      $data['id_empleado'],
+      $data['cantidad_cortada'],
+      $data['talla'],
+      $data['tela'],
+      $data['corte'], // Tipo de corte
+      $now,
+      $now
+    ];
+    $localConnection->goQuery($sqlInv, $paramsInv);
+
+    // 2. Marcar tarea como terminada en lotes_detalles_empleados_asignados
+    // Reutilizamos la lógica existente o llamamos al endpoint existente internamente?
+    // Mejor hacemos el UPDATE directo aquí para asegurar atomicidad o consistencia con este flujo.
+
+    // Buscar si existe asignación
+    $sqlFindAssign = "SELECT _id FROM lotes_detalles_empleados_asignados 
+                      WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND (progreso = 'en curso' OR progreso = 'por iniciar')";
+    // Necesitamos saber el ID departamento de Corte. Asumimos que viene en $data o lo buscamos.
+    $id_depto_corte = $data['id_departamento'];
+
+    $assign = $localConnection->goQuery($sqlFindAssign, [$data['id_orden'], $data['id_empleado'], $id_depto_corte]);
+
+    if (!empty($assign)) {
+      $sqlUpdate = "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = ? WHERE _id = ?";
+      $localConnection->goQuery($sqlUpdate, [$now, $assign[0]['_id']]);
+    }
+
+    // 3. Verificar si todos los items de la orden en Corte están listos para avanzar el Lote?
+    // Esta logica ya suele estar en "registrar-paso-empleado". 
+    // Por ahora solo registramos el inventario y terminamos la tarea individual. 
+    // El frontend podría llamar luego a verificar el estado global o usamos la misma logica de "registrar-paso-empleado" si se requiere.
+    // Para simplificar, asumimos que este endpoint es solo para el registro físico y tarea individual.
+
+    $localConnection->disconnect();
+    $response->getBody()->write(json_encode(['status' => 'success', 'message' => 'Corte registrado e inventario actualizado.']));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
+  /**
+   * Obtener detalles de productos de una orden para Corte
+   */
+  $app->get('/production/corte/orden-detalles/{id}', function (Request $request, Response $response, array $args) {
+    $id_orden = intval($args['id']);
+    $localConnection = new LocalDB();
+
+    try {
+      // Consultar productos de la orden
+      $sql = "SELECT _id, name, talla, cantidad, corte, tela FROM ordenes_productos WHERE id_orden = $id_orden";
+      $productos = $localConnection->goQuery($sql);
+
+      $response->getBody()->write(json_encode([
+        'productos' => $productos ?: []
+      ]));
+
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+
+    } catch (Exception $e) {
+      $response->getBody()->write(json_encode([
+        'error' => $e->getMessage()
+      ]));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
 }; // Fin de la función que envuelve las rutas
 
