@@ -775,7 +775,7 @@ return function (App $app) {
           // Verificar si existe el departamento, de no ser así indica que es el último paso.
           if (empty($response_departamentos)) {
             // Es el último paso debemos asignar terminado o el paso que viene despues de el último despues de producción
-            $sql5 = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = {$miEmpleado['id_orden']}; UPDATE ordenes SET `status` = 'terminado' WHERE _id = {$miEmpleado['id_orden']};";
+            $sql5 = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = {$miEmpleado['id_orden']}; UPDATE ordenes SET `status` = 'terminada' WHERE _id = {$miEmpleado['id_orden']};";
             // $sql5 .= "UPDATE ordenes SET `status` = 'terminado' WHERE _id = {$miEmpleado['id_orden']};";
           } else {
             // El paso existe, lo actualizamos para el semáforo y progressbar
