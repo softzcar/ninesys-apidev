@@ -2381,15 +2381,23 @@ return function (App $app) {
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
-    $sql = "INSERT INTO lotes_corte_ajustes (id_orden, id_lote, id_ordenes_productos, cantidad_solicitada, cantidad_ajustada, id_empleado_ajuste, moment)
-            VALUES (?, ?, ?, ?, ?, ?, ?)";
+    // Modificado para registrar en inventario_corte, que es lo que suma el avance.
+    // Lógica: Para este modulo de "Ajuste", asumimos que el valor enviado es el TOTAL acumulado real.
+    // Por lo tanto, borramos registros previos de este producto en esta orden para evitar sumas dobles (5 + 6 = 11).
+    // Si se quisiera un log histórico, deberíamos manejarlo en otra tabla o con delta.
+
+    // 1. Limpiar registros previos del producto en esta orden
+    $sqlDelete = "DELETE FROM inventario_corte WHERE id_orden = ? AND id_ordenes_productos = ?";
+    $localConnection->goQuery($sqlDelete, [$data['id_orden'], $data['id_ordenes_productos']]);
+
+    // 2. Insertar el nuevo valor total
+    $sql = "INSERT INTO inventario_corte (id_orden, id_ordenes_productos, id_empleado_corte, cantidad, estado, moment)
+            VALUES (?, ?, ?, ?, 'procesado', ?)";
     $params = [
       $data['id_orden'],
-      $data['id_lote'] ?? null,
       $data['id_ordenes_productos'],
-      $data['cantidad_solicitada'] ?? 0,
-      $data['cantidad_ajustada'],
-      $data['id_empleado_ajuste'] ?? null,
+      $data['id_empleado_ajuste'] ?? 0, // ID del empleado que corta
+      $data['cantidad_ajustada'], // La cantidad reportada
       $now
     ];
 
