@@ -2457,7 +2457,7 @@ return function (App $app) {
 
     if (!$originalOrder) {
       $localConnection->disconnect();
-      return $response->withStatus(404)->withJson(['error' => 'Orden original no encontrada']);
+      return $response->withStatus(404)->withHeader('Content-Type', 'application/json')->getBody()->write(json_encode(['error' => 'Orden original no encontrada']));
     }
 
     // 2. Crear nueva orden (Tipo Stock)
