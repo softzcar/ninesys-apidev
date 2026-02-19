@@ -2439,10 +2439,14 @@ return function (App $app) {
    */
   $app->post('/production/corte/crear-orden-stock-manual', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
+    if (is_null($data)) {
+      $data = json_decode($request->getBody()->getContents(), true);
+    }
+
     $localConnection = new LocalDB();
     $now = date('Y-m-d H:i:s');
 
-    $id_orden_original = $data['id_orden_original'];
+    $id_orden_original = $data['id_orden_original'] ?? null;
     $items_manual = $data['items'] ?? []; // Array de {cod, producto, talla, corte, cantidad, tela, atributos_seleccionados...}
 
     if (empty($id_orden_original) || empty($items_manual)) {
