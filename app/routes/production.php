@@ -2433,35 +2433,37 @@ return function (App $app) {
   });
 
   /**
-   * POST /production/corte/crear-orden-stock
-   * Crea una nueva orden interna (Stock) vinculada a la orden original con las piezas excedentes.
+  /**
+   * POST /production/corte/crear-orden-stock-manual
+   * Crea una nueva orden interna (Stock) vinculada a la orden original con productos manuales (excedentes de otro tipo).
    */
-  $app->post('/production/corte/crear-orden-stock', function (Request $request, Response $response) {
+  $app->post('/production/corte/crear-orden-stock-manual', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
     $now = date('Y-m-d H:i:s');
 
     $id_orden_original = $data['id_orden_original'];
-    $items_stock = $data['items'] ?? []; // Array de productos excedentes
+    $items_manual = $data['items'] ?? []; // Array de {nombre, talla, corte, cantidad, tela}
 
-    if (empty($id_orden_original) || empty($items_stock)) {
+    if (empty($id_orden_original) || empty($items_manual)) {
       $localConnection->disconnect();
-      $response->getBody()->write(json_encode(['error' => 'No hay items para crear orden de stock.']));
+      $response->getBody()->write(json_encode(['error' => 'Datos incompletos para crear orden de stock.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
-    // 1. Obtener datos de cliente de la orden original (o asignar a Cliente Interno/Stock)
-    // Por simplicidad, clonamos la orden pero con tipo 'stock' (si la columna tipo lo permite, o status 'stock')
-    // Asumiremos tipo = 'stock' en la columna 'tipo' de ordenes (VARCHAR 6) -> 'stock' cabe.
-
+    // 1. Obtener datos de cliente de la orden original
     $sqlOrder = "SELECT * FROM ordenes WHERE _id = ?";
     $originalOrder = $localConnection->goQuery($sqlOrder, [$id_orden_original])[0];
 
-    // Crear nueva orden
+    if (!$originalOrder) {
+      $localConnection->disconnect();
+      return $response->withStatus(404)->withJson(['error' => 'Orden original no encontrada']);
+    }
+
+    // 2. Crear nueva orden (Tipo Stock)
     $sqlNewOrder = "INSERT INTO ordenes (id_wp, id_wp_order, status, tipo, responsable, cliente_nombre, cliente_cedula, fecha_creacion, moment)
                     VALUES (?, ?, 'activa', 'stock', ?, ?, ?, ?, ?)";
-    // Usamos el mismo cliente para trazabilidad, o podríamos usar un cliente genérico "STOCK".
-    // El usuario pidió "nueva orden, interna, vinculada".
+
     $paramsOrder = [
       $originalOrder['id_wp'],
       null, // No linked WP order
@@ -2480,32 +2482,38 @@ return function (App $app) {
       return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
     }
 
-    // 2. Vincular ordenes
+    // 3. Vincular ordenes
     $sqlLink = "INSERT INTO ordenes_vinculadas (id_father, id_child, moment) VALUES (?, ?, ?)";
     $localConnection->goQuery($sqlLink, [$id_orden_original, $id_new_order, $now]);
 
-    // 3. Insertar items
-    foreach ($items_stock as $item) {
-      $sqlItem = "INSERT INTO ordenes_productos 
-            (id_orden, id_woo, id_tela, id_category, category_name, name, cantidad, id_size, talla, corte, rollo, tela, precio_unitario, moment)
-            SELECT ?, id_woo, id_tela, id_category, category_name, name, ?, id_size, talla, corte, rollo, tela, 0, ? 
-            FROM ordenes_productos WHERE _id = ?";
-      // Copiamos datos del producto original, ajustando cantidad y poniendo precio 0 (costo interno)
+    // 4. Insertar items manuales
+    $sqlItem = "INSERT INTO ordenes_productos 
+          (id_orden, name, cantidad, talla, corte, tela, id_category, category_name, precio_unitario, moment)
+          VALUES (?, ?, ?, ?, ?, ?, 0, 'Stock Interno', 0, ?)";
 
-      $localConnection->goQuery($sqlItem, [$id_new_order, $item['cantidad'], $now, $item['id_original_product']]);
+    foreach ($items_manual as $item) {
+      $localConnection->goQuery($sqlItem, [
+        $id_new_order,
+        $item['product_name'] ?? 'Producto Stock',
+        $item['cantidad'],
+        $item['talla'] ?? 'Única',
+        $item['genero'] ?? 'Unisex', // mapeado a campo `corte`
+        $item['tela'] ?? 'Generica',
+        $now
+      ]);
     }
 
-    // 4. Crear Lote para la nueva orden?
-    // Si queremos que entre en producción (o que ya esté "lista" en inventario), depende.
-    // Si son piezas CORTADAS, ya pasaron corte. Deberían ir a Inventario de Corte de la NUEVA orden.
-    // O simplemente quedar como orden activa para gestionarse.
-    // Asumiremos que se crea el lote para que aparezca en el sistema.
+    // 5. Crear Lote para la nueva orden
+    // Se inicia en paso 'Corte' directamente.
     $sqlLote = "INSERT INTO lotes (lote, fecha, id_orden, prioridad, paso, moment) VALUES (?, ?, ?, 0, 'Corte', ?)";
     $localConnection->goQuery($sqlLote, ['LOTE-STOCK-' . $id_new_order, date('Y-m-d'), $id_new_order, $now]);
 
+    // (Opcional) Si se desea, también se podría insertar en inventario_corte automáticamente con estado 'por_cortar',
+    // pero eso requiere asignar productosIds. Por ahora con crear la orden basta para que el Jefe de Producción la asigne.
+
     $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode(['status' => 'success', 'id_new_order' => $id_new_order, 'message' => 'Orden de stock creada.']));
+    $response->getBody()->write(json_encode(['status' => 'success', 'id_new_order' => $id_new_order, 'message' => 'Orden de stock creada correctamente.']));
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 
