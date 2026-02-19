@@ -2369,19 +2369,10 @@ return function (App $app) {
   /**
    * POST /production/corte/ajuste
    * Registra el ajuste de cantidad a cortar definido por el jefe de producción.
-   */
-  $app->post('/production/corte/ajuste', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
-    $localConnection = new LocalDB();
-    $now = date('Y-m-d H:i:s');
-
     // Fallback if getParsedBody is empty
     if (empty($data)) {
       $rawInput = file_get_contents('php://input');
       $data = json_decode($rawInput, true);
-      file_put_contents('/home/apidev.nineteengreen.com/public_html/debug_ajuste.log', date('Y-m-d H:i:s') . " - Raw Input: " . $rawInput . " - Decoded: " . print_r($data, true) . "\n", FILE_APPEND);
-    } else {
-      file_put_contents('/home/apidev.nineteengreen.com/public_html/debug_ajuste.log', date('Y-m-d H:i:s') . " - Data: " . print_r($data, true) . "\n", FILE_APPEND);
     }
 
     if (empty($data['id_orden']) || empty($data['id_ordenes_productos']) || !isset($data['cantidad_ajustada'])) {
