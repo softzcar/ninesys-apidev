@@ -2392,18 +2392,36 @@ return function (App $app) {
     // Por lo tanto, borramos registros previos de este producto en esta orden para evitar sumas dobles (5 + 6 = 11).
     // Si se quisiera un log histórico, deberíamos manejarlo en otra tabla o con delta.
 
-    // 1. Limpiar registros previos del producto en esta orden
+    // 1. Obtener detalles del producto original
+    $sqlProduct = "SELECT talla, tela, corte, name FROM ordenes_productos WHERE _id = ?";
+    $productDetails = $localConnection->goQuery($sqlProduct, [$data['id_ordenes_productos']]);
+
+    $talla = null;
+    $tela = null;
+    $corte = null;
+
+    if (!empty($productDetails)) {
+      $talla = $productDetails[0]['talla'];
+      $tela = $productDetails[0]['tela'];
+      $corte = $productDetails[0]['corte'];
+    }
+
+    // 2. Limpiar registros previos del producto en esta orden
     $sqlDelete = "DELETE FROM inventario_corte WHERE id_orden = ? AND id_ordenes_productos = ?";
     $localConnection->goQuery($sqlDelete, [$data['id_orden'], $data['id_ordenes_productos']]);
 
-    // 2. Insertar el nuevo valor total
-    $sql = "INSERT INTO inventario_corte (id_orden, id_ordenes_productos, id_empleado_corte, cantidad, estado, moment)
-            VALUES (?, ?, ?, ?, 'procesado', ?)";
+    // 3. Insertar el nuevo valor total con STATUS 'por_cortar'
+    // Se guardan los detalles técnicos (talla, tela, corte) para que el cortador sepa qué hacer.
+    $sql = "INSERT INTO inventario_corte (id_orden, id_ordenes_productos, id_empleado_corte, cantidad, talla, tela, corte, estado, moment)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'por_cortar', ?)";
     $params = [
       $data['id_orden'],
       $data['id_ordenes_productos'],
-      $data['id_empleado_ajuste'] ?? 0, // ID del empleado que corta
+      $data['id_empleado_ajuste'] ?? 0, // ID del empleado que solicita/ajusta
       $data['cantidad_ajustada'], // La cantidad reportada
+      $talla,
+      $tela,
+      $corte,
       $now
     ];
 
