@@ -2375,6 +2375,9 @@ return function (App $app) {
     $localConnection = new LocalDB();
     $now = date('Y-m-d H:i:s');
 
+    // DEBUG: Log request data
+    file_put_contents('/home/apidev.nineteengreen.com/public_html/debug_ajuste.log', date('Y-m-d H:i:s') . " - Data: " . print_r($data, true) . "\n", FILE_APPEND);
+
     if (empty($data['id_orden']) || empty($data['id_ordenes_productos']) || !isset($data['cantidad_ajustada'])) {
       $localConnection->disconnect();
       $response->getBody()->write(json_encode(['error' => 'Faltan datos requeridos.']));
