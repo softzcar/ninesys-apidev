@@ -2443,7 +2443,7 @@ return function (App $app) {
     $now = date('Y-m-d H:i:s');
 
     $id_orden_original = $data['id_orden_original'];
-    $items_manual = $data['items'] ?? []; // Array de {nombre, talla, corte, cantidad, tela}
+    $items_manual = $data['items'] ?? []; // Array de {cod, producto, talla, corte, cantidad, tela, atributos_seleccionados...}
 
     if (empty($id_orden_original) || empty($items_manual)) {
       $localConnection->disconnect();
@@ -2487,20 +2487,63 @@ return function (App $app) {
     $localConnection->goQuery($sqlLink, [$id_orden_original, $id_new_order, $now]);
 
     // 4. Insertar items manuales
+    // Nota: Se agregan columnas para IDs y atributos
     $sqlItem = "INSERT INTO ordenes_productos 
-          (id_orden, name, cantidad, talla, corte, tela, id_category, category_name, precio_unitario, moment)
-          VALUES (?, ?, ?, ?, ?, ?, 0, 'Stock Interno', 0, ?)";
+          (id_orden, id_woo, name, cantidad, id_size, talla, corte, id_tela, tela, id_category, category_name, precio_unitario, moment)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'Stock Interno', 0, ?)";
 
     foreach ($items_manual as $item) {
-      $localConnection->goQuery($sqlItem, [
+      $id_woo = $item['cod'] ?? 0;
+      $name = $item['producto'] ?? 'Producto Stock';
+      $cantidad = $item['cantidad'];
+      $talla = $item['talla'] ?? 'Única'; // Nombre
+      $id_size = $item['id_talla'] ?? 'NULL'; // ID si existe
+
+      // Si id_size es NULL String, lo convertimos a NULL real para bind_param o query directa, 
+      // pero LocalDB::goQuery maneja null si lo pasamos como null en el array.
+      if ($id_size === 'NULL')
+        $id_size = null;
+
+      $corte = $item['corte'] ?? 'No aplica';
+      $tela = $item['tela'] ?? 'Generica'; // Nombre
+      $id_tela = $item['id_tela'] ?? null;
+
+      // Insertar producto
+      $paramsItem = [
         $id_new_order,
-        $item['product_name'] ?? 'Producto Stock',
-        $item['cantidad'],
-        $item['talla'] ?? 'Única',
-        $item['genero'] ?? 'Unisex', // mapeado a campo `corte`
-        $item['tela'] ?? 'Generica',
+        $id_woo,
+        $name,
+        $cantidad,
+        $id_size,
+        $talla,
+        $corte,
+        $id_tela,
+        $tela,
         $now
-      ]);
+      ];
+      $resItem = $localConnection->goQuery($sqlItem, $paramsItem);
+      $id_orden_producto = $resItem['insert_id']; // Variable para usar con atributos (aunque aqui no se usa id_orden_producto, sino id_orden + id_product)
+
+      // 4.1 Insertar Atributos (si existen)
+      if (!empty($item['atributos_seleccionados']) && is_array($item['atributos_seleccionados'])) {
+        $sqlAttr = "INSERT INTO products_attributes_values (id_orden, id_product, id_product_attribute, attribute_value, attribute_price) VALUES (?, ?, ?, ?, ?)";
+
+        foreach ($item['atributos_seleccionados'] as $attr) {
+          // Validar estructura del atributo.
+          // Nota: id_product en products_attributes_values se refiere al ID del PRODUCTO (id_woo), no al id de la linea ordenes_productos.
+          if (isset($attr['value'], $attr['text'])) {
+            $price = isset($attr['precio']) ? $attr['precio'] : 0;
+
+            $localConnection->goQuery($sqlAttr, [
+              $id_new_order,
+              $id_woo, // id_product (woo id)
+              $attr['value'], // id_product_attribute
+              $attr['text'], // attribute_value
+              $price // attribute_price
+            ]);
+          }
+        }
+      }
     }
 
     // 5. Crear Lote para la nueva orden
