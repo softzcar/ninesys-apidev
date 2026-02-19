@@ -2369,7 +2369,8 @@ return function (App $app) {
   /**
    * POST /production/corte/ajuste
    * Registra el ajuste de cantidad a cortar definido por el jefe de producción.
-   $app->post('/production/corte/ajuste', function (Request $request, Response $response) {
+   */
+  $app->map(['POST', 'GET', 'OPTIONS'], '/production/corte/ajuste', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
     $now = date('Y-m-d H:i:s');
