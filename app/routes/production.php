@@ -2437,7 +2437,8 @@ return function (App $app) {
   /**
   /**
    * POST /production/corte/crear-orden-stock-manual
-   * Crea una nueva orden interna (Stock) vinculada a la orden original con productos manuales (excedentes de otro tipo).
+   * Guarda los datos de una nueva orden interna (Stock) vinculada a la orden original con productos manuales
+   * en la tabla ordenes_tmp para que sea aprobada posteriormente.
    */
   $app->post('/production/corte/crear-orden-stock-manual', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
@@ -2446,10 +2447,10 @@ return function (App $app) {
     }
 
     $localConnection = new LocalDB();
-    $now = date('Y-m-d H:i:s');
 
     $id_orden_original = $data['id_orden_original'] ?? null;
-    $items_manual = $data['items'] ?? []; // Array de {cod, producto, talla, corte, cantidad, tela, atributos_seleccionados...}
+    $items_manual = $data['items'] ?? [];
+    $id_empleado = $data['id_empleado'] ?? 1;
 
     if (empty($id_orden_original) || empty($items_manual)) {
       $localConnection->disconnect();
@@ -2457,115 +2458,20 @@ return function (App $app) {
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
-    // 1. Obtener datos de la orden original
-    $sqlOrder = "SELECT * FROM ordenes WHERE _id = ?";
-    $originalOrder = $localConnection->goQuery($sqlOrder, [$id_orden_original])[0];
+    // Convertimos el body completo a JSON
+    $form_json = json_encode($data);
 
-    if (!$originalOrder) {
-      $localConnection->disconnect();
-      return $response->withStatus(404)->withHeader('Content-Type', 'application/json')->getBody()->write(json_encode(['error' => 'Orden original no encontrada']));
-    }
-
-    // 2. Crear nueva orden (Tipo Stock)
-    // El cliente siempre es el cliente interno (ID 1 = Producción Interna)
-    // para evitar asociar la orden a un cliente real que no está relacionado con este pedido.
-    $sqlNewOrder = "INSERT INTO ordenes (id_wp, id_wp_order, status, tipo, responsable, id_cliente, cliente_nombre, cliente_cedula, fecha_creacion, moment, fecha_inicio, fecha_entrega, pago_abono, pago_total, pago_descuento)
-                    VALUES (?, ?, ?, 'stock', ?, 1, 'Producción Interna', 'INTERNO-001', ?, ?, ?, ?, 0, 0, 0)";
-
-    $paramsOrder = [
-      $originalOrder['id_wp'],
-      null, // No linked WP order
-      $originalOrder['status'], // Heredar status de la orden original
-      $originalOrder['responsable'],
-      date('Y-m-d'),
-      $now,
-      $originalOrder['fecha_inicio'],
-      $originalOrder['fecha_entrega']
-    ];
-    $resOrder = $localConnection->goQuery($sqlNewOrder, $paramsOrder);
-    $id_new_order = $resOrder['insert_id'];
-
-    if (!$id_new_order) {
-      $localConnection->disconnect();
-      $response->getBody()->write(json_encode(['error' => 'Falló creación de orden header']));
-      return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
-    }
-
-    // 3. Vincular ordenes
-    $sqlLink = "INSERT INTO ordenes_vinculadas (id_father, id_child, moment) VALUES (?, ?, ?)";
-    $localConnection->goQuery($sqlLink, [$id_orden_original, $id_new_order, $now]);
-
-    // 4. Insertar items manuales
-    // Nota: Se agregan columnas para IDs y atributos
-    $sqlItem = "INSERT INTO ordenes_productos 
-          (id_orden, id_woo, name, cantidad, id_size, talla, corte, id_tela, tela, id_category, category_name, precio_unitario, moment)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'Stock Interno', 0, ?)";
-
-    foreach ($items_manual as $item) {
-      $id_woo = $item['cod'] ?? 0;
-      $name = $item['producto'] ?? 'Producto Stock';
-      $cantidad = $item['cantidad'];
-      $talla = $item['talla'] ?? 'Única'; // Nombre
-      $id_size = $item['id_talla'] ?? 'NULL'; // ID si existe
-
-      // Si id_size es NULL String, lo convertimos a NULL real para bind_param o query directa, 
-      // pero LocalDB::goQuery maneja null si lo pasamos como null en el array.
-      if ($id_size === 'NULL')
-        $id_size = null;
-
-      $corte = $item['corte'] ?? 'No aplica';
-      $tela = $item['tela'] ?? 'Generica'; // Nombre
-      $id_tela = $item['id_tela'] ?? null;
-
-      // Insertar producto
-      $paramsItem = [
-        $id_new_order,
-        $id_woo,
-        $name,
-        $cantidad,
-        $id_size,
-        $talla,
-        $corte,
-        $id_tela,
-        $tela,
-        $now
-      ];
-      $resItem = $localConnection->goQuery($sqlItem, $paramsItem);
-      $id_orden_producto = $resItem['insert_id']; // Variable para usar con atributos (aunque aqui no se usa id_orden_producto, sino id_orden + id_product)
-
-      // 4.1 Insertar Atributos (si existen)
-      if (!empty($item['atributos_seleccionados']) && is_array($item['atributos_seleccionados'])) {
-        $sqlAttr = "INSERT INTO products_attributes_values (id_orden, id_product, id_product_attribute, attribute_value, attribute_price) VALUES (?, ?, ?, ?, ?)";
-
-        foreach ($item['atributos_seleccionados'] as $attr) {
-          // Validar estructura del atributo.
-          // Nota: id_product en products_attributes_values se refiere al ID del PRODUCTO (id_woo), no al id de la linea ordenes_productos.
-          if (isset($attr['value'], $attr['text'])) {
-            $price = isset($attr['precio']) ? $attr['precio'] : 0;
-
-            $localConnection->goQuery($sqlAttr, [
-              $id_new_order,
-              $id_woo, // id_product (woo id)
-              $attr['value'], // id_product_attribute
-              $attr['text'], // attribute_value
-              $price // attribute_price
-            ]);
-          }
-        }
-      }
-    }
-
-    // 5. Crear Lote para la nueva orden
-    // Se inicia en paso 'Corte' directamente.
-    $sqlLote = "INSERT INTO lotes (lote, fecha, id_orden, prioridad, paso, moment) VALUES (?, ?, ?, 0, 'Corte', ?)";
-    $localConnection->goQuery($sqlLote, ['LOTE-STOCK-' . $id_new_order, date('Y-m-d'), $id_new_order, $now]);
-
-    // (Opcional) Si se desea, también se podría insertar en inventario_corte automáticamente con estado 'por_cortar',
-    // pero eso requiere asignar productosIds. Por ahora con crear la orden basta para que el Jefe de Producción la asigne.
+    // Guardar en la tabla ordenes_tmp
+    $sqlInsert = "INSERT INTO ordenes_tmp (form, id_empleado, tipo) VALUES (?, ?, ?)";
+    $resInsert = $localConnection->goQuery($sqlInsert, [$form_json, $id_empleado, 'Orden desde producción']);
 
     $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode(['status' => 'success', 'id_new_order' => $id_new_order, 'message' => 'Orden de stock creada correctamente.']));
+    $response->getBody()->write(json_encode([
+      'status' => 'success',
+      'message' => 'Orden guardada para aprobación correctamente.',
+      'insert_id' => $resInsert['insert_id'] ?? null
+    ]));
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 

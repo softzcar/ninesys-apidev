@@ -1,0 +1,10 @@
+- Solicitud del Usuario: En la página `/test` tenemos un componente para asignar empledos... el procedimineto correcto no debe ser crear una nueva orden sino Guardar esta orden junto con las ordenes guardads y presupuestos en la tabla `ordenes_tmp` entonces lo que debemos hacer es guardar esta orden que hemos generado en esta tabla y en el campo `tipo` de esta tabla guardar el texto "Orden desde producción" de manera de poder identificarla posteriormente. vamos a arreglar este flujo.
+- Archivos Involucrados:
+  - `app/routes/production.php` (Backend)
+  - `components/produccion/NewStockOrderModal.vue` (Frontend)
+- Acción Realizada: Se modificó el endpoint `/production/corte/crear-orden-stock-manual` en el backend para que, en lugar de insertar directamente en las tablas `ordenes`, `ordenes_productos`, `lotes`, etc., inserte un registro en `ordenes_tmp` con el payload JSON en `form`, `id_empleado` proporcionado por el frontend y `tipo` establecido a 'Orden desde producción'. En el frontend se actualizó `NewStockOrderModal.vue` para enviar el `id_empleado` dentro del payload de la petición y modificar el mensaje de éxito indicando que la orden fue enviada para "aprobación".
+- Herramienta(s) Utilizada(s): `grep_search`, `view_file`, `replace_file_content`, `run_command`
+- Resultado: Éxito
+- Verificación: Se inspeccionó el código backend tras los cambios asegurando la inserción a `ordenes_tmp`. En frontend se validó la recolección del `id_empleado` a través del store de Vuex.
+- Observaciones de Gemini: El cambio previene la creación de órdenes de forma autónoma desde el módulo de Corte y transfiere el flujo de autorización al panel administrativo que lee de `ordenes_tmp` (Presupuestos / Guardadas).
+- Respuesta de Gemini: He completado los cambios. Ahora, al someter el formulario en el panel de corte, la orden no se crea directamente; en su lugar, se inserta en `ordenes_tmp` con el tipo "Orden desde producción", para que un Administrador la apruebe. También actualicé el mensaje de éxito en el frontend para reflejar esta acción. Ambos logs han sido creados.
