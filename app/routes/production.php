@@ -360,7 +360,7 @@ return function (App $app) {
         LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor 
         JOIN ordenes_productos c ON c._id = a.id_ordenes_productos 
         WHERE
-            (a.aprobada IS NULL) AND a.id_empleado IS NULL
+            (a.aprobada IS NULL OR (a.aprobada = 0 AND a.detalle IS NULL)) AND a.id_empleado IS NULL
         ORDER BY d.orden_fila ASC;
         ";
       $obj['reposiciones_solicitadas'] = $localConnection->goQuery($sql);
@@ -895,9 +895,10 @@ return function (App $app) {
     // Verificamos si se ha enviado la solicitud desde PRoduccion, lelgan los dos id de emploados
     if (isset($data['id_empleado_emisor'])) {
       // crear estructura de datos para los dos empleados
-      $campos = '(moment, id_orden, id_empleado, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, id_departamento_solicitante, id_departamento)';
+      $campos = '(moment, aprobada, id_orden, id_empleado, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, id_departamento_solicitante, id_departamento)';
       $values = '(';
       $values .= "'" . $now . "',";
+      $values .= 'NULL,';
       $values .= '' . $producto['id_orden'] . ',';
       $values .= '' . $data['id_empleado'] . ',';
       $values .= '' . $data['id_empleado_emisor'] . ',';
@@ -923,9 +924,10 @@ return function (App $app) {
     } else {
       // Si no viene id_empleado_emisor, asumimos que es la creación desde el módulo de empleados
       // Añadimos id_departamento_solicitante aquí
-      $campos = '(moment, id_orden, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, id_departamento_solicitante)';
+      $campos = '(moment, aprobada, id_orden, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, id_departamento_solicitante)';
       $values = '(';
       $values .= "'" . $now . "',";
+      $values .= 'NULL,';
       $values .= '' . $producto['id_orden'] . ',';
       $values .= '' . $data['id_empleado'] . ',';
       $values .= '' . $producto['_id'] . ',';
