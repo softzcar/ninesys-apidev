@@ -2462,8 +2462,9 @@ return function (App $app) {
     $form_json = json_encode($data);
 
     // Guardar en la tabla ordenes_tmp
+    // Nota: El campo 'tipo' es varchar(11), por lo que usamos 'Produccion' (10 chars) o 'Corte' (5 chars).
     $sqlInsert = "INSERT INTO ordenes_tmp (form, id_empleado, tipo) VALUES (?, ?, ?)";
-    $resInsert = $localConnection->goQuery($sqlInsert, [$form_json, $id_empleado, 'Orden desde producción']);
+    $resInsert = $localConnection->goQuery($sqlInsert, [$form_json, $id_empleado, 'Produccion']);
 
     $localConnection->disconnect();
 
