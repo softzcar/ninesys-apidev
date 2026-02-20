@@ -350,6 +350,25 @@ else
     print_info "Ya existen clientes en la base de datos"
 fi
 
+# Insertar inventario inicial (mismos datos que new company)
+INVENTORY_COUNT=$(mysql -u "$MYSQL_USER" "$DB_NAME" -N -e "SELECT COUNT(*) FROM inventario;" 2>/dev/null)
+if [ "$INVENTORY_COUNT" -eq 0 ]; then
+    mysql -u "$MYSQL_USER" "$DB_NAME" <<EOF 2>/dev/null
+    INSERT INTO \`inventario\` (\`_id\`, \`sku\`, \`id_catalogo\`, \`tipo_insumo\`, \`insumo\`, \`unidad\`, \`costo\`, \`rendimiento\`, \`cantidad\`, \`cantidad_inicial\`, \`color\`, \`ancho\`, \`elongacion\`, \`detalles\`, \`departamento\`, \`moment\`) VALUES
+    (1, 'PAP_001', 1, 'general', 'Papel de pruebas', 'Mts', 20.00, 1.0, 250.00, 250.00, 'BLANCO', 0.90, NULL, 'Papel para pruebas de impresión', 'Impresión', CURRENT_TIMESTAMP),
+    (2, 'TEL_001', 6, 'tela', 'Tela de pruebas', 'Kg', 80.00, 3.96, 24.00, 24.00, 'BLANCO', 1.50, 'HORIZONTAL', 'Tela para pruebas de estampado', 'Estampado', CURRENT_TIMESTAMP),
+    (3, 'TIN_C_001', 4, 'tinta', 'Tinta Cyan', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'CYAN', NULL, NULL, 'Tinta cyan para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+    (4, 'TIN_M_001', 4, 'tinta', 'Tinta Magenta', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'MAGENTA', NULL, NULL, 'Tinta magenta para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+    (5, 'TIN_Y_001', 4, 'tinta', 'Tinta Yellow', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'YELLOW', NULL, NULL, 'Tinta yellow para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+    (6, 'TIN_K_001', 4, 'tinta', 'Tinta Black', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'BLACK', NULL, NULL, 'Tinta negra para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+    (7, 'BOT_001', 3, 'general', 'Botones blancos', 'Und', 0.50, 1.0, 1000.00, 1000.00, 'BLANCO', NULL, NULL, 'Botones blancos para prendas', 'Costura', CURRENT_TIMESTAMP);
+EOF
+    print_success "Inventario de prueba insertado"
+    log_message "Inventario de prueba insertado"
+else
+    print_info "Ya existia inventario en la base de datos"
+fi
+
 ################################################################################
 # Resumen final
 ################################################################################
