@@ -2465,17 +2465,20 @@ return function (App $app) {
     }
 
     // 2. Crear nueva orden (Tipo Stock)
-    $sqlNewOrder = "INSERT INTO ordenes (id_wp, id_wp_order, status, tipo, responsable, cliente_nombre, cliente_cedula, fecha_creacion, moment)
-                    VALUES (?, ?, 'activa', 'stock', ?, ?, ?, ?, ?)";
+    $sqlNewOrder = "INSERT INTO ordenes (id_wp, id_wp_order, status, tipo, responsable, cliente_nombre, cliente_cedula, fecha_creacion, moment, fecha_inicio, fecha_entrega, pago_abono, pago_total, pago_descuento)
+                    VALUES (?, ?, ?, 'stock', ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)";
 
     $paramsOrder = [
       $originalOrder['id_wp'],
       null, // No linked WP order
+      $originalOrder['status'], // Heredar status de la orden original
       $originalOrder['responsable'],
       $originalOrder['cliente_nombre'] . ' (Excedente/Stock)',
       $originalOrder['cliente_cedula'],
       date('Y-m-d'),
-      $now
+      $now,
+      $originalOrder['fecha_inicio'],
+      $originalOrder['fecha_entrega']
     ];
     $resOrder = $localConnection->goQuery($sqlNewOrder, $paramsOrder);
     $id_new_order = $resOrder['insert_id'];
