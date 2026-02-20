@@ -205,15 +205,15 @@ INSERT INTO `customers` (
   )
 VALUES (
     1,
-    'Cliente',
-    'de Pruebas',
-    'Cliente Prueba',
-    'V12345678',
-    'Dirección de prueba',
-    'Caracas',
-    '584240000000',
-    'clientepruebas@email.com',
-    '2025-09-25 16:25:44'
+    'Producción',
+    'Interna',
+    'interno_sistema',
+    'INTERNO-001',
+    'N/A',
+    'N/A',
+    '0000000000',
+    'interno@sistema.local',
+    NOW()
   );
 CREATE TABLE `departamentos` (
   `_id` int(11) NOT NULL,
@@ -416,6 +416,22 @@ CREATE TABLE `inventario_remanentes` (
   PRIMARY KEY (`_id`),
   KEY `id_insumo` (`id_insumo`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Historial de remanentes (retazos/sobrantes) de insumos al ser terminados.';
+CREATE TABLE `inventario_corte` (
+  `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID único del registro',
+  `id_orden` int(11) NOT NULL COMMENT 'ID de la orden',
+  `id_ordenes_productos` int(11) NOT NULL COMMENT 'ID del producto en ordenes_productos',
+  `id_empleado_corte` int(11) DEFAULT NULL COMMENT 'ID del empleado que realizó el corte',
+  `cantidad` decimal(8, 2) NOT NULL DEFAULT 0.00 COMMENT 'Cantidad de piezas cortadas físicamente',
+  `talla` varchar(10) DEFAULT NULL COMMENT 'Talla de la pieza cortada',
+  `tela` varchar(128) DEFAULT NULL COMMENT 'Tela de la pieza cortada',
+  `corte` varchar(32) DEFAULT NULL COMMENT 'Tipo de corte',
+  `fecha_corte` timestamp NULL DEFAULT NULL COMMENT 'Fecha y hora real del corte',
+  `estado` enum('por_cortar', 'cortada', 'disponible', 'procesado') NOT NULL DEFAULT 'por_cortar' COMMENT 'Estado de las piezas (por_cortar: asignada/ajustada, cortada: piezas listas, disponible: en inventario, procesado: usada)',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro',
+  PRIMARY KEY (`_id`),
+  KEY `id_orden` (`id_orden`),
+  KEY `estado` (`estado`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Inventario de piezas cortadas listas para el siguiente departamento.';
 CREATE TABLE `lotes` (
   `_id` int(11) NOT NULL COMMENT 'ID Autonumérico',
   `lote` mediumtext DEFAULT NULL COMMENT 'Código del Lote',
@@ -428,6 +444,19 @@ CREATE TABLE `lotes` (
   `detalles` mediumtext DEFAULT NULL,
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Controla el proceso de fabricacion';
+CREATE TABLE `lotes_corte_ajustes` (
+  `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID único del registro',
+  `id_orden` int(11) NOT NULL COMMENT 'ID de la orden',
+  `id_lote` int(11) DEFAULT NULL COMMENT 'ID del lote asociado (opcional)',
+  `id_ordenes_productos` int(11) NOT NULL COMMENT 'ID del producto en ordenes_productos',
+  `cantidad_solicitada` decimal(8, 2) NOT NULL DEFAULT 0.00 COMMENT 'Cantidad original solicitada en la orden',
+  `cantidad_ajustada` decimal(8, 2) NOT NULL DEFAULT 0.00 COMMENT 'Cantidad nueva definida por producción',
+  `id_empleado_ajuste` int(11) DEFAULT NULL COMMENT 'ID del empleado que realizó el ajuste',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha del ajuste',
+  PRIMARY KEY (`_id`),
+  KEY `id_orden` (`id_orden`),
+  KEY `id_ordenes_productos` (`id_ordenes_productos`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registra los ajustes de cantidad a cortar definidos por producción.';
 CREATE TABLE `lotes_detalles` (
   `_id` int(10) NOT NULL COMMENT 'ID único del registro',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden de trabajo',
