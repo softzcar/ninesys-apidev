@@ -2449,7 +2449,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     $id_orden_original = $data['id_orden_original'] ?? null;
-    $items_manual = $data['items'] ?? [];
+    $items_manual = $data['form']['productos'] ?? ($data['items'] ?? []);
     $id_empleado = $data['id_empleado'] ?? 1;
 
     if (empty($id_orden_original) || empty($items_manual)) {
