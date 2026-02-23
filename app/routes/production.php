@@ -2458,8 +2458,8 @@ return function (App $app) {
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
-    // Convertimos el body completo a JSON
-    $form_json = json_encode($data);
+    // Extraer y convertir el 'form' a JSON simulando la estructura comercial
+    $form_json = json_encode($data['form'] ?? []);
 
     // Guardar en la tabla ordenes_tmp
     // Nota: El campo 'tipo' es varchar(11), por lo que usamos 'Produccion' (10 chars) o 'Corte' (5 chars).
