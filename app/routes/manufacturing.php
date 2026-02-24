@@ -2766,7 +2766,7 @@ return function (App $app) {
     $sqlProductos = "SELECT
         op._id AS id_ordenes_productos,
         op.id_woo,
-        p.name AS nombre,
+        op.name AS nombre,
         op.cantidad AS cantidad_base,
         (SELECT nombre FROM sizes WHERE _id = op.id_size) AS talla,
         op.corte,
