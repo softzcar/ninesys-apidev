@@ -852,13 +852,14 @@ return function (App $app) {
 
         $totalComimision = $totalComimision * ($porcentajeAsignado / 100);
 
-        // EXCEDENTE CORTE: Si es el dpto de Corte y no es reposición, sumar piezas excedentes
+        // EXCEDENTE CORTE: Si es el dpto de Corte y no es reposición, usar cantidad real de inventario_corte
         if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
-          $sqlExcedente = "SELECT IFNULL(SUM(lca.cantidad_ajustada - lca.cantidad_solicitada), 0) AS excedente FROM lotes_corte_ajustes lca WHERE lca.id_orden = {$miEmpleado['id_orden']}";
+          $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic WHERE ic.id_orden = {$miEmpleado['id_orden']}";
           $rspExcedente = $localConnection->goQuery($sqlExcedente);
-          $excedente = floatval($rspExcedente[0]['excedente'] ?? 0);
-          if ($excedente > 0) {
-            $piezas += $excedente;
+          $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
+          if ($cantidad_real > $piezas) {
+            $excedente = $cantidad_real - floatval($piezas);
+            $piezas = $cantidad_real;
             $totalComimision += ($excedente * $miEmpleado['precio_unitario_promedio'] * ($comisionValue / 100) * ($porcentajeAsignado / 100));
           }
         }
@@ -921,17 +922,19 @@ return function (App $app) {
         $comimision = $respComision[0]['comision_fija'];
         $totalComimision = $respComision[0]['total_comision_fija'];
 
-        // EXCEDENTE CORTE: Si es el dpto de Corte y no es reposición, sumar piezas excedentes
+        // EXCEDENTE CORTE: Si es el dpto de Corte y no es reposición, sumar piezas reales de inventario_corte
         if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
-          $sqlExcedente = "SELECT IFNULL(SUM(lca.cantidad_ajustada - lca.cantidad_solicitada), 0) AS excedente FROM lotes_corte_ajustes lca WHERE lca.id_orden = {$miEmpleado['id_orden']}";
+          $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic WHERE ic.id_orden = {$miEmpleado['id_orden']}";
           $rspExcedente = $localConnection->goQuery($sqlExcedente);
-          $excedente = floatval($rspExcedente[0]['excedente'] ?? 0);
-          if ($excedente > 0) {
-            $piezas += $excedente;
+          $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
+          if ($cantidad_real > $piezas) {
+            $excedente = $cantidad_real - floatval($piezas);
+            $piezas = $cantidad_real; // Reemplazar con cantidad real cortada
             $porcentajeFija = floatval($respComision[0]['procentaje_comision']) > 0 ? floatval($respComision[0]['procentaje_comision']) : 100;
             $totalComimision += ($excedente * floatval($comimision) * ($porcentajeFija / 100));
           }
         }
+
 
         // CORRECCIÓN: Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
         if ($salarioTipo === 'Salario') {
