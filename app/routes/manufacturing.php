@@ -2779,23 +2779,36 @@ return function (App $app) {
         AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
     $productos = $localConnection->goQuery($sqlProductos);
 
-    // Si es Corte (ID 3), buscar excedentes por producto
+    // Si es Corte (ID 3), buscar cantidad real cortada en inventario_corte
+    // El excedente = cantidad_real_cortada - cantidad_solicitada
     $excedentesMap = [];
     if ($id_departamento === 3) {
-      $sqlExc = "SELECT id_ordenes_productos, (cantidad_ajustada - cantidad_solicitada) AS excedente FROM lotes_corte_ajustes WHERE id_orden = {$args['id_orden']} AND (cantidad_ajustada - cantidad_solicitada) > 0";
+      $sqlExc = "SELECT id_ordenes_productos, cantidad AS cantidad_real FROM inventario_corte WHERE id_orden = {$args['id_orden']}";
       $excedentes = $localConnection->goQuery($sqlExc);
       foreach ($excedentes as $exc) {
-        $excedentesMap[intval($exc['id_ordenes_productos'])] = floatval($exc['excedente']);
+        $excedentesMap[intval($exc['id_ordenes_productos'])] = floatval($exc['cantidad_real']);
       }
     }
+
 
     // Calcular cantidad asignada por producto
     $result = [];
     foreach ($productos as $prod) {
       $id_op = intval($prod['id_ordenes_productos']);
       $cantidad_base = floatval($prod['cantidad_base']);
-      $excedente = isset($excedentesMap[$id_op]) ? $excedentesMap[$id_op] : 0;
-      $cantidad_total = $cantidad_base + $excedente;
+
+      // Para Corte: excedentesMap contiene la cantidad REAL cortada (ic.cantidad)
+      // Para otros departamentos: excedentesMap estará vacío, se usa la cantidad_base
+      if (isset($excedentesMap[$id_op])) {
+        $cantidad_real = $excedentesMap[$id_op];
+        $excedente = $cantidad_real - $cantidad_base;
+        $cantidad_total = $cantidad_real;
+      } else {
+        $cantidad_real = $cantidad_base;
+        $excedente = 0;
+        $cantidad_total = $cantidad_base;
+      }
+
       $cantidad_asignada = $cantidad_total * ($porcentaje / 100);
 
       $result[] = [
