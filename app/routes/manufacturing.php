@@ -2736,6 +2736,91 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  // Resumen de piezas asignadas personalmente a un empleado para una orden específica
+  // Fórmula: (cantidad_base + excedente_corte_si_aplica) * (procentaje_comision / 100)
+  $app->get('/empleados/mi-asignacion/{id_orden}/{id_empleado}', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+    $object = [];
+
+    // Obtener datos del empleado en esta asignación
+    $sqlAsignacion = "SELECT
+        a.id_departamento,
+        a.procentaje_comision,
+        dep.departamento
+      FROM lotes_detalles_empleados_asignados a
+      JOIN departamentos dep ON dep._id = a.id_departamento
+      WHERE a.id_orden = {$args['id_orden']}
+        AND a.id_empleado = {$args['id_empleado']}
+      LIMIT 1";
+    $asignacion = $localConnection->goQuery($sqlAsignacion);
+
+    if (empty($asignacion)) {
+      $response->getBody()->write(json_encode(['productos' => [], 'msg' => 'Sin asignacion encontrada']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    }
+
+    $porcentaje = floatval($asignacion[0]['procentaje_comision']) > 0 ? floatval($asignacion[0]['procentaje_comision']) : 100;
+    $id_departamento = intval($asignacion[0]['id_departamento']);
+
+    // Obtener productos base de la orden
+    $sqlProductos = "SELECT
+        op._id AS id_ordenes_productos,
+        op.id_woo,
+        p.name AS nombre,
+        op.cantidad AS cantidad_base,
+        (SELECT nombre FROM sizes WHERE _id = op.id_size) AS talla,
+        op.corte,
+        op.tela,
+        op.precio_unitario
+      FROM ordenes_productos op
+      JOIN products p ON p._id = op.id_woo
+      WHERE op.id_orden = {$args['id_orden']}
+        AND (p.fisico = 1 OR p.fisico IS NULL)
+        AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+    $productos = $localConnection->goQuery($sqlProductos);
+
+    // Si es Corte (ID 3), buscar excedentes por producto
+    $excedentesMap = [];
+    if ($id_departamento === 3) {
+      $sqlExc = "SELECT id_ordenes_productos, (cantidad_ajustada - cantidad_solicitada) AS excedente FROM lotes_corte_ajustes WHERE id_orden = {$args['id_orden']} AND (cantidad_ajustada - cantidad_solicitada) > 0";
+      $excedentes = $localConnection->goQuery($sqlExc);
+      foreach ($excedentes as $exc) {
+        $excedentesMap[intval($exc['id_ordenes_productos'])] = floatval($exc['excedente']);
+      }
+    }
+
+    // Calcular cantidad asignada por producto
+    $result = [];
+    foreach ($productos as $prod) {
+      $id_op = intval($prod['id_ordenes_productos']);
+      $cantidad_base = floatval($prod['cantidad_base']);
+      $excedente = isset($excedentesMap[$id_op]) ? $excedentesMap[$id_op] : 0;
+      $cantidad_total = $cantidad_base + $excedente;
+      $cantidad_asignada = $cantidad_total * ($porcentaje / 100);
+
+      $result[] = [
+        'id_ordenes_productos' => $id_op,
+        'nombre' => $prod['nombre'],
+        'talla' => $prod['talla'],
+        'corte' => $prod['corte'],
+        'tela' => $prod['tela'],
+        'cantidad_base' => $cantidad_base,
+        'excedente' => $excedente,
+        'cantidad_total' => $cantidad_total,
+        'porcentaje_asignado' => $porcentaje,
+        'cantidad_asignada' => round($cantidad_asignada, 0),
+      ];
+    }
+
+    $object['productos'] = $result;
+    $object['departamento'] = $asignacion[0]['departamento'];
+    $object['id_departamento'] = $id_departamento;
+
+    $localConnection->disconnect();
+    $response->getBody()->write(json_encode($object));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
   // Obtener ordenes asociadas a los empleados V2
   $app->get('/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
