@@ -2828,9 +2828,8 @@ return function (App $app) {
             (SELECT MIN(dep.orden_proceso) FROM lotes_detalles_empleados_asignados ldea JOIN departamentos dep ON ldea.id_departamento = dep._id WHERE ldea.id_orden = y.id_orden) AS orden_proceso_min,
             (SELECT orden_proceso FROM departamentos WHERE _id = {$args['id_departamento']}) AS orden_proceso_departamento,            
             (
-                -- FIX: Busca el primer departamento donde AÚN EXISTEN empleados sin terminar.
-                -- Un departamento se considera "en progreso" si hay al menos UN registro
-                -- con fecha_terminado IS NULL. Solo pasamos al siguiente cuando TODOS terminaron.
+                -- FIX: Primer departamento donde AUN hay empleados sin terminar.
+                -- Solo avanza al siguiente cuando TODOS terminaron (fecha_terminado IS NULL).
                 SELECT dep.orden_proceso
                 FROM lotes_detalles_empleados_asignados ldea2
                 JOIN departamentos dep ON dep._id = ldea2.id_departamento
