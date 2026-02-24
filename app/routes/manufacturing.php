@@ -852,6 +852,17 @@ return function (App $app) {
 
         $totalComimision = $totalComimision * ($porcentajeAsignado / 100);
 
+        // EXCEDENTE CORTE: Si es el dpto de Corte y no es reposición, sumar piezas excedentes
+        if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
+          $sqlExcedente = "SELECT IFNULL(SUM(lca.cantidad_ajustada - lca.cantidad_solicitada), 0) AS excedente FROM lotes_corte_ajustes lca WHERE lca.id_orden = {$miEmpleado['id_orden']}";
+          $rspExcedente = $localConnection->goQuery($sqlExcedente);
+          $excedente = floatval($rspExcedente[0]['excedente'] ?? 0);
+          if ($excedente > 0) {
+            $piezas += $excedente;
+            $totalComimision += ($excedente * $miEmpleado['precio_unitario_promedio'] * ($comisionValue / 100) * ($porcentajeAsignado / 100));
+          }
+        }
+
         // CORRECCIÓN: Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
         if ($salarioTipo === 'Salario') {
           $totalComimision = 0;
@@ -909,6 +920,18 @@ return function (App $app) {
         $id_lotes_detalles = $respComision[0]['id_lotes_detalles'];
         $comimision = $respComision[0]['comision_fija'];
         $totalComimision = $respComision[0]['total_comision_fija'];
+
+        // EXCEDENTE CORTE: Si es el dpto de Corte y no es reposición, sumar piezas excedentes
+        if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
+          $sqlExcedente = "SELECT IFNULL(SUM(lca.cantidad_ajustada - lca.cantidad_solicitada), 0) AS excedente FROM lotes_corte_ajustes lca WHERE lca.id_orden = {$miEmpleado['id_orden']}";
+          $rspExcedente = $localConnection->goQuery($sqlExcedente);
+          $excedente = floatval($rspExcedente[0]['excedente'] ?? 0);
+          if ($excedente > 0) {
+            $piezas += $excedente;
+            $porcentajeFija = floatval($respComision[0]['procentaje_comision']) > 0 ? floatval($respComision[0]['procentaje_comision']) : 100;
+            $totalComimision += ($excedente * floatval($comimision) * ($porcentajeFija / 100));
+          }
+        }
 
         // CORRECCIÓN: Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
         if ($salarioTipo === 'Salario') {
@@ -994,6 +1017,40 @@ return function (App $app) {
             $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", 'variable', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
             $object['sql_pagos'][] = $sql;
             $localConnection->goQuery($sql);
+          }
+        }
+
+        // EXCEDENTE CORTE (Comisión Variable): Para Corte, insertar pago extra por piezas excedentes
+        if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
+          $sqlExcVar = "SELECT
+              lca.id_ordenes_productos,
+              (lca.cantidad_ajustada - lca.cantidad_solicitada) AS excedente,
+              IFNULL(pc.comision, 0) AS comision_producto,
+              a._id AS id_lotes_detalles,
+              a.procentaje_comision
+            FROM lotes_corte_ajustes lca
+            JOIN lotes_detalles_empleados_asignados a ON a.id_orden = lca.id_orden AND a.id_empleado = {$miEmpleado['id_empleado']} AND a.id_departamento = {$miEmpleado['id_departamento']}
+            LEFT JOIN products_comisiones pc ON pc.id_product = (SELECT id_woo FROM ordenes_productos WHERE _id = lca.id_ordenes_productos LIMIT 1) AND pc.id_departamento = {$miEmpleado['id_departamento']}
+            WHERE lca.id_orden = {$miEmpleado['id_orden']}
+              AND (lca.cantidad_ajustada - lca.cantidad_solicitada) > 0
+          ";
+          $rspExcVar = $localConnection->goQuery($sqlExcVar);
+          foreach ($rspExcVar as $excProd) {
+            $excedente_piezas = floatval($excProd['excedente']);
+            $comision_exc = floatval($excProd['comision_producto']);
+            $porc_exc = floatval($excProd['procentaje_comision']) > 0 ? floatval($excProd['procentaje_comision']) : 100;
+            $monto_exc = ($excedente_piezas * $comision_exc) * ($porc_exc / 100);
+            if ($salarioTipo === 'Salario')
+              $monto_exc = 0;
+
+            $id_lotes_exc = $excProd['id_lotes_detalles'];
+            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = 0 AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND detalle = 'Corte-Excedente' LIMIT 1";
+            $checkExc = $localConnection->goQuery($sqlCheckExc);
+            if (empty($checkExc)) {
+              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES ({$miEmpleado['id_orden']}, 0, {$miEmpleado['id_departamento']}, {$comision_exc}, 'variable', {$excedente_piezas}, {$id_lotes_exc}, 'aprobado', {$monto_exc}, {$miEmpleado['id_empleado']}, 'Corte-Excedente');";
+              $object['sql_pagos_excedente'][] = $sqlExcIns;
+              $localConnection->goQuery($sqlExcIns);
+            }
           }
         }
       }
@@ -2750,9 +2807,16 @@ return function (App $app) {
             (SELECT valor_inicial FROM inventario_movimientos WHERE id_orden = a.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_inicial,
             (SELECT valor_final FROM inventario_movimientos WHERE id_orden = a.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_final,
             c.prioridad,
-            z.unidades_produccion AS unidades_solicitadas,
-            a.cantidad AS unidades,
-            a.cantidad AS piezas_actuales,
+            (z.unidades_produccion + IFNULL((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0)) AS unidades_solicitadas,
+            -- Unidades: para Corte suman el excedente pactado; para otros departamentos solo la cantidad original
+            IF({$args['id_departamento']} = 3,
+                (a.cantidad + IFNULL((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0)),
+                a.cantidad
+            ) AS unidades,
+            IF({$args['id_departamento']} = 3,
+                (a.cantidad + IFNULL((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0)),
+                a.cantidad
+            ) AS piezas_actuales,
             y.fecha_inicio,
             y.fecha_terminado,
             DATE_FORMAT(d.fecha_entrega, '%d-%m-%Y') AS fecha_entrega,
