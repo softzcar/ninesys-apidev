@@ -859,7 +859,8 @@ return function (App $app) {
           $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
           if ($cantidad_real > $piezas) {
             $excedente = $cantidad_real - floatval($piezas);
-            $piezas = $cantidad_real;
+            // Aplicar porcentaje a la cantidad total
+            $piezas = $cantidad_real * ($porcentajeAsignado / 100);
             $totalComimision += ($excedente * $miEmpleado['precio_unitario_promedio'] * ($comisionValue / 100) * ($porcentajeAsignado / 100));
           }
         }
@@ -929,8 +930,9 @@ return function (App $app) {
           $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
           if ($cantidad_real > $piezas) {
             $excedente = $cantidad_real - floatval($piezas);
-            $piezas = $cantidad_real; // Reemplazar con cantidad real cortada
             $porcentajeFija = floatval($respComision[0]['procentaje_comision']) > 0 ? floatval($respComision[0]['procentaje_comision']) : 100;
+            // Aplicar porcentaje a la cantidad total
+            $piezas = $cantidad_real * ($porcentajeFija / 100);
             $totalComimision += ($excedente * floatval($comimision) * ($porcentajeFija / 100));
           }
         }
