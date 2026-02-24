@@ -250,6 +250,7 @@ TABLES_TO_TRUNCATE=(
     "caja_cierres"
     "caja_fondos"
     "retiros"
+    "inventario_corte"
     "products_attributes_values"
 )
 

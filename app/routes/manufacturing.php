@@ -854,7 +854,7 @@ return function (App $app) {
 
         // EXCEDENTE CORTE: Si es el dpto de Corte y no es reposición, usar cantidad real de inventario_corte
         if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
-          $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic WHERE ic.id_orden = {$miEmpleado['id_orden']}";
+          $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = {$miEmpleado['id_orden']}";
           $rspExcedente = $localConnection->goQuery($sqlExcedente);
           $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
           if ($cantidad_real > $piezas) {
@@ -925,7 +925,7 @@ return function (App $app) {
 
         // EXCEDENTE CORTE: Si es el dpto de Corte y no es reposición, sumar piezas reales de inventario_corte
         if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
-          $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic WHERE ic.id_orden = {$miEmpleado['id_orden']}";
+          $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = {$miEmpleado['id_orden']}";
           $rspExcedente = $localConnection->goQuery($sqlExcedente);
           $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
           if ($cantidad_real > $piezas) {

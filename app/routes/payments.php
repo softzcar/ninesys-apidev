@@ -373,13 +373,11 @@ return function (App $app) {
                     DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
                     a.fecha_pago,
                     TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
-                    (SELECT IF(a.id_reposicion > 0,
-                    (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion),
                     IF(a.id_departamento = 3,
-                        IFNULL((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = b.id_orden), 0),
+                        IFNULL((SELECT SUM(ic.cantidad) FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = b.id_orden), 0),
                         (SELECT IFNULL(SUM(op.cantidad), 0) FROM ordenes_productos op JOIN products pp ON pp._id = op.id_woo WHERE op.id_orden = b.id_orden AND (pp.fisico = 1 OR pp.fisico IS NULL) AND (pp.es_diseno = 0 OR pp.es_diseno IS NULL))
                     )
-                )) as cantidad_productos
+                ) * (IFNULL(b.procentaje_comision, 100) / 100)) as cantidad_productos
                 FROM
                     pagos a
                 JOIN
@@ -429,10 +427,10 @@ return function (App $app) {
                         (SELECT IF(a.id_reposicion > 0,
                             (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion),
                             IF(a.id_departamento = 3,
-                                IFNULL((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = b.id_orden), 0),
+                                IFNULL((SELECT SUM(ic.cantidad) FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = b.id_orden), 0),
                                 (SELECT IFNULL(SUM(op.cantidad), 0) FROM ordenes_productos op JOIN products pp ON pp._id = op.id_woo WHERE op.id_orden = b.id_orden AND (pp.fisico = 1 OR pp.fisico IS NULL) AND (pp.es_diseno = 0 OR pp.es_diseno IS NULL))
                             )
-                        )) as cantidad_productos
+                        ) * (IFNULL(b.procentaje_comision, 100) / 100)) as cantidad_productos
                     FROM
                         pagos a
                     JOIN
@@ -485,10 +483,10 @@ return function (App $app) {
                         (SELECT IF(a.id_reposicion > 0,
                             (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion),
                             IF(a.id_departamento = 3,
-                                IFNULL((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = b.id_orden), 0),
+                                IFNULL((SELECT SUM(ic.cantidad) FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = b.id_orden), 0),
                                 (SELECT IFNULL(SUM(op.cantidad), 0) FROM ordenes_productos op JOIN products pp ON pp._id = op.id_woo WHERE op.id_orden = b.id_orden AND (pp.fisico = 1 OR pp.fisico IS NULL) AND (pp.es_diseno = 0 OR pp.es_diseno IS NULL))
                             )
-                        )) as cantidad_productos
+                        ) * (IFNULL(b.procentaje_comision, 100) / 100)) as cantidad_productos
                     FROM
                         pagos a
                     JOIN
