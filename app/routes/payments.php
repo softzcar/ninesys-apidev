@@ -473,7 +473,7 @@ return function (App $app) {
                     WHERE
                         a.fecha_pago IS NULL
                         AND a.comision_tipo = 'porcentaje'
-                        AND a.id_departamento IS NULL";
+                        AND a.id_lotes_detalles IS NOT NULL";
 
     $pagos_porcentaje = $localConnection->goQuery($sql_porcentaje);
     if (!is_array($pagos_porcentaje) || (isset($pagos_porcentaje['status']) && $pagos_porcentaje['status'] === 'error')) {
