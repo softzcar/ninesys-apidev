@@ -877,8 +877,8 @@ return function (App $app) {
 
         $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
 
-        // CHECK DUPLICATE BEFORE INSERT
-        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
+        // CHECK DUPLICATE BEFORE INSERT (Revised to include product ID)
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
@@ -952,8 +952,8 @@ return function (App $app) {
 
         $id_reposicion_val = isset($miEmpleado['id_reposicion']) ? $miEmpleado['id_reposicion'] : 'NULL';
 
-        // CHECK DUPLICATE BEFORE INSERT
-        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
+        // CHECK DUPLICATE BEFORE INSERT (Revised to include product ID)
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
@@ -963,13 +963,20 @@ return function (App $app) {
         }
       } else {
         // Para comisión variable: consulta por producto individual usando comisión por departamento
+        // Usamos COALESCE para tomar las piezas de la lotificación (si existen) o de la orden
         $sql = "SELECT
               a._id AS id_lotes_detalles,
               a.procentaje_comision,
-              c.cantidad,
+              ( IF(a.id_departamento = 3,
+                  (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id),
+                  IFNULL(ld.unidades_solicitadas, c.cantidad)
+                ) ) AS cantidad,
               IFNULL(pc.comision, 0) AS comision_producto,
-              1 AS factor_empleado, -- Factor fijo 1 para variable
-              (c.cantidad * IFNULL(pc.comision, 0)) AS monto_comision_por_producto, -- Sin factor de empleado
+              1 AS factor_empleado, 
+              ( IF(a.id_departamento = 3,
+                  (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id),
+                  IFNULL(ld.unidades_solicitadas, c.cantidad)
+                ) * IFNULL(pc.comision, 0) ) AS monto_comision_por_producto,
               c.id_woo AS id_producto
           FROM
               lotes_detalles_empleados_asignados a
@@ -979,6 +986,8 @@ return function (App $app) {
               ordenes_productos c ON c.id_orden = a.id_orden
           JOIN
               products p ON c.id_woo = p._id
+          LEFT JOIN
+              lotes_detalles ld ON ld.id_orden = a.id_orden AND ld.id_ordenes_productos = c._id AND ld.id_departamento = a.id_departamento
           LEFT JOIN
               products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = a.id_departamento
           WHERE
@@ -992,37 +1001,47 @@ return function (App $app) {
         $object['sql_comision_variable'] = $sql;
         $respComision = $localConnection->goQuery($sql);
 
-        // GUARDAR PAGO PARA CADA PRODUCTO EN COMISIÓN VARIABLE
+        // GUARDAR PAGO PARA CADA PRODUCTO EN COMISIÓN VARIABLE (Agrupado por Asignación)
+        $montoTotalVariable = 0;
+        $piezasTotales = 0;
+
+        // Para multi-asignaciones, id_lotes_detalles de la asignación es NULL.
+        // La query retorna a._id (el ID de la asignación) como 'id_lotes_detalles'.
+        // Esto es lo que debemos guardar en pagos para poder hacer JOIN después.
+        $id_lotes_detalles_principal = !empty($respComision) ? $respComision[0]['id_lotes_detalles'] : 'NULL';
+        $comision_referencial = !empty($respComision) ? $respComision[0]['comision_producto'] : 0;
+
+        // Si la query no retornó (sin productos configurados), buscar el _id de la asignación directamente
+        if ($id_lotes_detalles_principal === 'NULL') {
+          $sqlAsig = "SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_empleado = {$miEmpleado['id_empleado']} AND id_orden = {$miEmpleado['id_orden']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
+          $resAsig = $localConnection->goQuery($sqlAsig);
+          if (!empty($resAsig)) {
+            $id_lotes_detalles_principal = $resAsig[0]['_id'];
+          }
+        }
+
         foreach ($respComision as $producto) {
-          $piezas = $producto['cantidad'];
-          $id_lotes_detalles = $producto['id_lotes_detalles'];
-          $comimision = $producto['comision_producto'];  // Comisión del producto
-          $totalComimision = $producto['monto_comision_por_producto'];  // Monto calculado con factor del empleado
+          $montoProd = floatval($producto['monto_comision_por_producto']);
+          $porc = floatval($producto['procentaje_comision']) > 0 ? floatval($producto['procentaje_comision']) : 100;
+          $montoTotalVariable += ($montoProd * ($porc / 100));
+          $piezasTotales += (floatval($producto['cantidad']) * ($porc / 100));
+        }
 
-          // CORRECCIÓN: Aplicar porcentaje asignado (variable)
-          $porcentajeAsignado = floatval($producto['procentaje_comision']);
-          if ($porcentajeAsignado <= 0)
-            $porcentajeAsignado = 100;
+        // CORRECCIÓN: Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
+        if ($salarioTipo === 'Salario') {
+          $montoTotalVariable = 0;
+        }
 
-          $totalComimision = $totalComimision * ($porcentajeAsignado / 100);
+        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
 
-          // CORRECCIÓN: Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
-          if ($salarioTipo === 'Salario') {
-            $totalComimision = 0;
-          }
+        // CHECK DUPLICATE BEFORE INSERT (Revised to be assignment-based)
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
+        $check = $localConnection->goQuery($sqlCheck);
 
-          $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
-
-          // GUARDAR PAGO (Reconstruido)
-          // CHECK DUPLICATE BEFORE INSERT
-          $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
-          $check = $localConnection->goQuery($sqlCheck);
-
-          if (empty($check)) {
-            $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", 'variable', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
-            $object['sql_pagos'][] = $sql;
-            $localConnection->goQuery($sql);
-          }
+        if (empty($check)) {
+          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comision_referencial . ", 'variable', " . $piezasTotales . ', ' . $id_lotes_detalles_principal . ", 'aprobado', " . $montoTotalVariable . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
+          $object['sql_pagos'][] = $sql;
+          $localConnection->goQuery($sql);
         }
 
         // EXCEDENTE CORTE (Comisión Variable): Para Corte, insertar pago extra por piezas excedentes
@@ -1049,7 +1068,7 @@ return function (App $app) {
               $monto_exc = 0;
 
             $id_lotes_exc = $excProd['id_lotes_detalles'];
-            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = 0 AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND detalle = 'Corte-Excedente' LIMIT 1";
+            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = 0 AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = {$id_lotes_exc} AND detalle = 'Corte-Excedente' LIMIT 1";
             $checkExc = $localConnection->goQuery($sqlCheckExc);
             if (empty($checkExc)) {
               $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES ({$miEmpleado['id_orden']}, 0, {$miEmpleado['id_departamento']}, {$comision_exc}, 'variable', {$excedente_piezas}, {$id_lotes_exc}, 'aprobado', {$monto_exc}, {$miEmpleado['id_empleado']}, 'Corte-Excedente');";
