@@ -357,7 +357,6 @@ return function (App $app) {
                     b.id_orden AS orden,
                     b.id_orden AS id_orden, 
                     'Pago Fijo Global' AS producto,
-                    a.cantidad,
                     'N/A' as talla,
                     c.id_usuario AS id_empleado,
                     c.nombre,
@@ -373,30 +372,21 @@ return function (App $app) {
                     DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
                     a.fecha_pago,
                     TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
-                    (SELECT IF(a.id_reposicion > 0,
-                        (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion),
-                        IF(a.id_departamento = 3,
-                            IFNULL((SELECT SUM(ic.cantidad) FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = b.id_orden), 0),
-                            (SELECT IFNULL(SUM(op.cantidad), 0) FROM ordenes_productos op JOIN products pp ON pp._id = op.id_woo WHERE op.id_orden = b.id_orden AND (pp.fisico = 1 OR pp.fisico IS NULL) AND (pp.es_diseno = 0 OR pp.es_diseno IS NULL))
-                        )
-                    ) * (IFNULL(b.procentaje_comision, 100) / 100)) as cantidad_productos
+                    a.cantidad as cantidad
                 FROM
                     pagos a
-                JOIN
+                LEFT JOIN
                     lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
                 LEFT JOIN
-                    ordenes o ON b.id_orden = o._id
+                    ordenes o ON a.id_orden = o._id
                 JOIN
-                    api_empresas.empresas_usuarios c ON b.id_empleado = c.id_usuario
+                    api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
                 LEFT JOIN 
                     lotes_detalles ld ON b.id_lotes_detalles = ld._id
-                LEFT JOIN 
-                    products p ON ld.id_woo = p._id
                 WHERE
                     a.fecha_pago IS NULL
-                    AND c.comision_tipo = 'fija'
-                    AND (p.fisico = 1 OR p.fisico IS NULL)
-                    AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+                    AND a.comision_tipo = 'fija'
+                    AND a.id_lotes_detalles IS NOT NULL";
 
     $pagos_fijos = $localConnection->goQuery($sql_fija);
     if (!is_array($pagos_fijos) || (isset($pagos_fijos['status']) && $pagos_fijos['status'] === 'error')) {
@@ -407,12 +397,11 @@ return function (App $app) {
     $sql_variable = "SELECT DISTINCT
                         a._id AS id_pago,
                         a.id_reposicion,
-                        d.id_woo AS cod,
+                        'N/A' AS cod,
                         b._id AS id_lotes_detalles,
                         b.id_orden AS orden,
-                        d.name AS producto,
-                        d.cantidad,
-                        d.talla,
+                        'Lote Multi-Producto' AS producto,
+                        'N/A' AS talla,
                         c.id_usuario AS id_empleado,
                         c.nombre,
                         a.monto_pago AS pago,
@@ -426,32 +415,21 @@ return function (App $app) {
                         DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
                         a.fecha_pago,
                         TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
-                        (SELECT IF(a.id_reposicion > 0,
-                            (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion),
-                            IF(a.id_departamento = 3,
-                                IFNULL((SELECT SUM(ic.cantidad) FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = b.id_orden), 0),
-                                (SELECT IFNULL(SUM(op.cantidad), 0) FROM ordenes_productos op JOIN products pp ON pp._id = op.id_woo WHERE op.id_orden = b.id_orden AND (pp.fisico = 1 OR pp.fisico IS NULL) AND (pp.es_diseno = 0 OR pp.es_diseno IS NULL))
-                            )
-                        ) * (IFNULL(b.procentaje_comision, 100) / 100)) as cantidad_productos
+                        a.cantidad as cantidad
                     FROM
                         pagos a
-                    JOIN
+                    LEFT JOIN
                         lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
                     LEFT JOIN
-                        ordenes o ON b.id_orden = o._id
+                        ordenes o ON a.id_orden = o._id
                     JOIN
-                        api_empresas.empresas_usuarios c ON b.id_empleado = c.id_usuario
+                        api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
                     LEFT JOIN 
                         lotes_detalles ld ON b.id_lotes_detalles = ld._id
-                    LEFT JOIN
-                        ordenes_productos d ON ld.id_ordenes_productos = d._id
-                    LEFT JOIN 
-                        products p ON d.id_woo = p._id
                     WHERE
                         a.fecha_pago IS NULL
-                        AND c.comision_tipo = 'variable'
-                        AND (p.fisico = 1 OR p.fisico IS NULL)
-                        AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+                        AND a.comision_tipo = 'variable'
+                        AND a.id_lotes_detalles IS NOT NULL";
 
     $pagos_variables = $localConnection->goQuery($sql_variable);
     if (!is_array($pagos_variables) || (isset($pagos_variables['status']) && $pagos_variables['status'] === 'error')) {
@@ -462,12 +440,11 @@ return function (App $app) {
     $sql_porcentaje = "SELECT DISTINCT
                         a._id AS id_pago,
                         a.id_reposicion,
-                        d.id_woo AS cod,
+                        'N/A' AS cod,
                         b._id AS id_lotes_detalles,
                         b.id_orden AS orden,
-                        d.name AS producto,
-                        d.cantidad,
-                        d.talla,
+                        'Lote Multi-Producto' AS producto,
+                        'N/A' AS talla,
                         c.id_usuario AS id_empleado,
                         c.nombre,
                         a.monto_pago AS pago,
@@ -481,33 +458,22 @@ return function (App $app) {
                         DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
                         a.fecha_pago,
                         TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
-                        d.precio_unitario AS precio_producto,
-                        (SELECT IF(a.id_reposicion > 0,
-                            (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion),
-                            IF(a.id_departamento = 3,
-                                IFNULL((SELECT SUM(ic.cantidad) FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = b.id_orden), 0),
-                                (SELECT IFNULL(SUM(op.cantidad), 0) FROM ordenes_productos op JOIN products pp ON pp._id = op.id_woo WHERE op.id_orden = b.id_orden AND (pp.fisico = 1 OR pp.fisico IS NULL) AND (pp.es_diseno = 0 OR pp.es_diseno IS NULL))
-                            )
-                        ) * (IFNULL(b.procentaje_comision, 100) / 100)) as cantidad_productos
+                        0 AS precio_producto,
+                        a.cantidad as cantidad
                     FROM
                         pagos a
-                    JOIN
+                    LEFT JOIN
                         lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
                     LEFT JOIN
-                        ordenes o ON b.id_orden = o._id
+                        ordenes o ON a.id_orden = o._id
                     JOIN
-                        api_empresas.empresas_usuarios c ON b.id_empleado = c.id_usuario
+                        api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
                     LEFT JOIN 
                         lotes_detalles ld ON b.id_lotes_detalles = ld._id
-                    LEFT JOIN
-                        ordenes_productos d ON ld.id_ordenes_productos = d._id
-                    LEFT JOIN 
-                        products p ON d.id_woo = p._id
                     WHERE
                         a.fecha_pago IS NULL
-                        AND c.comision_tipo = 'porcentaje'
-                        AND (p.fisico = 1 OR p.fisico IS NULL)
-                        AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+                        AND a.comision_tipo = 'porcentaje'
+                        AND a.id_departamento IS NULL";
 
     $pagos_porcentaje = $localConnection->goQuery($sql_porcentaje);
     if (!is_array($pagos_porcentaje) || (isset($pagos_porcentaje['status']) && $pagos_porcentaje['status'] === 'error')) {
