@@ -373,11 +373,13 @@ return function (App $app) {
                     DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
                     a.fecha_pago,
                     TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
-                    IF(a.id_departamento = 3,
-                        IFNULL((SELECT SUM(ic.cantidad) FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = b.id_orden), 0),
-                        (SELECT IFNULL(SUM(op.cantidad), 0) FROM ordenes_productos op JOIN products pp ON pp._id = op.id_woo WHERE op.id_orden = b.id_orden AND (pp.fisico = 1 OR pp.fisico IS NULL) AND (pp.es_diseno = 0 OR pp.es_diseno IS NULL))
-                    )
-                ) * (IFNULL(b.procentaje_comision, 100) / 100)) as cantidad_productos
+                    (SELECT IF(a.id_reposicion > 0,
+                        (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion),
+                        IF(a.id_departamento = 3,
+                            IFNULL((SELECT SUM(ic.cantidad) FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = b.id_orden), 0),
+                            (SELECT IFNULL(SUM(op.cantidad), 0) FROM ordenes_productos op JOIN products pp ON pp._id = op.id_woo WHERE op.id_orden = b.id_orden AND (pp.fisico = 1 OR pp.fisico IS NULL) AND (pp.es_diseno = 0 OR pp.es_diseno IS NULL))
+                        )
+                    ) * (IFNULL(b.procentaje_comision, 100) / 100)) as cantidad_productos
                 FROM
                     pagos a
                 JOIN
@@ -397,7 +399,7 @@ return function (App $app) {
                     AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
 
     $pagos_fijos = $localConnection->goQuery($sql_fija);
-    if (!is_array($pagos_fijos)) {
+    if (!is_array($pagos_fijos) || (isset($pagos_fijos['status']) && $pagos_fijos['status'] === 'error')) {
       $pagos_fijos = [];
     }
 
@@ -452,7 +454,7 @@ return function (App $app) {
                         AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
 
     $pagos_variables = $localConnection->goQuery($sql_variable);
-    if (!is_array($pagos_variables)) {
+    if (!is_array($pagos_variables) || (isset($pagos_variables['status']) && $pagos_variables['status'] === 'error')) {
       $pagos_variables = [];
     }
 
@@ -508,7 +510,7 @@ return function (App $app) {
                         AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
 
     $pagos_porcentaje = $localConnection->goQuery($sql_porcentaje);
-    if (!is_array($pagos_porcentaje)) {
+    if (!is_array($pagos_porcentaje) || (isset($pagos_porcentaje['status']) && $pagos_porcentaje['status'] === 'error')) {
       $pagos_porcentaje = [];
     }
 
