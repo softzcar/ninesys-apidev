@@ -2644,7 +2644,11 @@ return function (App $app) {
                 ldea.id_departamento,
                 COUNT(DISTINCT ldea.id_empleado) AS numero_de_empleados,
                 MIN(ldea.fecha_inicio) AS fecha_inicio_agregada,
-                MAX(ldea.fecha_terminado) AS fecha_terminado_agregada
+                -- Solo consideramos terminado el departamento si TODOS los empleados terminaron
+                CASE 
+                    WHEN COUNT(ldea.id_empleado) = COUNT(ldea.fecha_terminado) THEN MAX(ldea.fecha_terminado) 
+                    ELSE NULL 
+                END AS fecha_terminado_agregada
             FROM
                 lotes_detalles_empleados_asignados ldea
             JOIN ordenes o ON o._id = ldea.id_orden
