@@ -1,0 +1,10 @@
+- Solicitud del Usuario: Resolver definitivamente por qué se están pagando 48 unidades en la orden 6 y corregir el error sobre la tabla deprecada.
+- Archivos Involucrados:
+  - `/app/routes/manufacturing.php`
+  - `/app/routes/payments.php`
+- Acción Realizada: Se revertieron los commits previos. Tras confirmar que `lotes_detalles` era una tabla fallida para asignación, se procedió a buscar de dónde provenían las 48 piezas. Se encontró que la consulta de comisiones variables en `/registrar-paso-empleado` estaba haciendo un `LEFT JOIN lotes_detalles ld` y leyendo `IFNULL(ld.unidades_solicitadas, c.cantidad)`. Dado que `unidades_solicitadas` contenía basura, sumaba infladamente (16 + 16 + 16 = 48). Se depuró por completo de `manufacturing.php`, apuntando fijamente a `c.cantidad`. También se extirpó a `lotes_detalles` de los historiales de pago general en `payments.php` (antes causaban errores y lecturas vacías).
+- Herramienta(s) Utilizada(s): `run_command` (SQL mysql), `grep_search`, `multi_replace_file_content`
+- Resultado: Éxito
+- Verificación: Se ejecutó el query `sql_calculo_pago` sobre MySQL para el id de empleado y orden, confirmando que la lectura vuelve a dar el resultado nativo (15 unidades en total, en vez de 48).
+- Observaciones de Gemini: Tenías toda la razón. Mi intento anterior se enfocó en parchar `lotes_detalles` creyendo que era base de los datos, cuando en realidad lo que debíamos hacer era sacarlo de la ecuación.
+- Respuesta de Gemini: Mil disculpas, tenías toda la razón. Lo que causaba las 48 unidades era un `LEFT JOIN` hacia la tabla `lotes_detalles` dentro del código de pago variable (`manufacturing.php`), lo que traía valores fantasma multiplicados. Ya quité a `lotes_detalles` de ese cálculo para que use la cantidad limpia. También la quité de `/semana` y otros reportes en `payments.php` donde iba a romper todo. Ya he deshecho mi commit falso y he realizado la corrección correcta. ¿Quieres que lo suba a producción o algo más?

@@ -381,8 +381,6 @@ return function (App $app) {
                     ordenes o ON a.id_orden = o._id
                 JOIN
                     api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
-                LEFT JOIN 
-                    lotes_detalles ld ON b.id_lotes_detalles = ld._id
                 WHERE
                     a.fecha_pago IS NULL
                     AND a.comision_tipo = 'fija'
@@ -424,8 +422,6 @@ return function (App $app) {
                         ordenes o ON a.id_orden = o._id
                     JOIN
                         api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
-                    LEFT JOIN 
-                        lotes_detalles ld ON b.id_lotes_detalles = ld._id
                     WHERE
                         a.fecha_pago IS NULL
                         AND a.comision_tipo = 'variable'
@@ -468,8 +464,6 @@ return function (App $app) {
                         ordenes o ON a.id_orden = o._id
                     JOIN
                         api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
-                    LEFT JOIN 
-                        lotes_detalles ld ON b.id_lotes_detalles = ld._id
                     WHERE
                         a.fecha_pago IS NULL
                         AND a.comision_tipo = 'porcentaje'
@@ -701,13 +695,13 @@ return function (App $app) {
     // PAGOS ESPLEADOS
     $sql = 'SELECT
             a._id id_pago,
-            b.id_woo cod,
+            NULL as cod,
             b._id id_lotes_detalles,
-            b.id_orden orden,
-            b.id_woo id_woo,
-            d.name producto,
+            a.id_orden orden,
+            NULL as id_woo,
+            \'Pago Multi-Producto\' as producto,
             a.cantidad cantidad,
-            d.talla,
+            \'N/A\' as talla,
             c.id_usuario id_empleado,
             c.nombre,
             a.monto_pago pago,
@@ -718,19 +712,15 @@ return function (App $app) {
             DATE_FORMAT(b.fecha_terminado, "%v") semana,
             DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
             a.fecha_pago,
-            TIMEDIFF(fecha_terminado, fecha_inicio) tiempo_transcurrido
+            TIMEDIFF(b.fecha_terminado, b.fecha_inicio) tiempo_transcurrido
             FROM
             pagos a
-            JOIN lotes_detalles b ON
-            a.id_lotes_detalles = b._id
-            JOIN api_empresas.empresas_usuarios c ON
-            a.id_empleado = c.id_usuario
-            JOIN ordenes_productos d ON
-            b.id_ordenes_productos = d._id
+            LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+            JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
             WHERE WEEK(a.fecha_pago, 1) = ' . $args['semana'] . ' AND a.fecha_pago IS NOT NULL
             ORDER BY
             c.nombre ASC,
-            b.id_orden ASC,
+            a.id_orden ASC,
             a._id ASC;';
     $object['data']['empleados'] = $localConnection->goQuery($sql);
     $object['sql_pagos_empleados'] = $sql;
@@ -810,35 +800,31 @@ return function (App $app) {
     $sql = 'SELECT
             a._id id_pago,
             b._id id_lotes_detalles,
-            b.id_orden orden,
-            b.id_woo id_woo,
-            d.name producto,
-            d.talla,
+            a.id_orden orden,
+            NULL as id_woo,
+            \'Pago Multi-Producto\' as producto,
+            \'N/A\' as talla,
             c.id_usuario id_empleado,
             c.nombre,
             c.comision,
             b.id_departamento,
-            b.departamento,
+            a.detalle as departamento,
             DATE_FORMAT(b.fecha_terminado, "%a") dia,
             DATE_FORMAT(b.fecha_terminado, "%v") semana,
             DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
-            b.unidades_solicitadas cantidad,
+            a.cantidad cantidad,
             a.monto_pago pago,
             a.fecha_pago,
             a.cantidad,
-            TIMEDIFF(fecha_terminado, fecha_inicio) tiempo_transcurrido
+            TIMEDIFF(b.fecha_terminado, b.fecha_inicio) tiempo_transcurrido
             FROM
             pagos a
-            JOIN lotes_detalles b ON
-            a.id_lotes_detalles = b._id
-            JOIN api_empresas.empresas_usuarios c ON
-            b.id_empleado = c.id_usuario
-            JOIN ordenes_productos d ON
-            b.id_ordenes_productos = d._id
+            LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+            JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
             WHERE ' . $whereEmpleados . ' AND a.fecha_pago IS NULL 
             ORDER BY
             c.nombre ASC,
-            b.id_orden ASC,
+            a.id_orden ASC,
             a._id ASC;
         ';
 
@@ -931,10 +917,10 @@ return function (App $app) {
     $sql = 'SELECT
     a._id id_pago,
     b._id id_lotes_detalles,
-    b.id_orden orden,
-    b.id_woo id_woo,
-    d.name producto,
-    d.talla,
+    a.id_orden orden,
+    NULL as id_woo,
+    \'Pago Multi-Producto\' as producto,
+    \'N/A\' as talla,
     c._id id_empleado,
     c.nombre,
     c.comision,
@@ -942,23 +928,19 @@ return function (App $app) {
     DATE_FORMAT(b.fecha_terminado, "%a") dia,
     DATE_FORMAT(b.fecha_terminado, "%v") semana,
     DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
-    b.unidades_solicitadas cantidad,
+    a.cantidad cantidad,
     a.monto_pago pago,
     a.fecha_pago,
     a.cantidad,
-    TIMEDIFF(fecha_terminado, fecha_inicio) tiempo_transcurrido
+    TIMEDIFF(b.fecha_terminado, b.fecha_inicio) tiempo_transcurrido
     FROM
     pagos a
-    JOIN lotes_detalles b ON
-    a.id_lotes_detalles = b._id
-    JOIN empleados c ON
-    b.id_empleado = c._id
-    JOIN ordenes_productos d ON
-    b.id_ordenes_productos = d._id
-    WHERE ' . $whereEmpleados . ' AND e.fecha_pago IS NULL 
+    LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+    JOIN empleados c ON a.id_empleado = c._id
+    WHERE ' . $whereEmpleados . ' AND a.fecha_pago IS NULL 
     ORDER BY
     c.nombre ASC,
-    b.id_orden ASC,
+    a.id_orden ASC,
     a._id ASC;
     ';
 
