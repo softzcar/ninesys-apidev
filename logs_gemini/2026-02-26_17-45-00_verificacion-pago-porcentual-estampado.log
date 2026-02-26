@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Revisar por qué la orden 1 recién creada en empresa 174 limpia, después de la corrección, pagó 12 piezas en lugar de 15 al departamento de Estampado.
+- Archivos Involucrados: `N/A`
+- Acción Realizada: Se inspeccionaron las bases de datos de `api_emp_174`. Se comprobó que en la tabla de asignaciones para la orden 1, el departamento de Estampado tiene una multi-asignación: el empleado 607 tiene 20% y el empleado 608 tiene 80%. Como el empleado 608 finalizó su tarea, el sistema le computó exactamente el 80% de las 15 piezas solicitadas (15 * 0.8 = 12).
+- Herramienta(s) Utilizada(s): `run_command`
+- Resultado: Éxito (El sistema demostró funcionar perfectamente)
+- Verificación: La matemática operó de forma perfecta de la mano de nuestra corrección. Se desestimó bug y se confirmó funcionamiento idóneo del escalado porcentual en comisiones variables, sin depender de la tabla obsoleta `lotes_detalles`.
+- Observaciones de Gemini: El usuario ha debido configurar esta multi-asignación al crear la orden de prueba o tenía prestablecida esta delegación.
+- Respuesta de Gemini: Informe detallado con tablas sobre la razón de la cuota. Se reitera éxito de los fixes de este día.
