@@ -2014,7 +2014,7 @@ return function (App $app) {
         } else {
           $comision_valor = floatval($resp_comision_empleado[0]['comision'] ?? 0);
         }
-        $sql_calculo_pago = 'SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable, ((SUM(c.cantidad) * eu.comision) * a.procentaje_comision / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? GROUP BY a._id, a.procentaje_comision';
+        $sql_calculo_pago = 'SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable, ((SUM(c.cantidad) * eu.comision) * a.procentaje_comision / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) GROUP BY a._id, a.procentaje_comision';
         $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
         if (!empty($resp_comision)) {
           $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
@@ -2155,7 +2155,7 @@ return function (App $app) {
         $resp_comision_empleado = $localConnection->goQuery($sql_comision_empleado, [$id_empleado]);
         $comision_tipo = $resp_comision_empleado[0]['comision_tipo'] ?? 'fija';
         $comision_valor = floatval($resp_comision_empleado[0]['comision'] ?? 0);
-        $sql_calculo_pago = 'SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable, ((SUM(c.cantidad) * eu.comision) * a.procentaje_comision / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? GROUP BY a._id, a.procentaje_comision';
+        $sql_calculo_pago = 'SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable, ((SUM(c.cantidad) * eu.comision) * a.procentaje_comision / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) GROUP BY a._id, a.procentaje_comision';
         $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
         if (!empty($resp_comision)) {
           $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
