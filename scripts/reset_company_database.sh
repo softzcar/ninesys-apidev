@@ -205,7 +205,6 @@ print_header "Limpiando datos operacionales"
 TABLES_TO_TRUNCATE=(
     "ordenes"
     "ordenes_productos"
-    "ordenes_tmp"
     "ordenes_vinculadas"
     "ordenes_observaciones"
     "ordenes_fila_orden"
