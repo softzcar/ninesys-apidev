@@ -2223,31 +2223,45 @@ return function (App $app) {
             $localConnection->goQuery($sql_pago, [$id_orden_actual, 0, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, 'aprobado', $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
           }
 
-          // EXCEDENTES CORTE (Comisión Variable)
-          if ($comision_tipo === 'variable') {
-            $sqlExcVar = "SELECT
-                  lca.id_ordenes_productos,
-                  (lca.cantidad_ajustada - lca.cantidad_solicitada) AS excedente,
-                  IFNULL(pc.comision, 0) AS comision_producto
-                FROM lotes_corte_ajustes lca
-                LEFT JOIN products_comisiones pc ON pc.id_product = (SELECT id_woo FROM ordenes_productos WHERE _id = lca.id_ordenes_productos LIMIT 1) AND pc.id_departamento = ?
-                WHERE lca.id_orden = ?
-                  AND (lca.cantidad_ajustada - lca.cantidad_solicitada) > 0
-              ";
-            $rspExcVar = $localConnection->goQuery($sqlExcVar, [$id_departamento, $id_orden_actual]);
-            foreach ($rspExcVar as $excProd) {
-              $excedente_piezas = floatval($excProd['excedente']);
+          // EXCEDENTES CORTE (Todos los tipos de comisión: variable, fija, porcentaje)
+          $sqlExcVar = "SELECT
+                lca.id_ordenes_productos,
+                (lca.cantidad_ajustada - lca.cantidad_solicitada) AS excedente,
+                IFNULL(pc.comision, 0) AS comision_producto,
+                op.precio_unitario
+              FROM lotes_corte_ajustes lca
+              LEFT JOIN ordenes_productos op ON op._id = lca.id_ordenes_productos
+              LEFT JOIN products_comisiones pc ON pc.id_product = op.id_woo AND pc.id_departamento = ?
+              WHERE lca.id_orden = ?
+                AND (lca.cantidad_ajustada - lca.cantidad_solicitada) > 0
+            ";
+          $rspExcVar = $localConnection->goQuery($sqlExcVar, [$id_departamento, $id_orden_actual]);
+          foreach ($rspExcVar as $excProd) {
+            $excedente_piezas = floatval($excProd['excedente']);
+            $precio_unitario_exc = floatval($excProd['precio_unitario'] ?? 0);
+
+            if ($comision_tipo === 'variable') {
               $comision_exc = floatval($excProd['comision_producto']);
               $monto_exc = ($excedente_piezas * $comision_exc) * ($procentaje_comision_asignado / 100);
-              if ($salario_tipo === 'Salario')
-                $monto_exc = 0;
+            } elseif ($comision_tipo === 'fija') {
+              $comision_exc = $comision_value_emp;
+              $monto_exc = ($excedente_piezas * $comision_exc) * ($procentaje_comision_asignado / 100);
+            } elseif ($comision_tipo === 'porcentaje') {
+              $comision_exc = $comision_value_emp; // porcentaje del empleado (ej: 3.00)
+              $monto_exc = ($excedente_piezas * $precio_unitario_exc * ($comision_exc / 100)) * ($procentaje_comision_asignado / 100);
+            } else {
+              $comision_exc = 0;
+              $monto_exc = 0;
+            }
 
-              $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = ? AND id_reposicion = 0 AND id_empleado = ? AND id_departamento = ? AND id_lotes_detalles = ? AND detalle = 'Corte-Excedente' LIMIT 1";
-              $checkExc = $localConnection->goQuery($sqlCheckExc, [$id_orden_actual, $id_emp_asignado, $id_departamento, $id_lotes_detalles]);
-              if (empty($checkExc)) {
-                $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, 0, ?, ?, 'variable', ?, ?, 'aprobado', ?, ?, 'Corte-Excedente')";
-                $localConnection->goQuery($sqlExcIns, [$id_orden_actual, $id_departamento, $comision_exc, $excedente_piezas, $id_lotes_detalles, $monto_exc, $id_emp_asignado]);
-              }
+            if ($salario_tipo === 'Salario')
+              $monto_exc = 0;
+
+            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = ? AND id_reposicion = 0 AND id_empleado = ? AND id_departamento = ? AND id_lotes_detalles = ? AND detalle = 'Corte-Excedente' LIMIT 1";
+            $checkExc = $localConnection->goQuery($sqlCheckExc, [$id_orden_actual, $id_emp_asignado, $id_departamento, $id_lotes_detalles]);
+            if (empty($checkExc)) {
+              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, 0, ?, ?, ?, ?, ?, 'aprobado', ?, ?, 'Corte-Excedente')";
+              $localConnection->goQuery($sqlExcIns, [$id_orden_actual, $id_departamento, $comision_exc, $comision_tipo, $excedente_piezas, $id_lotes_detalles, $monto_exc, $id_emp_asignado]);
             }
           }
 
