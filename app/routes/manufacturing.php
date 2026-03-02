@@ -104,21 +104,11 @@ return function (App $app) {
 
       if (!empty($ordenes_del_lote)) {
         // 4. Si hay órdenes en el lote, iniciar cada una de sus tareas de empleado
-        $sql_iniciar_tareas = '';
         foreach ($ordenes_del_lote as $orden) {
           $id_orden_actual = $orden['id_orden'];
-
-          // --- INICIO DE LA CORRECCIÓN ---
-          // Actualizar el progreso a 'en curso' y registrar la fecha de inicio SOLO para las tareas del departamento actual.
-          $sql_iniciar_tareas .= "UPDATE lotes_detalles_empleados_asignados SET fecha_inicio = NOW(), progreso = 'en curso'
-                        WHERE id_orden = {$id_orden_actual} AND id_departamento = {$id_departamento_actual};";
-          // --- FIN DE LA CORRECCIÓN ---
-        }
-
-        // Ejecutar las consultas de actualización en un solo lote para mayor eficiencia
-        if (!empty($sql_iniciar_tareas)) {
-          $debug_info['iniciar_tareas_sql'] = $sql_iniciar_tareas;
-          $localConnection->goQuery($sql_iniciar_tareas);
+          $sql_iniciar_tarea = "UPDATE lotes_detalles_empleados_asignados SET fecha_inicio = NOW(), progreso = 'en curso'
+                        WHERE id_orden = ? AND id_departamento = ?";
+          $localConnection->goQuery($sql_iniciar_tarea, [$id_orden_actual, $id_departamento_actual]);
         }
       }
 
@@ -727,10 +717,22 @@ return function (App $app) {
 
         if (!$passToNext) {
           // Terminar reposicion (Reached destination)
-          $sqlRepo = "UPDATE reposiciones SET terminada = 1 WHERE _id = {$miEmpleado['id_reposicion']};";
-          $sqlRepo .= "DELETE FROM `ordenes_fila_reposiciones` WHERE id_reposicion = {$miEmpleado['id_reposicion']};";
-          $sqlRepo .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'terminada', `fecha_terminado` = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$miEmpleado['id_reposicion']};";
-          $localConnection->goQuery($sqlRepo);
+          $localConnection->beginTransaction();
+          try {
+            $sqlRepo1 = "UPDATE reposiciones SET terminada = 1 WHERE _id = ?;";
+            $localConnection->goQuery($sqlRepo1, [$miEmpleado['id_reposicion']]);
+
+            $sqlRepo2 = "DELETE FROM `ordenes_fila_reposiciones` WHERE id_reposicion = ?;";
+            $localConnection->goQuery($sqlRepo2, [$miEmpleado['id_reposicion']]);
+
+            $sqlRepo3 = "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'terminada', `fecha_terminado` = '{$now}' WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = ?;";
+            $localConnection->goQuery($sqlRepo3, [$miEmpleado['id_orden'], $miEmpleado['id_empleado'], $miEmpleado['id_departamento'], $miEmpleado['id_reposicion']]);
+
+            $localConnection->commit();
+          } catch (Exception $e) {
+            $localConnection->rollback();
+            throw $e;
+          }
         }
       } else {
         // ONLY execute main order logic if NOT a reposition (or if we want repositions to trigger main logic, but usually not)
@@ -775,15 +777,26 @@ return function (App $app) {
           // Verificar si existe el departamento, de no ser así indica que es el último paso.
           if (empty($response_departamentos)) {
             // Es el último paso debemos asignar terminado o el paso que viene despues de el último despues de producción
-            $sql5 = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = {$miEmpleado['id_orden']}; UPDATE ordenes SET `status` = 'terminada' WHERE _id = {$miEmpleado['id_orden']};";
-            // $sql5 .= "UPDATE ordenes SET `status` = 'terminado' WHERE _id = {$miEmpleado['id_orden']};";
+            $localConnection->beginTransaction();
+            try {
+              $sqlLote = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?;";
+              $localConnection->goQuery($sqlLote, [$miEmpleado['id_orden']]);
+
+              $sqlOrden = "UPDATE ordenes SET `status` = 'terminada' WHERE _id = ?;";
+              $localConnection->goQuery($sqlOrden, [$miEmpleado['id_orden']]);
+
+              $localConnection->commit();
+            } catch (Exception $e) {
+              $localConnection->rollback();
+              throw $e;
+            }
           } else {
             // El paso existe, lo actualizamos para el semáforo y progressbar
             $departmentName = $response_departamentos[0]['departamento'] ?? 'terminado';  // Usar el nombre del departamento
             $next_department_id = $response_departamentos[0]['id_departamento'];  // Usar el ID correcto del departamento
-            $sql5 = "UPDATE lotes SET paso = '{$departmentName}', id_departamento_actual = {$next_department_id} WHERE id_orden = {$miEmpleado['id_orden']};";
+            $sql5 = "UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?;";
+            $localConnection->goQuery($sql5, [$departmentName, $next_department_id, $miEmpleado['id_orden']]);
           }
-          $response_update2 = $localConnection->goQuery($sql5);
         }
       } // End else !es_reposicion
 
