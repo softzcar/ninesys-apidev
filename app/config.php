@@ -43,3 +43,6 @@ loadEnvFile();
 
 // API Key de Gemini para el asistente IA (desde .env)
 define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: '');
+
+// URL base de la API de WhatsApp (desde .env)
+define('WS_API_URL', getenv('WS_API_URL') ?: 'https://ws.nineteengreen.com/');

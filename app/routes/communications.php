@@ -210,7 +210,7 @@ return function (App $app) {
       $message_to_send = $dataMensaje['mensaje'] ?? '';
 
       // 2. Instanciar el cliente de la API de WhatsApp
-      $whatsAppApiClient = new WhatsAppAPIClient('https://ws.nineteengreen.com/');
+      $whatsAppApiClient = new WhatsAppAPIClient(WS_API_URL);
 
       // 3. Llamar a la función para enviar el mensaje directo (el método del endpoint interno)
       $nodeApiResponse = $whatsAppApiClient->sendDirectMessageToNode(
@@ -462,7 +462,7 @@ return function (App $app) {
     // $msgApi = new WhatsAppAPIClient($apiBaseUrl);
 
     // Asumiendo que la clase WhatsAppAPIClient fue ajustada como se discutió o que el constructor maneja esto:
-    $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/');  // Ajustar según la implementación de tu clase
+    $msgApi = new WhatsAppAPIClient(WS_API_URL);  // Ajustar según la implementación de tu clase
 
     $testResp = $msgApi->sendMessageCustom(ID_EMPRESA, $id_orden, $phone, $result['msg_ws']);
     $result['result_msg'] = $testResp;
@@ -552,7 +552,7 @@ return function (App $app) {
       $formatted_msg = "*Mensaje Interno*\nDepartamento: $departamento\nDe: {$dataMensaje['nombre_empleado']}\nPara:$name_destino\n\n$message_to_send";
 
       // Instanciar el cliente de la API de WhatsApp
-      $whatsAppApiClient = new WhatsAppAPIClient('https://ws.nineteengreen.com/');
+      $whatsAppApiClient = new WhatsAppAPIClient(WS_API_URL);
 
       // Llamar a la nueva función para enviar el mensaje a través de la API de Node.js
       $nodeApiResponse = $whatsAppApiClient->sendDirectMessageToNode(

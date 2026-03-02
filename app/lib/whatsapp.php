@@ -51,7 +51,7 @@ class WhatsAppAPIClient
             throw new Exception('Credenciales de WhatsApp no configuradas para la empresa ID: ' . $id_empresa);
         }
 
-        $loginUrl = 'https://ws.nineteengreen.com/login';
+        $loginUrl = $this->apiUrl . 'login';
         $postData = json_encode([
             'username' => $credentials[0]['ws_username'],
             'password' => $credentials[0]['ws_password']
@@ -136,7 +136,7 @@ class WhatsAppAPIClient
         $http_status_code = $matches[1] ?? 0;
 
         if ($http_status_code >= 400) {
-             // Si el token es inválido (401 o 403), forzar un nuevo login la próxima vez
+            // Si el token es inválido (401 o 403), forzar un nuevo login la próxima vez
             if ($http_status_code == 401 || $http_status_code == 403) {
                 $this->dbConnection->goQuery('UPDATE empresas SET ws_token = NULL, ws_token_expires_at = NULL WHERE id_empresa = ?', [$id_empresa]);
             }
@@ -153,13 +153,13 @@ class WhatsAppAPIClient
 
     public function sendMessage($id_empresa, $payload)
     {
-        $url = 'https://ws.nineteengreen.com/send-message/' . $id_empresa;
+        $url = $this->apiUrl . 'send-message/' . $id_empresa;
         return $this->makeRequest('POST', $url, $id_empresa, $payload);
     }
 
     public function sendMessageCustom($id_empresa, $id_orden, $phone, $msg)
     {
-        $url = 'https://ws.nineteengreen.com/send-message-custom/' . $id_empresa;
+        $url = $this->apiUrl . 'send-message-custom/' . $id_empresa;
         $payload = [
             'phone' => $phone,
             'id_orden' => $id_orden,
@@ -167,16 +167,16 @@ class WhatsAppAPIClient
         ];
         return $this->makeRequest('POST', $url, $id_empresa, $payload);
     }
-    
+
     public function getWSSeesionInfo($id_empresa)
     {
-        $url = 'https://ws.nineteengreen.com/session-info/' . $id_empresa;
+        $url = $this->apiUrl . 'session-info/' . $id_empresa;
         return $this->makeRequest('GET', $url, $id_empresa);
     }
 
     public function sendDirectMessageToNode($id_empresa, $phone, $message)
     {
-        $url = 'https://ws.nineteengreen.com/send-direct-message/' . $id_empresa;
+        $url = $this->apiUrl . 'send-direct-message/' . $id_empresa;
         $payload = [
             'phone' => $phone,
             'message' => $message,
@@ -186,7 +186,7 @@ class WhatsAppAPIClient
 
     // El método getInfo y sendMessage_old se mantienen por si son usados en otras partes,
     // pero no se les añade la lógica de autenticación JWT para marcarlos como obsoletos.
-    
+
     private function getInfo($id_orden)
     {
         $sql = 'SELECT
@@ -234,7 +234,8 @@ class WhatsAppAPIClient
         }
         $newResponse['data']['template'] = $template;
         $newResponse['data']['object'] = $data['object'];
-        $this->apiUrl = 'https://ws.nineteengreen.com/send-message/' . $id_empresa;
+        $this->apiUrl = rtrim($this->apiUrl, '/') . '/'; // Asegurar que termina en slash
+        $api_url = $this->apiUrl . 'send-message/' . $id_empresa;
         try {
             $options = [
                 'http' => [
@@ -246,7 +247,7 @@ class WhatsAppAPIClient
                 ],
             ];
             $context = stream_context_create($options);
-            $result = @file_get_contents($this->apiUrl, false, $context);
+            $result = @file_get_contents($api_url, false, $context);
             if ($result === false) {
                 $error = error_get_last();
                 throw new Exception('Error al llamar a la API externa: ' . ($error ? $error['message'] : 'Error desconocido'));
