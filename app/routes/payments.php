@@ -255,10 +255,11 @@ return function (App $app) {
         // Si no hay pagos operativos (cantidadDePagos == 0) pero hay valores a procesar, creamos un ancla virtual en la tabla pagos
         if (count($idsParaPago) === 0 && ($salario > 0 || count($bonos) > 0 || count($descuentos) > 0) && $idEmpleado) {
           $fechaActual = $pagoData['fecha_pago'] ?? $now;
-          $observaciones = $pagoData['observaciones'] ?? 'Pago Salario Administrativo';
+          // El campo detalle en la tabla pagos es VARCHAR(16). 'Pago Nomina' tiene 11 chars.
+          $detallePago = 'Pago Nomina';
 
-          $sqlVirtual = "INSERT INTO pagos (id_empleado, detalle, monto_pago, comision, comision_tipo, cantidad, fecha_pago) VALUES (?, ?, 0, 0, 'fija', 1, ?)";
-          $result = $localConnection->goQuery($sqlVirtual, [$idEmpleado, $observaciones, $fechaActual]);
+          $sqlVirtual = "INSERT INTO pagos (id_empleado, detalle, monto_pago, comision, comision_tipo, cantidad, fecha_pago, estatus) VALUES (?, ?, 0, 0, 'fija', 1, ?, 'aprobado')";
+          $result = $localConnection->goQuery($sqlVirtual, [$idEmpleado, $detallePago, $fechaActual]);
 
           if (isset($result['insert_id'])) {
             $idsParaPago = [$result['insert_id']];
@@ -697,7 +698,21 @@ return function (App $app) {
                             WHERE p.id_empleado = eu.id_usuario 
                             AND p.fecha_pago IS NULL
                             AND p.id_orden > 0
-                        )";
+                        )
+                        -- Ocultar si ya se pagó el salario de este periodo (semana/quincena/mes) 
+                        -- (Calculamos el periodo actual igual que en el proceso de inserción)
+                        AND (
+                            SELECT COUNT(*) FROM " . LOCAL_DB . ".pagos_salarios ps 
+                            JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id 
+                            WHERE pa.id_empleado = eu.id_usuario 
+                            AND ps.numero_semana = (
+                                CASE 
+                                    WHEN eu.salario_periodo = 'quincenal' THEN (YEAR(NOW()) * 24 + (MONTH(NOW())-1) * 2 + IF(DAY(NOW())<=15, 1, 2))
+                                    WHEN eu.salario_periodo = 'mensual' THEN (YEAR(NOW()) * 12 + (MONTH(NOW())-1))
+                                    ELSE WEEK(NOW()) 
+                                END
+                            )
+                        ) = 0";
 
     $pagos_administrativos = $localConnection->goQuery($sql_administrativo);
     if (!is_array($pagos_administrativos) || (isset($pagos_administrativos['status']) && $pagos_administrativos['status'] === 'error')) {
