@@ -353,9 +353,59 @@ return function (App $app) {
     $idDeptoVal = intval($data['id_departamento']);
 
     $sqlUpdatePagos = "UPDATE pagos p 
-    JOIN lotes_detalles ld ON p.id_lotes_detalles = ld._id 
-    SET p.comision = {$comisionVal}, p.monto_pago = p.cantidad * {$comisionVal} 
-    WHERE p.fecha_pago IS NULL AND p.comision_tipo = 'variable' AND ld.id_woo = {$idProductVal} AND p.id_departamento = {$idDeptoVal}";
+        JOIN lotes_detalles_empleados_asignados a ON p.id_lotes_detalles = a._id 
+        SET p.monto_pago = (
+              SELECT SUM(
+                  IFNULL(pc.comision, 0) * 
+                  ( IF(a.id_departamento = 3,
+                      (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op._id),
+                      op.cantidad
+                    ) ) * 
+                  (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
+              )
+              FROM ordenes_productos op
+              JOIN products p_woo ON op.id_woo = p_woo._id
+              LEFT JOIN products_comisiones pc ON pc.id_product = op.id_woo AND pc.id_departamento = a.id_departamento
+              WHERE op.id_orden = a.id_orden
+                AND (p_woo.fisico = 1 OR p_woo.fisico IS NULL)
+                AND (p_woo.es_diseno = 0 OR p_woo.es_diseno IS NULL)
+          ),
+          p.comision = (
+              SELECT MAX(IFNULL(pc2.comision, 0))
+              FROM ordenes_productos op2
+              JOIN products p_woo2 ON op2.id_woo = p_woo2._id
+              LEFT JOIN products_comisiones pc2 ON pc2.id_product = op2.id_woo AND pc2.id_departamento = a.id_departamento
+              WHERE op2.id_orden = a.id_orden
+                AND (p_woo2.fisico = 1 OR p_woo2.fisico IS NULL)
+                AND (p_woo2.es_diseno = 0 OR p_woo2.es_diseno IS NULL)
+          ),
+          p.cantidad = (
+              SELECT SUM(
+                  ( IF(a.id_departamento = 3,
+                      (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op3._id),
+                      op3.cantidad
+                    ) ) * 
+                  (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
+              )
+              FROM ordenes_productos op3
+              JOIN products p_woo3 ON op3.id_woo = p_woo3._id
+              WHERE op3.id_orden = a.id_orden
+                AND (p_woo3.fisico = 1 OR p_woo3.fisico IS NULL)
+                AND (p_woo3.es_diseno = 0 OR p_woo3.es_diseno IS NULL)
+          )
+        WHERE p.fecha_pago IS NULL 
+          AND p.comision_tipo = 'variable' 
+          AND a.id_departamento = {$idDeptoVal}
+          AND p.detalle != 'Corte-Excedente'
+          AND EXISTS (
+              SELECT 1 FROM ordenes_productos op_ex 
+              WHERE op_ex.id_orden = a.id_orden AND op_ex.id_woo = {$idProductVal}
+          )
+          AND (
+              SELECT eu.salario_tipo 
+              FROM api_empresas.empresas_usuarios eu 
+              WHERE eu.id_usuario = a.id_empleado
+          ) != 'Salario'";
 
     $tmpConnection->goQuery($sqlUpdatePagos);
 
@@ -429,9 +479,59 @@ return function (App $app) {
         $idDeptoVal = intval($id_departamento);
 
         $sqlUpdatePagos = "UPDATE pagos p 
-        JOIN lotes_detalles ld ON p.id_lotes_detalles = ld._id 
-        SET p.comision = {$comisionVal}, p.monto_pago = p.cantidad * {$comisionVal} 
-        WHERE p.fecha_pago IS NULL AND p.comision_tipo = 'variable' AND ld.id_woo = {$idProductVal} AND p.id_departamento = {$idDeptoVal}";
+        JOIN lotes_detalles_empleados_asignados a ON p.id_lotes_detalles = a._id 
+        SET p.monto_pago = (
+              SELECT SUM(
+                  IFNULL(pc.comision, 0) * 
+                  ( IF(a.id_departamento = 3,
+                      (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op._id),
+                      op.cantidad
+                    ) ) * 
+                  (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
+              )
+              FROM ordenes_productos op
+              JOIN products p_woo ON op.id_woo = p_woo._id
+              LEFT JOIN products_comisiones pc ON pc.id_product = op.id_woo AND pc.id_departamento = a.id_departamento
+              WHERE op.id_orden = a.id_orden
+                AND (p_woo.fisico = 1 OR p_woo.fisico IS NULL)
+                AND (p_woo.es_diseno = 0 OR p_woo.es_diseno IS NULL)
+          ),
+          p.comision = (
+              SELECT MAX(IFNULL(pc2.comision, 0))
+              FROM ordenes_productos op2
+              JOIN products p_woo2 ON op2.id_woo = p_woo2._id
+              LEFT JOIN products_comisiones pc2 ON pc2.id_product = op2.id_woo AND pc2.id_departamento = a.id_departamento
+              WHERE op2.id_orden = a.id_orden
+                AND (p_woo2.fisico = 1 OR p_woo2.fisico IS NULL)
+                AND (p_woo2.es_diseno = 0 OR p_woo2.es_diseno IS NULL)
+          ),
+          p.cantidad = (
+              SELECT SUM(
+                  ( IF(a.id_departamento = 3,
+                      (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op3._id),
+                      op3.cantidad
+                    ) ) * 
+                  (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
+              )
+              FROM ordenes_productos op3
+              JOIN products p_woo3 ON op3.id_woo = p_woo3._id
+              WHERE op3.id_orden = a.id_orden
+                AND (p_woo3.fisico = 1 OR p_woo3.fisico IS NULL)
+                AND (p_woo3.es_diseno = 0 OR p_woo3.es_diseno IS NULL)
+          )
+        WHERE p.fecha_pago IS NULL 
+          AND p.comision_tipo = 'variable' 
+          AND a.id_departamento = {$idDeptoVal}
+          AND p.detalle != 'Corte-Excedente'
+          AND EXISTS (
+              SELECT 1 FROM ordenes_productos op_ex 
+              WHERE op_ex.id_orden = a.id_orden AND op_ex.id_woo = {$idProductVal}
+          )
+          AND (
+              SELECT eu.salario_tipo 
+              FROM api_empresas.empresas_usuarios eu 
+              WHERE eu.id_usuario = a.id_empleado
+          ) != 'Salario'";
 
         $tmpConnection->goQuery($sqlUpdatePagos);
 
