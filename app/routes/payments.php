@@ -199,14 +199,32 @@ return function (App $app) {
   // PROCESAR LOTE MASIVO DE PAGOS
   $app->post('/pagos/procesar-lote-pagos', function (Request $request, Response $response, $args) {
     $data = $request->getParsedBody();
+
+    // Fallback if getParsedBody is empty (sometimes Content-Type issues cause this)
+    if (empty($data)) {
+      $body = $request->getBody()->getContents();
+      $data = json_decode($body, true);
+    }
+
+    error_log('DEBUG procesar-lote-pagos DATA: ' . print_r($data, true));
+
     $localConnection = new LocalDB();
 
     $myDate = new CustomTime();
     $now = $myDate->today();
 
-    $pagosLote = $data['pagos'] ?? [];
+    // Sometimes the frontend might send JSON incorrectly or nested differently
+    // If $data contains 'pagos' as a JSON string instead of an array, decode it
+    if (isset($data['pagos']) && is_string($data['pagos'])) {
+      $pagosLote = json_decode($data['pagos'], true);
+    } else {
+      $pagosLote = $data['pagos'] ?? [];
+    }
+
+    error_log('DEBUG procesar-lote-pagos pagosLote: ' . print_r($pagosLote, true));
 
     if (!is_array($pagosLote) || count($pagosLote) === 0) {
+      error_log('DEBUG procesar-lote-pagos FALLO VALIDACION: no hay pagos o no es array. ' . (is_array($pagosLote) ? 'Es array vacío' : 'No es array'));
       return ApiResponse::validationError($response, 'No se proporcionaron pagos válidos para procesar');
     }
 
