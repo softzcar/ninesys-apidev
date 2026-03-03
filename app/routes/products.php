@@ -347,6 +347,18 @@ return function (App $app) {
 
     $object['response'] = $tmpConnection->goQuery($sql);
 
+    // Recálculo retroactivo en pagos (para lotes no pagados)
+    $comisionVal = floatval($data['comision']);
+    $idProductVal = intval($data['id_product']);
+    $idDeptoVal = intval($data['id_departamento']);
+
+    $sqlUpdatePagos = "UPDATE pagos p 
+    JOIN lotes_detalles ld ON p.id_lotes_detalles = ld._id 
+    SET p.comision = {$comisionVal}, p.monto_pago = p.cantidad * {$comisionVal} 
+    WHERE p.fecha_pago IS NULL AND p.comision_tipo = 'variable' AND ld.id_woo = {$idProductVal} AND p.id_departamento = {$idDeptoVal}";
+
+    $tmpConnection->goQuery($sqlUpdatePagos);
+
     $tmpConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
@@ -410,6 +422,19 @@ return function (App $app) {
         $queryResult = $tmpConnection->goQuery($sql);
         $operationResult['sql'] = $sql;
         $operationResult['response'] = $queryResult;
+
+        // Recálculo retroactivo en pagos (para lotes no pagados)
+        $comisionVal = floatval($comision);
+        $idProductVal = intval($id_product);
+        $idDeptoVal = intval($id_departamento);
+
+        $sqlUpdatePagos = "UPDATE pagos p 
+        JOIN lotes_detalles ld ON p.id_lotes_detalles = ld._id 
+        SET p.comision = {$comisionVal}, p.monto_pago = p.cantidad * {$comisionVal} 
+        WHERE p.fecha_pago IS NULL AND p.comision_tipo = 'variable' AND ld.id_woo = {$idProductVal} AND p.id_departamento = {$idDeptoVal}";
+
+        $tmpConnection->goQuery($sqlUpdatePagos);
+
       } catch (Exception $e) {
         $operationResult['status'] = 'error';
         $operationResult['message'] = $e->getMessage();

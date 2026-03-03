@@ -196,6 +196,164 @@ return function (App $app) {
     }
   });
 
+  // PROCESAR LOTE MASIVO DE PAGOS
+  $app->post('/pagos/procesar-lote-pagos', function (Request $request, Response $response, $args) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    $myDate = new CustomTime();
+    $now = $myDate->today();
+
+    $pagosLote = $data['pagos'] ?? [];
+
+    if (!is_array($pagosLote) || count($pagosLote) === 0) {
+      return ApiResponse::validationError($response, 'No se proporcionaron pagos válidos para procesar');
+    }
+
+    // ========== INICIAR TRANSACCIÓN ==========
+    $localConnection->beginTransaction();
+
+    try {
+      $totalMontoPagadoLote = 0;
+      $totalPagosProcesadosLote = 0;
+
+      foreach ($pagosLote as $pagoData) {
+        $idPagosStr = $pagoData['id_pagos'] ?? '';
+        $idEmpleado = $pagoData['id_empleado'] ?? null;
+        $bonos = $pagoData['bonos'] ?? [];
+        $descuentos = $pagoData['descuentos'] ?? [];
+        $salario = floatval($pagoData['monto_salario'] ?? 0);
+        $comision = floatval($pagoData['monto_comision'] ?? 0);
+
+        // Sanitizar y convertir los IDs de pago a un array de enteros.
+        $listaDeIdPagos = array_map('intval', explode(',', $idPagosStr));
+        // Filtrar valores vacíos o cero
+        $listaDeIdPagos = array_filter($listaDeIdPagos, function ($id) {
+          return $id > 0;
+        });
+
+        $idsParaPago = $listaDeIdPagos;
+
+        // Si no hay pagos operativos (cantidadDePagos == 0) pero hay valores a procesar, creamos un ancla virtual en la tabla pagos
+        if (count($idsParaPago) === 0 && ($salario > 0 || count($bonos) > 0 || count($descuentos) > 0) && $idEmpleado) {
+          $fechaActual = $pagoData['fecha_pago'] ?? $now;
+          $observaciones = $pagoData['observaciones'] ?? 'Pago Salario Administrativo';
+
+          $sqlVirtual = "INSERT INTO pagos (id_empleado, detalle, monto_pago, comision, comision_tipo, cantidad, fecha_pago) VALUES (?, ?, 0, 0, 'fija', 1, ?)";
+          $result = $localConnection->goQuery($sqlVirtual, [$idEmpleado, $observaciones, $fechaActual]);
+
+          if (isset($result['insert_id'])) {
+            $idsParaPago = [$result['insert_id']];
+          }
+        }
+
+        $cantidadDePagos = count($idsParaPago);
+
+        if ($cantidadDePagos > 0) {
+
+          $totalBonosAplicados = 0;
+          $totalDescuentosAplicados = 0;
+
+          // Procesar bonos
+          if (is_array($bonos) && count($bonos) > 0) {
+            foreach ($bonos as $bono) {
+              $monto = floatval($bono['monto'] ?? 0);
+              $descripcion = $bono['descripcion'] ?? 'Bono global';
+              if ($monto > 0) {
+                $totalBonosAplicados += $monto;
+                foreach ($idsParaPago as $idPago) {
+                  $montoPorPago = $monto / $cantidadDePagos;
+                  $sql = "INSERT INTO pagos_abonos (id_pago, monto, descripcion) VALUES (?, ?, ?)";
+                  $localConnection->goQuery($sql, [$idPago, $montoPorPago, $descripcion]);
+                }
+              }
+            }
+          }
+
+          // Procesar descuentos
+          if (is_array($descuentos) && count($descuentos) > 0) {
+            foreach ($descuentos as $descuento) {
+              $monto = floatval($descuento['monto'] ?? 0);
+              $descripcion = $descuento['descripcion'] ?? 'Descuento global';
+              if ($monto > 0) {
+                $totalDescuentosAplicados += $monto;
+                foreach ($idsParaPago as $idPago) {
+                  $montoPorPago = $monto / $cantidadDePagos;
+                  $sql = "INSERT INTO pagos_descuentos (id_pago, monto, descripcion) VALUES (?, ?, ?)";
+                  $localConnection->goQuery($sql, [$idPago, $montoPorPago, $descripcion]);
+                }
+              }
+            }
+          }
+
+          // Procesar salario si existe
+          if ($salario > 0 && $idEmpleado) {
+            // Buscar frecuencia de salario
+            $sql = "SELECT salario_periodo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?";
+            $resultUsuario = $localConnection->goQuery($sql, [$idEmpleado]);
+            $periodo = isset($resultUsuario[0]['salario_periodo']) ? $resultUsuario[0]['salario_periodo'] : 'semanal';
+
+            // Calcular el índice del periodo según la frecuencia para el histórico
+            $numeroPeriodo = intval(date('W')); // Default: semana
+            if ($periodo === 'quincenal') {
+              $dia = intval(date('d'));
+              $mes = intval(date('n')) - 1; // 0-11
+              $anio = intval(date('Y'));
+              $periodoMes = $dia <= 15 ? 1 : 2;
+              $numeroPeriodo = $anio * 24 + $mes * 2 + $periodoMes;
+            } elseif ($periodo === 'mensual') {
+              $mes = intval(date('n')) - 1; // 0-11
+              $anio = intval(date('Y'));
+              $numeroPeriodo = $anio * 12 + $mes;
+            }
+
+            $salarioPorPago = $salario / $cantidadDePagos;
+            foreach ($idsParaPago as $idPago) {
+              $sql = "INSERT INTO pagos_salarios (id_pago, tipo_salario, numero_semana, monto) VALUES (?, ?, ?, ?)";
+              $localConnection->goQuery($sql, [$idPago, $periodo, $numeroPeriodo, $salarioPorPago]);
+            }
+          }
+
+          // Calcular el monto total del pago y el monto por cada registro de pago
+          $montoTotalPago = ($salario + $comision + $totalBonosAplicados) - $totalDescuentosAplicados;
+          $montoPorRegistroDePago = $montoTotalPago / $cantidadDePagos;
+
+          $totalMontoPagadoLote += $montoTotalPago;
+          $totalPagosProcesadosLote += $cantidadDePagos;
+
+          // Crear placeholders (?) para la cláusula IN
+          $placeholders = implode(',', array_fill(0, count($idsParaPago), '?'));
+
+          // Actualizar pagos con fecha_pago y el monto_pago DIVIDIDO
+          $fechaActual = $pagoData['fecha_pago'] ?? $now;
+          $sql = "UPDATE pagos SET fecha_pago = ?, monto_pago = ? WHERE _id IN ({$placeholders})";
+          $params = array_merge([$fechaActual, $montoPorRegistroDePago], $idsParaPago);
+          $localConnection->goQuery($sql, $params);
+        }
+      }
+
+      // ========== CONFIRMAR TRANSACCIÓN ==========
+      $localConnection->commit();
+      $localConnection->disconnect();
+
+      return ApiResponse::success($response, 'Lote de pagos procesado correctamente', [
+        'cantidad_registros_procesados' => $totalPagosProcesadosLote,
+        'monto_total_pagado' => $totalMontoPagadoLote
+      ]);
+
+    } catch (\Throwable $e) {
+      // ========== REVERTIR TRANSACCIÓN ==========
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
+      $localConnection->disconnect();
+
+      error_log('Error en /pagos/procesar-lote-pagos: ' . $e->getMessage());
+
+      return ApiResponse::serverError($response, 'Error al procesar el lote de pagos: ' . $e->getMessage(), $e);
+    }
+  });
+
   // Lista de pagos semanales
   $app->get('/pagos/semana/disenadores', function (Request $request, Response $response, array $args) {
     // OBTENER PAGOS DE DISEÑADORES
@@ -348,6 +506,8 @@ return function (App $app) {
   $app->get('/pagos/semana/empleados', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
+    $id_empresa = intval(str_replace('api_emp_', '', LOCAL_DB));
+
     // --- 1. Consulta para empleados con COMISIÓN FIJA ---
     $sql_fija = "SELECT DISTINCT
                     a._id AS id_pago,
@@ -365,6 +525,8 @@ return function (App $app) {
                     a.comision AS comision,
                     a.comision_tipo,
                     c.salario_tipo,
+                    c.salario_monto,
+                    c.salario_periodo,
                     a.detalle AS departamento,
                     o.pago_total AS monto_orden,
                     DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
@@ -406,6 +568,8 @@ return function (App $app) {
                         a.comision AS comision,
                         a.comision_tipo,
                         c.salario_tipo,
+                        c.salario_monto,
+                        c.salario_periodo,
                         a.detalle AS departamento,
                         o.pago_total AS monto_orden,
                         DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
@@ -447,6 +611,8 @@ return function (App $app) {
                         a.comision AS comision,
                         a.comision_tipo,
                         c.salario_tipo,
+                        c.salario_monto,
+                        c.salario_periodo,
                         a.detalle AS departamento,
                         o.pago_total AS monto_orden,
                         DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
@@ -474,8 +640,54 @@ return function (App $app) {
       $pagos_porcentaje = [];
     }
 
-    // --- 4. Unir y ordenar los resultados ---
-    $todos_los_pagos = array_merge($pagos_fijos, $pagos_variables, $pagos_porcentaje);
+    // --- 4. Consulta para ESTRICTAMENTE ADMINISTRATIVOS O SIN TAREAS PENDIENTES ---
+    $sql_administrativo = "SELECT DISTINCT
+                        0 AS id_pago,
+                        0 AS id_reposicion,
+                        'N/A' as cod,
+                        0 AS id_lotes_detalles,
+                        0 AS orden,
+                        0 AS id_orden, 
+                        'Sin tareas operacionales' AS producto,
+                        'N/A' as talla,
+                        eu.id_usuario AS id_empleado,
+                        eu.nombre,
+                        0 AS pago,
+                        0 as comision,
+                        'fija' AS comision_tipo,
+                        eu.salario_tipo,
+                        eu.salario_monto,
+                        eu.salario_periodo,
+                        eu.departamento AS departamento,
+                        0 AS monto_orden,
+                        '' AS dia,
+                        '' AS semana,
+                        '' AS fecha,
+                        NULL AS fecha_pago,
+                        '' AS tiempo_transcurrido,
+                        0 as cantidad,
+                        (SELECT numero_semana FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = eu.id_usuario ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+                        (SELECT YEAR(pa.moment) FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = eu.id_usuario ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado
+                    FROM
+                        api_empresas.empresas_usuarios eu
+                    WHERE
+                        eu.id_empresa = {$id_empresa}
+                        AND eu.salario_monto > 0
+                        AND eu.activo = 1
+                        AND NOT EXISTS (
+                            SELECT 1 FROM pagos p 
+                            WHERE p.id_empleado = eu.id_usuario 
+                            AND p.fecha_pago IS NULL
+                            AND p.id_orden > 0
+                        )";
+
+    $pagos_administrativos = $localConnection->goQuery($sql_administrativo);
+    if (!is_array($pagos_administrativos) || (isset($pagos_administrativos['status']) && $pagos_administrativos['status'] === 'error')) {
+      $pagos_administrativos = [];
+    }
+
+    // --- 5. Unir y ordenar los resultados ---
+    $todos_los_pagos = array_merge($pagos_fijos, $pagos_variables, $pagos_porcentaje, $pagos_administrativos);
 
     // Opcional: re-ordenar el array combinado por nombre y luego por orden
     usort($todos_los_pagos, function ($a, $b) {
@@ -489,6 +701,7 @@ return function (App $app) {
     $object['sql_debug']['fija'] = $sql_fija;
     $object['sql_debug']['variable'] = $sql_variable;
     $object['sql_debug']['porcentaje'] = $sql_porcentaje;
+    $object['sql_debug']['administrativos'] = $sql_administrativo;
 
     $localConnection->disconnect();
 
