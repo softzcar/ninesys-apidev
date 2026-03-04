@@ -694,7 +694,7 @@ class WooMe
     // --- FIN DE LA CORRECCIÓN ---
   }
 
-  public function updateProductLite($id, $name, $sku, $category, $producto_fisico = 0, $es_diseno = 0)
+  public function updateProductLite($id, $name, $sku, $category, $producto_fisico = 0, $es_diseno = 0, $stock_quantity = 0)
   {
     $localConnection = new LocalDB();
 
@@ -704,7 +704,8 @@ class WooMe
                 `sku` = '" . $sku . "',
                 `category_ids` = '" . $category . "',
                 `fisico` = '" . $producto_fisico . "',
-                `es_diseno` = '" . $es_diseno . "'
+                `es_diseno` = '" . $es_diseno . "',
+                `stock_quantity` = '" . $stock_quantity . "'
             WHERE `_id` = " . $id;
 
     $resp = $localConnection->goQuery($sql);

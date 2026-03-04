@@ -190,8 +190,9 @@ return function (App $app) {
     $woo = new WooMe();
     $producto_fisico = $data['producto_fisico'] ?? 0;
     $es_diseno = $data['es_diseno'] ?? 0;
+    $stock_quantity = $data['stock_quantity'] ?? 0;
 
-    $result = $woo->updateProductLite($data['id'], $data['product'], $data['sku'], $data['category'], $producto_fisico, $es_diseno);
+    $result = $woo->updateProductLite($data['id'], $data['product'], $data['sku'], $data['category'], $producto_fisico, $es_diseno, $stock_quantity);
 
     $response->getBody()->write(json_encode([$result]));
     return $response
