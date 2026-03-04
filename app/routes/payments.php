@@ -873,34 +873,36 @@ return function (App $app) {
     // Condición de fecha para filtrar
     if ($pendiente) {
       $whereFecha = "AND a.fecha_pago IS NOT NULL";
-      // Para planilla actual: pagos procesados recientemente (último periodo)
-      // Mostramos los que tengan fecha_pago no nula y sean del último lote:
-      // Usamos la fecha del último pago del empleado
-      $sqlUltimaFecha = "SELECT MAX(fecha_pago) AS ultima_fecha FROM pagos WHERE id_empleado = ?";
-      $resUltimaFecha = $localConnection->goQuery($sqlUltimaFecha, [$idEmpleado]);
-      if (!empty($resUltimaFecha[0]['ultima_fecha'])) {
+      $sqlUltimaFecha = "SELECT MAX(fecha_pago) AS ultima_fecha FROM pagos WHERE id_empleado = {$idEmpleado}";
+      $resUltimaFecha = $localConnection->goQuery($sqlUltimaFecha);
+      if (is_array($resUltimaFecha) && !empty($resUltimaFecha[0]['ultima_fecha'])) {
         $ultimaFecha = $resUltimaFecha[0]['ultima_fecha'];
         $whereFecha = "AND DATE(a.fecha_pago) = DATE('{$ultimaFecha}')";
       }
     } elseif ($fechaInicio && $fechaFin) {
       $whereFecha = "AND DATE(a.fecha_pago) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
     } else {
-      // Sin filtro, devolver los del último pago
-      $sqlUltimaFecha = "SELECT MAX(fecha_pago) AS ultima_fecha FROM pagos WHERE id_empleado = ?";
-      $resUltimaFecha = $localConnection->goQuery($sqlUltimaFecha, [$idEmpleado]);
-      $ultimaFecha = $resUltimaFecha[0]['ultima_fecha'] ?? date('Y-m-d');
+      $sqlUltimaFecha = "SELECT MAX(fecha_pago) AS ultima_fecha FROM pagos WHERE id_empleado = {$idEmpleado}";
+      $resUltimaFecha = $localConnection->goQuery($sqlUltimaFecha);
+      $ultimaFecha = (is_array($resUltimaFecha) && !empty($resUltimaFecha[0]['ultima_fecha']))
+        ? $resUltimaFecha[0]['ultima_fecha']
+        : date('Y-m-d');
       $whereFecha = "AND DATE(a.fecha_pago) = DATE('{$ultimaFecha}')";
     }
 
     // 1. Info de la empresa
     $sqlConfig = "SELECT nombre_empresa, direccion, telefonos, email FROM config LIMIT 1";
     $configData = $localConnection->goQuery($sqlConfig);
-    $empresa = $configData[0] ?? ['nombre_empresa' => 'Empresa', 'direccion' => '', 'telefonos' => '', 'email' => ''];
+    $empresa = (is_array($configData) && isset($configData[0]))
+      ? $configData[0]
+      : ['nombre_empresa' => 'Empresa', 'direccion' => '', 'telefonos' => '', 'email' => ''];
 
     // 2. Info del empleado
-    $sqlEmpleado = "SELECT id_usuario, nombre, departamento, salario_tipo, salario_monto, salario_periodo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?";
-    $empleadoData = $localConnection->goQuery($sqlEmpleado, [$idEmpleado]);
-    $empleado = $empleadoData[0] ?? ['nombre' => 'Empleado', 'departamento' => ''];
+    $sqlEmpleado = "SELECT id_usuario, nombre, departamento, salario_tipo, salario_monto, salario_periodo FROM api_empresas.empresas_usuarios WHERE id_usuario = {$idEmpleado}";
+    $empleadoData = $localConnection->goQuery($sqlEmpleado);
+    $empleado = (is_array($empleadoData) && isset($empleadoData[0]))
+      ? $empleadoData[0]
+      : ['nombre' => 'Empleado', 'departamento' => ''];
 
     // 3. Pagos detallados (con producto y orden)
     $sqlPagos = "SELECT
@@ -936,7 +938,9 @@ return function (App $app) {
       JOIN pagos p ON ps.id_pago = p._id
       WHERE p.id_empleado = {$idEmpleado} {$whereFecha}";
     $salarioRes = $localConnection->goQuery($sqlSalario);
-    $totalSalario = floatval($salarioRes[0]['total_salario'] ?? 0);
+    $totalSalario = (is_array($salarioRes) && isset($salarioRes[0]['total_salario']))
+      ? floatval($salarioRes[0]['total_salario'])
+      : 0.0;
 
     // 5. Bonos del periodo
     $sqlBonos = "SELECT pa.descripcion, SUM(pa.monto) AS monto
@@ -962,8 +966,12 @@ return function (App $app) {
     $totalComision = array_reduce($pagosDetalle, function ($carry, $item) {
       return $carry + floatval($item['monto_pago'] ?? 0);
     }, 0.0);
-    $totalBonos = array_reduce($bonosRes, fn($c, $i) => $c + floatval($i['monto']), 0.0);
-    $totalDescuentos = array_reduce($descuentosRes, fn($c, $i) => $c + floatval($i['monto']), 0.0);
+    $totalBonos = array_reduce($bonosRes, function ($c, $i) {
+      return $c + floatval($i['monto'] ?? 0);
+    }, 0.0);
+    $totalDescuentos = array_reduce($descuentosRes, function ($c, $i) {
+      return $c + floatval($i['monto'] ?? 0);
+    }, 0.0);
     $totalPagado = $totalSalario + $totalComision + $totalBonos - $totalDescuentos;
 
     $localConnection->disconnect();
