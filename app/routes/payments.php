@@ -914,7 +914,7 @@ return function (App $app) {
         a.comision,
         a.comision_tipo,
         a.fecha_pago,
-        COALESCE(pr.nombre, a.detalle, 'N/A') AS producto,
+        COALESCE(pr.product, a.detalle, 'N/A') AS producto,
         op.cantidad AS cantidad_orden,
         dep.orden_proceso,
         dep.departamento AS nombre_departamento
@@ -932,6 +932,9 @@ return function (App $app) {
     if (!is_array($pagosDetalle))
       $pagosDetalle = [];
 
+    // Versión del filtro de fecha usando alias 'p' para las queries de bonos/descuentos
+    $whereFechaP = str_replace('a.fecha_pago', 'p.fecha_pago', $whereFecha);
+
     // 4. Salario del periodo
     $sqlSalario = "SELECT SUM(ps.monto) AS total_salario
       FROM pagos_salarios ps
@@ -946,7 +949,7 @@ return function (App $app) {
     $sqlBonos = "SELECT pa.descripcion, SUM(pa.monto) AS monto
       FROM pagos_abonos pa
       JOIN pagos p ON pa.id_pago = p._id
-      WHERE p.id_empleado = {$idEmpleado} {$whereFecha}
+      WHERE p.id_empleado = {$idEmpleado} {$whereFechaP}
       GROUP BY pa.descripcion";
     $bonosRes = $localConnection->goQuery($sqlBonos);
     if (!is_array($bonosRes))
@@ -956,7 +959,7 @@ return function (App $app) {
     $sqlDescuentos = "SELECT pd.descripcion, SUM(pd.monto) AS monto
       FROM pagos_descuentos pd
       JOIN pagos p ON pd.id_pago = p._id
-      WHERE p.id_empleado = {$idEmpleado} {$whereFecha}
+      WHERE p.id_empleado = {$idEmpleado} {$whereFechaP}
       GROUP BY pd.descripcion";
     $descuentosRes = $localConnection->goQuery($sqlDescuentos);
     if (!is_array($descuentosRes))
