@@ -658,9 +658,9 @@ return function (App $app) {
     if ($id_empresa) {
       $dsn = 'mysql:host=localhost;dbname=api_empresas';
       $user = 'setup_admin';
-      $password = 'SetupAdmin2024!';
+      $password = 'SetupAdmin2024';
       $user = 'setup_admin';
-      $password = 'SetupAdmin2024!';
+      $password = 'SetupAdmin2024';
 
       try {
         $pdo = new PDO($dsn, $user, $password, [
