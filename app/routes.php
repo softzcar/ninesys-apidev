@@ -675,9 +675,14 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
       }
 
-      // 1. Crear registro vacío en empresas para obtener id_empresa
-      $stmt = $pdo->prepare('INSERT INTO empresas (activo) VALUES (1)');
-      $stmt->execute();
+      // 1. Crear registro en empresas con monedas por defecto
+      $default_monedas = json_encode([
+        ['moneda' => 'dolar', 'mondeda_nombre' => 'Dólar', 'activo' => true, 'valor' => 1],
+        ['moneda' => 'bolivar', 'mondeda_nombre' => 'Bolívar', 'activo' => true, 'valor' => 1],
+        ['moneda' => 'peso_colombiano', 'mondeda_nombre' => 'Peso Colombiano', 'activo' => false, 'valor' => 0],
+      ]);
+      $stmt = $pdo->prepare('INSERT INTO empresas (activo, tipos_de_monedas) VALUES (1, ?)');
+      $stmt->execute([$default_monedas]);
       $id_empresa = $pdo->lastInsertId();
       error_log("DEBUG: Empresa creada con ID: {$id_empresa}");
 
