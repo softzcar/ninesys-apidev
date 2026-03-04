@@ -3148,29 +3148,53 @@ $object['sales_commission_ISSET'][] = false;
 
       // INICIO: Lógica condicional para guardar stock en /nueva/custom
 
-      if ($guardar_stock) {
-        $stock_updates = [];
-        foreach ($misProductos as $producto) {
-          $product_id = intval($producto['cod']);
-          $quantity = intval($producto['cantidad']);
-          if (isset($stock_updates[$product_id])) {
-            $stock_updates[$product_id] += $quantity;
+      // INICIO: Lógica para actualizar stock en /nueva/custom
+
+      $stock_additions = [];
+      $stock_deductions = [];
+
+      foreach ($misProductos as $producto) {
+        $product_id = intval($producto['cod']);
+        $quantity = intval($producto['cantidad']);
+
+        if ($guardar_stock) {
+          // Órdenes internas: generar e incrementar stock
+          if (isset($stock_additions[$product_id])) {
+            $stock_additions[$product_id] += $quantity;
           } else {
-            $stock_updates[$product_id] = $quantity;
+            $stock_additions[$product_id] = $quantity;
+          }
+        } else {
+          // Órdenes normales: deducir stock solo para productos físicos
+          $sql_fisico = "SELECT fisico FROM products WHERE _id = {$product_id}";
+          $res_f = $localConnection->goQuery($sql_fisico);
+          if (!empty($res_f) && !isset($res_f['status']) && intval($res_f[0]['fisico']) === 1) {
+            if (isset($stock_deductions[$product_id])) {
+              $stock_deductions[$product_id] += $quantity;
+            } else {
+              $stock_deductions[$product_id] = $quantity;
+            }
           }
         }
-
-        $sql_stock_update = '';
-        foreach ($stock_updates as $product_id => $total_quantity) {
-          $sql_stock_update .= "UPDATE products SET stock_quantity = stock_quantity + {$total_quantity} WHERE _id = {$product_id};";
-        }
-
-        if (!empty($sql_stock_update)) {
-          $object['custom_stock_update_sql'] = $sql_stock_update;
-          $object['custom_stock_update_response'] = $localConnection->goQuery($sql_stock_update);
-        }
       }
-      // FIN: Lógica condicional para guardar stock en /nueva/custom
+
+      $sql_stock_update = '';
+
+      // Aumentos por orden interna
+      foreach ($stock_additions as $product_id => $total_quantity) {
+        $sql_stock_update .= "UPDATE products SET stock_quantity = stock_quantity + {$total_quantity} WHERE _id = {$product_id};";
+      }
+
+      // Descuentos por venta estándar
+      foreach ($stock_deductions as $product_id => $total_quantity) {
+        $sql_stock_update .= "UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - {$total_quantity}) WHERE _id = {$product_id};";
+      }
+
+      if (!empty($sql_stock_update)) {
+        $object['custom_stock_update_sql'] = $sql_stock_update;
+        $object['custom_stock_update_response'] = $localConnection->goQuery($sql_stock_update);
+      }
+      // FIN: Lógica para actualizar stock en /nueva/custom
 
       // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
       $sql_metodos_pago = '';
@@ -3505,21 +3529,26 @@ $object['sales_commission_ISSET'][] = false;
         }
       }
 
-      // STOCK UPDATE
-      $stock_updates = [];
+      // STOCK UPDATE (Sólo productos físicos)
+      $stock_deductions = [];
       foreach ($misProductos as $producto) {
         $product_id = intval($producto['cod']);
         $quantity = intval($producto['cantidad']);
-        if (isset($stock_updates[$product_id])) {
-          $stock_updates[$product_id] += $quantity;
-        } else {
-          $stock_updates[$product_id] = $quantity;
+
+        $sql_fisico = "SELECT fisico FROM products WHERE _id = {$product_id}";
+        $res_f = $localConnection->goQuery($sql_fisico);
+        if (!empty($res_f) && !isset($res_f['status']) && intval($res_f[0]['fisico']) === 1) {
+          if (isset($stock_deductions[$product_id])) {
+            $stock_deductions[$product_id] += $quantity;
+          } else {
+            $stock_deductions[$product_id] = $quantity;
+          }
         }
       }
 
       $sql_stock_update = '';
-      foreach ($stock_updates as $product_id => $total_quantity) {
-        $sql_stock_update .= "UPDATE products SET stock_quantity = stock_quantity - {$total_quantity} WHERE _id = {$product_id};";
+      foreach ($stock_deductions as $product_id => $total_quantity) {
+        $sql_stock_update .= "UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - {$total_quantity}) WHERE _id = {$product_id};";
       }
 
       if (!empty($sql_stock_update)) {
@@ -4248,6 +4277,62 @@ $object['sales_commission_ISSET'][] = false;
    *   "responsable_id": 3
    * }
    */
+  // VALIDAR STOCK DE PRODUCTOS FÍSICOS
+  $app->post('/ordenes/validar-stock', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    $object = [];
+
+    try {
+      $data = $request->getParsedBody();
+      if ($data === null) {
+        $rawBody = (string) $request->getBody();
+        $data = json_decode($rawBody, true);
+      }
+
+      $productos = $data['productos'] ?? [];
+      if (empty($productos) || !is_array($productos)) {
+        return ApiResponse::validationError($response, 'Debe especificar al menos un producto para validar');
+      }
+
+      $errores = [];
+
+      foreach ($productos as $prod) {
+        $id_producto = intval($prod['id'] ?? 0);
+        $cantidad_pedida = intval($prod['cantidad'] ?? 0);
+        $nombre_producto = $prod['nombre'] ?? 'Producto Desconocido';
+
+        if ($id_producto > 0 && $cantidad_pedida > 0) {
+          $sql = "SELECT stock_quantity, fisico FROM products WHERE _id = ?";
+          $res = $localConnection->goQuery($sql, [$id_producto]);
+
+          if (!empty($res) && !isset($res['status'])) {
+            $is_fisico = intval($res[0]['fisico'] ?? 0);
+            $stock_actual = intval($res[0]['stock_quantity'] ?? 0);
+
+            if ($is_fisico === 1 && $cantidad_pedida > $stock_actual) {
+              $errores[] = "{$nombre_producto}: solicitados {$cantidad_pedida}, disponibles {$stock_actual}.";
+            }
+          }
+        }
+      }
+
+      if (!empty($errores)) {
+        return ApiResponse::error($response, 'Stock insuficiente para algunos productos', 400, ['errores' => $errores]);
+      }
+
+      $object['success'] = true;
+      $object['mensaje'] = 'Stock disponible para todos los productos físicos';
+      $response->getBody()->write(json_encode($object));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (\Throwable $e) {
+      error_log('Error en /ordenes/validar-stock: ' . $e->getMessage());
+      return ApiResponse::error($response, 'Error al validar stock: ' . $e->getMessage(), 500);
+    } finally {
+      $localConnection->disconnect();
+    }
+  });
+
   $app->post('/ordenes/prevalidar', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
     $object = [];
