@@ -583,7 +583,8 @@ return function (App $app) {
         // Conexión con root para DDL
         $root_dsn = 'mysql:host=localhost;dbname=mysql';
         $root_user = 'root';
-        $root_password = 'MyR5jRHuwj6kWA';
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        $root_password = (strpos($host, 'nineteengreen.com') !== false || strpos($host, 'localhost') !== false) ? 'ppbT5QsP5FgWIR' : 'MyR5jRHuwj6kWA';
         $root_pdo = new PDO($root_dsn, $root_user, $root_password, [
           PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
         ]);
@@ -701,7 +702,8 @@ return function (App $app) {
       // Conexión con root para operaciones DDL
       $root_dsn = 'mysql:host=localhost;dbname=mysql';
       $root_user = 'root';
-      $root_password = 'MyR5jRHuwj6kWA';  // Tu contraseña real de root
+      $host = $_SERVER['HTTP_HOST'] ?? '';
+      $root_password = (strpos($host, 'nineteengreen.com') !== false || strpos($host, 'localhost') !== false) ? 'ppbT5QsP5FgWIR' : 'MyR5jRHuwj6kWA';
       $root_pdo = new PDO($root_dsn, $root_user, $root_password, [
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
       ]);
