@@ -394,9 +394,9 @@ return function (App $app) {
   $app->get('/setup/user', function (Request $request, Response $response) {
     $dsn = 'mysql:host=localhost;dbname=api_empresas';
     $user = 'setup_admin';
-    $password = 'SetupAdmin2024';
+    $password = 'SetupAdmin2024!';
     $user = 'setup_admin';
-    $password = 'SetupAdmin2024';
+    $password = 'SetupAdmin2024!';
 
     try {
       $pdo = new PDO($dsn, $user, $password, [
@@ -472,7 +472,7 @@ return function (App $app) {
       // Conexión única con setup_admin (ahora con permisos globales)
       $dsn = 'mysql:host=localhost;dbname=api_empresas';
       $user = 'setup_admin';
-      $password = 'SetupAdmin2024';
+      $password = 'SetupAdmin2024!';
       $pdo = new PDO($dsn, $user, $password, [
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
       ]);
@@ -543,7 +543,7 @@ return function (App $app) {
       // Conectar a la base de datos
       $dsn = 'mysql:host=localhost;dbname=api_empresas';
       $user = 'setup_admin';
-      $password = 'SetupAdmin2024';
+      $password = 'SetupAdmin2024!';
       $pdo = new PDO($dsn, $user, $password, [
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
       ]);
@@ -598,7 +598,7 @@ return function (App $app) {
       // Conectar a la base de datos
       $dsn = 'mysql:host=localhost;dbname=api_empresas';
       $user = 'setup_admin';
-      $password = 'SetupAdmin2024';
+      $password = 'SetupAdmin2024!';
       $pdo = new PDO($dsn, $user, $password, [
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
       ]);
