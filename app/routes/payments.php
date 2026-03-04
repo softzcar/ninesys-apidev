@@ -872,22 +872,21 @@ return function (App $app) {
 
     // Condición de fecha para filtrar
     if ($pendiente) {
-      $whereFecha = "AND a.fecha_pago IS NOT NULL";
-      $sqlUltimaFecha = "SELECT MAX(fecha_pago) AS ultima_fecha FROM pagos WHERE id_empleado = {$idEmpleado}";
-      $resUltimaFecha = $localConnection->goQuery($sqlUltimaFecha);
-      if (is_array($resUltimaFecha) && !empty($resUltimaFecha[0]['ultima_fecha'])) {
-        $ultimaFecha = $resUltimaFecha[0]['ultima_fecha'];
-        $whereFecha = "AND DATE(a.fecha_pago) = DATE('{$ultimaFecha}')";
-      }
+      // Planilla actual: mostrar pagos AÚN NO PROCESADOS (fecha_pago IS NULL)
+      $whereFecha = "AND a.fecha_pago IS NULL";
+      $whereFechaP = "AND p.fecha_pago IS NULL";
     } elseif ($fechaInicio && $fechaFin) {
       $whereFecha = "AND DATE(a.fecha_pago) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+      $whereFechaP = "AND DATE(p.fecha_pago) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
     } else {
+      // Sin filtro: mostrar la última fecha de pago procesada
       $sqlUltimaFecha = "SELECT MAX(fecha_pago) AS ultima_fecha FROM pagos WHERE id_empleado = {$idEmpleado}";
       $resUltimaFecha = $localConnection->goQuery($sqlUltimaFecha);
       $ultimaFecha = (is_array($resUltimaFecha) && !empty($resUltimaFecha[0]['ultima_fecha']))
         ? $resUltimaFecha[0]['ultima_fecha']
         : date('Y-m-d');
       $whereFecha = "AND DATE(a.fecha_pago) = DATE('{$ultimaFecha}')";
+      $whereFechaP = "AND DATE(p.fecha_pago) = DATE('{$ultimaFecha}')";
     }
 
     // 1. Info de la empresa
@@ -904,7 +903,10 @@ return function (App $app) {
       ? $empleadoData[0]
       : ['nombre' => 'Empleado', 'departamento' => ''];
 
-    // 3. Pagos detallados (con producto y orden)
+    // 3. Pagos detallados
+    // La tabla 'pagos' ya contiene: detalle (departamento), cantidad y monto_pago (= cantidad × comisión).
+    // Obtenemos el nombre del producto con un subquery a ordenes_productos.
+    // No usamos JOINs con lotes_detalles porque generan filas duplicadas.
     $sqlPagos = "SELECT
         a._id AS id_pago,
         a.id_orden,
@@ -914,14 +916,13 @@ return function (App $app) {
         a.comision,
         a.comision_tipo,
         a.fecha_pago,
-        COALESCE(op.name, a.detalle, 'N/A') AS producto,
-        op.cantidad AS cantidad_orden,
+        COALESCE(
+          (SELECT op.name FROM ordenes_productos op WHERE op.id_orden = a.id_orden LIMIT 1),
+          a.detalle, 'N/A'
+        ) AS producto,
         dep.orden_proceso,
         dep.departamento AS nombre_departamento
       FROM pagos a
-      LEFT JOIN lotes_detalles_empleados_asignados ldea ON a.id_lotes_detalles = ldea._id
-      LEFT JOIN lotes_detalles ld ON ldea.id_lotes_detalles = ld._id
-      LEFT JOIN ordenes_productos op ON op._id = ld.id_ordenes_productos
       LEFT JOIN departamentos dep ON dep.departamento = a.detalle
       WHERE a.id_empleado = {$idEmpleado}
       {$whereFecha}
@@ -931,14 +932,11 @@ return function (App $app) {
     if (!is_array($pagosDetalle))
       $pagosDetalle = [];
 
-    // Versión del filtro de fecha usando alias 'p' para las queries de bonos/descuentos
-    $whereFechaP = str_replace('a.fecha_pago', 'p.fecha_pago', $whereFecha);
-
     // 4. Salario del periodo
     $sqlSalario = "SELECT SUM(ps.monto) AS total_salario
       FROM pagos_salarios ps
       JOIN pagos p ON ps.id_pago = p._id
-      WHERE p.id_empleado = {$idEmpleado} {$whereFecha}";
+      WHERE p.id_empleado = {$idEmpleado} {$whereFechaP}";
     $salarioRes = $localConnection->goQuery($sqlSalario);
     $totalSalario = (is_array($salarioRes) && isset($salarioRes[0]['total_salario']))
       ? floatval($salarioRes[0]['total_salario'])
@@ -975,6 +973,9 @@ return function (App $app) {
       return $c + floatval($i['monto'] ?? 0);
     }, 0.0);
     $totalPagado = $totalSalario + $totalComision + $totalBonos - $totalDescuentos;
+    $totalPiezas = array_reduce($pagosDetalle, function ($carry, $item) {
+      return $carry + intval($item['cantidad'] ?? 0);
+    }, 0);
 
     $localConnection->disconnect();
 
@@ -991,6 +992,7 @@ return function (App $app) {
         'bonos' => round($totalBonos, 2),
         'descuentos' => round($totalDescuentos, 2),
         'total' => round($totalPagado, 2),
+        'piezas' => $totalPiezas,
       ],
     ];
 
