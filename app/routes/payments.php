@@ -858,6 +858,136 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  // =============================================
+  // REPORTE DETALLADO DE PAGO POR EMPLEADO
+  // Params: ?pendiente=1 (planilla actual) ó ?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD (histórico)
+  // =============================================
+  $app->get('/pagos/reporte-empleado/{id_empleado}', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+    $params = $request->getQueryParams();
+    $idEmpleado = intval($args['id_empleado']);
+    $pendiente = isset($params['pendiente']) && $params['pendiente'] == '1';
+    $fechaInicio = $params['fecha_inicio'] ?? null;
+    $fechaFin = $params['fecha_fin'] ?? null;
+
+    // Condición de fecha para filtrar
+    if ($pendiente) {
+      $whereFecha = "AND a.fecha_pago IS NOT NULL";
+      // Para planilla actual: pagos procesados recientemente (último periodo)
+      // Mostramos los que tengan fecha_pago no nula y sean del último lote:
+      // Usamos la fecha del último pago del empleado
+      $sqlUltimaFecha = "SELECT MAX(fecha_pago) AS ultima_fecha FROM pagos WHERE id_empleado = ?";
+      $resUltimaFecha = $localConnection->goQuery($sqlUltimaFecha, [$idEmpleado]);
+      if (!empty($resUltimaFecha[0]['ultima_fecha'])) {
+        $ultimaFecha = $resUltimaFecha[0]['ultima_fecha'];
+        $whereFecha = "AND DATE(a.fecha_pago) = DATE('{$ultimaFecha}')";
+      }
+    } elseif ($fechaInicio && $fechaFin) {
+      $whereFecha = "AND DATE(a.fecha_pago) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+    } else {
+      // Sin filtro, devolver los del último pago
+      $sqlUltimaFecha = "SELECT MAX(fecha_pago) AS ultima_fecha FROM pagos WHERE id_empleado = ?";
+      $resUltimaFecha = $localConnection->goQuery($sqlUltimaFecha, [$idEmpleado]);
+      $ultimaFecha = $resUltimaFecha[0]['ultima_fecha'] ?? date('Y-m-d');
+      $whereFecha = "AND DATE(a.fecha_pago) = DATE('{$ultimaFecha}')";
+    }
+
+    // 1. Info de la empresa
+    $sqlConfig = "SELECT nombre_empresa, direccion, telefonos, email FROM config LIMIT 1";
+    $configData = $localConnection->goQuery($sqlConfig);
+    $empresa = $configData[0] ?? ['nombre_empresa' => 'Empresa', 'direccion' => '', 'telefonos' => '', 'email' => ''];
+
+    // 2. Info del empleado
+    $sqlEmpleado = "SELECT id_usuario, nombre, departamento, salario_tipo, salario_monto, salario_periodo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?";
+    $empleadoData = $localConnection->goQuery($sqlEmpleado, [$idEmpleado]);
+    $empleado = $empleadoData[0] ?? ['nombre' => 'Empleado', 'departamento' => ''];
+
+    // 3. Pagos detallados (con producto y orden)
+    $sqlPagos = "SELECT
+        a._id AS id_pago,
+        a.id_orden,
+        a.detalle AS departamento_pago,
+        a.cantidad,
+        a.monto_pago,
+        a.comision,
+        a.comision_tipo,
+        a.fecha_pago,
+        COALESCE(pr.nombre, a.detalle, 'N/A') AS producto,
+        op.cantidad AS cantidad_orden,
+        dep.orden_proceso,
+        dep.departamento AS nombre_departamento
+      FROM pagos a
+      LEFT JOIN lotes_detalles_empleados_asignados ldea ON a.id_lotes_detalles = ldea._id
+      LEFT JOIN lotes_detalles ld ON ldea.id_lote_detalle = ld._id
+      LEFT JOIN ordenes_productos op ON op.id_orden = a.id_orden AND op.id_producto = ld.id_producto
+      LEFT JOIN products pr ON pr._id = ld.id_producto
+      LEFT JOIN departamentos dep ON dep.departamento = a.detalle
+      WHERE a.id_empleado = {$idEmpleado}
+      {$whereFecha}
+      ORDER BY a.id_orden ASC, dep.orden_proceso ASC, a._id ASC";
+
+    $pagosDetalle = $localConnection->goQuery($sqlPagos);
+    if (!is_array($pagosDetalle))
+      $pagosDetalle = [];
+
+    // 4. Salario del periodo
+    $sqlSalario = "SELECT SUM(ps.monto) AS total_salario
+      FROM pagos_salarios ps
+      JOIN pagos p ON ps.id_pago = p._id
+      WHERE p.id_empleado = {$idEmpleado} {$whereFecha}";
+    $salarioRes = $localConnection->goQuery($sqlSalario);
+    $totalSalario = floatval($salarioRes[0]['total_salario'] ?? 0);
+
+    // 5. Bonos del periodo
+    $sqlBonos = "SELECT pa.descripcion, SUM(pa.monto) AS monto
+      FROM pagos_abonos pa
+      JOIN pagos p ON pa.id_pago = p._id
+      WHERE p.id_empleado = {$idEmpleado} {$whereFecha}
+      GROUP BY pa.descripcion";
+    $bonosRes = $localConnection->goQuery($sqlBonos);
+    if (!is_array($bonosRes))
+      $bonosRes = [];
+
+    // 6. Descuentos del periodo
+    $sqlDescuentos = "SELECT pd.descripcion, SUM(pd.monto) AS monto
+      FROM pagos_descuentos pd
+      JOIN pagos p ON pd.id_pago = p._id
+      WHERE p.id_empleado = {$idEmpleado} {$whereFecha}
+      GROUP BY pd.descripcion";
+    $descuentosRes = $localConnection->goQuery($sqlDescuentos);
+    if (!is_array($descuentosRes))
+      $descuentosRes = [];
+
+    // 7. Calcular totales
+    $totalComision = array_reduce($pagosDetalle, function ($carry, $item) {
+      return $carry + floatval($item['monto_pago'] ?? 0);
+    }, 0.0);
+    $totalBonos = array_reduce($bonosRes, fn($c, $i) => $c + floatval($i['monto']), 0.0);
+    $totalDescuentos = array_reduce($descuentosRes, fn($c, $i) => $c + floatval($i['monto']), 0.0);
+    $totalPagado = $totalSalario + $totalComision + $totalBonos - $totalDescuentos;
+
+    $localConnection->disconnect();
+
+    $result = [
+      'empresa' => $empresa,
+      'empleado' => $empleado,
+      'pagos' => $pagosDetalle,
+      'salario' => $totalSalario,
+      'bonos' => $bonosRes,
+      'descuentos' => $descuentosRes,
+      'totales' => [
+        'salario' => round($totalSalario, 2),
+        'comision' => round($totalComision, 2),
+        'bonos' => round($totalBonos, 2),
+        'descuentos' => round($totalDescuentos, 2),
+        'total' => round($totalPagado, 2),
+      ],
+    ];
+
+    $response->getBody()->write(json_encode(['success' => true, 'data' => $result], JSON_NUMERIC_CHECK));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
   $app->get('/pagos/historico/{semana}', function (Request $request, Response $response, array $args) {
     // $data = $request->getParsedBody();
     $localConnection = new LocalDB();
