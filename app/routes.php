@@ -550,7 +550,7 @@ return function (App $app) {
       $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
       // Verificar que el empleado existe y no está activo
-      $stmt = $pdo->prepare('SELECT activo FROM empresas_usuarios WHERE id_usuario = ?');
+      $stmt = $pdo->prepare('SELECT activo, id_empresa FROM empresas_usuarios WHERE id_usuario = ?');
       $stmt->execute([$id_empleado]);
       $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -565,9 +565,47 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
       }
 
-      // Eliminar el usuario
-      $stmt = $pdo->prepare('DELETE FROM empresas_usuarios WHERE id_usuario = ?');
-      $stmt->execute([$id_empleado]);
+      // 1. Obtener datos de la empresa y Validar seguridad (ID 163 intocable)
+      $id_empresa = $usuario['id_empresa'];
+      if ($id_empresa == 163) {
+        $response->getBody()->write(json_encode(['error' => 'No se puede eliminar la empresa principal (Producción)']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+      }
+
+      $stmt = $pdo->prepare('SELECT db_name, db_user FROM empresas WHERE id_empresa = ?');
+      $stmt->execute([$id_empresa]);
+      $empresa = $stmt->fetch(PDO::FETCH_ASSOC);
+
+      if ($empresa) {
+        $db_name = $empresa['db_name'];
+        $db_user = $empresa['db_user'];
+
+        // Conexión con root para DDL
+        $root_dsn = 'mysql:host=localhost;dbname=mysql';
+        $root_user = 'root';
+        $root_password = 'MyR5jRHuwj6kWA';
+        $root_pdo = new PDO($root_dsn, $root_user, $root_password, [
+          PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
+        ]);
+        $root_pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Eliminar BD y Usuario (Drop)
+        if ($db_name) {
+          $root_pdo->exec("DROP DATABASE IF EXISTS `{$db_name}`");
+        }
+        if ($db_user) {
+          $root_pdo->exec("DROP USER IF EXISTS '{$db_user}'@'localhost'");
+          $root_pdo->exec("DROP USER IF EXISTS '{$db_user}'@'%'");
+        }
+      }
+
+      // 2. Eliminar referencias en api_empresas en orden para no violar FK
+      $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
+      $pdo->exec("DELETE FROM empresas_gastos WHERE id_empresa = {$id_empresa}");
+      $pdo->exec("DELETE FROM empresas_usuarios_departamentos WHERE id_empleado IN (SELECT id_usuario FROM empresas_usuarios WHERE id_empresa = {$id_empresa})");
+      $pdo->exec("DELETE FROM empresas_usuarios WHERE id_empresa = {$id_empresa}");
+      $pdo->exec("DELETE FROM empresas WHERE id_empresa = {$id_empresa}");
+      $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
 
       $response->getBody()->write(json_encode(['message' => 'Usuario eliminado correctamente']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
