@@ -914,7 +914,7 @@ return function (App $app) {
         a.comision,
         a.comision_tipo,
         a.fecha_pago,
-        COALESCE(pr.product, a.detalle, 'N/A') AS producto,
+        COALESCE(op.name, a.detalle, 'N/A') AS producto,
         op.cantidad AS cantidad_orden,
         dep.orden_proceso,
         dep.departamento AS nombre_departamento
@@ -922,7 +922,6 @@ return function (App $app) {
       LEFT JOIN lotes_detalles_empleados_asignados ldea ON a.id_lotes_detalles = ldea._id
       LEFT JOIN lotes_detalles ld ON ldea.id_lotes_detalles = ld._id
       LEFT JOIN ordenes_productos op ON op._id = ld.id_ordenes_productos
-      LEFT JOIN products pr ON pr._id = op.id_producto
       LEFT JOIN departamentos dep ON dep.departamento = a.detalle
       WHERE a.id_empleado = {$idEmpleado}
       {$whereFecha}
