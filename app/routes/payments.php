@@ -920,9 +920,9 @@ return function (App $app) {
         dep.departamento AS nombre_departamento
       FROM pagos a
       LEFT JOIN lotes_detalles_empleados_asignados ldea ON a.id_lotes_detalles = ldea._id
-      LEFT JOIN lotes_detalles ld ON ldea.id_lote_detalle = ld._id
-      LEFT JOIN ordenes_productos op ON op.id_orden = a.id_orden AND op.id_producto = ld.id_producto
-      LEFT JOIN products pr ON pr._id = ld.id_producto
+      LEFT JOIN lotes_detalles ld ON ldea.id_lotes_detalles = ld._id
+      LEFT JOIN ordenes_productos op ON op._id = ld.id_ordenes_productos
+      LEFT JOIN products pr ON pr._id = op.id_producto
       LEFT JOIN departamentos dep ON dep.departamento = a.detalle
       WHERE a.id_empleado = {$idEmpleado}
       {$whereFecha}
