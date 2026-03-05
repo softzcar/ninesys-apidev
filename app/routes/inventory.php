@@ -1935,7 +1935,15 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             imo.valor_inicial,
             imo.valor_final,
             inv.cantidad cantidad_inventario,
-            imo.moment fecha_del_consumo
+            imo.moment fecha_del_consumo,
+            (
+                SELECT SUM(op.cantidad * COALESCE(pia.cantidad, 0))
+                FROM ordenes_productos op
+                JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product AND op.id_size = pia.id_talla
+                WHERE op.id_orden = imo.id_orden 
+                  AND pia.id_departamento = imo.id_departamento
+                  AND pia.id_catalogo_insumos_productos = inv.id_catalogo
+            ) AS material_estimado
         FROM
             inventario inv
         JOIN inventario_movimientos imo ON imo.id_insumo = inv._id 
