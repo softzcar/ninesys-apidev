@@ -1,0 +1,10 @@
+- Solicitud del Usuario: OK he cometido un error traer los programas desde el VPS de Hostinger para COntabo, en realidad todo funciona correctamente pero me he equivocado en el nombre de dominio que usaremos para producción...
+- Archivos Involucrados: VPS Contabo (`/home/api.nineteencustom.com`, `/home/apidev.nineteencustom.com`, `/home/ws.nineteencustom.com`, `/home/cdn.nineteencustom.com`), VPS Hostinger (`/home/ws.nineteengreen.com`)
+- Acción Realizada: Se re-direccionó la infraestructura de dominios para separar Producción (Contabo) de Pruebas (Hostinger):
+  1. En Contabo: Se reseteó el password de admin de CyberPanel. Se crearon vía CLI los 4 sitios vacíos con el dominio correcto `.nineteencustom.com`. Se migraron los archivos (`rsync -av`) desde las carpetas `.green` a las `.custom`, se parchó el `.env` para apuntar a los nuevos dominios y se reconfiguró PM2 para el servicio `ntmsg-app` en la nueva ruta. Finalmente se borraron los sitios erróneos `.green` del panel.
+  2. En Hostinger: Se migró el servicio de WhatsApp desde la carpeta suelta `/home/ozcar/msg-ninesys` hacia su hogar canónico en CyberPanel `/home/ws.nineteengreen.com/public_html`, se fijaron permisos y se reconfiguró PM2 para apuntar a dicha ruta.
+- Herramienta(s) Utilizada(s): run_command, task_boundary, replace_file_content, command_status, write_to_file
+- Resultado: Éxito
+- Verificación: En Contabo, los sitios `.custom` ya contienen el código y PM2 los ejecuta desde sus nuevas rutas; los sitios `.green` ya no existen. En Hostinger, el entorno de pruebas está consolidado bajo `.nineteengreen.com`.
+- Observaciones de Gemini: La migración fue exitosa siguiendo el esquema de "Crear -> Mover -> Destruir" para preservar la integridad de CyberPanel y los certificados SSL a futuro.
+- Respuesta de Gemini: He terminado la re-asignación total de dominios. Contabo ha quedado optimizado bajo `.nineteencustom.com` y Hostinger ha quedado consolidado como servidor de pruebas bajo `.nineteengreen.com`.

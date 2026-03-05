@@ -1,0 +1,14 @@
+- Solicitud del Usuario: "El porcentaje de comisión debe pagarse por exedentes de la manera como este configurada la comisión del empelado, sea variable, fija o porcentaje. Vamos a arreglaro CON MUCHISIMO CUIDADO DE NO ROMPER NADA"
+- Archivos Involucrados:
+  - app/routes/manufacturing.php (líneas 2226-2270)
+- Acción Realizada: Se reemplazó el bloque de "EXCEDENTES CORTE" que estaba envuelto en `if ($comision_tipo === 'variable')` por uno que corre para todos los tipos de comisión. Los cambios específicos:
+  1. Eliminado el guard `if ($comision_tipo === 'variable')` 
+  2. Actualizada la SQL query para hacer un JOIN directo a `ordenes_productos` (en lugar de subquery) y traer también `precio_unitario`
+  3. Dentro del foreach, se determina `$comision_exc` y `$monto_exc` con un if/elseif por tipo de comisión
+  4. Se corrigió el INSERT que hardcodeaba `'variable'` como comision_tipo a usar `$comision_tipo`
+  5. Se respeta la protección `if ($salario_tipo === 'Salario') $monto_exc = 0`
+- Herramienta(s) Utilizada(s): `view_file`, `replace_file_content`, `run_command`
+- Resultado: Éxito
+- Verificación: `php -l app/routes/manufacturing.php` devuelve "No syntax errors detected". Cambio aplicado en local.
+- Observaciones de Gemini: Cambio mínimamente invasivo. Solo se modificó el bloque de excedentes, sin tocar el cálculo base de pagos de Corte ni ningún otro endpoint del archivo.
+- Respuesta de Gemini: Notificación al usuario con resumen del cambio y descripción de la corrección por tipo.

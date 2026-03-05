@@ -1,0 +1,1 @@
+/home/developer/Escritorio/Antigravity/ninesys-apidev/scripts/fix_infrastructure_permissions.sh

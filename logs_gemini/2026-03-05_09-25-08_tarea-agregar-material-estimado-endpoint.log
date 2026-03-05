@@ -1,0 +1,8 @@
+- Solicitud del Usuario: 'en la pagina /inventario/gestion en la tabla tenemos unn boton que pone "Ver Cosnumo" y abre un modal llamado "Consumo NAterial: [material]" alli tenemos una tabla donde necesitamo mostrar un dato muy importante que es el "Estimado del material que arroja el sistema"...'
+- Archivos Involucrados: /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/inventory.php
+- Acción Realizada: Se modificó la consulta SQL del endpoint `GET /inventario/consumo/{id_insumo}` para incluir una subconsulta agrupada que une la tabla `ordenes_productos` mediante LEFT JOIN con `product_insumos_asignados`, calculando el estimado del material según la fórmula de producción esperada y las tallas configuradas con las cantidades.
+- Herramienta(s) Utilizada(s): grep_search, view_file, multi_replace_file_content, run_command
+- Resultado: Éxito
+- Verificación: Revisión exhaustiva del subquery para asegurar coincidencia total mediante los foreign keys y verificación del despliegue en ambiente en `hostinger` via ssh pull.
+- Observaciones de Gemini: Se subieron los cambios a Git y se hizo `git pull` en el VPS Ninesys.
+- Respuesta de Gemini: He finalizado la implementación en el Backend y he subido los cambios.

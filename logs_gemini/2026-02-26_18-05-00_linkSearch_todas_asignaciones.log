@@ -1,0 +1,10 @@
+- Solicitud del Usuario: Extender la vista de asignaciones de piezas en `linkSearch.vue` para todos los empleados de producción, y permitir que los administradores lo vean en el modal de detalles de la planilla de pagos.
+- Archivos Involucrados:
+  - `niesys/app_multi/components/linkSearch.vue`
+  - `niesys/app_multi/components/admin/PagosEmpleadoResumen.vue`
+- Acción Realizada: Se refactorizó `linkSearch.vue` para no depender del ID fijo 3 (Corte), validando ahora que el módulo activo sea el de empleado (`menus/menuEmpleado`) o que reciba la prop custom `empleadoIdOpcional`. En `PagosEmpleadoResumen.vue` se modificó la vinculación de `linkSearch` inyectando la variable `:empleadoIdOpcional="item.id_empleado"`, la cual es obtenida por cada iteración, logrando el contexto exacto.
+- Herramienta(s) Utilizada(s): `view_file`, `multi_replace_file_content`
+- Resultado: Éxito
+- Verificación: Revisión del código mutado que pasa correctamente las variables del array padre hacia la carga asíncrona de Vue, logrando aislamiento en la vista de asignación de piezas por usuario.
+- Observaciones de Gemini: Excelente sugerencia estandarizar la forma en la que los operarios y administradores pueden medir las cargas de la orden.
+- Respuesta de Gemini: Informe de éxito y solicitud de instrucciones para el despliegue del frontend.

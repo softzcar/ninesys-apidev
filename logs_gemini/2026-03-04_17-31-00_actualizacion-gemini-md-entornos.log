@@ -1,0 +1,8 @@
+- Solicitud del Usuario: El servidor local no se esta utilzianod para nada solo el VPS de HOstinger para pruebas y el VPS de Contabo para produccion Escribe esto en GEMINI.md de ambos proyectos y porcura que siempre setenga en cuenta, siempre que hagamos cambios lo subimos al VPS de Hostiger que es el de pruebas y bajo peticion se acutalia el servidor de produccion tanto para le backend como para el forntend. PAra el frontend la s prubas se hacen en un servidor de pruebas loca que corre con `npm run dev` no es neceario deplegar el fronend cada vez es tardado e innecesario, señala estas instucciones como importantes en ambos archivos GEMINI.md por favor
+- Archivos Involucrados: `/home/developer/Escritorio/Antigravity/ninesys-apidev/GEMINI.md`, `/home/developer/Escritorio/niesys/app_multi/GEMINI.md`
+- Acción Realizada: Se insertó un nuevo bloque informativo con la cabecera "Despliegue y Entornos de Prueba (⚠️ MUY IMPORTANTE)" detallando que las pruebas de Frontend se hacen localmente, Hostinger funge de QA/Pruebas del Backend y Contabo es Producción exclusiva bajo petición.
+- Herramienta(s) Utilizada(s): `view_file`, `multi_replace_file_content`
+- Resultado: Éxito
+- Verificación: Se revisaron los diffs generados certificando que las instrucciones hayan suplantado o complementado los apartados antiguos resaltando las negritas indicadas.
+- Observaciones de Gemini: Fundamental aclaración, esto prevendrá que accidentalmente haga modificaciones a Contabo o pierda minutos intentando compilar el Nuxt JS para subirlo al entorno de QA (Hostinger) cuando el propio proceso VITE local basta.
+- Respuesta de Gemini: Confirmación de que las reglas han sido absorbidas de fondo.

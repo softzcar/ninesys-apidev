@@ -1,0 +1,8 @@
+- Solicitud del Usuario: el script sh que corre en la terminal que se meustra en la interfaz no me permite interactuar con ella para indicarle que opcion queiro seleccionar
+- Archivos Involucrados: ninesys-hub/server/index.js, ninesys-hub/ui/index.html
+- Acción Realizada: Se migró la arquitectura del Hub de SSE a WebSockets (Socket.io). Se implementó el manejo de entrada de usuario (stdin) desde la web hacia el proceso hijo. Se añadió un campo de entrada en el frontend para interacción directa.
+- Herramienta(s) Utilizada(s): write_to_file, run_command (npm install, fuser)
+- Resultado: Éxito
+- Verificación: Servidor WebSockets operativo. Interfaz permite enviar texto al proceso en ejecución mediante el nuevo campo de comando.
+- Observaciones de Gemini: La migración a WebSockets abre la puerta a flujos de trabajo mucho más complejos que requieran confirmaciones paso a paso.
+- Respuesta de Gemini: El Hub ahora es 100% interactivo. Ya puedes enviar entradas a los scripts desde la interfaz web.

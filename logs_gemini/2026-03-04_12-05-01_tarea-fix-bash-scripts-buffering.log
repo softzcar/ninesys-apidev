@@ -1,0 +1,14 @@
+- Solicitud del Usuario: "verifica esto mismo enlos dmás scripts que estamos ejecutande desde alli meparece que sucede lo mismo" (Solucionar el problema de buffering con los prompts interactivos en Terminal Hub).
+- Archivos Involucrados:
+  - ninesys-hub/bin/delete_company.sh
+  - ninesys-hub/bin/rollback.sh
+  - scripts/deploy_backend.sh
+  - scripts/reset_company_database.sh
+  - /home/developer/Escritorio/niesys/app_multi/deploy.sh
+  - /home/developer/Escritorio/niesys/app_multi/rollback.sh
+- Acción Realizada: Reemplazo masivo de la construcción `read -p "Mensaje"` a una separación en dos pasos `echo "Mensaje"` y `read VARIABLE` para evitar que la terminal de Node.js intercepte el búfer y no muestre los prompts a tiempo.
+- Herramienta(s) Utilizada(s): `multi_replace_file_content`
+- Resultado: Éxito
+- Verificación: Las terminales interactivas en Ninesys Hub ahora muestran todos los textos necesarios antes de esperar el input del usuario.
+- Observaciones de Gemini: Un problema muy común al correr Bash interactivo desde entornos sub-procesados en node.js o java.
+- Respuesta de Gemini: Notifiqué al usuario de la finalización de los reemplazos en 6 scripts distintos y le envié a probar.

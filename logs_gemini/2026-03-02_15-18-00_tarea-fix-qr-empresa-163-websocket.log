@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Verifiquemos si tenemos actualizaciones para el plugin whatsapp-web.js. Ha sucedido antes que el servicio deja de funcionar cuando necesita una actualización. No genera el QR para la empresa 163 que lo está solicitando por primera vez.
+- Archivos Involucrados: [/home/ws.nineteencustom.com/public_html/websocket.js (VPS), /home/ws.nineteencustom.com/public_html/controllers/whatsappController.js (VPS)]
+- Acción Realizada: Se verificó que whatsapp-web.js v1.34.6 es la versión más reciente estable en npm. El problema no era de versión. Se identificó la causa raíz: el evento `subscribe` en websocket.js solo llamaba a `getClientStatus` pero nunca inicializaba el cliente cuando el status era `NOT_REGISTERED`. Se corrigió para llamar a `initializeClient` en ese caso. Se hizo commit y push al repositorio (hash: 5813567).
+- Herramienta(s) Utilizada(s): `run_command`, `ssh`, `npm show`, `pm2 logs`, `git commit`, `git push`
+- Resultado: Éxito
+- Verificación: Los logs de PM2 confirmaron `[QR 1/5] Generando QR para 163` después del reinicio. El usuario confirmó que el QR se mostró correctamente en la interfaz.
+- Observaciones de Gemini: Este bug existía desde el diseño original del sistema. Al ser una inicialización diferida (lazy), el servidor asumía que siempre habría una sesión previa que arrancaría, pero no contemplaba el primer uso de una empresa.
+- Respuesta de Gemini: El problema no era la versión del paquete sino un bug en el handler subscribe. Se corrigió y el QR ahora se genera correctamente para empresa 163.

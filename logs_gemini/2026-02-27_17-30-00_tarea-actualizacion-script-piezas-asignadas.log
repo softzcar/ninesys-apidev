@@ -1,0 +1,9 @@
+- Solicitud del Usuario: "vamos a actualizar nuestro cript de pruebas de apgos y vamos a cambiar al columna de 'Piezas_Orden' por `Piezas_Asignadas` para poder verificar el cáculo correctametne y lo subes al VPS"
+- Archivos Involucrados:
+  - scripts/simular_pago_orden.sh
+- Acción Realizada: Se modificó la línea 32 del script local para alterar el alias de la vista `Piezas_Orden` hacia `Piezas_Asignadas`. Además, se mejoró el valor sumado multiplicando `op.cantidad` por `a.procentaje_comision / 100`, de forma que el valor se ajuste al porcentaje de asignación de cada empleado. Finalmente, el script fue transferido al VPS mediante `scp` y ejecutado remotamente con la orden ID 1 para la empresa 174 comprobando la consistencia.
+- Herramienta(s) Utilizada(s): `view_file`, `replace_file_content`, `run_command`
+- Resultado: Éxito
+- Verificación: La salida estándar del script tras correr vía SSH entregó efectivamente la columna "Piezas_Asignadas" (p.ej.: 15.0000000 para aquellos con 100% de asignación sobre 15 piezas solicitadas de cantidad original), enalteciendo la precisión aritmética.
+- Observaciones de Gemini: Esta mejora previene confusiones del administrador al cotejar los valores del pago.
+- Respuesta de Gemini: Notificación indicando que la actualización ya ha sido aplicada y respaldada en su servidor.

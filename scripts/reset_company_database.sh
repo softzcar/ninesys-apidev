@@ -157,7 +157,8 @@ echo ""
 print_warning "═══════════════════════════════════════════════════════════════"
 echo ""
 
-read -p "¿Estás ABSOLUTAMENTE SEGURO de que deseas continuar? (escribe 'SI ELIMINAR' para confirmar): " CONFIRM1
+echo "¿Estás ABSOLUTAMENTE SEGURO de que deseas continuar? (escribe 'SI ELIMINAR' para confirmar): "
+read CONFIRM1
 
 if [ "$CONFIRM1" != "SI ELIMINAR" ]; then
     print_warning "Operación cancelada por el usuario"
@@ -166,7 +167,8 @@ if [ "$CONFIRM1" != "SI ELIMINAR" ]; then
 fi
 
 echo ""
-read -p "Segunda confirmación - Escribe el ID de la empresa ($COMPANY_ID) para proceder: " CONFIRM2
+echo "Segunda confirmación - Escribe el ID de la empresa ($COMPANY_ID) para proceder: "
+read CONFIRM2
 
 if [ "$CONFIRM2" != "$COMPANY_ID" ]; then
     print_warning "Operación cancelada: ID de empresa no coincide"

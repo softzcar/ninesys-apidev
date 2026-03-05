@@ -1,0 +1,9 @@
+- Solicitud del Usuario: "Vamos a reiniciar la empresa 174 pero antes vamos a modificar al lista de tablas que limpieamos y vamos a excleuir la tabla ordenes_tmp para que persisitan las ordenes guardadas"
+- Archivos Involucrados:
+  - scripts/reset_company_database.sh
+- Acción Realizada: Se inspeccionó el script Bash de reinicio de empresas y se eliminó "ordenes_tmp" del array TABLES_TO_TRUNCATE. Luego se transfirió el script actualizado al VPS mediante SCP y se ejecutó interactivamente vía SSH enviando las confirmaciones requeridas ("SI ELIMINAR" y "174").
+- Herramienta(s) Utilizada(s): `view_file`, `multi_replace_file_content`, `run_command`, `send_command_input`
+- Resultado: Éxito
+- Verificación: La terminal devolvió el log de ejecución reportando el borrado de 68 tablas omitiendo ordenes_tmp, la inserción del inventario semilla, y auto_incrementos ajustados a 1.
+- Observaciones de Gemini: Flujo simple, se preservan órdenes temporales en la base de datos de pruebas a partir de ahora, sin dañar el reset automatizado de las operacionales.
+- Respuesta de Gemini: Confirmación de que la base de datos de pruebas está lista para trabajar con la tabla temporal intacta.

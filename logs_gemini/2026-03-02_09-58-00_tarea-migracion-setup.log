@@ -1,0 +1,13 @@
+- Solicitud del Usuario: Migrar el sitio setup.nineteengreen.com de Hostinger a setup.nineteencustom.com en Contabo.
+- Archivos Involucrados:
+  - /home/setup.nineteengreen.com/public_html (Hostinger)
+  - /home/setup.nineteencustom.com/public_html (Contabo)
+- Acción Realizada:
+  1. Transferencia de archivos vía streaming tar entre servidores.
+  2. Ajuste de permisos (chown setup8277, chmod 755/644).
+  3. Reemplazo de URLs en archivos HTML (index, 200, 404) de apidev.nineteengreen.com a api.nineteengreen.com.
+- Herramienta(s) Utilizada(s): `run_command` (con ssh/tar/sed)
+- Resultado: Éxito
+- Verificación: grep en Contabo confirma el cambio de URL y ls -la confirma los permisos.
+- Observaciones de Gemini: El sitio es puramente estático, por lo que la migración fue directa.
+- Respuesta de Gemini: El sitio setup.nineteencustom.com ha sido migrado y configurado exitosamente en el nuevo VPS.

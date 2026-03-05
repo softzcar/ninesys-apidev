@@ -1,0 +1,8 @@
+- Solicitud del Usuario: ndo de que el servicio me genere el codigo QR para vncular un dispositivo pero no lo hace, al reiniciar todo una vez genero 5 QR y ya despues de e eso n más
+- Archivos Involucrados: [/home/ws.nineteencustom.com/public_html/controllers/whatsappController.js, /home/ws.nineteencustom.com/public_html/websocket.js]
+- Acción Realizada: Se identificaron tres bloqueos: límite de 5 QRs, RAM insuficiente y CORS duplicado. Se aumentó QR_ATTEMPT_LIMIT a 15, la RAM de Puppeteer a 512MB y se corrigió la lógica de split en websocket.js para procesar orígenes duplicados. Se limpió la sesión corrupta de la empresa 163 y se reinició el servicio.
+- Herramienta(s) Utilizada(s): `run_command` (sed, rm, pm2), `write_to_file`
+- Resultado: Éxito
+- Verificación: Logs de PM2 confirman carga limpia ([LAZY] Sesión 163 registrada) y suscripción de WebSocket sin errores de CORS.
+- Observaciones de Gemini: El error de CORS se debía a que el cliente enviaba el origen concatenado ("origin, origin"), lo que fallaba en la comparación estricta. La limpieza de la carpeta Session fue necesaria para destrabar el proceso.
+- Respuesta de Gemini: Se han aplicado las correcciones de límites de QR, RAM y CORS. El servicio ha sido reiniciado y la sesión 163 limpiada. Ya puedes intentar la vinculación nuevamente.

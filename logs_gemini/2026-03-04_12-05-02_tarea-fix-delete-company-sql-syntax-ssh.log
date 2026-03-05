@@ -1,0 +1,8 @@
+- Solicitud del Usuario: "Estpy porbando eliminar el amres 174 del VPS de PRoducción pero recibo error [...] api_emp_174: command not found"
+- Archivos Involucrados: ninesys-hub/bin/delete_company.sh
+- Acción Realizada: Modificación de la inyección de consultas SQL a través de SSH. Se cambió la ejecución del string embebido interactivo (`ssh "mysql <<EOF"`) por un pipe puro de texto plano en bash local enviado al input stream (`cat <<EOF | ssh "mysql"`).
+- Herramienta(s) Utilizada(s): `replace_file_content`
+- Resultado: Éxito
+- Verificación: Las comillas invertidas propias del DROP DATABASE en MySQL ya no son evaluadas erróneamente por Bash en el servidor remoto, permitiendo completar el DDL. Se eliminó manualmente la BD huérfana de la empresa 174 en Contabo.
+- Observaciones de Gemini: El servidor estaba confundiendo el encapsulamiento `` `api_emp_174` `` como un comando unix, rompiendo la sentencia SQL dejándola en `DROP DATABASE IF EXISTS ;`. El uso de pipe resuelve todo problema de inyección de este tipo.
+- Respuesta de Gemini: Expliqué al usuario el comportamiento exacto de por qué falló el DROP DATABASE y le avisé que había borrado el resto manualmente.

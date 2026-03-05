@@ -1,0 +1,1 @@
+/home/developer/Escritorio/Antigravity/ninesys-apidev/scripts/reset_company_database.sh

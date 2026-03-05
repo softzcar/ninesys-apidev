@@ -1,0 +1,1 @@
+/home/developer/Escritorio/niesys/app_multi/deploy.sh

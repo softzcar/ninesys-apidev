@@ -1,0 +1,8 @@
+- Solicitud del Usuario: Que posibilidad tenemos de poner un nuevo script en la lista que nos permita hacer el despliegue del backend eligiendo si en producción o en desarrollo simiilar al despliegue del forntend?
+- Archivos Involucrados: scripts/deploy_backend.sh, ninesys-hub/server/scripts.json
+- Acción Realizada: Se creó el script deploy_backend.sh con flujo interactivo (git push local + git pull remoto vía SSH). Se integró en el Ninesys Dev Hub configurando el workingDir correcto.
+- Herramienta(s) Utilizada(s): write_to_file, run_command (chmod, ln -s)
+- Resultado: Éxito
+- Verificación: El script aparece en la interfaz web y permite seleccionar entorno mediante el input interactivo diseñado previamente.
+- Observaciones de Gemini: Centralizar ambos despliegues (FE y BE) en una sola interfaz interactiva reduce drásticamente el riesgo de errores manuales.
+- Respuesta de Gemini: El despliegue de backend ya está disponible en el Hub.

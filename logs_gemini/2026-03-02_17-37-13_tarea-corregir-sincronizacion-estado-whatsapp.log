@@ -1,0 +1,11 @@
+- Solicitud del Usuario: Sincronizar cambios y corregir discrepancia de estado READY en Dashboard vs App.
+- Archivos Involucrados: [vps-contabo, vps-ninesys]: /home/.../public_html/controllers/whatsappController.js, /home/.../public_html/routes/index.js
+- Acción Realizada: 
+    1. Se corrigió un estado 'READY' fantasma en el Dashboard: Ahora el flag 'whatsappReady' se establece en 'false' inmediatamente cuando el evento 'qr' es emitido por el cliente.
+    2. Se corrigió un error en la definición de rutas: El endpoint '/ws-info/:companyId' se movió antes del 'module.exports' en 'routes/index.js' para que sea accesible.
+    3. Se sincronizaron ambos archivos con GitHub y se desplegaron en los VPS de Contabo y Hostinger.
+- Herramienta(s) Utilizada(s): scp, sed, pm2, git, curl
+- Resultado: Éxito
+- Verificación: Se consultó el endpoint '/ws-info/163' vía curl y ahora devuelve el estado real 'INITIALIZING' y no una respuesta vacía ni un 'READY' falso.
+- Observaciones de Gemini: El problema del 'READY' falso ocurría porque si una sesión previamente conectada expiraba, el evento 'qr' no borraba el estado de 'conectado' en la memoria del servidor.
+- Respuesta de Gemini: Se notificó al usuario la resolución y sincronización multi-entorno.

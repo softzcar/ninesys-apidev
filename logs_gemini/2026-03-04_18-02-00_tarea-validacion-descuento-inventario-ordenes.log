@@ -1,0 +1,10 @@
+- Solicitud del Usuario: Implementar validación estricta y descuento de stock físico al crear órdenes de cualquier tipo (Fábrica o Tienda).
+- Archivos Involucrados:
+  - app/routes/orders.php
+  - components/ordenes/nueva.vue
+- Acción Realizada: Se programó el endpoint `/ordenes/validar-stock` en el backend. Se modificó el backend en `/ordenes/nueva/custom` y `/ordenes/nueva/sport` para asegurar el ajuste de invetario en BBDD (restando stock si es venta o sumando si es compra interna `guardar_stock`). En VueJS, se adaptó `validateStep2` inyectando asincronía y bloqueo condicional contra la API de pre-validación.
+- Herramienta(s) Utilizada(s): view_file, multi_replace_file_content, run_command, command_status
+- Resultado: Éxito
+- Verificación: Se subió el código backend a GitHub y se sincronizó con el servidor de pruebas VPS Hostinger de la API. El frontend es local y compila Reactivamente.
+- Observaciones de Gemini: Se requirió refactorización adicional en backend para mantener la convivencia entre creación normal (descarga stock) y orden interna (carga stock).
+- Respuesta de Gemini: El desarrollo de validación y descuento de inventario ha sido implementado exitosamente. Puede probarlo ahora.

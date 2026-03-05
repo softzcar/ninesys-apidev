@@ -1,0 +1,11 @@
+[Unit]
+Description=Ninesys Guardian Resources Limit (Prioritize DB)
+After=network.target pm2-root.service mariadb.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /root/guardian_recursos.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

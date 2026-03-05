@@ -1,0 +1,21 @@
+- **Solicitud del Usuario:** Propuesta de estructura más robusta para los logs y mejoras de información. Incluir links a archivos walkthrough y tasks, commits IDs y evitar que los reportes sean "anímicos".
+- **Fecha y Hora:** 2026-03-05 09:57:33
+- **Proyecto(s):** Ambos (Frontend y Backend)
+- **Archivos Involucrados:**
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/GEMINI.md
+    - /home/developer/Escritorio/niesys/app_multi/GEMINI.md
+- **Commits Relacionados:**
+    - Frontend: N/A (Cambio de documentación local)
+    - Backend: N/A (Cambio de documentación local)
+- **Acción Realizada:** Se rediseñó la estructura de los archivos .log para incluir secciones de: Fecha/Hora, Proyecto, Commits, Inconvenientes, Justificación técnica, Logros y Referencias de sesión (enlaces a task.md y walkthrough.md). Se actualizaron los archivos maestros GEMINI.md en ambos repositorios para establecer esta nueva norma.
+- **Inconvenientes y Desafíos:** Ninguno relevante durante la ejecución, el proceso fue puramente documental y normativo.
+- **Decisión Final y Justificación:** Se optó por una estructura Markdown más rica en lugar de texto plano simple para mejorar el parseo automático de los scripts de reportes y la legibilidad humana. Se incluyeron enlaces directos a artefactos de sesión para que el usuario pueda auditar el proceso completo de cada tarea.
+- **Herramienta(s) Utilizada(s):** view_file, write_to_file, replace_file_content, task_boundary
+- **Resultado:** Éxito
+- **Verificación:** Revisión manual de los archivos GEMINI.md actualizados y generación de este log de prueba como ejemplo real.
+- **Logro Conseguido:** Estandarización de un sistema de logging robusto que garantiza que los reportes futuros reflejen fielmente el esfuerzo técnico y contexto de cada tarea, permitiendo una mejor visibilidad del tiempo invertido.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/adef8716-61b0-4533-b1cf-11190d921bb2/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/adef8716-61b0-4533-b1cf-11190d921bb2/walkthrough.md)
+- **Observaciones de Gemini:** La inclusión de enlaces a los artefactos de la sesión es clave para la persistencia del conocimiento a largo plazo, ya que estos archivos contienen el "paso a paso" que a veces se pierde en un log resumido.
+- **Respuesta de Gemini:** ¡Hecho! He actualizado la normativa en ambos proyectos. A partir de ahora usaremos la estructura robusta que incluye commits, justificaciones y enlaces a los archivos de sesión. He creado este primer log como ejemplo para que veas el resultado.

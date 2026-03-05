@@ -917,7 +917,9 @@ return function (App $app) {
         a.comision_tipo,
         a.fecha_pago,
         COALESCE(
-          (SELECT op.name FROM ordenes_productos op WHERE op.id_orden = a.id_orden LIMIT 1),
+          (SELECT opx.name FROM lotes_detalles_empleados_asignados ldea JOIN lotes_detalles ld ON ldea.id_lotes_detalles = ld._id JOIN ordenes_productos opx ON ld.id_ordenes_productos = opx._id WHERE ldea._id = a.id_lotes_detalles LIMIT 1),
+          (SELECT opy.name FROM ordenes_productos opy JOIN products p ON opy.id_woo = p._id WHERE opy.id_orden = a.id_orden AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL) LIMIT 1),
+          (SELECT opz.name FROM ordenes_productos opz WHERE opz.id_orden = a.id_orden LIMIT 1),
           a.detalle, 'N/A'
         ) AS producto,
         dep.orden_proceso,

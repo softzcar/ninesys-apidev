@@ -1,0 +1,8 @@
+- Solicitud del Usuario: vamos a crear un script que nos permita actualizar nuestra base de datos de la emprsa 163 en el servidor de desarrollo con los datos frescos de la empresa id 163 en el servidor de producción
+- Archivos Involucrados: scripts/sync_company_database.sh, GEMINI.md
+- Acción Realizada: Se creó un script de Bash para automatizar la sincronización de bases de datos entre servidores via SSH Pipe. Se implementó lógica para obtener credenciales dinámicamente de api_empresas y se usó --skip-triggers para evitar errores de permisos.
+- Herramienta(s) Utilizada(s): write_to_file, run_command (git push, SSH)
+- Resultado: Éxito
+- Verificación: Sincronización ejecutada con éxito. Conteo de órdenes coincide en ambos servidores (4097).
+- Observaciones de Gemini: El script es robusto para futuras empresas ya que consulta los nombres de BD y usuarios dinámicamente.
+- Respuesta de Gemini: Se creó y verificó el script sync_company_database.sh. Los datos de producción ya están en desarrollo.

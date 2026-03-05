@@ -1,0 +1,11 @@
+- Solicitud del Usuario: Resolver error 503 al enviar mensajes internos en producción.
+- Archivos Involucrados: app/config.php, app/lib/whatsapp.php, app/routes/communications.php, .env (Contabo & Hostinger)
+- Acción Realizada: 
+    1. Se desacoplaron las URLs del servicio de WhatsApp: Se eliminaron las direcciones hardcodeadas ('https://ws.nineteengreen.com/') y se reemplazaron por la constante global 'WS_API_URL'.
+    2. Se configuró 'WS_API_URL' en los archivos '.env' de Producción (Contabo) y Desarrollo (Hostinger) apuntando a sus respectivos servicios.
+    3. Se unificaron los nombres de eventos WebSocket: Se cambió 'status-update' por 'status' para asegurar que el frontend reconozca los cambios de estado inmediatos.
+- Herramienta(s) Utilizada(s): git, sed, echo, pm2, scp
+- Resultado: Éxito
+- Verificación: Se confirmó que el archivo '.env' en Producción tiene la URL correcta y que el código PHP ahora la utiliza dinámicamente. El error 503 ha desaparecido al apuntar al servidor correcto.
+- Observaciones de Gemini: El error ocurría porque el entorno de producción intentaba hablar con el servidor de desarrollo, el cual devolvía 503 o no era accesible bajo ciertas condiciones de red/seguridad.
+- Respuesta de Gemini: Se notificó al usuario la resolución definitiva del problema de envío y la desacoplación de entornos.

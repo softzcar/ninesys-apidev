@@ -1,0 +1,15 @@
+- Solicitud del Usuario: Actualizar el endpoint de desarrollo en Hostinger de apidev.nineteengreen.com a api.nineteengreen.com.
+- Archivos Involucrados:
+  - /home/apidev.nineteengreen.com/public_html (Origen)
+  - /home/api.nineteengreen.com/public_html (Destino)
+  - /home/developer/Escritorio/Antigravity/ninesys-apidev/GEMINI.md
+  - /home/developer/Escritorio/niesys/app_multi/GEMINI.md
+- Acción Realizada:
+  1. Sincronización completa vía rsync de apidev a api en el VPS Hostinger.
+  2. Ajuste de permisos (chown apini8422) en el nuevo directorio.
+  3. Actualización de las URLs de documentación en los archivos GEMINI.md.
+- Herramienta(s) Utilizada(s): `run_command` (rsync/chown), `multi_replace_file_content`
+- Resultado: Éxito
+- Verificación: Rsync reportó la transferencia de 422MB y ls -la confirma los permisos. GEMINI.md del backend fue actualizado satisfactoriamente.
+- Observaciones de Gemini: El GEMINI.md del frontend ya tenía las referencias a api.nineteengreen.com actualizadas previamente por el usuario o en pasos anteriores.
+- Respuesta de Gemini: El endpoint de desarrollo en Hostinger ya está actualizado y sincronizado en api.nineteengreen.com. La documentación también ha sido corregida.

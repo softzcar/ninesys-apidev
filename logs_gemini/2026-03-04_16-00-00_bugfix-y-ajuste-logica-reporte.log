@@ -1,0 +1,14 @@
+- Solicitud del Usuario: Arreglar errores de SQL, eliminar duplicados en el reporte, mostrar el total de piezas trabajadas y corregir el cálculo del salario por periodo (mensual/quincenal/semanal). Asegurar que el total a pagar coincida con la planilla.
+- Archivos Involucrados: app/routes/payments.php, components/admin/PagosReporteEmpleado.vue, components/admin/PagosVendedorResumen.vue
+- Acción Realizada: 
+    1. Backend: Corregidos errores SQL (columna 'product', alias 'p').
+    2. Backend: Eliminados JOINs con lotes para evitar duplicados, reemplazándolos con subquery a ordenes_productos.
+    3. Backend: Ajustada lógica de ?pendiente=1 para usar 'fecha_pago IS NULL'.
+    4. Frontend: Implementado cálculo dinámico de salario por periodo (25% semanal, 50% quincenal).
+    5. Frontend: Implementado computed 'totalEsperado' para mostrar el total a pagar acumulado en reportes pendientes.
+    6. UI: Unificada etiqueta 'Total Productos' a 'Total Piezas' e integrada fila de piezas en totales.
+- Herramienta(s) Utilizada(s): multi_replace_file_content, run_command
+- Resultado: Éxito
+- Verificación: Los montos del reporte detallado ahora coinciden exactamente con la planilla de pagos del empleado (ej: Maru, Jezus). El total de piezas se visualiza correctamente.
+- Observaciones de Gemini: El cálculo del salario era el punto crítico de discrepancia; ahora es coherente con el motor de pagos de la planilla.
+- Respuesta de Gemini: Errores corregidos, duplicados eliminados y lógica salarial sincronizada entre reportes.

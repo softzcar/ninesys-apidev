@@ -1,0 +1,8 @@
+- Solicitud del Usuario: en el endopint `https://api.nineteencustom.com/empleados` de VPS de producción estoy recibiendo el error ... SQLSTATE[42000]: Syntax error or access violation: 1142 SELECT command denied to user 'api_adminemp'@'localhost' for table `api_emp_163`.`pagos_salarios`
+- Archivos Involucrados: [public/model/create_new_company_api_emp_N.sql, app/routes.php]
+- Acción Realizada: Se diagnosticó que el usuario central `api_adminemp` carecía de permisos SELECT en las bases de datos de las empresas existentes (api_emp_163, api_emp_174). Se aplicaron los permisos manualmente en el VPS de producción mediante comandos SQL. Se verificó que el backend (`app/routes.php`) ya incluía la lógica de GRANT para nuevas empresas. Se actualizó el script SQL de creación de empresas (`public/model/create_new_company_api_emp_N.sql`) agregando el comando GRANT comentado para referencia futura.
+- Herramienta(s) Utilizada(s): [run_command, view_file, grep_search, replace_file_content]
+- Resultado: Éxito
+- Verificación: Se ejecutó `SHOW GRANTS FOR 'api_adminemp'@'localhost'` en el VPS, confirmando que ahora tiene permisos SELECT en `api_emp_163` y `api_emp_174`.
+- Observaciones de Gemini: El error se debía a que las empresas existentes fueron creadas antes de que se implementara la lógica de permisos automáticos en el backend, o bien no se aplicaron correctamente en la migración a Contabo.
+- Respuesta de Gemini: He corregido los permisos en el VPS de producción. Ahora el usuario `api_adminemp` tiene acceso de lectura a las tablas de las empresas, lo que resuelve el error 500 en el endpoint de empleados. También me aseguré de que las futuras empresas hereden estos permisos automáticamente.

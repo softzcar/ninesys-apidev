@@ -1612,6 +1612,10 @@ ADD CONSTRAINT `tintas_rec_ibfk_2` FOREIGN KEY (`id_catalogo_impresora`) REFEREN
 -- tinta_filtro
 ALTER TABLE `tinta_filtro`
 ADD CONSTRAINT `tinta_filtro_ibfk_1` FOREIGN KEY (`id_inventario`) REFERENCES `inventario` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Permisos necesarios para consultas cruzadas (Módulo Administrador / Empleados)
+-- GRANT SELECT ON `api_emp_N`.* TO 'api_adminemp'@'localhost';
+
 SET FOREIGN_KEY_CHECKS = 1;
 COMMIT;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */

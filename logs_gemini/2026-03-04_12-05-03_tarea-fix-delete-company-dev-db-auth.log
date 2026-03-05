@@ -1,0 +1,8 @@
+- Solicitud del Usuario: "Ok ahora estoy porbando eliminar una empresa en el servidor de desarrollo peor no me muestra la lsita de empresas en el VPS Hostinger [...] Access denied for user 'root'@'localhost' (using password: YES)"
+- Archivos Involucrados: ninesys-hub/bin/delete_company.sh
+- Acción Realizada: Implementar una condicional dinámica para la variable `SQL_CMD` de MySQL: Si la constante `DEV_DB_PASS` está vacía, no adjunta el argumento `-p` al comando mysql, y se confía en el `auth_socket` del root en Hostinger.
+- Herramienta(s) Utilizada(s): `multi_replace_file_content`
+- Resultado: Éxito
+- Verificación: El usuario de MySQL remoto (root sin contraseña manual) en Hostinger autorizó correctamente las consultas enviadas por bash local.
+- Observaciones de Gemini: Una asunción incorrecta durante la redacción inicial del script dictaba usar contraseña incluso en Desarrollo, lo que reventaba la validación de auth_socket que carece de contraseña tradicional.
+- Respuesta de Gemini: Detallamos el arreglo del parámetro "-p" dinámico.

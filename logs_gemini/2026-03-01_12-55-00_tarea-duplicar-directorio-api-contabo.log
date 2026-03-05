@@ -1,0 +1,18 @@
+- Solicitud del Usuario: Duplicar exactamente el directorio `/home/apidev.nineteengreen.com/public_html` en `/home/api.nineteengreen.com/public_html` en el VPS de Contabo.
+
+- Archivos Involucrados:
+  - Origen: `/home/apidev.nineteengreen.com/public_html` en Contabo (217.216.95.32)
+  - Destino: `/home/api.nineteengreen.com/public_html` en Contabo
+
+- Acción Realizada:
+  Ejecuté `cp -a /home/apidev.nineteengreen.com/public_html/. /home/api.nineteengreen.com/public_html/` en el VPS de Contabo via SSH. La opción `-a` preserva permisos, timestamps, enlaces simbólicos y atributos especiales.
+
+- Herramienta(s) Utilizada(s): `run_command`
+
+- Resultado: Éxito
+
+- Verificación: El comando retornó `DUPLICADO OK`. Se listó el contenido del directorio destino y se confirmó la presencia de los archivos principales (app/, composer.json, GEMINI.md, index.html, etc.).
+
+- Observaciones de Gemini: Próximos pasos sugeridos: crear el sitio `api.nineteengreen.com` en CyberPanel apuntando a `/home/api.nineteengreen.com/public_html`, y actualizar el repositorio Git en esa nueva ruta para futuros deploys.
+
+- Respuesta de Gemini: Directorio duplicado exitosamente. El sitio `/home/api.nineteengreen.com/public_html` tiene ahora el contenido idéntico al de `apidev.nineteengreen.com`.

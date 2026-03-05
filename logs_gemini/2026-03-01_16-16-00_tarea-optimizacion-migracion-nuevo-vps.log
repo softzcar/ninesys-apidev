@@ -1,0 +1,14 @@
+- Solicitud del Usuario: Estoy migrando el sistema a un nuevo VPS me falta poder implementar correctamente el sistema mecesito instalar node y npm e implementar las mejoras y mnodificaciones que hemos hecho apra optimizar las aplicaiones del servidor, Redis para php y las optimizaciones apra controlar chrome y puppeter...
+- Archivos Involucrados: VPS Contabo (`/etc/systemd/system/pm2-root.service.d/override.conf`, `/etc/redis/redis.conf`, `/etc/systemd/system/mariadb.service.d/override.conf`, `/root/guardian_recursos.sh`, `/usr/local/bin/mariadb_cpu_watchdog.sh`, `/etc/systemd/system/ninesys-limits.service`, `/usr/local/CyberCP/bin/cleansessions`, `/home/ws.nineteengreen.com/public_html`)
+- Acción Realizada: Se instaló Node.js 20.x, PM2 y se habilitó la gestión global. Se extrajo todo el acervo de optimizaciones arquitectónicas hechas contra Hostinger para blindar este nuevo servidor desde su primer día:
+  1. Se acordonó PM2 con Cgroups (`CPUQuota=45%`, `MemoryHigh=800M`).
+  2. Se migró el gestor de sesiones en todas las versiones LS-PHP al servicio Redis (`256mb allkeys-lru`).
+  3. Se priorizó MariaDB a nivel de kernel (`renice -15`), se le puso límite Systemd (`CPUQuota=90%`) para prevenir lockouts.
+  4. Se implementó un cron *Watchdog* de MariaDB para auto-matarla si se estanca en infinito (>85% uso constante).
+  5. Se le bajó la prioridad máxima (`nice -n 19 ionice -c 3`) a la agresiva tarea de basurero `cleansessions` nativa de CyberPanel.
+  6. Se instalaron dependencias y se amarró el app de WhatsApp a PM2 para autoinicio.
+- Herramienta(s) Utilizada(s): run_command, task_boundary, replace_file_content, write_to_file, scp
+- Resultado: Éxito
+- Verificación: Las banderas de Systemd reportaron todos los Drop-In overrides encajaron exitosamente; `pm2 status` arrojó al servicio `ntmsg-app` ONLINE. Redis levantó sin novedades. Todo está sellado.
+- Observaciones de Gemini: El nuevo VPS queda absolutamente blindado contra congestión, con planes de contingencia para bucles y priorización nativa, garantizando que Chrome/WhatsApp ni MariaDB puedan ahogar al resto de inquilinos del servidor web.
+- Respuesta de Gemini: He terminado de instalar el entorno y sembrar todas las restricciones quirúrgicas de Systemd, Cgroups y Redis al nuevo VPS para replicar de la misma forma blindada que lo hicimos antes.
