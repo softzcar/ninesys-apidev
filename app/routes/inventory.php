@@ -1308,6 +1308,20 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $object['response_rendimiento'] = json_encode($localConnection->goQuery($sql));
         }
 
+        // --- FIX: Terminar Rollo con consumo en cero ---
+        // Cuando tipo='fin', el inventario_movimiento ya fue registrado correctamente
+        // por la llamada previa de tipo='consumo'. Si procedemos, haría un UPDATE
+        // sobreescribiendo valor_inicial y valor_final con el stock actual (ya decrementado)
+        // y consumo=0, resultando en material_consumido=0 en el reporte.
+        // Solución: salir aquí; la única responsabilidad de tipo='fin' es poner el
+        // stock en 0 y registrar el remanente (ya ejecutado arriba).
+        if (isset($miInsumo['tipo']) && $miInsumo['tipo'] === 'fin') {
+            $object['tipo_fin_skip_movimiento'] = true;
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode($object));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        }
+
         // --- INICIO: Verificación de duplicados antes de insertar ---
         // Preparar el valor de id_reposicion
         $id_reposicion = (isset($miInsumo['id_reposicion']) && $miInsumo['id_reposicion'] !== 'null' && $miInsumo['id_reposicion'] !== '')
