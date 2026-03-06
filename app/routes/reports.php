@@ -512,5 +512,94 @@ return function (App $app) {
         $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     });
+    
+    // =================================================================
+    // REPORTE SEMANAL DETALLADO (Para Reporte de Eficiencia)
+    // =================================================================
+    $app->get('/reportes/semanal-detallado', function (Request $request, Response $response) {
+        $params = $request->getQueryParams();
+        $inicio = $params['inicio'] ?? null;
+        $fin = $params['fin'] ?? null;
+
+        if (!$inicio || !$fin) {
+            $response->getBody()->write(json_encode(['error' => 'Faltan parámetros de fecha']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $db = new LocalDB();
+        try {
+            // 1. Obtener Órdenes
+            $sqlOrders = "SELECT 
+                    a._id AS orden,
+                    a._id AS _id,
+                    CONCAT(COALESCE(cus.first_name, ''), ' ', COALESCE(cus.last_name, '')) AS cliente_nombre,
+                    a.fecha_inicio AS inicio,
+                    a.fecha_entrega AS entrega,
+                    (SELECT CONCAT(o.fecha_entrega, ' 08:30:00') FROM ordenes o WHERE o._id = a._id) AS fecha_entrega_orden,
+                    a.status AS status,
+                    a.moment,
+                    (
+                        SELECT SUM(op.cantidad) 
+                        FROM ordenes_productos op 
+                        JOIN products p ON op.id_woo = p._id 
+                        WHERE op.id_orden = a._id AND (p.fisico = 1 OR p.fisico IS NULL)
+                    ) AS total_unidades
+                FROM ordenes a
+                LEFT JOIN customers cus ON cus._id = a.id_wp
+                WHERE a.status IN ('terminada', 'entregada')
+                AND DATE(a.moment) BETWEEN ? AND ?
+                ORDER BY a._id DESC";
+            
+            $orders = $db->goQuery($sqlOrders, [$inicio, $fin]);
+            
+            if (empty($orders)) {
+                $db->disconnect();
+                $response->getBody()->write(json_encode(['items' => []]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+            }
+
+            $orderIds = array_column($orders, 'orden');
+            $idsString = implode(',', $orderIds);
+
+            // 2. Obtener Tareas para el Semáforo
+            $sqlTasks = "SELECT
+                    ldea.id_orden,
+                    ldea.id_departamento,
+                    dep.departamento AS nombre_departamento,
+                    dep.orden_proceso AS orden_proceso_departamento,
+                    MIN(ldea.fecha_inicio) AS fecha_inicio,
+                    CASE 
+                        WHEN COUNT(ldea.id_empleado) = COUNT(ldea.fecha_terminado) THEN MAX(ldea.fecha_terminado) 
+                        ELSE NULL 
+                    END AS fecha_terminado,
+                    COALESCE(COUNT(DISTINCT ldea.id_empleado), 1) as cant_empleados
+                FROM
+                    lotes_detalles_empleados_asignados ldea
+                JOIN departamentos dep ON dep._id = ldea.id_departamento
+                WHERE ldea.id_orden IN ($idsString)
+                GROUP BY ldea.id_orden, ldea.id_departamento
+                ORDER BY ldea.id_orden, dep.orden_proceso ASC";
+            
+            $tasks = $db->goQuery($sqlTasks);
+
+            $db->disconnect();
+
+            // Formatear respuesta agrupando tareas en cada orden
+            foreach ($orders as &$order) {
+                $order['tareas'] = array_filter($tasks, function($t) use ($order) {
+                    return $t['id_orden'] == $order['orden'];
+                });
+                $order['tareas'] = array_values($order['tareas']);
+            }
+
+            $response->getBody()->write(json_encode(['items' => $orders]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+        } catch (Exception $e) {
+            $db->disconnect();
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
 
 }; // Fin de la función que envuelve las rutas

@@ -3753,6 +3753,7 @@ return function (App $app) {
                   op.id_woo AS id_product_woo, -- Agregado para identificar producto en frontend
                   op.name AS producto,
                   op.cantidad,
+                  op.category_name,
                   
                   -- Tiempo Real
                   SUM($realTimeCalculationTerminado) AS totalRealTerminadas,
