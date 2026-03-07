@@ -627,7 +627,7 @@ return function (App $app) {
 
             // 5. Obtener Ranking de Productos Top 10
             $sqlTop = "SELECT 
-                    p.nombre AS name,
+                    p.product AS name,
                     SUM(op.cantidad) AS value
                 FROM ordenes_productos op
                 JOIN ordenes o ON o._id = op.id_orden
