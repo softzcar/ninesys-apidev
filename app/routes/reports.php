@@ -625,11 +625,6 @@ return function (App $app) {
                 WHERE o._id IN ($idsString)";
             $timeEff = $db->goQuery($sqlTime);
             
-            error_log("DEBUG REPORTS: orders count: " . count($orders));
-            error_log("DEBUG REPORTS: tasks count: " . count($tasks));
-            error_log("DEBUG REPORTS: matEff count: " . count($matEff));
-            error_log("DEBUG REPORTS: timeEff count: " . count($timeEff));
-
             $db->disconnect();
             
             // Agrupar tareas por ID de orden para un mapeo eficiente
@@ -697,15 +692,7 @@ return function (App $app) {
                 $finalItems[] = $order;
             }
 
-            $response->getBody()->write(json_encode([
-                'items' => $finalItems,
-                'debug' => [
-                    'orders_count' => count($orders),
-                    'tasks_count' => count($tasks),
-                    'matEff_count' => count($matEff),
-                    'timeEff_count' => count($timeEff)
-                ]
-            ]));
+            $response->getBody()->write(json_encode(['items' => $finalItems]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
         } catch (Exception $e) {
