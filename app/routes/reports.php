@@ -697,7 +697,15 @@ return function (App $app) {
                 $finalItems[] = $order;
             }
 
-            $response->getBody()->write(json_encode(['items' => $finalItems]));
+            $response->getBody()->write(json_encode([
+                'items' => $finalItems,
+                'debug' => [
+                    'orders_count' => count($orders),
+                    'tasks_count' => count($tasks),
+                    'matEff_count' => count($matEff),
+                    'timeEff_count' => count($timeEff)
+                ]
+            ]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
         } catch (Exception $e) {
