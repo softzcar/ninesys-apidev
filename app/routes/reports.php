@@ -563,16 +563,25 @@ return function (App $app) {
 
             // 2. Obtener Tareas para el Semáforo
             $sqlTasks = "SELECT
+                    ldea.id_orden AS _id,
                     ldea.id_orden,
                     ldea.id_departamento,
                     dep.departamento AS nombre_departamento,
                     dep.orden_proceso AS orden_proceso_departamento,
                     MIN(ldea.fecha_inicio) AS fecha_inicio,
-                    CASE 
-                        WHEN COUNT(ldea.id_empleado) = COUNT(ldea.fecha_terminado) THEN MAX(ldea.fecha_terminado) 
-                        ELSE NULL 
-                    END AS fecha_terminado,
-                    COALESCE(COUNT(DISTINCT ldea.id_empleado), 1) as cant_empleados
+                    MAX(ldea.fecha_terminado) AS fecha_terminado,
+                    DATE_FORMAT(MIN(ldea.fecha_inicio), '%d/%m/%Y %h:%i %p') AS fecha_inicio_formateada,
+                    DATE_FORMAT(MAX(ldea.fecha_terminado), '%d/%m/%Y %h:%i %p') AS fecha_terminado_formateada,
+                    DATE_FORMAT(MIN(ldea.fecha_inicio), '%d/%m/%Y %h:%i %p') AS fecha_estimada_inicio_formateada,
+                    DATE_FORMAT(MAX(ldea.fecha_terminado), '%d/%m/%Y %h:%i %p') AS fecha_estimada_fin_formateada,
+                    'terminado' AS status,
+                    COALESCE(COUNT(DISTINCT ldea.id_empleado), 1) as cant_empleados,
+                    (
+                        SELECT COALESCE(SUM(ptp.tiempo * op_sub.cantidad), 0)
+                        FROM products_tiempos_de_produccion ptp
+                        JOIN ordenes_productos op_sub ON op_sub.id_woo = ptp.id_product
+                        WHERE op_sub.id_orden = ldea.id_orden AND ptp.id_departamento = ldea.id_departamento
+                    ) AS tiempo_total_orden_depto
                 FROM
                     lotes_detalles_empleados_asignados ldea
                 JOIN departamentos dep ON dep._id = ldea.id_departamento
@@ -581,18 +590,109 @@ return function (App $app) {
                 ORDER BY ldea.id_orden, dep.orden_proceso ASC";
             
             $tasks = $db->goQuery($sqlTasks);
+            
+            // 3. Obtener Eficiencia de Material (Consolidado por Orden)
+            $sqlMat = "SELECT 
+                    op.id_orden,
+                    SUM(op.cantidad * pia.cantidad) AS meta,
+                    COALESCE((
+                        SELECT SUM(ABS(im_sub.valor_final - im_sub.valor_inicial) * COALESCE(inv_sub.rendimiento, 1))
+                        FROM inventario_movimientos im_sub
+                        LEFT JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
+                        WHERE im_sub.id_orden = op.id_orden
+                    ), 0) AS `real`
+                FROM ordenes_productos op
+                JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
+                WHERE op.id_orden IN ($idsString)
+                GROUP BY op.id_orden";
+            $matEff = $db->goQuery($sqlMat);
 
+            // 4. Obtener Eficiencia de Tiempo (Consolidado por Orden)
+            $sqlTime = "SELECT 
+                    o._id AS id_orden,
+                    (
+                        SELECT COALESCE(SUM(ptp.tiempo * op_sub.cantidad), 0)
+                        FROM products_tiempos_de_produccion ptp
+                        JOIN ordenes_productos op_sub ON op_sub.id_woo = ptp.id_product
+                        WHERE op_sub.id_orden = o._id
+                    ) AS projected,
+                    COALESCE((
+                        SELECT SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, ldea.fecha_terminado))
+                        FROM lotes_detalles_empleados_asignados ldea
+                        WHERE ldea.id_orden = o._id AND ldea.fecha_inicio IS NOT NULL AND ldea.fecha_terminado IS NOT NULL
+                    ), 0) AS `real`
+                FROM ordenes o
+                WHERE o._id IN ($idsString)";
+            $timeEff = $db->goQuery($sqlTime);
+            
             $db->disconnect();
-
-            // Formatear respuesta agrupando tareas en cada orden
-            foreach ($orders as &$order) {
-                $order['tareas'] = array_filter($tasks, function($t) use ($order) {
-                    return $t['id_orden'] == $order['orden'];
-                });
-                $order['tareas'] = array_values($order['tareas']);
+            
+            // Agrupar tareas por ID de orden para un mapeo eficiente
+            $tasksGrouped = [];
+            if (is_array($tasks)) {
+                foreach ($tasks as $t) {
+                    $id = (string)$t['id_orden'];
+                    if (!isset($tasksGrouped[$id])) {
+                        $tasksGrouped[$id] = [];
+                    }
+                    $tasksGrouped[$id][] = $t;
+                }
             }
 
-            $response->getBody()->write(json_encode(['items' => $orders]));
+            // Helper para formatear segundos
+            $formatSeconds = function($s) {
+                if ($s <= 0) return '0s';
+                $h = floor($s / 3600);
+                $m = floor(($s % 3600) / 60);
+                $sec = $s % 60;
+                if ($h > 0) return $h . "h " . (int)$m . "m";
+                if ($m > 0) return $m . "m " . (int)$sec . "s";
+                return (int)$sec . "s";
+            };
+
+            $finalItems = [];
+            foreach ($orders as $order) {
+                $currentId = (string)$order['_id'];
+                
+                // Tareas
+                $orderTasks = isset($tasksGrouped[$currentId]) ? $tasksGrouped[$currentId] : [];
+                foreach ($orderTasks as &$t) {
+                    $t['tiempo_total_orden_depto_formateado'] = $formatSeconds($t['tiempo_total_orden_depto']);
+                    if ($t['fecha_inicio'] && $t['fecha_terminado']) {
+                        $diff = strtotime($t['fecha_terminado']) - strtotime($t['fecha_inicio']);
+                        $t['tiempo_real_empleado_formateado'] = $formatSeconds($diff);
+                    } else {
+                        $t['tiempo_real_empleado_formateado'] = null;
+                    }
+                }
+                
+                $order['id_orden'] = $currentId;
+                $order['tareas'] = $orderTasks;
+                unset($t);
+
+                // Eficiencia Material
+                $matMatch = array_filter($matEff, function($me) use ($currentId) { return (string)$me['id_orden'] === $currentId; });
+                if (!empty($matMatch)) {
+                    $mVal = array_values($matMatch)[0];
+                    $order['eficiencia_material'] = ($mVal['real'] > 0) ? round(($mVal['meta'] / $mVal['real']) * 100, 2) : 100;
+                    if ($mVal['meta'] == 0 && $mVal['real'] == 0) $order['eficiencia_material'] = 'N/A';
+                } else {
+                    $order['eficiencia_material'] = 'N/A';
+                }
+
+                // Eficiencia Tiempo
+                $timeMatch = array_filter($timeEff, function($te) use ($currentId) { return (string)$te['id_orden'] === $currentId; });
+                if (!empty($timeMatch)) {
+                    $tVal = array_values($timeMatch)[0];
+                    $order['eficiencia_tiempo'] = ($tVal['real'] > 0) ? round(($tVal['projected'] / $tVal['real']) * 100, 2) : 100;
+                } else {
+                    $order['eficiencia_tiempo'] = 'N/A';
+                }
+
+                $finalItems[] = $order;
+            }
+
+            $response->getBody()->write(json_encode(['items' => $finalItems]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
         } catch (Exception $e) {
