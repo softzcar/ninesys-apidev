@@ -87,12 +87,66 @@ return function (App $app) {
                     ci._id DESC";
       $data = $localConnection->goQuery($sql);
 
-      // Decodificar el JSON de tintas_recargas para cada fila
+      // --- 1. Obtener Consumo Total por Impresora y Color ---
+      $sqlConsumo = "
+        SELECT id_catalogo_impresoras, 'C' AS color, SUM(c) AS total_consumido FROM tintas GROUP BY id_catalogo_impresoras, color
+        UNION ALL
+        SELECT id_catalogo_impresoras, 'M' AS color, SUM(m) AS total_consumido FROM tintas GROUP BY id_catalogo_impresoras, color
+        UNION ALL
+        SELECT id_catalogo_impresoras, 'Y' AS color, SUM(y) AS total_consumido FROM tintas GROUP BY id_catalogo_impresoras, color
+        UNION ALL
+        SELECT id_catalogo_impresoras, 'K' AS color, SUM(k) AS total_consumido FROM tintas GROUP BY id_catalogo_impresoras, color
+        UNION ALL
+        SELECT id_catalogo_impresoras, 'W' AS color, SUM(w) AS total_consumido FROM tintas GROUP BY id_catalogo_impresoras, color
+      ";
+      // Nota: Eliminamos 'color' de GROUP BY en la query anterior ya que los campos c,m,y,k,w ya desglosan por color.
+      // Corregimos la query:
+      $sqlConsumo = "
+        SELECT id_catalogo_impresoras, 'C' AS color, SUM(c) AS total_consumido FROM tintas WHERE c > 0 GROUP BY id_catalogo_impresoras, color
+        UNION ALL
+        SELECT id_catalogo_impresoras, 'M' AS color, SUM(m) AS total_consumido FROM tintas WHERE m > 0 GROUP BY id_catalogo_impresoras, color
+        UNION ALL
+        SELECT id_catalogo_impresoras, 'Y' AS color, SUM(y) AS total_consumido FROM tintas WHERE y > 0 GROUP BY id_catalogo_impresoras, color
+        UNION ALL
+        SELECT id_catalogo_impresoras, 'K' AS color, SUM(k) AS total_consumido FROM tintas WHERE k > 0 GROUP BY id_catalogo_impresoras, color
+        UNION ALL
+        SELECT id_catalogo_impresoras, 'W' AS color, SUM(w) AS total_consumido FROM tintas WHERE w > 0 GROUP BY id_catalogo_impresoras, color
+      ";
+      $consumos = $localConnection->goQuery($sqlConsumo);
+      $consumoMap = [];
+      if (is_array($consumos)) {
+        foreach ($consumos as $c) {
+          $key = $c['id_catalogo_impresoras'] . '_' . $c['color'];
+          $consumoMap[$key] = floatval($c['total_consumido']);
+        }
+      }
+
+      // --- 2. Obtener Recargas Totales por Impresora y Color ---
+      $sqlTotalRecargas = "SELECT id_catalogo_impresora, color, SUM(cantidad) AS total_recargado FROM tintas_recargas GROUP BY id_catalogo_impresora, color";
+      $recargasTotales = $localConnection->goQuery($sqlTotalRecargas);
+      $recargaMap = [];
+      if (is_array($recargasTotales)) {
+        foreach ($recargasTotales as $r) {
+          $key = $r['id_catalogo_impresora'] . '_' . $r['color'];
+          $recargaMap[$key] = floatval($r['total_recargado']);
+        }
+      }
+
+      // Decodificar el JSON de tintas_recargas para cada fila y enriquecer con datos de consumo
       foreach ($data as &$row) {
         $row['tintas_recargas'] = json_decode($row['tintas_recargas'], true);
         // Si no hay recargas, json_decode puede devolver null o un array con un solo null. Aseguramos un array vacío.
         if ($row['tintas_recargas'] === null || (is_array($row['tintas_recargas']) && count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0] === null)) {
           $row['tintas_recargas'] = [];
+        }
+
+        // Enriquecer cada registro de recarga
+        foreach ($row['tintas_recargas'] as &$recarga) {
+          if ($recarga === null) continue;
+          $key = $row['_id'] . '_' . $recarga['color'];
+          $recarga['consumido_color'] = $consumoMap[$key] ?? 0;
+          $recarga['total_recargado_color'] = $recargaMap[$key] ?? 0;
+          $recarga['restante_color'] = $recarga['total_recargado_color'] - $recarga['consumido_color'];
         }
       }
 
