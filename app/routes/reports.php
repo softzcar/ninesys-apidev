@@ -542,12 +542,18 @@ return function (App $app) {
                         SELECT SUM(op.cantidad) 
                         FROM ordenes_productos op 
                         JOIN products p ON op.id_woo = p._id 
-                        WHERE op.id_orden = a._id AND (p.fisico = 1 OR p.fisico IS NULL)
+                        WHERE op.id_orden = a._id 
+                        AND (p.fisico = 1 OR p.fisico IS NULL)
+                        AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
                     ) AS total_unidades
                 FROM ordenes a
                 LEFT JOIN customers cus ON cus._id = a.id_wp
                 WHERE a.status IN ('terminada', 'entregada')
-                AND DATE(a.moment) BETWEEN ? AND ?
+                AND a._id IN (
+                    SELECT DISTINCT id_orden 
+                    FROM lotes_detalles_empleados_asignados 
+                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
+                )
                 ORDER BY a._id DESC";
             
             $orders = $db->goQuery($sqlOrders, [$inicio, $fin]);
@@ -632,12 +638,34 @@ return function (App $app) {
                 FROM ordenes_productos op
                 JOIN ordenes o ON o._id = op.id_orden
                 JOIN products p ON p._id = op.id_woo
-                WHERE DATE(o.moment) BETWEEN ? AND ?
+                WHERE o._id IN (
+                    SELECT DISTINCT id_orden 
+                    FROM lotes_detalles_empleados_asignados 
+                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
+                )
                 AND (p.fisico = 1 OR p.fisico IS NULL)
+                AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
                 GROUP BY p._id
                 ORDER BY value DESC
                 LIMIT 10";
             $topProducts = $db->goQuery($sqlTop, [$inicio, $fin]);
+
+            // 6. Obtener Resumen de Todos los Productos para el Modal (Alfabético)
+            $sqlAll = "SELECT 
+                    p.product AS name,
+                    SUM(op.cantidad) AS value
+                FROM ordenes_productos op
+                JOIN products p ON p._id = op.id_woo
+                WHERE op.id_orden IN (
+                    SELECT DISTINCT id_orden 
+                    FROM lotes_detalles_empleados_asignados 
+                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
+                )
+                AND (p.fisico = 1 OR p.fisico IS NULL)
+                AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+                GROUP BY p._id
+                ORDER BY p.product ASC";
+            $allProducts = $db->goQuery($sqlAll, [$inicio, $fin]);
             
             $db->disconnect();
             
@@ -708,7 +736,8 @@ return function (App $app) {
 
             $response->getBody()->write(json_encode([
                 'items' => $finalItems,
-                'topProducts' => $topProducts ?: []
+                'topProducts' => $topProducts ?: [],
+                'allProducts' => $allProducts ?: []
             ]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
