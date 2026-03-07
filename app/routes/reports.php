@@ -625,6 +625,11 @@ return function (App $app) {
                 WHERE o._id IN ($idsString)";
             $timeEff = $db->goQuery($sqlTime);
             
+            error_log("DEBUG REPORTS: orders count: " . count($orders));
+            error_log("DEBUG REPORTS: tasks count: " . count($tasks));
+            error_log("DEBUG REPORTS: matEff count: " . count($matEff));
+            error_log("DEBUG REPORTS: timeEff count: " . count($timeEff));
+
             $db->disconnect();
             
             // Agrupar tareas por ID de orden para un mapeo eficiente
