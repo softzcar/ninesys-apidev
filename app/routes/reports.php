@@ -624,6 +624,20 @@ return function (App $app) {
                 FROM ordenes o
                 WHERE o._id IN ($idsString)";
             $timeEff = $db->goQuery($sqlTime);
+
+            // 5. Obtener Ranking de Productos Top 10
+            $sqlTop = "SELECT 
+                    p.nombre AS name,
+                    SUM(op.cantidad) AS value
+                FROM ordenes_productos op
+                JOIN ordenes o ON o._id = op.id_orden
+                JOIN products p ON p._id = op.id_woo
+                WHERE DATE(o.moment) BETWEEN ? AND ?
+                AND (p.fisico = 1 OR p.fisico IS NULL)
+                GROUP BY p._id
+                ORDER BY value DESC
+                LIMIT 10";
+            $topProducts = $db->goQuery($sqlTop, [$inicio, $fin]);
             
             $db->disconnect();
             
@@ -692,7 +706,10 @@ return function (App $app) {
                 $finalItems[] = $order;
             }
 
-            $response->getBody()->write(json_encode(['items' => $finalItems]));
+            $response->getBody()->write(json_encode([
+                'items' => $finalItems,
+                'topProducts' => $topProducts ?: []
+            ]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
         } catch (Exception $e) {
