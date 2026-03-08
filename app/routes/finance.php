@@ -631,7 +631,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     // Obtener retiros
-    $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario WHERE a.moment LIKE '" . $args['fecha'] . "%'";
+    $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario WHERE DATE(a.moment) = '" . $args['fecha'] . "'";
 
     $pbject['sql']['data_retiros'] = $sql;
     $object['data']['retiros'] = $localConnection->goQuery($sql);
