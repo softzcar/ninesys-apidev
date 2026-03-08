@@ -650,81 +650,51 @@ return function (App $app) {
       $fondo[0]['pesos'] = 0;
       $fondo[0]['bolivares'] = 0;
     }
+     $id_emp = $args['id_empleado'];
 
-    // DÓLARES EN CAJA,
+    // DÓLARES EN CAJA
+    $montoDolaresCaja = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM caja WHERE moneda = 'Dólares' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
+    $montoDolaresRetiros = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Dólares' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
+    $saldoDolares = floatval($montoDolaresCaja + ($fondo[0]['dolares'] ?? 0) - $montoDolaresRetiros);
 
-    $sql = "SELECT 
-            (SUM(c.monto) - IFNULL(SUM(a.monto), 0)) AS monto, 
-            c.moneda, 
-            c.tasa, 
-            FORMAT(((SUM(c.monto) - IFNULL(SUM(a.monto), 0)) / c.tasa), 'C2') AS dolares 
-        FROM 
-            caja c 
-        LEFT JOIN 
-            retiros a ON c.id_empleado = a.id_empleado AND a.moneda = 'Dólares' 
-        WHERE 
-            c.moneda = 'Dólares' 
-            AND c.id_caja_cierres IS NULL
-            AND c.id_empleado = " . $args['id_empleado'] . ';';
+    $object['data']['caja'] = [[
+        'monto' => $saldoDolares,
+        'moneda' => 'Dólares',
+        'tasa' => 1,
+        'dolares' => '$' . number_format($saldoDolares, 2)
+    ]];
+
+    // PESOS EN CAJA
+    $montoPesosCaja = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM caja WHERE moneda = 'Pesos' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
+    $montoPesosRetiros = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Pesos' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
+    $saldoPesos = floatval($montoPesosCaja + ($fondo[0]['pesos'] ?? 0) - $montoPesosRetiros);
     
-    $resDolares = $localConnection->goQuery($sql);
-    if (empty($resDolares) || $resDolares[0]['monto'] === null) {
-        $object['data']['caja'] = [[
-            'monto' => 0,
-            'moneda' => 'Dólares',
-            'tasa' => 1,
-            'dolares' => '$0.00'
-        ]];
-    } else {
-        $object['data']['caja'] = $resDolares;
-    }
+    $resTasaP = $localConnection->goQuery("SELECT tasa FROM caja WHERE moneda = 'Pesos' AND id_empleado = ? ORDER BY _id DESC LIMIT 1", [$id_emp]);
+    $tasaP = floatval(!empty($resTasaP) ? $resTasaP[0]['tasa'] : 1);
+    if($tasaP <= 0) $tasaP = 1;
 
-    // PESOS EN CAJA,
-    $sql = 'SELECT (IFNULL(SUM(c.monto), 0) + ' . $fondo[0]['pesos'] . ' - IFNULL(SUM(a.monto), 0)) AS monto, c.moneda, c.tasa, FORMAT(((IFNULL(SUM(c.monto), 0) + ' . $fondo[0]['pesos'] . " - IFNULL(SUM(a.monto), 0)) / c.tasa), 'C2') AS dolares FROM caja c LEFT JOIN retiros a ON c.id_empleado = a.id_empleado AND a.moneda = 'Pesos' WHERE c.moneda = 'Pesos' AND c.id_caja_cierres IS NULL AND c.id_empleado = " . $args['id_empleado'] . ';';
+    array_push($object['data']['caja'], [
+        'monto' => $saldoPesos,
+        'moneda' => 'Pesos',
+        'tasa' => $tasaP,
+        'dolares' => '$' . number_format($saldoPesos / $tasaP, 2)
+    ]);
 
-    $resPesos = $localConnection->goQuery($sql);
-    if (empty($resPesos) || $resPesos[0]['moneda'] === null) {
-        $tasa_p = floatval($args['tasa_peso'] ?? 1);
-        if ($tasa_p <= 0) $tasa_p = 1;
-        array_push($object['data']['caja'], [
-            'monto' => $fondo[0]['pesos'],
-            'moneda' => 'Pesos',
-            'tasa' => $tasa_p,
-            'dolares' => '$' . number_format($fondo[0]['pesos'] / $tasa_p, 2)
-        ]);
-    } else {
-        array_push($object['data']['caja'], $resPesos[0]);
-    }
+    // BOLIVARES EN CAJA
+    $montoBolivaresCaja = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM caja WHERE moneda = 'Bolívares' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
+    $montoBolivaresRetiros = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Bolívares' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
+    $saldoBolivares = floatval($montoBolivaresCaja + ($fondo[0]['bolivares'] ?? 0) - $montoBolivaresRetiros);
 
-    // BOLIVARES     EN CAJA,
-    $sql = 'SELECT 
-            (SUM(c.monto) + ' . $fondo[0]['bolivares'] . ' - IFNULL(SUM(a.monto), 0)) AS monto, 
-            c.moneda, 
-            c.tasa, 
-            FORMAT(((SUM(c.monto) + ' . $fondo[0]['bolivares'] . " - IFNULL(SUM(a.monto), 0)) / c.tasa), 'C2') AS dolares 
-        FROM 
-            caja c 
-        LEFT JOIN 
-            retiros a ON c.id_empleado = a.id_empleado AND a.moneda = 'Bolívares' 
-        WHERE 
-            c.moneda = 'Bolívares' 
-            AND c.id_caja_cierres IS NULL
-            AND c.id_empleado = " . $args['id_empleado'];
+    $resTasaB = $localConnection->goQuery("SELECT tasa FROM caja WHERE moneda = 'Bolívares' AND id_empleado = ? ORDER BY _id DESC LIMIT 1", [$id_emp]);
+    $tasaB = floatval(!empty($resTasaB) ? $resTasaB[0]['tasa'] : 1);
+    if($tasaB <= 0) $tasaB = 1;
 
-    $resBolivares = $localConnection->goQuery($sql);
-    if (empty($resBolivares) || $resBolivares[0]['moneda'] === null) {
-        $tasa_b = floatval($args['tasa_dolar'] ?? 1);
-        if ($tasa_b <= 0) $tasa_b = 1;
-        array_push($object['data']['caja'], [
-            'monto' => $fondo[0]['bolivares'],
-            'moneda' => 'Bolívares',
-            'tasa' => $tasa_b,
-            'dolares' => '$' . number_format($fondo[0]['bolivares'] / $tasa_b, 2)
-        ]);
-    } else {
-        array_push($object['data']['caja'], $resBolivares[0]);
-    }
-
+    array_push($object['data']['caja'], [
+        'monto' => $saldoBolivares,
+        'moneda' => 'Bolívares',
+        'tasa' => $tasaB,
+        'dolares' => '$' . number_format($saldoBolivares/ $tasaB, 2)
+    ]);
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
