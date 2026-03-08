@@ -681,11 +681,13 @@ return function (App $app) {
 
     $resPesos = $localConnection->goQuery($sql);
     if (empty($resPesos) || $resPesos[0]['moneda'] === null) {
+        $tasa_p = floatval($args['tasa_peso'] ?? 1);
+        if ($tasa_p <= 0) $tasa_p = 1;
         array_push($object['data']['caja'], [
             'monto' => $fondo[0]['pesos'],
             'moneda' => 'Pesos',
-            'tasa' => $args['tasa_peso'] ?? 1,
-            'dolares' => '$' . number_format($fondo[0]['pesos'] / ($args['tasa_peso'] ?: 1), 2)
+            'tasa' => $tasa_p,
+            'dolares' => '$' . number_format($fondo[0]['pesos'] / $tasa_p, 2)
         ]);
     } else {
         array_push($object['data']['caja'], $resPesos[0]);
@@ -708,11 +710,13 @@ return function (App $app) {
 
     $resBolivares = $localConnection->goQuery($sql);
     if (empty($resBolivares) || $resBolivares[0]['moneda'] === null) {
+        $tasa_b = floatval($args['tasa_dolar'] ?? 1);
+        if ($tasa_b <= 0) $tasa_b = 1;
         array_push($object['data']['caja'], [
             'monto' => $fondo[0]['bolivares'],
             'moneda' => 'Bolívares',
-            'tasa' => $args['tasa_dolar'] ?? 1,
-            'dolares' => '$' . number_format($fondo[0]['bolivares'] / ($args['tasa_dolar'] ?: 1), 2)
+            'tasa' => $tasa_b,
+            'dolares' => '$' . number_format($fondo[0]['bolivares'] / $tasa_b, 2)
         ]);
     } else {
         array_push($object['data']['caja'], $resBolivares[0]);
