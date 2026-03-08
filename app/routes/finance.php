@@ -454,6 +454,7 @@ return function (App $app) {
       foreach ($solicitado as $moneda => $monto) {
         if ($monto > 0 && $monto > $saldos[$moneda]) {
            $localConnection->disconnect();
+           $object['statusCode'] = 400;
            $object['status'] = 'error';
            $object['message'] = "Saldo insuficiente en $moneda. Disponible: " . number_format($saldos[$moneda], 2);
            $response->getBody()->write(json_encode($object));
@@ -489,6 +490,7 @@ return function (App $app) {
       $localConnection->commit();
       $localConnection->disconnect();
 
+      $object['statusCode'] = 200;
       $object['status'] = 'success';
       $object['message'] = 'Retiro registrado correctamente';
       $response->getBody()->write(json_encode($object));
@@ -499,6 +501,7 @@ return function (App $app) {
         $localConnection->rollback();
         $localConnection->disconnect();
       }
+      $object['statusCode'] = 500;
       $object['status'] = 'error';
       $object['message'] = $e->getMessage();
       $response->getBody()->write(json_encode($object));
