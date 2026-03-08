@@ -594,8 +594,8 @@ return function (App $app) {
     $object['data']['retiros'] = $localConnection->goQuery($sql);
 
     /** FONDO */
-    $sql = 'SELECT dolares, pesos, bolivares FROM caja_fondos ORDER BY _id DESC LIMIT 1';
-    $fondo = $localConnection->goQuery($sql);
+    $sql = 'SELECT dolares, pesos, bolivares FROM caja_fondos WHERE id_empleado = ? ORDER BY _id DESC LIMIT 1';
+    $fondo = $localConnection->goQuery($sql, [$args['id_empleado']]);
     // $pbject['sql']['data_fondo'] = $sql;
     $object['data']['fondo'] = $fondo;
 
