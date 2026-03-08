@@ -618,12 +618,13 @@ return function (App $app) {
             retiros a ON c.id_empleado = a.id_empleado AND a.moneda = 'Dólares' 
         WHERE 
             c.moneda = 'Dólares' 
+            AND c.id_caja_cierres IS NULL
             AND c.id_empleado = " . $args['id_empleado'] . ';';
     // $object['data']['sql_dolares'] = $sql;
     $object['data']['caja'] = $localConnection->goQuery($sql);
 
     // PESOS EN CAJA,
-    $sql = 'SELECT (SUM(c.monto) + ' . $fondo[0]['pesos'] . ' - IFNULL(SUM(a.monto), 0)) AS monto, c.moneda, c.tasa, FORMAT(((SUM(c.monto) + ' . $fondo[0]['pesos'] . " - IFNULL(SUM(a.monto), 0)) / c.tasa), 'C2') AS dolares FROM caja c LEFT JOIN retiros a ON c.id_empleado = a.id_empleado AND a.moneda = 'Pesos' WHERE c.moneda = 'Pesos' AND c.id_empleado = " . $args['id_empleado'] . ';';
+    $sql = 'SELECT (SUM(c.monto) + ' . $fondo[0]['pesos'] . ' - IFNULL(SUM(a.monto), 0)) AS monto, c.moneda, c.tasa, FORMAT(((SUM(c.monto) + ' . $fondo[0]['pesos'] . " - IFNULL(SUM(a.monto), 0)) / c.tasa), 'C2') AS dolares FROM caja c LEFT JOIN retiros a ON c.id_empleado = a.id_empleado AND a.moneda = 'Pesos' WHERE c.moneda = 'Pesos' AND c.id_caja_cierres IS NULL AND c.id_empleado = " . $args['id_empleado'] . ';';
 
     // $object['data']['sql_2'] = $sql;
     array_push($object['data']['caja'], $localConnection->goQuery($sql)[0]);
@@ -640,6 +641,7 @@ return function (App $app) {
             retiros a ON c.id_empleado = a.id_empleado AND a.moneda = 'Bolívares' 
         WHERE 
             c.moneda = 'Bolívares' 
+            AND c.id_caja_cierres IS NULL
             AND c.id_empleado = " . $args['id_empleado'];
 
     // $object['data']['sql_3'] = $sql;
