@@ -413,54 +413,97 @@ return function (App $app) {
 
   // Guardar nuevo retiro
   $app->post('/retiro', function (Request $request, Response $response) {
-    $arr = $request->getParsedBody();
-    $localConnection = new LocalDB();
-    // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
-    $sql = '';
+    try {
+      $arr = $request->getParsedBody();
+      $localConnection = new LocalDB();
+      $id_empleado = intval($arr['id_empleado']);
+      $detalle = $arr['detalle'] ?? '';
+      $tasa_peso = floatval($arr['tasa_peso'] ?? 1);
+      $tasa_bolivar = floatval($arr['tasa_dolar'] ?? 1);
 
-    if (intval($arr['montoDolaresEfectivo']) > 0) {
-      $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr['id_empleado'] . "', 'Dólares', 'Efectivo', '" . $arr['montoDolaresEfectivo'] . "', '" . $arr['detalle'] . "', '1');";
+      // 1. Obtener saldos actuales para validar
+      // (Reutilizamos la lógica del GET /retiros pero simplificada para validación)
+      
+      // Fondo
+      $sqlFondo = 'SELECT dolares, pesos, bolivares FROM caja_fondos WHERE id_empleado = ? ORDER BY _id DESC LIMIT 1';
+      $fondoRes = $localConnection->goQuery($sqlFondo, [$id_empleado]);
+      $fondo = !empty($fondoRes) ? $fondoRes[0] : ['dolares' => 0, 'pesos' => 0, 'bolivares' => 0];
+
+      $saldos = [];
+      $monedas = ['Dólares', 'Pesos', 'Bolívares'];
+      foreach ($monedas as $moneda) {
+        $extraFondo = 0;
+        if ($moneda === 'Pesos') $extraFondo = $fondo['pesos'];
+        if ($moneda === 'Bolívares') $extraFondo = $fondo['bolivares'];
+
+        $sqlSaldo = "SELECT (IFNULL(SUM(c.monto), 0) + $extraFondo - IFNULL(SUM(a.monto), 0)) AS saldo 
+                     FROM caja c 
+                     LEFT JOIN retiros a ON c.id_empleado = a.id_empleado AND a.moneda = ? 
+                     WHERE c.moneda = ? AND c.id_caja_cierres IS NULL AND c.id_empleado = ?";
+        $res = $localConnection->goQuery($sqlSaldo, [$moneda, $moneda, $id_empleado]);
+        $saldos[$moneda] = !empty($res) ? floatval($res[0]['saldo']) : 0;
+      }
+
+      // 2. Validar montos solicitados
+      $solicitado = [
+        'Dólares' => floatval($arr['montoDolaresEfectivo'] ?? 0),
+        'Pesos' => floatval($arr['montoPesosEfectivo'] ?? 0),
+        'Bolívares' => floatval($arr['montoBolivaresEfectivo'] ?? 0)
+      ];
+
+      foreach ($solicitado as $moneda => $monto) {
+        if ($monto > 0 && $monto > $saldos[$moneda]) {
+           $localConnection->disconnect();
+           $object['status'] = 'error';
+           $object['message'] = "Saldo insuficiente en $moneda. Disponible: " . number_format($saldos[$moneda], 2);
+           $response->getBody()->write(json_encode($object));
+           return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+      }
+
+      // 3. Procesar inserciones (Sentencias Preparadas)
+      $localConnection->beginTransaction();
+      
+      $insertSql = "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES (?, ?, ?, ?, ?, ?)";
+      
+      // Mapeo de campos del form a moneda/metodo
+      $operaciones = [
+        ['montoDolaresEfectivo', 'Dólares', 'Efectivo', 1],
+        ['montoDolaresZelle', 'Dólares', 'Zelle', 1],
+        ['montoDolaresPanama', 'Dólares', 'Panamá', 1],
+        ['montoPesosEfectivo', 'Pesos', 'Efectivo', $tasa_peso],
+        ['montoPesosTransferencia', 'Pesos', 'Transferencia', $tasa_peso],
+        ['montoBolivaresEfectivo', 'Bolívares', 'Efectivo', $tasa_bolivar],
+        ['montoBolivaresPunto', 'Bolívares', 'Punto', $tasa_bolivar],
+        ['montoBolivaresPagomovil', 'Bolívares', 'Pagomovil', $tasa_bolivar],
+        ['montoBolivaresTransferencia', 'Bolívares', 'Transferencia', $tasa_bolivar]
+      ];
+
+      foreach ($operaciones as $op) {
+        $monto = floatval($arr[$op[0]] ?? 0);
+        if ($monto > 0) {
+          $localConnection->goQuery($insertSql, [$id_empleado, $op[1], $op[2], $monto, $detalle, $op[3]]);
+        }
+      }
+
+      $localConnection->commit();
+      $localConnection->disconnect();
+
+      $object['status'] = 'success';
+      $object['message'] = 'Retiro registrado correctamente';
+      $response->getBody()->write(json_encode($object));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (Exception $e) {
+      if (isset($localConnection)) {
+        $localConnection->rollback();
+        $localConnection->disconnect();
+      }
+      $object['status'] = 'error';
+      $object['message'] = $e->getMessage();
+      $response->getBody()->write(json_encode($object));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     }
-
-    if (intval($arr['montoDolaresZelle']) > 0) {
-      $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr['id_empleado'] . "', 'Dólares', 'Zelle', '" . $arr['montoDolaresZelle'] . "', '" . $arr['detalle'] . "', '1');";
-    }
-
-    if (intval($arr['montoDolaresPanama']) > 0) {
-      $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr['id_empleado'] . "', 'Dólares', 'Panamá', '" . $arr['montoDolaresPanama'] . "', '" . $arr['detalle'] . "', '1');";
-    }
-
-    if (intval($arr['montoPesosEfectivo']) > 0) {
-      $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr['id_empleado'] . "', 'Pesos', 'Efectivo', '" . $arr['montoPesosEfectivo'] . "', '" . $arr['detalle'] . "', '" . $arr['tasa_peso'] . "');";
-    }
-
-    if (intval($arr['montoPesosTransferencia']) > 0) {
-      $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr['id_empleado'] . "', 'Pesos', 'Transferencia', '" . $arr['montoPesosTransferencia'] . "', '" . $arr['detalle'] . "', '" . $arr['tasa_peso'] . "');";
-    }
-
-    if (intval($arr['montoBolivaresEfectivo']) > 0) {
-      $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr['id_empleado'] . "', 'Bolívares', 'Efectivo', '" . $arr['montoBolivaresEfectivo'] . "', '" . $arr['detalle'] . "', '" . $arr['tasa_dolar'] . "');";
-    }
-
-    if (intval($arr['montoBolivaresPunto']) > 0) {
-      $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr['id_empleado'] . "', 'Bolívares', 'Punto', '" . $arr['montoBolivaresPunto'] . "', '" . $arr['detalle'] . "', '" . $arr['tasa_dolar'] . "');";
-    }
-
-    if (intval($arr['montoBolivaresPagomovil']) > 0) {
-      $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr['id_empleado'] . "', 'Bolívares', 'Pagomovil', '" . $arr['montoBolivaresPagomovil'] . "', '" . $arr['detalle'] . "', '" . $arr['tasa_dolar'] . "');";
-    }
-
-    if (intval($arr['montoBolivaresTransferencia']) > 0) {
-      $sql .= "INSERT INTO retiros (id_empleado, moneda, metodo_pago, monto, detalle_retiro, tasa) VALUES ('" . $arr['id_empleado'] . "', 'Bolívares', 'Transferencia', '" . $arr['montoBolivaresTransferencia'] . "', '" . $arr['detalle'] . "', '" . $arr['tasa_dolar'] . "');";
-    }
-
-    $data = $localConnection->goQuery($sql);
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($data));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
   });
 
   // Guardar nuevo abono
@@ -620,14 +663,33 @@ return function (App $app) {
             c.moneda = 'Dólares' 
             AND c.id_caja_cierres IS NULL
             AND c.id_empleado = " . $args['id_empleado'] . ';';
-    // $object['data']['sql_dolares'] = $sql;
-    $object['data']['caja'] = $localConnection->goQuery($sql);
+    
+    $resDolares = $localConnection->goQuery($sql);
+    if (empty($resDolares) || $resDolares[0]['monto'] === null) {
+        $object['data']['caja'] = [[
+            'monto' => 0,
+            'moneda' => 'Dólares',
+            'tasa' => 1,
+            'dolares' => '$0.00'
+        ]];
+    } else {
+        $object['data']['caja'] = $resDolares;
+    }
 
     // PESOS EN CAJA,
-    $sql = 'SELECT (SUM(c.monto) + ' . $fondo[0]['pesos'] . ' - IFNULL(SUM(a.monto), 0)) AS monto, c.moneda, c.tasa, FORMAT(((SUM(c.monto) + ' . $fondo[0]['pesos'] . " - IFNULL(SUM(a.monto), 0)) / c.tasa), 'C2') AS dolares FROM caja c LEFT JOIN retiros a ON c.id_empleado = a.id_empleado AND a.moneda = 'Pesos' WHERE c.moneda = 'Pesos' AND c.id_caja_cierres IS NULL AND c.id_empleado = " . $args['id_empleado'] . ';';
+    $sql = 'SELECT (IFNULL(SUM(c.monto), 0) + ' . $fondo[0]['pesos'] . ' - IFNULL(SUM(a.monto), 0)) AS monto, c.moneda, c.tasa, FORMAT(((IFNULL(SUM(c.monto), 0) + ' . $fondo[0]['pesos'] . " - IFNULL(SUM(a.monto), 0)) / c.tasa), 'C2') AS dolares FROM caja c LEFT JOIN retiros a ON c.id_empleado = a.id_empleado AND a.moneda = 'Pesos' WHERE c.moneda = 'Pesos' AND c.id_caja_cierres IS NULL AND c.id_empleado = " . $args['id_empleado'] . ';';
 
-    // $object['data']['sql_2'] = $sql;
-    array_push($object['data']['caja'], $localConnection->goQuery($sql)[0]);
+    $resPesos = $localConnection->goQuery($sql);
+    if (empty($resPesos) || $resPesos[0]['moneda'] === null) {
+        array_push($object['data']['caja'], [
+            'monto' => $fondo[0]['pesos'],
+            'moneda' => 'Pesos',
+            'tasa' => $args['tasa_peso'] ?? 1,
+            'dolares' => '$' . number_format($fondo[0]['pesos'] / ($args['tasa_peso'] ?: 1), 2)
+        ]);
+    } else {
+        array_push($object['data']['caja'], $resPesos[0]);
+    }
 
     // BOLIVARES     EN CAJA,
     $sql = 'SELECT 
@@ -644,8 +706,17 @@ return function (App $app) {
             AND c.id_caja_cierres IS NULL
             AND c.id_empleado = " . $args['id_empleado'];
 
-    // $object['data']['sql_3'] = $sql;
-    array_push($object['data']['caja'], $localConnection->goQuery($sql)[0]);
+    $resBolivares = $localConnection->goQuery($sql);
+    if (empty($resBolivares) || $resBolivares[0]['moneda'] === null) {
+        array_push($object['data']['caja'], [
+            'monto' => $fondo[0]['bolivares'],
+            'moneda' => 'Bolívares',
+            'tasa' => $args['tasa_dolar'] ?? 1,
+            'dolares' => '$' . number_format($fondo[0]['bolivares'] / ($args['tasa_dolar'] ?: 1), 2)
+        ]);
+    } else {
+        array_push($object['data']['caja'], $resBolivares[0]);
+    }
 
     $localConnection->disconnect();
 
