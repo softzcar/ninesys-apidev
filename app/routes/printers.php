@@ -184,76 +184,77 @@ return function (App $app) {
         ),
 
         -- =======================================================================================
-        -- PASO 2: Encontrar la fecha de la ÚLTIMA CONSUMO para cada tanque (impresora + color).
-        -- Esto nos ayudará a saber desde cuándo debemos sumar las recargas.
+        -- PASO 3: Calcular métricas históricas y detalles de la última recarga.
         -- =======================================================================================
-        last_consumption_per_tank AS (
-            SELECT
-                id_catalogo_impresoras,
-                color,
-                MAX(fecha_orden) AS last_consumption_date
-            FROM
-                consumo_desglosado
-            GROUP BY
-                id_catalogo_impresoras,
-                color
-        ),
-
-        -- =======================================================================================
-        -- PASO 3: Calcular la CANTIDAD TOTAL recargada para cada tanque desde la última vez que hubo consumo.
-        -- Si nunca hubo consumo, se suman todas las recargas.
-        -- =======================================================================================
-        total_recargas_desde_ultimo_consumo AS (
+        stats_recargas AS (
             SELECT
                 tr.id_catalogo_impresora,
                 tr.color,
-                SUM(tr.cantidad) AS total_cantidad_recargada,
-                MAX(tr.fecha_recarga) AS fecha_ultima_recarga -- La fecha de la última recarga sigue siendo útil
+                SUM(tr.cantidad) AS total_recargado_historico_ml,
+                MAX(tr.fecha_recarga) AS fecha_ultima_recarga,
+                -- Obtenemos la cantidad de la última recarga usando una subconsulta correlacionada para mayor precisión
+                (SELECT tr2.cantidad FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1) AS ultima_cantidad_recargada_ml
             FROM
                 tintas_recargas tr
             GROUP BY
                 tr.id_catalogo_impresora,
                 tr.color
+        ),
+
+        -- =======================================================================================
+        -- PASO 4: Calcular el consumo histórico total.
+        -- =======================================================================================
+        consumo_historico AS (
+            SELECT
+                id_catalogo_impresoras,
+                color,
+                SUM(consumo) AS consumo_total_historico_ml
+            FROM
+                consumo_desglosado
+            GROUP BY
+                id_catalogo_impresoras,
+                color
         )
 
         -- =======================================================================================
-        -- PASO 4: Unir todo y calcular el resultado final.
+        -- PASO 5: Unir todo y calcular los saldos finales.
         -- =======================================================================================
         SELECT
             ci.codigo_interno AS impresora,
-            trslc.color,
+            sr.color,
             ci.capacidad_contenedor AS capacidad_tanque_ml,
-            trslc.fecha_ultima_recarga AS fecha_ultima_recarga,
-            trslc.total_cantidad_recargada AS total_recargado_ml,
-            -- Sumamos todo el consumo que ocurrió DESPUÉS de la última recarga.
-            COALESCE(SUM(cd.consumo), 0) AS consumo_desde_ultima_recarga_ml,
-            -- El cálculo final: Tinta recargada MENOS tinta consumida.
-            (COALESCE(trslc.total_cantidad_recargada, 0) - COALESCE(SUM(cd.consumo), 0)) AS tinta_restante_estimada_ml
+            sr.fecha_ultima_recarga AS fecha_ultima_recarga,
+            sr.ultima_cantidad_recargada_ml,
+            sr.total_recargado_historico_ml,
+            COALESCE(ch.consumo_total_historico_ml, 0) AS consumo_total_historico_ml,
+            -- Saldo Histórico: Total Recargado - Consumo Total
+            (COALESCE(sr.total_recargado_historico_ml, 0) - COALESCE(ch.consumo_total_historico_ml, 0)) AS tinta_restante_total_ml,
+            -- Consumo desde la última recarga (necesario para el saldo vs última recarga)
+            COALESCE((
+                SELECT SUM(cd.consumo) 
+                FROM consumo_desglosado cd 
+                WHERE cd.id_catalogo_impresoras = sr.id_catalogo_impresora 
+                AND cd.color = sr.color 
+                AND cd.fecha_orden > sr.fecha_ultima_recarga
+            ), 0) AS consumo_desde_ultima_recarga_ml,
+            -- Tinta restante estimada (basada en el total acumulado vs consumo acumulado posterior a la última recarga - lógica original)
+            -- Pero el usuario pidió específicamente: Diferencia entre la última recarga contra el consumo (asumimos consumo tras esa recarga)
+            (COALESCE(sr.ultima_cantidad_recargada_ml, 0) - COALESCE((
+                SELECT SUM(cd.consumo) 
+                FROM consumo_desglosado cd 
+                WHERE cd.id_catalogo_impresoras = sr.id_catalogo_impresora 
+                AND cd.color = sr.color 
+                AND cd.fecha_orden > sr.fecha_ultima_recarga
+            ), 0)) AS tinta_restante_ultima_recarga_ml
         FROM
-            -- Empezamos con el total de recargas desde el último consumo
-            total_recargas_desde_ultimo_consumo trslc
-            
-        -- Unimos con el catálogo de impresoras para obtener sus nombres
+            stats_recargas sr
         JOIN
-            catalogo_impresoras ci ON ci._id = trslc.id_catalogo_impresora
-            
-        -- Hacemos un LEFT JOIN con el consumo. Usamos LEFT por si no ha habido consumo desde la última recarga.
+            catalogo_impresoras ci ON ci._id = sr.id_catalogo_impresora
         LEFT JOIN
-            consumo_desglosado cd 
-            ON trslc.id_catalogo_impresora = cd.id_catalogo_impresoras 
-            AND trslc.color = cd.color
-            -- ¡ESTA ES LA LÓGICA CLAVE! Solo contamos el consumo cuya fecha de orden es POSTERIOR a la fecha de la última recarga.
-            AND cd.fecha_orden > trslc.fecha_ultima_recarga
-            
-        GROUP BY
-            ci.codigo_interno,
-            trslc.color,
-            ci.capacidad_contenedor,
-            trslc.fecha_ultima_recarga,
-            trslc.total_cantidad_recargada
+            consumo_historico ch ON sr.id_catalogo_impresora = ch.id_catalogo_impresoras AND sr.color = ch.color
         ORDER BY
             impresora,
-            color;
+            sr.color;
         SQL;
       $data = $localConnection->goQuery($sql);
 
