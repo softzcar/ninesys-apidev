@@ -54,7 +54,8 @@ return function (App $app) {
 
     // POST /consumibles - Crear consumible
     $app->post('/consumibles', function (Request $request, Response $response) {
-        $data = $request->getParsedBody();
+        $body = $request->getBody()->getContents();
+        $data = json_decode($body, true);
         $localConnection = new LocalDB();
 
         $sql = "INSERT INTO consumibles (nombre, categoria, serial_id, maquina_tipo, notas, estado) 
@@ -76,7 +77,8 @@ return function (App $app) {
 
     // PUT /consumibles/{id} - Editar consumible
     $app->put('/consumibles/{id}', function (Request $request, Response $response, array $args) {
-        $data = $request->getParsedBody();
+        $body = $request->getBody()->getContents();
+        $data = json_decode($body, true);
         $localConnection = new LocalDB();
 
         $sql = "UPDATE consumibles SET nombre = ?, categoria = ?, serial_id = ?, notas = ? WHERE _id = ?";
@@ -97,7 +99,8 @@ return function (App $app) {
 
     // PATCH /consumibles/{id}/instalar - Instalar en máquina
     $app->patch('/consumibles/{id}/instalar', function (Request $request, Response $response, array $args) {
-        $data = $request->getParsedBody();
+        $body = $request->getBody()->getContents();
+        $data = json_decode($body, true);
         $localConnection = new LocalDB();
 
         $sql = "UPDATE consumibles SET id_maquina = ?, maquina_tipo = ?, estado = 'instalado', fecha_inicio = NOW() WHERE _id = ?";
