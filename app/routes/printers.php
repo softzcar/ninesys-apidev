@@ -72,6 +72,7 @@ return function (App $app) {
                                 'id_insumo', tr.id_insumo,
                                 'color', tr.color,
                                 'cantidad', tr.cantidad,
+                                'nivel_tanque_previo', tr.nivel_tanque_previo,
                                 'fecha_recarga', tr.fecha_recarga
                             )
                         ),
@@ -192,8 +193,13 @@ return function (App $app) {
                 tr.color,
                 SUM(tr.cantidad) AS total_recargado_historico_ml,
                 MAX(tr.fecha_recarga) AS fecha_ultima_recarga,
-                -- Obtenemos la cantidad de la última recarga usando una subconsulta correlacionada para mayor precisión
-                (SELECT tr2.cantidad FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1) AS ultima_cantidad_recargada_ml
+                -- Obtenemos la cantidad de la última recarga y el nivel previo
+                (SELECT tr2.cantidad FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1) AS ultima_cantidad_recargada_ml,
+                (SELECT tr2.nivel_tanque_previo FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1) AS nivel_tanque_previo_actual,
+                -- Obtenemos los datos de la PENÚLTIMA recarga para calcular el desperdicio del ciclo que cerró
+                (SELECT tr2.fecha_recarga FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1 OFFSET 1) AS fecha_penultima_recarga,
+                (SELECT tr2.cantidad FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1 OFFSET 1) AS cantidad_penultima_recarga,
+                (SELECT tr2.nivel_tanque_previo FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1 OFFSET 1) AS nivel_tanque_previo_penultima
             FROM
                 tintas_recargas tr
             GROUP BY
@@ -225,11 +231,13 @@ return function (App $app) {
             ci.capacidad_contenedor AS capacidad_tanque_ml,
             sr.fecha_ultima_recarga AS fecha_ultima_recarga,
             sr.ultima_cantidad_recargada_ml,
+            sr.nivel_tanque_previo_actual,
             sr.total_recargado_historico_ml,
             COALESCE(ch.consumo_total_historico_ml, 0) AS consumo_total_historico_ml,
             -- Saldo Histórico: Total Recargado - Consumo Total
             (COALESCE(sr.total_recargado_historico_ml, 0) - COALESCE(ch.consumo_total_historico_ml, 0)) AS tinta_restante_total_ml,
-            -- Consumo desde la última recarga (necesario para el saldo vs última recarga)
+            
+            -- Consumo desde la última recarga
             COALESCE((
                 SELECT SUM(cd.consumo) 
                 FROM consumo_desglosado cd 
@@ -237,15 +245,32 @@ return function (App $app) {
                 AND cd.color = sr.color 
                 AND cd.fecha_orden > sr.fecha_ultima_recarga
             ), 0) AS consumo_desde_ultima_recarga_ml,
-            -- Tinta restante estimada (basada en el total acumulado vs consumo acumulado posterior a la última recarga - lógica original)
-            -- Pero el usuario pidió específicamente: Diferencia entre la última recarga contra el consumo (asumimos consumo tras esa recarga)
-            (COALESCE(sr.ultima_cantidad_recargada_ml, 0) - COALESCE((
+
+            -- Tinta restante ACTUAL: Nivel previo + Nueva carga - Consumo desde entonces
+            (COALESCE(sr.nivel_tanque_previo_actual, 0) + COALESCE(sr.ultima_cantidad_recargada_ml, 0) - COALESCE((
                 SELECT SUM(cd.consumo) 
                 FROM consumo_desglosado cd 
                 WHERE cd.id_catalogo_impresoras = sr.id_catalogo_impresora 
                 AND cd.color = sr.color 
                 AND cd.fecha_orden > sr.fecha_ultima_recarga
-            ), 0)) AS tinta_restante_ultima_recarga_ml
+            ), 0)) AS tinta_restante_ultima_recarga_ml,
+
+            -- CÁLCULO DE DESPERDICIO DEL CICLO ANTERIOR:
+            -- Nivel inicial ciclo anterior (NP-1 + Cant-1) - Consumo ciclo anterior - Nivel Real actual (NP)
+            CASE 
+                WHEN sr.fecha_penultima_recarga IS NOT NULL AND sr.nivel_tanque_previo_actual IS NOT NULL THEN
+                    (COALESCE(sr.nivel_tanque_previo_penultima, 0) + COALESCE(sr.cantidad_penultima_recarga, 0)) -- Punto partida anterior
+                    - COALESCE((
+                        SELECT SUM(cd.consumo) 
+                        FROM consumo_desglosado cd 
+                        WHERE cd.id_catalogo_impresoras = sr.id_catalogo_impresora 
+                        AND cd.color = sr.color 
+                        AND cd.fecha_orden > sr.fecha_penultima_recarga
+                        AND cd.fecha_orden <= sr.fecha_ultima_recarga
+                    ), 0) -- Consumo en ese rango
+                    - sr.nivel_tanque_previo_actual -- Lo que realmente había al final
+                ELSE 0 
+            END AS desperdicio_ciclo_pasado_ml
         FROM
             stats_recargas sr
         JOIN
@@ -349,13 +374,14 @@ return function (App $app) {
       $myDate = new CustomTime();
       $now = $myDate->today();
 
-      $sql = 'INSERT INTO tintas_recargas (id_catalogo_impresora, id_insumo, color, cantidad, fecha_recarga) VALUES (?, ?, ?, ?, ?)';
+      $sql = 'INSERT INTO tintas_recargas (id_catalogo_impresora, id_insumo, color, cantidad, nivel_tanque_previo, fecha_recarga) VALUES (?, ?, ?, ?, ?, ?)';
 
       $params = [
         $data['id_impresora'],
         $data['id_insumo'],
         $data['color'],
         $data['mililitros'],
+        $data['nivel_tanque_previo'] ?? null,
         $now
       ];
 
