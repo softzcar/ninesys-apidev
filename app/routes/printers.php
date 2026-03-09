@@ -72,7 +72,7 @@ return function (App $app) {
                                 'id_insumo', tr.id_insumo,
                                 'color', tr.color,
                                 'cantidad', tr.cantidad,
-                                'nivel_tanque_previo', tr.nivel_tanque_previo,
+                                'nivel_tanque_previo', COALESCE(tr.nivel_tanque_previo, 0),
                                 'fecha_recarga', tr.fecha_recarga
                             )
                         ),
