@@ -1751,7 +1751,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         FROM
         inventario a
         JOIN tinta_filtro b ON b.id_inventario = a._id
-        WHERE a.cantidad > 0';
+        WHERE a.cantidad >= 1';
 
         $data = $localConnection->goQuery($sql);
 
