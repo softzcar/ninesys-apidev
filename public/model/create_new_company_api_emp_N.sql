@@ -116,6 +116,19 @@ CREATE TABLE `check_tareas` (
   `id_departamento` int(11) DEFAULT NULL COMMENT 'ID del departamento',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fin de tarea'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Lista de verificación de tareas por empleado. Controla el checklist de actividades completadas durante el proceso de producción de cada orden.';
+CREATE TABLE `consumibles` (
+  `_id` int(11) NOT NULL COMMENT 'ID único del registro',
+  `id_maquina` int(11) DEFAULT NULL COMMENT 'ID del aparato asignado',
+  `maquina_tipo` varchar(50) DEFAULT 'impresora' COMMENT 'Tipo de máquina (impresora, etc)',
+  `nombre` varchar(255) NOT NULL COMMENT 'Nombre/Descripción del consumible',
+  `categoria` varchar(50) DEFAULT NULL COMMENT 'insumo, repuesto, etc',
+  `serial_id` varchar(100) DEFAULT NULL COMMENT 'Serial o ID único del fabricante',
+  `estado` varchar(20) NOT NULL DEFAULT 'disponible' COMMENT 'disponible, instalado, agotado',
+  `fecha_inicio` datetime DEFAULT NULL COMMENT 'Fecha de instalación',
+  `fecha_fin` datetime DEFAULT NULL COMMENT 'Fecha de retiro/agotamiento',
+  `notas` text DEFAULT NULL,
+  `moment` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Registro de consumibles y repuestos con seguimiento de vida útil.';
 CREATE TABLE `config` (
   `_id` int(11) NOT NULL,
   `app_key` text DEFAULT NULL,
@@ -1090,6 +1103,7 @@ CREATE TABLE `tintas_recargas` (
   `id_catalogo_impresora` int(11) DEFAULT NULL COMMENT 'ID catalodo de imoresoras',
   `color` varchar(1) DEFAULT NULL COMMENT 'Color de la tinta',
   `cantidad` decimal(7, 2) DEFAULT NULL COMMENT 'Cantidad en ML',
+  `nivel_tanque_previo` decimal(10, 2) DEFAULT NULL,
   `fecha_recarga` timestamp NULL DEFAULT NULL COMMENT 'Fecha de la recarga',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Recargas de tinta';
@@ -1137,6 +1151,10 @@ ALTER TABLE `categories`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `check_tareas`
 ADD PRIMARY KEY (`_id`);
+ALTER TABLE `consumibles`
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `id_maquina` (`id_maquina`),
+  ADD KEY `estado` (`estado`);
 ALTER TABLE `config`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `customers`
@@ -1398,6 +1416,8 @@ MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT,
 ALTER TABLE `tintas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `tintas_recargas`
+MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
+ALTER TABLE `consumibles`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `tinta_filtro`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;

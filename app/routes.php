@@ -187,6 +187,9 @@ return function (App $app) {
   // RUTAS DE IMPRESORAS
   (require __DIR__ . '/routes/printers.php')($app);
 
+  // RUTAS DE CONSUMIBLES
+  (require __DIR__ . '/routes/consumables.php')($app);
+
   // RUTAS DE SUBIDA DE IMÁGENES
   (require __DIR__ . '/routes/upload.php')($app);
 
