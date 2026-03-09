@@ -88,67 +88,85 @@ return function (App $app) {
                     ci._id DESC";
       $data = $localConnection->goQuery($sql);
 
-      // --- 1. Obtener Consumo Total por Impresora y Color ---
+      // --- 1. Obtener Consumo Detallado para calcular por ciclo ---
       $sqlConsumo = "
-        SELECT id_catalogo_impresoras, 'C' AS color, SUM(c) AS total_consumido FROM tintas GROUP BY id_catalogo_impresoras, color
+        SELECT id_catalogo_impresoras, 'C' AS color, c AS cantidad, moment FROM tintas WHERE c > 0
         UNION ALL
-        SELECT id_catalogo_impresoras, 'M' AS color, SUM(m) AS total_consumido FROM tintas GROUP BY id_catalogo_impresoras, color
+        SELECT id_catalogo_impresoras, 'M' AS color, m AS cantidad, moment FROM tintas WHERE m > 0
         UNION ALL
-        SELECT id_catalogo_impresoras, 'Y' AS color, SUM(y) AS total_consumido FROM tintas GROUP BY id_catalogo_impresoras, color
+        SELECT id_catalogo_impresoras, 'Y' AS color, y AS cantidad, moment FROM tintas WHERE y > 0
         UNION ALL
-        SELECT id_catalogo_impresoras, 'K' AS color, SUM(k) AS total_consumido FROM tintas GROUP BY id_catalogo_impresoras, color
+        SELECT id_catalogo_impresoras, 'K' AS color, k AS cantidad, moment FROM tintas WHERE k > 0
         UNION ALL
-        SELECT id_catalogo_impresoras, 'W' AS color, SUM(w) AS total_consumido FROM tintas GROUP BY id_catalogo_impresoras, color
+        SELECT id_catalogo_impresoras, 'W' AS color, w AS cantidad, moment FROM tintas WHERE w > 0
+        ORDER BY moment ASC
       ";
-      // Nota: Eliminamos 'color' de GROUP BY en la query anterior ya que los campos c,m,y,k,w ya desglosan por color.
-      // Corregimos la query:
-      $sqlConsumo = "
-        SELECT id_catalogo_impresoras, 'C' AS color, SUM(c) AS total_consumido FROM tintas WHERE c > 0 GROUP BY id_catalogo_impresoras, color
-        UNION ALL
-        SELECT id_catalogo_impresoras, 'M' AS color, SUM(m) AS total_consumido FROM tintas WHERE m > 0 GROUP BY id_catalogo_impresoras, color
-        UNION ALL
-        SELECT id_catalogo_impresoras, 'Y' AS color, SUM(y) AS total_consumido FROM tintas WHERE y > 0 GROUP BY id_catalogo_impresoras, color
-        UNION ALL
-        SELECT id_catalogo_impresoras, 'K' AS color, SUM(k) AS total_consumido FROM tintas WHERE k > 0 GROUP BY id_catalogo_impresoras, color
-        UNION ALL
-        SELECT id_catalogo_impresoras, 'W' AS color, SUM(w) AS total_consumido FROM tintas WHERE w > 0 GROUP BY id_catalogo_impresoras, color
-      ";
-      $consumos = $localConnection->goQuery($sqlConsumo);
-      $consumoMap = [];
-      if (is_array($consumos)) {
-        foreach ($consumos as $c) {
-          $key = $c['id_catalogo_impresoras'] . '_' . $c['color'];
-          $consumoMap[$key] = floatval($c['total_consumido']);
-        }
-      }
+      $allConsumos = $localConnection->goQuery($sqlConsumo);
 
-      // --- 2. Obtener Recargas Totales por Impresora y Color ---
-      $sqlTotalRecargas = "SELECT id_catalogo_impresora, color, SUM(cantidad) AS total_recargado FROM tintas_recargas GROUP BY id_catalogo_impresora, color";
-      $recargasTotales = $localConnection->goQuery($sqlTotalRecargas);
-      $recargaMap = [];
-      if (is_array($recargasTotales)) {
-        foreach ($recargasTotales as $r) {
-          $key = $r['id_catalogo_impresora'] . '_' . $r['color'];
-          $recargaMap[$key] = floatval($r['total_recargado']);
-        }
-      }
-
-      // Decodificar el JSON de tintas_recargas para cada fila y enriquecer con datos de consumo
+      // Procesar cada impresora para calcular sus ciclos de tinta
       foreach ($data as &$row) {
         $row['tintas_recargas'] = json_decode($row['tintas_recargas'], true);
-        // Si no hay recargas, json_decode puede devolver null o un array con un solo null. Aseguramos un array vacío.
-        if ($row['tintas_recargas'] === null || (is_array($row['tintas_recargas']) && count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0] === null)) {
+        if (!$row['tintas_recargas'] || (count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0]['id'] === null)) {
           $row['tintas_recargas'] = [];
+          continue;
         }
 
-        // Enriquecer cada registro de recarga
-        foreach ($row['tintas_recargas'] as &$recarga) {
-          if ($recarga === null) continue;
-          $key = $row['_id'] . '_' . $recarga['color'];
-          $recarga['consumido_color'] = $consumoMap[$key] ?? 0;
-          $recarga['total_recargado_color'] = $recargaMap[$key] ?? 0;
-          $recarga['restante_color'] = $recarga['total_recargado_color'] - $recarga['consumido_color'];
+        // Agrupar recargas por color
+        $recargasPorColor = [];
+        foreach ($row['tintas_recargas'] as $r) {
+            if ($r['id'] === null) continue;
+            $recargasPorColor[$r['color']][] = $r;
         }
+
+        $procesadas = [];
+
+        foreach ($recargasPorColor as $color => $colorRecargas) {
+            // Ordenamos por fecha para procesar los ciclos cronológicamente
+            usort($colorRecargas, function($a, $b) {
+                return strcmp($a['fecha_recarga'], $b['fecha_recarga']);
+            });
+
+            for ($i = 0; $i < count($colorRecargas); $i++) {
+                $curr = $colorRecargas[$i];
+                $next = $colorRecargas[$i+1] ?? null;
+
+                // Nivel total en tanque al terminar esta recarga
+                $curr['restante_post_recarga'] = (float)$curr['nivel_tanque_previo'] + (float)$curr['cantidad'];
+                
+                // El ciclo de este insumo va desde que se echa hasta que se vuelve a recargar ese color
+                $inicio = $curr['fecha_recarga'];
+                $fin = $next ? $next['fecha_recarga'] : date('Y-m-d H:i:s');
+                
+                $consumoCiclo = 0;
+                if (is_array($allConsumos)) {
+                    foreach ($allConsumos as $c) {
+                        if ($c['id_catalogo_impresoras'] == $row['_id'] && $c['color'] == $color) {
+                            if ($c['moment'] >= $inicio && $c['moment'] < $fin) {
+                                $consumoCiclo += (float)$c['cantidad'];
+                            }
+                        }
+                    }
+                }
+                $curr['consumido_en_ciclo'] = $consumoCiclo;
+                
+                // Remanente (Ajuste): Diferencia al final del ciclo
+                if ($next) {
+                    $teoricoAlFinal = $curr['restante_post_recarga'] - $consumoCiclo;
+                    $realAlFinal = (float)$next['nivel_tanque_previo'];
+                    $curr['desperdicio_ajuste'] = $teoricoAlFinal - $realAlFinal;
+                } else {
+                    $curr['desperdicio_ajuste'] = null; // Ciclo aún abierto
+                }
+                
+                $procesadas[] = $curr;
+            }
+        }
+        
+        $row['tintas_recargas'] = $procesadas;
+        // Ordenamos DESC para la tabla del frontend
+        usort($row['tintas_recargas'], function($a, $b) {
+            return strcmp($b['fecha_recarga'], $a['fecha_recarga']);
+        });
       }
 
       $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
