@@ -367,7 +367,7 @@ return function (App $app) {
       FROM
           empresas_usuarios_departamentos a
       LEFT JOIN empresas_usuarios b ON b.id_usuario = a.id_empleado
-      WHERE  id_departamento = $depId AND b.id_empresa = " . ID_EMPRESA;
+      WHERE  id_departamento = $depId AND b.activo = 1 AND b.id_empresa = " . ID_EMPRESA;
     $object['empleados'] = $localConnection_emp->goQuery($sql);
 
     $localConnection = new LocalDB();
@@ -507,7 +507,7 @@ return function (App $app) {
     $object['disenos']['fields'][2]['key'] = 'empleado';
     $object['disenos']['fields'][2]['label'] = 'Empleado';
 
-    $sql = "SELECT a.tipo, a.id_orden, b.email username, b.nombre, b.id_usuario id_empleado FROM disenos a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario  WHERE a.tipo = 'modas' OR a.tipo = 'gráfico' AND a.id_empleado > 0";
+    $sql = "SELECT a.tipo, a.id_orden, b.email username, b.nombre, b.id_usuario id_empleado FROM disenos a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario  WHERE (a.tipo = 'modas' OR a.tipo = 'gráfico') AND a.id_empleado > 0 AND b.activo = 1";
 
     $object['disenos']['items'] = $localConnection->goQuery($sql);
     $object['empleados'] = $localConnection->goQuery('SELECT * FROM api_empresas.empresas_usuarios');
