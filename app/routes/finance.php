@@ -630,11 +630,11 @@ return function (App $app) {
   });
 
   // Obteber Retiros
-  $app->get('/retiros/{fecha}/{id_empleado}', function (Request $request, Response $response, array $args) {
+  $app->get('/retiros/{inicio}/{fin}/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
     // Obtener retiros
-    $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario WHERE DATE(a.moment) = '" . $args['fecha'] . "'";
+    $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario WHERE DATE(a.moment) BETWEEN '" . $args['inicio'] . "' AND '" . $args['fin'] . "' ORDER BY a.moment DESC";
 
     $pbject['sql']['data_retiros'] = $sql;
     $object['data']['retiros'] = $localConnection->goQuery($sql);
