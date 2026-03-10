@@ -1,0 +1,36 @@
+- **Solicitud del Usuario**: Mejorar la precisión del reporte de producción, corregir errores de decimales en el total, reubicar el contador de productos fabricados y añadir un modal de resumen detallado por producto en orden alfabético.
+- **Fecha y Hora**: 2026-03-07 17:15:00
+- **Proyecto(s)**: Frontend / Backend
+- **Archivos Involucrados**:
+    - [reports.php](file:///home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/reports.php)
+    - [semanal.vue](file:///home/developer/Escritorio/niesys/app_multi/pages/reportes/semanal.vue)
+- **Commits Relacionados**:
+    - Frontend: N/A (Desarrollo local)
+    - Backend: 6d5a2380582531e0f0bdcdf9696dbf515436665e
+- **Acción Realizada**:
+    - **Backend (API)**: 
+        - Se refactorizó la lógica de filtrado en el endpoint `semanal-detallado`. El filtro ahora se basa en la fecha real de terminación de tareas (`fecha_terminado` en la tabla `lotes_detalles_empleados_asignados`) en lugar de la fecha de creación de la orden, garantizando que el reporte refleje la producción entregada.
+        - Se añadió una nueva consulta SQL (`allProducts`) que extrae todos los productos fabricados en el periodo, agrupados por nombre y ordenados alfabéticamente, para alimentar el modal de detalle.
+        - Se sincronizaron los filtros para excluir consistentemente productos de tipo diseño (`es_diseno = 1`) y asegurar precisión en el conteo de unidades físicas.
+    - **Frontend (UI)**:
+        - Se cambió el procesamiento de unidades de `parseInt` a `parseFloat` para soportar decimales (crítico para productos medidos en metros).
+        - Se reubicó la tarjeta de "Total Productos Fabricados" a una posición central entre los gráficos y los selectores de fecha para mejorar la jerarquía visual.
+        - Se implementó un modal interactivo (`b-modal`) que se activa al hacer clic en el total. Este modal presenta un resumen premium con cabecera corporativa y una tabla detallada de productos.
+        - Se aplicó formato regional `es-ES` con restricción de 1 decimal para corregir errores de precisión de punto flotante observados en la UI.
+- **Inconvenientes y Desafíos**: El principal desafío fue la discrepancia de datos entre el total general y el desglose de productos, la cual se originaba por el truncamiento de decimales y el uso de fechas de creación de orden en lugar de fechas de producción real. También se detectó un retraso en la visualización del modal debido a que los cambios del backend no se habían desplegado inicialmente en el VPS Hostinger.
+- **Decisión Final y Justificación**: Se decidió usar `fecha_terminado` como eje cronológico principal de todo el reporte, ya que es el único dato que vincula físicamente la manufactura con un momento en el tiempo. Se optó por un diseño de tabla limpia dentro del modal para facilitar la auditoría manual de los totales por parte del usuario.
+- **Herramienta(s) Utilizada(s)**: `replace_file_content`, `multi_replace_file_content`, `run_command`, `git`, `ssh`.
+- **Resultado**: Éxito
+- **Verificación**: 
+    1. Se ejecutaron consultas SQL directas en el VPS Hostinger comparando la sumatoria de `ordenes_productos` (filtrada por `ldea`) con el resultado del endpoint, confirmando coincidencia exacta.
+    2. Se verificó visualmente el modal, confirmando que ahora lista todos los productos alfabéticamente con 1 decimal de precisión.
+    3. Se validó la restricción de fechas futuras en los selectores.
+- **Logro Conseguido**: Se eliminó la incertidumbre sobre la precisión del reporte de producción y se proporcionó una herramienta de desglose (modal) que permite al usuario validar cada unidad fabricada, mejorando significativamente la confiabilidad de la analítica del sistema.
+- **Referencias de Sesión (Contexto)**:
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/2991c6ad-8194-4f52-be65-78530226521e/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/2991c6ad-8194-4f52-be65-78530226521e/walkthrough.md)
+
+- **⚠️ NOTA DE PERSISTENCIA**: Los links anteriores son temporales. Para que la información sea PERMANENTE y aparezca en los reportes, se ha detallado todo el proceso técnico en este log.
+
+- **Observaciones de Gemini**: La importancia de desplegar cambios en el VPS cuando se trabaja con un frontend local conectado a una API remota fue el punto clave para resolver la falta de datos en el modal hacia el final de la tarea.
+- **Respuesta de Gemini**: Se informó al usuario sobre la resolución exitosa de la discrepancia, la habilitación del modal detallado y el despliegue final en el servidor Hostinger.

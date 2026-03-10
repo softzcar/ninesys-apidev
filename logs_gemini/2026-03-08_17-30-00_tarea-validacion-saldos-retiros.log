@@ -1,0 +1,21 @@
+- **Solicitud del Usuario:** Ok ahora vemos los montos correstos! Sigamos dejanso esta pagina funcional... Vamos a verificar que motnos nos llega por tipo de moneda si no hay regotros debemos mostrar `0.00` y no debemos permitir retiros de montos que superen el monto de la moneda a retirar.
+- **Fecha y Hora:** 2026-03-08 17:30:00
+- **Proyecto(s):** Frontend y Backend
+- **Archivos Involucrados:**
+    - Frontend: `/home/developer/Escritorio/niesys/app_multi/pages/comercializacion/retiros/index.vue`
+    - Backend: `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/finance.php`
+- **Commits Relacionados:**
+    - Frontend: `8d8f99d` (fix(retiros): validación de saldo disponible y visualización de ceros)
+    - Backend: `2001c0d` (fix(finance): validación de saldo disponible y formateo de ceros en retiros)
+- **Acción Realizada:**
+    - **Backend:** Se usó `IFNULL` en las consultas de saldo para asegurar que siempre retornen un valor numérico. Se refactorizó el endpoint `POST /retiro` para incluir una validación de saldo disponible antes de insertar y se migraron las consultas a sentencias preparadas para mayor seguridad.
+    - **Frontend:** Se actualizó la visualización de la lista de efectivo para manejar valores nulos/indefinidos mostrando `0.00`. Se añadió una validación en el método `enviarRetiro` que bloquea la operación e informa al usuario si el monto solicitado excede el saldo de la moneda correspondiente.
+- **Inconvenientes y Desafíos:** Ninguno relevante. El despliegue en Hostinger se realizó con éxito usando los scripts estándar.
+- **Decisión Final y Justificación:** La validación doble (Frontend y Backend) es la mejor práctica para garantizar la integridad de los datos y una buena experiencia de usuario, evitando errores de red o intentos de manipulación manual.
+- **Herramienta(s) Utilizada(s):** `multi_replace_file_content`, `deploy.sh`, `git`.
+- **Resultado:** Éxito
+- **Verificación:** Se verificó que al no haber fondos en una moneda se muestra `0.00`. Al intentar retirar un monto mayor al disponible, la interfaz muestra una alerta de error y el backend rechaza la petición con un código 400.
+- **Logro Conseguido:** Estabilización funcional y de seguridad del módulo de retiros, garantizando que el flujo de efectivo sea coherente y esté protegido contra sobre-retiros.
+- **Referencias de Sesión (Contexto):** 
+    - Implementation Plan: [implementation_plan.md](file:///home/developer/.gemini/antigravity/brain/f54a8ac7-0b65-4f91-b620-d96e54c34bbe/implementation_plan.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/f54a8ac7-0b65-4f91-b620-d96e54c34bbe/walkthrough.md)

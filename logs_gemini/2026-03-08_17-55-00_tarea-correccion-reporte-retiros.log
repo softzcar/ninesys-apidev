@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** He probado hacer un par de retiros que segun la app se han procesado correctamente pero no los veo en el reporte de retiros. Además se solicitó priorizar validaciones de saldo y corregir el mensaje de "No hay fondos" al cargar.
+- **Fecha y Hora:** 2026-03-08 17:55:00
+- **Proyecto(s):** Backend y Frontend
+- **Archivos Involucrados:**
+    - `app/routes/finance.php` (Backend)
+    - `pages/comercializacion/retiros/index.vue` (Frontend)
+- **Commits Relacionados:**
+    - Backend: `63677f0` (fix(finance): fix date filtering in getRetiros to show records correctly)
+    - Frontend: `f808a7b` (fix(retiros): prioritze balance validation over description), `68010eb` (fix(retiros): improve loading state and error messaging UX)
+- **Acción Realizada:**
+    - **Backend:** Se corrigió la consulta SQL en el endpoint `GET /retiros` para usar `DATE(moment)` en lugar de `LIKE`, asegurando que los registros con timestamp completo sean encontrados por fecha exacta.
+    - **Frontend:** 
+        - Se reordenó la lógica en `enviarRetiro` para validar el saldo insuficiente antes que la descripción.
+        - Se implementó un estado `loading` para mostrar "Cargando..." durante la obtención de datos de la API, eliminando el mensaje falso de "No hay fondos" que aparecía inicialmente.
+- **Inconvenientes y Desafíos:** El uso de `LIKE` en la consulta fallaba debido al formato de timestamp guardado en los nuevos registros. `sshpass` no estaba disponible localmente, por lo que se usó SSH directo al VPS.
+- **Decisión Final y Justificación:** Usar funciones de fecha nativas de MySQL (`DATE()`) es más robusto que comparaciones de cadenas parciales. Separar el estado de carga del estado de "sin datos" mejora drásticamente la UX.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `deploy.sh`, `ssh`.
+- **Resultado:** Éxito
+- **Verificación:** Se verificó manualmente en la base de datos que los retiros existen (IDs 1 y 2 para el empleado 10) y que la consulta ahora los recupera correctamente.
+- **Logro Conseguido:** Reporte de retiros funcional y experiencia de usuario más fluida y profesional.
+- **Referencias de Sesión (Contexto):** 
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/f54a8ac7-0b65-4f91-b620-d96e54c34bbe/walkthrough.md)

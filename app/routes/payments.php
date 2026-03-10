@@ -1046,7 +1046,7 @@ return function (App $app) {
 
     // 1. Salarios
     $sqlSalarios = "SELECT 
-        ps.monto, 
+        SUM(ps.monto) as monto, 
         ps.tipo_salario, 
         p.id_empleado 
         FROM pagos_salarios ps 

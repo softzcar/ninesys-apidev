@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** las fechas siguen sin formatearse el format es dd/mm/yyyy
+- **Fecha y Hora:** 2026-03-07 18:42:42
+- **Proyecto(s):** Frontend
+- **Archivos Involucrados:**
+    - `components/admin/ReporteImpresoras.vue`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: N/A
+- **Acción Realizada:** 
+    - **Frontend**: Se corrigió el formateo de fechas en la tabla de recargas. Debido a que el formateador por string en `b-table` no estaba aplicando correctamente la función del mixin, se cambió a un **scoped slot** (`#cell(fecha_recarga)`) para llamar directamente a `formatDate(data.value.split(' ')[0])`. Esto garantiza el formato solicitado `dd/mm/yyyy`.
+- **Inconvenientes y Desafíos:** El uso de `formatter` como string a veces presenta problemas con mixins en b-table; los slots son más robustos.
+- **Decisión Final y Justificación:** Forzar el formateo mediante slots para asegurar que la lógica del mixin se ejecute correctamente sobre la parte de la fecha del timestamp de MySQL.
+- **Herramienta(s) Utilizada(s):** `multi_replace_file_content`, `run_command`, `write_to_file`
+- **Resultado:** Éxito
+- **Verificación:** Aplicación técnica del slot y confirmación de que `formatDate` del mixin realiza la transposición de `YYYY-MM-DD` a `DD/MM/YYYY`.
+- **Logro Conseguido:** Formateo correcto y estricto de fechas según la solicitud del usuario.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/e0e4a5d5-a07b-40da-a6cd-0cd5d1443806/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/e0e4a5d5-a07b-40da-a6cd-0cd5d1443806/walkthrough.md)
+
+- **⚠️ NOTA DE PERSISTENCIA:** Los links anteriores son temporales. Para que la información sea PERMANENTE y aparezca en los reportes, **DEBES** detallar todo el proceso técnico en 'Acción Realizada', 'Verificación' e 'Inconvenientes'. No te limites a poner "ver walkthrough".
+
+- **Observaciones de Gemini:** Se utilizó el split para aislar la fecha del tiempo antes de pasarla al formateador.
+- **Respuesta de Gemini:** Corregido. He usado un slot para asegurar que el mixin formatee la fecha exactamente como `dd/mm/yyyy`.

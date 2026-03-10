@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** Entonces dejemos de mostrar NaN para esos registros en la interfaz, mostrmos CERO para los registros antiguos, entiendo que para una ueva empresa como odos los datos se crearan correctametne le calculo se debe mostrar correctamente
+- **Fecha y Hora:** 2026-03-09 15:15:00
+- **Proyecto(s):** Ambos
+- **Archivos Involucrados:** 
+    - `/home/developer/Escritorio/niesys/app_multi/mixins/mixins.js`
+    - `/home/developer/Escritorio/Antigravity/ninesys-apidev/public/model/create_new_company_api_emp_N.sql`
+- **Commits Relacionados:**
+    - Frontend: N/A (Desarrollo Local)
+    - Backend: N/A (Sincronizado en Hostinger)
+- **Acción Realizada:** 
+    1. Se modificó el método `formatNumber` en `mixins.js` para manejar valores `null`, `undefined` e `isNaN`, retornando `0` en estos casos.
+    2. Se actualizó la plantilla SQL `create_new_company_api_emp_N.sql` para incluir la columna `nivel_tanque_previo` en la tabla `tintas_recargas`.
+    3. Se proporcionó la consulta SQL manual para el entorno de producción al usuario debido a problemas de conectividad SSH.
+- **Inconvenientes y Desafíos:** Latencia extrema en la conexión SSH al VPS Contabo impidió la ejecución automática del `ALTER TABLE` en producción.
+- **Decisión Final y Justificación:** Se optó por robustecer el formateo en el frontend para garantizar que los registros históricos nunca muestren `NaN`, proporcionando una transición suave mientras se alimenta la base de datos con los nuevos datos.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`, `write_to_file`
+- **Resultado:** Éxito
+- **Verificación:** Se verificó que el backend en Hostinger estuviera actualizado y que la lógica del mixin fuera correcta para evitar errores visuales.
+- **Logro Conseguido:** Estandarización del esquema de base de datos para futuras empresas y eliminación de errores visuales (`NaN`) en los reportes de remanente de tinta.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/f95b857c-df55-407e-88a0-1657bd0b03da/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/f95b857c-df55-407e-88a0-1657bd0b03da/walkthrough.md)
+- **Observaciones de Gemini:** La robustez en el mixin `formatNumber` es una mejora global que beneficia a otros reportes que puedan tener valores nulos o indefinidos.
+- **Respuesta de Gemini:** Se ha implementado la robustez en la interfaz para mostrar 0.00 en lugar de NaN. La plantilla SQL para nuevas empresas también ha sido actualizada.

@@ -50,11 +50,15 @@
 
 ---
 
-## Despliegue y Entornos de Prueba (⚠️ MUY IMPORTANTE)
+## Despliegue y Entornos de Prueba (⚠️ REGLAS CRÍTICAS - LECTURA OBLIGATORIA)
 
-- **Desarrollo Local (Frontend):** Las pruebas del Frontend se hacen EXCLUSIVAMENTE de forma local ejecutando `npm run dev`. **NO ES NECESARIO** ni recomendado desplegar el frontend al VPS para validar cada ajuste, ya que es un proceso tardado e innecesario.
-- **Servidor de Pruebas (Hostinger):** El VPS de **Hostinger** (`api.nineteengreen.com`) funciona como el ENTORNO DE PRUEBAS. Todo cambio realizado en el código del **Backend** DEBE subirse y actualizarse (`git fetch && git pull`) en este VPS de Hostinger para poder probarse, ya que el servidor local de frontend se conecta a él para funcionar.
-- **Servidor de Producción (Contabo):** El VPS de **Contabo** (`nineteencustom.com`) es el entorno de PRODUCCIÓN. Solo se debe actualizar el código aquí **bajo petición explícita del usuario**, tanto para Frontend como para Backend. NUNCA despliegues en Contabo por iniciativa propia.
+- **Servidor de Producción (Contabo - `nineteencustom.com`):** 
+    - > [!CAUTION]
+    - > **PROHIBICIÓN TOTAL:** NUNCA actualices, despliegues o realices `git reset --hard / pull` en Contabo (ni Backend ni Frontend) sin una petición explícita y directa del usuario para esa acción específica. Es un entorno de producción crítico.
+- **Servidor de Pruebas (Hostinger - `api.nineteengreen.com`):**
+    - **Backend (API):** Es **OBLIGATORIO** actualizar el backend en Hostinger (`git fetch && git pull`) CADA VEZ que realices cambios en el código de la API. Esto es necesario para que las pruebas locales del frontend (que se conectan a esta API) funcionen correctamente.
+    - **Frontend:** **NO** actualices el frontend en Hostinger a menos que el usuario lo solicite explícitamente. Las pruebas de frontend se validan ejecutando `npm run dev` localmente.
+- **Desarrollo Local (Frontend):** Las pruebas del Frontend se hacen EXCLUSIVAMENTE de forma local ejecutando `npm run dev`. No es necesario desplegar al VPS para validar ajustes visuales o de lógica.
 
 ---
 
@@ -261,9 +265,10 @@ ssh vps-ninesys "mysql -u root api_emp_174 < /home/backups/company_resets/backup
 
 ---
 
-Para actualizar la aplicación en el servidor de producción (VPS Contabo), utiliza el siguiente comando:
+Para actualizar la aplicación en el servidor de producción (VPS Contabo), **SOLO BAJO PETICIÓN DEL USUARIO**, utiliza el siguiente comando:
 
 ```bash
+# RECUERDA: Solo ejecutar esto si el usuario lo pide explícitamente
 ssh vps-contabo "cd /home/api.nineteencustom.com/public_html && git fetch origin && git checkout refactor/modular-routes && git pull origin refactor/modular-routes"
 ```
 

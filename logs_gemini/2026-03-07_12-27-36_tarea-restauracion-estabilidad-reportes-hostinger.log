@@ -1,0 +1,28 @@
+- **Solicitud del Usuario:** Restauración de la estabilidad del reporte general tras error de conexión en Hostinger.
+- **Fecha y Hora:** 2026-03-07 12:27:36
+- **Proyecto(s):** Backend y Frontend
+- **Archivos Involucrados:** 
+    - /home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/reports.php
+    - /home/developer/Escritorio/niesys/app_multi/pages/reportes/semanal.vue
+    - /home/api.nineteengreen.com/public_html/.env (VPS Hostinger)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: f146aaf (Reversión a producción)
+- **Acción Realizada:** 
+    1. Identificación de error 'getaddrinfo for none failed' causado por fallo en IdEmpresaMiddleware.
+    2. Corrección de credenciales de 'api_adminemp' en MariaDB de Hostinger (creación de usuario para 127.0.0.1).
+    3. Creación de archivo .env en Hostinger con DB_PASS=admEmp_n1ne_2026$.
+    4. Sincronización forzada de Hostinger con el commit f146aaf (versión estable de Contabo).
+    5. Limpieza de código experimental en reports.php y semanal.vue.
+- **Inconvenientes y Desafíos:** Discrepancia entre conexión por Socket (localhost) y TCP (127.0.0.1) en MariaDB que causaba fallos intermitentes en PHP.
+- **Decisión Final y Justificación:** Se decidió revertir al commit de producción para garantizar estabilidad inmediata y reparar la capa de conexión (Middleware) en lugar de seguir depurando la nueva funcionalidad sobre un sistema inestable.
+- **Herramienta(s) Utilizada(s):** `run_command`, `replace_file_content`, `ssh`
+- **Resultado:** Éxito
+- **Verificación:** El usuario confirmó que 'ya funciona' tras reiniciar el entorno local. Los endpoints de administración en Hostinger responden correctamente.
+- **Logro Conseguido:** Sistema restaurado a su punto de operación más estable, asegurando la continuidad del reporte detallado y el semáforo de producción.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/2991c6ad-8194-4f52-be65-78530226521e/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/2991c6ad-8194-4f52-be65-78530226521e/walkthrough.md)
+
+- **Observaciones de Gemini:** La inestabilidad fue una combinación de código nuevo (ranking) y problemas de infraestructura preexistentes en Hostinger (credenciales centralizadas).
+- **Respuesta de Gemini:** Confirmación de restauración total y sincronización con producción.

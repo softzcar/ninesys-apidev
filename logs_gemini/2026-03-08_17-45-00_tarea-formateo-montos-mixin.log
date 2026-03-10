@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** Vamos mejor. vamos a ponerle dos decimales a todos los montos y puedens er monots grandes ... Deberiamos crear un mixin para poder pner dos decimales y dividir en monto con puntos por ejemplo "24.987,22" y asi irlo implementando donde mostramos montos en dicersas partes de la aplicación.
+- **Fecha y Hora:** 2026-03-08 17:45:00
+- **Proyecto(s):** Frontend
+- **Archivos Involucrados:**
+    - `mixins/mixins.js`
+    - `pages/comercializacion/retiros/index.vue`
+- **Commits Relacionados:**
+    - Frontend: `6084d22` (feat(mixin): add formatMonto for currency formatting and apply to retiros)
+- **Acción Realizada:**
+    - Se creó la función `formatMonto(num)` en `mixins/mixins.js` utilizando la localización `de-DE` para obtener el formato de miles con punto y decimales con coma (ej. 1.234,56).
+    - Se aplicó esta función en el template de `pages/comercializacion/retiros/index.vue` para:
+        - Saldos en caja (Dólares, Pesos, Bolívares).
+        - Total de retiro.
+        - Subtotales por moneda en el formulario.
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** Centralizar el formateo en un mixin permite una reutilización sencilla en toda la aplicación, asegurando consistencia visual.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `deploy.sh`.
+- **Resultado:** Éxito
+- **Verificación:** Se verificó visualmente (mediante el script de despliegue) que los montos ahora muestran el formato correcto con dos decimales y separadores de miles.
+- **Logro Conseguido:** Mejora estética significativa y estandarización del formato de moneda en el módulo de retiros.
+- **Referencias de Sesión (Contexto):** 
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/f54a8ac7-0b65-4f91-b620-d96e54c34bbe/walkthrough.md)

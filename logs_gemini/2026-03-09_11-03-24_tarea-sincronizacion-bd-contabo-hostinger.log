@@ -1,0 +1,30 @@
+- **Solicitud del Usuario:** vamos a revisar nuestro script par clonal la base de datos de la empresa 163 desde el VPS Contabo al VPS de pruebas Hostinger, al usar nuestro HUB de aplicaciones recibo el error de la imágen
+- **Fecha y Hora:** 2026-03-09 11:03:24
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** [/home/developer/Escritorio/Antigravity/ninesys-apidev/scripts/sync_company_database.sh](file:///home/developer/Escritorio/Antigravity/ninesys-apidev/scripts/sync_company_database.sh)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: N/A (Cambios locales en script de automatización)
+- **Acción Realizada:** 
+    - Identificación de credenciales obsoletas en el script `sync_company_database.sh`.
+    - Actualización de contraseñas de acceso root para MariaDB en Contabo y Hostinger.
+    - Corrección del escape de caracteres especiales (`!` y `$`) en los comandos ejecutados vía SSH para evitar bloqueos del shell.
+    - Implementación de un sistema de entrecomillado estricto para las consultas MySQL ejecutadas remotamente.
+    - Diagnóstico de falta de respuesta en el VPS Hostinger, que fue resuelto tras un reinicio por parte del usuario.
+    - Ejecución exitosa de la sincronización de la base de datos `api_emp_163` desde el origen (Contabo) al destino (Hostinger).
+- **Inconvenientes y Desafíos:** 
+    - El principal inconveniente fue la lentitud extrema y falta de respuesta del VPS Hostinger inicial, probablemente debido a procesos SQL pesados de larga duración (41h+).
+    - Dificultades técnicas con el escape de caracteres especiales en el shell de Linux al inyectar comandos a través de SSH.
+- **Decisión Final y Justificación:** Se optó por mantener el script de sincronización directa vía pipe para mayor velocidad, pero reforzando la seguridad de las contraseñas mediante el uso de comillas simples envolventes en el comando SSH.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`, `multi_replace_file_content`, `write_to_file`
+- **Resultado:** Éxito
+- **Verificación:** Se ejecutó el script y se validaron los conteos de la tabla `ordenes`. Ambos servidores muestran exactamente **4186** órdenes, confirmando la integridad de la clonación.
+- **Logro Conseguido:** Restauración de la funcionalidad de sincronización de base de datos entre producción y desarrollo, permitiendo pruebas con datos reales de forma segura.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/3c5462e2-76e3-47a9-a5c4-ae04745f6256/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/3c5462e2-76e3-47a9-a5c4-ae04745f6256/walkthrough.md)
+
+- **⚠️ NOTA DE PERSISTENCIA:** Los links anteriores son temporales. Para que la información sea PERMANENTE y aparezca en los reportes, **DEBES** detallar todo el proceso técnico en 'Acción Realizada', 'Verificación' e 'Inconvenientes'. No te limites a poner "ver walkthrough".
+
+- **Observaciones de Gemini:** La estabilidad del VPS Hostinger parece ser intermitente; se recomienda monitorear procesos largos (`mysqladmin proc`) para evitar nuevos bloqueos.
+- **Respuesta de Gemini:** ¡Sincronización exitosa! He corregido el script `sync_company_database.sh` con las credenciales actuales y he verificado que los datos (4186 órdenes) se han clonado correctamente tras el reinicio del servidor de pruebas.

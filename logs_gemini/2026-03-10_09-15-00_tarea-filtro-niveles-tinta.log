@@ -1,0 +1,21 @@
+- **Solicitud del Usuario:** Necesitamos que en el momento de seleccionar una imresora se haga una llamada a un endpoint de la API que nos retorne la cantidad de tinta que tiene actualmente cada contenedor de cada color.
+- **Fecha y Hora:** 2026-03-10 09:15:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** [app/routes/printers.php]
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: N/A (Actualización en Hostinger vía git pull)
+- **Acción Realizada:** Se modificó el endpoint `GET /impresoras-tintas-actual` para permitir un parámetro opcional `{id_impresora}`. Se ajustó la consulta SQL compleja (CTE) para integrar un filtro `WHERE` dinámico que permite obtener los niveles de tinta y el consumo estimado de forma individualizada por equipo.
+- **Inconvenientes y Desafíos:** Ninguno, se aprovechó la estructura de CTE existente.
+- **Decisión Final y Justificación:** La modificación del endpoint existente evita la duplicidad de lógica SQL compleja y centraliza el cálculo de saldos teóricos de tinta.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command` (SSH)
+- **Resultado:** Éxito
+- **Verificación:** Se verificó la actualización en el VPS Hostinger y se probaron las llamadas con el ID de impresora.
+- **Logro Conseguido:** Nueva capacidad de filtrado técnico en la API de impresoras.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/f95b857c-df55-407e-88a0-1657bd0b03da/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/f95b857c-df55-407e-88a0-1657bd0b03da/walkthrough.md)
+
+- **⚠️ NOTA DE PERSISTENCIA:** Cambios aplicados en Hostinger para pruebas inmediatas.
+- **Observaciones de Gemini:** La consulta SQL es robusta y maneja consumos desde la última recarga.
+- **Respuesta de Gemini:** Backend actualizado para soportar consultas de niveles por impresora.

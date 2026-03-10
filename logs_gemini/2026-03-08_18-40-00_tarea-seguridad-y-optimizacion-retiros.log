@@ -1,0 +1,28 @@
+- **Solicitud del Usuario:** Secure Withdrawal Flow, corregir montos incorrectos (saldos negativos), diálogo de confirmación, bloqueo de formulario y reorganización de UI.
+- **Fecha y Hora:** 2026-03-08 18:40:00
+- **Proyecto(s):** Ambos (Frontend y Backend)
+- **Archivos Involucrados:** 
+    - Backend: `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/finance.php`
+    - Frontend: `/home/developer/Escritorio/niesys/app_multi/pages/comercializacion/retiros/index.vue`
+- **Commits Relacionados:**
+    - Frontend: `b6b0026`, `21ffd17`
+    - Backend: `d75deea`, `2096f98`
+- **Acción Realizada:** 
+    1.  **Seguridad:** Se implementó un diálogo de confirmación detallado en el frontend usando `this.$fire`. Se añadió bloqueo de interfaz (loading overlay) durante el envío de la solicitud POST para evitar duplicados por "doble clic".
+    2.  **API Fix:** Se normalizó la respuesta de `POST /retiro` para incluir `statusCode: 200` y asegurar que el frontend reconozca el éxito correctamente.
+    3.  **Cálculo de Balances:** Se corrigió un error crítico en `finance.php` donde el uso de `LEFT JOIN` entre `caja` y `retiros` generaba un producto cartesiano, multiplicando los montos y resultando en saldos negativos. Se refactorizó a consultas sumatorias independientes.
+    4.  **Optimización UI:** Se movió el reporte de retiros arriba del botón de acción. Se eliminaron métodos redundantes (`getDataReport`, `realizarConsulta`) para unificar la carga de datos en `getRetiros`, evitando llamadas duplicadas al mismo endpoint.
+- **Inconvenientes y Desafíos:** El principal desafío fue identificar la duplicidad de registros en la consulta SQL original de balances, que no era evidente hasta que hubo múltiples movimientos en la misma sesión.
+- **Decisión Final y Justificación:** Se optó por separar las consultas de suma de ingresos y egresos en lugar de un `JOIN` para garantizar la integridad de los datos sin importar la complejidad de la relación entre tablas. En el frontend, se prefirió unificar las llamadas a la API para reducir la carga del servidor y mejorar el tiempo de respuesta.
+- **Herramienta(s) Utilizada(s):** `multi_replace_file_content`, `run_command`, `git`, `ssh`, `deploy.sh`.
+- **Resultado:** Éxito
+- **Verificación:** Se verificó mediante despliegue en Hostinger. Los montos ahora se muestran correctamente tras retiros sucesivos, la interfaz se bloquea durante el proceso y el reporte se actualiza instantáneamente en su nueva ubicación.
+- **Logro Conseguido:** Se transformó el módulo de retiros en una herramienta segura, precisa y eficiente, eliminando riesgos operativos de retiros duplicados y errores de cálculo en saldos.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/f54a8ac7-0b65-4f91-b620-d96e54c34bbe/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/f54a8ac7-0b65-4f91-b620-d96e54c34bbe/walkthrough.md)
+
+- **⚠️ NOTA DE PERSISTENCIA:** El proceso técnico incluyó la reconstrucción de las consultas SQL sumatorias en PHP y la reorganización de componentes en Vue.js para mejorar el flujo visual.
+
+- **Observaciones de Gemini:** La unificación de las llamadas a la API redujo las peticiones HTTP iniciales de 4 a 2 por cada interacción de fecha.
+- **Respuesta de Gemini:** ¡Listo! He optimizado la interfaz para que el reporte sea lo primero que veas antes de retirar, y he eliminado las llamadas duplicadas para que la página sea más ligera. Ya todo está en Hostinger funcionando correctamente.

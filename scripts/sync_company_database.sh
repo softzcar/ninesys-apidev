@@ -9,12 +9,12 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 # Configuración Producción (Contabo)
 PROD_SSH="vps-contabo"
 PROD_DB_USER="root"
-PROD_DB_PASS="MyR5jRHuwj6kWA"
+PROD_DB_PASS="vpsMDBr00t_2026!#"
 
 # Configuración Desarrollo (Hostinger)
 DEV_SSH="vps-ninesys"
 DEV_DB_USER="root"
-DEV_DB_PASS="rkyaFy!dAs8L5Lq8"
+DEV_DB_PASS="ppbT5QsP5FgWIR"
 
 echo "---------------------------------------------------------"
 echo "Sincronizando Empresa ID: $ID_EMPRESA"
@@ -24,7 +24,7 @@ echo "---------------------------------------------------------"
 
 # 1. Obtener detalles de la base de datos desde la central en Producción
 echo "[1/4] Obteniendo detalles de la base de datos en Producción..."
-PROD_DETAILS=$(ssh $PROD_SSH "mysql -u $PROD_DB_USER -p$PROD_DB_PASS api_empresas -N -s -e \"SELECT db_name, db_user, db_password FROM empresas WHERE id_empresa = $ID_EMPRESA;\"")
+PROD_DETAILS=$(ssh $PROD_SSH 'mysql -u root -pvpsMDBr00t_2026!# api_empresas -N -s -e "SELECT db_name, db_user, db_password FROM empresas WHERE id_empresa = '$ID_EMPRESA';"' )
 
 if [ -z "$PROD_DETAILS" ]; then
     echo "❌ Error: No se encontró la empresa $ID_EMPRESA en Producción."
@@ -36,7 +36,7 @@ echo "✅ Origen: $DB_NAME ($PROD_USER)"
 
 # 2. Obtener detalles de la base de datos en Desarrollo
 echo "[2/4] Obteniendo detalles de la base de datos en Desarrollo..."
-DEV_DETAILS=$(ssh $DEV_SSH "mysql -u api_adminemp -prkyaFy!dAs8L5Lq8 api_empresas -N -s -e \"SELECT db_user, db_password FROM empresas WHERE id_empresa = $ID_EMPRESA;\"")
+DEV_DETAILS=$(ssh $DEV_SSH 'mysql -u api_adminemp -padmEmp_n1ne_2026$ api_empresas -N -s -e "SELECT db_user, db_password FROM empresas WHERE id_empresa = '$ID_EMPRESA';"' )
 
 if [ -z "$DEV_DETAILS" ]; then
     echo "❌ Error: No se encontró la empresa $ID_EMPRESA en Desarrollo."
@@ -49,8 +49,8 @@ echo "✅ Destino: $DB_NAME ($DEV_USER)"
 # 3. Sincronización vía Pipe
 echo "[3/4] Ejecutando sincronización (Prod -> Dev)..."
 # Usamos --skip-triggers para evitar errores de DEFINER=root
-ssh $PROD_SSH "mysqldump -u $PROD_USER -p$PROD_PASS --single-transaction --quick --lock-tables=false --skip-triggers $DB_NAME" | \
-ssh $DEV_SSH "mysql -u $DEV_USER -p$DEV_PASS $DB_NAME"
+ssh $PROD_SSH "mysqldump -u $PROD_USER -p'$PROD_PASS' --single-transaction --quick --lock-tables=false --skip-triggers $DB_NAME" | \
+ssh $DEV_SSH "mysql -u $DEV_USER -p'$DEV_PASS' $DB_NAME"
 
 if [ $? -eq 0 ]; then
     echo "✅ Datos sincronizados (sin triggers)."
@@ -61,8 +61,8 @@ fi
 
 # 4. Verificación rápida
 echo "[4/4] Verificando conteos..."
-COUNT_PROD=$(ssh $PROD_SSH "mysql -u $PROD_USER -p$PROD_PASS $DB_NAME -N -s -e \"SELECT count(*) FROM ordenes;\"")
-COUNT_DEV=$(ssh $DEV_SSH "mysql -u $DEV_USER -p$DEV_PASS $DB_NAME -N -s -e \"SELECT count(*) FROM ordenes;\"")
+COUNT_PROD=$(ssh $PROD_SSH "mysql -u $PROD_USER -p'$PROD_PASS' $DB_NAME -N -s -e \"SELECT count(*) FROM ordenes;\"")
+COUNT_DEV=$(ssh $DEV_SSH "mysql -u $DEV_USER -p'$DEV_PASS' $DB_NAME -N -s -e \"SELECT count(*) FROM ordenes;\"")
 
 echo "📊 Conteo de órdenes:"
 echo "   Producción: $COUNT_PROD"

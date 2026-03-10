@@ -1,0 +1,16 @@
+- **Solicitud del Usuario:** Si, creea n plan para poder corregir este grave problema (saldos de caja inflados por datos históricos).
+- **Fecha y Hora:** 2026-03-08 17:05:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - Backend: `/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/finance.php`
+- **Commits Relacionados:**
+    - Backend: `6e45197` (fix(finance): filtrar solo registros abiertos en saldo de retiros)
+- **Acción Realizada:** Se modificó el endpoint `GET /retiros` para que las consultas de saldo incluyan la condición `AND id_caja_cierres IS NULL`. Esto soluciona el problema donde se sumaban registros históricos de meses anteriores (desde julio de 2025) que ya habían sido procesados en cierres previos.
+- **Inconvenientes y Desafíos:** Ninguno. Se identificó la causa raíz mediante el análisis de la base de datos (Sayerlin tenía miles de registros "abiertos" lógicamente pero que pertenecían a periodos ya cerrados).
+- **Decisión Final y Justificación:** Implementar un filtro estricto por estado de cierre es la única forma de garantizar que el dinero en efectivo mostrado coincida con la realidad física en manos del vendedor.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`, `git`.
+- **Resultado:** Éxito
+- **Verificación:** Los montos de Sayerlin en el servidor de pruebas deben bajar de ~21,000 $ a ~349 $ (valor reales según DB).
+- **Logro Conseguido:** Corrección de una falla crítica de integridad financiera que permitía la visualización de saldos irreales y potencialmente retiros duplicados de fondos antiguos.
+- **Referencias de Sesión (Contexto):** 
+    - Implementation Plan: [implementation_plan.md](file:///home/developer/.gemini/antigravity/brain/f54a8ac7-0b65-4f91-b620-d96e54c34bbe/implementation_plan.md)

@@ -1,0 +1,26 @@
+- **Solicitud del Usuario:** Mostrar información del remanente de tintas en los reportes (Reporte de Impresoras y Reporte de Tintas Actuales).
+- **Fecha y Hora:** 2026-03-09 14:28:47
+- **Proyecto(s):** Ambos (Frontend y Backend)
+- **Archivos Involucrados:** 
+    - Backend: `app/routes/printers.php`
+    - Frontend: `components/admin/ReporteImpresoras.vue`, `components/impresoras/TintasActualReporte.vue`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: Commit en rama `refactor/modular-routes` (Desplegado a Hostinger únicamente)
+- **Acción Realizada:** 
+    - **Backend:** Se modificó la consulta SQL del endpoint `GET /impresoras` para incluir el campo `nivel_tanque_previo` en el objeto JSON de cada recarga.
+    - **Frontend (Reporte Impresoras):** Se añadió la columna "Restante Previo (ml)" al desglose de recargas de cada impresora, permitiendo auditar el estado del tanque antes de cada carga.
+    - **Frontend (Reporte Tintas Actuales):** Se formateó la columna de "Desperdicio (Ciclo Ant.)" para mejorar legibilidad y se integró esta misma información en el **Modal de Histórico** junto con la columna "Ajuste / Desperdicio".
+    - Se aplicó el formateador numérico `formatNumber` en todas las nuevas columnas para mantener la consistencia visual.
+- **Inconvenientes y Desafíos:** Ninguno relevante. Se corrigió un error menor de sintaxis en un bloque de código Vue durante la edición.
+- **Decisión Final y Justificación:** Se optó por mostrar el dato como "Restante Previo" en el historial de recargas para que sea fácil de contrastar con la cantidad recargada en ese momento.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `multi_replace_file_content`, `run_command` (despliegue)
+- **Resultado:** Éxito
+- **Verificación:** Se verificó el despliegue en el servidor de pruebas (Hostinger). El servidor de producción (Contabo) permanece en el estado anterior.
+- **Logro Conseguido:** Trazabilidad completa del desperdicio de tintas desde el punto de captura (formulario) hasta el reporte consolidado e histórico, cerrando el ciclo de gestión de inventario solicitado.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/f95b857c-df55-407e-88a0-1657bd0b03da/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/f95b857c-df55-407e-88a0-1657bd0b03da/walkthrough.md)
+
+- **Observaciones de Gemini:** Los reportes ahora ofrecen una visión clara no solo de lo que se consume en pedidos, sino de lo que realmente se pierde en el proceso operativo (purgas, etc.).
+- **Respuesta de Gemini:** He implementado la visualización de los remanentes en ambos reportes. En el de impresoras ahora puedes ver el "Restante Previo" por recarga, y en el de tintas actuales el desperdicio ya se muestra formateado e incluido en el historial.

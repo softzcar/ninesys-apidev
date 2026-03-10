@@ -179,9 +179,12 @@ return function (App $app) {
       $localConnection->disconnect();
     }
   });
-  $app->get('/impresoras-tintas-actual', function (Request $request, Response $response) {
+  $app->get('/impresoras-tintas-actual[/{id_impresora}]', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
     try {
+      $id_impresora = $args['id_impresora'] ?? null;
+      $whereClause = $id_impresora ? "WHERE ci._id = " . intval($id_impresora) : "";
+
       $sql = <<<SQL
         -- Usamos Common Table Expressions (CTEs) para organizar la lógica en pasos.
 
@@ -295,6 +298,7 @@ return function (App $app) {
             catalogo_impresoras ci ON ci._id = sr.id_catalogo_impresora
         LEFT JOIN
             consumo_historico ch ON sr.id_catalogo_impresora = ch.id_catalogo_impresoras AND sr.color = ch.color
+        $whereClause
         ORDER BY
             impresora,
             sr.color;
