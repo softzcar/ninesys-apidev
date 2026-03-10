@@ -60,27 +60,27 @@ return function (App $app) {
         SELECT
             CONCAT(
                 '[',
-                GROUP_CONCAT(
+                IFNULL(GROUP_CONCAT(
                     JSON_OBJECT(
-                        'category_name', category_name,
-                        'category_total', category_total
+                        'category_name', t_cat.category_name,
+                        'category_total', t_cat.category_total
                     )
-                ),
+                ), ''),
                 ']'
             )
         FROM (
             SELECT 
-                c.nombre as category_name,
-                SUM(op.cantidad * op.precio_unitario) as category_total
+                op_in.id_orden,
+                c_in.nombre as category_name,
+                SUM(op_in.cantidad * op_in.precio_unitario) as category_total
             FROM 
-                ordenes_productos op
-            JOIN products p ON op.id_woo = p._id
-            JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
-            WHERE 
-                op.id_orden = ord._id
+                ordenes_productos op_in
+            JOIN products p_in ON op_in.id_woo = p_in._id
+            JOIN categories c_in ON FIND_IN_SET(c_in._id, p_in.category_ids)
             GROUP BY 
-                c.nombre
+                op_in.id_orden, c_in.nombre
         ) t_cat
+        WHERE t_cat.id_orden = ord._id
     ) AS product_categories,
     DATE_FORMAT(met.moment, '%d/%m/%Y') AS fecha,
     DATE_FORMAT(met.moment, '%h:%i %p') AS hora
@@ -141,27 +141,27 @@ return function (App $app) {
                     SELECT
                         CONCAT(
                             '[',
-                            GROUP_CONCAT(
+                            IFNULL(GROUP_CONCAT(
                                 JSON_OBJECT(
-                                    'category_name', category_name,
-                                    'category_total', category_total
+                                    'category_name', t_cat.category_name,
+                                    'category_total', t_cat.category_total
                                 )
-                            ),
+                            ), ''),
                             ']'
                         )
                     FROM (
                         SELECT 
-                            c.nombre as category_name,
-                            SUM(op.cantidad * op.precio_unitario) as category_total
+                            op_in.id_orden,
+                            c_in.nombre as category_name,
+                            SUM(op_in.cantidad * op_in.precio_unitario) as category_total
                         FROM 
-                            ordenes_productos op
-                        JOIN products p ON op.id_woo = p._id
-                        JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
-                        WHERE 
-                            op.id_orden = ord._id
+                            ordenes_productos op_in
+                        JOIN products p_in ON op_in.id_woo = p_in._id
+                        JOIN categories c_in ON FIND_IN_SET(c_in._id, p_in.category_ids)
                         GROUP BY 
-                            c.nombre
+                            op_in.id_orden, c_in.nombre
                     ) t_cat
+                    WHERE t_cat.id_orden = ord._id
                 ) AS product_categories,
                 DATE_FORMAT(met.moment, '%d/%m/%Y') AS fecha,
                 DATE_FORMAT(met.moment, '%h:%i %p') AS hora
