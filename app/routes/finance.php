@@ -278,131 +278,78 @@ return function (App $app) {
   $app->get('/reporte-de-caja/{inicio}/{fin}/{id_vendedor}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    if ($args['inicio'] === $args['fin']) {
-      $where = "a.moment LIKE '" . $args['inicio'] . "%' ";
+    $id_vendedor = (int)$args['id_vendedor'];
+    $inicio = $args['inicio'];
+    $fin = $args['fin'];
+
+    if ($inicio === $fin) {
+      $whereBase = "moment LIKE '$inicio%'";
     } else {
-      $where = "a.moment BETWEEN '" . $args['inicio'] . "' AND '" . $args['fin'] . "'";
+      $whereBase = "moment BETWEEN '$inicio' AND '$fin'";
     }
 
-    $whereRetiros = $where . ' AND a.id_empleado = ' . $args['id_vendedor'] . ';';
-    $where .= ' AND o.responsable = ' . $args['id_vendedor'] . ';';
+    // Filtro de vendedor
+    $filterUserCaja = $id_vendedor === 0 ? "" : " AND id_empleado = $id_vendedor";
+    $filterUserOrdenes = $id_vendedor === 0 ? "" : " AND o.responsable = $id_vendedor";
+    $filterUserRetiros = $id_vendedor === 0 ? "" : " AND a.id_empleado = $id_vendedor";
 
-    /** EFECTIVO */
-    $sql = "SELECT
-                    monto,
-                    'Dólares' moneda,
-                    tasa,
-                    (monto / tasa) dolares,
-                    (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = {$args['id_vendedor']}) vendedor
-                    FROM caja WHERE id_empleado = {$args['id_vendedor']} AND moneda LIKE 'Dólares';
-                ";
-    $object['sql_dolares'] = $sql;
-    $object['data']['efectivo']['dolares'] = $localConnection->goQuery($sql);
-
-    // Pesos
-    $sql = "SELECT
-                    monto,
-                    'Pesos' moneda,
-                    tasa,
-                    (monto / tasa) dolares,
-                    (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = {$args['id_vendedor']}) vendedor
-                FROM caja WHERE id_empleado = {$args['id_vendedor']} AND moneda LIKE 'Pesos'
-        ";
-    $object['sql_pesos'] = $sql;
-
-    $object['data']['efectivo']['pesos'] = $localConnection->goQuery($sql);
-
-    // Bolívares
-    $sql = "SELECT
-                    monto,
-                    'Bolívares' moneda,
-                    tasa,
-                    (monto / tasa) dolares,
-                    (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = {$args['id_vendedor']}) vendedor
-                FROM caja WHERE id_empleado = {$args['id_vendedor']} AND moneda LIKE 'Bolívares'
-        ";
-    $object['sql_bolivares'] = $sql;
-
-    $object['data']['efectivo']['bolivares'] = $localConnection->goQuery($sql);
+    /** EFECTIVO (Dólares, Pesos, Bolívares) */
+    $tiposMoneda = ['Dólares', 'Pesos', 'Bolívares'];
+    foreach ($tiposMoneda as $moneda) {
+      $monedaKey = strtolower(str_replace('ó', 'o', $moneda));
+      $sql = "SELECT 
+                SUM(monto) monto, 
+                '$moneda' moneda, 
+                tasa, 
+                SUM(monto / tasa) dolares
+              FROM caja 
+              WHERE $whereBase $filterUserCaja AND moneda = '$moneda'
+              GROUP BY tasa";
+      $object['data']['efectivo'][$monedaKey] = $localConnection->goQuery($sql);
+    }
 
     /** MONEDA DIGITAL */
-
-    // ZELLE
-
-    $sql = "SELECT 
-             SUM(a.monto) monto, 
-             a.tasa, 
-             SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
-             a.moneda, 
-             'Zelle' metodo_pago, 
-             a.tipo_de_pago 
-             FROM metodos_de_pago AS a 
-             JOIN ordenes AS o 
-             ON a.id_orden = o._id
-             WHERE a.metodo_pago = 'Zelle' AND " . $where;
-    $object['data']['digital']['zelle'] = $localConnection->goQuery($sql);
-
-    // PAGOMOVIL (bOLIVARES)
-    $sql = "SELECT 
-            SUM(a.monto) monto, 
-            a.tasa, 
-            SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
-            a.moneda, 
-            'Pagomovil' metodo_pago, 
-            a.tipo_de_pago 
-            FROM metodos_de_pago AS a 
-            JOIN ordenes AS o 
-            ON a.id_orden = o._id
-            WHERE a.metodo_pago = 'Pagomovil' AND " . $where;
-
-    $object['data']['digital']['pagomovil'] = $localConnection->goQuery($sql);
-
-    // PUNTO (BOLIVARES)
-    $sql = "SELECT 
-            SUM(a.monto) monto, 
-            a.tasa, 
-            SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
-            a.moneda, 
-            'Punto' metodo_pago, 
-            a.tipo_de_pago 
-            FROM metodos_de_pago AS a 
-            JOIN ordenes AS  o 
-            ON a.id_orden = o._id
-            WHERE a.metodo_pago = 'Punto' AND " . $where;
-
-    $object['data']['digital']['punto'] = $localConnection->goQuery($sql);
-
-    // TRANSFERENCIA (BOLIVARES)
-    $sql = "SELECT 
-            SUM(a.monto) monto, 
-            a.tasa, 
-            SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
-            a.moneda, 
-            'Transferencia' metodo_pago, 
-            a.tipo_de_pago 
-            FROM metodos_de_pago AS a 
-            JOIN ordenes AS o 
-            ON a.id_orden = o._id
-            WHERE a.metodo_pago = 'Transferencia' AND " . $where;
-
-    $object['data']['digital']['transferencia'] = $localConnection->goQuery($sql);
+    $metodosDigitales = ['Zelle', 'Pagomovil', 'Punto', 'Transferencia'];
+    foreach ($metodosDigitales as $metodo) {
+      $metodoKey = strtolower($metodo);
+      $sql = "SELECT 
+                SUM(a.monto) monto, 
+                a.tasa, 
+                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
+                a.moneda, 
+                '$metodo' metodo_pago
+              FROM metodos_de_pago AS a 
+              JOIN ordenes AS o ON a.id_orden = o._id
+              WHERE a.metodo_pago = '$metodo' AND a.$whereBase $filterUserOrdenes
+              GROUP BY a.tasa, a.moneda";
+      $object['data']['digital'][$metodoKey] = $localConnection->goQuery($sql);
+    }
 
     /** RETIROS */
-    $sql = 'SELECT 
-            a.monto, 
-            a.moneda, 
-            a.tasa, 
-            SUM(ROUND(a.monto / tasa, 2)) AS dolares, 
-            a.detalle_retiro, 
-            b.nombre 
+    $sql = "SELECT 
+              SUM(a.monto) monto, 
+              a.moneda, 
+              a.tasa, 
+              SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
+              'Retiros' metodo_pago
             FROM retiros AS a 
-            -- JOIN ordenes AS o ON o._id = a.id_empleado
-            -- JOIN empleados b ON b._id = o.responsable 
-            JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado 
-            WHERE ' . $whereRetiros;
+            WHERE DATE(a.moment) BETWEEN '$inicio' AND '$fin' $filterUserRetiros
+            GROUP BY a.tasa, a.moneda";
 
-    $object['data']['sql_retiros'] = $sql;
     $object['data']['retiros'] = $localConnection->goQuery($sql);
+
+    // Obtener lista de vendedores para el select del frontend
+    $sqlv = "SELECT
+                id_usuario _id,
+                nombre
+            FROM
+                api_empresas.empresas_usuarios a 
+            JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado
+            WHERE
+                (b.id_departamento = 7 OR b.id_departamento = 8) AND a.id_empresa = " . ID_EMPRESA . " 
+            ORDER BY nombre ASC";
+    $object['vendedores'] = $localConnection->goQuery($sqlv);
+
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
