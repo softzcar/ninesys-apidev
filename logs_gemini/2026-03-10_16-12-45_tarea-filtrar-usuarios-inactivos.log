@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** REvision de exclusion de usuarios inactivos en la página `/diseno/asignacion` tenemos un botón con icono de perona que nos abre un lodal para asiganr diseñadores, en este modal me aparece un diseÑador cue esta marcado como inactivo en el sistema debemos filtrar que mestr solo los usuaiors aue esten activos
+- **Fecha y Hora:** 2026-03-10 16:12:45
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** [/home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/designs.php](file:///home/developer/Escritorio/Antigravity/ninesys-apidev/app/routes/designs.php)
+- **Commits Relacionados:**
+    - Backend: `ea451d9`
+- **Acción Realizada:** Se modificó la consulta SQL en el endpoint `GET /disenos` y `GET /disenos/asignados` en el backend para filtrar por el campo `activo = 1`. Esto asegura que los usuarios marcados como inactivos (como 'Enemias') no aparezcan en los listados de selección de diseñadores. Se corrigió también la precedencia lógica en una consulta mediante el uso de paréntesis.
+- **Inconvenientes y Desafíos:** Ninguno relevante. La base de datos ya contaba con la columna `activo`, lo que facilitó la implementación.
+- **Decisión Final y Justificación:** Se optó por el filtro en el backend para centralizar la lógica de negocio y evitar que datos innecesarios viajen al frontend, mejorando la seguridad y limpieza de la respuesta del API.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`, `ssh`, `mysql`.
+- **Resultado:** Éxito
+- **Verificación:** Se consultó la base de datos en el servidor de pruebas para confirmar que 'Enemias' tiene `activo = 0` y se verificó que la consulta SQL en el backend ahora incluye el filtro `b.activo = 1`.
+- **Logro Conseguido:** Se eliminó la presencia de personal inactivo en el proceso de asignación de diseños, evitando errores operativos de asignación a cuentas deshabilitadas.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/d25fcca0-7935-41bc-83f0-d5cfb1b19759/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/d25fcca0-7935-41bc-83f0-d5cfb1b19759/walkthrough.md)
+
+- **Observaciones de Gemini:** La tarea fue directa gracias a la estructura modular del backend actual. Se recomienda revisar si otros departamentos requieren un filtro similar en sus listas de selección.
+- **Respuesta de Gemini:** ¡Solucionado! He actualizado el backend para que el modal de asignación de diseñadores solo muestre a los usuarios activos. He verificado que el usuario 'Enemias' está marcado como inactivo y, con este cambio, ya no aparecerá en las opciones de selección. Los cambios han sido sincronizados también con el servidor de pruebas en Hostinger.
