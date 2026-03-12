@@ -767,12 +767,10 @@ return function (App $app) {
                 a.fecha_pago,
                 (SELECT numero_semana FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_empleado ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
                 (SELECT YEAR(pa.moment) FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_empleado ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
-                DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago,
+                DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago,
                 (SELECT IF(a.id_reposicion > 0, (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion), (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = a.id_orden))) as cantidad_productos
             FROM
                 pagos a
-            JOIN abonos b ON
-                b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado
             JOIN api_empresas.empresas_usuarios c
             ON
                 a.id_empleado = c.id_usuario
@@ -822,19 +820,17 @@ return function (App $app) {
                 d.status,
                 e.tipo_de_pago,
                 a.fecha_pago,
-                DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago,
+                DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago,
                 (SELECT IF(a.id_reposicion > 0, (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion), (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = a.id_orden))) as cantidad_productos
             FROM
                 pagos a
-            JOIN abonos b ON
-                b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado
             JOIN api_empresas.empresas_usuarios c
             ON
                 a.id_empleado = c.id_usuario
             JOIN ordenes d ON
                 a.id_orden = d._id
             LEFT JOIN metodos_de_pago e ON
-                e._id = a.id_metodos_de_pago OR a.id_metodos_de_pago IS NULL
+                e._id = a.id_metodos_de_pago
             WHERE
                 a.id_empleado = {$args['id_vendedoor']} AND 
                 a.fecha_pago IS NULL
@@ -1022,11 +1018,9 @@ return function (App $app) {
         d.status,
         e.tipo_de_pago,
         a.fecha_pago,
-        DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago
+        DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago
         FROM
         pagos a
-        JOIN
-        abonos b ON b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado
         JOIN
         api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
         JOIN
@@ -1182,7 +1176,7 @@ return function (App $app) {
       $whereEmpleados = "b.fecha_inicio >= '" . $data['fecha_inicio'] . "' AND DATE_ADD(b.fecha_terminado, INTERVAL -1 DAY) <= '" . $data['fecha_fin'] . "' ";
     }
 
-    $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN abonos b ON b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
+    $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
     $object['data']['vendedores'] = $localConnection->goQuery($sql);
     // FIN BUSCAR PAGOS DE VENDEDORES
 
@@ -1299,7 +1293,7 @@ return function (App $app) {
       // $where = "(DATE(e.moment) BETWEEN '" . $data["fecha_inicio"] . "' AND '" . $data["fecha_fin"] . "') ";
     }
 
-    $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(b.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN abonos b ON b.id_orden = a.id_orden AND b.id_empleado = a.id_empleado JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
+    $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
     $object['data']['vendedores'] = $localConnection->goQuery($sql);
     // FIN BUSCAR PAGOS DE VENDEDORES
 

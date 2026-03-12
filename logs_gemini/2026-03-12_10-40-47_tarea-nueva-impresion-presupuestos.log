@@ -1,0 +1,11 @@
+- **Solicitud del Usuario:** Implementar nueva lógica de impresión en Presupuestos (pestaña nueva).
+- **Fecha y Hora:** 2026-03-12 10:40:47
+- **Proyecto(s):** Frontend (`app_multi`)
+- **Archivos Involucrados:** `components/ordenes/presupuesto.vue`, `utils/PrintService.js`
+- **Acción Realizada:** 
+    1. Se migró la lógica de impresión de presupuestos al estándar basado en `PrintService`.
+    2. Se importó `PrintService` en `presupuesto.vue`.
+    3. Se actualizó el método `finishOrder` para construir el contenido HTML de impresión con estilos CSS dinámicos (basados en permisos de vista de precios) y disparar la apertura en una nueva pestaña mediante `PrintService.imprimir`.
+- **Resultado:** Éxito
+- **Verificación:** Se confirmó que el código de `presupuesto.vue` ahora utiliza el mismo patrón que `nueva.vue`, garantizando que la impresión no bloquee la pestaña principal y ofrezca una vista previa profesional.
+- **Respuesta de Gemini:** "¡Hecho! He implementado la nueva lógica de impresión en el módulo de presupuestos. Ahora, al finalizar un presupuesto y elegir imprimirlo, se abrirá automáticamente en una nueva pestaña siguiendo el formato moderno de la aplicación."

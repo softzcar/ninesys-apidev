@@ -158,17 +158,41 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // OBTENER ORDENES GUARDADAS
+  // OBTENER ORDENES GUARDADAS (Borradores + Presupuestos Finalizados con observaciones y productos)
   $app->get('/ordenes/guardadas', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT a._id, a.form, a.tipo, b.id_usuario AS id_empleado, b.nombre AS empleado 
-          FROM ordenes_tmp a 
-          JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario';
+    // Consultamos borradores y presupuestos finalizados en una sola query
+    // Para los borradores (ordenes_tmp), las observaciones están dentro del JSON 'form'
+    // Para los presupuestos finalizados, están en la columna 'observaciones'
+    $sql = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (
+              SELECT a._id, 
+                     a.form, 
+                     a.tipo, 
+                     b.id_usuario AS id_empleado, 
+                     b.nombre AS empleado,
+                     JSON_UNQUOTE(JSON_EXTRACT(a.form, '$.obs')) as observaciones,
+                     JSON_EXTRACT(a.form, '$.productos') as productos_json
+              FROM ordenes_tmp a 
+              JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario
+              UNION ALL
+              SELECT p._id, 
+                     CONCAT('{\"id_presupuesto_original\":', p._id, ',\"nombre\":\"', p.cliente_nombre, '\",\"cedula\":\"', p.cliente_cedula, '\",\"total\":', p.pago_total, ',\"presupuesto_emitido\":true}') as form, 
+                     'Presupuesto Finalizado' as tipo, 
+                     p.responsable as id_empleado, 
+                     u.nombre as empleado,
+                     p.observaciones,
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre)) 
+                      FROM presupuestos_productos pp 
+                      LEFT JOIN sizes s ON pp.id_size = s._id 
+                      WHERE pp.id_orden = p._id) as productos_json
+              FROM presupuestos p
+              JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
+              WHERE p.status != 'Convertido'
+            ) as combined
+            ORDER BY _id DESC LIMIT 100";
 
     $object['items'] = $localConnection->goQuery($sql);
-
-    // No decodificamos el JSON aquí. El frontend lo manejará con manejo de errores adecuado.
 
     $response->getBody()->write(json_encode($object));
     return $response

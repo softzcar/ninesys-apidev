@@ -57,7 +57,7 @@
     - > [!CAUTION]
     - > **PROHIBICIÓN TOTAL:** NUNCA actualices, despliegues o realices `git reset --hard / pull` en Contabo (ni Backend ni Frontend) sin una petición explícita y directa del usuario para esa acción específica. Es un entorno de producción crítico.
 - **Servidor de Pruebas (Hostinger - `api.nineteengreen.com`):**
-    - **Backend (API):** Es **OBLIGATORIO** actualizar el backend en Hostinger (`git fetch && git pull`) CADA VEZ que realices cambios en el código de la API. Esto es necesario para que las pruebas locales del frontend (que se conectan a esta API) funcionen correctamente.
+    - **Backend (API):** Es **OBLIGATORIO** actualizar el backend en Hostinger CADA VEZ que realices cambios en el código de la API. Utiliza el workflow `/desplegar-backend` para asegurar que este paso se complete correctamente antes de marcar cualquier tarea como terminada.
     - **Frontend:** **NO** actualices el frontend en Hostinger a menos que el usuario lo solicite explícitamente. Las pruebas de frontend se validan ejecutando `npm run dev` localmente.
 - **Desarrollo Local (Frontend):** Las pruebas del Frontend se hacen EXCLUSIVAMENTE de forma local ejecutando `npm run dev`. No es necesario desplegar al VPS para validar ajustes visuales o de lógica.
 
