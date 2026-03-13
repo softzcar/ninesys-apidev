@@ -47,6 +47,7 @@
     
     - **Importancia:** Este registro es FUNDAMENTAL para el seguimiento del proyecto y para la generación de reportes. **La precisión y la inmediatez son IMPERATIVAS**. Sin logs, no hay manera de documentar el trabajo realizado.
 - Siempre prefiere implementar código de la manera menos invasiva posible
+- **Garantía de Esquema (CRÍTICO):** Cualquier cambio en la estructura de la base de datos (nuevas tablas, alteración de campos/ENUMs) debe actualizarse OBLIGATORIAMENTE en el archivo de plantilla para nuevas empresas: [create_new_company_api_emp_N.sql](file:///home/developer/Escritorio/niesys/ninesys-apidev/public/model/create_new_company_api_emp_N.sql). Consulta el workflow `database-schema-updates` para más detalles.
 - Evita hacer cambios o mejoras que no se te soliciten pero siempre puedes sugerirlas
 
 ---
@@ -56,10 +57,13 @@
 - **Servidor de Producción (Contabo - `nineteencustom.com`):** 
     - > [!CAUTION]
     - > **PROHIBICIÓN TOTAL:** NUNCA actualices, despliegues o realices `git reset --hard / pull` en Contabo (ni Backend ni Frontend) sin una petición explícita y directa del usuario para esa acción específica. Es un entorno de producción crítico.
+    - **Uso de Datos**: Solo el VPS de Contabo contiene la base de datos de producción real.
 - **Servidor de Pruebas (Hostinger - `api.nineteengreen.com`):**
-    - **Backend (API):** Es **OBLIGATORIO** actualizar el backend en Hostinger CADA VEZ que realices cambios en el código de la API. Utiliza el workflow `/desplegar-backend` para asegurar que este paso se complete correctamente antes de marcar cualquier tarea como terminada.
-    - **Frontend:** **NO** actualices el frontend en Hostinger a menos que el usuario lo solicite explícitamente. Las pruebas de frontend se validan ejecutando `npm run dev` localmente.
-- **Desarrollo Local (Frontend):** Las pruebas del Frontend se hacen EXCLUSIVAMENTE de forma local ejecutando `npm run dev`. No es necesario desplegar al VPS para validar ajustes visuales o de lógica.
+    - **Backend (API):** Es **OBLIGATORIO** actualizar el backend en Hostinger CADA VEZ que realices cambios en el código de la API. Utiliza el workflow `/desplegar-backend`.
+    - **Base de Datos**: Las pruebas de datos deben realizarse en la base de datos de Hostinger, **NO en localhost**.
+- **Entorno Local:**
+    - **⚠️ IMPORTANTE:** **NO** utilizar MySQL local (`localhost` / `127.0.0.1`) para pruebas de lógica de negocio o datos de Ninesys. El entorno local solo sirve para pruebas visuales del Frontend (`npm run dev`) y edición de archivos.
+    - Los registros de base de datos siempre deben consultarse o modificarse en los VPS respectivos (Hostinger para pruebas, Contabo para producción) mediante SSH o las herramientas habilitadas para tal fin.
 
 ---
 

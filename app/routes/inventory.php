@@ -1124,10 +1124,26 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
 
         // buscar cantidad actual del producto
-        $sql_check = 'SELECT cantidad, sku, rendimiento, tipo_insumo FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
+        $sql_check = 'SELECT cantidad, sku, rendimiento, tipo_insumo, departamento FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
         $object['sql_cantidad_producto'] = $sql_check;
         $cantidad_producto = $localConnection->goQuery($sql_check);
         $object['cantidad_producto'] = $cantidad_producto;
+
+        // --- SANITIZACIÓN Y NORMALIZACIÓN DE PAYLOAD ---
+        // Si no vienen en el payload, intentamos recuperarlos o asignar valores seguros
+        $miInsumo['departamento'] = $miInsumo['departamento'] ?? ($cantidad_producto[0]['departamento'] ?? 'N/A');
+        
+        // Si no hay departamento especificado, buscamos el ID correspondiente en la base de datos
+        if (!isset($miInsumo['id_departamento'])) {
+            $sql_id_dep = "SELECT _id FROM departamentos WHERE departamento = '{$miInsumo['departamento']}' LIMIT 1";
+            $res_id_dep = $localConnection->goQuery($sql_id_dep);
+            $miInsumo['id_departamento'] = !empty($res_id_dep) ? $res_id_dep[0]['_id'] : 0;
+        }
+
+        $miInsumo['id_orden'] = $miInsumo['id_orden'] ?? null;
+        $miInsumo['id_producto'] = $miInsumo['id_producto'] ?? null;
+        $miInsumo['es_reposicion'] = $miInsumo['es_reposicion'] ?? 0;
+        // -----------------------------------------------
 
         $cantidad_inicial = floatval($cantidad_producto[0]['cantidad']);
         $rendimiento = floatval($cantidad_producto[0]['rendimiento']); // Obtener rendimiento
@@ -1277,7 +1293,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
 
         // Guardar en rendimiento
-        if ($miInsumo['departamento'] === 'Corte') {
+        if ($miInsumo['departamento'] === 'Corte' && !empty($miInsumo['id_orden'])) {
             // 1- Determinar si el registro existe (INSERT o UPDATE)
             $sql = 'SELECT COUNT(id_orden) FROM rendimiento WHERE id_orden = ' . $miInsumo['id_orden'];
             $exist = $localConnection->goQuery($sql);
@@ -1329,22 +1345,25 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             : null;
 
         // Verificar si ya existe un movimiento para esta orden/insumo/departamento
-        $sql_check_mov = 'SELECT _id FROM inventario_movimientos 
-                          WHERE id_orden = ? AND id_insumo = ? AND id_departamento = ?';
-        $check_mov_params = [
-            $miInsumo['id_orden'],
-            $miInsumo['id_insumo'],
-            $miInsumo['id_departamento']
-        ];
+        $existing_mov = [];
+        if (!empty($miInsumo['id_orden'])) {
+            $sql_check_mov = 'SELECT _id FROM inventario_movimientos 
+                              WHERE id_orden = ? AND id_insumo = ? AND id_departamento = ?';
+            $check_mov_params = [
+                $miInsumo['id_orden'],
+                $miInsumo['id_insumo'],
+                $miInsumo['id_departamento']
+            ];
 
-        if ($id_reposicion) {
-            $sql_check_mov .= ' AND id_reposicion = ?';
-            $check_mov_params[] = $id_reposicion;
-        } else {
-            $sql_check_mov .= ' AND id_reposicion IS NULL';
+            if ($id_reposicion) {
+                $sql_check_mov .= ' AND id_reposicion = ?';
+                $check_mov_params[] = $id_reposicion;
+            } else {
+                $sql_check_mov .= ' AND id_reposicion IS NULL';
+            }
+
+            $existing_mov = $localConnection->goQuery($sql_check_mov, $check_mov_params);
         }
-
-        $existing_mov = $localConnection->goQuery($sql_check_mov, $check_mov_params);
 
         // Preparar el valor de id_catalogo
         $id_catalogo = (isset($miInsumo['id_catalogo']) && $miInsumo['id_catalogo'] !== 'null' && $miInsumo['id_catalogo'] !== '')

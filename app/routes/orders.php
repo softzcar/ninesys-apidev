@@ -261,11 +261,11 @@ return function (App $app) {
       }
     }
 
-    // 7. VALIDACIÓN DE MOTIVO para Administración (Cancelada o Terminada manual)
-    // Solo pedir motivo si es un Admin cambiando a cancelada o terminada
-    if (($order['estado'] === 'cancelada' || $order['estado'] === 'terminada')) {
-      // Verificar que se envió el motivo
-      if (!isset($order['motivo']) || trim($order['motivo']) === '') {
+    // 7. VALIDACIÓN DE MOTIVO para Administración (Cancelada, Terminada manual, Reactivada o reversión de Entregada)
+    // Pedir motivo si se cambia a cancelada/terminada O si se está saliendo de esos estados o de 'entregada'
+    if ($order['estado'] === 'cancelada' || $order['estado'] === 'terminada' || $estadoActual === 'cancelada' || $estadoActual === 'terminada' || $estadoActual === 'entregada') {
+      // Verificar que se envió el motivo si hay cambio de estado
+      if ($order['estado'] !== $estadoActual && (!isset($order['motivo']) || trim($order['motivo']) === '')) {
         $localConnection->disconnect();
         $response->getBody()->write(json_encode([
           'success' => false,
@@ -280,15 +280,23 @@ return function (App $app) {
     $sql = "UPDATE ordenes SET status = '" . $order['estado'] . "' WHERE _id = " . intval($order['id']);
     $data = $localConnection->goQuery($sql);
 
-    // 9. REGISTRAR EN AUDITORÍA (si es cancelada o terminada manual)
-    if ($order['estado'] === 'cancelada' || $order['estado'] === 'terminada') {
+    // 9. REGISTRAR EN AUDITORÍA (si es cancelada, terminada manual, reactivada o reversión de entregada)
+    if (($order['estado'] === 'cancelada' || $order['estado'] === 'terminada' || $estadoActual === 'cancelada' || $estadoActual === 'terminada' || $estadoActual === 'entregada') && $order['estado'] !== $estadoActual) {
       $motivoEscaped = addslashes(trim($order['motivo']));
       $idAdmin = isset($order['id_admin']) ? intval($order['id_admin']) : 0;
       $nombreAdmin = isset($order['nombre_admin']) ? addslashes($order['nombre_admin']) : 'Desconocido';
 
+      // Determinar la acción para la auditoría
+      $accion = $order['estado'];
+      if ($estadoActual === 'cancelada' || $estadoActual === 'terminada') {
+        $accion = 'reactivada';
+      } elseif ($estadoActual === 'entregada') {
+        $accion = 'reversión de entrega';
+      }
+
       $sqlAudit = "INSERT INTO ordenes_auditoria (id_orden, accion, id_admin, nombre_admin, motivo) 
                    VALUES (" . intval($order['id']) . ", 
-                           '" . $order['estado'] . "', 
+                           '$accion', 
                            $idAdmin, 
                            '$nombreAdmin', 
                            '$motivoEscaped')";

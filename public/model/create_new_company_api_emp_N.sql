@@ -731,7 +731,7 @@ CREATE TABLE `ordenes_productos` (
 CREATE TABLE `ordenes_auditoria` (
   `_id` INT AUTO_INCREMENT PRIMARY KEY COMMENT 'ID único del registro',
   `id_orden` INT NOT NULL COMMENT 'ID de la orden',
-  `accion` ENUM('cancelada', 'terminada') NOT NULL COMMENT 'Tipo de acción manual',
+  `accion` ENUM('cancelada', 'terminada', 'reactivada', 'reversión de entrega') NOT NULL COMMENT 'Tipo de acción manual',
   `id_admin` INT NOT NULL COMMENT 'ID del administrador',
   `nombre_admin` VARCHAR(255) NOT NULL COMMENT 'Nombre del administrador',
   `motivo` TEXT NOT NULL COMMENT 'Motivo detallado',
