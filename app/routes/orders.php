@@ -263,7 +263,10 @@ return function (App $app) {
 
     // 7. VALIDACIÓN DE MOTIVO para Administración (Cancelada, Terminada manual, Reactivada o reversión de Entregada)
     // Pedir motivo si se cambia a cancelada/terminada O si se está saliendo de esos estados o de 'entregada'
-    if ($order['estado'] === 'cancelada' || $order['estado'] === 'terminada' || $estadoActual === 'cancelada' || $estadoActual === 'terminada' || $estadoActual === 'entregada') {
+    // EXCEPCIÓN: terminada -> entregada es el flujo normal y NO requiere motivo manual
+    $esFlujoNormalTerminadaAEntrega = ($estadoActual === 'terminada' && $order['estado'] === 'entregada');
+
+    if (!$esFlujoNormalTerminadaAEntrega && ($order['estado'] === 'cancelada' || $order['estado'] === 'terminada' || $estadoActual === 'cancelada' || $estadoActual === 'terminada' || $estadoActual === 'entregada')) {
       // Verificar que se envió el motivo si hay cambio de estado
       if ($order['estado'] !== $estadoActual && (!isset($order['motivo']) || trim($order['motivo']) === '')) {
         $localConnection->disconnect();
@@ -281,7 +284,8 @@ return function (App $app) {
     $data = $localConnection->goQuery($sql);
 
     // 9. REGISTRAR EN AUDITORÍA (si es cancelada, terminada manual, reactivada o reversión de entregada)
-    if (($order['estado'] === 'cancelada' || $order['estado'] === 'terminada' || $estadoActual === 'cancelada' || $estadoActual === 'terminada' || $estadoActual === 'entregada') && $order['estado'] !== $estadoActual) {
+    // No registrar auditoría manual si es el flujo normal terminada -> entregada
+    if (!$esFlujoNormalTerminadaAEntrega && ($order['estado'] === 'cancelada' || $order['estado'] === 'terminada' || $estadoActual === 'cancelada' || $estadoActual === 'terminada' || $estadoActual === 'entregada') && $order['estado'] !== $estadoActual) {
       $motivoEscaped = addslashes(trim($order['motivo']));
       $idAdmin = isset($order['id_admin']) ? intval($order['id_admin']) : 0;
       $nombreAdmin = isset($order['nombre_admin']) ? addslashes($order['nombre_admin']) : 'Desconocido';

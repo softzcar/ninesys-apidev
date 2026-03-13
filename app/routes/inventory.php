@@ -1201,9 +1201,10 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             }
 
             // Now update inventory based on consumption (or set to 0 if finishing)
-            if (isset($miInsumo['tipo']) && $miInsumo['tipo'] === 'fin') {
+            if (isset($miInsumo['tipo']) && ($miInsumo['tipo'] === 'fin' || $miInsumo['tipo'] === 'terminacion_manual')) {
                 // Set to 0 when finishing
                 $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $cantidad_consumida = 0;
             } else {
                 // Normal consumption update
                 $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
@@ -1236,8 +1237,9 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             }
 
             // Check if finishing
-            if (isset($miInsumo['tipo']) && $miInsumo['tipo'] === 'fin') {
+            if (isset($miInsumo['tipo']) && ($miInsumo['tipo'] === 'fin' || $miInsumo['tipo'] === 'terminacion_manual')) {
                 $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $cantidad_consumida = 0; // Ensure movement history records final value as 0
             }
             $sql .= 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             $update_cantidad_inventario = $localConnection->goQuery($sql);
@@ -1267,9 +1269,10 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             }
 
             // Now update inventory based on consumption (or set to 0 if finishing)
-            if (isset($miInsumo['tipo']) && $miInsumo['tipo'] === 'fin') {
+            if (isset($miInsumo['tipo']) && ($miInsumo['tipo'] === 'fin' || $miInsumo['tipo'] === 'terminacion_manual')) {
                 // Set to 0 when finishing
                 $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $cantidad_consumida = 0;
             } else {
                 // Normal consumption update
                 $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';

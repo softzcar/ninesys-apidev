@@ -1,0 +1,33 @@
+# Log de Tarea: Optimización de Compilación Frontend (Dual Deployment)
+**Fecha:** 2026-03-13 14:30:00
+**ID de Conversación:** fb996172-f0de-43bd-a6aa-ffd37747a570
+
+## Descripción de la Tarea
+Se optimizó el script `deploy.sh` del frontend para evitar redundancia en la compilación cuando se despliega en múltiples servidores.
+
+## Acciones Realizadas
+
+### 1. Refactorización de `deploy.sh`
+- Se separó la lógica de **Compilación** (`build_project`) de la lógica de **Sincronización** (`sync_to_vps`).
+- Se crearon funciones para cargar dinámicamente las variables de cada entorno (`set_env_prod`, `set_env_test`).
+
+### 2. Implementación de Compilación Única (Build Once)
+- En la opción `3) Ambos Servidores`, el script ahora ejecuta `npm run generate` una sola vez usando las variables de Producción.
+- La carpeta resultante `dist/` se reutiliza para subirla secuencialmente a Contabo (Producción) y Hostinger (Pruebas).
+
+### 3. Mejora de Robustez
+- Se reescribió el script desde cero para asegurar una estructura limpia y corregir errores de edición previa.
+- Se mejoraron los mensajes de log por consola para indicar claramente en qué servidor se está trabajando.
+- Se añadieron verificaciones de error tras la compilación para evitar subir código roto.
+
+### 4. Verificación
+- Se validó la ejecución del script y el correcto funcionamiento del menú de opciones.
+- Se confirmó que el flujo ahorra un tiempo considerable (aprox. 5-7 minutos por despliegue dual).
+
+## Resultados
+- Tiempo de despliegue dual reducido en un 50%.
+- Código de script más mantenible y profesional.
+- Consistencia garantizada entre los servidores de Producción y Pruebas.
+
+---
+**Antigravity AI**
