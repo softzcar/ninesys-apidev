@@ -182,10 +182,9 @@ return function (App $app) {
                      p.responsable as id_empleado, 
                      u.nombre as empleado,
                      p.observaciones,
-                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', t.tela)) 
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela)) 
                       FROM presupuestos_productos pp 
                       LEFT JOIN sizes s ON pp.id_size = s._id 
-                      LEFT JOIN catalogo_telas t ON pp.id_tela = t._id
                       WHERE pp.id_orden = p._id) as productos_json
               FROM presupuestos p
               JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
@@ -196,23 +195,29 @@ return function (App $app) {
     $results = $localConnection->goQuery($sql);
 
     // Procesar resultados para asegurar consistencia en productos_json
-    foreach ($results as &$item) {
-      if ($item['tipo'] !== 'Presupuesto Finalizado') {
-        // Es un borrador (ordenes_tmp). Mapear 'producto' -> 'name' para consistencia con la tabla
-        $prods = json_decode($item['productos_json'], true) ?: [];
-        $mappedProds = array_map(function($p) {
-          return [
-            'name' => $p['producto'] ?? 'S/N',
-            'cantidad' => $p['cantidad'] ?? 0,
-            'talla' => $p['talla'] ?? 'N/A',
-            'tela' => $p['tela'] ?? 'N/A'
-          ];
-        }, $prods);
-        $item['productos_json'] = json_encode($mappedProds);
+    // Evitar PHP Fatal Error si la consulta SQL falló ($results contiene 'status' => 'error')
+    if (isset($results['status']) && $results['status'] === 'error') {
+      $object['items'] = [];
+      $object['error'] = $results['message'];
+      $object['sql'] = $results['sql'];
+    } else {
+      foreach ($results as &$item) {
+        if ($item['tipo'] !== 'Presupuesto Finalizado') {
+          // Es un borrador (ordenes_tmp). Mapear 'producto' -> 'name' para consistencia con la tabla
+          $prods = json_decode($item['productos_json'], true) ?: [];
+          $mappedProds = array_map(function($p) {
+            return [
+              'name' => $p['producto'] ?? 'S/N',
+              'cantidad' => $p['cantidad'] ?? 0,
+              'talla' => $p['talla'] ?? 'N/A',
+              'tela' => $p['tela'] ?? 'N/A'
+            ];
+          }, $prods);
+          $item['productos_json'] = json_encode($mappedProds);
+        }
       }
+      $object['items'] = $results;
     }
-
-    $object['items'] = $results;
 
     $response->getBody()->write(json_encode($object));
     return $response
