@@ -423,10 +423,11 @@ return function (App $app) {
         }
     }
     $object['items'] = $results;
+    $object['sql'] = $sql;
 
     $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode($object['items']));
+    $response->getBody()->write(json_encode($object));
 
     return $response
       ->withHeader('Content-Type', 'application/json')
