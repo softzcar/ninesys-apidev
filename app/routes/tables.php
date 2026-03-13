@@ -204,7 +204,8 @@ return function (App $app) {
       foreach ($results as &$item) {
         if ($item['tipo'] !== 'Presupuesto Finalizado') {
           // Es un borrador (ordenes_tmp). Mapear 'producto' -> 'name' para consistencia con la tabla
-          $prods = json_decode($item['productos_json'], true) ?: [];
+          $prodsJson = $item['productos_json'] ?: '[]';
+          $prods = json_decode($prodsJson, true) ?: [];
           $mappedProds = array_map(function($p) {
             return [
               'name' => $p['producto'] ?? 'S/N',
