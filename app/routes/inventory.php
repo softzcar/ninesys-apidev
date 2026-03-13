@@ -1113,6 +1113,14 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
         $object = []; // Init object
         $object['debug_received'] = $miInsumo; // DEBUG ECHO
+
+        // --- SANITIZACIÓN Y NORMALIZACIÓN DE PAYLOAD ---
+        // Asegurar que las llaves básicas existen antes de usarlas en la lógica
+        $miInsumo['es_reposicion'] = $miInsumo['es_reposicion'] ?? 0;
+        $miInsumo['id_insumo'] = $miInsumo['id_insumo'] ?? null;
+        $miInsumo['tipo'] = $miInsumo['tipo'] ?? 'consumo';
+        // -----------------------------------------------
+
         $localConnection = new LocalDB();
 
         // Verifcar si es reposicion y actualizar el campor `terminada`
@@ -1131,6 +1139,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
         // --- SANITIZACIÓN Y NORMALIZACIÓN DE PAYLOAD ---
         // Si no vienen en el payload, intentamos recuperarlos o asignar valores seguros
+        // Note: $cantidad_producto is not available here, so fallback to 'N/A' if not in payload.
         $miInsumo['departamento'] = $miInsumo['departamento'] ?? ($cantidad_producto[0]['departamento'] ?? 'N/A');
         
         // Si no hay departamento especificado, buscamos el ID correspondiente en la base de datos
