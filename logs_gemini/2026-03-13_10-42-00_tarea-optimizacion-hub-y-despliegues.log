@@ -1,0 +1,44 @@
+# Log de Tarea: Optimización de HUB y Scripts de Despliegue
+**Fecha:** 2026-03-13 10:42:00
+**ID de Conversación:** fb996172-f0de-43bd-a6aa-ffd37747a570
+
+## Descripción de la Tarea
+Se realizó una auditoría y optimización integral del HUB de aplicaciones y los procesos de despliegue tras la migración de directorios.
+
+## Acciones Realizadas
+
+### 1. Reubicación del HUB de Aplicaciones
+- Se localizó el HUB en su nueva ubicación unificada: `/home/developer/Escritorio/niesys/ninesys-apidev/ninesys-hub`.
+- Se detectaron y corrigieron rutas "hardcoded" en `scripts.json` que apuntaban al antiguo directorio `/home/developer/Escritorio/Antigravity/`.
+
+### 2. Reparación de Enlaces Simbólicos
+- Se identificó un error de "archivo no encontrado" en la ejecución de scripts del HUB.
+- La causa era que los enlaces simbólicos en `ninesys-hub/bin/` estaban rotos.
+- Se recrearon todos los enlaces simbólicos (13 en total) apuntando a la nueva carpeta de scripts: `/home/developer/Escritorio/niesys/ninesys-apidev/scripts/`.
+
+### 3. Mejora de Scripts de Despliegue (`deploy.sh` y `deploy_backend.sh`)
+- **Despliegue Frontend:**
+    - Se añadió la opción `3) Ambos Servidores` para desplegar en Contabo y Hostinger simultáneamente.
+    - Se eliminó la confirmación manual `(s/N)` para agilizar el flujo.
+    - Se refactorizó el código en funciones modulares.
+- **Despliegue Backend:**
+    - Se corrigió la autenticación para usar el alias de SSH `vps-contabo`, eliminando la dependencia de `sshpass`.
+    - Se corrigió la ruta de producción en el VPS (`nineteencustom.com`).
+    - Se añadió la opción de despliegue dual.
+    - Se eliminó la confirmación manual.
+
+### 4. Optimización de Git Push
+- Se implementó una verificación inteligente en `deploy_backend.sh`.
+- El script ahora detecta si el código local ya está sincronizado con GitHub antes de intentar un `git push`, omitiendo el paso si no hay cambios nuevos.
+
+### 5. Despliegue en Producción
+- Se ejecutó con éxito el despliegue del backend en el servidor **Contabo** usando el nuevo flujo optimizado.
+
+## Resultados
+- HUB de aplicaciones 100% funcional en la nueva estructura.
+- Proceso de despliegue más rápido, automático y robusto.
+- Eliminación de dependencias fallidas (`sshpass`).
+- Sincronización verificada entre entornos.
+
+---
+**Antigravity AI**

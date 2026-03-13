@@ -1702,6 +1702,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 moment
             FROM
                 inventario
+            WHERE
+                cantidad > 0
             ORDER BY
                 insumo ASC;';
         } else {
@@ -1724,7 +1726,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             FROM
                 inventario
             WHERE
-                departamento = '" . $args['departamento'] . "'
+                departamento = '" . $args['departamento'] . "' AND cantidad > 0
             ORDER BY
                 insumo ASC;";
         }

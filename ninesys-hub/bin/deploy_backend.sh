@@ -1,1 +1,1 @@
-/home/developer/Escritorio/Antigravity/ninesys-apidev/scripts/deploy_backend.sh
+/home/developer/Escritorio/niesys/ninesys-apidev/scripts/deploy_backend.sh
