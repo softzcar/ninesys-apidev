@@ -195,31 +195,32 @@ return function (App $app) {
 
     $results = $localConnection->goQuery($sql);
 
-    // Procesar resultados para asegurar consistencia en productos_json
-    // Evitar PHP Fatal Error si la consulta SQL falló ($results contiene 'status' => 'error')
-    if (isset($results['status']) && $results['status'] === 'error') {
-      $object['items'] = [];
-      $object['error'] = $results['message'];
-      $object['sql'] = $results['sql'];
-    } else {
       foreach ($results as &$item) {
+        $prodsJson = $item['productos_json'] ?: '[]';
+        $prods = (is_string($prodsJson)) ? json_decode($prodsJson, true) : $prodsJson;
+        $prods = $prods ?: [];
+
         if ($item['tipo'] !== 'Presupuesto Finalizado') {
-          // Es un borrador (ordenes_tmp). Mapear 'producto' -> 'name' para consistencia con la tabla
-          $prodsJson = $item['productos_json'] ?: '[]';
-          $prods = json_decode($prodsJson, true) ?: [];
-          $mappedProds = array_map(function($p) {
+          // Es un borrador (ordenes_tmp). Mapear llaves para consistencia
+          $item['productos_json'] = array_map(function($p) {
+            $attrText = '';
+            if (!empty($p['atributos_seleccionados']) && is_array($p['atributos_seleccionados'])) {
+              $attrText = $p['atributos_seleccionados'][0]['text'] ?? '';
+            }
             return [
-              'name' => $p['producto'] ?? 'S/N',
+              'name' => $p['name'] ?? ($p['producto'] ?? 'S/N'),
               'cantidad' => $p['cantidad'] ?? 0,
               'talla' => $p['talla'] ?? 'N/A',
-              'tela' => $p['tela'] ?? 'N/A'
+              'tela' => $p['tela'] ?? 'N/A',
+              'atributo' => $p['atributo'] ?? $attrText
             ];
           }, $prods);
-          $item['productos_json'] = json_encode($mappedProds);
+        } else {
+          // Ya es un presupuesto finalizado, asegurar que productos_json sea array
+          $item['productos_json'] = $prods;
         }
       }
       $object['items'] = $results;
-    }
 
     $response->getBody()->write(json_encode($object));
     return $response
@@ -305,10 +306,55 @@ return function (App $app) {
     $object['response_delete'] = json_encode($localConnection->goQuery($sql));
     $object['sql_delete'] = $sql;
 
-    $sql = 'SELECT a._id, a.form, b.id_usuario id_empleado, b.nombre empleado FROM ordenes_tmp a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario';
-    $object['items'] = $localConnection->goQuery($sql);
+    $sql = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (
+              SELECT a._id, a.form, a.tipo, b.id_usuario AS id_empleado, b.nombre AS empleado,
+                     JSON_UNQUOTE(JSON_EXTRACT(a.form, '$.obs')) as observaciones,
+                     JSON_EXTRACT(a.form, '$.productos') as productos_json
+              FROM ordenes_tmp a 
+              JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario
+              UNION ALL
+              SELECT p._id, 
+                     CONCAT('{\"id_presupuesto_original\":', p._id, ',\"nombre\":\"', p.cliente_nombre, '\",\"cedula\":\"', p.cliente_cedula, '\",\"total\":', p.pago_total, ',\"presupuesto_emitido\":true}') as form, 
+                     'Presupuesto Finalizado' as tipo, 
+                     p.responsable as id_empleado, 
+                     u.nombre as empleado,
+                     p.observaciones,
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'atributo', pa.attribute_name)) 
+                      FROM presupuestos_productos pp 
+                      LEFT JOIN sizes s ON pp.id_size = s._id 
+                      LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
+                      WHERE pp.id_orden = p._id) as productos_json
+              FROM presupuestos p
+              JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
+              WHERE p.status != 'Convertido'
+            ) as combined
+            ORDER BY _id DESC LIMIT 100";
 
-    $object['response'] = json_encode($localConnection->goQuery($sql));
+    $results = $localConnection->goQuery($sql);
+    foreach ($results as &$item) {
+        $prodsJson = $item['productos_json'] ?: '[]';
+        $prods = (is_string($prodsJson)) ? json_decode($prodsJson, true) : $prodsJson;
+        $prods = $prods ?: [];
+
+        if ($item['tipo'] !== 'Presupuesto Finalizado') {
+            $item['productos_json'] = array_map(function($p) {
+                $attrText = '';
+                if (!empty($p['atributos_seleccionados']) && is_array($p['atributos_seleccionados'])) {
+                    $attrText = $p['atributos_seleccionados'][0]['text'] ?? '';
+                }
+                return [
+                    'name' => $p['name'] ?? ($p['producto'] ?? 'S/N'),
+                    'cantidad' => $p['cantidad'] ?? 0,
+                    'talla' => $p['talla'] ?? 'N/A',
+                    'tela' => $p['tela'] ?? 'N/A',
+                    'atributo' => $p['atributo'] ?? $attrText
+                ];
+            }, $prods);
+        } else {
+            $item['productos_json'] = $prods;
+        }
+    }
+    $object['items'] = $results;
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
@@ -328,17 +374,59 @@ return function (App $app) {
     $object['sql_insert'] = $sql;
     $localConnection->goQuery($sql);
 
-    $sql = 'SELECT a._id, a.form, b.id_usuario id_empleado, b.nombre empleado FROM ordenes_tmp a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario';
-    $object['items'] = $localConnection->goQuery($sql);
-    $object['sql'] = $sql;
+    $sql = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (
+              SELECT a._id, a.form, a.tipo, b.id_usuario AS id_empleado, b.nombre AS empleado,
+                     JSON_UNQUOTE(JSON_EXTRACT(a.form, '$.obs')) as observaciones,
+                     JSON_EXTRACT(a.form, '$.productos') as productos_json
+              FROM ordenes_tmp a 
+              JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario
+              UNION ALL
+              SELECT p._id, 
+                     CONCAT('{\"id_presupuesto_original\":', p._id, ',\"nombre\":\"', p.cliente_nombre, '\",\"cedula\":\"', p.cliente_cedula, '\",\"total\":', p.pago_total, ',\"presupuesto_emitido\":true}') as form, 
+                     'Presupuesto Finalizado' as tipo, 
+                     p.responsable as id_empleado, 
+                     u.nombre as empleado,
+                     p.observaciones,
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'atributo', pa.attribute_name)) 
+                      FROM presupuestos_productos pp 
+                      LEFT JOIN sizes s ON pp.id_size = s._id 
+                      LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
+                      WHERE pp.id_orden = p._id) as productos_json
+              FROM presupuestos p
+              JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
+              WHERE p.status != 'Convertido'
+            ) as combined
+            ORDER BY _id DESC LIMIT 100";
 
-    $string = implode('', explode('\\', json_encode($object['items'])));
-    $items = stripslashes(trim($string));
-    $items = stripslashes(trim($items));
+    $results = $localConnection->goQuery($sql);
+    foreach ($results as &$item) {
+        $prodsJson = $item['productos_json'] ?: '[]';
+        $prods = (is_string($prodsJson)) ? json_decode($prodsJson, true) : $prodsJson;
+        $prods = $prods ?: [];
+
+        if ($item['tipo'] !== 'Presupuesto Finalizado') {
+            $item['productos_json'] = array_map(function($p) {
+                $attrText = '';
+                if (!empty($p['atributos_seleccionados']) && is_array($p['atributos_seleccionados'])) {
+                    $attrText = $p['atributos_seleccionados'][0]['text'] ?? '';
+                }
+                return [
+                    'name' => $p['name'] ?? ($p['producto'] ?? 'S/N'),
+                    'cantidad' => $p['cantidad'] ?? 0,
+                    'talla' => $p['talla'] ?? 'N/A',
+                    'tela' => $p['tela'] ?? 'N/A',
+                    'atributo' => $p['atributo'] ?? $attrText
+                ];
+            }, $prods);
+        } else {
+            $item['productos_json'] = $prods;
+        }
+    }
+    $object['items'] = $results;
 
     $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode($items));
+    $response->getBody()->write(json_encode($object['items']));
 
     return $response
       ->withHeader('Content-Type', 'application/json')
