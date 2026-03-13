@@ -2201,13 +2201,26 @@ $object['sales_commission_ISSET'][] = false;
         }
 
         if (isset($decodedObj['tela'])) {
-          $values .= "'" . $decodedObj['tela'] . "'";
+          $values .= "'" . $decodedObj['tela'] . "',";
         } else {
-          $values .= "''";
+          $values .= "'',";
         }
 
+        // Nuevos campos: id_products_attributes, id_size, id_tela
+        $id_attr = "NULL";
+        if (!empty($decodedObj['atributos_seleccionados']) && is_array($decodedObj['atributos_seleccionados'])) {
+          $id_attr = $decodedObj['atributos_seleccionados'][0]['value'] ?? "NULL";
+        }
+        $values .= $id_attr . ",";
 
-        $sql2 = 'INSERT INTO presupuestos_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela) VALUES (' . $values . ')';
+        $id_size = (isset($decodedObj['talla']) && is_numeric($decodedObj['talla'])) ? $decodedObj['talla'] : "NULL";
+        $values .= $id_size . ",";
+
+        $id_tela = (isset($decodedObj['tela']) && is_numeric($decodedObj['tela'])) ? $decodedObj['tela'] : "NULL";
+        $values .= $id_tela;
+
+
+        $sql2 = 'INSERT INTO presupuestos_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela, id_products_attributes, id_size, id_tela) VALUES (' . $values . ')';
         $object['sql_presupuestos_productos'] = $sql2;
         $object['producto_detalle'][] = $localConnection->goQuery($sql2);
       }

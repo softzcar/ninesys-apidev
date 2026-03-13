@@ -182,9 +182,10 @@ return function (App $app) {
                      p.responsable as id_empleado, 
                      u.nombre as empleado,
                      p.observaciones,
-                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela)) 
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'atributo', pa.attribute_name)) 
                       FROM presupuestos_productos pp 
                       LEFT JOIN sizes s ON pp.id_size = s._id 
+                      LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
                       WHERE pp.id_orden = p._id) as productos_json
               FROM presupuestos p
               JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
@@ -304,7 +305,7 @@ return function (App $app) {
     $object['response_delete'] = json_encode($localConnection->goQuery($sql));
     $object['sql_delete'] = $sql;
 
-    $sql = 'SELECT a._id, a.form, b._id id_empleado, b.nombre empleado FROM ordenes_tmp a JOIN empleados b ON a.id_empleado = b._id';
+    $sql = 'SELECT a._id, a.form, b.id_usuario id_empleado, b.nombre empleado FROM ordenes_tmp a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario';
     $object['items'] = $localConnection->goQuery($sql);
 
     $object['response'] = json_encode($localConnection->goQuery($sql));
@@ -327,7 +328,7 @@ return function (App $app) {
     $object['sql_insert'] = $sql;
     $localConnection->goQuery($sql);
 
-    $sql = 'SELECT a._id, a.form, b._id id_empleado, b.nombre empleado FROM ordenes_tmp a JOIN empleados b ON a.id_empleado = b._id';
+    $sql = 'SELECT a._id, a.form, b.id_usuario id_empleado, b.nombre empleado FROM ordenes_tmp a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario';
     $object['items'] = $localConnection->goQuery($sql);
     $object['sql'] = $sql;
 
