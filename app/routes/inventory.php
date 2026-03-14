@@ -1708,6 +1708,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $localConnection->disconnect();
 
             $fields = [
+                ['key' => '_id', 'label' => 'ID', 'sortable' => true],
                 ['key' => 'sku', 'label' => 'SKU', 'sortable' => true],
                 ['key' => 'insumo', 'label' => 'Insumo', 'sortable' => true],
                 ['key' => 'unidad', 'label' => 'Unidad', 'sortable' => true],
