@@ -696,6 +696,49 @@ return function (App $app) {
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
   });
+
+  // Balance de Cierres de Caja
+  $app->get('/balance-de-cierres/{inicio}/{fin}/{id_vendedor}', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+    $inicio = $args['inicio'];
+    $fin = $args['fin'];
+    $id_vendedor = (int)$args['id_vendedor'];
+
+    $filterVendedor = $id_vendedor === 0 ? "" : " AND c.id_empleado = $id_vendedor";
+
+    // Consulta para obtener los cierres y calcular el balance
+    $sql = "SELECT 
+              c._id,
+              c.moment AS fecha_cierre,
+              u.nombre AS vendedor,
+              c.dolares AS monto_cierre_usd,
+              c.pesos AS monto_cierre_cop,
+              c.bolivares AS monto_cierre_bs,
+              f.dolares AS fondo_nuevo_usd,
+              f.pesos AS fondo_nuevo_cop,
+              f.bolivares AS fondo_nuevo_bs,
+              -- Fondo anterior (del cierre previo)
+              (SELECT f_ant.dolares FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_usd,
+              (SELECT f_ant.pesos FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_cop,
+              (SELECT f_ant.bolivares FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_bs,
+              -- Recaudado en este cierre
+              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Dólares') as recaudado_usd,
+              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Pesos') as recaudado_cop,
+              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Bolívares') as recaudado_bs
+            FROM caja_cierres c
+            JOIN caja_fondos f ON c._id = f.id_caja_cierres
+            JOIN api_empresas.empresas_usuarios u ON c.id_empleado = u.id_usuario
+            WHERE DATE(c.moment) BETWEEN '$inicio' AND '$fin' $filterVendedor
+            ORDER BY c.moment DESC";
+
+    $object['data'] = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
   /** FIN RETIROS */
 
 }; // Fin de la función que envuelve las rutas
