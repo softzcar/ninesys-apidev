@@ -1705,6 +1705,12 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                     ORDER BY insumo ASC";
             
             $items = $localConnection->goQuery($sql, $queryParams);
+
+            // Obtener lista dinámica de departamentos que tienen stock
+            $sqlDeps = "SELECT DISTINCT departamento FROM inventario WHERE cantidad > 0 AND departamento IS NOT NULL AND departamento != '' ORDER BY departamento ASC";
+            $resDeps = $localConnection->goQuery($sqlDeps);
+            $availableDepartments = array_map(function($d) { return $d['departamento']; }, $resDeps);
+
             $localConnection->disconnect();
 
             $fields = [
@@ -1720,7 +1726,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $response->getBody()->write(json_encode([
                 'success' => true,
                 'items' => $items ?? [],
-                'fields' => $fields
+                'fields' => $fields,
+                'availableDepartments' => $availableDepartments
             ], JSON_NUMERIC_CHECK));
 
             return $response
