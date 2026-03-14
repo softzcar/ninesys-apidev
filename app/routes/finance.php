@@ -724,7 +724,18 @@ return function (App $app) {
               -- Recaudado en este cierre
               (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Dólares') as recaudado_usd,
               (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Pesos') as recaudado_cop,
-              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Bolívares') as recaudado_bs
+              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Bolívares') as recaudado_bs,
+              -- Tasas manejadas en este cierre (o la última conocida hasta ese momento)
+              COALESCE(
+                (SELECT tasa FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Pesos' ORDER BY _id DESC LIMIT 1),
+                (SELECT tasa FROM caja WHERE moneda = 'Pesos' AND moment <= c.moment ORDER BY moment DESC LIMIT 1),
+                1
+              ) as tasa_cop,
+              COALESCE(
+                (SELECT tasa FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Bolívares' ORDER BY _id DESC LIMIT 1),
+                (SELECT tasa FROM caja WHERE moneda = 'Bolívares' AND moment <= c.moment ORDER BY moment DESC LIMIT 1),
+                1
+              ) as tasa_bs
             FROM caja_cierres c
             JOIN caja_fondos f ON c._id = f.id_caja_cierres
             JOIN api_empresas.empresas_usuarios u ON c.id_empleado = u.id_usuario
