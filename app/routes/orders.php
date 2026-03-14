@@ -3015,9 +3015,10 @@ $object['sales_commission_ISSET'][] = false;
            } */
           $cat_name = 'Uncatagorized';
 
+          $precio_item = (isset($decodedObj['precio']) && !empty($decodedObj['precio'])) ? $decodedObj['precio'] : 0;
           $values = "'" . $now . "',";
-          $values .= $decodedObj['precio'] . ',';
-          $values .= "'" . $decodedObj['precio'] . "',";
+          $values .= $precio_item . ',';
+          $values .= "'" . $precio_item . "',";
           $values .= "'" . $decodedObj['producto'] . "',";
           $values .= $last_id . ',';
           $values .= $decodedObj['cod'] . ',';

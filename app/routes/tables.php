@@ -219,6 +219,11 @@ return function (App $app) {
           // Ya es un presupuesto finalizado, asegurar que productos_json sea array
           $item['productos_json'] = $prods;
         }
+
+        // DECODE FORM field for both types
+        if (isset($item['form']) && is_string($item['form'])) {
+          $item['form'] = json_decode($item['form'], true);
+        }
       }
       $object['items'] = $results;
 
@@ -289,7 +294,8 @@ return function (App $app) {
     }
     $object['sql'] = $sql;
     $resp = $localConnection->goQuery($sql);
-    $object['resp'] = $localConnection->disconnect($sql);
+    $localConnection->disconnect();
+    $object['resp'] = 'OK';
 
     $response->getBody()->write(json_encode($object));
 
@@ -302,11 +308,27 @@ return function (App $app) {
   $app->post('/ordenes/guardadas/eliminar', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
     $data = $request->getParsedBody();
-    $sql = 'DELETE FROM ordenes_tmp WHERE _id =  ' . $data['id'];
-    $object['response_delete'] = json_encode($localConnection->goQuery($sql));
-    $object['sql_delete'] = $sql;
+    $id = $data['id'];
+    $tipo = $data['tipo'] ?? 'Borrador'; // 'Presupuesto Finalizado' o cualquier otra cosa (Borrador)
 
-    $sql = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (
+    if ($tipo === 'Presupuesto Finalizado') {
+      // Eliminar presupuesto finalizado y sus productos
+      $sql1 = 'DELETE FROM presupuestos_productos WHERE id_orden = ' . $id;
+      $sql2 = 'DELETE FROM presupuestos WHERE _id = ' . $id;
+      $localConnection->goQuery($sql1);
+      $localConnection->goQuery($sql2);
+      $object['sql_delete'] = "$sql1; $sql2";
+    } else {
+      // Eliminar borrador
+      $sql = 'DELETE FROM ordenes_tmp WHERE _id =  ' . $id;
+      $localConnection->goQuery($sql);
+      $object['sql_delete'] = $sql;
+    }
+
+    $object['response_delete'] = "OK";
+
+    // Recargar la lista
+    $sqlLoad = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (
               SELECT a._id, a.form, a.tipo, b.id_usuario AS id_empleado, b.nombre AS empleado,
                      JSON_UNQUOTE(JSON_EXTRACT(a.form, '$.obs')) as observaciones,
                      JSON_EXTRACT(a.form, '$.productos') as productos_json
@@ -330,7 +352,7 @@ return function (App $app) {
             ) as combined
             ORDER BY _id DESC LIMIT 100";
 
-    $results = $localConnection->goQuery($sql);
+    $results = $localConnection->goQuery($sqlLoad);
     foreach ($results as &$item) {
         $prodsJson = $item['productos_json'] ?: '[]';
         $prods = (is_string($prodsJson)) ? json_decode($prodsJson, true) : $prodsJson;
@@ -352,6 +374,11 @@ return function (App $app) {
             }, $prods);
         } else {
             $item['productos_json'] = $prods;
+        }
+
+        // DECODE FORM field
+        if (isset($item['form']) && is_string($item['form'])) {
+            $item['form'] = json_decode($item['form'], true);
         }
     }
     $object['items'] = $results;
@@ -420,6 +447,11 @@ return function (App $app) {
             }, $prods);
         } else {
             $item['productos_json'] = $prods;
+        }
+
+        // DECODE FORM field
+        if (isset($item['form']) && is_string($item['form'])) {
+            $item['form'] = json_decode($item['form'], true);
         }
     }
     $object['items'] = $results;

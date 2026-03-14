@@ -76,7 +76,7 @@ class WooMe
                 'regular_price' => $product->regular_price,
                 'sale_price' => $product->sale_price,
                 'permalink' => $product->permalink,
-                'images' => !empty($product->images) ? $product->images[0]->src : 'https://cdn.nineteengreen.com/images/no-image.png',
+                'images' => !empty($product->images) ? $product->images[0]->src : 'https://cdn.nineteencustom.com/images/no-image.png',
                 'virtual' => $product->virtual,
                 'attributes' => $product->attributes,
                 'categories' => $product->categories
@@ -158,7 +158,7 @@ class WooMe
             'attributes' => $mySizes,
             'images' => [
                 [
-                    'src' => 'https://cdn.nineteengreen.com/images/no-image.png',
+                    'src' => 'https://cdn.nineteencustom.com/images/no-image.png',
                 ],
             ],
         ];
@@ -208,7 +208,7 @@ class WooMe
             'categories' => $categories_array,
             'images' => [
                 [
-                    'src' => 'https://cdn.nineteengreen.com/images/no-image.png',
+                    'src' => 'https://cdn.nineteencustom.com/images/no-image.png',
                 ],
             ],
         ];
@@ -318,7 +318,7 @@ class WooMe
                 'cod' => $product->id,
                 'name' => $product->name,
                 'permalink' => $product->permalink,
-                'images' => !empty($product->images) ? $product->images[0]->src : 'https://cdn.nineteengreen.com/images/no-image.png',
+                'images' => !empty($product->images) ? $product->images[0]->src : 'https://cdn.nineteencustom.com/images/no-image.png',
                 'virtual' => $product->virtual,
                 'attributes' => $product->attributes,
                 'categories' => $product->categories
