@@ -56,6 +56,8 @@ return function (App $app) {
         WHERE
             op.id_orden = ord._id
     ) AS total_orden,
+    (SELECT IFNULL(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id) AS total_descuento,
+    (SELECT IFNULL(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id) AS total_nota_credito,
     (
         SELECT
             CONCAT(
@@ -137,6 +139,8 @@ return function (App $app) {
                     WHERE
                         op.id_orden = ord._id
                 ) AS total_orden,
+                (SELECT IFNULL(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id) AS total_descuento,
+                (SELECT IFNULL(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id) AS total_nota_credito,
                 (
                     SELECT
                         CONCAT(
