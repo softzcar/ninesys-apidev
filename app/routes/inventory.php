@@ -2561,6 +2561,67 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
     });
 
+    /**
+     * GET /api/inventario/reporte
+     * Reporte general de inventario con filtros de fecha
+     */
+    $app->get('/api/inventario/reporte', function (Request $request, Response $response) {
+        try {
+            $params = $request->getQueryParams();
+            $fecha_inicio = $params['fecha_inicio'] ?? null;
+            $fecha_fin = $params['fecha_fin'] ?? null;
+
+            $localConnection = new LocalDB();
+            
+            $where = "";
+            $queryParams = [];
+            
+            if ($fecha_inicio && $fecha_fin) {
+                $where = " WHERE DATE(moment) BETWEEN ? AND ?";
+                $queryParams = [$fecha_inicio, $fecha_fin];
+            }
+
+            $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, color, departamento, moment 
+                    FROM inventario 
+                    {$where} 
+                    ORDER BY moment DESC";
+            
+            $items = $localConnection->goQuery($sql, $queryParams);
+            $localConnection->disconnect();
+
+            $fields = [
+                ['key' => 'sku', 'label' => 'SKU', 'sortable' => true],
+                ['key' => 'insumo', 'label' => 'Insumo', 'sortable' => true],
+                ['key' => 'unidad', 'label' => 'Unidad', 'sortable' => true],
+                ['key' => 'cantidad', 'label' => 'Stock', 'sortable' => true],
+                ['key' => 'costo', 'label' => 'Costo', 'sortable' => true],
+                ['key' => 'departamento', 'label' => 'Departamento', 'sortable' => true],
+                ['key' => 'moment', 'label' => 'Fecha Registro', 'sortable' => true]
+            ];
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'items' => $items ?? [],
+                'fields' => $fields
+            ], JSON_NUMERIC_CHECK));
+
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(200);
+
+        } catch (\Exception $e) {
+            if (isset($localConnection)) {
+                $localConnection->disconnect();
+            }
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'Error al generar reporte de inventario',
+                'error' => $e->getMessage()
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
     /** FIN INVENTARIO */
 
 }; // Fin de la función que envuelve las rutas
