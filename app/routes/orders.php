@@ -1897,7 +1897,8 @@ $object['sales_commission_ISSET'][] = false;
         $values .= $last_id . ',';
         $values .= $decodedObj['cod'] . ',';
         $values .= $decodedObj['cantidad'] . ',';
-        $values .= $decodedObj['categoria'] . ',';
+        $id_categoria = (isset($decodedObj['categoria']) && !empty($decodedObj['categoria'])) ? intval($decodedObj['categoria']) : 0;
+        $values .= $id_categoria . ',';
         $values .= "'" . $cat_name . "',";
         // $values .= "'" . $tmp["->name"] . "',";
 
@@ -2184,7 +2185,8 @@ $object['sales_commission_ISSET'][] = false;
         $values .= $last_id . ',';
         $values .= $decodedObj['cod'] . ',';
         $values .= $decodedObj['cantidad'] . ',';
-        $values .= $decodedObj['categoria'] . ',';
+        $id_categoria = (isset($decodedObj['categoria']) && !empty($decodedObj['categoria'])) ? intval($decodedObj['categoria']) : 0;
+        $values .= $id_categoria . ',';
         $values .= "'" . $cat_name . "',";
         // $values .= "'" . $tmp["->name"] . "',";
 
@@ -3020,7 +3022,8 @@ $object['sales_commission_ISSET'][] = false;
           $values .= $last_id . ',';
           $values .= $decodedObj['cod'] . ',';
           $values .= $decodedObj['cantidad'] . ',';
-          $values .= $decodedObj['categoria'] . ',';
+          $id_categoria = (isset($decodedObj['categoria']) && !empty($decodedObj['categoria'])) ? intval($decodedObj['categoria']) : 0;
+          $values .= $id_categoria . ',';
           $values .= "'" . $cat_name . "',";
           // $values .= "'" . $tmp["->name"] . "',";
 
@@ -3476,7 +3479,8 @@ $object['sales_commission_ISSET'][] = false;
           $values .= $last_id . ',';
           $values .= $decodedObj['cod'] . ',';
           $values .= $decodedObj['cantidad'] . ',';
-          $values .= $decodedObj['categoria'] . ',';
+          $id_categoria = (isset($decodedObj['categoria']) && !empty($decodedObj['categoria'])) ? intval($decodedObj['categoria']) : 0;
+          $values .= $id_categoria . ',';
           $values .= "'" . $cat_name . "',";
 
           if (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '') {
