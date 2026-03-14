@@ -2562,10 +2562,10 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     });
 
     /**
-     * GET /api/inventario/reporte
+     * GET /api/inventario/reportes/general
      * Reporte general de inventario con filtros por departamento
      */
-    $app->get('/api/inventario/reporte', function (Request $request, Response $response) {
+    $app->get('/api/inventario/reportes/general', function (Request $request, Response $response) {
         try {
             $params = $request->getQueryParams();
             $departamento = $params['departamento'] ?? null;
