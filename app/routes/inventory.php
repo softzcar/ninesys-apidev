@@ -1680,6 +1680,65 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     });
     /** FIN INSUMOS */
 
+    /**
+     * GET /inventario/reportes/general
+     * Reporte general de inventario con filtros por departamento
+     */
+    $app->get('/inventario/reportes/general', function (Request $request, Response $response) {
+        try {
+            $params = $request->getQueryParams();
+            $departamento = $params['departamento'] ?? null;
+
+            $localConnection = new LocalDB();
+            
+            $where = "";
+            $queryParams = [];
+            
+            if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') {
+                $where = " WHERE departamento = ?";
+                $queryParams = [$departamento];
+            }
+
+            $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, color, departamento, moment 
+                    FROM inventario 
+                    {$where} 
+                    ORDER BY insumo ASC";
+            
+            $items = $localConnection->goQuery($sql, $queryParams);
+            $localConnection->disconnect();
+
+            $fields = [
+                ['key' => 'sku', 'label' => 'SKU', 'sortable' => true],
+                ['key' => 'insumo', 'label' => 'Insumo', 'sortable' => true],
+                ['key' => 'unidad', 'label' => 'Unidad', 'sortable' => true],
+                ['key' => 'cantidad', 'label' => 'Stock', 'sortable' => true],
+                ['key' => 'costo', 'label' => 'Costo', 'sortable' => true],
+                ['key' => 'departamento', 'label' => 'Departamento', 'sortable' => true]
+            ];
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'items' => $items ?? [],
+                'fields' => $fields
+            ], JSON_NUMERIC_CHECK));
+
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(200);
+
+        } catch (\Exception $e) {
+            if (isset($localConnection)) {
+                $localConnection->disconnect();
+            }
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'Error al generar reporte de inventario',
+                'error' => $e->getMessage()
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
     /** INVENTARIO */
     $app->get('/inventario/{departamento}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
@@ -2558,65 +2617,6 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             return $response
                 ->withHeader('Content-Type', 'application/json')
                 ->withStatus(500);
-        }
-    });
-
-    /**
-     * GET /api/inventario/reportes/general
-     * Reporte general de inventario con filtros por departamento
-     */
-    $app->get('/api/inventario/reportes/general', function (Request $request, Response $response) {
-        try {
-            $params = $request->getQueryParams();
-            $departamento = $params['departamento'] ?? null;
-
-            $localConnection = new LocalDB();
-            
-            $where = "";
-            $queryParams = [];
-            
-            if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') {
-                $where = " WHERE departamento = ?";
-                $queryParams = [$departamento];
-            }
-
-            $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, color, departamento, moment 
-                    FROM inventario 
-                    {$where} 
-                    ORDER BY insumo ASC";
-            
-            $items = $localConnection->goQuery($sql, $queryParams);
-            $localConnection->disconnect();
-
-            $fields = [
-                ['key' => 'sku', 'label' => 'SKU', 'sortable' => true],
-                ['key' => 'insumo', 'label' => 'Insumo', 'sortable' => true],
-                ['key' => 'unidad', 'label' => 'Unidad', 'sortable' => true],
-                ['key' => 'cantidad', 'label' => 'Stock', 'sortable' => true],
-                ['key' => 'costo', 'label' => 'Costo', 'sortable' => true],
-                ['key' => 'departamento', 'label' => 'Departamento', 'sortable' => true]
-            ];
-
-            $response->getBody()->write(json_encode([
-                'success' => true,
-                'items' => $items ?? [],
-                'fields' => $fields
-            ], JSON_NUMERIC_CHECK));
-
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus(200);
-
-        } catch (\Exception $e) {
-            if (isset($localConnection)) {
-                $localConnection->disconnect();
-            }
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => 'Error al generar reporte de inventario',
-                'error' => $e->getMessage()
-            ]));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
     });
 
