@@ -293,7 +293,7 @@ return function (App $app) {
 
     $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode(str_replace("\r", '', $object)));
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
 
     return $response
       ->withHeader('Content-Type', 'application/json')
