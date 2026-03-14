@@ -2563,28 +2563,27 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
     /**
      * GET /api/inventario/reporte
-     * Reporte general de inventario con filtros de fecha
+     * Reporte general de inventario con filtros por departamento
      */
     $app->get('/api/inventario/reporte', function (Request $request, Response $response) {
         try {
             $params = $request->getQueryParams();
-            $fecha_inicio = $params['fecha_inicio'] ?? null;
-            $fecha_fin = $params['fecha_fin'] ?? null;
+            $departamento = $params['departamento'] ?? null;
 
             $localConnection = new LocalDB();
             
             $where = "";
             $queryParams = [];
             
-            if ($fecha_inicio && $fecha_fin) {
-                $where = " WHERE DATE(moment) BETWEEN ? AND ?";
-                $queryParams = [$fecha_inicio, $fecha_fin];
+            if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') {
+                $where = " WHERE departamento = ?";
+                $queryParams = [$departamento];
             }
 
             $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, color, departamento, moment 
                     FROM inventario 
                     {$where} 
-                    ORDER BY moment DESC";
+                    ORDER BY insumo ASC";
             
             $items = $localConnection->goQuery($sql, $queryParams);
             $localConnection->disconnect();
@@ -2595,8 +2594,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 ['key' => 'unidad', 'label' => 'Unidad', 'sortable' => true],
                 ['key' => 'cantidad', 'label' => 'Stock', 'sortable' => true],
                 ['key' => 'costo', 'label' => 'Costo', 'sortable' => true],
-                ['key' => 'departamento', 'label' => 'Departamento', 'sortable' => true],
-                ['key' => 'moment', 'label' => 'Fecha Registro', 'sortable' => true]
+                ['key' => 'departamento', 'label' => 'Departamento', 'sortable' => true]
             ];
 
             $response->getBody()->write(json_encode([
