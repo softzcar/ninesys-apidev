@@ -27,6 +27,21 @@ perform_backend_deploy() {
     echo "Branch: $BRANCH"
     echo "Ruta:   $REMOTE_PATH"
 
+    # 0. Verificar cambios locales sin confirmar
+    echo ">>> Paso 0: Verificando cambios locales sin confirmar..."
+    if ! git diff-index --quiet HEAD --; then
+        echo "⚠️ ADVERTENCIA: Tienes cambios locales sin confirmar (uncommitted changes)."
+        echo "Los siguientes archivos han sido modificados localmente:"
+        git status -s
+        echo "------------------------------------------------"
+        echo "¿Deseas continuar con el despliegue de todas formas (usando solo el último commit)? (s/n)"
+        read CONTINUE_UNCOMMITTED
+        if [ "$CONTINUE_UNCOMMITTED" != "s" ]; then
+            echo "Despliegue cancelado. Por favor, realiza un commit de tus cambios antes de desplegar."
+            return 1
+        fi
+    fi
+
     # 1. Asegurar cambios locales en el repositorio central
     echo ">>> Paso 1: Verificando sincronización con GitHub..."
     git fetch origin "$BRANCH" > /dev/null 2>&1
@@ -40,19 +55,27 @@ perform_backend_deploy() {
         echo ">>> Subiendo cambios locales a GitHub (git push origin $BRANCH)..."
         git push origin "$BRANCH"
         if [ $? -ne 0 ]; then
-            echo "¡ERROR! Falló el git push. El servidor no podrá actualizarse."
+            echo "❌ ¡ERROR! Falló el git push. El servidor no podrá actualizarse."
             return 1
         fi
     fi
 
     # 2. Actualizar el servidor remoto
     echo ">>> Paso 2: Actualizando servidor remoto ($TARGET)..."
-    ssh "$REMOTE_ALIAS" "cd $REMOTE_PATH && git fetch origin && git checkout $BRANCH && git pull origin $BRANCH"
+    ssh "$REMOTE_ALIAS" "cd $REMOTE_PATH && \
+        echo '>>> En el servidor: Fetching cambios...' && \
+        git fetch origin && \
+        echo '>>> En el servidor: Checking out branch $BRANCH...' && \
+        git checkout $BRANCH && \
+        echo '>>> En el servidor: Pulling cambios...' && \
+        git pull origin $BRANCH"
 
     if [ $? -eq 0 ]; then
         echo "✅ DESPLIEGUE EN $TARGET COMPLETADO CON ÉXITO"
+        ssh "$REMOTE_ALIAS" "cd $REMOTE_PATH && echo 'HEAD Remoto: ' && git rev-parse --short HEAD"
     else
         echo "❌ ERROR DURANTE EL DESPLIEGUE EN $TARGET"
+        echo "Sugerencia: Conéctate vía SSH ($REMOTE_ALIAS) y verifica si hay conflictos o cambios locales en el servidor."
         return 1
     fi
     echo ""
