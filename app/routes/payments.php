@@ -1012,7 +1012,7 @@ return function (App $app) {
         metodos_de_pago e ON e._id = a.id_metodos_de_pago
         JOIN
         pagos_salarios ps ON ps.id_pago = a._id
-        WHERE ps.numero_semana = {$args['semana']} AND a.fecha_pago IS NOT NULL
+        WHERE ps.numero_semana = {$args['semana']} AND a.fecha_pago IS NOT NULL AND a.detalle = 'Comercialización'
         GROUP BY
         a._id
         ORDER BY
