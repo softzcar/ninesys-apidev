@@ -548,11 +548,11 @@ return function (App $app) {
                     c.salario_periodo,
                     a.detalle AS departamento,
                     o.pago_total AS monto_orden,
-                    DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
-                    DATE_FORMAT(b.fecha_terminado, '%v') AS semana,
-                    DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
+                    COALESCE(DATE_FORMAT(b.fecha_terminado, '%a'), DATE_FORMAT(a.moment, '%a')) AS dia,
+                    COALESCE(DATE_FORMAT(b.fecha_terminado, '%v'), DATE_FORMAT(a.moment, '%v')) AS semana,
+                    COALESCE(DATE_FORMAT(b.fecha_terminado, '%d/%m/%y'), DATE_FORMAT(a.moment, '%d/%m/%y')) AS fecha,
                     a.fecha_pago,
-                    TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
+                    COALESCE(TIMEDIFF(b.fecha_terminado, b.fecha_inicio), '') AS tiempo_transcurrido,
                     a.cantidad as cantidad
                 FROM
                     pagos a
@@ -565,7 +565,7 @@ return function (App $app) {
                 WHERE
                     a.fecha_pago IS NULL
                     AND a.comision_tipo = 'fija'
-                    AND a.id_lotes_detalles IS NOT NULL";
+                    AND (a.id_lotes_detalles IS NOT NULL OR (a.detalle NOT IN ('Comercialización', 'Diseño') AND a.id_orden > 0))";
 
     $pagos_fijos = $localConnection->goQuery($sql_fija);
     if (!is_array($pagos_fijos) || (isset($pagos_fijos['status']) && $pagos_fijos['status'] === 'error')) {
@@ -591,11 +591,11 @@ return function (App $app) {
                         c.salario_periodo,
                         a.detalle AS departamento,
                         o.pago_total AS monto_orden,
-                        DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
-                        DATE_FORMAT(b.fecha_terminado, '%v') AS semana,
-                        DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
+                        COALESCE(DATE_FORMAT(b.fecha_terminado, '%a'), DATE_FORMAT(a.moment, '%a')) AS dia,
+                        COALESCE(DATE_FORMAT(b.fecha_terminado, '%v'), DATE_FORMAT(a.moment, '%v')) AS semana,
+                        COALESCE(DATE_FORMAT(b.fecha_terminado, '%d/%m/%y'), DATE_FORMAT(a.moment, '%d/%m/%y')) AS fecha,
                         a.fecha_pago,
-                        TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
+                        COALESCE(TIMEDIFF(b.fecha_terminado, b.fecha_inicio), '') AS tiempo_transcurrido,
                         a.cantidad as cantidad
                     FROM
                         pagos a
@@ -608,7 +608,7 @@ return function (App $app) {
                     WHERE
                         a.fecha_pago IS NULL
                         AND a.comision_tipo = 'variable'
-                        AND a.id_lotes_detalles IS NOT NULL";
+                        AND (a.id_lotes_detalles IS NOT NULL OR (a.detalle NOT IN ('Comercialización', 'Diseño') AND a.id_orden > 0))";
 
     $pagos_variables = $localConnection->goQuery($sql_variable);
     if (!is_array($pagos_variables) || (isset($pagos_variables['status']) && $pagos_variables['status'] === 'error')) {
@@ -634,11 +634,11 @@ return function (App $app) {
                         c.salario_periodo,
                         a.detalle AS departamento,
                         o.pago_total AS monto_orden,
-                        DATE_FORMAT(b.fecha_terminado, '%a') AS dia,
-                        DATE_FORMAT(b.fecha_terminado, '%v') AS semana,
-                        DATE_FORMAT(b.fecha_terminado, '%d/%m/%y') AS fecha,
+                        COALESCE(DATE_FORMAT(b.fecha_terminado, '%a'), DATE_FORMAT(a.moment, '%a')) AS dia,
+                        COALESCE(DATE_FORMAT(b.fecha_terminado, '%v'), DATE_FORMAT(a.moment, '%v')) AS semana,
+                        COALESCE(DATE_FORMAT(b.fecha_terminado, '%d/%m/%y'), DATE_FORMAT(a.moment, '%d/%m/%y')) AS fecha,
                         a.fecha_pago,
-                        TIMEDIFF(b.fecha_terminado, b.fecha_inicio) AS tiempo_transcurrido,
+                        COALESCE(TIMEDIFF(b.fecha_terminado, b.fecha_inicio), '') AS tiempo_transcurrido,
                         0 AS precio_producto,
                         a.cantidad as cantidad
                     FROM
@@ -652,7 +652,7 @@ return function (App $app) {
                     WHERE
                         a.fecha_pago IS NULL
                         AND a.comision_tipo = 'porcentaje'
-                        AND a.id_lotes_detalles IS NOT NULL";
+                        AND (a.id_lotes_detalles IS NOT NULL OR (a.detalle NOT IN ('Comercialización', 'Diseño') AND a.id_orden > 0))";
 
     $pagos_porcentaje = $localConnection->goQuery($sql_porcentaje);
     if (!is_array($pagos_porcentaje) || (isset($pagos_porcentaje['status']) && $pagos_porcentaje['status'] === 'error')) {
@@ -752,7 +752,7 @@ return function (App $app) {
                 a._id AS id_pago,
                 a.id_orden,
                 a.id_empleado,
-                a.detalle,
+                a.detalle AS departamento,
                 a.cantidad,
                 a.monto_pago AS pago,
                 -- (a.comision * a.cantidad) pago,
@@ -779,7 +779,7 @@ return function (App $app) {
             LEFT JOIN metodos_de_pago e ON
                 e._id = a.id_metodos_de_pago
             WHERE
-                a.fecha_pago IS NULL AND d.status != 'cancelada'
+                a.fecha_pago IS NULL AND d.status != 'cancelada' AND a.detalle = 'Comercialización'
             GROUP BY
                 a._id
             ORDER BY
