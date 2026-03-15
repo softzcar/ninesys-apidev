@@ -137,6 +137,14 @@ return function (App $app) {
           $sql = "SELECT salario_periodo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?";
           $resultUsuario = $localConnection->goQuery($sql, [$idEmpleado]);
           $periodo = isset($resultUsuario[0]['salario_periodo']) ? $resultUsuario[0]['salario_periodo'] : 'semanal';
+          
+          // Refuerzo de cálculo: Si el salario viene del mes completo, prorratear
+          $salarioMontoReal = $salario;
+          if ($periodo === 'semanal') {
+            $salarioMontoReal = $salario / 4;
+          } elseif ($periodo === 'quincenal') {
+            $salarioMontoReal = $salario / 2;
+          }
 
           // Calcular el índice del periodo según la frecuencia para el histórico
           $numeroPeriodo = intval(date('W')); // Default: semana
@@ -153,7 +161,7 @@ return function (App $app) {
           }
 
           // Dividir el salario entre la cantidad de pagos
-          $salarioPorPago = $salario / $cantidadDePagos;
+          $salarioPorPago = $salarioMontoReal / $cantidadDePagos;
           foreach ($listaDeIdPagos as $idPago) {
             $sql = "INSERT INTO pagos_salarios (id_pago, tipo_salario, numero_semana, monto) VALUES (?, ?, ?, ?)";
             $localConnection->goQuery($sql, [$idPago, $periodo, $numeroPeriodo, $salarioPorPago]);
@@ -162,7 +170,7 @@ return function (App $app) {
       }
 
       // Calcular el monto total del pago y el monto por cada registro de pago
-      $montoTotalPago = ($salario + $comision + $totalBonos) - $totalDescuentos;
+      $montoTotalPago = ($salarioMontoReal + $comision + $totalBonos) - $totalDescuentos;
       $montoPorRegistroDePago = $montoTotalPago / $cantidadDePagos;
 
       // Crear placeholders (?) para la cláusula IN
@@ -312,6 +320,14 @@ return function (App $app) {
             $resultUsuario = $localConnection->goQuery($sql, [$idEmpleado]);
             $periodo = isset($resultUsuario[0]['salario_periodo']) ? $resultUsuario[0]['salario_periodo'] : 'semanal';
 
+            // Refuerzo de cálculo: Si el salario viene del mes completo, prorratear
+            $salarioMontoReal = $salario;
+            if ($periodo === 'semanal') {
+              $salarioMontoReal = $salario / 4;
+            } elseif ($periodo === 'quincenal') {
+              $salarioMontoReal = $salario / 2;
+            }
+
             // Calcular el índice del periodo según la frecuencia para el histórico
             $numeroPeriodo = intval(date('W')); // Default: semana
             if ($periodo === 'quincenal') {
@@ -329,7 +345,7 @@ return function (App $app) {
               $numeroPeriodo = intval(date('W')); 
             }
 
-            $salarioPorPago = $salario / $cantidadDePagos;
+            $salarioPorPago = $salarioMontoReal / $cantidadDePagos;
             foreach ($idsParaPago as $idPago) {
               $sql = "INSERT INTO pagos_salarios (id_pago, tipo_salario, numero_semana, monto) VALUES (?, ?, ?, ?)";
               $localConnection->goQuery($sql, [$idPago, $periodo, $numeroPeriodo, $salarioPorPago]);
@@ -337,7 +353,7 @@ return function (App $app) {
           }
 
           // Calcular el monto total del pago y el monto por cada registro de pago
-          $montoTotalPago = ($salario + $comision + $totalBonosAplicados) - $totalDescuentosAplicados;
+          $montoTotalPago = ($salarioMontoReal + $comision + $totalBonosAplicados) - $totalDescuentosAplicados;
           $montoPorRegistroDePago = $montoTotalPago / $cantidadDePagos;
 
           $totalMontoPagadoLote += $montoTotalPago;
