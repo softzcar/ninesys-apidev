@@ -120,6 +120,7 @@ return function (App $app) {
       }
 
       // Procesar salario si existe
+      $salarioMontoReal = $salario;
       if ($salario > 0) {
         $idEmpleado = $data['id_empleado'] ?? null;
 
@@ -139,7 +140,6 @@ return function (App $app) {
           $periodo = isset($resultUsuario[0]['salario_periodo']) ? $resultUsuario[0]['salario_periodo'] : 'semanal';
           
           // Refuerzo de cálculo: Si el salario viene del mes completo, prorratear
-          $salarioMontoReal = $salario;
           if ($periodo === 'semanal') {
             $salarioMontoReal = $salario / 4;
           } elseif ($periodo === 'quincenal') {
@@ -313,15 +313,15 @@ return function (App $app) {
             }
           }
 
-          // Procesar salario si existe
-          if ($salario > 0 && $idEmpleado) {
-            // Buscar frecuencia de salario
+        // Procesar salario si existe
+        $salarioMontoReal = $salario;
+        if ($salario > 0 && $idEmpleado) {
+          // Buscar frecuencia de salario
             $sql = "SELECT salario_periodo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?";
             $resultUsuario = $localConnection->goQuery($sql, [$idEmpleado]);
             $periodo = isset($resultUsuario[0]['salario_periodo']) ? $resultUsuario[0]['salario_periodo'] : 'semanal';
 
             // Refuerzo de cálculo: Si el salario viene del mes completo, prorratear
-            $salarioMontoReal = $salario;
             if ($periodo === 'semanal') {
               $salarioMontoReal = $salario / 4;
             } elseif ($periodo === 'quincenal') {
