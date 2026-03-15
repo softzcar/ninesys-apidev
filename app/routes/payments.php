@@ -324,6 +324,9 @@ return function (App $app) {
               $mes = intval(date('n')) - 1; // 0-11
               $anio = intval(date('Y'));
               $numeroPeriodo = $anio * 12 + $mes;
+            } else {
+              // Alinear con WEEK(NOW(), 1) de MySQL
+              $numeroPeriodo = intval(date('W')); 
             }
 
             $salarioPorPago = $salario / $cantidadDePagos;
@@ -692,27 +695,7 @@ return function (App $app) {
                     WHERE
                         eu.id_empresa = {$id_empresa}
                         AND eu.salario_monto > 0
-                        AND eu.activo = 1
-                        AND NOT EXISTS (
-                            SELECT 1 FROM pagos p 
-                            WHERE p.id_empleado = eu.id_usuario 
-                            AND p.fecha_pago IS NULL
-                            AND p.id_orden > 0
-                        )
-                        -- Ocultar si ya se pagó el salario de este periodo (semana/quincena/mes) 
-                        -- (Calculamos el periodo actual igual que en el proceso de inserción)
-                        AND (
-                            SELECT COUNT(*) FROM " . LOCAL_DB . ".pagos_salarios ps 
-                            JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id 
-                            WHERE pa.id_empleado = eu.id_usuario 
-                            AND ps.numero_semana = (
-                                CASE 
-                                    WHEN eu.salario_periodo = 'quincenal' THEN (YEAR(NOW()) * 24 + (MONTH(NOW())-1) * 2 + IF(DAY(NOW())<=15, 1, 2))
-                                    WHEN eu.salario_periodo = 'mensual' THEN (YEAR(NOW()) * 12 + (MONTH(NOW())-1))
-                                    ELSE WEEK(NOW()) 
-                                END
-                            )
-                        ) = 0";
+                        AND eu.activo = 1";
 
     $pagos_administrativos = $localConnection->goQuery($sql_administrativo);
     if (!is_array($pagos_administrativos) || (isset($pagos_administrativos['status']) && $pagos_administrativos['status'] === 'error')) {
@@ -1161,7 +1144,7 @@ return function (App $app) {
 
     if (isset($data['numero_semana'])) {
       //
-      $where = 'WEEK(e.moment) = ' . $data['numero_semana'] . "%' AND e.fecha_pago IS NULL";
+      $where = 'WEEK(e.moment, 1) = ' . $data['numero_semana'] . "%' AND e.fecha_pago IS NULL";
       // $where = "e.moment LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL";
       $whereEmpleados = "b.fecha_terminado LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL ";
     } else {
