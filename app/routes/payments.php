@@ -62,6 +62,7 @@ return function (App $app) {
     $listaDeIdPagos = array_filter($listaDeIdPagos, function ($id) {
       return $id > 0;
     });
+    $listaDeIdPagos = array_values($listaDeIdPagos);
     $cantidadDePagos = count($listaDeIdPagos);
 
     // ========== VALIDACIONES ==========
@@ -128,7 +129,7 @@ return function (App $app) {
         if (!$idEmpleado && count($listaDeIdPagos) > 0) {
           $sqlEmp = "SELECT id_empleado FROM pagos WHERE _id = ?";
           $resEmp = $localConnection->goQuery($sqlEmp, [$listaDeIdPagos[0]]);
-          if (isset($resEmp[0]['id_empleado'])) {
+          if (!empty($resEmp) && isset($resEmp[0]['id_empleado'])) {
             $idEmpleado = $resEmp[0]['id_empleado'];
           }
         }
@@ -706,7 +707,7 @@ return function (App $app) {
                         0 as cantidad,
                         (SELECT numero_semana FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = eu.id_usuario ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
                         (SELECT YEAR(pa.moment) FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = eu.id_usuario ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
-                        (SELECT DATE_FORMAT(pa.fecha_pago, '%d/%m/%Y') FROM " . LOCAL_DB . ".pagos pa WHERE pa.id_empleado = eu.id_usuario AND pa.fecha_pago IS NOT NULL AND WEEK(pa.fecha_pago, 1) = WEEK(NOW(), 1) AND YEAR(pa.fecha_pago) = YEAR(NOW()) ORDER BY pa.fecha_pago DESC LIMIT 1) ultima_fecha_pago
+                        (SELECT DATE_FORMAT(pa.fecha_pago, '%d/%m/%Y') FROM " . LOCAL_DB . ".pagos pa LEFT JOIN " . LOCAL_DB . ".pagos_salarios ps ON ps.id_pago = pa._id WHERE pa.id_empleado = eu.id_usuario AND pa.fecha_pago IS NOT NULL AND (WEEK(pa.fecha_pago, 1) = WEEK(NOW(), 1) OR ps.numero_semana = WEEK(NOW(), 1)) AND YEAR(pa.fecha_pago) = YEAR(NOW()) ORDER BY pa.fecha_pago DESC LIMIT 1) ultima_fecha_pago
                     FROM
                         api_empresas.empresas_usuarios eu
                     WHERE
