@@ -31,7 +31,7 @@ return function (App $app) {
             a.id_seguridad_social,
             (SELECT numero_semana FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_usuario ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
             (SELECT YEAR(pa.moment) FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_usuario ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
-            (SELECT DATE_FORMAT(pa.fecha_pago, "%d/%m/%Y") FROM ' . LOCAL_DB . '.pagos pa WHERE pa.id_empleado = a.id_usuario AND pa.fecha_pago IS NOT NULL ORDER BY pa.fecha_pago DESC LIMIT 1) ultima_fecha_pago,
+            (SELECT DATE_FORMAT(pa.fecha_pago, "%d/%m/%Y") FROM ' . LOCAL_DB . '.pagos pa WHERE pa.id_empleado = a.id_usuario AND pa.fecha_pago IS NOT NULL AND WEEK(pa.fecha_pago, 1) = WEEK(NOW(), 1) AND YEAR(pa.fecha_pago) = YEAR(NOW()) ORDER BY pa.fecha_pago DESC LIMIT 1) ultima_fecha_pago,
             IFNULL(CONCAT("[", GROUP_CONCAT(
                 DISTINCT CONCAT("{\"id\":", b.id_departamento, ",\"nombre\":\"", c.departamento, "\"}")
                 SEPARATOR ","), "]"), "[]") AS departamentos,
