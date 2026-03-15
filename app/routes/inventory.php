@@ -2628,6 +2628,115 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
     });
 
+    /**
+     * GET /inventario/reportes/movimientos
+     * Reporte de movimientos de inventario con auditoría
+     */
+    $app->get('/inventario/reportes/movimientos', function (Request $request, Response $response) {
+        try {
+            $params = $request->getQueryParams();
+            $inicio = $params['inicio'] ?? null;
+            $fin = $params['fin'] ?? null;
+            $departamento = $params['departamento'] ?? null;
+            $insumo = $params['insumo'] ?? null;
+            
+            $localConnection = new LocalDB();
+            
+            $where = ["1=1"];
+            $queryParams = [];
+            
+            if ($inicio && $fin) {
+                $where[] = "DATE(m.moment) BETWEEN ? AND ?";
+                $queryParams[] = $inicio;
+                $queryParams[] = $fin;
+            }
+            
+            if ($departamento && $departamento !== 'Todas') {
+                $where[] = "m.departamento = ?";
+                $queryParams[] = $departamento;
+            }
+            
+            if ($insumo) {
+                $where[] = "(i.sku LIKE ? OR i.insumo LIKE ?)";
+                $queryParams[] = "%$insumo%";
+                $queryParams[] = "%$insumo%";
+            }
+            
+            $whereStr = implode(" AND ", $where);
+            
+            $sql = "SELECT 
+                        m._id, 
+                        m.moment, 
+                        m.departamento, 
+                        m.id_insumo, 
+                        i.sku, 
+                        i.insumo as nombre_insumo, 
+                        m.id_orden, 
+                        m.valor_inicial, 
+                        m.valor_final, 
+                        ROUND(ABS(m.valor_inicial - m.valor_final), 2) as cantidad_consumida,
+                        (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = m.id_empleado) as usuario_nombre,
+                        (SELECT COUNT(*) FROM inventario_movimientos_historial h WHERE h.id_movimiento = m._id) as historial_count
+                    FROM inventario_movimientos m
+                    LEFT JOIN inventario i ON m.id_insumo = i._id
+                    WHERE {$whereStr}
+                    ORDER BY m.moment DESC, m._id DESC";
+            
+            $items = $localConnection->goQuery($sql, $queryParams);
+            $localConnection->disconnect();
+            
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'items' => $items ?? []
+            ], JSON_NUMERIC_CHECK));
+            
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+            
+        } catch (\Exception $e) {
+            if (isset($localConnection)) $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    /**
+     * GET /inventario/movimientos/{id}/historial
+     * Detalle de auditoría de un movimiento
+     */
+    $app->get('/inventario/movimientos/{id}/historial', function (Request $request, Response $response, array $args) {
+        try {
+            $id_movimiento = $args['id'];
+            $localConnection = new LocalDB();
+            
+            $sql = "SELECT 
+                        h._id,
+                        h.campo_modificado,
+                        h.valor_anterior,
+                        h.valor_nuevo,
+                        h.observaciones,
+                        h.moment as fecha,
+                        (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = h.id_usuario_modificacion) as usuario_nombre
+                    FROM inventario_movimientos_historial h
+                    WHERE h.id_movimiento = ?
+                    ORDER BY h.moment DESC";
+            
+            $items = $localConnection->goQuery($sql, [$id_movimiento]);
+            $localConnection->disconnect();
+            
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'items' => $items ?? []
+            ], JSON_NUMERIC_CHECK));
+            
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+            
+        } catch (\Exception $e) {
+            if (isset($localConnection)) $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
     /** FIN INVENTARIO */
 
 }; // Fin de la función que envuelve las rutas
