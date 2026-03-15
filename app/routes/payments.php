@@ -1010,7 +1010,9 @@ return function (App $app) {
         ordenes d ON a.id_orden = d._id
         LEFT JOIN
         metodos_de_pago e ON e._id = a.id_metodos_de_pago
-        WHERE WEEK(a.fecha_pago, 1) = {$args['semana']} AND a.fecha_pago IS NOT NULL
+        JOIN
+        pagos_salarios ps ON ps.id_pago = a._id
+        WHERE ps.numero_semana = {$args['semana']} AND a.fecha_pago IS NOT NULL
         GROUP BY
         a._id
         ORDER BY
@@ -1028,7 +1030,7 @@ return function (App $app) {
         p.id_empleado 
         FROM pagos_salarios ps 
         JOIN pagos p ON ps.id_pago = p._id 
-        WHERE WEEK(p.fecha_pago, 1) = {$args['semana']} AND p.fecha_pago IS NOT NULL
+        WHERE ps.numero_semana = {$args['semana']} AND p.fecha_pago IS NOT NULL
         GROUP BY p.id_empleado"; // Agrupamos por empleado porque el salario es por periodo, no por orden individual necesariamente para el recibo global
 
     $salariosData = $localConnection->goQuery($sqlSalarios);
@@ -1041,7 +1043,8 @@ return function (App $app) {
         p.id_empleado 
         FROM pagos_abonos pa 
         JOIN pagos p ON pa.id_pago = p._id 
-        WHERE WEEK(p.fecha_pago, 1) = {$args['semana']} AND p.fecha_pago IS NOT NULL";
+        JOIN pagos_salarios ps ON ps.id_pago = p._id
+        WHERE ps.numero_semana = {$args['semana']} AND p.fecha_pago IS NOT NULL";
 
     $bonosData = $localConnection->goQuery($sqlBonos);
     $object['data']['bonos_detalles'] = $bonosData ?: [];
@@ -1053,7 +1056,8 @@ return function (App $app) {
         p.id_empleado 
         FROM pagos_descuentos pd 
         JOIN pagos p ON pd.id_pago = p._id 
-        WHERE WEEK(p.fecha_pago, 1) = {$args['semana']} AND p.fecha_pago IS NOT NULL";
+        JOIN pagos_salarios ps ON ps.id_pago = p._id
+        WHERE ps.numero_semana = {$args['semana']} AND p.fecha_pago IS NOT NULL";
 
     $descuentosData = $localConnection->goQuery($sqlDescuentos);
     $object['data']['descuentos_detalles'] = $descuentosData ?: [];
@@ -1084,7 +1088,8 @@ return function (App $app) {
             pagos a
             LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
             JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
-            WHERE WEEK(a.fecha_pago, 1) = ' . $args['semana'] . ' AND a.fecha_pago IS NOT NULL
+            JOIN pagos_salarios ps ON ps.id_pago = a._id
+            WHERE ps.numero_semana = ' . $args['semana'] . ' AND a.fecha_pago IS NOT NULL
             ORDER BY
             c.nombre ASC,
             a.id_orden ASC,
