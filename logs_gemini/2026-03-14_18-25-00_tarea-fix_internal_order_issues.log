@@ -1,0 +1,23 @@
+- **Solicitud del Usuario:** En al página /comercializacion/ordenes al seleccionar crear nua orden interna intorducir todos los datos del Wizard suceden dos cosas, la primera es que en la pestña emitir orden (img 2) no se meuestran detalles de productos y al finalziar la orden el endpoint https://api.nineteengreen.com/ordenes/nueva/custom con el payload ... da un error 500.
+- **Fecha y Hora:** 2026-03-14 18:25:00
+- **Proyecto(s):** Ambos (Frontend / Backend)
+- **Archivos Involucrados:**
+    - /home/developer/Escritorio/niesys/ninesys-apidev/app/routes/orders.php
+    - /home/developer/Escritorio/niesys/app_multi/components/ordenes/nueva.vue
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: N/A
+- **Acción Realizada:** 
+    1. **Backend**: Se modificó el endpoint `/ordenes/nueva/custom` en `orders.php` para manejar la ausencia de la clave 'precio' en los objetos de productos. Esto ocurría específicamente en órdenes internas donde el precio no es enviado. Se implementó un valor por defecto de 0.
+    2. **Frontend**: Se extrajo la lógica de preparación de datos para la vista previa (`formPrint`) en el componente `nueva.vue` a un nuevo método `prepareFormPrint()`. Se agregó el llamado a este método en `validateStep2()` cuando la orden es interna (`guardarStock: true`), ya que estas órdenes saltan el paso de pagos (Step 3) donde antes se ejecutaba esta lógica.
+- **Inconvenientes y Desafíos:** Se experimentó una pequeña corrupción accidental en el método `step3()` durante la aplicación de los cambios con `replace_file_content`, la cual fue detectada por el linter y corregida inmediatamente restaurando la estructura correcta del método.
+- **Decisión Final y Justificación:** Se optó por asignar un precio de 0 por defecto en el backend para evitar el error 500, ya que las órdenes de producción interna no requieren transacciones monetarias inmediatas en el registro de productos. En el frontend, la abstracción de `prepareFormPrint` mejora la mantenibilidad y resuelve el problema de la vista previa vacía al saltar pasos del wizard.
+- **Herramienta(s) Utilizada(s):** `view_file`, `grep_search`, `replace_file_content`, `multi_replace_file_content`, `write_to_file`, `run_command`
+- **Resultado:** Éxito
+- **Verificación:** Se verificó la lógica del backend mediante un script de prueba (`/tmp/verify_fix.php`) que validó el manejo de claves ausentes. En el frontend se comprobó mediante inspección de código que el objeto `formPrint` se puebla correctamente antes de navegar al tab final.
+- **Logro Conseguido:** Eliminación del error 500 al crear órdenes internas y corrección de la visualización de productos en el resumen final de la orden.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/f143fe36-6047-454a-b9fa-ea5a04fa9213/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/f143fe36-6047-454a-b9fa-ea5a04fa9213/walkthrough.md)
+- **Observaciones de Gemini:** La estructura del wizard es compleja y el salto de pasos manual entre validaciones facilita que se olviden sincronizaciones de estado como `formPrint`. La abstracción fue la solución más limpia.
+- **Respuesta de Gemini:** Se corrigieron ambos problemas: el error 500 en el backend (por falta de 'precio') y la falta de detalles en el frontend (por saltar la preparación de la vista previa).

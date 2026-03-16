@@ -642,6 +642,10 @@ return function (App $app) {
 
   // TODAS LAS ORDENES
   $app->get('/table/ordenes-todas', function (Request $request, Response $response) {
+    $params = $request->getQueryParams();
+    $fecha_inicio = $params['fecha_inicio'] ?? date('Y-m-01');
+    $fecha_fin = $params['fecha_fin'] ?? date('Y-m-d');
+
     $localConnection = new LocalDB();
 
     $sql = "SELECT
@@ -684,6 +688,10 @@ FROM
     ordenes ord
 JOIN customers cus ON ord.id_wp = cus._id
 LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
+WHERE 
+    (ord.fecha_inicio >= '$fecha_inicio' AND ord.fecha_inicio <= '$fecha_fin') OR
+    (ord.fecha_entrega >= '$fecha_inicio' AND ord.fecha_entrega <= '$fecha_fin') OR
+    (ord.fecha_inicio <= '$fecha_inicio' AND ord.fecha_entrega >= '$fecha_fin')
 ORDER BY
     ord._id
 DESC;";

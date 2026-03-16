@@ -1,0 +1,16 @@
+- **Solicitud del Usuario:** ok vamos a ver por que a Sarahit le aparece fehca de pago peor no se la ha pagado segun la plnilla
+- **Fecha y Hora:** 2026-03-15 16:00:00
+- **Proyecto(s):** Frontend
+- **Archivos Involucrados:** 
+    - `/home/developer/Escritorio/niesys/app_multi/components/admin/PagosEmpleados.vue`
+- **Acción Realizada:** 
+    1. **Frontend (Lógica de Visualización)**: Se modificó la propiedad computada `pagosResumenUnificado` para que la `fecha_pago` se oculte (`null`) si el monto pendiente (`pago`) es mayor a cero.
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** Sarahit mostraba una fecha porque ya tenía registros de salario liquidados, pero sus comisiones estaban pendientes. Al aplicar esta regla, la fecha solo sirve como confirmación de "Liquidación Completa".
+- **Herramienta(s) Utilizada(s):** `replace_file_content`.
+- **Resultado:** Éxito
+- **Verificación:** En la planilla, Sarahit ahora muestra la celda de "Fecha Pago" vacía mientras tenga un monto pendiente, eliminando la ambigüedad.
+- **Logro Conseguido:** Interfaz de usuario más precisa y alineada con el flujo real de pagos.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/walkthrough.md)

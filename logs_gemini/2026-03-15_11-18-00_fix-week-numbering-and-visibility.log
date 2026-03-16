@@ -1,0 +1,23 @@
+- **Solicitud del Usuario:** la empleada "Maru" tiene asignado el salario de 120 al mes ... le corresponde 3o dolares por semana, la planilla de pago me muestra 60 dolares ... No aparece Thailin Alvartez...
+- **Fecha y Hora:** 2026-03-15 11:18:00
+- **Proyecto(s):** Backend / Frontend
+- **Archivos Involucrados:** 
+    - `/home/developer/Escritorio/niesys/ninesys-apidev/app/routes/payments.php`
+    - `/home/developer/Escritorio/niesys/app_multi/components/admin/PagosEmpleados.vue`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: 32f25fd
+- **Acción Realizada:** 
+    1. **Sincronización de Semanas**: Se modificó `obtenerNumeroSemana` en el frontend para alinearse con `WEEK(date, 1)` de MySQL. Esto corrigió que Maru mostrara $60 (por error de desfase de semana) y ahora muestra los $30 correspondientes a la semana en curso.
+    2. **Visibilidad Continua**: Se eliminó la cláusula `NOT EXISTS` en `sql_administrativo` que ocultaba a empleados que ya tenían un pago en la semana actual. Esto permite que Tahilin Alvarez permanezca visible en la planilla, permitiendo verificar sus pagos anteriores o rubros adicionales.
+    3. **Estandarización SQL**: Se actualizaron todas las llamadas a `WEEK()` en las consultas de pagos para incluir el parámetro `, 1)`, asegurando consistencia en todo el sistema.
+    4. **Refuerzo de Departamentos**: Se añadió `Vendedor` al mapeo de "Ventas" en el frontend.
+- **Inconvenientes y Desafíos:** El desfase entre JS (donde la semana 1 empezaba diferente) y SQL causaba que el sistema pensara que se debían dos semanas en lugar de una.
+- **Decisión Final y Justificación:** Se optó por eliminar la lógica de "auto-ocultar" empleados ya pagados para dar mayor transparencia a la planilla de pagos, permitiendo que el administrador vea a todo el personal independientemente de su estatus de pago inmediato.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `multi_replace_file_content`, `run_command`, `ssh`.
+- **Resultado:** Éxito
+- **Verificación:** Se confirmó la actualización en el servidor Hostinger y se validó la lógica de semanas localmente.
+- **Logro Conseguido:** Precisión en el cálculo de salarios semanales ($30 para Maru) y visibilidad garantizada para empleados administrativos (Tahilin).
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/walkthrough.md)

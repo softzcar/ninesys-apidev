@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** no pertenece a ese departamento, vamos arreglar la consulta para el histórico de pagos también (Luis + Ventas)
+- **Fecha y Hora:** 2026-03-15 11:37:00
+- **Proyecto(s):** Backend / Frontend
+- **Archivos Involucrados:** 
+    - `/home/developer/Escritorio/niesys/ninesys-apidev/app/routes/payments.php`
+    - `/home/developer/Escritorio/niesys/app_multi/components/admin/PagosHistorico.vue`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: 1711d22
+- **Acción Realizada:** 
+    1. **Restricción de Consulta Histórica**: Se añadió la condición `AND a.detalle = 'Comercialización'` a la query de vendedores en el endpoint `/pagos/historico/{semana}`. Esto previene que empleados de producción (como Luis) aparezcan en la lista de ventas solo por tener registros de pago generales, eliminando etiquetas de departamento erróneas.
+    2. **Mapeo Consistente en Frontend**: Se implementó en `PagosHistorico.vue` la misma lógica de mapeo que en la planilla principal: "Comercialización" y "Vendedor" se transforman en "Ventas", y se limpian las etiquetas redundantes.
+    3. **Despliegue**: Se actualizaron los cambios en el servidor Hostinger.
+- **Inconvenientes y Desafíos:** La lógica de agregación del frontend tomaba cualquier registro del array `vendedores` y le asignaba el departamento "Ventas" si no venía definido, lo cual era incorrecto para empleados que tienen múltiples tipos de pagos.
+- **Decisión Final y Justificación:** Filtrar desde el backend es lo más eficiente para asegurar que cada sección del reporte histórico contenga solo la información pertinente a ese rubro.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `multi_replace_file_content`, `run_command`, `ssh`.
+- **Resultado:** Éxito
+- **Verificación:** Se validó que los empleados de producción ya no aparecen con la etiqueta "Ventas" en el resumen histórico.
+- **Logro Conseguido:** Precisión total en la visualización de departamentos en el histórico de pagos, alineada con la planilla de pagos activa.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/walkthrough.md)

@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** ok ahora solo muestra fecha de pago para el empleado con comisiones cunado tenemos empleados con salario pagado también encesitamos que meustre la fecha y intenté pagar a la empleada "Maru" peror ecibo el error 500 Undefined array key 0
+- **Fecha y Hora:** 2026-03-15 15:55:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** 
+    - `/home/developer/Escritorio/niesys/ninesys-apidev/app/routes/employees.php`
+    - `/home/developer/Escritorio/niesys/ninesys-apidev/app/routes/payments.php`
+- **Commits Relacionados:**
+    - Backend: 3c523aa
+- **Acción Realizada:** 
+    1. **Corrección de Error 500**: Se agregó `array_values()` tras filtrar `id_pagos` en `payments.php`. Esto evita fallos al intentar acceder al índice `[0]` cuando el primer ID enviado es `0` (ignorado por el filtro).
+    2. **Mejora de Fecha de Pago**: Se actualizó el subquery SQL para considerar tanto la fecha física del pago como el número de semana registrado en `pagos_salarios`. Esto permite que empleados pagados "anticipadamente" o que ya tienen su salario liquidado para la semana actual muestren su fecha correctamente.
+- **Inconvenientes y Desafíos:** Ninguno significativo.
+- **Decisión Final y Justificación:** La clave `0` causaba un crash total del proceso. Al resetear los índices, el backend vuelve a ser robusto. La lógica de fecha ahora es más flexible pero mantiene la restricción de relevancia semanal.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `multi_replace_file_content`, `run_command`, `ssh`.
+- **Resultado:** Éxito
+- **Verificación:** Los empleados con "Salario Pagado" ahora muestran su fecha de liquidación, y el proceso de pago para Maru ya no arroja error 500.
+- **Logro Conseguido:** Estabilidad en el procesamiento de pagos y visualización coherente de fechas.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/walkthrough.md)

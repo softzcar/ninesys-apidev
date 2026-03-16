@@ -1,0 +1,21 @@
+- **Solicitud del Usuario:** ok ahora que se procesa le pago me doy cuenta que no estamos mostrando la fecha de pago en la planilla de pago mostremos ese dato
+- **Fecha y Hora:** 2026-03-15 15:40:00
+- **Proyecto(s):** Backend, Frontend
+- **Archivos Involucrados:** 
+    - `/home/developer/Escritorio/niesys/ninesys-apidev/app/routes/employees.php`
+    - `/home/developer/Escritorio/niesys/ninesys-apidev/app/routes/payments.php`
+    - `/home/developer/Escritorio/niesys/app_multi/components/admin/PagosEmpleados.vue`
+- **Commits Relacionados:**
+    - Backend: 2dd2ad0
+- **Acción Realizada:** 
+    1. **Backend (Consultas)**: Se agregaron subconsultas SQL para recuperar la `ultima_fecha_pago` (formateada como DD/MM/YYYY) tanto en el endpoint general de empleados como en la consulta administrativa de pagos.
+    2. **Frontend (Agregación)**: Se actualizó el componente `PagosEmpleados.vue` para que la propiedad computada `pagosResumenUnificado` capture e incluya la fecha de pago en cada registro de la tabla.
+- **Inconvenientes y Desafíos:** Se corrigió un error de sintaxis menor en el SQL inicial (uso de comillas dobles para el formato de fecha en PHP).
+- **Decisión Final y Justificación:** Mostrar la fecha de pago directamente en la planilla mejora la trazabilidad y permite confirmar de inmediato los procesos realizados durante la semana actual sin tener que ir al histórico.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `multi_replace_file_content`, `run_command`, `ssh`.
+- **Resultado:** Éxito
+- **Verificación:** La columna "Fecha Pago" ahora se puebla correctamente con la fecha de la última liquidación exitosa del empleado.
+- **Logro Conseguido:** Mayor visibilidad y control sobre el estado de los pagos semanales.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/walkthrough.md)

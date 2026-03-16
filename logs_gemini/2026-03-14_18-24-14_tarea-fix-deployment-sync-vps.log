@@ -1,0 +1,38 @@
+# Log de Tarea: Corrección de Sincronización de Despliegue y VPS
+**Fecha:** 2026-03-14 18:24:14
+**ID de Conversación:** 1248c7c5-4ba7-4961-a885-d59f8f5b15a6
+
+## Descripción de la Tarea
+Se investigó un problema donde los cambios del backend no se reflejaban en los VPS (Hostinger y Contabo) a pesar de que el script de despliegue reportaba éxito. Se mejoró la robustez del proceso de despliegue.
+
+## Acciones Realizadas
+
+### 1. Diagnóstico de Falla de Sincronización
+- Se identificó que el script `deploy_backend.sh` no verificaba cambios locales sin confirmar (`uncommitted changes`).
+- Como resultado, el script solo subía lo que ya estaba en el historial de Git, ignorando las modificaciones pendientes en el espacio de trabajo local.
+- Se detectaron cambios críticos pendientes en:
+    - `app/routes/orders.php`
+    - `app/routes/tables.php`
+    - `installer/api/app/lib/woome.php`
+
+### 2. Mejora del Script de Despliegue (`scripts/deploy_backend.sh`)
+- Se implementó el **Paso 0: Verificación de cambios locales**.
+- El script ahora usa `git diff-index --quiet HEAD --` para detectar si hay archivos modificados o sin seguimiento antes de proceder.
+- Se añadió un prompt interactivo que alerta al usuario y permite cancelar el despliegue para realizar un commit previo, garantizando que el servidor reciba la versión exacta del código deseada.
+- Se mejoró el logging remoto para mostrar el hash de HEAD en el VPS tras el despliegue.
+
+### 3. Sincronización Manual y Reparación de Contabo
+- Se detectó que el VPS de Contabo estaba desactualizado y tenía modificaciones locales en `app/lib/config.php` (contraseñas de base de datos) que causaban conflictos con `git pull`.
+- Se realizó un `git stash` en el servidor, seguido de un `pull` y un `stash pop` para sincronizar el código sin perder las configuraciones específicas de producción.
+- Se verificó que ambos servidores (Hostinger y Contabo) ahora comparten el mismo commit de referencia: `2d12bd0`.
+
+### 4. Ejecución de Despliegue Dual
+- Se realizó un despliegue exitoso en ambos servidores simultáneamente usando la opción 3 del script mejorado.
+
+## Resultados
+- Script de despliegue más seguro: evita despliegues parciales de código no commiteado.
+- Sincronización total verificada entre Desarrollo (Hostinger) y Producción (Contabo).
+- Código actualizado con las últimas correcciones de rutas y librerías en todos los entornos.
+
+---
+**Antigravity AI**

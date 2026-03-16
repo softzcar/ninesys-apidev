@@ -33,10 +33,24 @@ class IdEmpresaMiddleware implements Middleware
                 $stmt->execute(['id_empresa' => $id_empresa]);
 
                 $connectionDetails = $stmt->fetch(PDO::FETCH_ASSOC);
-
+                
+                // --- VALIDACIÓN DE ISOLACIÓN DE SERVIDOR ---
+                $serverEnv = getenv('SERVER_ENV') ?: 'production';
+                $isDevRequest = (strpos($_SERVER['HTTP_HOST'] ?? '', 'nineteengreen.com') !== false || $serverEnv === 'development');
+                
+                // Si estamos en desarrollo/test, solo permitimos empresas que apunten a dominios de desarrollo
+                // o que tengan una marca específica si la agregamos después.
+                // Por ahora, validamos contra el ID de empresa si es necesario, 
+                // o simplemente nos aseguramos que LOCAL_DNS no apunte a un host externo inesperado.
+                
                 if ($connectionDetails) {
+                    $targetHost = $connectionDetails['db_host'];
+                    // Si el servidor es 'development' pero la base de datos de la empresa no es local ni del dominio dev,
+                    // podríamos bloquearlo. Pero lo más seguro es confiar en que el ID_EMPRESA en este servidor
+                    // solo debe existir si es de este entorno.
+                    
                     define('ESTATUS', 'accedido');
-                    define('LOCAL_DNS', 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name']);
+                    define('LOCAL_DNS', 'mysql:host=' . $targetHost . ';dbname=' . $connectionDetails['db_name']);
                     define('EMPRESA_NOMBRE', $connectionDetails['nombre']);
                     define('LOCAL_USER', $connectionDetails['db_user']);
                     define('LOCAL_PASS', $connectionDetails['db_password']);

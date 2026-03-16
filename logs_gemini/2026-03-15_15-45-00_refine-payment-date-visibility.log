@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** las fechas de pago se deben mostrar unicamente para los empleados que ya se les ha realizado el pago laas estas mostrando para los empeados que aún no se les ha pagado
+- **Fecha y Hora:** 2026-03-15 15:45:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** 
+    - `/home/developer/Escritorio/niesys/ninesys-apidev/app/routes/employees.php`
+    - `/home/developer/Escritorio/niesys/ninesys-apidev/app/routes/payments.php`
+- **Commits Relacionados:**
+    - Backend: ff3b788
+- **Acción Realizada:** 
+    1. **Backend (Filtro por Semana)**: Se modificaron las subconsultas de `ultima_fecha_pago` para incluir un filtro que valide que la fecha pertenece a la semana actual (`WEEK(pa.fecha_pago, 1) = WEEK(NOW(), 1)`) y al año actual.
+    2. **Despliegue**: Se actualizaron los cambios en Hostinger.
+- **Inconvenientes y Desafíos:** Se ajustó la sintaxis SQL en PHP para manejar correctamente las comillas en las funciones `DATE_FORMAT`.
+- **Decisión Final y Justificación:** Limitar la visualización a la semana actual evita la confusión de ver fechas antiguas en una planilla destinada a la gestión de pagos pendientes. Solo los empleados liquidados "hoy" o en el transcurso de la semana mostrarán su fecha.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`, `ssh`.
+- **Resultado:** Éxito
+- **Verificación:** Los empleados que no han sido pagados esta semana ahora muestran la celda de fecha vacía, mientras que los ya liquidados mantienen su registro visible.
+- **Logro Conseguido:** Planilla activa libre de datos históricos irrelevantes.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/walkthrough.md)

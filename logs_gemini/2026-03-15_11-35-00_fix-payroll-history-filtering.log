@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** si me voy a la pagina `/historico-de-pagos` ... retorna dentro de la propiedad `data` un array vacio ... si hemos determinado que los salarios en la planilla de pagos ya fueron pagados ¿Por que no me muestra resultados el histórico de pagos?
+- **Fecha y Hora:** 2026-03-15 11:35:00
+- **Proyecto(s):** Backend / Frontend
+- **Archivos Involucrados:** 
+    - `/home/developer/Escritorio/niesys/ninesys-apidev/app/routes/payments.php`
+    - `/home/developer/Escritorio/niesys/app_multi/components/admin/PagosHistorico.vue`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: c89a572
+- **Acción Realizada:** 
+    1. **Cambio de Lógica de Filtrado**: Se modificó el endpoint `/pagos/historico/{semana}` para filtrar por `ps.numero_semana` (tabla `pagos_salarios`) en lugar de calcular la semana dinámicamente desde `fecha_pago`. Esto asegura que los pagos procesados anticipadamente (ej. pagos de semana 11 hechos en la semana 10) se agrupen correctamente en el reporte de la semana para la cual fueron destinados.
+    2. **Alineación Frontend**: Se actualizó `obtenerNumeroSemana` en `PagosHistorico.vue` al estándar ISO-8601 para garantizar que la consulta al API pida el número de semana correcto.
+    3. **Despliegue**: Se actualizaron los cambios en el servidor Hostinger.
+- **Inconvenientes y Desafíos:** Se descubrió que los pagos de la semana 11 para Eneida, Tahilin y otros se realizaron físicamente el 5/6 de marzo (semana 10), por lo que la consulta anterior por `fecha_pago` nunca los encontraría al buscar la semana 11.
+- **Decisión Final y Justificación:** La vinculación por `numero_semana` es la única forma confiable de reconstruir el recibo de una semana específica cuando la fecha de transacción no coincide estrictamente con el periodo contable.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `multi_replace_file_content`, `run_command`, `ssh`.
+- **Resultado:** Éxito
+- **Verificación:** Se confirmó que existían registros en `pagos_salarios` con `numero_semana = 11` y `fecha_pago` del 5/6 de marzo. Los nuevos cambios ahora capturan estos registros.
+- **Logro Conseguido:** Los reportes del Histórico de Pagos ahora reflejan fielmente todos los rubros pagados para la semana seleccionada, independientemente de cuándo se haya ejecutado la transacción.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/c17e1133-e89b-48e4-9e9f-cb04dba96db4/walkthrough.md)

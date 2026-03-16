@@ -1,0 +1,24 @@
+# Log: 2026-03-14 18:24:31 - Fix Undefined array key "categoria" and Deployment
+
+## Problem Description
+- **Error**: `ERROR: Undefined array key "categoria" on line 3023 in file /home/api.nineteengreen.com/public_html/app/routes/orders.php.`
+- **Cause**: The `/ordenes/nueva/custom` endpoint (and others) was accessing `$decodedObj['categoria']` directly without checking if it existed. When loading budgets/presupuestos, this key was often missing.
+- **Context**: The error was also persisting after a "deployment" because the changes were not committed locally, causing the deployment script to take the old version of the file from GitHub.
+
+## Changes Implemented
+- **Modified**: [orders.php](file:///home/developer/Escritorio/niesys/ninesys-apidev/app/routes/orders.php)
+    - Applied robust handling for the `categoria` key in `/ordenes/nueva/custom`, `/ordenes/nueva`, `/presupuesto/nuevo`, and `/ordenes/nueva/sport`.
+    - Added checks for `precio` as well to prevent similar potential errors.
+    - Simplified category handling by defaulting to `id_categoria = 0` and `cat_name = 'Uncatagorized'`.
+
+## Deployment Actions
+- **Local Commitment**: Changes committed to branch `refactor/modular-routes`.
+- **Remote Push**: Changes pushed to `origin/refactor/modular-routes`.
+- **Manual SSH Update**: 
+    - Logged into `vps-ninesys` (Hostinger).
+    - Executed: `cd /home/api.nineteengreen.com/public_html && git fetch origin && git checkout refactor/modular-routes && git pull origin refactor/modular-routes`.
+- **Verification on Server**: Verified via `grep` on the server that the code now handles `id_categoria` correctly.
+
+## Outcome
+- The 500 error is resolved on the Hostinger server.
+- The system now handles missing data in the products payload gracefully.
