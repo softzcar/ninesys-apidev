@@ -2721,6 +2721,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $data = [];
 
             // 1. Telas e Insumos Más Usados (Top 5 - Últimos 30 días)
+            // Agrupamos por SKU para sumar el consumo de diferentes rollos del mismo producto
             $sqlMateriales = "SELECT 
                                 i.insumo as label, 
                                 ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value,
@@ -2729,7 +2730,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                             JOIN inventario i ON im.id_insumo = i._id 
                             WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
                               AND (im.valor_inicial - im.valor_final) > 0
-                            GROUP BY im.id_insumo 
+                            GROUP BY i.sku 
                             ORDER BY value DESC 
                             LIMIT 5";
             $data['materiales'] = $localConnection->goQuery($sqlMateriales);
