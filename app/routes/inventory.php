@@ -2712,6 +2712,82 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     });
 
     /**
+     * GET /inventario/reportes/graficos-consumo
+     * Endpoint consolidado para los gráficos de Telas/Insumos, Tintas y Papel (Últimos 30 días)
+     */
+    $app->get('/inventario/reportes/graficos-consumo', function (Request $request, Response $response) {
+        try {
+            $localConnection = new LocalDB();
+            $data = [];
+
+            // 1. Telas e Insumos Más Usados (Top 5 - Últimos 30 días)
+            $sqlMateriales = "SELECT 
+                                i.insumo as label, 
+                                ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value 
+                            FROM inventario_movimientos im 
+                            JOIN inventario i ON im.id_insumo = i._id 
+                            WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                              AND (im.valor_inicial - im.valor_final) > 0
+                            GROUP BY im.id_insumo 
+                            ORDER BY value DESC 
+                            LIMIT 5";
+            $data['materiales'] = $localConnection->goQuery($sqlMateriales);
+
+            // 2. Distribución de Tintas por Color (Suma total - Últimos 30 días)
+            $sqlTintas = "SELECT 
+                            ROUND(SUM(COALESCE(c, 0)), 2) as C, 
+                            ROUND(SUM(COALESCE(m, 0)), 2) as M, 
+                            ROUND(SUM(COALESCE(y, 0)), 2) as Y, 
+                            ROUND(SUM(COALESCE(k, 0)), 2) as K, 
+                            ROUND(SUM(COALESCE(w, 0)), 2) as W 
+                        FROM tintas 
+                        WHERE moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+            $tintasResult = $localConnection->goQuery($sqlTintas);
+            if (!empty($tintasResult)) {
+                $t = $tintasResult[0];
+                $data['tintas'] = [
+                    'labels' => ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'],
+                    'values' => [$t['C'], $t['M'], $t['Y'], $t['K'], $t['W']],
+                    'colors' => ['#00FFFF', '#FF00FF', '#FFFF00', '#000000', '#FFFFFF']
+                ];
+            } else {
+                $data['tintas'] = ['labels' => [], 'values' => [], 'colors' => []];
+            }
+
+            // 3. Consumo de Papel (Agrupado por Semana - Últimos 30 días)
+            $sqlPapel = "SELECT 
+                            CONCAT('Sem ', WEEK(im.moment, 1)) as label, 
+                            ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value 
+                        FROM inventario_movimientos im 
+                        JOIN inventario i ON im.id_insumo = i._id 
+                        WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                          AND (i.insumo LIKE '%Papel%' OR i.departamento IN ('Impresión', 'Impresion'))
+                          AND (im.valor_inicial - im.valor_final) > 0
+                        GROUP BY WEEK(im.moment, 1)
+                        ORDER BY MIN(im.moment) ASC";
+            $data['papel'] = $localConnection->goQuery($sqlPapel);
+
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'data' => $data
+            ], JSON_NUMERIC_CHECK));
+
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+        } catch (\Exception $e) {
+            if (isset($localConnection)) $localConnection->disconnect();
+            $response->getBody()->write(json_encode([
+                'success' => false, 
+                'message' => 'Error al obtener datos para gráficos',
+                'error' => $e->getMessage()
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    /**
      * GET /inventario/movimientos/{id}/historial
      * Detalle de auditoría de un movimiento
      */
