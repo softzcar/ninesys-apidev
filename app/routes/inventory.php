@@ -2723,7 +2723,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             // 1. Telas e Insumos Más Usados (Top 5 - Últimos 30 días)
             $sqlMateriales = "SELECT 
                                 i.insumo as label, 
-                                ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value 
+                                ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value,
+                                i.unidad
                             FROM inventario_movimientos im 
                             JOIN inventario i ON im.id_insumo = i._id 
                             WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
