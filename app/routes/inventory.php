@@ -1684,7 +1684,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
      * GET /inventario/reportes/general
      * Reporte general de inventario con filtros por departamento
      */
-    $app->get('/api/inventario/reportes/general', function (Request $request, Response $response) {
+    $app->get('/inventario/reportes/general', function (Request $request, Response $response) {
         try {
             $params = $request->getQueryParams();
             $departamento = $params['departamento'] ?? null;
