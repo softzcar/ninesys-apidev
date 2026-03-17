@@ -1011,6 +1011,25 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  $app->get('/next-id-budget', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+
+    $sql = 'SELECT MAX(_id) + 1 id FROM presupuestos';
+    $data = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    if (!$data[0]['id']) {
+      $data[0]['id'] = '1';
+    }
+
+    $nextId['id'] = str_pad((string) $data[0]['id'], 3, '0', STR_PAD_LEFT);
+
+    $response->getBody()->write(json_encode($nextId, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   /** FIN GENRAL */
 
 }; // Fin de la función que envuelve las rutas
