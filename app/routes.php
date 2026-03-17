@@ -206,30 +206,57 @@ return function (App $app) {
   $app->get('/bcv-rates', function (Request $request, Response $response) {
     $url = 'https://bcv.justcarlux.dev/api/v1/rates';
 
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Opcional, dependiendo del entorno
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-
-    $result = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-    if (curl_errno($ch)) {
-      $error_msg = curl_error($ch);
+    function fetchUrl($url) {
+      $ch = curl_init();
+      curl_setopt($ch, CURLOPT_URL, $url);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+      curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+      curl_setopt($ch, CURLOPT_TIMEOUT, 5); // Timeout más agresivo
+      $result = curl_exec($ch);
+      $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
       curl_close($ch);
-      $response->getBody()->write(json_encode(['error' => 'Error backend: ' . $error_msg]));
-      return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+      return ['result' => $result, 'code' => $httpCode];
     }
 
-    curl_close($ch);
+    $response_data = fetchUrl($url);
 
-    $response->getBody()->write($result);
+    // Si falla el origen primario (o da error de Cloudflare), intentamos el fallback
+    if ($response_data['code'] >= 400 || !$response_data['result']) {
+      $fallback_url = 'https://ve.dolarapi.com/v1/dolares/oficial';
+      $fallback_data = fetchUrl($fallback_url);
+
+      if ($fallback_data['code'] === 200 && $fallback_data['result']) {
+        $data = json_decode($fallback_data['result'], true);
+        if (isset($data['promedio'])) {
+          // Adaptar formato de DolarAPI al formato esperado por el frontend
+          $result = json_encode([
+            'rates' => [
+              'usd' => $data['promedio']
+            ],
+            'fuente' => 'dolarapi_fallback'
+          ]);
+          $response->getBody()->write($result);
+          return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withHeader('Access-Control-Allow-Origin', '*')
+            ->withStatus(200);
+        }
+      }
+    }
+
+    // Si falló el fallback o el original funcionó (pero con error no manejado), 
+    // devolvemos lo que tengamos o un error amigable
+    if (!$response_data['result'] || $response_data['code'] >= 400) {
+      $response->getBody()->write(json_encode(['error' => 'No se pudieron obtener tasas de ninguna fuente']));
+      return $response->withStatus(503)->withHeader('Content-Type', 'application/json');
+    }
+
+    $response->getBody()->write($response_data['result']);
 
     return $response
       ->withHeader('Content-Type', 'application/json')
-      ->withHeader('Access-Control-Allow-Origin', '*') // Permitir acceso desde cualquier origen (incluyendo localhost)
-      ->withStatus($httpCode);
+      ->withHeader('Access-Control-Allow-Origin', '*')
+      ->withStatus($response_data['code']);
   });
   /** ENVIAR EMAILS */
   $app->get('/send-email', function (Request $request, Response $response) {
