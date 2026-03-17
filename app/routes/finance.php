@@ -294,7 +294,7 @@ return function (App $app) {
     $object['response_insert_caja_fondos'] = $localConnection->goQuery($sql);
 
     // Actualizamos caja para los registros cerrados
-    $sql = "UPDATE caja SET id_caja_cierres = $insertID WHERE id_empleado = {$datosCierre['id_empleado']}";
+    $sql = "UPDATE caja SET id_caja_cierres = $insertID WHERE id_empleado = {$datosCierre['id_empleado']} AND id_caja_cierres IS NULL";
     $object['response_update_caja'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();

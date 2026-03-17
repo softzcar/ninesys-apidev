@@ -231,14 +231,25 @@
 
                 grid.innerHTML = scripts.map(s => {
                     const color = categoryColors[s.category] || "var(--accent)";
+                    const needsArg = s.category === "Base de Datos" || s.category === "Sincronización";
+                    
                     return `
                     <div class="card" style="border-top: 3px solid ${color}">
-                        <div style="display:flex; justify-content:flex-start">
+                        <div style="display:flex; justify-content:space-between; align-items: center;">
                             <span class="tag" style="color: ${color}; background: ${color}22; border: 1px solid ${color}44">${s.category}</span>
+                            ${needsArg ? '<span style="font-size:0.7rem; color:var(--text-dim)">Requiere ID</span>' : ''}
                         </div>
                         <h3>${s.name}</h3>
                         <p>${s.description}</p>
-                        <button class="btn-run" onclick="runScript('${s.id}')">
+                        
+                        ${needsArg ? `
+                        <div style="margin-bottom: 1rem;">
+                            <input type="text" class="company-id-input" data-id="${s.id}" placeholder="ID Empresa (ej. 174)" 
+                                style="width: 100%; padding: 0.5rem; border-radius: 0.4rem; background: #0f172a; border: 1px solid #334155; color: white; font-size: 0.8rem;">
+                        </div>
+                        ` : ''}
+
+                        <button class="btn-run" onclick="runScript('${s.id}', ${needsArg})">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                             Ejecutar Script
                         </button>
@@ -261,9 +272,20 @@
             consoleEl.scrollTop = consoleEl.scrollHeight;
         }
 
-        function runScript(id) {
+        function runScript(id, hasArg = false) {
             clearConsole();
-            socket.emit('run-script', id);
+            let args = [];
+            
+            if (hasArg) {
+                const input = document.querySelector(`.company-id-input[data-id="${id}"]`);
+                if (input && input.value.trim()) {
+                    args.push(input.value.trim());
+                } else if (hasArg) {
+                    log("⚠️ Advertencia: No se proporcionó ID de empresa. Algunos scripts podrían fallar o usar un valor por defecto.", "system");
+                }
+            }
+            
+            socket.emit('run-script', { id, args });
         }
 
         socket.on('output', (data) => {

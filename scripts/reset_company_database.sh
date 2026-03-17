@@ -48,9 +48,10 @@ else
 fi
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
-# Credenciales MySQL (ajustar según sea necesario)
-MYSQL_USER="root"
-MYSQL_HOST="localhost"
+# Credenciales MySQL (Ajustar según entorno de ejecución)
+MYSQL_USER="${DB_USER:-root}"
+MYSQL_PASS="${DB_PASS:-}"
+MYSQL_HOST="${DB_HOST:-localhost}"
 
 ################################################################################
 # Funciones auxiliares
@@ -116,7 +117,7 @@ mkdir -p "$LOG_DIR"
 
 print_header "Verificando base de datos: $DB_NAME"
 
-if ! mysql -u "$MYSQL_USER" -e "USE $DB_NAME" 2>/dev/null; then
+if ! mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "USE $DB_NAME" 2>/dev/null; then
     print_error "Error: La base de datos '$DB_NAME' no existe"
     exit 1
 fi
@@ -187,7 +188,7 @@ log_message "Confirmaciones completadas - Iniciando reset"
 print_info "Creando backup de seguridad..."
 log_message "Iniciando backup a: $BACKUP_FILE"
 
-if mysqldump -u "$MYSQL_USER" "$DB_NAME" > "$BACKUP_FILE" 2>/dev/null; then
+if mysqldump -u "$MYSQL_USER" -p"$MYSQL_PASS" "$DB_NAME" > "$BACKUP_FILE" 2>/dev/null; then
     BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
     print_success "Backup creado exitosamente: $BACKUP_FILE ($BACKUP_SIZE)"
     log_message "Backup completado: $BACKUP_FILE ($BACKUP_SIZE)"
@@ -292,7 +293,7 @@ EOF
 print_info "Ejecutando limpieza de datos..."
 log_message "Ejecutando script SQL de limpieza"
 
-if mysql -u "$MYSQL_USER" < "$SQL_SCRIPT" 2>/dev/null; then
+if mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" < "$SQL_SCRIPT" 2>/dev/null; then
     print_success "Limpieza de datos completada"
     log_message "Limpieza completada exitosamente"
     rm -f "$SQL_SCRIPT"
@@ -327,7 +328,7 @@ TABLES_TO_RESET_AI=(
 )
 
 for TABLE in "${TABLES_TO_RESET_AI[@]}"; do
-    mysql -u "$MYSQL_USER" "$DB_NAME" -e "ALTER TABLE \`$TABLE\` AUTO_INCREMENT = 1;" 2>/dev/null
+    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" "$DB_NAME" -e "ALTER TABLE \`$TABLE\` AUTO_INCREMENT = 1;" 2>/dev/null
     print_info "Reseteado: $TABLE → AUTO_INCREMENT = 1"
     log_message "AUTO_INCREMENT reseteado para: $TABLE"
 done
@@ -341,10 +342,10 @@ print_success "Contadores reseteados"
 print_header "Insertando datos de prueba básicos"
 
 # Verificar si ya existe un cliente de prueba
-CUSTOMER_COUNT=$(mysql -u "$MYSQL_USER" "$DB_NAME" -N -e "SELECT COUNT(*) FROM customers;" 2>/dev/null)
+CUSTOMER_COUNT=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" "$DB_NAME" -N -e "SELECT COUNT(*) FROM customers;" 2>/dev/null)
 
 if [ "$CUSTOMER_COUNT" -eq 0 ]; then
-    mysql -u "$MYSQL_USER" "$DB_NAME" <<EOF 2>/dev/null
+    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" "$DB_NAME" <<EOF 2>/dev/null
     INSERT INTO customers (_id, first_name, last_name, username, cedula, address, billing_city, phone, email)
     VALUES (1, 'Cliente', 'de Pruebas', 'Cliente Prueba', 'V12345678', 'Dirección de prueba', 'Caracas', '584240000000', 'clientepruebas@email.com');
 EOF
@@ -355,9 +356,9 @@ else
 fi
 
 # Insertar inventario inicial (mismos datos que new company)
-INVENTORY_COUNT=$(mysql -u "$MYSQL_USER" "$DB_NAME" -N -e "SELECT COUNT(*) FROM inventario;" 2>/dev/null)
+INVENTORY_COUNT=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" "$DB_NAME" -N -e "SELECT COUNT(*) FROM inventario;" 2>/dev/null)
 if [ "$INVENTORY_COUNT" -eq 0 ]; then
-    mysql -u "$MYSQL_USER" "$DB_NAME" <<EOF 2>/dev/null
+    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" "$DB_NAME" <<EOF 2>/dev/null
     INSERT INTO \`inventario\` (\`_id\`, \`sku\`, \`id_catalogo\`, \`tipo_insumo\`, \`insumo\`, \`unidad\`, \`costo\`, \`rendimiento\`, \`cantidad\`, \`cantidad_inicial\`, \`color\`, \`ancho\`, \`elongacion\`, \`detalles\`, \`departamento\`, \`moment\`) VALUES
     (1, 'PAP_001', 1, 'general', 'Papel de pruebas', 'Mts', 20.00, 1.0, 250.00, 250.00, 'BLANCO', 0.90, NULL, 'Papel para pruebas de impresión', 'Impresión', CURRENT_TIMESTAMP),
     (2, 'TEL_001', 6, 'tela', 'Tela de pruebas', 'Kg', 80.00, 3.96, 24.00, 24.00, 'BLANCO', 1.50, 'HORIZONTAL', 'Tela para pruebas de estampado', 'Estampado', CURRENT_TIMESTAMP),
@@ -393,13 +394,13 @@ echo ""
 # Mostrar estadísticas de la base de datos
 print_header "Estadísticas de la base de datos"
 
-TOTAL_TABLES=$(mysql -u "$MYSQL_USER" "$DB_NAME" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$DB_NAME';" 2>/dev/null)
+TOTAL_TABLES=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" "$DB_NAME" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$DB_NAME';" 2>/dev/null)
 print_info "Total de tablas: $TOTAL_TABLES"
 
 # Contar registros en tablas principales
-ORDER_COUNT=$(mysql -u "$MYSQL_USER" "$DB_NAME" -N -e "SELECT COUNT(*) FROM ordenes;" 2>/dev/null)
-CUSTOMER_COUNT=$(mysql -u "$MYSQL_USER" "$DB_NAME" -N -e "SELECT COUNT(*) FROM customers;" 2>/dev/null)
-PRODUCT_COUNT=$(mysql -u "$MYSQL_USER" "$DB_NAME" -N -e "SELECT COUNT(*) FROM products;" 2>/dev/null)
+ORDER_COUNT=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" "$DB_NAME" -N -e "SELECT COUNT(*) FROM ordenes;" 2>/dev/null)
+CUSTOMER_COUNT=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" "$DB_NAME" -N -e "SELECT COUNT(*) FROM customers;" 2>/dev/null)
+PRODUCT_COUNT=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" "$DB_NAME" -N -e "SELECT COUNT(*) FROM products;" 2>/dev/null)
 
 echo ""
 echo "  Órdenes: $ORDER_COUNT"

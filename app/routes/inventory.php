@@ -1684,20 +1684,32 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
      * GET /inventario/reportes/general
      * Reporte general de inventario con filtros por departamento
      */
-    $app->get('/inventario/reportes/general', function (Request $request, Response $response) {
+    $app->get('/api/inventario/reportes/general', function (Request $request, Response $response) {
         try {
             $params = $request->getQueryParams();
             $departamento = $params['departamento'] ?? null;
+            $filtroStock = $params['filtroStock'] ?? 'enStock';
 
             $localConnection = new LocalDB();
             
-            $where = "";
+            $conditions = [];
             $queryParams = [];
             
+            // Filtro por departamento
             if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') {
-                $where = " WHERE departamento = ?";
-                $queryParams = [$departamento];
+                $conditions[] = "departamento = ?";
+                $queryParams[] = $departamento;
             }
+
+            // Filtro por disponibilidad
+            if ($filtroStock === 'enStock') {
+                $conditions[] = "cantidad <> 0";
+            } else if ($filtroStock === 'terminados') {
+                $conditions[] = "cantidad = 0";
+            }
+            // Si es 'todos', no se agregan condiciones de cantidad
+
+            $where = !empty($conditions) ? " WHERE " . implode(" AND ", $conditions) : "";
 
             $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, color, departamento, moment 
                     FROM inventario 

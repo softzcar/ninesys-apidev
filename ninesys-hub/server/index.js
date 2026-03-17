@@ -33,7 +33,10 @@ io.on('connection', (socket) => {
     console.log('Cliente conectado');
     let child = null;
 
-    socket.on('run-script', (scriptId) => {
+    socket.on('run-script', (data) => {
+        const scriptId = typeof data === 'string' ? data : data.id;
+        const scriptArgs = data.args || [];
+        
         const scripts = getScripts();
         const script = scripts.find(s => s.id === scriptId);
 
@@ -46,7 +49,10 @@ io.on('connection', (socket) => {
 
         socket.emit('output', { type: 'system', msg: `Iniciando ${script.name}...` });
 
-        child = spawn(command, [scriptFullPath], {
+        // Combinar script y argumentos
+        const spawnArgs = [scriptFullPath, ...scriptArgs];
+
+        child = spawn(command, spawnArgs, {
             cwd: script.workingDir || path.resolve(__dirname, '..'),
             env: { ...process.env, TERM: 'xterm' }
         });
