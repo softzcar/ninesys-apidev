@@ -1680,84 +1680,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     });
     /** FIN INSUMOS */
 
-    /**
-     * GET /inventario/reportes/general
-     * Reporte general de inventario con filtros por departamento
-     */
-    $app->get('/inventario/reportes/general', function (Request $request, Response $response) {
-        try {
-            $params = $request->getQueryParams();
-            $departamento = $params['departamento'] ?? null;
-            $filtroStock = $params['filtroStock'] ?? 'enStock';
 
-            $localConnection = new LocalDB();
-            
-            $conditions = [];
-            $queryParams = [];
-            
-            // Filtro por departamento
-            if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') {
-                $conditions[] = "departamento = ?";
-                $queryParams[] = $departamento;
-            }
-
-            // Filtro por disponibilidad
-            if ($filtroStock === 'enStock') {
-                $conditions[] = "cantidad <> 0";
-            } else if ($filtroStock === 'terminados') {
-                $conditions[] = "cantidad = 0";
-            }
-            // Si es 'todos', no se agregan condiciones de cantidad
-
-            $where = !empty($conditions) ? " WHERE " . implode(" AND ", $conditions) : "";
-
-            $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, color, departamento, moment 
-                    FROM inventario 
-                    {$where} 
-                    ORDER BY insumo ASC";
-            
-            $items = $localConnection->goQuery($sql, $queryParams);
-
-            // Obtener lista dinámica de departamentos que tienen stock
-            $sqlDeps = "SELECT DISTINCT departamento FROM inventario WHERE cantidad > 0 AND departamento IS NOT NULL AND departamento != '' ORDER BY departamento ASC";
-            $resDeps = $localConnection->goQuery($sqlDeps);
-            $availableDepartments = array_map(function($d) { return $d['departamento']; }, $resDeps);
-
-            $localConnection->disconnect();
-
-            $fields = [
-                ['key' => '_id', 'label' => 'ID', 'sortable' => true],
-                ['key' => 'sku', 'label' => 'SKU', 'sortable' => true],
-                ['key' => 'insumo', 'label' => 'Insumo', 'sortable' => true],
-                ['key' => 'unidad', 'label' => 'Unidad', 'sortable' => true],
-                ['key' => 'cantidad', 'label' => 'Stock', 'sortable' => true],
-                ['key' => 'costo', 'label' => 'Costo', 'sortable' => true],
-                ['key' => 'departamento', 'label' => 'Departamento', 'sortable' => true]
-            ];
-
-            $response->getBody()->write(json_encode([
-                'success' => true,
-                'items' => $items ?? [],
-                'fields' => $fields,
-                'availableDepartments' => $availableDepartments
-            ], JSON_NUMERIC_CHECK));
-
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus(200);
-
-        } catch (\Exception $e) {
-            if (isset($localConnection)) {
-                $localConnection->disconnect();
-            }
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => 'Error al generar reporte de inventario',
-                'error' => $e->getMessage()
-            ]));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
-        }
-    });
 
     /** INVENTARIO */
     $app->get('/inventario/{departamento}', function (Request $request, Response $response, array $args) {
@@ -2711,6 +2634,145 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
     });
 
+    /**
+     * GET /inventario/reportes/general
+     * Reporte general de inventario con filtros y datos para gráficos
+     */
+    $app->get('/inventario/reportes/general', function (Request $request, Response $response) {
+        try {
+            $params = $request->getQueryParams();
+            $departamento = $params['departamento'] ?? null;
+            $filtroStock = $params['filtroStock'] ?? 'enStock';
+
+            $localConnection = new LocalDB();
+            
+            $conditions = [];
+            $queryParams = [];
+            
+            // Filtro por departamento
+            if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') {
+                $conditions[] = "departamento = ?";
+                $queryParams[] = $departamento;
+            }
+
+            // Filtro por disponibilidad
+            if ($filtroStock === 'enStock') {
+                $conditions[] = "cantidad <> 0";
+            } else if ($filtroStock === 'terminados') {
+                $conditions[] = "cantidad = 0";
+            }
+            // Si es 'todos', no se agregan condiciones de cantidad
+
+            $where = !empty($conditions) ? " WHERE " . implode(" AND ", $conditions) : "";
+
+            $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, color, departamento, moment 
+                    FROM inventario 
+                    {$where} 
+                    ORDER BY insumo ASC";
+            
+            $items = $localConnection->goQuery($sql, $queryParams);
+
+            // Obtener lista dinámica de departamentos que tienen stock
+            $sqlDeps = "SELECT DISTINCT departamento FROM inventario WHERE cantidad > 0 AND departamento IS NOT NULL AND departamento != '' ORDER BY departamento ASC";
+            $resDeps = $localConnection->goQuery($sqlDeps);
+            $availableDepartments = array_map(function($d) { return $d['departamento']; }, $resDeps);
+
+            // ====== DATOS PARA GRÁFICOS (filtrados por departamento) ======
+            $chartData = [];
+            $deptWhere = ($departamento && $departamento !== 'Todas' && $departamento !== 'todos')
+                ? "AND i.departamento = '" . addslashes($departamento) . "'"
+                : "";
+
+            // 1. Telas e Insumos Más Usados (Top 5 - Últimos 30 días, filtrado por dept)
+            $sqlMateriales = "SELECT 
+                                i.insumo as label, 
+                                ROUND(SUM((im.valor_inicial - im.valor_final) * IF(i.tipo_insumo = 'tela', COALESCE(NULLIF(i.rendimiento, 0), 1), 1)), 2) as value,
+                                IF(i.tipo_insumo = 'tela', 'Mts', i.unidad) as unidad
+                            FROM inventario_movimientos im 
+                            JOIN inventario i ON im.id_insumo = i._id 
+                            WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                              AND (im.valor_inicial - im.valor_final) > 0
+                              {$deptWhere}
+                            GROUP BY i.sku 
+                            ORDER BY value DESC 
+                            LIMIT 5";
+            $chartData['materiales'] = $localConnection->goQuery($sqlMateriales) ?: [];
+
+            // 2. Distribución de Tintas por Color (Suma total - Últimos 30 días)
+            // Las tintas no tienen departamento directo, se mantienen globales
+            $sqlTintas = "SELECT 
+                            ROUND(SUM(COALESCE(c, 0)), 2) as C, 
+                            ROUND(SUM(COALESCE(m, 0)), 2) as M, 
+                            ROUND(SUM(COALESCE(y, 0)), 2) as Y, 
+                            ROUND(SUM(COALESCE(k, 0)), 2) as K, 
+                            ROUND(SUM(COALESCE(w, 0)), 2) as W 
+                        FROM tintas 
+                        WHERE moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+            $tintasResult = $localConnection->goQuery($sqlTintas);
+            if (!empty($tintasResult)) {
+                $t = $tintasResult[0];
+                $chartData['tintas'] = [
+                    'labels' => ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'],
+                    'values' => [$t['C'], $t['M'], $t['Y'], $t['K'], $t['W']],
+                    'colors' => ['#00FFFF', '#FF00FF', '#FFFF00', '#000000', '#FFFFFF']
+                ];
+            } else {
+                $chartData['tintas'] = ['labels' => [], 'values' => [], 'colors' => []];
+            }
+
+            // 3. Consumo de Papel (Agrupado por Semana - Últimos 30 días, filtrado por dept)
+            $sqlPapel = "SELECT 
+                            CONCAT('Sem ', WEEK(im.moment, 1)) as label, 
+                            ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value 
+                        FROM inventario_movimientos im 
+                        JOIN inventario i ON im.id_insumo = i._id 
+                        WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                          AND (i.insumo LIKE '%Papel%' OR i.departamento IN ('Impresión', 'Impresion'))
+                          AND (im.valor_inicial - im.valor_final) > 0
+                          {$deptWhere}
+                        GROUP BY WEEK(im.moment, 1)
+                        ORDER BY MIN(im.moment) ASC";
+            $chartData['papel'] = $localConnection->goQuery($sqlPapel) ?: [];
+            // ====== FIN DATOS GRÁFICOS ======
+
+            $localConnection->disconnect();
+
+            $fields = [
+                ['key' => '_id', 'label' => 'ID', 'sortable' => true],
+                ['key' => 'sku', 'label' => 'SKU', 'sortable' => true],
+                ['key' => 'insumo', 'label' => 'Insumo', 'sortable' => true],
+                ['key' => 'unidad', 'label' => 'Unidad', 'sortable' => true],
+                ['key' => 'cantidad', 'label' => 'Stock', 'sortable' => true],
+                ['key' => 'costo', 'label' => 'Costo', 'sortable' => true],
+                ['key' => 'departamento', 'label' => 'Departamento', 'sortable' => true]
+            ];
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'items' => $items ?? [],
+                'fields' => $fields,
+                'availableDepartments' => $availableDepartments,
+                'chartData' => $chartData
+            ], JSON_NUMERIC_CHECK));
+
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(200);
+
+        } catch (\Exception $e) {
+            if (isset($localConnection)) {
+                $localConnection->disconnect();
+            }
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'Error al generar reporte de inventario',
+                'error' => $e->getMessage()
+            ]));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(500);
+        }
+    });
     /**
      * GET /inventario/reportes/graficos-consumo
      * Endpoint consolidado para los gráficos de Telas/Insumos, Tintas y Papel (Últimos 30 días)
