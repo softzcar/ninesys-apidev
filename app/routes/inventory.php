@@ -2677,20 +2677,31 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $resDeps = $localConnection->goQuery($sqlDeps);
             $availableDepartments = array_map(function($d) { return $d['departamento']; }, $resDeps);
 
-            // ====== DATOS PARA GRÁFICOS (filtrados por departamento) ======
+            // ====== DATOS PARA GRÁFICOS (filtrados por departamento y fechas) ======
             $chartData = [];
             $deptWhere = ($departamento && $departamento !== 'Todas' && $departamento !== 'todos')
                 ? "AND i.departamento = '" . addslashes($departamento) . "'"
                 : "";
 
-            // 1. Telas e Insumos Más Usados (Top 5 - Últimos 30 días, filtrado por dept)
+            // Rango de fechas para gráficos (por defecto últimos 30días)
+            $fechaDesde = $params['fechaDesde'] ?? null;
+            $fechaHasta = $params['fechaHasta'] ?? null;
+            if ($fechaDesde && $fechaHasta) {
+                $fechaWhere = "im.moment >= '" . addslashes($fechaDesde) . " 00:00:00' AND im.moment <= '" . addslashes($fechaHasta) . " 23:59:59'";
+                $fechaWhereTintas = "moment >= '" . addslashes($fechaDesde) . " 00:00:00' AND moment <= '" . addslashes($fechaHasta) . " 23:59:59'";
+            } else {
+                $fechaWhere = "im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+                $fechaWhereTintas = "moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+            }
+
+            // 1. Telas e Insumos Más Usados (Top 5 - filtrado por dept y fechas)
             $sqlMateriales = "SELECT 
                                 i.insumo as label, 
                                 ROUND(SUM((im.valor_inicial - im.valor_final) * IF(i.tipo_insumo = 'tela', COALESCE(NULLIF(i.rendimiento, 0), 1), 1)), 2) as value,
                                 IF(i.tipo_insumo = 'tela', 'Mts', i.unidad) as unidad
                             FROM inventario_movimientos im 
                             JOIN inventario i ON im.id_insumo = i._id 
-                            WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                            WHERE {$fechaWhere}
                               AND (im.valor_inicial - im.valor_final) > 0
                               {$deptWhere}
                             GROUP BY i.sku 
@@ -2698,7 +2709,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                             LIMIT 5";
             $chartData['materiales'] = $localConnection->goQuery($sqlMateriales) ?: [];
 
-            // 2. Distribución de Tintas por Color (Suma total - Últimos 30 días)
+            // 2. Distribución de Tintas por Color (filtrado por dept y fechas)
             // Las tintas no tienen departamento directo, se vinculan vía id_orden a los movimientos de ese dept
             $tintaFilterByDept = "";
             if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos' && $departamento !== 'Impresión' && $departamento !== 'Impresion') {
@@ -2718,7 +2729,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                             ROUND(SUM(COALESCE(k, 0)), 2) as K, 
                             ROUND(SUM(COALESCE(w, 0)), 2) as W 
                         FROM tintas 
-                        WHERE moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                        WHERE {$fechaWhereTintas}
                         {$tintaFilterByDept}";
             $tintasResult = $localConnection->goQuery($sqlTintas);
             if (!empty($tintasResult)) {
@@ -2732,7 +2743,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 $chartData['tintas'] = ['labels' => [], 'values' => [], 'colors' => []];
             }
 
-            // 3. Consumo de Papel (Agrupado por Semana - Últimos 30 días, filtrado por dept)
+            // 3. Consumo de Papel (Agrupado por Semana - filtrado por dept y fechas)
             // Al igual que las tintas, si el depto no es global o Impresión, filtramos por las órdenes del depto
             $papelFilterByDept = "";
             if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos' && $departamento !== 'Impresión' && $departamento !== 'Impresion') {
@@ -2752,7 +2763,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                             ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value 
                         FROM inventario_movimientos im 
                         JOIN inventario i ON im.id_insumo = i._id 
-                        WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                        WHERE {$fechaWhere}
                           AND (i.tipo_insumo = 'papel' OR i.insumo LIKE '%Papel%')
                           AND (im.valor_inicial - im.valor_final) > 0
                           {$papelFilterByDept}
