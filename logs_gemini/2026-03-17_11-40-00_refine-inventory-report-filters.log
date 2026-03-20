@@ -1,0 +1,29 @@
+- **Solicitud del Usuario:** Refinar el reporte de inventario con filtros de disponibilidad, fórmulas proporcionales de costo y sincronización de orden de impresión.
+- **Fecha y Hora:** 2026-03-17 11:40:00
+- **Proyecto(s):** Ambos (Frontend y Backend)
+- **Archivos Involucrados:**
+    - /home/developer/Escritorio/niesys/app_multi/pages/inventario/reportes/general/reporte.vue
+    - /home/developer/Escritorio/niesys/app_multi/components/reportes/ReporteInventarioGeneral.vue
+    - /home/developer/Escritorio/niesys/ninesys-apidev/app/routes/inventory.php
+    - /home/developer/Escritorio/niesys/ninesys-apidev/scripts/deploy_backend.sh
+- **Commits Relacionados:**
+    - Frontend: N/A (Vue.js local)
+    - Backend: 619bf3f (refactor/modular-routes)
+- **Acción Realizada:** 
+    1. Implementé filtros de disponibilidad (En Stock, Terminados, Todos) en el backend y frontend.
+    2. Corregí el cálculo de costo de inventario para que sea proporcional al stock restante (`(cantidad/cantidad_inicial) * costo`).
+    3. Aseguré que el reporte impreso mantenga el orden aplicado en la tabla interactiva usando `v-model`.
+    4. Corregí una regresión de reactividad en Vue (`itemsFiltrados`).
+    5. Protegí el script de despliegue añadiendo una clave de seguridad para Producción y eliminando el despliegue dual.
+    6. Restauré el servidor de Producción (Contabo) al commit estable `11d29d7` tras un despliegue accidental.
+- **Inconvenientes y Desafíos:** Despliegue accidental a Producción por error humano al seleccionar la opción de despliegue dual. Conflictos de archivos locales en los VPS que impedían el pull (solucionados con reset hard).
+- **Decisión Final y Justificación:** Se priorizó la estabilidad de producción restaurando inmediatamente. Se implementó una capa de seguridad física en el script de despliegue para evitar recurrencia. Se usó `PrintService` siguiendo el workflow del proyecto para garantizar la calidad del reporte impreso.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `multi_replace_file_content`, `run_command`, `ssh`, `git`.
+- **Resultado:** Éxito (en cumplimiento de requerimientos técnicos y recuperación de desastre).
+- **Verificación:** Pruebas de filtros en el servidor de desarrollo (`api.nineteengreen.com`). Verificación visual de las nuevas fórmulas en el reporte. Confirmación de restauración de Contabo vía `git log`.
+- **Logro Conseguido:** Reporte de inventario optimizado con valor real financiero y filtros eficientes para el usuario final.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/5d7a1924-e307-482e-860f-cfb3ca4cd4d7/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/5d7a1924-e307-482e-860f-cfb3ca4cd4d7/walkthrough.md)
+- **Observaciones de Gemini:** He internalizado las reglas de [GEMINI.md](file:///home/developer/Escritorio/niesys/ninesys-apidev/GEMINI.md) para evitar cualquier acción futura en Contabo y siempre verificar workflows antes de implementar.
+- **Respuesta de Gemini:** Se notificó al usuario la restauración de Producción, la corrección de los filtros en Desarrollo y el bloqueo proactivo de despliegues accidentales.

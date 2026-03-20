@@ -1703,6 +1703,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 unidad,
                 costo,
                 rendimiento,
+                tipo_insumo,
                 departamento,
                 moment
             FROM
@@ -1726,6 +1727,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 unidad,
                 costo,
                 rendimiento,
+                tipo_insumo,
                 departamento,
                 moment
             FROM
@@ -2665,7 +2667,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
             $where = !empty($conditions) ? " WHERE " . implode(" AND ", $conditions) : "";
 
-            $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, color, departamento, moment 
+            $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, tipo_insumo, cantidad, cantidad_inicial, color, departamento, moment 
                     FROM inventario 
                     {$where} 
                     ORDER BY insumo ASC";

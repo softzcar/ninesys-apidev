@@ -54,13 +54,17 @@
 
 ## Despliegue y Entornos de Prueba (⚠️ REGLAS CRÍTICAS - LECTURA OBLIGATORIA)
 
+> [!CAUTION]
+> ### 🛑 BLOQUEO DE PRODUCCIÓN (CONTABO)
+> Queda ESTRICTAMENTE PROHIBIDO realizar cualquier tipo de despliegue (`deploy_backend.sh`), sincronización (`rsync`), o comando remoto (`ssh`, `git reset`, `git pull`) hacia el servidor de Contabo sin una petición EXPLÍCITA, DIRECTA y LITERAL del usuario para esa acción específica.
+> **No asumas, no sugieras si no es necesario, y NO te equivoques de opción en los scripts.**
+
+- **Prohibición de Despliegue Automático:** Queda terminantemente prohibido el uso de `SafeToAutoRun: true` en cualquier herramienta que involucre comandos de red o despliegue a servidores remotos.
+- **Workflow Obligatorio:** Antes de interactuar con CUALQUIER servidor remoto (incluyendo Hostinger), DEBES ejecutar el workflow: `/.agent/workflows/validar-seguridad-despliegue.md`.
+
 - **Servidor de Producción (Contabo - `nineteencustom.com`):** 
-    - > [!CAUTION]
-    - > **PROHIBICIÓN TOTAL:** NUNCA actualices, despliegues o realices `git reset --hard / pull` en Contabo (ni Backend ni Frontend) sin una petición explícita y directa del usuario para esa acción específica. Es un entorno de producción crítico.
-    - **Uso de Datos**: Solo el VPS de Contabo contiene la base de datos de producción real.
-- **Servidor de Pruebas (Hostinger - `api.nineteengreen.com`):**
-    - **Backend (API):** Es **OBLIGATORIO** actualizar el backend en Hostinger CADA VEZ que realices cambios en el código de la API. Utiliza el workflow `/desplegar-backend`.
-    - **Base de Datos**: Las pruebas de datos deben realizarse en la base de datos de Hostinger, **NO en localhost**.
+    - Solo el VPS de Contabo contiene la base de datos de producción real.
+    - Se deja quieto hasta que el usuario lo pida explícitamente.
 - **Entorno Local:**
     - **⚠️ IMPORTANTE:** **NO** utilizar MySQL local (`localhost` / `127.0.0.1`) para pruebas de lógica de negocio o datos de Ninesys. El entorno local solo sirve para pruebas visuales del Frontend (`npm run dev`) y edición de archivos.
     - Los registros de base de datos siempre deben consultarse o modificarse en los VPS respectivos (Hostinger para pruebas, Contabo para producción) mediante SSH o las herramientas habilitadas para tal fin.
