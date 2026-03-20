@@ -2699,7 +2699,18 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $chartData['materiales'] = $localConnection->goQuery($sqlMateriales) ?: [];
 
             // 2. Distribución de Tintas por Color (Suma total - Últimos 30 días)
-            // Las tintas no tienen departamento directo, se mantienen globales
+            // Las tintas no tienen departamento directo, se vinculan vía id_orden a los movimientos de ese dept
+            $tintaFilterByDept = "";
+            if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos' && $departamento !== 'Impresión' && $departamento !== 'Impresion') {
+                $tintaFilterByDept = "AND id_orden IN (
+                    SELECT DISTINCT im.id_orden 
+                    FROM inventario_movimientos im
+                    JOIN inventario i ON im.id_insumo = i._id
+                    WHERE i.departamento = '" . addslashes($departamento) . "'
+                    AND im.id_orden IS NOT NULL AND im.id_orden != 0
+                )";
+            }
+
             $sqlTintas = "SELECT 
                             ROUND(SUM(COALESCE(c, 0)), 2) as C, 
                             ROUND(SUM(COALESCE(m, 0)), 2) as M, 
@@ -2707,7 +2718,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                             ROUND(SUM(COALESCE(k, 0)), 2) as K, 
                             ROUND(SUM(COALESCE(w, 0)), 2) as W 
                         FROM tintas 
-                        WHERE moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+                        WHERE moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                        {$tintaFilterByDept}";
             $tintasResult = $localConnection->goQuery($sqlTintas);
             if (!empty($tintasResult)) {
                 $t = $tintasResult[0];
