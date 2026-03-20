@@ -2733,15 +2733,29 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             }
 
             // 3. Consumo de Papel (Agrupado por Semana - Últimos 30 días, filtrado por dept)
+            // Al igual que las tintas, si el depto no es global o Impresión, filtramos por las órdenes del depto
+            $papelFilterByDept = "";
+            if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos' && $departamento !== 'Impresión' && $departamento !== 'Impresion') {
+                $papelFilterByDept = "AND im.id_orden IN (
+                    SELECT DISTINCT im2.id_orden 
+                    FROM inventario_movimientos im2
+                    JOIN inventario i2 ON im2.id_insumo = i2._id
+                    WHERE i2.departamento = '" . addslashes($departamento) . "'
+                    AND im2.id_orden IS NOT NULL AND im2.id_orden != 0
+                )";
+            } else {
+                $papelFilterByDept = $deptWhere;
+            }
+
             $sqlPapel = "SELECT 
                             CONCAT('Sem ', WEEK(im.moment, 1)) as label, 
                             ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value 
                         FROM inventario_movimientos im 
                         JOIN inventario i ON im.id_insumo = i._id 
                         WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-                          AND (i.insumo LIKE '%Papel%' OR i.departamento IN ('Impresión', 'Impresion'))
+                          AND (i.tipo_insumo = 'papel' OR i.insumo LIKE '%Papel%')
                           AND (im.valor_inicial - im.valor_final) > 0
-                          {$deptWhere}
+                          {$papelFilterByDept}
                         GROUP BY WEEK(im.moment, 1)
                         ORDER BY MIN(im.moment) ASC";
             $chartData['papel'] = $localConnection->goQuery($sqlPapel) ?: [];
