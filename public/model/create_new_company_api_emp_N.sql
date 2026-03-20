@@ -367,7 +367,7 @@ CREATE TABLE `inventario` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico',
   `sku` varchar(128) DEFAULT NULL COMMENT 'SKU del Item de inventario',
   `id_catalogo` int(11) DEFAULT NULL COMMENT 'ID de catalogo_insumos_productos',
-  `tipo_insumo` enum('general','tela','tinta') NOT NULL DEFAULT 'general' COMMENT 'Categoría de insumo para lógica de consumo',
+  `tipo_insumo` enum('general','tela','tinta','papel','repuesto','bisutería','empaque') NOT NULL DEFAULT 'general' COMMENT 'Categoría de insumo para lógica de consumo',
   `insumo` varchar(45) DEFAULT NULL COMMENT 'Nombre del insumo',
   `unidad` varchar(6) DEFAULT NULL COMMENT 'Unidd de medida del articulo CD, LTS, ML UND',
   `costo` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio de costo del insumo',

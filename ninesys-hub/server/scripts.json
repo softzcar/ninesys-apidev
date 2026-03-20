@@ -3,7 +3,7 @@
         "id": "deploy",
         "name": "Despliegue Frontend",
         "description": "Compila y sube la aplicación frontend a los servidores de Producción (Contabo) o Pruebas (Hostinger).",
-        "path": "bin/deploy.sh",
+        "path": "../../../app_multi/deploy.sh",
         "workingDir": "/home/developer/Escritorio/niesys/app_multi",
         "type": "sh",
         "category": "Despliegue"
@@ -12,7 +12,7 @@
         "id": "rollback",
         "name": "Rollback Frontend",
         "description": "Restaura una versión anterior del frontend desde los respaldos del VPS.",
-        "path": "bin/rollback.sh",
+        "path": "../../../app_multi/rollback.sh",
         "workingDir": "/home/developer/Escritorio/niesys/app_multi",
         "type": "sh",
         "category": "Despliegue"
@@ -31,7 +31,7 @@
         "name": "Sincronizar Base de Datos",
         "description": "Clona los datos reales de la empresa desde Producción hacia el entorno de Desarrollo.",
         "path": "bin/sync_company_database.sh",
-        "workingDir": "/home/developer/Escritorio/niesys/ninesys-apidev",
+        "workingDir": "/home/developer/Escritorio/niesys/ninesys-apidev/ninesys-hub",
         "type": "sh",
         "category": "Sincronización"
     },
@@ -40,7 +40,7 @@
         "name": "Reiniciar Base de Datos",
         "description": "Elimina datos operativos (órdenes, clientes) manteniendo la configuración crítica.",
         "path": "bin/reset_company_database.sh",
-        "workingDir": "/home/developer/Escritorio/niesys/ninesys-apidev",
+        "workingDir": "/home/developer/Escritorio/niesys/ninesys-apidev/ninesys-hub",
         "type": "sh",
         "category": "Base de Datos"
     },
@@ -49,7 +49,7 @@
         "name": "Eliminar Empresa (Completo)",
         "description": "ELIMINACIÓN TOTAL: Borra la base de datos de la empresa y sus registros en api_empresas.",
         "path": "bin/delete_company.sh",
-        "workingDir": "/home/developer/Escritorio/niesys/ninesys-apidev",
+        "workingDir": "/home/developer/Escritorio/niesys/ninesys-apidev/ninesys-hub",
         "type": "sh",
         "category": "Base de Datos"
     },

@@ -2724,8 +2724,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             // Agrupamos por SKU para sumar el consumo de diferentes rollos del mismo producto
             $sqlMateriales = "SELECT 
                                 i.insumo as label, 
-                                ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value,
-                                i.unidad
+                                ROUND(SUM((im.valor_inicial - im.valor_final) * IF(i.tipo_insumo = 'tela', COALESCE(NULLIF(i.rendimiento, 0), 1), 1)), 2) as value,
+                                IF(i.tipo_insumo = 'tela', 'Mts', i.unidad) as unidad
                             FROM inventario_movimientos im 
                             JOIN inventario i ON im.id_insumo = i._id 
                             WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)

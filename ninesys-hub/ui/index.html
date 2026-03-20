@@ -208,13 +208,13 @@
     </div>
 
     <script>
-        const socket = io('http://localhost:4000');
+        const socket = io('http://localhost:4001');
         const consoleEl = document.getElementById('console');
         const inputEl = document.getElementById('terminal-input');
 
         async function loadScripts() {
             try {
-                const res = await fetch('http://localhost:4000/api/scripts');
+                const res = await fetch('http://localhost:4001/api/scripts');
                 const scripts = await res.json();
                 const grid = document.getElementById('scripts-grid');
 

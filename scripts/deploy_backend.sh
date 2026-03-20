@@ -1,24 +1,23 @@
 #!/bin/bash
 
-# === CONFIGURACIÓN DE ENTORNOS ===
-BRANCH="refactor/modular-routes"
+# ==============================================================================
+# SCRIPT DE DESPLIEGUE - NINESYS BACKEND (API)
+# ==============================================================================
 
-# VPS Aliases (configurados en ~/.ssh/config)
+BRANCH="refactor/modular-routes"
 PROD_ALIAS="vps-contabo"
 PROD_PATH="/home/api.nineteencustom.com/public_html"
-
 DEV_ALIAS="vps-ninesys"
 DEV_PATH="/home/api.nineteengreen.com/public_html"
 
 echo "------------------------------------------------"
-echo "  DESPLIEGUE DE BACKEND (API)"
+echo "  DESPLIEGUE DE BACKEND (API) - PROTEGIDO"
 echo "------------------------------------------------"
-echo "1) Producción (Contabo - vps-contabo)"
+echo "1) Producción (Contabo - vps-contabo) - [BLOQUEADO POR SEGURIDAD]"
 echo "2) Desarrollo (Hostinger - vps-ninesys)"
-echo "3) Ambos Servidores (Contabo + Hostinger)"
 echo "q) Salir"
 echo "------------------------------------------------"
-echo "Opción [1-3]: "
+echo "Opción [1-2]: "
 read CHOICE
 
 perform_backend_deploy() {
@@ -26,21 +25,6 @@ perform_backend_deploy() {
     echo "Target: $TARGET"
     echo "Branch: $BRANCH"
     echo "Ruta:   $REMOTE_PATH"
-
-    # 0. Verificar cambios locales sin confirmar
-    echo ">>> Paso 0: Verificando cambios locales sin confirmar..."
-    if ! git diff-index --quiet HEAD --; then
-        echo "⚠️ ADVERTENCIA: Tienes cambios locales sin confirmar (uncommitted changes)."
-        echo "Los siguientes archivos han sido modificados localmente:"
-        git status -s
-        echo "------------------------------------------------"
-        echo "¿Deseas continuar con el despliegue de todas formas (usando solo el último commit)? (s/n)"
-        read CONTINUE_UNCOMMITTED
-        if [ "$CONTINUE_UNCOMMITTED" != "s" ]; then
-            echo "Despliegue cancelado. Por favor, realiza un commit de tus cambios antes de desplegar."
-            return 1
-        fi
-    fi
 
     # 1. Asegurar cambios locales en el repositorio central
     echo ">>> Paso 1: Verificando sincronización con GitHub..."
@@ -65,17 +49,14 @@ perform_backend_deploy() {
     ssh "$REMOTE_ALIAS" "cd $REMOTE_PATH && \
         echo '>>> En el servidor: Fetching cambios...' && \
         git fetch origin && \
-        echo '>>> En el servidor: Checking out branch $BRANCH...' && \
-        git checkout $BRANCH && \
-        echo '>>> En el servidor: Pulling cambios...' && \
-        git pull origin $BRANCH"
+        echo '>>> En el servidor: Resetting --hard origin/$BRANCH...' && \
+        git reset --hard origin/$BRANCH"
 
     if [ $? -eq 0 ]; then
         echo "✅ DESPLIEGUE EN $TARGET COMPLETADO CON ÉXITO"
         ssh "$REMOTE_ALIAS" "cd $REMOTE_PATH && echo 'HEAD Remoto: ' && git rev-parse --short HEAD"
     else
         echo "❌ ERROR DURANTE EL DESPLIEGUE EN $TARGET"
-        echo "Sugerencia: Conéctate vía SSH ($REMOTE_ALIAS) y verifica si hay conflictos o cambios locales en el servidor."
         return 1
     fi
     echo ""
@@ -83,6 +64,13 @@ perform_backend_deploy() {
 
 case $CHOICE in
     1)
+        echo "⚠️ CRÍTICO: El despliegue a PRODUCCIÓN está restringido por orden directa del usuario."
+        echo "Introduce la clave de seguridad para confirmar que esto NO es un error: "
+        read SAFETY_KEY
+        if [ "$SAFETY_KEY" != "BORRAR_CONTABO_ES_PECADO" ]; then
+            echo "❌ ACCESO DENEGADO. Abortando protección de servidor."
+            exit 1
+        fi
         TARGET="PRODUCCIÓN (Contabo)"
         REMOTE_ALIAS=$PROD_ALIAS
         REMOTE_PATH=$PROD_PATH
@@ -92,20 +80,6 @@ case $CHOICE in
         TARGET="DESARROLLO (Hostinger)"
         REMOTE_ALIAS=$DEV_ALIAS
         REMOTE_PATH=$DEV_PATH
-        perform_backend_deploy
-        ;;
-    3)
-        echo "Iniciando despliegue dual de Backend..."
-        # Despliegue en Desarrollo
-        TARGET="DESARROLLO (Hostinger)"
-        REMOTE_ALIAS=$DEV_ALIAS
-        REMOTE_PATH=$DEV_PATH
-        perform_backend_deploy
-        
-        # Despliegue en Producción
-        TARGET="PRODUCCIÓN (Contabo)"
-        REMOTE_ALIAS=$PROD_ALIAS
-        REMOTE_PATH=$PROD_PATH
         perform_backend_deploy
         ;;
     *)

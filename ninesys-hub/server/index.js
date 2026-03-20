@@ -15,7 +15,7 @@ const io = new Server(server, {
     }
 });
 
-const PORT = 4000;
+const PORT = 4001;
 
 app.use(cors());
 app.use(express.json());
