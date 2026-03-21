@@ -1,0 +1,1 @@
+/home/developer/Escritorio/niesys/ninesys-apidev/scripts/restore_cyberpanel_access.sh

@@ -254,6 +254,37 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  $app->get('/ordenes/notas-por-empleado/{id_orden}', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+    $id_orden = $args['id_orden'];
+
+    $sql = "SELECT
+                loa.id_empleado,
+                emp.nombre AS empleado,
+                dep.departamento,
+                obe.borrador AS nota,
+                CASE WHEN obe.borrador IS NOT NULL AND obe.borrador != '' THEN 1 ELSE 0 END AS tiene_nota
+            FROM
+                lotes_detalles_empleados_asignados loa
+            JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = loa.id_empleado
+            JOIN departamentos dep ON dep._id = loa.id_departamento
+            LEFT JOIN ordenes_borrador_empleado obe ON obe.id_orden = loa.id_orden 
+                AND obe.id_empleado = loa.id_empleado 
+                AND obe.id_departamento = loa.id_departamento
+            WHERE
+                loa.id_orden = $id_orden
+            ORDER BY dep.orden_proceso ASC, emp.nombre ASC";
+
+    $object = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+
   $app->get('/ordenes/borrador/reporte-semanal/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 

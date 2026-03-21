@@ -3,7 +3,7 @@
         "id": "deploy",
         "name": "Despliegue Frontend",
         "description": "Compila y sube la aplicación frontend a los servidores de Producción (Contabo) o Pruebas (Hostinger).",
-        "path": "../../../app_multi/deploy.sh",
+        "path": "../../app_multi/deploy.sh",
         "workingDir": "/home/developer/Escritorio/niesys/app_multi",
         "type": "sh",
         "category": "Despliegue"
@@ -12,7 +12,7 @@
         "id": "rollback",
         "name": "Rollback Frontend",
         "description": "Restaura una versión anterior del frontend desde los respaldos del VPS.",
-        "path": "../../../app_multi/rollback.sh",
+        "path": "../../app_multi/rollback.sh",
         "workingDir": "/home/developer/Escritorio/niesys/app_multi",
         "type": "sh",
         "category": "Despliegue"
@@ -79,5 +79,14 @@
         "workingDir": "/home/developer/Escritorio/niesys/ninesys-apidev/ninesys-hub",
         "type": "sh",
         "category": "Base de Datos"
+    },
+    {
+        "id": "cyberpanel_tunnel",
+        "name": "Túnel CyberPanel",
+        "description": "Habilita el acceso seguro a CyberPanel (Puerto 8090) mediante un túnel SSH. Mantén el proceso abierto mientras lo uses.",
+        "path": "bin/restore_cyberpanel_access.sh",
+        "workingDir": "/home/developer/Escritorio/niesys/ninesys-apidev/scripts",
+        "type": "sh",
+        "category": "Seguridad"
     }
 ]
