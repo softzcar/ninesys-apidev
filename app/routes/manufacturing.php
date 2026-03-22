@@ -4008,10 +4008,36 @@ return function (App $app) {
         LIMIT $limit
       ";
 
-      $data = $localConnection->goQuery($sql);
+      $dataResumen = $localConnection->goQuery($sql);
+
+      // --- NUEVO: Obtener detalles crudos para el Mixin del Frontend ---
+      $sqlDetalles = "
+        SELECT 
+            ldea.id_orden,
+            ldea.id_ordenes_productos,
+            ldea.fecha_inicio,
+            ldea.fecha_terminado,
+            ldea.id_departamento,
+            op.cantidad AS unidades,
+            ptp.tiempo AS tiempo_produccion
+        FROM lotes_detalles_empleados_asignados ldea
+        JOIN ordenes o ON o._id = ldea.id_orden
+        JOIN ordenes_productos op ON op._id = ldea.id_ordenes_productos
+        LEFT JOIN products_tiempos_de_produccion ptp ON ptp.id_product = op.id_woo AND ptp.id_departamento = ldea.id_departamento
+        $whereClause
+        " . ($id_empleado ? " AND ldea.id_empleado = $id_empleado" : "") . "
+        ORDER BY ldea.fecha_inicio DESC
+      ";
+      
+      $dataDetalles = $localConnection->goQuery($sqlDetalles);
       $localConnection->disconnect();
 
-      $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+      $responseObject = [
+        'resumen' => $dataResumen,
+        'tareas_detalles' => $dataDetalles
+      ];
+
+      $response->getBody()->write(json_encode($responseObject, JSON_NUMERIC_CHECK));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
     } catch (PDOException $e) {
