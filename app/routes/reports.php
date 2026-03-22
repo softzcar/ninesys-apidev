@@ -748,4 +748,54 @@ return function (App $app) {
         }
     });
 
+    // =================================================================
+    // REPORTE GLOBAL DE EFICIENCIA POR EMPLEADOS (Para Gráfico)
+    // =================================================================
+    $app->get('/reportes/employee-efficiency-global', function (Request $request, Response $response) {
+        $params = $request->getQueryParams();
+        $inicio = $params['inicio'] ?? null;
+        $fin = $params['fin'] ?? null;
+
+        if (!$inicio || !$fin) {
+            $response->getBody()->write(json_encode(['error' => 'Faltan parámetros de fecha']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $db = new LocalDB();
+        try {
+            $sqlDetalles = "
+                SELECT 
+                    ldea.id_empleado,
+                    eu.nombre AS empleado_nombre,
+                    ldea.id_orden,
+                    ldea.id_departamento,
+                    ldea.fecha_inicio,
+                    ldea.fecha_terminado,
+                    (
+                        SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                        FROM products_tiempos_de_produccion ptp_sub
+                        JOIN ordenes_productos op ON ptp_sub.id_product = op.id_woo
+                        WHERE ptp_sub.id_departamento = ldea.id_departamento 
+                        AND op.id_orden = ldea.id_orden
+                    ) AS projected_seconds
+                FROM lotes_detalles_empleados_asignados ldea
+                JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                WHERE (DATE(ldea.fecha_inicio) BETWEEN ? AND ? OR DATE(ldea.fecha_terminado) BETWEEN ? AND ?)
+                AND ldea.fecha_inicio IS NOT NULL
+                ORDER BY eu.nombre, ldea.fecha_inicio DESC
+            ";
+            
+            $tareas = $db->goQuery($sqlDetalles, [$inicio, $fin, $inicio, $fin]);
+            $db->disconnect();
+            
+            $response->getBody()->write(json_encode(['tareas' => $tareas], JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+        } catch (Exception $e) {
+            if(isset($db)) $db->disconnect();
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
 }; // Fin de la función que envuelve las rutas
