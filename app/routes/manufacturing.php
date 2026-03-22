@@ -4010,21 +4010,14 @@ return function (App $app) {
 
       $dataResumen = $localConnection->goQuery($sql);
 
-      // --- NUEVO: Obtener detalles crudos para el Mixin del Frontend ---
       $sqlDetalles = "
         SELECT 
             ldea.id_orden,
-            ld.id_ordenes_productos,
             ldea.fecha_inicio,
             ldea.fecha_terminado,
-            ldea.id_departamento,
-            op.cantidad AS unidades,
-            ptp.tiempo AS tiempo_produccion
+            ldea.id_departamento
         FROM lotes_detalles_empleados_asignados ldea
-        JOIN lotes_detalles ld ON ld._id = ldea.id_lotes_detalles
         JOIN ordenes o ON o._id = ldea.id_orden
-        JOIN ordenes_productos op ON op._id = ld.id_ordenes_productos
-        LEFT JOIN products_tiempos_de_produccion ptp ON ptp.id_product = op.id_woo AND ptp.id_departamento = ldea.id_departamento
         $whereClause
         " . ($id_empleado ? " AND ldea.id_empleado = $id_empleado" : "") . "
         ORDER BY ldea.fecha_inicio DESC
