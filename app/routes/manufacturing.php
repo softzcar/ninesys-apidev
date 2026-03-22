@@ -4024,6 +4024,9 @@ return function (App $app) {
       ";
       
       $dataDetalles = $localConnection->goQuery($sqlDetalles);
+      
+      file_put_contents('/tmp/gemini_debug_sqldetalles.txt', "SQL: $sqlDetalles\n\nROWS: " . count($dataDetalles) . "\n" . print_r($dataDetalles, true));
+
       $localConnection->disconnect();
 
       $responseObject = [
