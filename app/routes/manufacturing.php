@@ -3927,6 +3927,8 @@ return function (App $app) {
             FROM lotes_detalles_empleados_asignados sub_ldea
             WHERE sub_ldea.id_orden IN ($idsStr)
             $empleadoCondition
+            AND sub_ldea.fecha_inicio IS NOT NULL
+            AND sub_ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
             GROUP BY sub_ldea.id_orden
         )
         SELECT 
@@ -3965,6 +3967,7 @@ return function (App $app) {
                     AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
                     AND ldea_sub.fecha_terminado IS NULL
                     AND ldea_sub.fecha_inicio IS NOT NULL
+                    AND ldea_sub.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
                 )
             ) AS totalProjectedEnCurso,
             
@@ -4020,6 +4023,8 @@ return function (App $app) {
         JOIN ordenes o ON o._id = ldea.id_orden
         $whereClause
         " . ($id_empleado ? " AND ldea.id_empleado = $id_empleado" : "") . "
+        AND ldea.fecha_inicio IS NOT NULL
+        AND ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
         ORDER BY ldea.fecha_inicio DESC
       ";
       
