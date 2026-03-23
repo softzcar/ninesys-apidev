@@ -433,7 +433,15 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     //  Verificar existencia de la orden
-    $sql = 'SELECT a.id_orden, SUM(a.abono) abono, SUM(a.descuento) descuento, SUM(a.nota_credito) nota_credito, b.pago_total total, SUM(a.abono) + SUM(a.descuento) total_abono_descuento, a.detalle, a.moment  FROM abonos a JOIN ordenes b ON a.id_orden = b._id WHERE a.id_orden = ' . $args['id'];
+    $sql = "SELECT 
+              b._id as id_orden, 
+              IFNULL((SELECT SUM(abono) FROM abonos WHERE id_orden = b._id), 0) abono, 
+              IFNULL((SELECT SUM(descuento) FROM abonos WHERE id_orden = b._id), 0) descuento, 
+              IFNULL((SELECT SUM(nota_credito) FROM abonos WHERE id_orden = b._id), 0) nota_credito, 
+              b.pago_total as total, 
+              IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = b._id), 0) total_abono_descuento
+            FROM ordenes b 
+            WHERE b._id = " . intval($args['id']);
     $datosAbono = $localConnection->goQuery($sql);
 
     $object['sql'] = $sql;
@@ -5283,7 +5291,7 @@ $object['sales_commission_ISSET'][] = false;
       $responsable_id
     ]);
 
-    $orden_id = $db->lastInsertId();
+    $orden_id = $db->getLastID();
 
     if (!$orden_id) {
       return ['ok' => false, 'mensaje' => '❌ Error al crear la orden. Intenta de nuevo.'];
@@ -5438,8 +5446,21 @@ moment
 
   $object['sql_orden'] = $sql_orden;
   $localConnection->goQuery($sql_orden);
-  $id_orden = $localConnection->lastInsertId();
+  $id_orden = $localConnection->getLastID();
   $object['id_orden'] = $id_orden;
+
+  // REGISTRAR ABONO Y DESCUENTO INICIAL EN TABLA ABONOS
+  if (floatval($abono) > 0 || floatval($descuento) > 0) {
+    $sql_abono = "INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento, detalle) VALUES (
+      '{$now}',
+      {$id_orden},
+      " . intval($presupuesto['responsable']) . ",
+      " . floatval($abono) . ",
+      " . floatval($descuento) . ",
+      'Abono inicial por presupuesto'
+    )";
+    $localConnection->goQuery($sql_abono);
+  }
 
   // INSERTAR OBSERVACIONES SI EXISTEN
   if (!empty($presupuesto['observaciones'])) {
