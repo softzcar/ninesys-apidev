@@ -15,361 +15,214 @@ return function (App $app) {
         $fin = $args['fin'] ?? null;
         $id_empresa = ID_EMPRESA;
 
-        $finalResponse = [];
-
         try {
-            // --- 1. Consulta del Reporte Principal (Base de datos de la empresa) ---
-            $db = new LocalDB();
+            $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
+            $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
+
+            $finalResponse = [];
+
             $whereConditions = [];
             $params = [];
 
             if ($inicio && $fin) {
-                $whereConditions[] = 'DATE(a.moment) BETWEEN ? AND ?';
-                $params[] = $inicio;
-                $params[] = $fin;
+                $whereConditions[] = 'DATE(a.moment) BETWEEN :inicio AND :fin';
+                $params[':inicio'] = $inicio;
+                $params[':fin'] = $fin;
             }
 
-            // Filtrar solo órdenes terminadas o entregadas (con datos completos de producción)
+            // --- OPTIMIZACIÓN: Obtener horario laboral una vez para evitar subconsultas redundantes ---
+            $horarioQuery = "SELECT horario_laboral FROM empresas WHERE id_empresa = ?";
+            $horarioResult = $dbEmpresas->goQuery($horarioQuery, [$id_empresa]);
+            
+            $horario_laboral = (!empty($horarioResult) && isset($horarioResult[0]['horario_laboral'])) ? $horarioResult[0]['horario_laboral'] : null;
+            // Sanitizar el JSON para usarlo como literal en SQL
+            $horario_literal = $horario_laboral ? "'" . $horario_laboral . "'" : "'{}'";
+
+            // Filtrar solo órdenes terminadas o entregadas
             $whereConditions[] = "a.status IN ('terminada', 'entregada')";
 
+            // Obtener datos de salarios para el reporte
             $sqlSalarios = "SELECT id_usuario id_empleado, salario_monto, salario_periodo, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_empresa = $id_empresa";
-            $salariosData = $db->goQuery($sqlSalarios);
-            $finalResponse['salarios_data'] = $salariosData;
+            $salariosData = $dbEmpresas->goQuery($sqlSalarios);
+            $finalResponse['costo_hora_empleado'] = $salariosData;
 
+            $companyDB = LOCAL_DB;
+            
+            // --- 3. Obtener Costo de Tinta (api_empresas.tintas_recargas) ---
+            $tintaSql = "SELECT precio_litro FROM api_empresas.tintas_recargas WHERE id_empresa = :id_empresa ORDER BY fecha DESC LIMIT 1";
+            $tintaData = $dbEmpresas->goQuery($tintaSql, ['id_empresa' => $id_empresa]);
+            $costo_tinta_litro = $tintaData[0]['precio_litro'] ?? 0;
 
+            $whereClause = (isset($whereConditions) && !empty($whereConditions)) ? ' WHERE ' . implode(' AND ', $whereConditions) : '';
+
+            // 1. Obtener Órdenes (Consulta Base)
             $sqlReporte = "SELECT
-            a._id AS id_orden,
-            (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = a.responsable) vendedor,
-            COALESCE(prod.total_productos, 0) AS total_productos,
-            a.pago_total,
-            COALESCE(ins.costos_de_insumos, 0) AS costos_de_insumos,
-            COALESCE(mano_de_obra.costo_mano_de_obra, 0) AS costo_mano_de_obra,
-            (COALESCE(ins.costos_de_insumos, 0) + COALESCE(mano_de_obra.costo_mano_de_obra, 0)) AS costo_total,
-            (a.pago_total - (COALESCE(ins.costos_de_insumos, 0) + COALESCE(mano_de_obra.costo_mano_de_obra, 0))) AS ganancia,
-            
-            COALESCE(tiempo.empleados_asignados, '') AS empleados_asignados, -- AÑADIDO: Mostrar los IDs de los empleados
-            
-            COALESCE(tiempo.tiempo_de_produccion, 0) AS tiempo_de_produccion,
-            COALESCE(repo.total_reposiciones, 0) AS reposiciones
-        FROM
-            ordenes a
-        LEFT JOIN (
-            SELECT id_orden, SUM(cantidad) AS total_productos
-            FROM ordenes_productos
-            GROUP BY id_orden
-        ) prod ON a._id = prod.id_orden
-        LEFT JOIN (
-            SELECT c.id_orden, SUM((c.valor_inicial - c.valor_final) * (d.costo / d.cantidad_inicial)) AS costos_de_insumos, GROUP_CONCAT(d.sku) AS skus
-            FROM inventario_movimientos c JOIN inventario d ON c.id_insumo = d._id
-            GROUP BY c.id_orden
-        ) ins ON a._id = ins.id_orden
-        LEFT JOIN (
-            SELECT id_orden, SUM(monto_pago) AS costo_mano_de_obra
-            FROM pagos
-            GROUP BY id_orden
-        ) mano_de_obra ON a._id = mano_de_obra.id_orden
-        LEFT JOIN (
-            -- MODIFICADO: Subconsulta 'tiempo' para incluir los empleados
-            SELECT
-                ldea.id_orden,
-                GROUP_CONCAT(DISTINCT ldea.id_empleado) AS empleados_asignados, -- AÑADIDO: Agrupar los IDs de los empleados en una cadena
-                api_empresas.CalcularHorasLaborales(
-                    MIN(ldea.fecha_inicio),
-                    MAX(ldea.fecha_terminado),
-                    (SELECT horario_laboral FROM api_empresas.empresas LIMIT 1)
-                ) AS tiempo_de_produccion
+                a._id AS id_orden,
+                a.moment,
+                a.cliente_nombre,
+                a.status,
+                a.pago_total,
+                a.responsable as id_vendedor
             FROM
-                lotes_detalles_empleados_asignados ldea
-            WHERE ldea.fecha_inicio IS NOT NULL AND ldea.fecha_terminado IS NOT NULL
-            GROUP BY ldea.id_orden
-        ) tiempo ON a._id = tiempo.id_orden
+                $companyDB.ordenes a
+            $whereClause
+            ORDER BY a._id DESC
+            ";
 
-        LEFT JOIN (
-            SELECT id_orden, COUNT(_id) AS total_reposiciones
-            FROM reposiciones
-            GROUP BY id_orden
-        ) repo ON a._id = repo.id_orden
-      ";
-
-            if (!empty($whereConditions)) {
-                $sqlReporte .= ' WHERE ' . implode(' AND ', $whereConditions);
-            }
-
-            $finalResponse['sqlReporte'] = $sqlReporte;
-            $finalResponse['whereConditions'] = $whereConditions;
-            $finalResponse['params'] = $params;
-
-            // $reporteData = $db->goQuery($sqlReporte, $params);
-            $reporteData = $db->goQuery($sqlReporte, $params);
+            $reporteData = $dbEmpresas->goQuery($sqlReporte, $params);
             if (isset($reporteData['status']) && $reporteData['status'] === 'error') {
-                throw new Exception('Error en la consulta del reporte: ' . $reporteData['message']);
-            }
-            $finalResponse['reporte_data'] = $reporteData;
-
-
-            // --- Consulta de Tintas Consumidas ---
-            $sqlTintas = <<<SQL
-      -- Usamos tres CTEs: uno para encontrar el costo por ml de recargas, otro para fallback desde inventario, y otro para calcular el costo total.
-      WITH
-      -- CTE 1: Encuentra el costo por ml de la última recarga para cada tanque.
-      last_ink_refill_cost AS (
-          SELECT
-              tr.id_catalogo_impresora,
-              tr.color,
-              CASE
-                  WHEN inv.cantidad_inicial > 0 THEN (inv.costo / inv.cantidad_inicial)
-                  ELSE 0
-              END AS ink_cost_per_ml,
-              ROW_NUMBER() OVER (PARTITION BY tr.id_catalogo_impresora, tr.color ORDER BY tr.fecha_recarga DESC) as rn
-          FROM
-              tintas_recargas tr
-          JOIN
-              inventario inv ON tr.id_insumo = inv._id
-      ),
-      -- CTE 2 (NUEVO): Fallback - Obtiene el costo por ml desde inventario usando tinta_filtro
-      fallback_ink_cost AS (
-          SELECT
-              tf.color AS color_code,
-              CASE
-                  WHEN inv.cantidad_inicial > 0 THEN (inv.costo / inv.cantidad_inicial)
-                  ELSE 0
-              END AS ink_cost_per_ml
-          FROM tinta_filtro tf
-          JOIN inventario inv ON tf.id_inventario = inv._id
-      ),
-      -- CTE 3: Usa los CTEs anteriores para calcular el costo total de la tinta para cada orden.
-      costos_por_orden AS (
-          SELECT
-              tin.id_orden,
-              ROUND(
-                  (COALESCE(tin.c, 0) * COALESCE(lic_c.ink_cost_per_ml, fic_c.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.m, 0) * COALESCE(lic_m.ink_cost_per_ml, fic_m.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.y, 0) * COALESCE(lic_y.ink_cost_per_ml, fic_y.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.k, 0) * COALESCE(lic_k.ink_cost_per_ml, fic_k.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.w, 0) * COALESCE(lic_w.ink_cost_per_ml, fic_w.ink_cost_per_ml, 0))
-              , 2) AS total_tinta_costo
-          FROM
-              tintas tin
-          -- Primero intentamos con tintas_recargas
-          LEFT JOIN last_ink_refill_cost lic_c ON lic_c.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_c.color = 'C' AND lic_c.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_m ON lic_m.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_m.color = 'M' AND lic_m.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_y ON lic_y.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_y.color = 'Y' AND lic_y.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_k ON lic_k.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_k.color = 'K' AND lic_k.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_w ON lic_w.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_w.color = 'W' AND lic_w.rn = 1
-          -- Fallback: usamos inventario directamente si no hay recargas
-          LEFT JOIN fallback_ink_cost fic_c ON fic_c.color_code = 'C'
-          LEFT JOIN fallback_ink_cost fic_m ON fic_m.color_code = 'M'
-          LEFT JOIN fallback_ink_cost fic_y ON fic_y.color_code = 'Y'
-          LEFT JOIN fallback_ink_cost fic_k ON fic_k.color_code = 'K'
-          LEFT JOIN fallback_ink_cost fic_w ON fic_w.color_code = 'W'
-          GROUP BY tin.id_orden
-      )
-
-      -- Consulta Final: Unimos tu consulta original con nuestros costos calculados.
-      SELECT
-          imo.id_orden,
-          imo.c AS cyan,
-          imo.m AS magenta,
-          imo.y AS yellow,
-          imo.k AS black,
-          (COALESCE(imo.c, 0) + COALESCE(imo.m, 0) + COALESCE(imo.y, 0) + COALESCE(imo.k, 0) + COALESCE(imo.w, 0)) AS total_tinta_consumo_ml,
-          cpo.total_tinta_costo
-      FROM
-          tintas imo
-      LEFT JOIN
-          costos_por_orden cpo ON imo.id_orden = cpo.id_orden
-      WHERE DATE(imo.moment) BETWEEN ? AND ?
-      ORDER BY
-          imo.id_orden ASC
-      SQL;
-
-            $tintasData = $db->goQuery($sqlTintas, [$inicio, $fin]);
-            $finalResponse['tintas_consumidas'] = $tintasData;
-
-            // --- Consulta Resumida de Tintas (solo totales por orden) ---
-            $sqlTintasResumen = <<<SQL
-      -- Usamos tres CTEs: uno para recargas, otro para fallback desde inventario, y otro para calcular el costo total.
-      WITH
-      -- CTE 1: Encuentra el costo por ml de la última recarga para cada tanque.
-      last_ink_refill_cost AS (
-          SELECT
-              tr.id_catalogo_impresora,
-              tr.color,
-              CASE
-                  WHEN inv.cantidad_inicial > 0 THEN (inv.costo / inv.cantidad_inicial)
-                  ELSE 0
-              END AS ink_cost_per_ml,
-              ROW_NUMBER() OVER (PARTITION BY tr.id_catalogo_impresora, tr.color ORDER BY tr.fecha_recarga DESC) as rn
-          FROM
-              tintas_recargas tr
-          JOIN
-              inventario inv ON tr.id_insumo = inv._id
-      ),
-      -- CTE 2 (NUEVO): Fallback - Obtiene el costo por ml desde inventario usando tinta_filtro
-      fallback_ink_cost AS (
-          SELECT
-              tf.color AS color_code,
-              CASE
-                  WHEN inv.cantidad_inicial > 0 THEN (inv.costo / inv.cantidad_inicial)
-                  ELSE 0
-              END AS ink_cost_per_ml
-          FROM tinta_filtro tf
-          JOIN inventario inv ON tf.id_inventario = inv._id
-      ),
-      -- CTE 3: Usa los CTEs anteriores para calcular el costo total de la tinta para cada orden.
-      costos_por_orden AS (
-          SELECT
-              tin.id_orden,
-              ROUND(
-                  (COALESCE(tin.c, 0) * COALESCE(lic_c.ink_cost_per_ml, fic_c.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.m, 0) * COALESCE(lic_m.ink_cost_per_ml, fic_m.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.y, 0) * COALESCE(lic_y.ink_cost_per_ml, fic_y.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.k, 0) * COALESCE(lic_k.ink_cost_per_ml, fic_k.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.w, 0) * COALESCE(lic_w.ink_cost_per_ml, fic_w.ink_cost_per_ml, 0))
-              , 2) AS total_tinta_costo
-          FROM
-              tintas tin
-          LEFT JOIN last_ink_refill_cost lic_c ON lic_c.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_c.color = 'C' AND lic_c.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_m ON lic_m.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_m.color = 'M' AND lic_m.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_y ON lic_y.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_y.color = 'Y' AND lic_y.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_k ON lic_k.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_k.color = 'K' AND lic_k.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_w ON lic_w.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_w.color = 'W' AND lic_w.rn = 1
-          -- Fallback desde inventario
-          LEFT JOIN fallback_ink_cost fic_c ON fic_c.color_code = 'C'
-          LEFT JOIN fallback_ink_cost fic_m ON fic_m.color_code = 'M'
-          LEFT JOIN fallback_ink_cost fic_y ON fic_y.color_code = 'Y'
-          LEFT JOIN fallback_ink_cost fic_k ON fic_k.color_code = 'K'
-          LEFT JOIN fallback_ink_cost fic_w ON fic_w.color_code = 'W'
-          GROUP BY tin.id_orden
-      )
-
-      -- Consulta Final Resumida: Solo totales por orden
-      SELECT
-          imo.id_orden,
-          (COALESCE(imo.c, 0) + COALESCE(imo.m, 0) + COALESCE(imo.y, 0) + COALESCE(imo.k, 0) + COALESCE(imo.w, 0)) AS total_tinta_consumo_ml,
-          cpo.total_tinta_costo
-      FROM
-          tintas imo
-      LEFT JOIN
-          costos_por_orden cpo ON imo.id_orden = cpo.id_orden
-      WHERE DATE(imo.moment) BETWEEN ? AND ?
-      ORDER BY
-          imo.id_orden ASC
-      SQL;
-
-            $tintasResumenData = $db->goQuery($sqlTintasResumen, [$inicio, $fin]);
-            $finalResponse['tintas_resumen'] = $tintasResumenData;
-
-            // --- Consulta de Insumos Consumidos Resumen ---
-            $sqlInsumosResumen = "
-      SELECT
-        a.id_orden,
-          ((a.valor_inicial - a.valor_final - b.desperdicio) / ((a.valor_inicial - a.valor_final) / 100)) eficiencia
-      FROM inventario_movimientos a
-      JOIN rendimiento b ON a.id_insumo = b.id_orden
-      WHERE DATE(a.fecha) BETWEEN ? AND ?
-      GROUP BY a.id_orden
-      ORDER BY a.id_orden ASC;
-      ";
-
-            $insumosResumenData = $db->goQuery($sqlInsumosResumen, [$inicio, $fin]);
-            $finalResponse['insumos_resumen'] = $insumosResumenData;
-
-            // --- Consulta de Insumos Consumidos Detalles ---
-            $sqlInsumosResumenDetalles = "
-      SELECT
-            a._id id_inventario_movimientos,
-            a.id_orden,
-          a.id_producto,
-            d.product producto,
-            c.insumo,
-            ((a.valor_inicial - a.valor_final - b.desperdicio) / ((a.valor_inicial - a.valor_final) / 100)) eficiencia
-        FROM
-          inventario_movimientos a
-            LEFT JOIN rendimiento b ON a.id_orden = b.id_orden 
-            JOIN inventario c ON a.id_insumo = c._id 
-            JOIN products d ON a.id_producto = d._id
-        WHERE DATE(a.fecha) BETWEEN ? AND ?
-        ORDER BY a.id_orden ASC;
-      ";
-
-            $insumosResumenDataDetalles = $db->goQuery($sqlInsumosResumenDetalles, [$inicio, $fin]);
-            $finalResponse['insumos_detalles'] = $insumosResumenDataDetalles;
-
-            // Consulta de tareas de empleados (debe ir ANTES del disconnect)
-            $sqlHorarioEmpleados = "SELECT
-            a.id_orden,
-            a.id_empleado,
-            a.fecha_inicio,
-            a.fecha_terminado,
-            TIME_TO_SEC(TIMEDIFF(a.fecha_terminado, a.fecha_inicio)) / 60 AS minutos_transcurridos
-        FROM
-            lotes_detalles_empleados_asignados a
-        WHERE
-            a.fecha_inicio IS NOT NULL AND a.fecha_terminado IS NOT NULL;
-      ";
-            $horarioEmpleadosResult = $db->goQuery($sqlHorarioEmpleados);
-            $finalResponse['tareas_data'] = $horarioEmpleadosResult;
-
-            $db->disconnect();
-
-            // --- 2. Consulta de Gastos Fijos (Base de datos de empresas) ---
-            $dbEmpresas = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
-            $sqlGastos = "SELECT SUM(
-                        CASE periodicidad
-                            WHEN 'mensual' THEN monto / 4.33
-                            WHEN 'trimestral' THEN monto / 13
-                            WHEN 'semestral' THEN monto / 26
-                            WHEN 'anual' THEN monto / 52 
-                            ELSE 0
-                        END
-                    ) AS total_gastos_semanales 
-                    FROM empresas_gastos
-                    WHERE id_empresa = ? AND estatus = 'activo'";
-
-            $gastosResult = $dbEmpresas->goQuery($sqlGastos, [$id_empresa]);
-
-            $sqlHorario = "SELECT
-          eu.id_usuario,    
-          eu.nombre,    
-          eu.salario_tipo, 
-            eu.salario_monto / 
-            (
-                (
-                    (JSON_VALUE(e.horario_laboral, '$.horaFinManana') - JSON_VALUE(e.horario_laboral, '$.horaInicioManana')) + 
-                    (JSON_VALUE(e.horario_laboral, '$.horaFinTarde') - JSON_VALUE(e.horario_laboral, '$.horaInicioTarde'))
-                ) * JSON_LENGTH(e.horario_laboral, '$.diasLaborales') * (52 / 12)
-            ) AS costo_por_hora
-        FROM
-            empresas_usuarios eu
-        LEFT JOIN
-            empresas e ON eu.id_empresa = e.id_empresa -- <-- CORREGIDO: Usando 'id_empresa' para el JOIN
-        WHERE
-            (eu.salario_tipo LIKE 'Salario' OR eu.salario_tipo LIKE 'Salario más Comisión') AND 
-            eu.id_empresa =  $id_empresa
-      ";
-
-            // $horarioResult = $dbEmpresas->goQuery($sqlHorario, [$id_empresa]);
-            $horarioResult = $dbEmpresas->goQuery($sqlHorario);
-            $finalResponse['costo_hora_empleado'] = $horarioResult;
-
-
-            if (isset($gastosResult['status']) && $gastosResult['status'] === 'error') {
-                throw new Exception('Error en la consulta de gastos: ' . $gastosResult['message']);
-            }
-            $totalGastosSemanales = !empty($gastosResult) ? (float) $gastosResult[0]['total_gastos_semanales'] : 0;
-            $dbEmpresas->disconnect();
-
-            // --- 3. Cálculos combinados ---
-            $totalProductosPeriodo = 0;
-            foreach ($reporteData as $row) {
-                $totalProductosPeriodo += $row['total_productos'];
+                throw new Exception('Error en la consulta base del reporte: ' . $reporteData['message']);
             }
 
-            $costoOperativoPorProducto = 0;
-            if ($totalProductosPeriodo > 0) {
-                $costoOperativoPorProducto = $totalGastosSemanales / $totalProductosPeriodo;
+            if (empty($reporteData)) {
+                $finalResponse['reporte_data'] = [];
+            } else {
+                $orderIds = array_column($reporteData, 'id_orden');
+                $orderIdsStr = implode(',', $orderIds);
+
+                // 2. Obtener Nombres de Vendedores
+                $vendedoresSql = "SELECT id_usuario, nombre FROM api_empresas.empresas_usuarios WHERE id_empresa = $id_empresa";
+                $vendedoresRaw = $dbEmpresas->goQuery($vendedoresSql);
+                $vendedoresMap = [];
+                foreach ($vendedoresRaw as $v) $vendedoresMap[$v['id_usuario']] = $v['nombre'];
+
+                // 3. BATCH: Total Productos
+                $productosSql = "SELECT id_orden, SUM(cantidad) as total FROM $companyDB.ordenes_productos WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden";
+                $productosRaw = $dbEmpresas->goQuery($productosSql);
+                $productosMap = [];
+                foreach ($productosRaw as $p) $productosMap[$p['id_orden']] = $p['total'];
+
+                // 4. BATCH: Costo de Insumos
+                $insumosSql = "SELECT c.id_orden, SUM((c.valor_inicial - c.valor_final) * (d.costo / d.cantidad_inicial)) as total 
+                               FROM $companyDB.inventario_movimientos c JOIN $companyDB.inventario d ON c.id_insumo = d._id 
+                               WHERE c.id_orden IN ($orderIdsStr) GROUP BY c.id_orden";
+                $insumosRaw = $dbEmpresas->goQuery($insumosSql);
+                $insumosMap = [];
+                foreach ($insumosRaw as $i) $insumosMap[$i['id_orden']] = $i['total'];
+
+                // 5. BATCH: Costo Mano de Obra (Pagos)
+                $pagosSql = "SELECT id_orden, SUM(monto_pago) as total FROM $companyDB.pagos WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden";
+                $pagosRaw = $dbEmpresas->goQuery($pagosSql);
+                $pagosMap = [];
+                foreach ($pagosRaw as $p) $pagosMap[$p['id_orden']] = $p['total'];
+
+                // 6. BATCH: Reposiciones
+                $reposSql = "SELECT id_orden, COUNT(_id) as total FROM $companyDB.reposiciones WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden";
+                $reposRaw = $dbEmpresas->goQuery($reposSql);
+                $reposMap = [];
+                foreach ($reposRaw as $r) $reposMap[$r['id_orden']] = $r['total'];
+
+                // 7. BATCH: Empleados Asignados y Tiempo de Producción (Optimizado)
+                $empAsigSql = "SELECT 
+                        id_orden, 
+                        GROUP_CONCAT(DISTINCT id_empleado) as empleados,
+                        SUM(TIME_TO_SEC(TIMEDIFF(fecha_terminado, fecha_inicio)) / 3600) as tiempo_total
+                    FROM $companyDB.lotes_detalles_empleados_asignados 
+                    WHERE id_orden IN ($orderIdsStr) 
+                    GROUP BY id_orden";
+                $empAsigRaw = $dbEmpresas->goQuery($empAsigSql);
+                $empAsigMap = [];
+                $tiempoMap = [];
+                if (!empty($empAsigRaw) && !isset($empAsigRaw['status'])) {
+                    foreach ($empAsigRaw as $ea) {
+                        $empAsigMap[$ea['id_orden']] = $ea['empleados'];
+                        $tiempoMap[$ea['id_orden']] = (float)$ea['tiempo_total'];
+                    }
+                }
+
+                // 8. BATCH: Tintas
+                $tintasSql = "SELECT id_orden, moment, c, m, y, k, w, id_catalogo_impresoras FROM $companyDB.tintas WHERE id_orden IN ($orderIdsStr)";
+                $tintasRaw = $dbEmpresas->goQuery($tintasSql);
+
+                // Obtener costos de tintas (Recargas e Inventario)
+                $recargasSql = "SELECT tr.id_catalogo_impresora, tr.color, (inv.costo / inv.cantidad_inicial) as cost_ml FROM $companyDB.tintas_recargas tr JOIN $companyDB.inventario inv ON tr.id_insumo = inv._id ORDER BY tr.fecha_recarga DESC";
+                $recargasRaw = $dbEmpresas->goQuery($recargasSql);
+                $costMap = [];
+                foreach ($recargasRaw as $r) {
+                    if (!isset($costMap[$r['id_catalogo_impresora']][$r['color']])) $costMap[$r['id_catalogo_impresora']][$r['color']] = $r['cost_ml'];
+                }
+
+                $tintasDetalle = [];
+                $tintasResumenMap = [];
+                foreach ($tintasRaw as $t) {
+                    $id = $t['id_orden'];
+                    $cost_total = 0;
+                    $total_ml = 0;
+                    foreach (['c', 'm', 'y', 'k', 'w'] as $col) {
+                        $ml = (float)($t[$col] ?? 0);
+                        $total_ml += $ml;
+                        $cost_total += ($ml * ($costMap[$t['id_catalogo_impresoras']][strtoupper($col)] ?? 0));
+                    }
+                    $tintasDetalle[] = ['id_orden' => $id, 'total_tinta_consumo_ml' => $total_ml, 'total_tinta_costo' => round($cost_total, 2)];
+                    if (!isset($tintasResumenMap[$id])) $tintasResumenMap[$id] = ['ml' => 0, 'cost' => 0];
+                    $tintasResumenMap[$id]['ml'] += $total_ml;
+                    $tintasResumenMap[$id]['cost'] += $cost_total;
+                }
+
+                $tintasResumenFinal = [];
+                foreach ($tintasResumenMap as $id => $data) {
+                    $tintasResumenFinal[] = ['id_orden' => $id, 'total_tinta_consumo_ml' => $data['ml'], 'total_tinta_costo' => round($data['cost'], 2)];
+                }
+
+                // 9. Combinar Datos en reporteData
+                foreach ($reporteData as &$row) {
+                    $id = $row['id_orden'];
+                    $row['vendedor'] = $vendedoresMap[$row['id_vendedor']] ?? 'Desconocido';
+                    $row['total_productos'] = $productosMap[$id] ?? 0;
+                    $row['costos_de_insumos'] = ($insumosMap[$id] ?? 0) + ($tintasResumenMap[$id]['cost'] ?? 0);
+                    $row['costo_mano_de_obra'] = $pagosMap[$id] ?? 0;
+                    $row['tiempo_de_produccion'] = $tiempoMap[$id] ?? 0;
+                    $row['empleados_asignados'] = $empAsigMap[$id] ?? '';
+                    $row['reposiciones'] = $reposMap[$id] ?? 0;
+                }
+
+                $finalResponse['reporte_data'] = $reporteData;
+                $finalResponse['tintas_consumidas'] = $tintasDetalle;
+                $finalResponse['tintas_resumen'] = $tintasResumenFinal;
+
+                // 10. BATCH: Eficiencia de Insumos (Optimizado para evitar bloqueos)
+                $sqlInsumosResumen = "SELECT 
+                        movs.id_orden,
+                        AVG((movs.consumo - COALESCE(rend.desperdicio, 0)) / (NULLIF(movs.consumo, 0) / 100)) as eficiencia
+                    FROM (
+                        SELECT id_orden, id_insumo, SUM(valor_inicial - valor_final) as consumo
+                        FROM $companyDB.inventario_movimientos
+                        WHERE id_orden IN ($orderIdsStr)
+                        GROUP BY id_orden, id_insumo
+                    ) movs
+                    LEFT JOIN $companyDB.rendimiento rend ON movs.id_orden = rend.id_orden AND movs.id_insumo = rend.id_insumo
+                    GROUP BY movs.id_orden";
+                
+                $insumosResumenRaw = $dbEmpresas->goQuery($sqlInsumosResumen);
+                $eficienciaMap = [];
+                if (!empty($insumosResumenRaw) && !isset($insumosResumenRaw['status'])) {
+                    foreach ($insumosResumenRaw as $ir) {
+                        $eficienciaMap[$ir['id_orden']] = (float)$ir['eficiencia'];
+                    }
+                }
+                
+                // Integrar eficiencia directamente en reporteData
+                foreach ($reporteData as &$row) {
+                    $row['eficiencia_insumos'] = $eficienciaMap[$row['id_orden']] ?? 0;
+                }
+
+                $finalResponse['insumos_resumen'] = $insumosResumenRaw;
+
+                $sqlInsumosDetalles = "SELECT a._id id_inventario_movimientos, a.id_orden, a.id_producto, d.product producto, c.insumo, ((a.valor_inicial - a.valor_final - COALESCE(b.desperdicio, 0)) / (NULLIF(a.valor_inicial - a.valor_final, 0) / 100)) eficiencia FROM $companyDB.inventario_movimientos a LEFT JOIN $companyDB.rendimiento b ON a.id_orden = b.id_orden AND a.id_insumo = b.id_insumo JOIN $companyDB.inventario c ON a.id_insumo = c._id JOIN $companyDB.products d ON a.id_producto = d._id WHERE a.id_orden IN ($orderIdsStr) ORDER BY a.id_orden ASC";
+                $finalResponse['insumos_detalles'] = $dbEmpresas->goQuery($sqlInsumosDetalles);
+
+                // 11. Tareas de Empleados
+                $sqlTareas = "SELECT a.id_orden, a.id_empleado, a.fecha_inicio, a.fecha_terminado, TIME_TO_SEC(TIMEDIFF(a.fecha_terminado, a.fecha_inicio)) / 60 AS minutos_transcurridos FROM $companyDB.lotes_detalles_empleados_asignados a WHERE a.id_orden IN ($orderIdsStr) AND a.fecha_terminado IS NOT NULL";
+                $finalResponse['tareas_data'] = $dbEmpresas->goQuery($sqlTareas);
             }
+
+            // 12. Gastos Fijos (Siempre se incluyen para evitar errores en el Frontend)
+            $sqlGastos = "SELECT SUM(CASE periodicidad WHEN 'mensual' THEN monto / 4.33 WHEN 'trimestral' THEN monto / 13 WHEN 'semestral' THEN monto / 26 WHEN 'anual' THEN monto / 52 ELSE 0 END) AS total_gastos_semanales FROM $companyDB.empresas_gastos WHERE id_empresa = $id_empresa AND estatus = 'activo'";
+            $gastosResult = $dbEmpresas->goQuery($sqlGastos);
+            $totalGastosSemanales = (!empty($gastosResult) && isset($gastosResult[0]['total_gastos_semanales'])) ? (float)$gastosResult[0]['total_gastos_semanales'] : 0;
+
+            $totalProductosPeriodo = !empty($reporteData) ? array_sum(array_column($reporteData, 'total_productos')) : 0;
+            $costoOperativoPorProducto = $totalProductosPeriodo > 0 ? ($totalGastosSemanales / $totalProductosPeriodo) : 0;
 
             $finalResponse['costos_operativos'] = [
                 'total_gastos_semanales' => $totalGastosSemanales,
@@ -377,11 +230,10 @@ return function (App $app) {
                 'costo_operativo_por_producto' => $costoOperativoPorProducto
             ];
 
-            // --- 4. Enviar respuesta ---
-            $response->getBody()->write(json_encode($finalResponse, JSON_NUMERIC_CHECK));
+            $response->getBody()->write(json_encode($finalResponse, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } catch (Exception $e) {
-            $response->getBody()->write(json_encode(['error' => 'Error en la consulta del reporte: ' . $e->getMessage()]));
+            $response->getBody()->write(json_encode(['error' => 'Error en el reporte (Debug SQL Mode): ' . $e->getMessage()]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
     });
