@@ -1176,7 +1176,9 @@ ALTER TABLE `inventario`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `inventario_movimientos`
 ADD PRIMARY KEY (`_id`),
-  ADD KEY `id_orden` (
+  ADD KEY `id_orden` (`id_orden`),
+  ADD KEY `id_insumo` (`id_insumo`),
+  ADD KEY `idx_composite` (
     `id_orden`,
     `id_producto`,
     `id_empleado`,
@@ -1273,7 +1275,8 @@ ADD PRIMARY KEY (`_id`);
 ALTER TABLE `product_insumos_asignados`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `rendimiento`
-ADD PRIMARY KEY (`_id`);
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `id_orden` (`id_orden`);
 ALTER TABLE `reposiciones`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (
@@ -1632,6 +1635,14 @@ ADD CONSTRAINT `tintas_rec_ibfk_2` FOREIGN KEY (`id_catalogo_impresora`) REFEREN
 -- tinta_filtro
 ALTER TABLE `tinta_filtro`
 ADD CONSTRAINT `tinta_filtro_ibfk_1` FOREIGN KEY (`id_inventario`) REFERENCES `inventario` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- =====================================================
+-- PERMISOS REQUERIDOS (PARA REFERENCIA)
+-- =====================================================
+-- Estos comandos deben ejecutarse con el usuario root después de crear la empresa:
+-- 1. GRANT EXECUTE ON `api_empresas`.* TO 'api_user_N'@'localhost';
+-- 2. GRANT EXECUTE ON `api_empresas`.* TO 'api_user_N'@'%';
+-- 3. FLUSH PRIVILEGES;
 
 -- Permisos necesarios para consultas cruzadas (Módulo Administrador / Empleados)
 -- GRANT SELECT ON `api_emp_N`.* TO 'api_adminemp'@'localhost';

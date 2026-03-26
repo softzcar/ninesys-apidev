@@ -28,8 +28,10 @@ class LocalDB
     }
 
     try {
+      // Forzar localhost para evitar cuelgues de TCP con 127.0.0.1 en entornos LiteSpeed
+      $sanitizedDSN = str_replace('127.0.0.1', 'localhost', $this->dsn);
       $this->pdo = new PDO(
-        $this->dsn,
+        $sanitizedDSN,
         $this->user,
         $this->pass,
         array(
