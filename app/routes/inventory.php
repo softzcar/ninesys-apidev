@@ -731,9 +731,8 @@ return function (App $app) {
             inv.unidad,    
             inv.departamento
         FROM
-            inventario inv
-        RIGHT JOIN inventario_movimientos imo ON imo.id_insumo = inv._id
-        INNER JOIN tintas tin On tin.id_orden = imo.id_orden 
+            inventario_movimientos imo
+        LEFT JOIN inventario inv ON imo.id_insumo = inv._id
         ' . $where . '
         ORDER BY imo.id_orden ASC, inv.insumo ASC';
         $object['insumos_consumidos'] = $localConnection->goQuery($sql);

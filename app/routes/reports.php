@@ -169,7 +169,7 @@ return function (App $app) {
                     $id = $row['id_orden'];
                     $row['vendedor'] = $vendedoresMap[$row['id_vendedor']] ?? 'Desconocido';
                     $row['total_productos'] = $productosMap[$id] ?? 0;
-                    $row['costos_de_insumos'] = ($insumosMap[$id] ?? 0) + ($tintasResumenMap[$id]['cost'] ?? 0);
+                    $row['costos_de_insumos'] = $insumosMap[$id] ?? 0;
                     $row['costo_mano_de_obra'] = $pagosMap[$id] ?? 0;
                     $row['tiempo_de_produccion'] = $tiempoMap[$id] ?? 0;
                     $row['empleados_asignados'] = $empAsigMap[$id] ?? '';
