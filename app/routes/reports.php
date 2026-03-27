@@ -14,6 +14,8 @@ return function (App $app) {
         $inicio = $args['inicio'] ?? null;
         $fin = $args['fin'] ?? null;
         $id_empresa = ID_EMPRESA;
+        $queryParams = $request->getQueryParams();
+        $debug = isset($queryParams['debug']) && (string)$queryParams['debug'] === '1';
 
         try {
             $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
@@ -42,8 +44,34 @@ return function (App $app) {
             $whereConditions[] = "a.status IN ('terminada', 'entregada')";
 
             // Obtener datos de salarios para el reporte
-            $sqlSalarios = "SELECT id_usuario id_empleado, salario_monto, salario_periodo, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_empresa = $id_empresa";
+            $sqlSalarios = "SELECT id_usuario, id_usuario as id_empleado, nombre, salario_monto, salario_periodo, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_empresa = $id_empresa";
             $salariosData = $dbEmpresas->goQuery($sqlSalarios);
+            $horarioObj = $horario_laboral ? json_decode($horario_laboral, true) : null;
+            $horasDia = 0;
+            $diasSemana = 0;
+            if (is_array($horarioObj)) {
+                $horasDia = (float)($horarioObj['horaFinManana'] ?? 0) - (float)($horarioObj['horaInicioManana'] ?? 0);
+                $horasDia += (float)($horarioObj['horaFinTarde'] ?? 0) - (float)($horarioObj['horaInicioTarde'] ?? 0);
+                $diasSemana = is_array($horarioObj['diasLaborales'] ?? null) ? count($horarioObj['diasLaborales']) : 0;
+            }
+            $horasSemana = max(0, $horasDia) * max(0, $diasSemana);
+            if (is_array($salariosData) && !isset($salariosData['status'])) {
+                foreach ($salariosData as &$emp) {
+                    $monto = (float)($emp['salario_monto'] ?? 0);
+                    $periodo = strtolower((string)($emp['salario_periodo'] ?? ''));
+                    $factorSemanas = 0;
+                    if ($periodo === 'semanal') $factorSemanas = 1;
+                    else if ($periodo === 'quincenal') $factorSemanas = 2;
+                    else if ($periodo === 'mensual') $factorSemanas = 4.33;
+                    else if ($periodo === 'bimensual') $factorSemanas = 8.66;
+                    else if ($periodo === 'trimestral') $factorSemanas = 13;
+                    else if ($periodo === 'semestral') $factorSemanas = 26;
+                    else if ($periodo === 'anual') $factorSemanas = 52;
+
+                    $horasPeriodo = $horasSemana > 0 && $factorSemanas > 0 ? ($horasSemana * $factorSemanas) : 0;
+                    $emp['costo_por_hora'] = $horasPeriodo > 0 ? round($monto / $horasPeriodo, 4) : 0;
+                }
+            }
             $finalResponse['costo_hora_empleado'] = $salariosData;
 
             $companyDB = LOCAL_DB;
@@ -93,7 +121,7 @@ return function (App $app) {
                 foreach ($productosRaw as $p) $productosMap[$p['id_orden']] = $p['total'];
 
                 // 4. BATCH: Costo de Insumos
-                $insumosSql = "SELECT c.id_orden, SUM((c.valor_inicial - c.valor_final) * (d.costo / d.cantidad_inicial)) as total 
+                $insumosSql = "SELECT c.id_orden, SUM(ABS(c.valor_inicial - c.valor_final) * (d.costo / d.cantidad_inicial)) as total 
                                FROM $companyDB.inventario_movimientos c JOIN $companyDB.inventario d ON c.id_insumo = d._id 
                                WHERE c.id_orden IN ($orderIdsStr) GROUP BY c.id_orden";
                 $insumosRaw = $dbEmpresas->goQuery($insumosSql);
@@ -111,6 +139,34 @@ return function (App $app) {
                 $reposRaw = $dbEmpresas->goQuery($reposSql);
                 $reposMap = [];
                 foreach ($reposRaw as $r) $reposMap[$r['id_orden']] = $r['total'];
+
+                $debugMaps = [];
+                if ($debug) {
+                    $debugMaps = [
+                        'movs' => [],
+                        'pagos' => [],
+                        'tintas' => [],
+                        'tareas_total' => [],
+                        'tareas_abiertas' => [],
+                    ];
+
+                    $dbgMovs = $dbEmpresas->goQuery("SELECT id_orden, COUNT(*) as cnt FROM $companyDB.inventario_movimientos WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden");
+                    if (is_array($dbgMovs) && !isset($dbgMovs['status'])) foreach ($dbgMovs as $x) $debugMaps['movs'][$x['id_orden']] = (int)$x['cnt'];
+
+                    $dbgPagos = $dbEmpresas->goQuery("SELECT id_orden, COUNT(*) as cnt FROM $companyDB.pagos WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden");
+                    if (is_array($dbgPagos) && !isset($dbgPagos['status'])) foreach ($dbgPagos as $x) $debugMaps['pagos'][$x['id_orden']] = (int)$x['cnt'];
+
+                    $dbgTintas = $dbEmpresas->goQuery("SELECT id_orden, COUNT(*) as cnt FROM $companyDB.tintas WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden");
+                    if (is_array($dbgTintas) && !isset($dbgTintas['status'])) foreach ($dbgTintas as $x) $debugMaps['tintas'][$x['id_orden']] = (int)$x['cnt'];
+
+                    $dbgTareas = $dbEmpresas->goQuery("SELECT id_orden, COUNT(*) as total, SUM(CASE WHEN fecha_terminado IS NULL THEN 1 ELSE 0 END) as abiertas FROM $companyDB.lotes_detalles_empleados_asignados WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden");
+                    if (is_array($dbgTareas) && !isset($dbgTareas['status'])) {
+                        foreach ($dbgTareas as $x) {
+                            $debugMaps['tareas_total'][$x['id_orden']] = (int)$x['total'];
+                            $debugMaps['tareas_abiertas'][$x['id_orden']] = (int)$x['abiertas'];
+                        }
+                    }
+                }
 
                 // 7. BATCH: Empleados Asignados y Tiempo de Producción (Optimizado)
                 $empAsigSql = "SELECT 
@@ -174,18 +230,33 @@ return function (App $app) {
                     $row['tiempo_de_produccion'] = $tiempoMap[$id] ?? 0;
                     $row['empleados_asignados'] = $empAsigMap[$id] ?? '';
                     $row['reposiciones'] = $reposMap[$id] ?? 0;
+                    if ($debug) {
+                        $row['debug_movimientos_insumos'] = $debugMaps['movs'][$id] ?? 0;
+                        $row['debug_pagos'] = $debugMaps['pagos'][$id] ?? 0;
+                        $row['debug_tintas'] = $debugMaps['tintas'][$id] ?? 0;
+                        $row['debug_tareas_total'] = $debugMaps['tareas_total'][$id] ?? 0;
+                        $row['debug_tareas_abiertas'] = $debugMaps['tareas_abiertas'][$id] ?? 0;
+                    }
                 }
 
                 $finalResponse['reporte_data'] = $reporteData;
                 $finalResponse['tintas_consumidas'] = $tintasDetalle;
                 $finalResponse['tintas_resumen'] = $tintasResumenFinal;
+                if ($debug) {
+                    $finalResponse['debug'] = [
+                        'id_empresa' => $id_empresa,
+                        'inicio' => $inicio,
+                        'fin' => $fin,
+                        'orders' => count($orderIds),
+                    ];
+                }
 
                 // 10. BATCH: Eficiencia de Insumos (Optimizado para evitar bloqueos)
                 $sqlInsumosResumen = "SELECT 
                         movs.id_orden,
                         AVG((movs.consumo - COALESCE(rend.desperdicio, 0)) / (NULLIF(movs.consumo, 0) / 100)) as eficiencia
                     FROM (
-                        SELECT id_orden, id_insumo, SUM(valor_inicial - valor_final) as consumo
+                        SELECT id_orden, id_insumo, SUM(ABS(valor_inicial - valor_final)) as consumo
                         FROM $companyDB.inventario_movimientos
                         WHERE id_orden IN ($orderIdsStr)
                         GROUP BY id_orden, id_insumo
@@ -208,7 +279,7 @@ return function (App $app) {
 
                 $finalResponse['insumos_resumen'] = $insumosResumenRaw;
 
-                $sqlInsumosDetalles = "SELECT a._id id_inventario_movimientos, a.id_orden, a.id_producto, d.product producto, c.insumo, ((a.valor_inicial - a.valor_final - COALESCE(b.desperdicio, 0)) / (NULLIF(a.valor_inicial - a.valor_final, 0) / 100)) eficiencia FROM $companyDB.inventario_movimientos a LEFT JOIN $companyDB.rendimiento b ON a.id_orden = b.id_orden AND a.id_insumo = b.id_insumo JOIN $companyDB.inventario c ON a.id_insumo = c._id JOIN $companyDB.products d ON a.id_producto = d._id WHERE a.id_orden IN ($orderIdsStr) ORDER BY a.id_orden ASC";
+                $sqlInsumosDetalles = "SELECT a._id id_inventario_movimientos, a.id_orden, a.id_producto, d.product producto, c.insumo, ((ABS(a.valor_inicial - a.valor_final) - COALESCE(b.desperdicio, 0)) / (NULLIF(ABS(a.valor_inicial - a.valor_final), 0) / 100)) eficiencia FROM $companyDB.inventario_movimientos a LEFT JOIN $companyDB.rendimiento b ON a.id_orden = b.id_orden AND a.id_insumo = b.id_insumo JOIN $companyDB.inventario c ON a.id_insumo = c._id JOIN $companyDB.products d ON a.id_producto = d._id WHERE a.id_orden IN ($orderIdsStr) ORDER BY a.id_orden ASC";
                 $finalResponse['insumos_detalles'] = $dbEmpresas->goQuery($sqlInsumosDetalles);
 
                 // 11. Tareas de Empleados

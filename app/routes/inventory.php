@@ -725,9 +725,9 @@ return function (App $app) {
             inv.color,
             inv.costo,    
             inv.rendimiento,       
-            (imo.valor_inicial - imo.valor_final) cantidad_utilizada,
+            ABS(imo.valor_inicial - imo.valor_final) cantidad_utilizada,
             inv.cantidad cantidad_restante, 
-            ROUND(((inv.costo / inv.cantidad_inicial) * (imo.valor_inicial - imo.valor_final)), 2) AS total_insumo,
+            ROUND(((inv.costo / inv.cantidad_inicial) * ABS(imo.valor_inicial - imo.valor_final)), 2) AS total_insumo,
             inv.unidad,    
             inv.departamento
         FROM
@@ -737,83 +737,65 @@ return function (App $app) {
         ORDER BY imo.id_orden ASC, inv.insumo ASC';
         $object['insumos_consumidos'] = $localConnection->goQuery($sql);
 
-        // $sql = 'SELECT imo.id_orden, imo.c cyan, imo.m magenta, imo.y yellow, imo.k black, (imo.c + imo.m + imo.y + imo.k) total_tinta FROM tintas imo ' . $where . ' ORDER BY imo.id_orden ASC';
-        $sql = <<<SQL
-      -- Usamos tres CTEs: uno para recargas, otro para fallback desde inventario, y otro para calcular el costo total.
-      WITH 
-      -- CTE 1: Encuentra el costo por ml de la última recarga para cada tanque.
-      last_ink_refill_cost AS (
-          SELECT
-              tr.id_catalogo_impresora,
-              tr.color,
-              CASE 
-                  WHEN inv.cantidad_inicial > 0 THEN (inv.costo / inv.cantidad_inicial)
-                  ELSE 0 
-              END AS ink_cost_per_ml,
-              ROW_NUMBER() OVER (PARTITION BY tr.id_catalogo_impresora, tr.color ORDER BY tr.fecha_recarga DESC) as rn
-          FROM
-              tintas_recargas tr
-          JOIN
-              inventario inv ON tr.id_insumo = inv._id
-      ),
-      -- CTE 2: Fallback - Obtiene el costo por ml desde inventario usando tinta_filtro
-      fallback_ink_cost AS (
-          SELECT
-              tf.color AS color_code,
-              CASE
-                  WHEN inv.cantidad_inicial > 0 THEN (inv.costo / inv.cantidad_inicial)
-                  ELSE 0
-              END AS ink_cost_per_ml
-          FROM tinta_filtro tf
-          JOIN inventario inv ON tf.id_inventario = inv._id
-      ),
-      -- CTE 3: Usa los CTEs anteriores para calcular el costo total de la tinta para cada orden.
-      costos_por_orden AS (
-          SELECT
-              tin.id_orden,
-              ROUND(
-                  (COALESCE(tin.c, 0) * COALESCE(lic_c.ink_cost_per_ml, fic_c.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.m, 0) * COALESCE(lic_m.ink_cost_per_ml, fic_m.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.y, 0) * COALESCE(lic_y.ink_cost_per_ml, fic_y.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.k, 0) * COALESCE(lic_k.ink_cost_per_ml, fic_k.ink_cost_per_ml, 0)) +
-                  (COALESCE(tin.w, 0) * COALESCE(lic_w.ink_cost_per_ml, fic_w.ink_cost_per_ml, 0))
-              , 2) AS total_tinta_costo
-          FROM
-              tintas tin
-          LEFT JOIN last_ink_refill_cost lic_c ON lic_c.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_c.color = 'C' AND lic_c.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_m ON lic_m.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_m.color = 'M' AND lic_m.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_y ON lic_y.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_y.color = 'Y' AND lic_y.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_k ON lic_k.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_k.color = 'K' AND lic_k.rn = 1
-          LEFT JOIN last_ink_refill_cost lic_w ON lic_w.id_catalogo_impresora = tin.id_catalogo_impresoras AND lic_w.color = 'W' AND lic_w.rn = 1
-          -- Fallback desde inventario
-          LEFT JOIN fallback_ink_cost fic_c ON fic_c.color_code = 'C'
-          LEFT JOIN fallback_ink_cost fic_m ON fic_m.color_code = 'M'
-          LEFT JOIN fallback_ink_cost fic_y ON fic_y.color_code = 'Y'
-          LEFT JOIN fallback_ink_cost fic_k ON fic_k.color_code = 'K'
-          LEFT JOIN fallback_ink_cost fic_w ON fic_w.color_code = 'W'
-          GROUP BY tin.id_orden
-      )
+        if (!is_null($id_orden) && intval($id_orden) > 0) {
+            $tintasRows = $localConnection->goQuery("SELECT id_orden, id_catalogo_impresoras, c, m, y, k, w FROM tintas WHERE id_orden = $id_orden");
+            if (!is_array($tintasRows) || isset($tintasRows['status']) || empty($tintasRows)) {
+                $object['tintas'] = [];
+            } else {
+                $printerIds = [];
+                foreach ($tintasRows as $tr) {
+                    if (isset($tr['id_catalogo_impresoras'])) $printerIds[] = (int)$tr['id_catalogo_impresoras'];
+                }
+                $printerIds = array_values(array_unique(array_filter($printerIds)));
+                $printerIdsStr = !empty($printerIds) ? implode(',', $printerIds) : '';
 
-      -- Consulta Final: Unimos tu consulta original con nuestros costos calculados.
-      SELECT 
-          imo.id_orden, 
-          imo.c AS cyan, 
-          imo.m AS magenta, 
-          imo.y AS yellow, 
-          imo.k AS black,
-          imo.w AS white,
-          (COALESCE(imo.c, 0) + COALESCE(imo.m, 0) + COALESCE(imo.y, 0) + COALESCE(imo.k, 0) + COALESCE(imo.w, 0)) AS total_tinta_consumo_ml,
-          cpo.total_tinta_costo
-      FROM 
-          tintas imo
-      LEFT JOIN 
-          costos_por_orden cpo ON imo.id_orden = cpo.id_orden
-      {$where}
-      ORDER BY 
-          imo.id_orden ASC
-      SQL;
+                $fallbackRaw = $localConnection->goQuery("SELECT tf.color AS color_code, (inv.costo / inv.cantidad_inicial) AS cost_ml FROM tinta_filtro tf JOIN inventario inv ON tf.id_inventario = inv._id");
+                $fallbackMap = [];
+                if (is_array($fallbackRaw) && !isset($fallbackRaw['status'])) {
+                    foreach ($fallbackRaw as $fr) $fallbackMap[strtoupper($fr['color_code'])] = (float)($fr['cost_ml'] ?? 0);
+                }
 
-        $object['tintas'] = $localConnection->goQuery($sql);
+                $costMap = [];
+                if (!empty($printerIdsStr)) {
+                    $recargasRaw = $localConnection->goQuery("SELECT tr.id_catalogo_impresora, tr.color, (inv.costo / inv.cantidad_inicial) AS cost_ml FROM tintas_recargas tr JOIN inventario inv ON tr.id_insumo = inv._id WHERE tr.id_catalogo_impresora IN ($printerIdsStr) ORDER BY tr.fecha_recarga DESC");
+                    if (is_array($recargasRaw) && !isset($recargasRaw['status'])) {
+                        foreach ($recargasRaw as $rr) {
+                            $pid = (int)$rr['id_catalogo_impresora'];
+                            $col = strtoupper((string)$rr['color']);
+                            if (!isset($costMap[$pid][$col])) $costMap[$pid][$col] = (float)($rr['cost_ml'] ?? 0);
+                        }
+                    }
+                }
+
+                $tintasOut = [];
+                foreach ($tintasRows as $tr) {
+                    $pid = (int)($tr['id_catalogo_impresoras'] ?? 0);
+                    $totalMl = 0;
+                    $totalCost = 0;
+                    foreach (['c' => 'C', 'm' => 'M', 'y' => 'Y', 'k' => 'K', 'w' => 'W'] as $key => $colorCode) {
+                        $ml = (float)($tr[$key] ?? 0);
+                        $totalMl += $ml;
+                        $costMl = $costMap[$pid][$colorCode] ?? ($fallbackMap[$colorCode] ?? 0);
+                        $totalCost += ($ml * $costMl);
+                    }
+
+                    $tintasOut[] = [
+                        'id_orden' => (int)$tr['id_orden'],
+                        'cyan' => (float)($tr['c'] ?? 0),
+                        'magenta' => (float)($tr['m'] ?? 0),
+                        'yellow' => (float)($tr['y'] ?? 0),
+                        'black' => (float)($tr['k'] ?? 0),
+                        'white' => (float)($tr['w'] ?? 0),
+                        'total_tinta_consumo_ml' => $totalMl,
+                        'total_tinta_costo' => round($totalCost, 2),
+                    ];
+                }
+
+                $object['tintas'] = $tintasOut;
+            }
+        } else {
+            $object['tintas'] = $localConnection->goQuery("SELECT id_orden, c AS cyan, m AS magenta, y AS yellow, k AS black, w AS white, (COALESCE(c, 0) + COALESCE(m, 0) + COALESCE(y, 0) + COALESCE(k, 0) + COALESCE(w, 0)) AS total_tinta_consumo_ml, 0 AS total_tinta_costo FROM tintas imo $where ORDER BY id_orden ASC");
+        }
         $localConnection->disconnect();
 
         $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
