@@ -37,7 +37,8 @@ foreach ($empresas as $emp) {
         "ALTER TABLE `lotes_detalles_empleados_asignados` ADD INDEX `idx_orden_depto` (`id_orden`, `id_departamento`)",
         "ALTER TABLE `ordenes` ADD INDEX `idx_status` (`status`)",
         "ALTER TABLE `ordenes_productos` ADD INDEX `idx_orden_woo` (`id_orden`, `id_woo`)",
-        "ALTER TABLE `products_tiempos_de_produccion` ADD INDEX `idx_prod_depto` (`id_product`, `id_departamento`)"
+        "ALTER TABLE `products_tiempos_de_produccion` ADD INDEX `idx_prod_depto` (`id_product`, `id_departamento`)",
+        "ALTER TABLE `ordenes_fila_orden` ADD INDEX `idx_id_orden` (`id_orden`)"
     ];
 
     foreach($queries as $q) {
