@@ -1,34 +1,66 @@
 <?php
-require_once __DIR__ . '/../app/config.php';
-require_once __DIR__ . '/../app/model/LocalDB.php';
+// Standalone indexing script to avoid dependency issues
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-try {
-    $conn = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
-
-    // Encuentra bases de datos para indexar
-    $sql = "SELECT table_schema FROM information_schema.tables WHERE table_schema LIKE 'api_emp_%' GROUP BY table_schema;";
-    $result = $conn->goQuery($sql);
-    
-    foreach($result as $row) {
-        if(isset($row['table_schema'])) {
-            $db = $row['table_schema'];
-            echo "Updating $db...\n";
-            try {
-                // Add index on pagos
-                $conn->switchDatabase("mysql:host=localhost;dbname=$db", EMPRESAS_USER, EMPRESAS_PASS);
-                $conn->goQuery("ALTER TABLE pagos ADD INDEX idx_pagos_empleado_moment (id_empleado, moment);");
-                $conn->goQuery("ALTER TABLE pagos ADD INDEX idx_pagos_fecha (fecha_pago);");
-                
-                // Add index on pagos_salarios
-                $conn->goQuery("ALTER TABLE pagos_salarios ADD INDEX idx_pagos_salarios_id_pago (id_pago);");
-                echo "Added indexes for $db successfully.\n";
-            } catch (Exception $e) {
-                echo "Warning on $db: " . $e->getMessage() . "\n";
+// We need DB credentials. Since we are on-server, we can try to find them in .env
+function getDbConfig() {
+    $envFile = __DIR__ . '/../.env';
+    $config = [];
+    if (file_exists($envFile)) {
+        $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            if (strpos(trim($line), '#') === 0) continue;
+            if (strpos($line, '=') !== false) {
+                list($key, $value) = explode('=', $line, 2);
+                $config[trim($key)] = trim($value, "\"' ");
             }
         }
     }
-    echo "Done processing all databases.\n";
+    return $config;
+}
 
-} catch (Exception $e) {
-    echo "Error: " . $e->getMessage() . "\n";
+$config = getDbConfig();
+$host = $config['DB_HOST'] ?? 'localhost';
+$user = $config['DB_USER'] ?? 'root';
+$pass = $config['DB_PASS'] ?? '';
+
+try {
+    $pdo = new PDO("mysql:host=$host", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Find all company databases
+    $stmt = $pdo->query("SHOW DATABASES LIKE 'api_emp_%'");
+    $databases = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    foreach ($databases as $db) {
+        echo "Processing database: $db\n";
+        try {
+            $pdo->exec("USE `$db` ");
+            
+            // Index for pagos
+            echo " - Indexing pagos...\n";
+            try {
+                $pdo->exec("ALTER TABLE pagos ADD INDEX idx_pagos_empleado_moment (id_empleado, moment)");
+            } catch (Exception $e) { echo "   Warning: " . $e->getMessage() . "\n"; }
+            
+            try {
+                $pdo->exec("ALTER TABLE pagos ADD INDEX idx_pagos_fecha (fecha_pago)");
+            } catch (Exception $e) { echo "   Warning: " . $e->getMessage() . "\n"; }
+
+            // Index for pagos_salarios
+            echo " - Indexing pagos_salarios...\n";
+            try {
+                $pdo->exec("ALTER TABLE pagos_salarios ADD INDEX idx_ps_id_pago (id_pago)");
+            } catch (Exception $e) { echo "   Warning: " . $e->getMessage() . "\n"; }
+            
+            echo " - Done with $db\n";
+        } catch (Exception $e) {
+            echo "Error on $db: " . $e->getMessage() . "\n";
+        }
+    }
+    echo "Summary: All databases processed.\n";
+
+} catch (PDOException $e) {
+    die("Connection failed: " . $e->getMessage());
 }
