@@ -2792,11 +2792,18 @@ return function (App $app) {
 
     // --- INICIO DE LA SEGUNDA CORRECCIÓN ---
     $sql = "
-        -- Versión 5: Consulta súper optimizada con ActiveOrders CTE
+        -- Versión 6: Optimizada con OrderTotals CTE y reducción de subconsultas correlacionadas
         WITH ActiveOrders AS (
             SELECT _id, status, fecha_entrega
             FROM ordenes
             WHERE status IN ('En espera', 'activa', 'pausada')
+        ),
+        OrderTotals AS (
+            -- Pre-calculamos unidades totales por orden para evitar subconsultas repetitivas
+            SELECT id_orden, SUM(cantidad) AS total_unidades
+            FROM ordenes_productos
+            WHERE id_orden IN (SELECT _id FROM ActiveOrders)
+            GROUP BY id_orden
         ),
         AssignmentData AS (
             -- Consolidamos asignaciones por tarea (orden + departamento)
@@ -2805,7 +2812,6 @@ return function (App $app) {
                 ldea.id_departamento,
                 COUNT(DISTINCT ldea.id_empleado) AS numero_de_empleados,
                 MIN(ldea.fecha_inicio) AS fecha_inicio_agregada,
-                -- Solo consideramos terminado el departamento si TODOS los empleados terminaron
                 CASE 
                     WHEN COUNT(ldea.id_empleado) = COUNT(ldea.fecha_terminado) THEN MAX(ldea.fecha_terminado) 
                     ELSE NULL 
@@ -2818,7 +2824,7 @@ return function (App $app) {
                 ldea.id_departamento
         ),
         ProjectedCoverage AS (
-            -- Pre-calculamos la config para evitar NOT EXISTS lógicos costosos
+            -- Pre-calculamos la configuración por producto/depto
             SELECT DISTINCT a.id_orden, d.id_departamento
             FROM ordenes_productos a
             JOIN products_tiempos_de_produccion d ON d.id_product = a.id_woo
@@ -2835,7 +2841,7 @@ return function (App $app) {
                 ad.fecha_terminado_agregada AS fecha_terminado,
                 c.fecha_entrega AS fecha_entrega_de_la_orden,
                 CONCAT(c.fecha_entrega, ' 08:30:00') AS fecha_entrega_orden,
-                SUM(a.cantidad) AS total_unidades,
+                ot.total_unidades,
                 (SUM(d.tiempo * a.cantidad) / COALESCE(ad.numero_de_empleados, 1)) AS tiempo_total_orden_depto,
                 ofo.orden_fila AS orden_fila_orden,
                 dep.orden_proceso AS orden_proceso_departamento,
@@ -2848,6 +2854,8 @@ return function (App $app) {
                 departamentos dep ON dep._id = d.id_departamento
             JOIN
                 ActiveOrders c ON c._id = a.id_orden
+            JOIN
+                OrderTotals ot ON ot.id_orden = a.id_orden
             LEFT JOIN
                 AssignmentData ad ON ad.id_orden = a.id_orden AND ad.id_departamento = d.id_departamento
             LEFT JOIN
@@ -2868,7 +2876,7 @@ return function (App $app) {
                 ad.fecha_terminado_agregada AS fecha_terminado,
                 c.fecha_entrega AS fecha_entrega_de_la_orden,
                 CONCAT(c.fecha_entrega, ' 08:30:00') AS fecha_entrega_orden,
-                (SELECT SUM(op.cantidad) FROM ordenes_productos op WHERE op.id_orden = ad.id_orden) AS total_unidades,
+                ot.total_unidades,
                 0 AS tiempo_total_orden_depto,
                 ofo.orden_fila AS orden_fila_orden,
                 dep.orden_proceso AS orden_proceso_departamento,
@@ -2878,13 +2886,15 @@ return function (App $app) {
             JOIN
                 ActiveOrders c ON c._id = ad.id_orden
             JOIN
+                OrderTotals ot ON ot.id_orden = ad.id_orden
+            JOIN
                 departamentos dep ON dep._id = ad.id_departamento
             LEFT JOIN
                 ordenes_fila_orden ofo ON ofo.id_orden = ad.id_orden
             LEFT JOIN
                 ProjectedCoverage pc ON pc.id_orden = ad.id_orden AND pc.id_departamento = ad.id_departamento
             WHERE
-                pc.id_orden IS NULL -- Reemplaza el NOT EXISTS
+                pc.id_orden IS NULL
         ) AS UnifiedResults
         ORDER BY
             orden_fila_orden ASC,
