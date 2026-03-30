@@ -9,6 +9,108 @@ return function (App $app) {
 
   /** Fin asignacion */
 
+  // =========================================================
+  // BATCH: Actualizar orden de filas de órdenes (1 request)
+  // =========================================================
+  $app->post('/ordenes/actualizar-filas-batch', function (Request $request, Response $response) {
+    $body = $request->getParsedBody();
+
+    // Aceptamos tanto application/json como form-encoded con campo 'ordenes'
+    if (isset($body['ordenes'])) {
+      $ordenes = json_decode($body['ordenes'], true);
+    } else {
+      // Content-Type: application/json – Slim parsea directo
+      $ordenes = $body;
+    }
+
+    if (empty($ordenes) || !is_array($ordenes)) {
+      $response->getBody()->write(json_encode(['success' => false, 'message' => 'Payload vacío o inválido.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection = new LocalDB();
+    $localConnection->beginTransaction();
+
+    try {
+      foreach ($ordenes as $item) {
+        $id_orden   = intval($item['id_orden']   ?? 0);
+        $orden_fila = intval($item['orden_fila'] ?? 0);
+
+        if ($id_orden <= 0 || $orden_fila <= 0) {
+          throw new \Exception("Datos inválidos para id_orden={$id_orden}, orden_fila={$orden_fila}");
+        }
+
+        $sql = "UPDATE ordenes_fila_orden SET orden_fila = {$orden_fila} WHERE id_orden = {$id_orden}";
+        $localConnection->goQuery($sql);
+      }
+
+      $localConnection->commit();
+      $localConnection->disconnect();
+
+      $response->getBody()->write(json_encode(['success' => true]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (\Throwable $e) {
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
+      $localConnection->disconnect();
+      error_log('Error en /ordenes/actualizar-filas-batch: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['success' => false, 'message' => $e->getMessage()]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    }
+  });
+
+  // =========================================================
+  // BATCH: Actualizar orden de filas de reposiciones (1 request)
+  // =========================================================
+  $app->post('/reposiciones/actualizar-filas-batch', function (Request $request, Response $response) {
+    $body = $request->getParsedBody();
+
+    if (isset($body['reposiciones'])) {
+      $reposiciones = json_decode($body['reposiciones'], true);
+    } else {
+      $reposiciones = $body;
+    }
+
+    if (empty($reposiciones) || !is_array($reposiciones)) {
+      $response->getBody()->write(json_encode(['success' => false, 'message' => 'Payload vacío o inválido.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection = new LocalDB();
+    $localConnection->beginTransaction();
+
+    try {
+      foreach ($reposiciones as $item) {
+        $id_reposicion = intval($item['id_reposicion'] ?? 0);
+        $orden_fila    = intval($item['orden_fila']    ?? 0);
+
+        if ($id_reposicion <= 0 || $orden_fila <= 0) {
+          throw new \Exception("Datos inválidos para id_reposicion={$id_reposicion}, orden_fila={$orden_fila}");
+        }
+
+        $sql = "UPDATE ordenes_fila_reposiciones SET orden_fila = {$orden_fila} WHERE id_reposicion = {$id_reposicion}";
+        $localConnection->goQuery($sql);
+      }
+
+      $localConnection->commit();
+      $localConnection->disconnect();
+
+      $response->getBody()->write(json_encode(['success' => true]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+
+    } catch (\Throwable $e) {
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
+      $localConnection->disconnect();
+      error_log('Error en /reposiciones/actualizar-filas-batch: ' . $e->getMessage());
+      $response->getBody()->write(json_encode(['success' => false, 'message' => $e->getMessage()]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    }
+  });
+
   /** PRODUCCION */
 
   // SSE PRODUCCION
@@ -1915,6 +2017,13 @@ return function (App $app) {
         throw new \Exception('La orden no existe');
       }
 
+      $depCheck = $localConnection->goQuery("SELECT COUNT(*) cnt FROM inventario_movimientos WHERE id_orden = ?", [$id]);
+      $hasMovs = intval($depCheck[0]['cnt'] ?? 0) > 0;
+      $metaCheck = $localConnection->goQuery("SELECT COUNT(*) cnt FROM product_insumos_asignados pia JOIN ordenes_productos op ON op.id_woo = pia.id_product AND op.id_size = pia.id_talla WHERE op.id_orden = ?", [$id]);
+      $hasMeta = intval($metaCheck[0]['cnt'] ?? 0) > 0;
+      if ($hasMeta && !$hasMovs) {
+        throw new \Exception('La orden requiere consumo de insumos y no registra movimientos de inventario');
+      }
       // Actualizar estado
       $sql = "UPDATE ordenes SET status = 'terminada' WHERE _id = ?";
       $localConnection->goQuery($sql, [$id]);
@@ -2581,4 +2690,3 @@ return function (App $app) {
     }
   });
 }; // Fin de la función que envuelve las rutas
-
