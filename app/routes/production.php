@@ -13,14 +13,16 @@ return function (App $app) {
   // BATCH: Actualizar orden de filas de órdenes (1 request)
   // =========================================================
   $app->post('/ordenes/actualizar-filas-batch', function (Request $request, Response $response) {
-    $body = $request->getParsedBody();
+    // Slim no parsea application/json automáticamente; leemos el cuerpo raw
+    $rawBody = (string) $request->getBody();
+    $ordenes = json_decode($rawBody, true);
 
-    // Aceptamos tanto application/json como form-encoded con campo 'ordenes'
-    if (isset($body['ordenes'])) {
-      $ordenes = json_decode($body['ordenes'], true);
-    } else {
-      // Content-Type: application/json – Slim parsea directo
-      $ordenes = $body;
+    // Fallback: intentar con form-encoded (campo 'ordenes')
+    if (empty($ordenes)) {
+      $body = $request->getParsedBody();
+      if (isset($body['ordenes'])) {
+        $ordenes = json_decode($body['ordenes'], true);
+      }
     }
 
     if (empty($ordenes) || !is_array($ordenes)) {
@@ -65,12 +67,16 @@ return function (App $app) {
   // BATCH: Actualizar orden de filas de reposiciones (1 request)
   // =========================================================
   $app->post('/reposiciones/actualizar-filas-batch', function (Request $request, Response $response) {
-    $body = $request->getParsedBody();
+    // Slim no parsea application/json automáticamente; leemos el cuerpo raw
+    $rawBody = (string) $request->getBody();
+    $reposiciones = json_decode($rawBody, true);
 
-    if (isset($body['reposiciones'])) {
-      $reposiciones = json_decode($body['reposiciones'], true);
-    } else {
-      $reposiciones = $body;
+    // Fallback: intentar con form-encoded (campo 'reposiciones')
+    if (empty($reposiciones)) {
+      $body = $request->getParsedBody();
+      if (isset($body['reposiciones'])) {
+        $reposiciones = json_decode($body['reposiciones'], true);
+      }
     }
 
     if (empty($reposiciones) || !is_array($reposiciones)) {
