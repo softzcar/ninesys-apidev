@@ -2792,18 +2792,18 @@ return function (App $app) {
 
     // --- INICIO DE LA SEGUNDA CORRECCIÓN ---
     $sql = "
-        -- Versión 6: Optimizada con OrderTotals CTE y reducción de subconsultas correlacionadas
+        -- Versión 7: Ultra-optimización final con OrderTotals JOIN-based y podado agresivo
         WITH ActiveOrders AS (
             SELECT _id, status, fecha_entrega
             FROM ordenes
             WHERE status IN ('En espera', 'activa', 'pausada')
         ),
         OrderTotals AS (
-            -- Pre-calculamos unidades totales por orden para evitar subconsultas repetitivas
-            SELECT id_orden, SUM(cantidad) AS total_unidades
-            FROM ordenes_productos
-            WHERE id_orden IN (SELECT _id FROM ActiveOrders)
-            GROUP BY id_orden
+            -- Pre-calculamos unidades usando JOIN para que el optimizador use los índices de ActiveOrders
+            SELECT op.id_orden, SUM(op.cantidad) AS total_unidades
+            FROM ordenes_productos op
+            JOIN ActiveOrders ao ON ao._id = op.id_orden
+            GROUP BY op.id_orden
         ),
         AssignmentData AS (
             -- Consolidamos asignaciones por tarea (orden + departamento)
