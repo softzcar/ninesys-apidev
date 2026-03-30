@@ -886,8 +886,8 @@ return function (App $app) {
       $nombre = 'Administrador';  // Definir nombre por defecto para el administrador
 
       // 4. Crear registro en empresas_usuarios
-      $stmt = $pdo->prepare('INSERT INTO empresas_usuarios (email, password, departamento, id_empresa, activo, acceso, comision, comision_tipo, comision_porcentaje) VALUES (?, ?, ?, ?, 1, 1, 1.00, ?, 0.00)');
-      $stmt->execute([$email, $password_generated, 'Administración', $id_empresa, 'fija']);
+      $stmt = $pdo->prepare('INSERT INTO empresas_usuarios (nombre, email, password, departamento, id_empresa, activo, acceso, comision, comision_tipo, comision_porcentaje) VALUES (?, ?, ?, ?, ?, 1, 1, 1.00, ?, 0.00)');
+      $stmt->execute([$nombre, $email, $password_generated, 'Administración', $id_empresa, 'fija']);
       $id_usuario = $pdo->lastInsertId();
       error_log("DEBUG: Usuario creado con ID: {$id_usuario}");
 
@@ -1003,8 +1003,8 @@ return function (App $app) {
 
       // Crear cada empleado de ejemplo
       foreach ($empleados_ejemplo as $empleado_data) {
-        // Crear registro en empresas_usuarios
-        $stmt = $pdo->prepare('INSERT INTO empresas_usuarios (nombre, email, telefono, password, departamento, id_empresa, activo, acceso, comision, comision_tipo, comision_porcentaje, salario_monto, id_seguridad_social, dni) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, 0.00, ?, ?, ?)');
+        // Crear registro en empresas_usuarios (Base de datos central - Login)
+        $stmt = $pdo->prepare('INSERT INTO empresas_usuarios (nombre, email, telefono, password, departamento, id_empresa, activo, acceso, comision, comision_tipo, comision_porcentaje) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, 0.00)');
         $stmt->execute([
           $empleado_data['nombre'],
           $empleado_data['email'],
@@ -1013,10 +1013,7 @@ return function (App $app) {
           $empleado_data['departamento'],
           $id_empresa,
           $empleado_data['comision'],
-          $empleado_data['comision_tipo'],
-          $empleado_data['salario_monto'],
-          $empleado_data['id_seguridad_social'],
-          $empleado_data['dni']
+          $empleado_data['comision_tipo']
         ]);
         $id_empleado = $pdo->lastInsertId();
 
@@ -1141,6 +1138,7 @@ return function (App $app) {
       ]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
     } catch (Exception $e) {
+      error_log("ERROR CRÍTICO en POST /setup/user: " . $e->getMessage());
       $response->getBody()->write(json_encode(['error' => 'Error interno del servidor: ' . $e->getMessage()]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     }
