@@ -1637,6 +1637,27 @@ return function (App $app) {
       }
 
       $now = date('Y-m-d H:i:s');
+      $ordenIds = array_map(function($o){ return intval($o['id_orden']); }, $ordenes_del_lote);
+      $ordenIdsStr = implode(',', $ordenIds);
+      $depCheckSql = "SELECT op.id_orden, COUNT(*) as cnt FROM product_insumos_asignados pia JOIN ordenes_productos op ON op.id_woo = pia.id_product AND op.id_size = pia.id_talla WHERE op.id_orden IN ($ordenIdsStr) AND pia.id_departamento = ? GROUP BY op.id_orden";
+      $depChecks = $localConnection->goQuery($depCheckSql, [$id_departamento]);
+      $requiereMap = [];
+      if (is_array($depChecks)) {
+        foreach ($depChecks as $dc) { $requiereMap[intval($dc['id_orden'])] = intval($dc['cnt']); }
+      }
+      $payloadOrdenes = [];
+      foreach ($consumos_lote as $cons) {
+        if (!empty($cons['id_ordenes']) && is_array($cons['id_ordenes'])) {
+          foreach ($cons['id_ordenes'] as $oid) { $payloadOrdenes[intval($oid)] = true; }
+        }
+      }
+      foreach ($ordenIds as $oid) {
+        $req = $requiereMap[$oid] ?? 0;
+        if ($req > 0 && empty($payloadOrdenes[$oid])) {
+          $response->getBody()->write(json_encode(['error' => 'Faltan consumos para órdenes requeridas', 'id_orden' => $oid]));
+          return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+      }
 
       if (!empty($consumos_lote)) {
         foreach ($consumos_lote as $consumo) {
@@ -2771,8 +2792,13 @@ return function (App $app) {
 
     // --- INICIO DE LA SEGUNDA CORRECCIÓN ---
     $sql = "
-        -- Versión 4: Consulta robusta con CTE + UNION para cubrir tareas proyectadas y tareas extra/ad-hoc
-        WITH AssignmentData AS (
+        -- Versión 5: Consulta súper optimizada con ActiveOrders CTE
+        WITH ActiveOrders AS (
+            SELECT _id, status, fecha_entrega
+            FROM ordenes
+            WHERE status IN ('En espera', 'activa', 'pausada')
+        ),
+        AssignmentData AS (
             -- Consolidamos asignaciones por tarea (orden + departamento)
             SELECT
                 ldea.id_orden,
@@ -2786,16 +2812,20 @@ return function (App $app) {
                 END AS fecha_terminado_agregada
             FROM
                 lotes_detalles_empleados_asignados ldea
-            JOIN ordenes o ON o._id = ldea.id_orden
-            WHERE
-                (o.status LIKE 'En espera' OR o.status LIKE 'activa' OR o.status LIKE 'pausada')
+            JOIN ActiveOrders o ON o._id = ldea.id_orden
             GROUP BY
                 ldea.id_orden,
                 ldea.id_departamento
+        ),
+        ProjectedCoverage AS (
+            -- Pre-calculamos la config para evitar NOT EXISTS lógicos costosos
+            SELECT DISTINCT a.id_orden, d.id_departamento
+            FROM ordenes_productos a
+            JOIN products_tiempos_de_produccion d ON d.id_product = a.id_woo
+            JOIN ActiveOrders ao ON ao._id = a.id_orden
         )
         SELECT * FROM (
             -- PARTE A: Tareas Proyectadas (Configuradas en el producto)
-            -- Se muestran existan o no asignaciones reales (LEFT JOIN AssignmentData)
             SELECT
                 a.id_orden,
                 c.status,
@@ -2804,7 +2834,7 @@ return function (App $app) {
                 ad.fecha_inicio_agregada AS fecha_inicio,
                 ad.fecha_terminado_agregada AS fecha_terminado,
                 c.fecha_entrega AS fecha_entrega_de_la_orden,
-                (SELECT CONCAT(o.fecha_entrega, ' 08:30:00') FROM ordenes o WHERE o._id = a.id_orden) AS fecha_entrega_orden,
+                CONCAT(c.fecha_entrega, ' 08:30:00') AS fecha_entrega_orden,
                 SUM(a.cantidad) AS total_unidades,
                 (SUM(d.tiempo * a.cantidad) / COALESCE(ad.numero_de_empleados, 1)) AS tiempo_total_orden_depto,
                 ofo.orden_fila AS orden_fila_orden,
@@ -2817,13 +2847,11 @@ return function (App $app) {
             JOIN
                 departamentos dep ON dep._id = d.id_departamento
             JOIN
-                ordenes c ON c._id = a.id_orden
+                ActiveOrders c ON c._id = a.id_orden
             LEFT JOIN
                 AssignmentData ad ON ad.id_orden = a.id_orden AND ad.id_departamento = d.id_departamento
             LEFT JOIN
                 ordenes_fila_orden ofo ON ofo.id_orden = a.id_orden
-            WHERE
-                (c.status LIKE 'En espera' OR c.status LIKE 'activa' OR c.status LIKE 'pausada')
             GROUP BY
                 a.id_orden,
                 d.id_departamento
@@ -2831,7 +2859,6 @@ return function (App $app) {
             UNION ALL
 
             -- PARTE B: Tareas Extra/Ad-hoc (Asignaciones reales SIN configuración de producto)
-            -- Se muestran solo si NO existen en la Parte A (NOT EXISTS)
             SELECT
                 ad.id_orden,
                 c.status,
@@ -2840,27 +2867,24 @@ return function (App $app) {
                 ad.fecha_inicio_agregada AS fecha_inicio,
                 ad.fecha_terminado_agregada AS fecha_terminado,
                 c.fecha_entrega AS fecha_entrega_de_la_orden,
-                (SELECT CONCAT(o.fecha_entrega, ' 08:30:00') FROM ordenes o WHERE o._id = ad.id_orden) AS fecha_entrega_orden,
+                CONCAT(c.fecha_entrega, ' 08:30:00') AS fecha_entrega_orden,
                 (SELECT SUM(op.cantidad) FROM ordenes_productos op WHERE op.id_orden = ad.id_orden) AS total_unidades,
-                0 AS tiempo_total_orden_depto, -- No hay tiempo estimado configurado
+                0 AS tiempo_total_orden_depto,
                 ofo.orden_fila AS orden_fila_orden,
                 dep.orden_proceso AS orden_proceso_departamento,
                 ad.numero_de_empleados AS cant_empleados
             FROM
                 AssignmentData ad
             JOIN
-                ordenes c ON c._id = ad.id_orden
+                ActiveOrders c ON c._id = ad.id_orden
             JOIN
                 departamentos dep ON dep._id = ad.id_departamento
             LEFT JOIN
                 ordenes_fila_orden ofo ON ofo.id_orden = ad.id_orden
+            LEFT JOIN
+                ProjectedCoverage pc ON pc.id_orden = ad.id_orden AND pc.id_departamento = ad.id_departamento
             WHERE
-                NOT EXISTS (
-                    SELECT 1
-                    FROM ordenes_productos a
-                    JOIN products_tiempos_de_produccion d ON d.id_product = a.id_woo
-                    WHERE a.id_orden = ad.id_orden AND d.id_departamento = ad.id_departamento
-                )
+                pc.id_orden IS NULL -- Reemplaza el NOT EXISTS
         ) AS UnifiedResults
         ORDER BY
             orden_fila_orden ASC,
