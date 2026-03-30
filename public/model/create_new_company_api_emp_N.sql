@@ -1637,6 +1637,21 @@ ALTER TABLE `tinta_filtro`
 ADD CONSTRAINT `tinta_filtro_ibfk_1` FOREIGN KEY (`id_inventario`) REFERENCES `inventario` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- =====================================================
+-- INDICES ADICIONALES PARA OPTIMIZACION
+-- =====================================================
+ALTER TABLE `lotes_detalles_empleados_asignados`
+  ADD INDEX `idx_orden_depto` (`id_orden`, `id_departamento`);
+
+ALTER TABLE `ordenes`
+  ADD INDEX `idx_status` (`status`);
+
+ALTER TABLE `ordenes_productos`
+  ADD INDEX `idx_orden_woo` (`id_orden`, `id_woo`);
+
+ALTER TABLE `products_tiempos_de_produccion`
+  ADD INDEX `idx_prod_depto` (`id_product`, `id_departamento`);
+
+-- =====================================================
 -- PERMISOS REQUERIDOS (PARA REFERENCIA)
 -- =====================================================
 -- Estos comandos deben ejecutarse con el usuario root después de crear la empresa:
