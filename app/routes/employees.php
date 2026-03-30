@@ -29,26 +29,71 @@ return function (App $app) {
             a.dni,
             a.fecha_ingreso,
             a.id_seguridad_social,
-            (SELECT numero_semana FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_usuario ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
-            (SELECT YEAR(pa.moment) FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_usuario ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
-            (SELECT DATE_FORMAT(pa.fecha_pago, "%d/%m/%Y") FROM ' . LOCAL_DB . '.pagos pa LEFT JOIN ' . LOCAL_DB . '.pagos_salarios ps ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_usuario AND pa.fecha_pago IS NOT NULL AND (WEEK(pa.fecha_pago, 1) = WEEK(NOW(), 1) OR ps.numero_semana = WEEK(NOW(), 1)) AND YEAR(pa.fecha_pago) = YEAR(NOW()) ORDER BY pa.fecha_pago DESC LIMIT 1) ultima_fecha_pago,
-            IFNULL(CONCAT("[", GROUP_CONCAT(
-                DISTINCT CONCAT("{\"id\":", b.id_departamento, ",\"nombre\":\"", c.departamento, "\"}")
-                SEPARATOR ","), "]"), "[]") AS departamentos,
-            IFNULL(CONCAT("[", GROUP_CONCAT(
-                DISTINCT CONCAT("{\"id_carga\":", d.id_carga, ",\"nombre_completo\":\"", d.nombre_completo, "\",\"cedula_o_id\":\"", d.cedula_o_id, "\",\"parentesco\":\"", d.tipo_relacion, "\",\"fecha_nacimiento\":\"", d.fecha_nacimiento, "\",\"es_deducible\":", d.es_deducible_impuesto, "}")
-                SEPARATOR ","), "]"), "[]") AS carga_familiar
+            ult_sem.ultima_semana_pagada,
+            ult_sem.ultimo_anio_pagado,
+            DATE_FORMAT(ult_fecha.ultima_fecha_pago, "%d/%m/%Y") ultima_fecha_pago,
+            IFNULL(deps.departamentos, "[]") AS departamentos,
+            IFNULL(carga.carga_familiar, "[]") AS carga_familiar
         FROM
             api_empresas.empresas_usuarios a
-        LEFT JOIN api_empresas.empresas_usuarios_departamentos b ON b.id_empleado = a.id_usuario
-        LEFT JOIN ' . LOCAL_DB . '.departamentos c ON c._id = b.id_departamento
-        LEFT JOIN ' . LOCAL_DB . '.salario_carga_familiar d ON d.id_empleado = a.id_usuario
+        LEFT JOIN (
+            SELECT
+                b.id_empleado,
+                IFNULL(CONCAT("[", GROUP_CONCAT(
+                    DISTINCT CONCAT("{\"id\":", b.id_departamento, ",\"nombre\":\"", c.departamento, "\"}")
+                    SEPARATOR ","), "]"), "[]") AS departamentos
+            FROM
+                api_empresas.empresas_usuarios_departamentos b
+            LEFT JOIN ' . LOCAL_DB . '.departamentos c ON c._id = b.id_departamento
+            GROUP BY
+                b.id_empleado
+        ) deps ON deps.id_empleado = a.id_usuario
+        LEFT JOIN (
+            SELECT
+                d.id_empleado,
+                IFNULL(CONCAT("[", GROUP_CONCAT(
+                    DISTINCT CONCAT("{\"id_carga\":", d.id_carga, ",\"nombre_completo\":\"", d.nombre_completo, "\",\"cedula_o_id\":\"", d.cedula_o_id, "\",\"parentesco\":\"", d.tipo_relacion, "\",\"fecha_nacimiento\":\"", d.fecha_nacimiento, "\",\"es_deducible\":", d.es_deducible_impuesto, "}")
+                    SEPARATOR ","), "]"), "[]") AS carga_familiar
+            FROM
+                ' . LOCAL_DB . '.salario_carga_familiar d
+            GROUP BY
+                d.id_empleado
+        ) carga ON carga.id_empleado = a.id_usuario
+        LEFT JOIN (
+            SELECT
+                pa.id_empleado,
+                ps.numero_semana AS ultima_semana_pagada,
+                YEAR(pa.moment) AS ultimo_anio_pagado
+            FROM
+                ' . LOCAL_DB . '.pagos pa
+            JOIN ' . LOCAL_DB . '.pagos_salarios ps ON ps.id_pago = pa._id
+            JOIN (
+                SELECT
+                    pa2.id_empleado,
+                    MAX(pa2.moment) AS max_moment
+                FROM
+                    ' . LOCAL_DB . '.pagos pa2
+                JOIN ' . LOCAL_DB . '.pagos_salarios ps2 ON ps2.id_pago = pa2._id
+                GROUP BY
+                    pa2.id_empleado
+            ) m ON m.id_empleado = pa.id_empleado AND m.max_moment = pa.moment
+        ) ult_sem ON ult_sem.id_empleado = a.id_usuario
+        LEFT JOIN (
+            SELECT
+                pa.id_empleado,
+                MAX(pa.fecha_pago) AS ultima_fecha_pago
+            FROM
+                ' . LOCAL_DB . '.pagos pa
+            LEFT JOIN ' . LOCAL_DB . '.pagos_salarios ps ON ps.id_pago = pa._id
+            WHERE
+                pa.fecha_pago IS NOT NULL
+                AND (WEEK(pa.fecha_pago, 1) = WEEK(NOW(), 1) OR ps.numero_semana = WEEK(NOW(), 1))
+                AND YEAR(pa.fecha_pago) = YEAR(NOW())
+            GROUP BY
+                pa.id_empleado
+        ) ult_fecha ON ult_fecha.id_empleado = a.id_usuario
         WHERE
-            a.activo = 1  AND a.id_empresa = ' . ID_EMPRESA . ' GROUP BY
-            a.id_usuario, a.email, a.password, a.nombre, a.departamento,
-            a.telefono, a.comision, a.comision_porcentaje,
-            a.salario_tipo, a.salario_monto, a.salario_periodo,
-            a.comision_tipo, a.acceso, a.dni, a.fecha_ingreso, a.id_seguridad_social;';
+            a.activo = 1 AND a.id_empresa = ' . ID_EMPRESA . ';';
         $object['sql'] = $sql;
         $items = $localConnection->goQuery($sql);
 
