@@ -23,7 +23,7 @@ echo "Verificando índices para la empresa ID: " . $emp['id_empresa'] . " (" . $
 $local_dns = 'mysql:host=' . $emp['db_host'] . ';dbname=' . $emp['db_name'];
 $db->switchDatabase($local_dns, $emp['db_user'], $emp['db_password']);
 
-$tables = ['lotes_detalles_empleados_asignados', 'ordenes', 'ordenes_productos', 'products_tiempos_de_produccion'];
+$tables = ['lotes_detalles_empleados_asignados', 'ordenes', 'ordenes_productos', 'products_tiempos_de_produccion', 'ordenes_fila_orden'];
 
 foreach ($tables as $table) {
     echo "Tabla: $table\n";
