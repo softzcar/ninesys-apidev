@@ -11,7 +11,29 @@ return function (App $app) {
     $app->get('/empleados', function (Request $request, Response $response) {
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
         $idEmp = ID_EMPRESA;
-        $sql = 'SELECT
+        $sql = '
+        WITH 
+            ultimos_pagos AS (
+                SELECT
+                    pa.id_empleado,
+                    ps.numero_semana AS ultima_semana_pagada,
+                    YEAR(pa.moment) AS ultimo_anio_pagado,
+                    ROW_NUMBER() OVER(PARTITION BY pa.id_empleado ORDER BY pa.moment DESC) as rn
+                FROM ' . LOCAL_DB . '.pagos pa
+                JOIN ' . LOCAL_DB . '.pagos_salarios ps ON ps.id_pago = pa._id
+            ),
+            fecha_reciente AS (
+                SELECT
+                    pa.id_empleado,
+                    MAX(pa.fecha_pago) AS ultima_fecha_pago
+                FROM ' . LOCAL_DB . '.pagos pa
+                LEFT JOIN ' . LOCAL_DB . '.pagos_salarios ps ON ps.id_pago = pa._id
+                WHERE pa.fecha_pago IS NOT NULL
+                  AND (WEEK(pa.fecha_pago, 1) = WEEK(NOW(), 1) OR ps.numero_semana = WEEK(NOW(), 1))
+                  AND YEAR(pa.fecha_pago) = YEAR(NOW())
+                GROUP BY pa.id_empleado
+            )
+        SELECT
             a.id_usuario AS _id,
             a.email AS username,
             a.password,
@@ -29,9 +51,9 @@ return function (App $app) {
             a.dni,
             a.fecha_ingreso,
             a.id_seguridad_social,
-            ult_sem.ultima_semana_pagada,
-            ult_sem.ultimo_anio_pagado,
-            DATE_FORMAT(ult_fecha.ultima_fecha_pago, "%d/%m/%Y") ultima_fecha_pago,
+            up.ultima_semana_pagada,
+            up.ultimo_anio_pagado,
+            DATE_FORMAT(fr.ultima_fecha_pago, "%d/%m/%Y") ultima_fecha_pago,
             IFNULL(deps.departamentos, "[]") AS departamentos,
             IFNULL(carga.carga_familiar, "[]") AS carga_familiar
         FROM
@@ -59,39 +81,8 @@ return function (App $app) {
             GROUP BY
                 d.id_empleado
         ) carga ON carga.id_empleado = a.id_usuario
-        LEFT JOIN (
-            SELECT
-                pa.id_empleado,
-                ps.numero_semana AS ultima_semana_pagada,
-                YEAR(pa.moment) AS ultimo_anio_pagado
-            FROM
-                ' . LOCAL_DB . '.pagos pa
-            JOIN ' . LOCAL_DB . '.pagos_salarios ps ON ps.id_pago = pa._id
-            JOIN (
-                SELECT
-                    pa2.id_empleado,
-                    MAX(pa2.moment) AS max_moment
-                FROM
-                    ' . LOCAL_DB . '.pagos pa2
-                JOIN ' . LOCAL_DB . '.pagos_salarios ps2 ON ps2.id_pago = pa2._id
-                GROUP BY
-                    pa2.id_empleado
-            ) m ON m.id_empleado = pa.id_empleado AND m.max_moment = pa.moment
-        ) ult_sem ON ult_sem.id_empleado = a.id_usuario
-        LEFT JOIN (
-            SELECT
-                pa.id_empleado,
-                MAX(pa.fecha_pago) AS ultima_fecha_pago
-            FROM
-                ' . LOCAL_DB . '.pagos pa
-            LEFT JOIN ' . LOCAL_DB . '.pagos_salarios ps ON ps.id_pago = pa._id
-            WHERE
-                pa.fecha_pago IS NOT NULL
-                AND (WEEK(pa.fecha_pago, 1) = WEEK(NOW(), 1) OR ps.numero_semana = WEEK(NOW(), 1))
-                AND YEAR(pa.fecha_pago) = YEAR(NOW())
-            GROUP BY
-                pa.id_empleado
-        ) ult_fecha ON ult_fecha.id_empleado = a.id_usuario
+        LEFT JOIN ultimos_pagos up ON up.id_empleado = a.id_usuario AND up.rn = 1
+        LEFT JOIN fecha_reciente fr ON fr.id_empleado = a.id_usuario
         WHERE
             a.activo = 1 AND a.id_empresa = ' . ID_EMPRESA . ';';
         $object['sql'] = $sql;
