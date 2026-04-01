@@ -3592,7 +3592,7 @@ return function (App $app) {
                   LEFT JOIN inventario inv ON inv._id = im.id_insumo 
                   WHERE im.id_orden IN ($idsString) 
                     AND (inv.id_catalogo = cip._id OR im.id_catalogo_insumos_prodcutos = cip._id)
-                    AND im.fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                    AND im.fecha >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
                 ), (SELECT MAX(_id) FROM inventario WHERE id_catalogo = cip._id)) AS id_insumo,
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
@@ -3608,7 +3608,7 @@ return function (App $app) {
                       LEFT JOIN inventario inv_check ON inv_check._id = im_check.id_insumo
                       WHERE im_check.id_orden = op.id_orden 
                       AND (im_check.id_catalogo_insumos_prodcutos = cip._id OR inv_check.id_catalogo = cip._id)
-                      AND im_check.fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                      AND im_check.fecha >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
                     ) > 0 THEN op.cantidad * pia.cantidad 
                     ELSE 0 
                   END
@@ -3627,7 +3627,7 @@ return function (App $app) {
                     LEFT JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
                     WHERE im_sub.id_orden IN ($idsString)
                       AND (inv_sub.id_catalogo = cip._id OR im_sub.id_catalogo_insumos_prodcutos = cip._id)
-                      AND im_sub.fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                      AND im_sub.fecha >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
                 ), 0) AS cantidad_real
 
             FROM ordenes_productos op
@@ -3949,7 +3949,7 @@ return function (App $app) {
                 sub_ldea.id_orden,
                 SUM(
                     CASE 
-                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND sub_ldea.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 
+                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND sub_ldea.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
                         ELSE 0 
                     END
@@ -3965,7 +3965,7 @@ return function (App $app) {
             WHERE sub_ldea.id_orden IN ($idsStr)
             $empleadoCondition
             AND sub_ldea.fecha_inicio IS NOT NULL
-            AND sub_ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            AND sub_ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
             GROUP BY sub_ldea.id_orden
         )
         SELECT 
@@ -3989,7 +3989,7 @@ return function (App $app) {
                     WHERE ldea_sub.id_orden = o._id
                     AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
                     AND ldea_sub.fecha_terminado IS NOT NULL
-                    AND ldea_sub.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                    AND ldea_sub.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
                 )
             ) AS totalProjectedTerminadas,
 
@@ -4004,7 +4004,7 @@ return function (App $app) {
                     AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
                     AND ldea_sub.fecha_terminado IS NULL
                     AND ldea_sub.fecha_inicio IS NOT NULL
-                    AND ldea_sub.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                    AND ldea_sub.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
                 )
             ) AS totalProjectedEnCurso,
             
