@@ -70,7 +70,8 @@ return function (App $app) {
             // --- Hidden Sheet: ListadoUnidades ---
             $sheetUnidades = $spreadsheet->createSheet();
             $sheetUnidades->setTitle('ListadoUnidades');
-            $unidades = ['Metros', 'Kilos', 'Unidades'];
+            $sheetUnidades->setTitle('ListadoUnidades');
+            $unidades = ['Metros', 'Kilos', 'Unidades', 'Mililitros'];
             $sheetUnidades->fromArray([['Unidad']], NULL, 'A1');  // Header
             $row = 2;
             foreach ($unidades as $unidad) {
@@ -453,13 +454,13 @@ return function (App $app) {
                 $tipo_insumo_excel = $item['Tipo de Insumo'] ?? null;  // Nuevo campo
                 $nombre_catalogo_excel = $item['Producto del Catálogo'] ?? null;  // Antes 'Insumo'
                 $cantidad = $item['Cantidad'] ?? null;
-                $unidad = $item['Unidad'] ?? null;
+                $unidad_excel = $item['Unidad'] ?? null;
                 $costo = $item['Costo Total'] ?? null;  // Antes 'Costo'
                 $rendimiento = $item['Rendimiento'] ?? null;
                 $departamento_nombre_excel = $item['Departamento'] ?? null;
 
                 // Validaciones básicas de campos obligatorios
-                if (empty($sku) || empty($nombre_inventario) || empty($tipo_insumo_excel) || empty($nombre_catalogo_excel) || empty($cantidad) || empty($unidad) || empty($costo) || empty($departamento_nombre_excel)) {
+                if (empty($sku) || empty($nombre_inventario) || empty($tipo_insumo_excel) || empty($nombre_catalogo_excel) || empty($cantidad) || empty($unidad_excel) || empty($costo) || empty($departamento_nombre_excel)) {
                     $error_list[] = "Ítem de inventario incompleto (SKU: {$sku}). Se omitió. Revise SKU, Nombre Insumo, Tipo de Insumo, Producto del Catálogo, Cantidad, Unidad, Costo Total, Departamento.";
                     continue;
                 }
@@ -471,6 +472,19 @@ return function (App $app) {
                     $error_list[] = "Departamento '{$departamento_nombre_excel}' no encontrado para el SKU {$sku}. Se omitió.";
                     continue;
                 }
+
+                // Mapear Unidad (Etiqueta Excel -> Valor DB)
+                $unidad_map = [
+                    'Metros' => 'Mts',
+                    'Kilos' => 'Kg',
+                    'Unidades' => 'Und',
+                    'Mililitros' => 'Ml',
+                    'Mts' => 'Mts',
+                    'Kg' => 'Kg',
+                    'Und' => 'Und',
+                    'Ml' => 'Ml'
+                ];
+                $unidad = $unidad_map[$unidad_excel] ?? $unidad_excel;
 
                 // Obtener el ID del catálogo
                 $id_catalogo = $catalogo_insumo_map[$nombre_catalogo_excel] ?? null;
