@@ -43,13 +43,13 @@ return function (App $app) {
             $sheetInventario->setTitle('Inventario');
 
             // Set headers for Inventario sheet
-            // === ACTUALIZADO: Añadimos 'Insumo' después de 'Nombre' ===
-            $headersInventario = ['SKU', 'Nombre', 'Insumo', 'Cantidad', 'Unidad', 'Costo', 'Rendimiento', 'Departamento'];
+            // === ACTUALIZADO: Añadimos 'Tipo de Insumo' y renombramos columnas para claridad ===
+            $headersInventario = ['SKU', 'Nombre Insumo', 'Tipo de Insumo', 'Producto del Catálogo', 'Cantidad', 'Unidad', 'Costo Total', 'Rendimiento', 'Departamento'];
             $sheetInventario->fromArray($headersInventario, NULL, 'A1');
 
             // Set column widths for Inventario sheet
-            // === ACTUALIZADO: El rango se extiende hasta 'H' (antes 'G') por la nueva columna ===
-            foreach (range('A', 'H') as $col) {
+            // === ACTUALIZADO: El rango se extiende hasta 'I' por la nueva columna ===
+            foreach (range('A', 'I') as $col) {
                 $sheetInventario->getColumnDimension($col)->setAutoSize(true);
             }
 
@@ -108,6 +108,19 @@ return function (App $app) {
             $sheetCatalogoInsumos->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
             // ===================================================================
 
+            // --- NUEVA HOJA OCULTA: ListadoTiposInsumo ---
+            $sheetTiposInsumo = $spreadsheet->createSheet();
+            $sheetTiposInsumo->setTitle('ListadoTiposInsumo');
+            $tiposInsumo = ['general', 'tela', 'tinta', 'papel', 'repuesto', 'bisutería'];
+            $sheetTiposInsumo->fromArray([['Tipo']], NULL, 'A1');  // Header
+            $row = 2;
+            foreach ($tiposInsumo as $tipo) {
+                $sheetTiposInsumo->setCellValue('A' . $row, $tipo);
+                $row++;
+            }
+            $sheetTiposInsumo->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
+            // ===================================================================
+
             // --- Data Validation for Inventario sheet ---
             // Rollo (Column A) - Custom validation for uniqueness (case-insensitive, underscore-insensitive)
             $rolloValidation = $sheetInventario->getCell('A2')->getDataValidation();
@@ -120,10 +133,25 @@ return function (App $app) {
             $formula = 'AND(COUNTIF(ListadoRollosNormalizado!A:A, SUBSTITUTE(UPPER(A2),"_",""))=0, COUNTIF(A:A,A2)=1)';
             $rolloValidation->setFormula1($formula);
 
-            // Nombre (Column B) - No specific validation, can be text
+            // Nombre Insumo (Column B) - No specific validation, can be text
 
-            // === NUEVA VALIDACIÓN: Insumo (Columna C) - List validation ===
-            $insumoCatalogoValidation = $sheetInventario->getCell('C2')->getDataValidation();
+            // === NUEVA VALIDACIÓN: Tipo de Insumo (Columna C) - List validation ===
+            $tipoInsumoValidation = $sheetInventario->getCell('C2')->getDataValidation();
+            $tipoInsumoValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+            $tipoInsumoValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);
+            $tipoInsumoValidation->setAllowBlank(false);
+            $tipoInsumoValidation->setShowInputMessage(true);
+            $tipoInsumoValidation->setShowErrorMessage(true);
+            $tipoInsumoValidation->setShowDropDown(true);
+            $tipoInsumoValidation->setErrorTitle('Error de entrada');
+            $tipoInsumoValidation->setError('El valor no está en la lista de tipos de insumo.');
+            $tipoInsumoValidation->setPromptTitle('Seleccionar Tipo');
+            $tipoInsumoValidation->setPrompt('Por favor, seleccione un tipo de insumo de la lista.');
+            $tipoInsumoValidation->setFormula1('\'ListadoTiposInsumo\'!A$2:A$' . (count($tiposInsumo) + 1));
+            // ======================================================================
+
+            // Producto del Catálogo (Columna D - ANTES C) - List validation
+            $insumoCatalogoValidation = $sheetInventario->getCell('D2')->getDataValidation();
             $insumoCatalogoValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);  // Usando ruta completa
             $insumoCatalogoValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);  // Usando ruta completa
             $insumoCatalogoValidation->setAllowBlank(false);  // Replicando el comportamiento de 'Departamento'
@@ -131,14 +159,14 @@ return function (App $app) {
             $insumoCatalogoValidation->setShowErrorMessage(true);
             $insumoCatalogoValidation->setShowDropDown(true);
             $insumoCatalogoValidation->setErrorTitle('Error de entrada');
-            $insumoCatalogoValidation->setError('El valor no está en la lista de insumos del catálogo.');
-            $insumoCatalogoValidation->setPromptTitle('Seleccionar Insumo');
-            $insumoCatalogoValidation->setPrompt('Por favor, seleccione un insumo del catálogo de la lista.');
+            $insumoCatalogoValidation->setError('El valor no está en la lista de productos del catálogo.');
+            $insumoCatalogoValidation->setPromptTitle('Seleccionar Producto');
+            $insumoCatalogoValidation->setPrompt('Por favor, seleccione un producto del catálogo de la lista.');
             $insumoCatalogoValidation->setFormula1('\'ListadoInsumosCatalogo\'!B$2:B$' . (count($catalogoInsumos) + 1));
             // ==============================================================
 
-            // Cantidad (Columna D - ANTES C) - Numeric validation
-            $cantidadValidation = $sheetInventario->getCell('D2')->getDataValidation();
+            // Cantidad (Columna E - ANTES D) - Numeric validation
+            $cantidadValidation = $sheetInventario->getCell('E2')->getDataValidation();
             $cantidadValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_DECIMAL);  // Usando ruta completa
             $cantidadValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);  // Usando ruta completa
             $cantidadValidation->setAllowBlank(false);
@@ -148,8 +176,8 @@ return function (App $app) {
             $cantidadValidation->setFormula1('0');
             $cantidadValidation->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_GREATERTHANOREQUAL);  // Usando ruta completa
 
-            // Unidad (Columna E - ANTES D) - List validation
-            $unidadValidation = $sheetInventario->getCell('E2')->getDataValidation();
+            // Unidad (Columna F - ANTES E) - List validation
+            $unidadValidation = $sheetInventario->getCell('F2')->getDataValidation();
             $unidadValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);  // Usando ruta completa
             $unidadValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);  // Usando ruta completa
             $unidadValidation->setAllowBlank(false);
@@ -162,8 +190,8 @@ return function (App $app) {
             $unidadValidation->setPrompt('Por favor, seleccione una unidad de la lista (Metros, Kilos, Unidades).');
             $unidadValidation->setFormula1('\'ListadoUnidades\'!A$2:A$' . (count($unidades) + 1));
 
-            // Costo (Columna F - ANTES E) - Numeric validation
-            $costoValidation = $sheetInventario->getCell('F2')->getDataValidation();
+            // Costo Total (Columna G - ANTES F) - Numeric validation
+            $costoValidation = $sheetInventario->getCell('G2')->getDataValidation();
             $costoValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_DECIMAL);  // Usando ruta completa
             $costoValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);  // Usando ruta completa
             $costoValidation->setAllowBlank(false);
@@ -173,8 +201,8 @@ return function (App $app) {
             $costoValidation->setFormula1('0');
             $costoValidation->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_GREATERTHANOREQUAL);  // Usando ruta completa
 
-            // Rendimiento (Columna G - ANTES F) - Numeric validation
-            $rendimientoValidation = $sheetInventario->getCell('G2')->getDataValidation();
+            // Rendimiento (Columna H - ANTES G) - Numeric validation
+            $rendimientoValidation = $sheetInventario->getCell('H2')->getDataValidation();
             $rendimientoValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_DECIMAL);  // Usando ruta completa
             $rendimientoValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);  // Usando ruta completa
             $rendimientoValidation->setAllowBlank(true);
@@ -184,8 +212,8 @@ return function (App $app) {
             $rendimientoValidation->setFormula1('0');
             $rendimientoValidation->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_GREATERTHANOREQUAL);  // Usando ruta completa
 
-            // Departamento (Columna H - ANTES G) - List validation
-            $departamentoValidation = $sheetInventario->getCell('H2')->getDataValidation();
+            // Departamento (Columna I - ANTES H) - List validation
+            $departamentoValidation = $sheetInventario->getCell('I2')->getDataValidation();
             $departamentoValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);  // Usando ruta completa
             $departamentoValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);  // Usando ruta completa
             $departamentoValidation->setAllowBlank(false);
@@ -201,14 +229,16 @@ return function (App $app) {
             // Apply validation to a range (e.g., up to row 1000)
             for ($i = 2; $i <= 1000; $i++) {
                 $sheetInventario->getCell('A' . $i)->setDataValidation(clone $rolloValidation);
-                // === NUEVO: Aplicar validación para Insumo ===
-                $sheetInventario->getCell('C' . $i)->setDataValidation(clone $insumoCatalogoValidation);
+                // === NUEVO: Aplicar validación para Tipo de Insumo ===
+                $sheetInventario->getCell('C' . $i)->setDataValidation(clone $tipoInsumoValidation);
+                // === NUEVO: Aplicar validación para Producto del Catálogo ===
+                $sheetInventario->getCell('D' . $i)->setDataValidation(clone $insumoCatalogoValidation);
                 // === ACTUALIZADO: Las referencias de las columnas se han desplazado ===
-                $sheetInventario->getCell('D' . $i)->setDataValidation(clone $cantidadValidation);
-                $sheetInventario->getCell('E' . $i)->setDataValidation(clone $unidadValidation);
-                $sheetInventario->getCell('F' . $i)->setDataValidation(clone $costoValidation);
-                $sheetInventario->getCell('G' . $i)->setDataValidation(clone $rendimientoValidation);
-                $sheetInventario->getCell('H' . $i)->setDataValidation(clone $departamentoValidation);
+                $sheetInventario->getCell('E' . $i)->setDataValidation(clone $cantidadValidation);
+                $sheetInventario->getCell('F' . $i)->setDataValidation(clone $unidadValidation);
+                $sheetInventario->getCell('G' . $i)->setDataValidation(clone $costoValidation);
+                $sheetInventario->getCell('H' . $i)->setDataValidation(clone $rendimientoValidation);
+                $sheetInventario->getCell('I' . $i)->setDataValidation(clone $departamentoValidation);
             }
 
             // Save the Excel file
@@ -417,19 +447,20 @@ return function (App $app) {
             $error_list = [];
 
             foreach ($inventoryItems as $item) {
-                // Extracción de datos del ítem del JSON
+                // Extracción de datos del ítem del JSON - Actualizado mapeo para nuevas columnas
                 $sku = $item['SKU'] ?? null;
-                $nombre_inventario = $item['Nombre'] ?? null;  // Esto se guarda en la columna 'insumo' de la tabla 'inventario'
-                $nombre_catalogo_excel = $item['Insumo'] ?? null;  // Esto es el nombre del catálogo, usado para buscar el ID
+                $nombre_inventario = $item['Nombre Insumo'] ?? null;  // Antes 'Nombre'
+                $tipo_insumo_excel = $item['Tipo de Insumo'] ?? null;  // Nuevo campo
+                $nombre_catalogo_excel = $item['Producto del Catálogo'] ?? null;  // Antes 'Insumo'
                 $cantidad = $item['Cantidad'] ?? null;
                 $unidad = $item['Unidad'] ?? null;
-                $costo = $item['Costo'] ?? null;
+                $costo = $item['Costo Total'] ?? null;  // Antes 'Costo'
                 $rendimiento = $item['Rendimiento'] ?? null;
-                $departamento_nombre_excel = $item['Departamento'] ?? null;  // Esto se guarda en la columna 'departamento' de la tabla 'inventario'
+                $departamento_nombre_excel = $item['Departamento'] ?? null;
 
                 // Validaciones básicas de campos obligatorios
-                if (empty($sku) || empty($nombre_inventario) || empty($nombre_catalogo_excel) || empty($cantidad) || empty($unidad) || empty($costo) || empty($departamento_nombre_excel)) {
-                    $error_list[] = "Ítem de inventario incompleto (SKU: {$sku}). Se omitió. Revise SKU, Nombre, Insumo, Cantidad, Unidad, Costo, Departamento.";
+                if (empty($sku) || empty($nombre_inventario) || empty($tipo_insumo_excel) || empty($nombre_catalogo_excel) || empty($cantidad) || empty($unidad) || empty($costo) || empty($departamento_nombre_excel)) {
+                    $error_list[] = "Ítem de inventario incompleto (SKU: {$sku}). Se omitió. Revise SKU, Nombre Insumo, Tipo de Insumo, Producto del Catálogo, Cantidad, Unidad, Costo Total, Departamento.";
                     continue;
                 }
 
@@ -441,22 +472,16 @@ return function (App $app) {
                     continue;
                 }
 
-                // === INICIO DE CAMBIOS: Obtener el ID del catálogo y determinar el tipo de insumo ===
+                // Obtener el ID del catálogo
                 $id_catalogo = $catalogo_insumo_map[$nombre_catalogo_excel] ?? null;
 
                 if ($id_catalogo === null) {
-                    $error_list[] = "Insumo de catálogo '{$nombre_catalogo_excel}' no encontrado para el SKU {$sku}. Se omitió.";
+                    $error_list[] = "Producto del catálogo '{$nombre_catalogo_excel}' no encontrado para el SKU {$sku}. Se omitió.";
                     continue;
                 }
 
-                // Determinar tipo de insumo automáticamente para la carga masiva
-                $tipo_insumo = 'general';
-                if ($unidad === 'Kg' && floatval($rendimiento) > 1) {
-                    $tipo_insumo = 'tela';
-                } elseif (stripos($nombre_inventario, 'Tinta') !== false) {
-                    $tipo_insumo = 'tinta';
-                }
-                // === FIN DE CAMBIOS ===
+                // Usar el tipo de insumo proporcionado por el Excel (ahora es obligatorio y validado)
+                $tipo_insumo = strtolower(trim($tipo_insumo_excel));
 
                 // Normalizar SKU para la búsqueda y validación de unicidad.
                 // Es crucial que esta lógica de normalización coincida con cómo se realiza en la validación de la plantilla Excel.
@@ -491,7 +516,7 @@ return function (App $app) {
                     // Lógica de INSERCIÓN
                     // === INICIO DE CAMBIOS: Añadimos id_catalogo y tipo_insumo a la sentencia INSERT y los valores ===
                     // Asegúrate de que el número de placeholders (?) coincida con el número de valores.
-                    $insert_sql = 'INSERT INTO inventario (id_catalogo, tipo_insumo, insumo, unidad, costo, rendimiento, cantidad, departamento, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+                    $insert_sql = 'INSERT INTO inventario (id_catalogo, tipo_insumo, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, departamento, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
                     $db->goQuery($insert_sql, [
                         $id_catalogo,
                         $tipo_insumo,
@@ -499,6 +524,7 @@ return function (App $app) {
                         $unidad,
                         $costo,
                         $rendimiento,
+                        $cantidad,
                         $cantidad,
                         $departamento_nombre_excel,
                         $sku
@@ -855,8 +881,8 @@ return function (App $app) {
                         : "NULL";
 
                     $tipo_insumo = $miInsumo['tipo_insumo'] ?? 'general';
-                    $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$currentCantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}')";
-                    $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo, tipo_insumo) VALUES ' . $values;
+                    $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$currentCantidad}, {$currentCantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}')";
+                    $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, cantidad_inicial, sku, id_catalogo, tipo_insumo) VALUES ' . $values;
                     $result = $localConnection->goQuery($sql);
                     $lastId = $localConnection->getLastID();
 
@@ -880,8 +906,8 @@ return function (App $app) {
                     : "NULL";
 
                 $tipo_insumo = $miInsumo['tipo_insumo'] ?? 'general';
-                $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$cantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}')";
-                $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, sku, id_catalogo, tipo_insumo) VALUES ' . $values;
+                $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$cantidad}, {$cantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}')";
+                $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, cantidad_inicial, sku, id_catalogo, tipo_insumo) VALUES ' . $values;
                 $result = $localConnection->goQuery($sql);
                 $lastId = $localConnection->getLastID();
 
@@ -2557,6 +2583,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $fin = $params['fin'] ?? null;
             $departamento = $params['departamento'] ?? null;
             $insumo = $params['insumo'] ?? null;
+            $id_insumo = $params['id_insumo'] ?? null;
             
             $localConnection = new LocalDB();
             
@@ -2578,6 +2605,11 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 $where[] = "(i.sku LIKE ? OR i.insumo LIKE ?)";
                 $queryParams[] = "%$insumo%";
                 $queryParams[] = "%$insumo%";
+            }
+            
+            if ($id_insumo !== null && $id_insumo !== '') {
+                $where[] = "m.id_insumo = ?";
+                $queryParams[] = $id_insumo;
             }
             
             $whereStr = implode(" AND ", $where);
