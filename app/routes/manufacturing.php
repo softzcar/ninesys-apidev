@@ -3592,12 +3592,13 @@ return function (App $app) {
                   LEFT JOIN inventario inv ON inv._id = im.id_insumo 
                   WHERE im.id_orden IN ($idsString) 
                     AND (inv.id_catalogo = cip._id OR im.id_catalogo_insumos_prodcutos = cip._id)
+                    AND im.fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
                 ), (SELECT MAX(_id) FROM inventario WHERE id_catalogo = cip._id)) AS id_insumo,
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
                 cip.id_departamento,
                 
-                -- Consumo Estándar (Meta): SOLO sumamos la meta si hay consumo real registrado para esta orden e insumo.
+                -- Consumo Estándar (Meta): SOLO sumamos la meta si hay consumo real registrado para esta orden e insumo en los últimos 30 días.
                 -- Esto evita inflar la meta con órdenes en las que el empleado aún no ha trabajado o consumido material.
                 SUM(
                   CASE 
@@ -3607,6 +3608,7 @@ return function (App $app) {
                       LEFT JOIN inventario inv_check ON inv_check._id = im_check.id_insumo
                       WHERE im_check.id_orden = op.id_orden 
                       AND (im_check.id_catalogo_insumos_prodcutos = cip._id OR inv_check.id_catalogo = cip._id)
+                      AND im_check.fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
                     ) > 0 THEN op.cantidad * pia.cantidad 
                     ELSE 0 
                   END
@@ -3618,13 +3620,14 @@ return function (App $app) {
                 -- Rendimiento: Ahora retornamos 1 porque el cálculo real ya viene convertido a la unidad destino (Metros)
                 1.0 AS rendimiento, 
 
-                -- Consumo Real: Suma de movimientos registrados
+                -- Consumo Real: Suma de movimientos registrados en los últimos 30 días
                 COALESCE((
                     SELECT SUM(ABS(im_sub.valor_final - im_sub.valor_inicial) * COALESCE(inv_sub.rendimiento, 1))
                     FROM inventario_movimientos im_sub
                     LEFT JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
                     WHERE im_sub.id_orden IN ($idsString)
                       AND (inv_sub.id_catalogo = cip._id OR im_sub.id_catalogo_insumos_prodcutos = cip._id)
+                      AND im_sub.fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
                 ), 0) AS cantidad_real
 
             FROM ordenes_productos op
@@ -3946,7 +3949,7 @@ return function (App $app) {
                 sub_ldea.id_orden,
                 SUM(
                     CASE 
-                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND DATE(sub_ldea.fecha_terminado) = CURDATE() THEN 
+                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND sub_ldea.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
                         ELSE 0 
                     END
@@ -3986,7 +3989,7 @@ return function (App $app) {
                     WHERE ldea_sub.id_orden = o._id
                     AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
                     AND ldea_sub.fecha_terminado IS NOT NULL
-                    AND DATE(ldea_sub.fecha_terminado) = CURDATE()
+                    AND ldea_sub.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
                 )
             ) AS totalProjectedTerminadas,
 
