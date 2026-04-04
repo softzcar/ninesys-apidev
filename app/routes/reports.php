@@ -114,31 +114,47 @@ return function (App $app) {
                 $vendedoresMap = [];
                 foreach ($vendedoresRaw as $v) $vendedoresMap[$v['id_usuario']] = $v['nombre'];
 
-                // 3. BATCH: Total Productos
-                $productosSql = "SELECT id_orden, SUM(cantidad) as total FROM $companyDB.ordenes_productos WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden";
-                $productosRaw = $dbEmpresas->goQuery($productosSql);
+                // 3. BATCH: Total Productos (Solo si hay órdenes)
                 $productosMap = [];
-                foreach ($productosRaw as $p) $productosMap[$p['id_orden']] = $p['total'];
+                if (!empty($orderIds)) {
+                    $productosSql = "SELECT id_orden, SUM(cantidad) as total FROM $companyDB.ordenes_productos WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden";
+                    $productosRaw = $dbEmpresas->goQuery($productosSql);
+                    if (is_array($productosRaw) && !isset($productosRaw['status'])) {
+                        foreach ($productosRaw as $p) $productosMap[$p['id_orden']] = $p['total'];
+                    }
+                }
 
-                // 4. BATCH: Costo de Insumos
-                $insumosSql = "SELECT c.id_orden, SUM(COALESCE(ABS(c.valor_inicial - c.valor_final), 0) * (COALESCE(d.costo, 0) / NULLIF(COALESCE(d.cantidad_inicial, 1), 0))) as total 
-                               FROM $companyDB.inventario_movimientos c JOIN $companyDB.inventario d ON c.id_insumo = d._id 
-                               WHERE c.id_orden IN ($orderIdsStr) GROUP BY c.id_orden";
-                $insumosRaw = $dbEmpresas->goQuery($insumosSql);
+                // 4. BATCH: Costo de Insumos (Solo si hay órdenes)
                 $insumosMap = [];
-                foreach ($insumosRaw as $i) $insumosMap[$i['id_orden']] = $i['total'];
+                if (!empty($orderIds)) {
+                    $insumosSql = "SELECT c.id_orden, SUM(COALESCE(ABS(c.valor_inicial - c.valor_final), 0) * (COALESCE(d.costo, 0) / NULLIF(COALESCE(d.cantidad_inicial, 1), 0))) as total 
+                                   FROM $companyDB.inventario_movimientos c JOIN $companyDB.inventario d ON c.id_insumo = d._id 
+                                   WHERE c.id_orden IN ($orderIdsStr) GROUP BY c.id_orden";
+                    $insumosRaw = $dbEmpresas->goQuery($insumosSql);
+                    if (is_array($insumosRaw) && !isset($insumosRaw['status'])) {
+                        foreach ($insumosRaw as $i) $insumosMap[$i['id_orden']] = $i['total'];
+                    }
+                }
 
-                // 5. BATCH: Costo Mano de Obra (Pagos)
-                $pagosSql = "SELECT p.id_orden, SUM(p.monto_pago - COALESCE((SELECT SUM(monto) FROM pagos_salarios WHERE id_pago = p._id), 0)) as total FROM $companyDB.pagos p WHERE p.id_orden IN ($orderIdsStr) GROUP BY p.id_orden";
-                $pagosRaw = $dbEmpresas->goQuery($pagosSql);
+                // 5. BATCH: Costo Mano de Obra (Pagos) (Solo si hay órdenes)
                 $pagosMap = [];
-                foreach ($pagosRaw as $p) $pagosMap[$p['id_orden']] = $p['total'];
+                if (!empty($orderIds)) {
+                    $pagosSql = "SELECT p.id_orden, SUM(p.monto_pago - COALESCE((SELECT SUM(monto) FROM pagos_salarios WHERE id_pago = p._id), 0)) as total FROM $companyDB.pagos p WHERE p.id_orden IN ($orderIdsStr) GROUP BY p.id_orden";
+                    $pagosRaw = $dbEmpresas->goQuery($pagosSql);
+                    if (is_array($pagosRaw) && !isset($pagosRaw['status'])) {
+                        foreach ($pagosRaw as $p) $pagosMap[$p['id_orden']] = $p['total'];
+                    }
+                }
 
-                // 6. BATCH: Reposiciones
-                $reposSql = "SELECT id_orden, COUNT(_id) as total FROM $companyDB.reposiciones WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden";
-                $reposRaw = $dbEmpresas->goQuery($reposSql);
+                // 6. BATCH: Reposiciones (Solo si hay órdenes)
                 $reposMap = [];
-                foreach ($reposRaw as $r) $reposMap[$r['id_orden']] = $r['total'];
+                if (!empty($orderIds)) {
+                    $reposSql = "SELECT id_orden, COUNT(_id) as total FROM $companyDB.reposiciones WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden";
+                    $reposRaw = $dbEmpresas->goQuery($reposSql);
+                    if (is_array($reposRaw) && !isset($reposRaw['status'])) {
+                        foreach ($reposRaw as $r) $reposMap[$r['id_orden']] = $r['total'];
+                    }
+                }
 
                 $debugMaps = [];
                 if ($debug) {
@@ -187,23 +203,29 @@ return function (App $app) {
                 }
 
                 // 8. BATCH: Tintas
-                $tintasSql = "SELECT id_orden, moment, c, m, y, k, w, id_catalogo_impresoras FROM $companyDB.tintas WHERE id_orden IN ($orderIdsStr)";
-                $tintasRaw = $dbEmpresas->goQuery($tintasSql);
+                $tintasRaw = [];
+                if (!empty($orderIds)) {
+                    $tintasSql = "SELECT id_orden, moment, c, m, y, k, w, id_catalogo_impresoras FROM $companyDB.tintas WHERE id_orden IN ($orderIdsStr)";
+                    $tintasRaw = $dbEmpresas->goQuery($tintasSql);
+                }
 
                 // Obtener costos de tintas (Recargas e Inventario)
                 $recargasSql = "SELECT tr.id_catalogo_impresora, tr.color, (inv.costo / inv.cantidad_inicial) as cost_ml FROM $companyDB.tintas_recargas tr JOIN $companyDB.inventario inv ON tr.id_insumo = inv._id ORDER BY tr.fecha_recarga DESC";
                 $recargasRaw = $dbEmpresas->goQuery($recargasSql);
                 $costMap = [];
-                foreach ($recargasRaw as $r) {
-                    $colKey = strtoupper(substr(trim($r['color'] ?? ''), 0, 1));
-                    if ($colKey && !isset($costMap[$r['id_catalogo_impresora']][$colKey])) {
-                        $costMap[$r['id_catalogo_impresora']][$colKey] = $r['cost_ml'];
+                if (is_array($recargasRaw) && !isset($recargasRaw['status'])) {
+                    foreach ($recargasRaw as $r) {
+                        $colKey = strtoupper(substr(trim($r['color'] ?? ''), 0, 1));
+                        if ($colKey && !isset($costMap[$r['id_catalogo_impresora']][$colKey])) {
+                            $costMap[$r['id_catalogo_impresora']][$colKey] = $r['cost_ml'];
+                        }
                     }
                 }
 
                 $tintasDetalle = [];
                 $tintasResumenMap = [];
-                foreach ($tintasRaw as $t) {
+                if (is_array($tintasRaw) && !isset($tintasRaw['status'])) {
+                    foreach ($tintasRaw as $t) {
                     $id = $t['id_orden'];
                     $cost_total = 0;
                     $total_ml = 0;
@@ -218,6 +240,7 @@ return function (App $app) {
                     $tintasResumenMap[$id]['ml'] += $total_ml;
                     $tintasResumenMap[$id]['cost'] += $cost_total;
                 }
+            }
 
                 $tintasResumenFinal = [];
                 foreach ($tintasResumenMap as $id => $data) {
