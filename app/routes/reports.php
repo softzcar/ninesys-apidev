@@ -139,15 +139,7 @@ return function (App $app) {
                 // 5. BATCH: Costo Mano de Obra (Pagos) (Solo si hay órdenes)
                 $pagosMap = [];
                 if (!empty($orderIds)) {
-                    $pagosSql = "SELECT p.id_orden, SUM(
-                        p.monto_pago 
-                        - COALESCE((SELECT SUM(monto) FROM pagos_salarios WHERE id_pago = p._id), 0)
-                        + CASE 
-                            WHEN (SELECT COUNT(*) FROM pagos_salarios WHERE id_pago = p._id) = 0 
-                            THEN (COALESCE((SELECT SUM(monto) FROM pagos_abonos WHERE id_pago = p._id), 0) - COALESCE((SELECT SUM(monto) FROM pagos_descuentos WHERE id_pago = p._id), 0))
-                            ELSE 0 
-                          END
-                    ) as total FROM $companyDB.pagos p WHERE p.id_orden IN ($orderIdsStr) GROUP BY p.id_orden";
+                    $pagosSql = "SELECT p.id_orden, SUM(p.monto_pago - COALESCE((SELECT SUM(monto) FROM $companyDB.pagos_salarios WHERE id_pago = p._id), 0)) as total FROM $companyDB.pagos p WHERE p.id_orden IN ($orderIdsStr) GROUP BY p.id_orden";
                     $pagosRaw = $dbEmpresas->goQuery($pagosSql);
                     if (is_array($pagosRaw) && !isset($pagosRaw['status'])) {
                         foreach ($pagosRaw as $p) $pagosMap[$p['id_orden']] = $p['total'];
