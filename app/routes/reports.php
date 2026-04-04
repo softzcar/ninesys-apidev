@@ -127,7 +127,7 @@ return function (App $app) {
                 // 4. BATCH: Costo de Insumos (Solo si hay órdenes)
                 $insumosMap = [];
                 if (!empty($orderIds)) {
-                    $insumosSql = "SELECT c.id_orden, SUM(COALESCE(ABS(c.valor_inicial - c.valor_final), 0) * (COALESCE(d.costo, 0) / NULLIF(COALESCE(d.cantidad_inicial, 1), 0))) as total 
+                    $insumosSql = "SELECT c.id_orden, SUM(COALESCE(ABS(c.valor_inicial - c.valor_final), 0) * (COALESCE(d.costo, 0) / COALESCE(NULLIF(d.cantidad_inicial, 0), 1))) as total 
                                    FROM $companyDB.inventario_movimientos c JOIN $companyDB.inventario d ON c.id_insumo = d._id 
                                    WHERE c.id_orden IN ($orderIdsStr) GROUP BY c.id_orden";
                     $insumosRaw = $dbEmpresas->goQuery($insumosSql);
@@ -222,6 +222,16 @@ return function (App $app) {
                     }
                 }
 
+                // Fallback: tinta_filtro
+                $fallbackRaw = $dbEmpresas->goQuery("SELECT tf.color, (inv.costo / inv.cantidad_inicial) as cost_ml FROM $companyDB.tinta_filtro tf JOIN $companyDB.inventario inv ON tf.id_inventario = inv._id");
+                $fallbackMap = [];
+                if (is_array($fallbackRaw) && !isset($fallbackRaw['status'])) {
+                    foreach ($fallbackRaw as $fr) {
+                        $colKey = strtoupper(substr(trim($fr['color'] ?? ''), 0, 1));
+                        if ($colKey) $fallbackMap[$colKey] = $fr['cost_ml'];
+                    }
+                }
+
                 $tintasDetalle = [];
                 $tintasResumenMap = [];
                 if (is_array($tintasRaw) && !isset($tintasRaw['status'])) {
@@ -233,9 +243,10 @@ return function (App $app) {
                         $ml = (float)($t[$col] ?? 0);
                         $total_ml += $ml;
                         $colKey = strtoupper(substr($col, 0, 1));
-                        $cost_total += ($ml * ($costMap[$t['id_catalogo_impresoras']][$colKey] ?? 0));
+                        $costMl = $costMap[$t['id_catalogo_impresoras']][$colKey] ?? ($fallbackMap[$colKey] ?? 0);
+                        $cost_total += ($ml * $costMl);
                     }
-                    $tintasDetalle[] = ['id_orden' => $id, 'total_tinta_consumo_ml' => $total_ml, 'total_tinta_costo' => round($cost_total, 2)];
+                    $tintasDetalle[] = ['id_orden' => $id, 'total_tinta_consumo_ml' => round($total_ml, 2), 'total_tinta_costo' => round($cost_total, 2)];
                     if (!isset($tintasResumenMap[$id])) $tintasResumenMap[$id] = ['ml' => 0, 'cost' => 0];
                     $tintasResumenMap[$id]['ml'] += $total_ml;
                     $tintasResumenMap[$id]['cost'] += $cost_total;
@@ -244,7 +255,7 @@ return function (App $app) {
 
                 $tintasResumenFinal = [];
                 foreach ($tintasResumenMap as $id => $data) {
-                    $tintasResumenFinal[] = ['id_orden' => $id, 'total_tinta_consumo_ml' => $data['ml'], 'total_tinta_costo' => round($data['cost'], 2)];
+                    $tintasResumenFinal[] = ['id_orden' => $id, 'total_tinta_consumo_ml' => round($data['ml'], 2), 'total_tinta_costo' => round($data['cost'], 2)];
                 }
 
                 // 9. Combinar Datos en reporteData

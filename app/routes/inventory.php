@@ -767,7 +767,7 @@ return function (App $app) {
             COALESCE(inv.rendimiento, 1) as rendimiento,       
             COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0) as cantidad_utilizada,
             COALESCE(inv.cantidad, 0) as cantidad_restante, 
-            ROUND((COALESCE(inv.costo, 0) / NULLIF(COALESCE(inv.cantidad_inicial, 1), 0)) * COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0), 2) AS total_insumo,
+            ROUND((COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), 1)) * COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0), 2) AS total_insumo,
             COALESCE(inv.unidad, "un") as unidad,    
             COALESCE(inv.departamento, "N/A") as departamento
         FROM
@@ -829,7 +829,7 @@ return function (App $app) {
                         'yellow' => (float)($tr['y'] ?? 0),
                         'black' => (float)($tr['k'] ?? 0),
                         'white' => (float)($tr['w'] ?? 0),
-                        'total_tinta_consumo_ml' => $totalMl,
+                        'total_tinta_consumo_ml' => round($totalMl, 2),
                         'total_tinta_costo' => round($totalCost, 2),
                     ];
                 }
