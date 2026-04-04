@@ -121,7 +121,7 @@ return function (App $app) {
                 foreach ($productosRaw as $p) $productosMap[$p['id_orden']] = $p['total'];
 
                 // 4. BATCH: Costo de Insumos
-                $insumosSql = "SELECT c.id_orden, SUM(ABS(c.valor_inicial - c.valor_final) * (d.costo / d.cantidad_inicial)) as total 
+                $insumosSql = "SELECT c.id_orden, SUM(COALESCE(ABS(c.valor_inicial - c.valor_final), 0) * (COALESCE(d.costo, 0) / NULLIF(COALESCE(d.cantidad_inicial, 1), 0))) as total 
                                FROM $companyDB.inventario_movimientos c JOIN $companyDB.inventario d ON c.id_insumo = d._id 
                                WHERE c.id_orden IN ($orderIdsStr) GROUP BY c.id_orden";
                 $insumosRaw = $dbEmpresas->goQuery($insumosSql);
@@ -129,7 +129,7 @@ return function (App $app) {
                 foreach ($insumosRaw as $i) $insumosMap[$i['id_orden']] = $i['total'];
 
                 // 5. BATCH: Costo Mano de Obra (Pagos)
-                $pagosSql = "SELECT id_orden, SUM(monto_pago) as total FROM $companyDB.pagos WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden";
+                $pagosSql = "SELECT p.id_orden, SUM(p.monto_pago - COALESCE((SELECT SUM(monto) FROM pagos_salarios WHERE id_pago = p._id), 0)) as total FROM $companyDB.pagos p WHERE p.id_orden IN ($orderIdsStr) GROUP BY p.id_orden";
                 $pagosRaw = $dbEmpresas->goQuery($pagosSql);
                 $pagosMap = [];
                 foreach ($pagosRaw as $p) $pagosMap[$p['id_orden']] = $p['total'];
@@ -195,7 +195,10 @@ return function (App $app) {
                 $recargasRaw = $dbEmpresas->goQuery($recargasSql);
                 $costMap = [];
                 foreach ($recargasRaw as $r) {
-                    if (!isset($costMap[$r['id_catalogo_impresora']][$r['color']])) $costMap[$r['id_catalogo_impresora']][$r['color']] = $r['cost_ml'];
+                    $colKey = strtoupper(substr(trim($r['color'] ?? ''), 0, 1));
+                    if ($colKey && !isset($costMap[$r['id_catalogo_impresora']][$colKey])) {
+                        $costMap[$r['id_catalogo_impresora']][$colKey] = $r['cost_ml'];
+                    }
                 }
 
                 $tintasDetalle = [];
@@ -207,7 +210,8 @@ return function (App $app) {
                     foreach (['c', 'm', 'y', 'k', 'w'] as $col) {
                         $ml = (float)($t[$col] ?? 0);
                         $total_ml += $ml;
-                        $cost_total += ($ml * ($costMap[$t['id_catalogo_impresoras']][strtoupper($col)] ?? 0));
+                        $colKey = strtoupper(substr($col, 0, 1));
+                        $cost_total += ($ml * ($costMap[$t['id_catalogo_impresoras']][$colKey] ?? 0));
                     }
                     $tintasDetalle[] = ['id_orden' => $id, 'total_tinta_consumo_ml' => $total_ml, 'total_tinta_costo' => round($cost_total, 2)];
                     if (!isset($tintasResumenMap[$id])) $tintasResumenMap[$id] = ['ml' => 0, 'cost' => 0];
@@ -354,11 +358,15 @@ return function (App $app) {
         $id_orden = $args['id_orden'];
 
         $sql = 'SELECT
+                    p._id AS id_pago,
                     p.id_empleado,
                     eu.nombre AS nombre_empleado,
                     p.detalle AS departamento,
                     p.cantidad,
-                    p.monto_pago
+                    p.monto_pago,
+                    (SELECT COALESCE(SUM(monto), 0) FROM pagos_abonos WHERE id_pago = p._id) AS total_bonos,
+                    (SELECT COALESCE(SUM(monto), 0) FROM pagos_descuentos WHERE id_pago = p._id) AS total_descuentos,
+                    (SELECT COALESCE(SUM(monto), 0) FROM pagos_salarios WHERE id_pago = p._id) AS total_salario_pagado
                 FROM
                     pagos p
                 JOIN

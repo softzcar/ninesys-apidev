@@ -759,17 +759,17 @@ return function (App $app) {
 
         $sql = 'SELECT
             imo.id_orden,
-            inv.sku,
-            inv._id id_insumo,
-            inv.insumo nombre_insumo,    
+            COALESCE(inv.sku, "N/A") as sku,
+            COALESCE(inv._id, 0) as id_insumo,
+            COALESCE(inv.insumo, "Insumo Desconocido") as nombre_insumo,    
             inv.color,
-            inv.costo,    
-            inv.rendimiento,       
-            ABS(imo.valor_inicial - imo.valor_final) cantidad_utilizada,
-            inv.cantidad cantidad_restante, 
-            ROUND(((inv.costo / inv.cantidad_inicial) * ABS(imo.valor_inicial - imo.valor_final)), 2) AS total_insumo,
-            inv.unidad,    
-            inv.departamento
+            COALESCE(inv.costo, 0) as costo,    
+            COALESCE(inv.rendimiento, 1) as rendimiento,       
+            COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0) as cantidad_utilizada,
+            COALESCE(inv.cantidad, 0) as cantidad_restante, 
+            ROUND((COALESCE(inv.costo, 0) / NULLIF(COALESCE(inv.cantidad_inicial, 1), 0)) * COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0), 2) AS total_insumo,
+            COALESCE(inv.unidad, "un") as unidad,    
+            COALESCE(inv.departamento, "N/A") as departamento
         FROM
             inventario_movimientos imo
         LEFT JOIN inventario inv ON imo.id_insumo = inv._id
@@ -792,7 +792,10 @@ return function (App $app) {
                 $fallbackRaw = $localConnection->goQuery("SELECT tf.color AS color_code, (inv.costo / inv.cantidad_inicial) AS cost_ml FROM tinta_filtro tf JOIN inventario inv ON tf.id_inventario = inv._id");
                 $fallbackMap = [];
                 if (is_array($fallbackRaw) && !isset($fallbackRaw['status'])) {
-                    foreach ($fallbackRaw as $fr) $fallbackMap[strtoupper($fr['color_code'])] = (float)($fr['cost_ml'] ?? 0);
+                    foreach ($fallbackRaw as $fr) {
+                        $colKey = strtoupper(substr(trim($fr['color_code'] ?? ''), 0, 1));
+                        if ($colKey) $fallbackMap[$colKey] = (float)($fr['cost_ml'] ?? 0);
+                    }
                 }
 
                 $costMap = [];
@@ -801,8 +804,8 @@ return function (App $app) {
                     if (is_array($recargasRaw) && !isset($recargasRaw['status'])) {
                         foreach ($recargasRaw as $rr) {
                             $pid = (int)$rr['id_catalogo_impresora'];
-                            $col = strtoupper((string)$rr['color']);
-                            if (!isset($costMap[$pid][$col])) $costMap[$pid][$col] = (float)($rr['cost_ml'] ?? 0);
+                            $colKey = strtoupper(substr(trim($rr['color'] ?? ''), 0, 1));
+                            if ($colKey && !isset($costMap[$pid][$colKey])) $costMap[$pid][$colKey] = (float)($rr['cost_ml'] ?? 0);
                         }
                     }
                 }
