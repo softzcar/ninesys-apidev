@@ -210,7 +210,7 @@ return function (App $app) {
                 }
 
                 // Obtener costos de tintas (Recargas e Inventario)
-                $recargasSql = "SELECT tr.id_catalogo_impresora, tr.color, (inv.costo / inv.cantidad_inicial) as cost_ml FROM $companyDB.tintas_recargas tr JOIN $companyDB.inventario inv ON tr.id_insumo = inv._id ORDER BY tr.fecha_recarga DESC";
+                $recargasSql = "SELECT tr.id_catalogo_impresora, tr.color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), 1)) as cost_ml FROM $companyDB.tintas_recargas tr JOIN $companyDB.inventario inv ON tr.id_insumo = inv._id ORDER BY tr.fecha_recarga DESC";
                 $recargasRaw = $dbEmpresas->goQuery($recargasSql);
                 $costMap = [];
                 if (is_array($recargasRaw) && !isset($recargasRaw['status'])) {
@@ -223,7 +223,7 @@ return function (App $app) {
                 }
 
                 // Fallback: tinta_filtro
-                $fallbackRaw = $dbEmpresas->goQuery("SELECT tf.color, (inv.costo / inv.cantidad_inicial) as cost_ml FROM $companyDB.tinta_filtro tf JOIN $companyDB.inventario inv ON tf.id_inventario = inv._id");
+                $fallbackRaw = $dbEmpresas->goQuery("SELECT tf.color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), 1)) as cost_ml FROM $companyDB.tinta_filtro tf JOIN $companyDB.inventario inv ON tf.id_inventario = inv._id");
                 $fallbackMap = [];
                 if (is_array($fallbackRaw) && !isset($fallbackRaw['status'])) {
                     foreach ($fallbackRaw as $fr) {

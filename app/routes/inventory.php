@@ -789,7 +789,7 @@ return function (App $app) {
                 $printerIds = array_values(array_unique(array_filter($printerIds)));
                 $printerIdsStr = !empty($printerIds) ? implode(',', $printerIds) : '';
 
-                $fallbackRaw = $localConnection->goQuery("SELECT tf.color AS color_code, (inv.costo / inv.cantidad_inicial) AS cost_ml FROM tinta_filtro tf JOIN inventario inv ON tf.id_inventario = inv._id");
+                $fallbackRaw = $localConnection->goQuery("SELECT tf.color AS color_code, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), 1)) AS cost_ml FROM tinta_filtro tf JOIN inventario inv ON tf.id_inventario = inv._id");
                 $fallbackMap = [];
                 if (is_array($fallbackRaw) && !isset($fallbackRaw['status'])) {
                     foreach ($fallbackRaw as $fr) {
@@ -800,7 +800,7 @@ return function (App $app) {
 
                 $costMap = [];
                 if (!empty($printerIdsStr)) {
-                    $recargasRaw = $localConnection->goQuery("SELECT tr.id_catalogo_impresora, tr.color, (inv.costo / inv.cantidad_inicial) AS cost_ml FROM tintas_recargas tr JOIN inventario inv ON tr.id_insumo = inv._id WHERE tr.id_catalogo_impresora IN ($printerIdsStr) ORDER BY tr.fecha_recarga DESC");
+                    $recargasRaw = $localConnection->goQuery("SELECT tr.id_catalogo_impresora, tr.color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), 1)) AS cost_ml FROM tintas_recargas tr JOIN inventario inv ON tr.id_insumo = inv._id WHERE tr.id_catalogo_impresora IN ($printerIdsStr) ORDER BY tr.fecha_recarga DESC");
                     if (is_array($recargasRaw) && !isset($recargasRaw['status'])) {
                         foreach ($recargasRaw as $rr) {
                             $pid = (int)$rr['id_catalogo_impresora'];
