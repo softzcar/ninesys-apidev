@@ -1,0 +1,32 @@
+- **Solicitud del Usuario:** Desplegar el endpoint interno msg_service al VPS dev (Hostinger) y verificar que funciona correctamente con smoke tests.
+- **Fecha y Hora:** 2026-04-06 14:33:33
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+    - /home/api.nineteengreen.com/public_html/.env (en VPS dev: append de MSG_SERVICE_INTERNAL_TOKEN)
+    - app/routes/msg_service.php (desplegado vía git reset --hard)
+    - app/routes.php (desplegado)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: 9b97793 (mi commit) + 49b083f (HEAD actual de origin/refactor/modular-routes tras los commits del usuario "Reparar desmadre")
+- **Acción Realizada:**
+    1. Generado token con `openssl rand -hex 32` y appendido al .env del VPS dev como `MSG_SERVICE_INTERNAL_TOKEN=...` (vía ssh).
+    2. El usuario ejecutó `git push` y `deploy_backend.sh` opción 2. Inicialmente el push de mi commit falló por falta de credenciales en mi sesión, así que el primer deploy quedó atrás. El usuario hizo cleanup de su lado y un re-deploy.
+    3. Verificado que VPS dev, origin y local están sincronizados en 49b083f, con mi commit 9b97793 incluido y el archivo `app/routes/msg_service.php` presente con el registro en `app/routes.php` línea 207.
+    4. Smoke tests con curl contra `https://api.nineteengreen.com/internal/*`:
+        - GET /internal/ping sin token → 401 {"error":"Unauthorized"} ✅
+        - GET /internal/ping con token → 200 {ok:true, service:"ninesys-api", timestamp:...} ✅
+        - GET /internal/db-credentials/163 con token → 200 con credenciales reales de api_emp_163 ✅
+        - GET /internal/db-credentials/99999 con token → 404 {"error":"Not Found"} ✅
+        - GET /internal/db-credentials/abc con token → 400 {"error":"Bad Request"} ✅
+- **Inconvenientes y Desafíos:**
+    - Mi sesión no tenía credenciales Git (HTTPS remote sin PAT). Tuve que delegar el push al usuario.
+    - En el primer intento de smoke test el endpoint respondía 405 "Must be one of: OPTIONS" — fue porque el deploy todavía no incluía mi commit (Slim ya tenía rutas OPTIONS globales para CORS y devolvía 405 en lugar de 404). Tras el re-deploy correcto, todo OK.
+- **Decisión Final y Justificación:**
+    - El endpoint queda en producción del VPS dev. Las 5 pruebas cubren el camino feliz, autorización, y los dos paths de error principales.
+- **Herramienta(s) Utilizada(s):** `Bash` (ssh, curl, git, openssl).
+- **Resultado:** Éxito.
+- **Verificación:** Ver tabla de smoke tests en la conversación. Los 5 casos pasaron con los códigos HTTP esperados.
+- **Logro Conseguido:** Fase 1 del plan de migración a Baileys cerrada. msg_ninesys ya tiene un canal seguro para resolver credenciales multi-tenant en runtime.
+- **Referencias de Sesión (Contexto):** N/A
+- **Observaciones de Gemini:** El `db_host` de la empresa 163 es `localhost`, lo que implica que cuando arranquemos Fase 2 (tenantResolver en msg_ninesys) las pruebas en local requerirán túnel SSH al VPS o despliegue directo en /home/ozcar/msg-ninesys.
+- **Respuesta de Gemini:** Endpoint desplegado y verificado. Listo para arrancar Fase 2.
