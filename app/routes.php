@@ -202,6 +202,10 @@ return function (App $app) {
   // RUTA DE ÓRDENES SIN ASIGNACIÓN
   (require __DIR__ . '/routes/ordenes-sin-asignacion.php')($app);
 
+  // RUTAS INTERNAS PARA EL SERVICIO msg_ninesys (WhatsApp / Baileys)
+  // Protegidas por token interno compartido (header X-Internal-Token).
+  (require __DIR__ . '/routes/msg_service.php')($app);
+
   /** PROXY PARA TASAS DE CAMBIO (CORS FIX) */
   $app->get('/bcv-rates', function (Request $request, Response $response) {
     $url = 'https://bcv.justcarlux.dev/api/v1/rates';
