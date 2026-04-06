@@ -1328,13 +1328,13 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $object['remanente_updated'] = $remanente_val;
         }
 
-        // Guardar en rendimiento
-        if ($miInsumo['departamento'] === 'Corte' && !empty($miInsumo['id_orden'])) {
+        // Guardar en rendimiento (Abierto a todos los departamentos)
+        if (!empty($miInsumo['id_orden'])) {
             // 1- Determinar si el registro existe (INSERT o UPDATE)
             $sql = 'SELECT COUNT(id_orden) FROM rendimiento WHERE id_orden = ' . $miInsumo['id_orden'];
             $exist = $localConnection->goQuery($sql);
 
-            // Inicialización por defecto para evitar errores de linter
+            // Inicialización por defecto
             $campo_valor = 'desperdicio';
             $campo_empleado = 'id_empleado_corte';
 
@@ -1344,7 +1344,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             } elseif ($miInsumo['departamento'] === 'Estampado') {
                 $campo_valor = 'id_insumo';
                 $campo_empleado = 'id_empleado_estampado';
-            } elseif ($miInsumo['departamento'] === 'Corte') {
+            } else {
+                // Fallback para otros departamentos (Corte, Costura, etc.)
                 $campo_valor = 'desperdicio';
                 $campo_empleado = 'id_empleado_corte';
             }
