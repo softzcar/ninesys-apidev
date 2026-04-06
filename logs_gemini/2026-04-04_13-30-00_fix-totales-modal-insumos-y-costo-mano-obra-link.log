@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** Totalizar los montos en la columna "Costo Insumos" igual que en "Costo M. O." y corregir el link del modal que muestra "$ 0.00".
+- **Fecha y Hora:** 2026-04-04 13:30:00
+- **Proyecto(s):** Frontend (app_multi)
+- **Archivos Involucrados:**
+  - `app_multi/components/admin/ReporteCostosDeProduccionInsumos.vue`
+- **Acción Realizada:**
+  1. Se agregó `foot-clone` a las tablas de Tintas e Insumos en el modal.
+  2. Se agregaron los templates `#foot()` para mostrar los totales en cada columna.
+  3. Se agregó un resumen total al final del modal (similar al de Mano de Obra).
+  4. Se agregaron las computed properties: `totalTintaML`, `totalTintaCosto`, `totalInsumosCosto`, `totalGeneralInsumos`.
+- **Descubrimiento Adicional:**
+  - Se identificó que los montos inflados en los costos de insumos/tintas eran causados por registros con `cantidad_inicial = 0` en la tabla `inventario`.
+  - Esto causaba que el cálculo `(costo / cantidad_inicial)` produjera valores incorrectos.
+  - La división por cero estaba protegida con `NULLIF` y `COALESCE`, pero resultaba en `costo / 1` lo cual seguía siendo incorrecto (ej: $15/ml en lugar de $0.015/ml).
+  - Solución: Actualizar los registros de inventario con `cantidad_inicial = cantidad` para aquellos que tienen `cantidad_inicial = 0`.
+- **Referencias de Sesión (Contexto):**
+  - Log anterior: `2026-03-27_11-56-38_tarea-fix-cantidad-inicial-insumos.log` (corrección del flujo de creación)
+  - Log anterior: `2026-01-26_14-25-00_tarea-correccion-formula-costos.log` (fórmula costo/cantidad_inicial)
+- **Resultado:** Éxito - Totales funcionando correctamente. Montos correctos tras actualizar cantidad_inicial en BD.
+- **Verificación:** Visual en el modal del reporte de costos de producción.

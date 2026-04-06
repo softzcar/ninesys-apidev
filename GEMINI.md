@@ -248,9 +248,9 @@ Según la base de datos central `api_empresas`:
 
 | ID  | Nombre | Base de Datos | Uso |
 |-----|--------|---------------|-----|
-| 163 | NineteenCustom | `api_emp_163` | 🏭 Producción |
-| 171 | Pruebas | `api_emp_171` | 🧪 Testing |
-| 174 | Pruebas Dev | `api_emp_174` | 🔧 Desarrollo |
+| 163 | nineteencustom.com | `api_emp_163` | 🏭 Producción |
+| 163 | nineteengreen.com | `api_emp_163` | 🏭 Testing |
+
 
 ### Recuperación de Datos
 
@@ -266,11 +266,10 @@ ssh vps-ninesys "mysql -u root api_emp_174 < /home/backups/company_resets/backup
 
 ### Notas Importantes
 
-1. **Siempre probar primero en empresa 171 o 174** antes de resetear empresa de producción (163)
-2. El script **detecta automáticamente** si está en VPS o local y ajusta las rutas
-3. Los backups se guardan en `/home/backups/company_resets/` en el VPS
-4. Los logs se guardan en `/home/api.nineteengreen.com/logs_reset/` en el VPS
-5. El reset tarda aproximadamente **10-30 segundos** dependiendo del tamaño de los datos
+1. El script **detecta automáticamente** si está en VPS o local y ajusta las rutas
+2. Los backups se guardan en `/home/backups/company_resets/` en el VPS
+3. Los logs se guardan en `/home/api.nineteengreen.com/logs_reset/` en el VPS
+4. El reset tarda aproximadamente **10-30 segundos** dependiendo del tamaño de los datos
 
 ---
 

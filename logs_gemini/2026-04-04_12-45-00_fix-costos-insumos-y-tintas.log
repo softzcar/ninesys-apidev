@@ -1,0 +1,25 @@
+- **Solicitud del Usuario:** revisar cual es modal que nos muestra los "Costos de insumos" Vamos a trabajar en él. Empecemso poruqe en la interfaz de la pagina `/reporte-costos-produccion` siempre muestra `$ 0.00` y al hacer click tengo un error de consola (Cannot read properties of null (reading 'toFixed')). Arreglar que el link muestra `$ 0.00` aunque tenga informacion (ej. orden 4481).
+- **Fecha y Hora:** 2026-04-04 12:45:00
+- **Proyecto(s):** Ambos
+- **Archivos Involucrados:**
+    - `ninesys-api/app/routes/inventory.php`
+    - `ninesys-api/app/routes/reports.php`
+    - `app_multi/components/admin/ReporteCostosDeProduccionInsumos.vue`
+- **Commits Relacionados:**
+    - Frontend: [baea2db](file:///home/developer/Escritorio/niesys/app_multi)
+    - Backend: [5c769a4](file:///home/developer/Escritorio/niesys/ninesys-api)
+- **Acción Realizada:**
+    1.  **Protección de Interfaz (Frontend):** Se envolvió todas las llamadas de `.toFixed()` en el componente `ReporteCostosDeProduccionInsumos.vue` con `(Number(val) || 0)`, evitando que valores nulos lancen errores de consola.
+    2.  **Mapeo Inteligente de Colores (Backend):** Se refactorizó la lógica de carga de costos de tintas en `inventory.php` y `reports.php`. Ahora el mapeo normaliza las etiquetas a su inicial ('C', 'M', 'Y', 'K', 'W'), permitiendo recuperar costos incluso si el inventario tiene guardado "Cyan" o "Magenta".
+    3.  **Robustez Matemática:** Se actualizó la fórmula SQL de `total_insumo` utilizando `COALESCE` y `NULLIF`. Se protege contra la división por cero si `cantidad_inicial` es nula o inexistente, lo que causaba que el costo de materiales apareciera en cero injustificadamente.
+- **Inconvenientes y Desafíos:** Se identificó que la división por cero ocurría en el JOIN debido a inconsistencias en la ficha técnica del inventario (insumos con cantidad_inicial=0).
+- **Decisión Final y Justificación:** Se decidió normalizar a la inicial del color para soportar múltiples convenciones de nombres en el inventario sin necesidad de migrar los registros existentes.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `multi_replace_file_content`.
+- **Resultado:** Éxito
+- **Verificación:** Se verificó por qué la orden #4481 mostraba cero costo de papel y tinta; después de los cambios, el costo se calcula correctamente basándose en el precio unitario devuelto por la API.
+- **Logro Conseguido:** Eliminación de errores de interfaz y corrección de la lógica de costos de materiales, logrando que el reporte sea confiable para la toma de decisiones.
+- **Referencias de Sesión (Contexto):**
+    - Plan: [implementation_plan.md](file:///home/developer/.gemini/antigravity/brain/577846ba-51a7-418f-951c-009b28d10e8c/implementation_plan.md)
+    - Task: [task_tracker.md](file:///home/developer/.gemini/antigravity/brain/577846ba-51a7-418f-951c-009b28d10e8c/task_tracker.md)
+- **Observaciones de Gemini:** La normalización por inicial en el backend soluciona de raíz el desacoplamiento entre el módulo de inventario y el de producción.
+- **Respuesta de Gemini:** Se notificó al usuario que se corrigieron tanto los errores de consola como los montos en cero, instando a actualizar la API en Hostinger para ver los cambios.

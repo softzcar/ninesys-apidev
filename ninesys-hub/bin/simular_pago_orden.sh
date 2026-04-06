@@ -1,1 +1,0 @@
-/home/developer/Escritorio/niesys/ninesys-apidev/scripts/simular_pago_orden.sh

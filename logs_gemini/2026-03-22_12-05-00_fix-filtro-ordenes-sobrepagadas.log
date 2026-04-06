@@ -1,0 +1,20 @@
+TAREA: Sincronización de Filtros de Estado de Pago (Orden 3900)
+FECHA: 2026-03-22
+SISTEMA: Frontend (app_multi)
+
+PROBLEMA:
+La orden ID 3900 aparecía incorrectamente en el filtro "Sobrepagadas" (Overpaid) a pesar de tener un saldo pendiente de $59.70 dolares. Esto causaba confusión entre el listado general y el modal de abonos.
+
+ANÁLISIS:
+- El modal utiliza el endpoint `/ordenes/abono/{id}` que consulta la tabla contable `abonos` (Fuente de verdad).
+- El filtro de la tabla en `activas.vue` recalculaba el saldo restando los pagos físicos de la tabla `metodos_de_pago` directamente.
+- Existía una discrepancia entre ambas tablas.
+
+CAMBIOS REALIZADOS:
+- Se modificó `app_multi/components/ordenes/activas.vue` (Frontend).
+- El sistema ahora utiliza `saldo_pendiente` del API para clasificar las órdenes.
+- Se corrigieron los errores de Vue relacionados con los setters de `totalRows` y `ordenesLength`.
+
+REPOSITORIO:
+- Frontend: Commit 6124939
+- Backend: Sin cambios requeridos en esta tarea.

@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** Fix the balance display for orders lacking abonos records, ensure initial payments are recorded during budget conversion, and confirm custom order payment recording.
+- **Fecha y Hora:** 2026-03-23 10:20:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** [/home/developer/Escritorio/niesys/ninesys-apidev/app/routes/orders.php]
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: 52a8485
+- **Acción Realizada:** 
+    1.  Modified the query in `GET /ordenes/abono/{id}` to use `LEFT JOIN` and subqueries, ensuring `pago_total` is returned even if the `abonos` table is empty (fixing Order 3858 issues).
+    2.  Implemented payment and discount recording in `POST /presupuesto/{id}/convertir-a-orden` to ensure initial payments are logged in the `abonos` table.
+    3.  Corrected invalid `lastInsertId()` method calls in `orders.php` to use `getLastID()` from the `LocalDB` class.
+    4.  Performed `git push` and then `git pull` on Hostinger (test server) to deploy the changes.
+- **Inconvenientes y Desafíos:** Tuve una confusión inicial intentando modificar `LocalDB.php` para añadir `lastInsertId()`, pero revertí el cambio al recordar que no debo modificar archivos de conexión/modelos base sin necesidad extrema y que el método `getLastID()` ya existía y debía usarse en su lugar.
+- **Decisión Final y Justificación:** Se eligió modificar la consulta SQL para usar `IFNULL` y subconsultas en lugar de un `JOIN` simple, asegurando robustez ante la ausencia de registros. Se mantuvo el uso de `LocalDB::getLastID()` para respetar la abstracción de base de datos del proyecto.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`, `ssh`, `multi_replace_file_content`
+- **Resultado:** Éxito
+- **Verificación:** Se verificó que el repositorio en Hostinger se actualizó correctamente con el commit `52a8485`. La respuesta de la API local fue analizada previamente para asegurar que la consulta SQL era válida.
+- **Logro Conseguido:** Se corrigió el error de balance en cero para órdenes con pagos "huérfanos" y se automatizó el registro de abonos iniciales en la conversión de presupuestos, mejorando la coherencia financiera del sistema.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/94003229-fabc-40da-96a7-592dcf4dd678/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/94003229-fabc-40da-96a7-592dcf4dd678/walkthrough.md)
+
+- **Observaciones de Gemini:** Los cambios realizados son preventivos y correctivos. La lógica de negocio ahora es más consistente entre la creación manual de órdenes y la conversión desde presupuestos.
+- **Respuesta de Gemini:** ¡Listo! He realizado el push y el pull en Hostinger. Los cambios ya están desplegados en el servidor de pruebas.

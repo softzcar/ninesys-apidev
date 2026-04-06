@@ -1,1 +1,0 @@
-/home/developer/Escritorio/generar_reportes_diarios.py

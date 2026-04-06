@@ -1,0 +1,12 @@
+- **Solicitud del Usuario:** Investigar por qué el reporte `/reporte-costos-produccion` en empresa 163 retorna costos de insumos y salarios en cero.
+- **Fecha y Hora:** 2026-03-27 10:12:51
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - [reports.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/reports.php)
+- **Acción Realizada:**
+  - Se corrigió el cálculo de consumo/costo de insumos usando `ABS(valor_inicial - valor_final)` para soportar movimientos con semántica de consumo estimado.
+  - Se enriqueció la data de empleados retornando `costo_por_hora` (derivado de salario_monto, salario_periodo y horario laboral) para habilitar el cálculo de salarios invertidos en el frontend.
+  - Se añadió un modo `debug=1` en el endpoint del reporte que incluye contadores por orden de inventario_movimientos, pagos, tintas y tareas (incluyendo tareas abiertas).
+- **Resultado:** Ajustes aplicados localmente; validación de sintaxis PHP exitosa.
+- **Verificación:** `php -l` sin errores.
+

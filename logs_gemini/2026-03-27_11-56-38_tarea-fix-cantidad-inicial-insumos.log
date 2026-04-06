@@ -1,0 +1,13 @@
+- **Solicitud del Usuario:** Investigar por qué existen insumos con `cantidad_inicial=0` y corregir el flujo de creación para evitarlo.
+- **Fecha y Hora:** 2026-03-27 11:56:38
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - [inventory.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/inventory.php)
+  - [routes.php](file:///home/developer/Escritorio/niesys/ninesys-api/installer/api/app/routes.php)
+- **Acción Realizada:**
+  - Se corrigió `POST /insumos/nuevo` para que al insertar en `inventario` establezca `cantidad_inicial` con el mismo valor de `cantidad` (o el valor calculado en el caso de tintas).
+  - Se corrigió la carga masiva de inventario para que en inserciones nuevas establezca `cantidad_inicial = cantidad`.
+  - Se corrigió el endpoint equivalente en el installer para insertar `cantidad_inicial`.
+- **Resultado:** Cambios aplicados localmente y validados con `php -l` sin errores de sintaxis.
+- **Verificación:** Sintaxis PHP validada.
+

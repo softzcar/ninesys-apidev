@@ -1,0 +1,12 @@
+- **Solicitud del Usuario:** Unificar columnas en `/reporte-costos-produccion` y asegurar que el endpoint de insumos incluya tintas e insumos sin pérdidas.
+- **Fecha y Hora:** 2026-03-26 17:57:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - [reports.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/reports.php)
+  - [inventory.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/inventory.php)
+- **Acción Realizada:**
+  - Se separó `costos_de_insumos` para que represente únicamente insumos (sin incluir tintas) en el endpoint `/reportes/costos-produccion/{inicio}/{fin}`.
+  - Se corrigió el endpoint `/reporte/insumos-cosumidos-por-orden/...` para que la consulta de insumos no dependa de la existencia de registros en `tintas`, evitando que se pierdan insumos en el resultado.
+- **Resultado:** Ajustes aplicados localmente y validados con `php -l` sin errores de sintaxis.
+- **Verificación:** Sintaxis PHP validada para los archivos modificados.
+

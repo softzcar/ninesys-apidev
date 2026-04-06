@@ -1,0 +1,14 @@
+- **Solicitud del Usuario:** Analizar orden 4184 y corregir por qué el reporte retorna costos en cero y el modal de insumos queda cargando.
+- **Fecha y Hora:** 2026-03-27 10:41:39
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - [reports.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/reports.php)
+  - [inventory.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/inventory.php)
+- **Acción Realizada:**
+  - Se corrigió el payload de `costo_hora_empleado` para incluir `id_usuario` (además de `id_empleado`) y `nombre`, manteniendo `costo_por_hora` calculado.
+  - Se ajustó el endpoint `/reporte/insumos-cosumidos-por-orden/{id_orden}` para:
+    - Calcular tintas con queries acotadas al `id_orden` y costos por recarga en PHP (evita CTEs pesadas y posibles bloqueos).
+    - Usar `ABS(valor_inicial - valor_final)` para consumos/costos de insumos.
+- **Resultado:** Cambios aplicados localmente y validados con `php -l` sin errores.
+- **Verificación:** Sintaxis PHP validada.
+

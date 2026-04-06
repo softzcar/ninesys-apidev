@@ -429,6 +429,52 @@ CREATE TABLE `inventario_remanentes` (
   PRIMARY KEY (`_id`),
   KEY `id_insumo` (`id_insumo`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Historial de remanentes (retazos/sobrantes) de insumos al ser terminados.';
+
+CREATE TABLE `gastos` (
+  `_id` int(11) NOT NULL AUTO_INCREMENT,
+  `nombre` varchar(255) NOT NULL,
+  `descripcion` text DEFAULT NULL,
+  `monto` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `moneda` varchar(3) NOT NULL DEFAULT 'USD',
+  `periodicidad` enum('mensual','trimestral','semestral','anual','único') NOT NULL DEFAULT 'mensual',
+  `tipo` enum('fijo','variable') NOT NULL DEFAULT 'fijo',
+  `estatus` enum('activo','inactivo') NOT NULL DEFAULT 'activo',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Plantillas de gastos recurrentes (fijos y variables)';
+
+CREATE TABLE `gastos_registros` (
+  `_id` int(11) NOT NULL AUTO_INCREMENT,
+  `id_gasto_plantilla` int(11) DEFAULT NULL,
+  `tipo` enum('fijo','variable','adicional') NOT NULL,
+  `nombre` varchar(255) NOT NULL,
+  `descripcion` text DEFAULT NULL,
+  `monto` decimal(12,2) NOT NULL,
+  `moneda` varchar(3) NOT NULL DEFAULT 'USD',
+  `fecha_de_gasto` date NOT NULL,
+  `periodo` varchar(7) DEFAULT NULL COMMENT 'Formato YYYY-MM',
+  `id_usuario` int(11) DEFAULT NULL,
+  `moment` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`_id`),
+  KEY `idx_fecha` (`fecha_de_gasto`),
+  KEY `idx_periodo` (`periodo`),
+  CONSTRAINT `fk_gastos_registros_plantilla` FOREIGN KEY (`id_gasto_plantilla`) REFERENCES `gastos` (`_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Registro de pagos realizados de todos los tipos de gastos';
+
+CREATE TABLE `gastos_auditoria` (
+  `_id` int(11) NOT NULL AUTO_INCREMENT,
+  `id_registro` int(11) NOT NULL,
+  `accion` enum('editado','eliminado') NOT NULL,
+  `id_usuario` int(11) NOT NULL,
+  `nombre_usuario` varchar(255) NOT NULL,
+  `monto_anterior` decimal(12,2) DEFAULT NULL,
+  `monto_nuevo` decimal(12,2) DEFAULT NULL,
+  `detalle` text NOT NULL,
+  `fecha_accion` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`_id`),
+  KEY `idx_registro` (`id_registro`),
+  KEY `idx_fecha_accion` (`fecha_accion`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Auditoría de cambios en los registros de gastos';
 CREATE TABLE `inventario_corte` (
   `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID único del registro',
   `id_orden` int(11) NOT NULL COMMENT 'ID de la orden',

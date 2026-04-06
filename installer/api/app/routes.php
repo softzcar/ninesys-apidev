@@ -6137,11 +6137,12 @@ return function (App $app) {
 
         $values .= "'" . $miInsumo['unidad'] . "',";
 
+        $values .= "'" . $miInsumo['cantidad'] . "',";
         $values .= "'" . $miInsumo['cantidad'] . "')";
 
 
 
-        $sql = "INSERT INTO inventario (moment, insumo, departamento, unidad, cantidad) VALUES " . $values;
+        $sql = "INSERT INTO inventario (moment, insumo, departamento, unidad, cantidad, cantidad_inicial) VALUES " . $values;
 
         $object['sql'] = $sql;
 

@@ -1,1 +1,0 @@
-/home/developer/Escritorio/convertir_html_a_pdf.py

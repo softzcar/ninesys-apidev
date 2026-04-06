@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** Analizar y optimizar la página `/reporte-costos-produccion` y resolver el bloqueo del servidor causado por consultas pesadas en el backend.
+- **Fecha y Hora:** 2026-03-26 16:46:30
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+    - [reports.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/reports.php)
+- **Commits Relacionados:**
+    - Backend: 2eb59d3da9222cfdac7ad4e18af8a4b933c35737
+- **Acción Realizada:**
+    1. **Optimización de Consultas:** Se refactorizó el endpoint `/reportes/costos-produccion/{inicio}/{fin}` para utilizar una estrategia de procesamiento por lotes (BATCH) y evitar subconsultas pesadas que bloqueaban el servidor.
+    2. **Cálculo de Tiempo de Producción:** Se reactivó y optimizó el cálculo de `tiempo_de_produccion` sumando los tiempos reales de las tareas en `lotes_detalles_empleados_asignados` por orden.
+    3. **Eficiencia de Insumos:** Se integró la eficiencia directamente en la consulta principal mediante un `LEFT JOIN` y procesamiento por lotes, eliminando el cuello de botella anterior.
+    4. **GitHub Push:** Se subieron los cambios exitosamente a la rama `refactor/modular-routes` usando el PAT proporcionado por el usuario.
+- **Inconvenientes y Desafíos:** El despliegue automático a Hostinger falló debido a un error de SSH (`Connection reset by peer`). Los cambios están en GitHub pero requieren despliegue manual o revisión de la conexión SSH del servidor.
+- **Decisión Final y Justificación:** Se priorizó la estabilidad del servidor mediante el uso de consultas optimizadas y el cálculo de datos en memoria PHP tras obtener resultados por lotes, en lugar de realizar múltiples subconsultas SQL complejas.
+- **Herramienta(s) Utilizada(s):** `SearchReplace`, `RunCommand`, `git`.
+- **Resultado:** Éxito parcial (Código optimizado y pusheado, despliegue SSH fallido).
+- **Verificación:** Validación de sintaxis PHP exitosa. Verificación de lógica de consultas SQL.
+- **Logro Conseguido:** Reactivación de métricas críticas (tiempo y eficiencia) sin comprometer el rendimiento del servidor.

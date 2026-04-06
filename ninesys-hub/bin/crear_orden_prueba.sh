@@ -1,1 +1,0 @@
-/home/developer/Escritorio/niesys/ninesys-apidev/scripts/crear_orden_prueba.sh

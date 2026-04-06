@@ -85,7 +85,7 @@ return function (App $app) {
         ) carga ON carga.id_empleado = a.id_usuario
         WHERE
             a.activo = 1 AND a.id_empresa = ' . ID_EMPRESA . ';';
-        $object['sql'] = $sql;
+        // $object['sql'] = $sql; // Removido para producción
         $items = $localConnection->goQuery($sql);
 
         if (isset($items['status']) && $items['status'] === 'error') {
@@ -94,8 +94,7 @@ return function (App $app) {
                 'statusCode' => 500,
                 'error' => [
                     'type' => 'SERVER_ERROR',
-                    'description' => $items['message'],
-                    'sql' => $sql
+                    'description' => $items['message']
                 ]
             ]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
@@ -119,8 +118,10 @@ return function (App $app) {
 
         $object['fields'][0]['key'] = 'nombre';
         $object['fields'][0]['label'] = 'Nombre';
+        $object['fields'][0]['sortable'] = true;
         $object['fields'][1]['key'] = 'username';
         $object['fields'][1]['label'] = 'Usuario';
+        $object['fields'][1]['sortable'] = true;
         $object['fields'][2]['key'] = 'departamentos';
         $object['fields'][2]['label'] = 'Departamentos';
         $object['fields'][3]['key'] = 'acciones';
@@ -303,13 +304,11 @@ return function (App $app) {
         $values .= "id_seguridad_social='" . $miEmpleado['id_seguridad_social'] . "'";
 
         $sql = 'UPDATE api_empresas.empresas_usuarios SET ' . $values . ' WHERE id_usuario = ' . $miEmpleado['_id'];
-        $object['sql'] = $sql;
         $object['response'] = json_encode($localConnection->goQuery($sql));
 
         // Limpiar registros anteriores
         $sql = "DELETE FROM api_empresas.empresas_usuarios_departamentos WHERE id_empleado = {$miEmpleado['_id']};";
 
-        $object['sql_delete'] = $sql;
         $object['response_delete'] = json_encode($localConnection->goQuery($sql));
 
         // Insertar nuevas asiganciones de departamentos

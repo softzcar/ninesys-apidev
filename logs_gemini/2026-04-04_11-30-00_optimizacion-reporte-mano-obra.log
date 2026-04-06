@@ -1,0 +1,27 @@
+- **Solicitud del Usuario:** vamos a revisar el componente @[app_multi/components/admin/ReporteCostosProduccionLabor.vue]en la sección de 'Salarios Invertidos' está mostrando el ID del empelado en lugar del nombre. Además, analizar cómo estamos calculando los montos (Salarios, Comisiones, Bonos, Descuentos) y arreglar que el total se muestra CERO aunque si hay datos para mostrar.
+- **Fecha y Hora:** 2026-04-04 11:30:00
+- **Proyecto(s):** Ambos
+- **Archivos Involucrados:**
+    - `ninesys-api/app/routes/reports.php`
+    - `app_multi/components/admin/ReporteCostosProduccionLabor.vue`
+- **Commits Relacionados:**
+    - Frontend: [baea2db](file:///home/developer/Escritorio/niesys/app_multi) (Se incluyó en el commit consolidado posterior)
+    - Backend: [5c769a4](file:///home/developer/Escritorio/niesys/ninesys-api)
+- **Acción Realizada:**
+    1.  **Backend (`reports.php`)**: Actualización del endpoint `/reportes/mano-obra-por-orden/{id_orden}` para incluir subconsultas de `pagos_abonos` (Bonos), `pagos_descuentos` (Descuentos) y `pagos_salarios` (Salarios pagados). Se ajustó la lógica de suma en el reporte principal para evitar duplicar el costo salarial (restando el salario ya pagado de la comisión bruta).
+    2.  **Frontend (`ReporteCostosProduccionLabor.vue`)**: 
+        - Renombradas secciones a "Comisiones" y "Salarios".
+        - Corregido error donde se mostraba el ID del empleado en lugar del nombre.
+        - Añadidas columnas de Bonos y Descuentos con formato condicional (verde/rojo).
+        - Implementada la sumatoria final del **TOTAL MANO DE OBRA**.
+        - Corregido bug de "CERO" mediante el uso de `Number(val || 0)` para prevenir valores `NaN` en cálculos financieros.
+- **Inconvenientes y Desafíos:** Se detectó que al sumar valores nulos o indefinidos provenientes de la API sin normalizar, Javascript devolvía `NaN`, lo que la interfaz mostraba como 0.00.
+- **Decisión Final y Justificación:** Se optó por realizar el desglose neto en la API para centralizar la lógica de negocio y asegurar que el reporte coincida con los pagos reales efectuados.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `multi_replace_file_content`, `run_command`.
+- **Resultado:** Éxito
+- **Verificación:** Se verificó abriendo el modal de mano de obra para órdenes específicas y confirmando que el total es la suma neta de (Comisión + Bonos - Descuentos + Salario Teórico).
+- **Logro Conseguido:** Mayor transparencia financiera en el reporte de costos, permitiendo diferenciar claramente entre el pago variable (productividad) y el costo fijo (salarios).
+- **Referencias de Sesión (Contexto):**
+    - Task: [task_tracker.md](file:///home/developer/.gemini/antigravity/brain/577846ba-51a7-418f-951c-009b28d10e8c/task_tracker.md)
+- **Observaciones de Gemini:** La refactorización del componente mejora la mantenibilidad y previene errores futuros de tipo numérico.
+- **Respuesta de Gemini:** Se notificó al usuario que el error de visualización del total fue corregido y que ahora el desglose es más detallado.

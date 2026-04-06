@@ -1,1 +1,0 @@
-/home/developer/Escritorio/niesys/ninesys-apidev/scripts/reset_company_database.sh

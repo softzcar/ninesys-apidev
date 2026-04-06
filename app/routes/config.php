@@ -522,28 +522,23 @@ return function (App $app) {
         }
     });
     // =================================================================
-    // ENDPOINTS PARA GESTIÓN DE GASTOS FIJOS DE LA EMPRESA
+    // ENDPOINTS PARA GESTIÓN DE PLANTILLAS DE GASTOS (LOCAL)
     // =================================================================
 
     /**
      * GET /gastos
-     * Obtiene todos los gastos fijos de la empresa autenticada.
+     * Obtiene todos los gastos (fijos/variables) de la base de datos local de la empresa.
      */
     $app->get('/gastos', function (Request $request, Response $response, array $args) {
-        $id_empresa = ID_EMPRESA;
-        if (!$id_empresa) {
-            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado. No se pudo identificar la empresa.']));
+        if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
+            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
 
-        $sql = 'SELECT _id, nombre, descripcion, monto, moneda, periodicidad, estatus 
-                FROM api_empresas.empresas_gastos 
-                WHERE id_empresa = ?';
-        $params = [$id_empresa];
-
         try {
-            $db = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
-            $gastos = $db->goQuery($sql, $params);
+            $db = new LocalDB();
+            $sql = 'SELECT _id, nombre, descripcion, monto, moneda, periodicidad, tipo, estatus, moment FROM gastos';
+            $gastos = $db->goQuery($sql);
             $db->disconnect();
 
             $response->getBody()->write(json_encode($gastos, JSON_NUMERIC_CHECK));
@@ -556,64 +551,51 @@ return function (App $app) {
 
     /**
      * POST /gastos
-     * Crea un nuevo registro de gasto para la empresa.
+     * Crea una nueva plantilla de gasto en la base de datos local.
      */
     $app->post('/gastos', function (Request $request, Response $response, array $args) {
-        $id_empresa = ID_EMPRESA;
-        if (!$id_empresa) {
+        if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
             $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
 
         $data = $request->getParsedBody();
-
         if (empty($data['nombre']) || !isset($data['monto'])) {
-            $response->getBody()->write(json_encode(['error' => 'Los campos "nombre" y "monto" son obligatorios.']));
+            $response->getBody()->write(json_encode(['error' => 'Nombre y monto son obligatorios.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
-        $sql = 'INSERT INTO api_empresas.empresas_gastos 
-                    (id_empresa, nombre, descripcion, monto, moneda, periodicidad, estatus) 
-                VALUES 
-                    (?, ?, ?, ?, ?, ?, ?)';
-
         try {
-            $db = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $db = new LocalDB();
+            $sql = 'INSERT INTO gastos (nombre, descripcion, monto, moneda, periodicidad, tipo, estatus) VALUES (?, ?, ?, ?, ?, ?, ?)';
             $params = [
-                $id_empresa,
                 $data['nombre'],
                 $data['descripcion'] ?? null,
                 $data['monto'],
                 $data['moneda'] ?? 'USD',
                 $data['periodicidad'] ?? 'mensual',
+                $data['tipo'] ?? 'fijo',
                 $data['estatus'] ?? 'activo'
             ];
 
-            $result = $db->goQuery($sql, $params);
+            $db->goQuery($sql, $params);
             $newId = $db->getLastID();
             $db->disconnect();
 
-            $response->getBody()->write(json_encode(['message' => 'Gasto creado exitosamente', 'id_gasto' => $newId]));
+            $response->getBody()->write(json_encode(['message' => 'Plantilla de gasto creada exitosamente', 'id' => $newId]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
         } catch (Exception $e) {
-            $response->getBody()->write(json_encode(['error' => 'Error al crear el gasto: ' . $e->getMessage()]));
+            $response->getBody()->write(json_encode(['error' => 'Error al crear la plantilla: ' . $e->getMessage()]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
     });
 
     /**
-     * PUT /gastos/{id_gasto}
-     * Actualiza un gasto existente.
+     * PUT /gastos/{id}
+     * Actualiza una plantilla de gasto existente.
      */
-    $app->put('/gastos/{id_gasto}', function (Request $request, Response $response, array $args) {
-        $id_empresa = ID_EMPRESA;
-        $id_gasto = $args['id_gasto'];
-        if (!$id_empresa) {
-            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
-        }
-
-        // Corrección: Leer y parsear manualmente el cuerpo de la solicitud PUT
+    $app->put('/gastos/{id}', function (Request $request, Response $response, array $args) {
+        $id = $args['id'];
         $put_body = $request->getBody()->getContents();
         parse_str($put_body, $data);
 
@@ -622,64 +604,363 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
-        $fields = [];
-        $params = [];
-        foreach ($data as $key => $value) {
-            $fields[] = "$key = ?";
-            $params[] = $value;
-        }
-        $params[] = $id_gasto;
-        $params[] = $id_empresa;
-        $set_clause = implode(', ', $fields);
-
-        $sql = "UPDATE api_empresas.empresas_gastos SET $set_clause WHERE _id = ? AND id_empresa = ?";
-
         try {
-            $db = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
-            $result = $db->goQuery($sql, $params);
+            $db = new LocalDB();
+            $fields = [];
+            $params = [];
+            foreach ($data as $key => $value) {
+                // Evitar inyección base de nombres de campos si fuera dinámico, 
+                // pero aquí confiamos en el input filtrado o validado si fuera necesario.
+                $fields[] = "$key = ?";
+                $params[] = $value;
+            }
+            $params[] = $id;
+
+            $sql = "UPDATE gastos SET " . implode(', ', $fields) . " WHERE _id = ?";
+            $db->goQuery($sql, $params);
             $db->disconnect();
 
-            // Nota: El método goQuery no parece devolver el número de filas afectadas,
-            // por lo que no podemos verificar si el gasto existía antes de actualizar.
-            // Se asume éxito si no hay excepción.
-
-            $response->getBody()->write(json_encode(['message' => 'Gasto actualizado exitosamente.']));
+            $response->getBody()->write(json_encode(['message' => 'Plantilla de gasto actualizada exitosamente.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } catch (Exception $e) {
-            $response->getBody()->write(json_encode(['error' => 'Error al actualizar el gasto: ' . $e->getMessage()]));
+            $response->getBody()->write(json_encode(['error' => 'Error al actualizar la plantilla: ' . $e->getMessage()]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
     });
 
     /**
-     * DELETE /gastos/{id_gasto}
-     * Elimina un gasto.
+     * DELETE /gastos/{id}
+     * Elimina una plantilla de gasto.
      */
-    $app->delete('/gastos/{id_gasto}', function (Request $request, Response $response, array $args) {
-        $id_empresa = ID_EMPRESA;
-        $id_gasto = $args['id_gasto'];
-        if (!$id_empresa) {
-            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
-        }
-
-        $sql = 'DELETE FROM api_empresas.empresas_gastos WHERE _id = ? AND id_empresa = ?';
-        $params = [$id_gasto, $id_empresa];
-
+    $app->delete('/gastos/{id}', function (Request $request, Response $response, array $args) {
         try {
-            $db = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
-            $result = $db->goQuery($sql, $params);
+            $db = new LocalDB();
+            $db->goQuery('DELETE FROM gastos WHERE _id = ?', [$args['id']]);
             $db->disconnect();
 
-            $response->getBody()->write(json_encode(['message' => 'Gasto eliminado exitosamente.']));
+            $response->getBody()->write(json_encode(['message' => 'Plantilla de gasto eliminada exitosamente.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } catch (Exception $e) {
-            $response->getBody()->write(json_encode(['error' => 'Error al eliminar el gasto: ' . $e->getMessage()]));
+            $response->getBody()->write(json_encode(['error' => 'Error al eliminar la plantilla: ' . $e->getMessage()]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
     });
 
-    // FIN GESTIÓN GASTOS FIJOS DE LA EMPRESA
+    // =================================================================
+    // ENDPOINTS PARA REGISTROS DE PAGOS (GASTOS REALES)
+    // =================================================================
+
+    /**
+     * GET /gastos/registros
+     * Obtiene el historial de pagos de gastos registrados.
+     */
+    $app->get('/gastos/registros', function (Request $request, Response $response, array $args) {
+        try {
+            $db = new LocalDB();
+            $q = $request->getQueryParams();
+
+            $conditions = [];
+            $params = [];
+
+            // Filtro por tipo (fijo / variable / adicional)
+            if (!empty($q['tipo'])) {
+                $conditions[] = 'tipo = ?';
+                $params[] = $q['tipo'];
+            }
+
+            // Filtro por periodo exacto (YYYY-MM) — usado por GastosAdicionales
+            if (!empty($q['periodo'])) {
+                $conditions[] = 'periodo = ?';
+                $params[] = $q['periodo'];
+            }
+
+            // Filtro por rango de fechas — usado por GastosHistorial
+            if (!empty($q['desde'])) {
+                $conditions[] = 'fecha_de_gasto >= ?';
+                $params[] = $q['desde'];
+            }
+            if (!empty($q['hasta'])) {
+                $conditions[] = 'fecha_de_gasto <= ?';
+                $params[] = $q['hasta'];
+            }
+
+            $where = count($conditions) > 0 ? 'WHERE ' . implode(' AND ', $conditions) : '';
+            $sql = "SELECT * FROM gastos_registros $where ORDER BY fecha_de_gasto DESC";
+
+            $registros = $db->goQuery($sql, $params);
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode($registros, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    });
+
+    /**
+     * POST /gastos/registros
+     * Registra un nuevo pago de gasto (fijo, variable o adicional).
+     */
+    $app->post('/gastos/registros', function (Request $request, Response $response, array $args) {
+        $data = $request->getParsedBody();
+        if (empty($data['nombre']) || empty($data['monto']) || empty($data['fecha_de_gasto'])) {
+            $response->getBody()->write(json_encode(['error' => 'Nombre, monto y fecha son obligatorios.']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        try {
+            $db = new LocalDB();
+            $periodo = substr($data['fecha_de_gasto'], 0, 7); // Generar YYYY-MM
+
+            $sql = 'INSERT INTO gastos_registros 
+                    (id_gasto_plantilla, tipo, nombre, descripcion, monto, moneda, fecha_de_gasto, periodo, id_usuario) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            
+            $id_usuario = (isset($data['id_usuario']) && is_numeric($data['id_usuario'])) ? (int)$data['id_usuario'] : null;
+
+            $params = [
+                $data['id_gasto_plantilla'] ?? null,
+                $data['tipo'] ?? 'adicional',
+                $data['nombre'],
+                $data['descripcion'] ?? null,
+                $data['monto'],
+                $data['moneda'] ?? 'USD',
+                $data['fecha_de_gasto'],
+                $periodo,
+                $id_usuario
+            ];
+
+            $result = $db->goQuery($sql, $params);
+
+            // goQuery retorna ['insert_id' => X] en INSERTs o ['status' => 'error'] si falló
+            if (isset($result['status']) && $result['status'] === 'error') {
+                throw new Exception($result['message'] ?? 'Error desconocido al insertar.');
+            }
+
+            $newId = $result['insert_id'] ?? 0;
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode(['message' => 'Gasto registrado correctamente', 'id' => $newId]));
+            return $response->withStatus(201)->withHeader('Content-Type', 'application/json');
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    });
+
+    /**
+     * PUT /gastos/registros/{id}
+     * Edita un registro de gasto y guarda auditoría obligatoria.
+     */
+    $app->put('/gastos/registros/{id}', function (Request $request, Response $response, array $args) {
+        $id_registro = $args['id'];
+        $put_body = $request->getBody()->getContents();
+        parse_str($put_body, $data);
+
+        if (empty($data['id_usuario']) || empty($data['nombre_usuario'])) {
+            $response->getBody()->write(json_encode(['error' => 'ID y Nombre de usuario son requeridos para la auditoría.']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        try {
+            $db = new LocalDB();
+            
+            // 1. Obtener datos actuales para la bitácora
+            $current = $db->goQuery('SELECT monto FROM gastos_registros WHERE _id = ?', [$id_registro]);
+            if (empty($current)) throw new Exception('Registro de gasto no encontrado.');
+            $monto_anterior = $current[0]['monto'];
+
+            // 2. Actualizar el registro
+            $fields = []; $params = [];
+            // Campos permitidos para actualizar (whitelist)
+            $camposPermitidos = ['nombre', 'descripcion', 'monto', 'moneda', 'fecha_de_gasto'];
+            foreach ($data as $key => $value) {
+                if (!in_array($key, $camposPermitidos)) continue;
+                if ($key === 'fecha_de_gasto') {
+                    $fields[] = 'periodo = ?';
+                    $params[] = substr($value, 0, 7);
+                }
+                $fields[] = "$key = ?";
+                $params[] = $value;
+            }
+            if (empty($fields)) throw new Exception('No se proporcionaron campos válidos para actualizar.');
+            $params[] = $id_registro;
+            $db->goQuery('UPDATE gastos_registros SET ' . implode(', ', $fields) . ' WHERE _id = ?', $params);
+
+            // 3. Insertar en auditoría
+            $sqlAudit = 'INSERT INTO gastos_auditoria 
+                (id_registro, accion, id_usuario, nombre_usuario, monto_anterior, monto_nuevo, detalle) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)';
+            
+            $id_usuario_audit = (isset($data['id_usuario']) && is_numeric($data['id_usuario'])) ? (int)$data['id_usuario'] : null;
+
+            $db->goQuery($sqlAudit, [
+                $id_registro,
+                'editado',
+                $id_usuario_audit,
+                $data['nombre_usuario'] ?? 'Sistema',
+                $monto_anterior,
+                $data['monto'] ?? $monto_anterior,
+                $data['detalle'] ?? 'Actualización de registro de gasto'
+            ]);
+
+            $db->disconnect();
+            $response->getBody()->write(json_encode(['message' => 'Registro actualizado y auditado correctamente.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    });
+
+    /**
+     * DELETE /gastos/registros/{id}
+     * Elimina un registro de gasto y guarda auditoría.
+     */
+    $app->delete('/gastos/registros/{id}', function (Request $request, Response $response, array $args) {
+        $id_registro = $args['id'];
+
+        // Axios con {data: ...} en DELETE envía como body con content-type application/x-www-form-urlencoded
+        // También soportamos query params como fallback
+        $bodyRaw = $request->getBody()->getContents();
+        parse_str($bodyRaw, $bodyData);
+        $queryParams = $request->getQueryParams();
+
+        // Combinar: body tiene prioridad sobre query params
+        $auditData = array_merge($queryParams, $bodyData);
+
+        if (empty($auditData['id_usuario']) || empty($auditData['nombre_usuario'])) {
+            $response->getBody()->write(json_encode(['error' => 'ID y Nombre de usuario son requeridos para la auditoría.']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        try {
+            $db = new LocalDB();
+
+            // 1. Obtener datos actuales para la bitácora
+            $current = $db->goQuery('SELECT monto, nombre FROM gastos_registros WHERE _id = ?', [$id_registro]);
+            if (empty($current)) throw new Exception('Registro no encontrado.');
+            $monto_anterior = $current[0]['monto'];
+
+            // 2. Registrar auditoría ANTES de eliminar
+            $sqlAudit = 'INSERT INTO gastos_auditoria 
+                (id_registro, accion, id_usuario, nombre_usuario, monto_anterior, monto_nuevo, detalle) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)';
+
+            $id_usuario_delete = (isset($auditData['id_usuario']) && is_numeric($auditData['id_usuario'])) ? (int)$auditData['id_usuario'] : null;
+
+            $db->goQuery($sqlAudit, [
+                $id_registro,
+                'eliminado',
+                $id_usuario_delete,
+                $auditData['nombre_usuario'] ?? 'Sistema',
+                $monto_anterior,
+                null,
+                $auditData['detalle'] ?? 'Eliminación manual de registro'
+            ]);
+
+            // 3. Eliminar el registro
+            $db->goQuery('DELETE FROM gastos_registros WHERE _id = ?', [$id_registro]);
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode(['message' => 'Registro eliminado y auditado correctamente.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    });
+
+    /**
+     * GET /gastos/auditoria
+     * Obtiene el historial general de auditoría con filtros.
+     */
+    $app->get('/gastos/auditoria', function (Request $request, Response $response, array $args) {
+        try {
+            $db = new LocalDB();
+            $p = $request->getQueryParams();
+            
+            $conditions = [];
+            $params = [];
+            
+            if (!empty($p['desde'])) {
+                $conditions[] = 'fecha_accion >= ?';
+                $params[] = $p['desde'] . ' 00:00:00';
+            }
+            if (!empty($p['hasta'])) {
+                $conditions[] = 'fecha_accion <= ?';
+                $params[] = $p['hasta'] . ' 23:59:59';
+            }
+            if (!empty($p['accion'])) {
+                $conditions[] = 'accion = ?';
+                $params[] = $p['accion'];
+            }
+            
+            $where = count($conditions) > 0 ? 'WHERE ' . implode(' AND ', $conditions) : '';
+            $sql = "SELECT * FROM gastos_auditoria $where ORDER BY fecha_accion DESC";
+            
+            $auditoria = $db->goQuery($sql, $params);
+            $db->disconnect();
+            
+            $response->getBody()->write(json_encode($auditoria, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    });
+
+    /**
+     * GET /gastos/auditoria/{id_registro}
+     * Obtiene el historial de auditoría para un registro específico.
+     */
+    $app->get('/gastos/auditoria/{id_registro}', function (Request $request, Response $response, array $args) {
+        try {
+            $db = new LocalDB();
+            $sql = 'SELECT * FROM gastos_auditoria WHERE id_registro = ? ORDER BY fecha_accion DESC';
+            $auditoria = $db->goQuery($sql, [$args['id_registro']]);
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode($auditoria, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    });
+
+    /**
+     * GET /gastos/pendientes
+     * Obtiene las plantillas de gastos que aún no tienen un registro de pago en el periodo base (mes actual).
+     */
+    $app->get('/gastos/pendientes', function (Request $request, Response $response, array $args) {
+        try {
+            $db = new LocalDB();
+            $periodoActual = date('Y-m');
+
+            $sql = "SELECT g.* 
+                    FROM gastos g
+                    WHERE g.estatus = 'activo'
+                    AND g._id NOT IN (
+                        SELECT id_gasto_plantilla 
+                        FROM gastos_registros 
+                        WHERE periodo = ? 
+                        AND id_gasto_plantilla IS NOT NULL
+                    )";
+            
+            $pendientes = $db->goQuery($sql, [$periodoActual]);
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode($pendientes, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    });
+
+    // FIN GESTIÓN GASTOS (LOCAL POR EMPRESA)
 
     /**
      * POST /config/multiplicador-precio
