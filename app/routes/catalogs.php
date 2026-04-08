@@ -212,6 +212,7 @@ return function (App $app) {
                 tp._id id_tiempos_de_produccion,
                 pr._id id_product,
                 tp.tiempo,
+                tp.usa_desperdicio,
                 de._id id_departamento,
                 pr.product,
                 de.departamento
@@ -246,7 +247,9 @@ return function (App $app) {
                         "departamento",
                         c.departamento,
                         "tiempo",
-                        b.tiempo
+                        b.tiempo,
+                        "usa_desperdicio",
+                        b.usa_desperdicio
                     )
                 ),
                 "]"
@@ -289,6 +292,7 @@ return function (App $app) {
     $id_product = intval($miTiempo['id_product']);  // Convertir a entero para seguridad
     $departamento = intval($miTiempo['id_departamento']);  // Convertir a entero para seguridad
     $tiempo = intval($miTiempo['tiempo']);  // Convertir a entero para seguridad
+    $usa_desperdicio = isset($miTiempo['usa_desperdicio']) ? intval($miTiempo['usa_desperdicio']) : 0;
 
     /** VERIFICAR EXISTENCIA DEL REGISTRO */
     $sql = "SELECT _id FROM products_tiempos_de_produccion WHERE id_product = $id_product AND id_departamento = $departamento";
@@ -296,10 +300,10 @@ return function (App $app) {
 
     if (empty($object['response_verify'])) {
       // No existe, insertar nuevo registro
-      $sql = "INSERT INTO products_tiempos_de_produccion (id_product, id_departamento, tiempo) VALUES ($id_product, $departamento, $tiempo);";
+      $sql = "INSERT INTO products_tiempos_de_produccion (id_product, id_departamento, tiempo, usa_desperdicio) VALUES ($id_product, $departamento, $tiempo, $usa_desperdicio);";
     } else {
       // Existe, actualizar registro
-      $sql = "UPDATE products_tiempos_de_produccion SET tiempo = $tiempo WHERE id_product = $id_product AND id_departamento = $departamento;";
+      $sql = "UPDATE products_tiempos_de_produccion SET tiempo = $tiempo, usa_desperdicio = $usa_desperdicio WHERE id_product = $id_product AND id_departamento = $departamento;";
     }
 
     $object['sql'] = $sql;
@@ -308,7 +312,35 @@ return function (App $app) {
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
 
+  /** ACTUALIZAR FLAG DE DESPERDICIO DEDICADO */
+  $app->post('/tiempos-de-produccion/usa-desperdicio', function (Request $request, Response $response) {
+    $body = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    $id_product = intval($body['id_product']);
+    $id_departamento = intval($body['id_departamento']);
+    $usa_desperdicio = isset($body['usa_desperdicio']) ? intval($body['usa_desperdicio']) : 0;
+
+    /** VERIFICAR EXISTENCIA DEL REGISTRO */
+    $sql = "SELECT _id FROM products_tiempos_de_produccion WHERE id_product = $id_product AND id_departamento = $id_departamento";
+    $verify = $localConnection->goQuery($sql);
+
+    if (empty($verify)) {
+      $sql = "INSERT INTO products_tiempos_de_produccion (id_product, id_departamento, tiempo, usa_desperdicio) VALUES ($id_product, $id_departamento, 0, $usa_desperdicio);";
+    } else {
+      $sql = "UPDATE products_tiempos_de_produccion SET usa_desperdicio = $usa_desperdicio WHERE id_product = $id_product AND id_departamento = $id_departamento;";
+    }
+
+    $object['sql'] = $sql;
+    $object['response'] = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);

@@ -3126,6 +3126,7 @@ return function (App $app) {
             a.tela,
             (SELECT tela FROM catalogo_telas WHERE _id = a.id_tela) AS tela_vendedor,
             tp.tiempo AS tiempo_produccion,
+            tp.usa_desperdicio,
             y.procentaje_comision,
             c.paso,
             d.status,
