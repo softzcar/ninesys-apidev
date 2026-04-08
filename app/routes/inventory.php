@@ -1330,32 +1330,24 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
         // Guardar en rendimiento (Abierto a todos los departamentos)
         if (!empty($miInsumo['id_orden'])) {
-            // 1- Determinar si el registro existe (INSERT o UPDATE)
-            $sql = 'SELECT COUNT(id_orden) FROM rendimiento WHERE id_orden = ' . $miInsumo['id_orden'];
+            // 1- Determinar si el registro existe para ESTA orden, ESTE insumo y ESTE departamento
+            $id_insumo_query = !empty($miInsumo['id_insumo']) && $miInsumo['id_insumo'] !== 'null' && $miInsumo['id_insumo'] !== null ? intval($miInsumo['id_insumo']) : 'NULL';
+            
+            $sql = "SELECT COUNT(id_orden) FROM rendimiento WHERE id_orden = {$miInsumo['id_orden']} AND id_insumo " . ($id_insumo_query === 'NULL' ? "IS NULL" : "= $id_insumo_query") . " AND id_departamento = {$miInsumo['id_departamento']}";
             $exist = $localConnection->goQuery($sql);
 
-            // Inicialización por defecto
-            $campo_valor = 'desperdicio';
-            $campo_empleado = 'id_empleado_corte';
-
-            if ($miInsumo['departamento'] === 'Impresión') {
-                $campo_valor = 'metros';
-                $campo_empleado = 'id_empleado_impresion';
-            } elseif ($miInsumo['departamento'] === 'Estampado') {
-                $campo_valor = 'id_insumo';
-                $campo_empleado = 'id_empleado_estampado';
-            } else {
-                // Fallback para otros departamentos (Corte, Costura, etc.)
-                $campo_valor = 'desperdicio';
-                $campo_empleado = 'id_empleado_corte';
-            }
+            // Evitar nulos
+            $cantidad_consumida = isset($miInsumo['cantidad_consumida']) &&  $miInsumo['cantidad_consumida'] ? floatval($miInsumo['cantidad_consumida']) : 0;
+            $valor_desperdicio = isset($miInsumo['valor']) && $miInsumo['valor'] ? floatval($miInsumo['valor']) : 0;
 
             // Si exist > 0, es un registro existente -> UPDATE
             if ($exist[0]['COUNT(id_orden)'] > 0) {
-                $sql = "UPDATE rendimiento SET id_insumo = {$miInsumo['id_insumo']}, metros = {$miInsumo['cantidad_consumida']}, $campo_empleado = {$miInsumo['id_empleado']}, $campo_valor  = {$miInsumo['valor']} WHERE id_orden = {$miInsumo['id_orden']};";
+                // Actualizar las cantidades sumando a las existentes o reemplazándolas?
+                // En este caso es mejor reemplazar con el ultimo reporte en caso de correccion
+                $sql = "UPDATE rendimiento SET cantidad = {$cantidad_consumida}, desperdicio = {$valor_desperdicio}, id_empleado = {$miInsumo['id_empleado']} WHERE id_orden = {$miInsumo['id_orden']} AND id_insumo " . ($id_insumo_query === 'NULL' ? "IS NULL" : "= $id_insumo_query") . " AND id_departamento = {$miInsumo['id_departamento']};";
             } else {
                 // Si no existe -> INSERT
-                $sql = "INSERT INTO rendimiento (id_orden, $campo_empleado, $campo_valor, id_insumo, metros) VALUES ({$miInsumo['id_orden']}, {$miInsumo['id_empleado']}, {$miInsumo['valor']}, {$miInsumo['id_insumo']}, {$miInsumo['cantidad_consumida']});";
+                $sql = "INSERT INTO rendimiento (id_orden, id_insumo, id_departamento, id_empleado, cantidad, desperdicio) VALUES ({$miInsumo['id_orden']}, {$id_insumo_query}, {$miInsumo['id_departamento']}, {$miInsumo['id_empleado']}, {$cantidad_consumida}, {$valor_desperdicio});";
             }
 
             $object['response_rendimiento'] = json_encode($localConnection->goQuery($sql));
@@ -1876,10 +1868,12 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                       b.cantidad cantidad_estimada_de_consumo,
                       b.unidad unidad_de_medida,
                       b.id_catalogo_insumos_productos,
-                      (SELECT nombre FROM catalogo_insumos_productos WHERE _id = b.id_catalogo_insumos_productos) catalogo
+                      (SELECT nombre FROM catalogo_insumos_productos WHERE _id = b.id_catalogo_insumos_productos) catalogo,
+                      tp.usa_desperdicio
                   FROM
                       ordenes_productos a
                   LEFT JOIN product_insumos_asignados b ON b.id_product = a.id_woo
+                  LEFT JOIN products_tiempos_de_produccion tp ON tp.id_product = a.id_woo AND tp.id_departamento = b.id_departamento
                   WHERE
                       a.id_orden = {$args['id_orden']}
                   ORDER BY a.talla ASC";

@@ -1074,12 +1074,11 @@ INSERT INTO `product_insumos_asignados` (`_id`, `id_product`, `id_catalogo_insum
 (16, 1, 3, 4, 4, 6.00, 'Und');
 CREATE TABLE `rendimiento` (
   `_id` int(11) NOT NULL,
-  `id_empleado_impresion` int(11) DEFAULT NULL,
-  `id_empleado_estampado` int(11) DEFAULT NULL,
-  `id_empleado_corte` int(11) DEFAULT NULL,
+  `id_empleado` int(11) DEFAULT NULL,
+  `id_departamento` int(11) DEFAULT NULL,
   `id_orden` int(11) DEFAULT NULL,
   `id_insumo` int(11) DEFAULT NULL COMMENT 'Numero de rollo',
-  `metros` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Metros de material utilizado',
+  `cantidad` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Cantidad de material utilizado',
   `desperdicio` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'peso en gramos del material sobrante',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Datos para el calculo de el rendimiento del material';
