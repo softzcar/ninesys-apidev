@@ -745,7 +745,7 @@ return function (App $app) {
       $dataMensaje = $request->getParsedBody();
 
       // Enviar WhatsApp Aqui
-      $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $dataMensaje['id_orden']);
+      $msgApi = new WhatsAppAPIClient(WS_API_URL . 'send-message/' . $dataMensaje['id_orden']);
       $testResp = $msgApi->sendMessage(ID_EMPRESA, $dataMensaje['id_orden'], 'general', $dataMensaje['mensaje']);
 
       $response = $response
@@ -888,7 +888,7 @@ return function (App $app) {
 
       // Enviar mensaje de orden terminada usando sendDirectMessageToNode
       if ($phone_cliente) {
-        $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/');
+        $msgApi = new WhatsAppAPIClient(WS_API_URL);
         $testResp = $msgApi->sendDirectMessageToNode(ID_EMPRESA, $phone_cliente, $msg['mensaje']);
       } else {
         $testResp = ['status' => 'error', 'message' => 'No se encontró teléfono del cliente'];
@@ -924,7 +924,7 @@ return function (App $app) {
         }
 
         if ($msg['mensaje'] != '' && $phone_cliente) {
-          $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/');
+          $msgApi = new WhatsAppAPIClient(WS_API_URL);
           $testResp = $msgApi->sendDirectMessageToNode(ID_EMPRESA, $phone_cliente, $msg['mensaje']);
         } else if (!$phone_cliente) {
           $testResp = ['status' => 'error', 'message' => 'No se encontró teléfono del cliente'];
@@ -937,7 +937,7 @@ return function (App $app) {
       $msg['mensaje'] = 'Hola ' . $cliente . ' le recordamos que tiene una deuda pendiente de *' . $dataMensaje['monto'] . ' USD* de su Orden número *' . $dataMensaje['id_orden'] . '*';
 
       if ($phone_cliente) {
-        $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/');
+        $msgApi = new WhatsAppAPIClient(WS_API_URL);
         $testResp = $msgApi->sendDirectMessageToNode(ID_EMPRESA, $phone_cliente, $msg['mensaje']);
       } else {
         $testResp = ['status' => 'error', 'message' => 'No se encontró teléfono del cliente'];

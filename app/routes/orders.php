@@ -2036,7 +2036,7 @@ $object['sales_commission_ISSET'][] = false;
     $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
     $object['resultBuscar'] = $resultBuscar['object'];
 
-    $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . ($args['id_orden'] ?? $args['id']));
+    $msgApi = new WhatsAppAPIClient(WS_API_URL . 'send-message/' . ($args['id_orden'] ?? $args['id']));
     $testResp = $msgApi->sendMessage(ID_EMPRESA, $last_id, 'welcome', $resultBuscar);
     /* $result = $woo->sendMail($orderWC->id, $resultBuscar["object"]);
         $object["sendMail"] = $result; */
@@ -3305,7 +3305,7 @@ $object['sales_commission_ISSET'][] = false;
           $payload['template'] = 'welcome';
 
           $encoded_payload = json_encode($payload);
-          $ws_url = 'https://ws.nineteengreen.com/send-message/' . ID_EMPRESA;  // Asegúrate que ID_EMPRESA esté definido
+          $ws_url = WS_API_URL . 'send-message/' . ID_EMPRESA;
 
           $ch = curl_init($ws_url);
           curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);

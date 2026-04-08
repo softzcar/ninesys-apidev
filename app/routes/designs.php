@@ -835,7 +835,7 @@ return function (App $app) {
   });
 
   $app->get('/ws-connect/{id_empresa}', function (Request $request, Response $response, array $args) {
-    $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/session-info/' . $args['id_empresa']);
+    $msgApi = new WhatsAppAPIClient(WS_API_URL . 'session-info/' . $args['id_empresa']);
     $testResp = $msgApi->getWSSeesionInfo($args['id_empresa']);
 
     $response->getBody()->write(json_encode($testResp, JSON_NUMERIC_CHECK));
@@ -973,7 +973,7 @@ return function (App $app) {
 
     // $localConnection->disconnect();
 
-    $msgApi = new WhatsAppAPIClient('https://ws.nineteengreen.com/send-message/' . $args['id_orden']);
+    $msgApi = new WhatsAppAPIClient(WS_API_URL . 'send-message/' . $args['id_orden']);
     $testResp = $msgApi->sendMessage(ID_EMPRESA, $args['id_orden'], 'welcome', $data);
 
     /*  $datos['phone'] = '584147307169';
