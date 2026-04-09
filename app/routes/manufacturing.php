@@ -761,17 +761,24 @@ return function (App $app) {
           // Marcamos lotes_detalles como terminado para esta combinación de orden/departamento
           $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ? WHERE id_orden = ? AND id_departamento = ?", [$now, $miEmpleado['id_orden'], $miEmpleado['id_departamento']]);
 
-          // --- 3. ¿SE HA TERMINADO LA ORDEN COMPLETA? (Lógica de asignaciones totales) ---
+          // --- 3. ¿SE HA TERMINADO LA ORDEN COMPLETA? (Lógica Refinada) ---
+          // A. ¿Queda algún empleado trabajando en esta orden?
           $sqlAsignadosPendientes = "SELECT COUNT(*) as cuenta FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND fecha_terminado IS NULL";
           $resAsignados = $localConnection->goQuery($sqlAsignadosPendientes, [$miEmpleado['id_orden']]);
-          
-          $sqlTareasPendientes = "SELECT COUNT(*) as cuenta FROM lotes_detalles WHERE id_orden = ? AND fecha_terminado IS NULL";
-          $resTareas = $localConnection->goQuery($sqlTareasPendientes, [$miEmpleado['id_orden']]);
-
           $numAsignados = is_array($resAsignados) ? intval($resAsignados[0]['cuenta'] ?? 0) : 1;
-          $numTareas = is_array($resTareas) ? intval($resTareas[0]['cuenta'] ?? 0) : 1;
 
-          if ($numAsignados === 0 && $numTareas === 0) {
+          // B. ¿Queda alguna tarea de PRODUCCIÓN REAL pendiente en lotes_detalles?
+          // Solo contamos departamentos que tengan 'asignar_numero_de_paso = 1'
+          $sqlTareasReales = "SELECT COUNT(ld._id) as cuenta 
+                              FROM lotes_detalles ld
+                              JOIN departamentos d ON ld.id_departamento = d._id
+                              WHERE ld.id_orden = ? 
+                                AND ld.fecha_terminado IS NULL 
+                                AND d.asignar_numero_de_paso = 1";
+          $resTareas = $localConnection->goQuery($sqlTareasReales, [$miEmpleado['id_orden']]);
+          $numTareasProduccion = is_array($resTareas) ? intval($resTareas[0]['cuenta'] ?? 0) : 1;
+
+          if ($numAsignados === 0 && $numTareasProduccion === 0) {
             // LA ORDEN HA TERMINADO REALMENTE
             if (intval($miEmpleado['id_orden']) > 0) {
               $localConnection->beginTransaction();
@@ -785,11 +792,13 @@ return function (App $app) {
               }
             }
           } else {
-            // LA ORDEN SIGUE ACTIVA -> Actualizar a qué departamento global se ha movido (el siguiente pendiente con menor orden_proceso)
+            // LA ORDEN SIGUE ACTIVA -> Mover el paso global al siguiente pendiente de producción
             $sqlNextGlobal = "SELECT d.departamento, d._id as id_departamento
                               FROM lotes_detalles ld
                               JOIN departamentos d ON ld.id_departamento = d._id
-                              WHERE ld.id_orden = ? AND ld.fecha_terminado IS NULL
+                              WHERE ld.id_orden = ? 
+                                AND ld.fecha_terminado IS NULL 
+                                AND d.asignar_numero_de_paso = 1
                               ORDER BY d.orden_proceso ASC
                               LIMIT 1";
             $nextGlobal = $localConnection->goQuery($sqlNextGlobal, [$miEmpleado['id_orden']]);
