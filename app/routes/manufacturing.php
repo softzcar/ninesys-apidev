@@ -737,40 +737,34 @@ return function (App $app) {
       } else {
         // ONLY execute main order logic if NOT a reposition (or if we want repositions to trigger main logic, but usually not)
 
-        // --- VERIFICAR SI HAY OTROS EMPLEADOS PENDIENTES ---
-        // Antes de avanzar el paso de la orden, verificamos si hay otros empleados asignados a este departamento
-        // que aún no han terminado su tarea.
-        $sqlCheckPending = "SELECT COUNT(*) as pending 
-                            FROM lotes_detalles_empleados_asignados 
-                            WHERE id_orden = {$miEmpleado['id_orden']} 
-                            AND id_departamento = {$miEmpleado['id_departamento']} 
-                            AND (progreso != 'terminada' AND progreso != 'terminado')
-                            AND id_empleado != {$miEmpleado['id_empleado']}";
-        // Eliminamos filtros de reposición para asegurar que contamos tareas principales si estamos en flujo principal
-        // Opcional: AND (id_reposicion IS NULL OR id_reposicion = 0)
-
-        $checkResults = $localConnection->goQuery($sqlCheckPending);
-        $pendingCount = 0;
-        if (!empty($checkResults) && isset($checkResults[0]['pending'])) {
-          $pendingCount = intval($checkResults[0]['pending']);
+        // --- 1. REGISTRAR FIN DE TAREA DEL EMPLEADO ACTUAL INMEDIATAMENTE ---
+        $sqlTerminarActual = "UPDATE lotes_detalles_empleados_asignados SET 
+            fecha_terminado = '{$now}', 
+            progreso = 'terminada' 
+            WHERE id_orden = {$miEmpleado['id_orden']} 
+            AND id_empleado = {$miEmpleado['id_empleado']} 
+            AND id_departamento = {$miEmpleado['id_departamento']}";
+        
+        if (isset($miEmpleado['id_lotes_detalles']) && $miEmpleado['id_lotes_detalles'] !== 'undefined' && $miEmpleado['id_lotes_detalles'] !== null) {
+            $sqlTerminarActual .= " AND _id = " . intval($miEmpleado['id_lotes_detalles']);
         }
+        $localConnection->goQuery($sqlTerminarActual);
+        // --- 2. VERIFICAR SI HAY OTROS EMPLEADOS PENDIENTES EN ESTE MISMO PASO ---
+        $sqlCheckDept = "SELECT COUNT(*) as pending FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_departamento = {$miEmpleado['id_departamento']} AND fecha_terminado IS NULL";
+        $checkDept = $localConnection->goQuery($sqlCheckDept);
+        $pendingDept = intval($checkDept[0]['pending'] ?? 0);
 
-        if ($pendingCount > 0) {
-          // Hay otros empleados pendientes. NO avanzamos el lote.
-          // Solo se registrará el fin de tarea del empleado actual (más abajo en el código) y su pago.
-          $object['msg_extra'] = "Orden no avanzada. Quedan $pendingCount empleados pendientes en este paso.";
-          $response_update2 = null;
+        if ($pendingDept > 0) {
+          $object['msg_extra'] = "Orden no avanzada globalmente. Quedan $pendingDept empleados pendientes en este departamento.";
         } else {
-          // Todos han terminado para este producto y departamento (o este es el último). 
-          // Marcamos lotes_detalles como terminado para esta combinación
-          $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ? WHERE _id = ?", [$now, $miEmpleado['id_lotes_detalles']]);
+          // Todos han terminado en este departamento. 
+          // Marcamos lotes_detalles como terminado para esta combinación de orden/departamento
+          $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ? WHERE id_orden = ? AND id_departamento = ?", [$now, $miEmpleado['id_orden'], $miEmpleado['id_departamento']]);
 
-          // ¿SE HA TERMINADO LA ORDEN COMPLETA? (Lógica sugerida por el usuario + Seguridad de tareas requeridas)
-          // 1. Verificamos si queda algún empleado asignado a esta orden que no haya terminado
+          // --- 3. ¿SE HA TERMINADO LA ORDEN COMPLETA? (Lógica de asignaciones totales) ---
           $sqlAsignadosPendientes = "SELECT COUNT(*) as cuenta FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND fecha_terminado IS NULL";
           $resAsignados = $localConnection->goQuery($sqlAsignadosPendientes, [$miEmpleado['id_orden']]);
           
-          // 2. Verificamos si queda alguna tarea requerida en lotes_detalles pendiente de terminar (incluye las no asignadas aún)
           $sqlTareasPendientes = "SELECT COUNT(*) as cuenta FROM lotes_detalles WHERE id_orden = ? AND fecha_terminado IS NULL";
           $resTareas = $localConnection->goQuery($sqlTareasPendientes, [$miEmpleado['id_orden']]);
 
@@ -1098,13 +1092,6 @@ return function (App $app) {
         }
       }
 
-      $sqlTerminar = "UPDATE lotes_detalles_empleados_asignados SET 
-          fecha_terminado = '{$now}', 
-          progreso = 'terminada' 
-          WHERE id_orden = {$miEmpleado['id_orden']} 
-          AND id_empleado = {$miEmpleado['id_empleado']} 
-          AND id_departamento = {$miEmpleado['id_departamento']};";
-      $localConnection->goQuery($sqlTerminar);
     } // Cierre if ($miEmpleado['tipo'] === 'fin')
 
     $localConnection->disconnect();
