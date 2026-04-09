@@ -765,14 +765,15 @@ return function (App $app) {
 
           $current_orden_proceso = intval($miEmpleado['orden_proceso']);
 
-          // LÓGICA CORREGIDA: Buscar el siguiente departamento en la secuencia de producción
-          $sqlDep = 'SELECT _id AS id_departamento, departamento, orden_proceso
-                     FROM departamentos
-                     WHERE asignar_numero_de_paso = 1 AND orden_proceso > ?
-                     ORDER BY orden_proceso ASC
+          // LÓGICA CORREGIDA: Buscar el siguiente departamento que REALMENTE se necesite para esta orden
+          $sqlDep = 'SELECT d._id AS id_departamento, d.departamento, d.orden_proceso
+                     FROM departamentos d
+                     WHERE d.asignar_numero_de_paso = 1 AND d.orden_proceso > ?
+                     AND d._id IN (SELECT DISTINCT id_departamento FROM lotes_detalles WHERE id_orden = ?)
+                     ORDER BY d.orden_proceso ASC
                      LIMIT 1';
           $object['sql_select_next_departament'] = $sqlDep;
-          $response_departamentos = $localConnection->goQuery($sqlDep, [$current_orden_proceso]);
+          $response_departamentos = $localConnection->goQuery($sqlDep, [$current_orden_proceso, $miEmpleado['id_orden']]);
 
           // Verificar si existe el departamento, de no ser así indica que es el último paso.
           if (empty($response_departamentos)) {
@@ -1756,12 +1757,20 @@ return function (App $app) {
       foreach ($ordenes_del_lote as $order) {
         $id_orden_actual = $order['id_orden'];
 
-        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
-        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+        $siguiente_paso_proceso = intval($orden_proceso_actual);
+        $sqlDep = 'SELECT d._id AS id_departamento, d.departamento, d.orden_proceso
+                   FROM departamentos d
+                   WHERE d.asignar_numero_de_paso = 1 AND d.orden_proceso > ?
+                   AND d._id IN (SELECT DISTINCT id_departamento FROM lotes_detalles WHERE id_orden = ?)
+                   ORDER BY d.orden_proceso ASC
+                   LIMIT 1';
+        $next_dep_info = $localConnection->goQuery($sqlDep, [$siguiente_paso_proceso, $id_orden_actual]);
+
         if (empty($next_dep_info)) {
           $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?", [$id_orden_actual]);
+          $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ?", [$id_orden_actual]);
         } else {
-          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
+          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['id_departamento'], $id_orden_actual]);
         }
 
         // UNIFICACIÓN DE LÓGICA DE PAGO (Replicando registrar-paso-empleado para multi-asignados)
@@ -2042,12 +2051,20 @@ return function (App $app) {
 
       foreach ($ordenes_del_lote as $order) {
         $id_orden_actual = $order['id_orden'];
-        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
-        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+        $siguiente_paso_proceso = intval($orden_proceso_actual);
+        $sqlDep = 'SELECT d._id AS id_departamento, d.departamento, d.orden_proceso
+                   FROM departamentos d
+                   WHERE d.asignar_numero_de_paso = 1 AND d.orden_proceso > ?
+                   AND d._id IN (SELECT DISTINCT id_departamento FROM lotes_detalles WHERE id_orden = ?)
+                   ORDER BY d.orden_proceso ASC
+                   LIMIT 1';
+        $next_dep_info = $localConnection->goQuery($sqlDep, [$siguiente_paso_proceso, $id_orden_actual]);
+
         if (empty($next_dep_info)) {
           $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?", [$id_orden_actual]);
+          $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ?", [$id_orden_actual]);
         } else {
-          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
+          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['id_departamento'], $id_orden_actual]);
         }
 
         $sql_comision_empleado = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
@@ -2186,12 +2203,20 @@ return function (App $app) {
         $id_orden_actual = $order['id_orden'];
 
         // Lógica de actualización de paso en `lotes`
-        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
-        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+        $siguiente_paso_proceso = intval($orden_proceso_actual);
+        $sqlDep = 'SELECT d._id AS id_departamento, d.departamento, d.orden_proceso
+                   FROM departamentos d
+                   WHERE d.asignar_numero_de_paso = 1 AND d.orden_proceso > ?
+                   AND d._id IN (SELECT DISTINCT id_departamento FROM lotes_detalles WHERE id_orden = ?)
+                   ORDER BY d.orden_proceso ASC
+                   LIMIT 1';
+        $next_dep_info = $localConnection->goQuery($sqlDep, [$siguiente_paso_proceso, $id_orden_actual]);
+
         if (empty($next_dep_info)) {
           $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?", [$id_orden_actual]);
+          $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ?", [$id_orden_actual]);
         } else {
-          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
+          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['id_departamento'], $id_orden_actual]);
         }
 
         // Lógica de Pagos y actualización de estados
