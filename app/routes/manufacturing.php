@@ -774,6 +774,10 @@ return function (App $app) {
                      LIMIT 1';
           $object['sql_select_next_departament'] = $sqlDep;
           $response_departamentos = $localConnection->goQuery($sqlDep, [$current_orden_proceso, $miEmpleado['id_orden']]);
+          
+          // DEBUG
+          $debugData = "Date: " . date('Y-m-d H:i:s') . " | Order: {$miEmpleado['id_orden']} | CurrentOP: {$current_orden_proceso} | NextDep: " . json_encode($response_departamentos) . "\n";
+          file_put_contents(__DIR__ . '/debug_order_status.log', $debugData, FILE_APPEND);
 
           // Verificar si existe el departamento, de no ser así indica que es el último paso.
           if (empty($response_departamentos)) {
