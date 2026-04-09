@@ -735,13 +735,12 @@ return function (App $app) {
           }
         }
       } else {
-        // ONLY execute main order logic if NOT a reposition (or if we want repositions to trigger main logic, but usually not)
-
-        // --- 1. REGISTRAR FIN DE TAREA DEL EMPLEADO ACTUAL INMEDIATAMENTE ---
+        // ONLY execute main order logic if NOT a reposition (or if we want repositions to trigger main        // --- 1. REGISTRAR FIN DE TAREA DEL EMPLEADO ACTUAL ---
+        $id_orden_seguro = intval($miEmpleado['id_orden']);
         $sqlTerminarActual = "UPDATE lotes_detalles_empleados_asignados SET 
             fecha_terminado = '{$now}', 
             progreso = 'terminada' 
-            WHERE id_orden = {$miEmpleado['id_orden']} 
+            WHERE id_orden = {$id_orden_seguro} 
             AND id_empleado = {$miEmpleado['id_empleado']} 
             AND id_departamento = {$miEmpleado['id_departamento']}";
         
@@ -749,64 +748,47 @@ return function (App $app) {
             $sqlTerminarActual .= " AND _id = " . intval($miEmpleado['id_lotes_detalles']);
         }
         $localConnection->goQuery($sqlTerminarActual);
-        // --- 2. VERIFICAR SI HAY OTROS EMPLEADOS PENDIENTES EN ESTE MISMO PASO ---
-        $sqlCheckDept = "SELECT COUNT(*) as pending FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_departamento = {$miEmpleado['id_departamento']} AND fecha_terminado IS NULL";
-        $checkDept = $localConnection->goQuery($sqlCheckDept);
-        $pendingDept = intval($checkDept[0]['pending'] ?? 0);
 
-        if ($pendingDept > 0) {
-          $object['msg_extra'] = "Orden no avanzada globalmente. Quedan $pendingDept empleados pendientes en este departamento.";
+        // --- 2. BARRIDO TOTAL: ¿QUEDA ALGO PENDIENTE EN TODA LA ORDEN? ---
+        // Buscamos cualquier asignación en cualquier departamento que aún no tenga fecha_terminado
+        $sqlGlobalCheck = "SELECT COUNT(*) as cuenta FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND fecha_terminado IS NULL";
+        $resGlobal = $localConnection->goQuery($sqlGlobalCheck, [$id_orden_seguro]);
+        $totalPendientesOrden = is_array($resGlobal) ? intval($resGlobal[0]['cuenta'] ?? 0) : 1;
+
+        if ($totalPendientesOrden === 0) {
+          // --- CIERRE DE ORDEN (SIN CONDICIONES) ---
+          $localConnection->beginTransaction();
+          try {
+            $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?;", [$id_orden_seguro]);
+            $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ?;", [$id_orden_seguro]);
+            $localConnection->commit();
+            $object['msg_extra'] = "Orden {$id_orden_seguro} finalizada globalmente.";
+          } catch (Exception $e) {
+            if ($localConnection->inTransaction()) $localConnection->rollback();
+            throw $e;
+          }
         } else {
-          // Todos han terminado en este departamento. 
-          // Marcamos lotes_detalles como terminado para esta combinación de orden/departamento
-          $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ? WHERE id_orden = ? AND id_departamento = ?", [$now, $miEmpleado['id_orden'], $miEmpleado['id_departamento']]);
+          // --- LA ORDEN SIGUE ACTIVA -> ACTUALIZAR PASO ACTUAL SI EL DEP. TERMINÓ ---
+          $sqlDeptCheck = "SELECT COUNT(*) as pending FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND id_departamento = ? AND fecha_terminado IS NULL";
+          $resDept = $localConnection->goQuery($sqlDeptCheck, [$id_orden_seguro, $miEmpleado['id_departamento']]);
+          $pendingInDept = intval($resDept[0]['pending'] ?? 0);
 
-          // --- 3. ¿SE HA TERMINADO LA ORDEN COMPLETA? (Lógica Refinada) ---
-          // A. ¿Queda algún empleado trabajando en esta orden?
-          $sqlAsignadosPendientes = "SELECT COUNT(*) as cuenta FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND fecha_terminado IS NULL";
-          $resAsignados = $localConnection->goQuery($sqlAsignadosPendientes, [$miEmpleado['id_orden']]);
-          $numAsignados = is_array($resAsignados) ? intval($resAsignados[0]['cuenta'] ?? 0) : 1;
-
-          // B. ¿Queda alguna tarea de PRODUCCIÓN REAL pendiente en lotes_detalles?
-          // Solo contamos departamentos que tengan 'asignar_numero_de_paso = 1'
-          $sqlTareasReales = "SELECT COUNT(ld._id) as cuenta 
-                              FROM lotes_detalles ld
-                              JOIN departamentos d ON ld.id_departamento = d._id
-                              WHERE ld.id_orden = ? 
-                                AND ld.fecha_terminado IS NULL 
-                                AND d.asignar_numero_de_paso = 1";
-          $resTareas = $localConnection->goQuery($sqlTareasReales, [$miEmpleado['id_orden']]);
-          $numTareasProduccion = is_array($resTareas) ? intval($resTareas[0]['cuenta'] ?? 0) : 1;
-
-          if ($numAsignados === 0 && $numTareasProduccion === 0) {
-            // LA ORDEN HA TERMINADO REALMENTE
-            if (intval($miEmpleado['id_orden']) > 0) {
-              $localConnection->beginTransaction();
-              try {
-                $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?;", [$miEmpleado['id_orden']]);
-                $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ?;", [$miEmpleado['id_orden']]);
-                $localConnection->commit();
-              } catch (Exception $e) {
-                if ($localConnection->inTransaction()) $localConnection->rollback();
-                throw $e;
-              }
+          if ($pendingInDept === 0) {
+            // El departamento actual terminó, buscamos el siguiente asignado
+            $sqlNextStep = "SELECT d.departamento, d._id as id_departamento
+                            FROM lotes_detalles_empleados_asignados ldea
+                            JOIN departamentos d ON ldea.id_departamento = d._id
+                            WHERE ldea.id_orden = ? AND ldea.fecha_terminado IS NULL
+                            ORDER BY d.orden_proceso ASC
+                            LIMIT 1";
+            $resNext = $localConnection->goQuery($sqlNextStep, [$id_orden_seguro]);
+            
+            if (is_array($resNext) && count($resNext) > 0) {
+              $localConnection->goQuery("UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?", 
+                                        [$resNext[0]['departamento'], $resNext[0]['id_departamento'], $id_orden_seguro]);
             }
           } else {
-            // LA ORDEN SIGUE ACTIVA -> Mover el paso global al siguiente pendiente de producción
-            $sqlNextGlobal = "SELECT d.departamento, d._id as id_departamento
-                              FROM lotes_detalles ld
-                              JOIN departamentos d ON ld.id_departamento = d._id
-                              WHERE ld.id_orden = ? 
-                                AND ld.fecha_terminado IS NULL 
-                                AND d.asignar_numero_de_paso = 1
-                              ORDER BY d.orden_proceso ASC
-                              LIMIT 1";
-            $nextGlobal = $localConnection->goQuery($sqlNextGlobal, [$miEmpleado['id_orden']]);
-            
-            if (is_array($nextGlobal) && count($nextGlobal) > 0) {
-              $localConnection->goQuery("UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?", 
-                                        [$nextGlobal[0]['departamento'], $nextGlobal[0]['id_departamento'], $miEmpleado['id_orden']]);
-            }
+            $object['msg_extra'] = "Quedan $pendingInDept empleados pendientes en este departamento.";
           }
         }
       } // End else !es_reposicion
