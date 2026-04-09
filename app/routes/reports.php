@@ -493,23 +493,15 @@ return function (App $app) {
                     r.id_orden,
                     i.insumo AS material,
                     i.sku,
-                    r.metros AS cantidad_consumida,
+                    r.cantidad AS cantidad_consumida,
                     i.unidad,
                     r.desperdicio,
-                    CASE
-                        WHEN r.id_empleado_corte IS NOT NULL THEN (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado_corte)
-                        WHEN r.id_empleado_impresion IS NOT NULL THEN (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado_impresion)
-                        WHEN r.id_empleado_estampado IS NOT NULL THEN (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado_estampado)
-                        ELSE 'No Asignado'
-                    END AS empleado,
-                    CASE
-                        WHEN r.id_empleado_corte IS NOT NULL THEN 'Corte'
-                        WHEN r.id_empleado_impresion IS NOT NULL THEN 'Impresión'
-                        WHEN r.id_empleado_estampado IS NOT NULL THEN 'Estampado'
-                        ELSE 'No Asignado'
-                    END AS departamento
+                    eu.nombre AS empleado,
+                    d.departamento
                 FROM rendimiento r
                 JOIN inventario i ON r.id_insumo = i._id
+                LEFT JOIN api_empresas.empresas_usuarios eu ON r.id_empleado = eu.id_usuario
+                LEFT JOIN departamentos d ON r.id_departamento = d._id
                 WHERE r.id_orden = ?";
         $db = new LocalDB();
         $data = $db->goQuery($sql, [$id_orden]);
