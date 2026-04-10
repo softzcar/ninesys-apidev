@@ -338,11 +338,12 @@ return function (App $app) {
                             SELECT SUM(op_sub.cantidad * pia_sub.cantidad)
                             FROM $companyDB.ordenes_productos op_sub
                             JOIN $companyDB.product_insumos_asignados pia_sub ON pia_sub.id_product = op_sub.id_woo AND pia_sub.id_talla = op_sub.id_size
-                            WHERE op_sub.id_orden = a.id_orden AND pia_sub.id_insumo = a.id_insumo
+                            WHERE op_sub.id_orden = a.id_orden 
+                              AND pia_sub.id_catalogo_insumos_productos = COALESCE(a.id_catalogo_insumos_prodcutos, c.id_catalogo)
                         ), 0) as meta
                     FROM $companyDB.inventario_movimientos a 
-                    JOIN $companyDB.inventario c ON a.id_insumo = c._id 
-                    JOIN $companyDB.products d ON a.id_producto = d._id 
+                    LEFT JOIN $companyDB.inventario c ON a.id_insumo = c._id 
+                    LEFT JOIN $companyDB.products d ON a.id_producto = d._id 
                     WHERE a.id_orden IN ($orderIdsStr) 
                     ORDER BY a.id_orden ASC";
                 
@@ -357,8 +358,10 @@ return function (App $app) {
                             $idr['eficiencia'] = ($r > 0) ? round(($m / $r) * 100, 2) : 100;
                         }
                     }
+                    $finalResponse['insumos_detalles'] = $insDetRaw;
+                } else {
+                    $finalResponse['insumos_detalles'] = [];
                 }
-                $finalResponse['insumos_detalles'] = $insDetRaw;
 
                 // 11. Tareas de Empleados
                 $sqlTareas = "SELECT a.id_orden, a.id_empleado, a.fecha_inicio, a.fecha_terminado, TIME_TO_SEC(TIMEDIFF(a.fecha_terminado, a.fecha_inicio)) / 60 AS minutos_transcurridos FROM $companyDB.lotes_detalles_empleados_asignados a WHERE a.id_orden IN ($orderIdsStr) AND a.fecha_terminado IS NOT NULL";
