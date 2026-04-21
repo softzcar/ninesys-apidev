@@ -1745,9 +1745,11 @@ CREATE TABLE IF NOT EXISTS `wa_conversations` (
   `mode`         ENUM('bot','human','hybrid') NOT NULL DEFAULT 'hybrid',
   `ai_enabled`   TINYINT(1) NOT NULL DEFAULT 1,
   `ai_agent_id`     INT       NULL,
-  `assigned_to`     INT       NULL,
-  `owner_id`        INT       NULL,
-  `last_inbound_at` DATETIME  NULL,
+  `assigned_to`          INT       NULL,
+  `owner_id`             INT       NULL,
+  `last_inbound_at`      DATETIME  NULL,
+  `assigned_at`          DATETIME  NULL,
+  `last_vendor_reply_at` DATETIME  NULL,
   `unread_count`    INT NOT NULL DEFAULT 0,
   `last_message`    TEXT NULL,
   `last_ts`         BIGINT NULL,
@@ -1762,7 +1764,19 @@ CREATE TABLE IF NOT EXISTS `wa_conversations` (
   KEY `idx_assigned` (`assigned_to`),
   KEY `idx_owner` (`owner_id`),
   KEY `idx_ai_agent` (`ai_agent_id`),
-  KEY `idx_deleted_at` (`deleted_at`)
+  KEY `idx_deleted_at` (`deleted_at`),
+  KEY `idx_assigned_at` (`assigned_at`),
+  KEY `idx_last_vendor_reply_at` (`last_vendor_reply_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Estado de disponibilidad y límites de carga por vendedor (Fase D.2).
+-- user_id = id del empleado en la tabla de la empresa.
+CREATE TABLE IF NOT EXISTS `wa_vendor_state` (
+  `user_id`      INT NOT NULL PRIMARY KEY,
+  `is_available` TINYINT(1) NOT NULL DEFAULT 1,
+  `max_active`   INT NOT NULL DEFAULT 0,  -- 0 = sin tope
+  `updated_at`   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                 ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `wa_messages` (
