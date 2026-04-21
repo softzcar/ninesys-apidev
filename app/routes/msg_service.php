@@ -150,13 +150,20 @@ return function (App $app) {
      *   422 { error: 'unprocessable_entity', message, reason, ... }
      *   500 { error: 'internal_error', message }
      *
+     * Formato esperado del horario_laboral en api_empresas.empresas:
+     *   - horaInicioManana / horaFinManana / horaInicioTarde / horaFinTarde:
+     *     número decimal en horas (ej: 8.5 = 08:30, 12 = 12:00, 17.5 = 17:30).
+     *     Rango válido: [0, 24]. Pueden ser null/vacío para turnos no usados.
+     *   - diasLaborales: array de enteros (convención: 1=Lun..7=Dom o 0=Dom..6=Sáb).
+     *
      * `reason` posibles en 422:
      *   - horario_laboral_empty
      *   - horario_laboral_invalid_json
      *   - horario_laboral_not_object
      *   - horario_laboral_missing_keys  (+ `missing: [...]`)
-     *   - horario_laboral_invalid_time_format  (+ `invalid: {...}`)
+     *   - horario_laboral_invalid_time_range  (+ `invalid: {...}`)
      *   - dias_laborales_not_array
+     *   - dias_laborales_invalid_items  (+ `invalid: [...]`)
      */
     $app->get('/internal/business-hours', function (Request $request, Response $response) {
         $respondJson = function (array $payload, int $status) use ($response) {
@@ -275,32 +282,47 @@ return function (App $app) {
             ], 422);
         }
 
-        // --- 9. Validar formato de horas (HH:MM 24h). Vacíos permitidos para
-        //     tramos opcionales (ej: empresa que no tiene turno tarde). ---
+        // --- 9. Validar horas como decimales en [0, 24]. Vacíos/null permitidos
+        //     para tramos opcionales (ej: empresa sin turno tarde). ---
         $timeKeys = ['horaInicioManana', 'horaFinManana', 'horaInicioTarde', 'horaFinTarde'];
         $invalidTimes = [];
         foreach ($timeKeys as $k) {
             $v = $horario[$k];
             if ($v === null || $v === '') continue;
-            if (!is_string($v) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $v)) {
+            if (!is_numeric($v) || $v < 0 || $v > 24) {
                 $invalidTimes[$k] = $v;
             }
         }
         if (!empty($invalidTimes)) {
             return $respondJson([
                 'error'   => 'unprocessable_entity',
-                'message' => 'Uno o más horarios tienen un formato inválido (esperado HH:MM 24h).',
-                'reason'  => 'horario_laboral_invalid_time_format',
+                'message' => 'Uno o más horarios están fuera de rango (se esperan horas decimales en [0, 24]).',
+                'reason'  => 'horario_laboral_invalid_time_range',
                 'invalid' => $invalidTimes,
             ], 422);
         }
 
-        // --- 10. Validar diasLaborales como array ---
+        // --- 10. Validar diasLaborales como array de enteros ---
         if (!is_array($horario['diasLaborales'])) {
             return $respondJson([
                 'error'   => 'unprocessable_entity',
                 'message' => 'El campo diasLaborales debe ser un array.',
                 'reason'  => 'dias_laborales_not_array',
+            ], 422);
+        }
+        $invalidDays = [];
+        foreach ($horario['diasLaborales'] as $d) {
+            // Aceptamos 0-7 para cubrir ambas convenciones (0=Dom..6=Sáb o 1=Lun..7=Dom).
+            if (!is_int($d) || $d < 0 || $d > 7) {
+                $invalidDays[] = $d;
+            }
+        }
+        if (!empty($invalidDays)) {
+            return $respondJson([
+                'error'   => 'unprocessable_entity',
+                'message' => 'diasLaborales contiene valores no válidos (se esperan enteros en [0, 7]).',
+                'reason'  => 'dias_laborales_invalid_items',
+                'invalid' => $invalidDays,
             ], 422);
         }
 
