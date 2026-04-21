@@ -512,7 +512,7 @@ return function (App $app) {
                     // Lógica de ACTUALIZACIÓN
                     $item_id = $existing_item[0]['_id'];
                     // === INICIO DE CAMBIOS: Añadimos id_catalogo y tipo_insumo a la sentencia UPDATE ===
-                    $update_sql = 'UPDATE inventario SET id_catalogo = ?, tipo_insumo = ?, insumo = ?, unidad = ?, costo = ?, rendimiento = ?, cantidad = ?, departamento = ?, sku = ? WHERE _id = ?';
+                    $update_sql = 'UPDATE inventario SET id_catalogo = ?, tipo_insumo = ?, insumo = ?, unidad = ?, costo = ?, rendimiento = ?, cantidad = ?, cantidad_inicial = COALESCE(NULLIF(cantidad_inicial, 0), ?), departamento = ?, sku = ? WHERE _id = ?';
                     $db->goQuery($update_sql, [
                         $id_catalogo,
                         $tipo_insumo,
@@ -520,6 +520,7 @@ return function (App $app) {
                         $unidad,
                         $costo,
                         $rendimiento,
+                        $cantidad,
                         $cantidad,
                         $departamento_nombre_excel,
                         $sku,
@@ -761,15 +762,19 @@ return function (App $app) {
             imo.id_orden,
             COALESCE(inv.sku, "N/A") as sku,
             COALESCE(inv._id, 0) as id_insumo,
-            COALESCE(inv.insumo, "Insumo Desconocido") as nombre_insumo,    
+            CASE 
+                WHEN imo.id_insumo IS NULL OR imo.id_insumo = 0 THEN CONCAT("Material de ", COALESCE(imo.departamento, "Producción"), " no especificado")
+                WHEN inv._id IS NULL THEN CONCAT("Insumo Eliminado (ID: ", imo.id_insumo, ")")
+                ELSE inv.insumo
+            END as nombre_insumo,    
             inv.color,
             COALESCE(inv.costo, 0) as costo,    
             COALESCE(inv.rendimiento, 1) as rendimiento,       
             COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0) as cantidad_utilizada,
             COALESCE(inv.cantidad, 0) as cantidad_restante, 
-            ROUND((COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), 1)) * COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0), 2) AS total_insumo,
+            ROUND((COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) * COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0), 2) AS total_insumo,
             COALESCE(inv.unidad, "un") as unidad,    
-            COALESCE(inv.departamento, "N/A") as departamento
+            COALESCE(inv.departamento, imo.departamento, "N/A") as departamento
         FROM
             inventario_movimientos imo
         LEFT JOIN inventario inv ON imo.id_insumo = inv._id
@@ -789,7 +794,7 @@ return function (App $app) {
                 $printerIds = array_values(array_unique(array_filter($printerIds)));
                 $printerIdsStr = !empty($printerIds) ? implode(',', $printerIds) : '';
 
-                $fallbackRaw = $localConnection->goQuery("SELECT tf.color AS color_code, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), 1)) AS cost_ml FROM tinta_filtro tf JOIN inventario inv ON tf.id_inventario = inv._id");
+                $fallbackRaw = $localConnection->goQuery("SELECT tf.color AS color_code, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) AS cost_ml FROM tinta_filtro tf JOIN inventario inv ON tf.id_inventario = inv._id");
                 $fallbackMap = [];
                 if (is_array($fallbackRaw) && !isset($fallbackRaw['status'])) {
                     foreach ($fallbackRaw as $fr) {
@@ -800,7 +805,7 @@ return function (App $app) {
 
                 $costMap = [];
                 if (!empty($printerIdsStr)) {
-                    $recargasRaw = $localConnection->goQuery("SELECT tr.id_catalogo_impresora, tr.color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), 1)) AS cost_ml FROM tintas_recargas tr JOIN inventario inv ON tr.id_insumo = inv._id WHERE tr.id_catalogo_impresora IN ($printerIdsStr) ORDER BY tr.fecha_recarga DESC");
+                    $recargasRaw = $localConnection->goQuery("SELECT tr.id_catalogo_impresora, tr.color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) AS cost_ml FROM tintas_recargas tr JOIN inventario inv ON tr.id_insumo = inv._id WHERE tr.id_catalogo_impresora IN ($printerIdsStr) ORDER BY tr.fecha_recarga DESC");
                     if (is_array($recargasRaw) && !isset($recargasRaw['status'])) {
                         foreach ($recargasRaw as $rr) {
                             $pid = (int)$rr['id_catalogo_impresora'];
@@ -1144,6 +1149,20 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         $miInsumo['id_insumo'] = $miInsumo['id_insumo'] ?? null;
         $miInsumo['tipo'] = $miInsumo['tipo'] ?? 'consumo';
         // -----------------------------------------------
+
+        // --- VALIDACIÓN ESTRICTA: id_insumo obligatorio ---
+        // Rechazar solicitudes sin un id_insumo válido para evitar registros huérfanos
+        // que aparecen como "Insumo Desconocido" en el Reporte de Costos.
+        $id_insumo_val = intval($miInsumo['id_insumo']);
+        if (empty($miInsumo['id_insumo']) || $id_insumo_val <= 0) {
+            $response->getBody()->write(json_encode([
+                'error' => 'Debe seleccionar un insumo válido antes de registrar el consumo.',
+                'code' => 'INSUMO_REQUERIDO',
+                'received_id_insumo' => $miInsumo['id_insumo']
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+        // --- FIN VALIDACIÓN ---
 
         $localConnection = new LocalDB();
 

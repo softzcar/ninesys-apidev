@@ -1647,8 +1647,18 @@ return function (App $app) {
 
       if (!empty($consumos_lote)) {
         foreach ($consumos_lote as $consumo) {
-          if (empty($consumo['id_insumo']) || !isset($consumo['cantidad_total']))
-            continue;
+          // --- VALIDACIÓN ESTRICTA: No permitir consumos sin insumo válido ---
+          if (empty($consumo['id_insumo']) || intval($consumo['id_insumo']) <= 0) {
+            $response->getBody()->write(json_encode([
+              'error' => 'Cada consumo debe tener un insumo (material/rollo) seleccionado. No se permite registrar consumos sin especificar el material.',
+              'code' => 'INSUMO_REQUERIDO',
+              'received' => $consumo
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+          }
+          if (!isset($consumo['cantidad_total']) || floatval($consumo['cantidad_total']) <= 0) {
+            continue; // Saltar consumos con cantidad 0 (no es error, solo no hay consumo)
+          }
 
           $id_insumo_actual = intval($consumo['id_insumo']);
           $cantidad_total_consumida = floatval($consumo['cantidad_total']);
