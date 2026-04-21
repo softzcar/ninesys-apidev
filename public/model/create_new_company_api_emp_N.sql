@@ -1744,17 +1744,25 @@ CREATE TABLE IF NOT EXISTS `wa_conversations` (
   `is_group`     TINYINT(1) NOT NULL DEFAULT 0,
   `mode`         ENUM('bot','human','hybrid') NOT NULL DEFAULT 'hybrid',
   `ai_enabled`   TINYINT(1) NOT NULL DEFAULT 1,
-  `assigned_to`  INT NULL,
-  `unread_count` INT NOT NULL DEFAULT 0,
-  `last_message` TEXT NULL,
-  `last_ts`      BIGINT NULL,
-  `tags`         JSON NULL,
-  `created_at`   DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `ai_agent_id`     INT       NULL,
+  `assigned_to`     INT       NULL,
+  `owner_id`        INT       NULL,
+  `last_inbound_at` DATETIME  NULL,
+  `unread_count`    INT NOT NULL DEFAULT 0,
+  `last_message`    TEXT NULL,
+  `last_ts`         BIGINT NULL,
+  `tags`            JSON NULL,
+  `created_at`      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at`      DATETIME NULL,
+  `deleted_by`      INT       NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_jid` (`jid`),
   KEY `idx_last_ts` (`last_ts` DESC),
-  KEY `idx_assigned` (`assigned_to`)
+  KEY `idx_assigned` (`assigned_to`),
+  KEY `idx_owner` (`owner_id`),
+  KEY `idx_ai_agent` (`ai_agent_id`),
+  KEY `idx_deleted_at` (`deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `wa_messages` (
@@ -1773,9 +1781,11 @@ CREATE TABLE IF NOT EXISTS `wa_messages` (
   `status`        ENUM('pending','sent','delivered','read','failed') NOT NULL DEFAULT 'pending',
   `ts`            BIGINT NOT NULL,
   `created_at`    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at`    DATETIME NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_wa_msg` (`wa_message_id`),
-  KEY `idx_conv` (`jid`, `ts`)
+  KEY `idx_conv` (`jid`, `ts`),
+  KEY `idx_deleted_at` (`deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `wa_templates` (
@@ -1805,6 +1815,23 @@ CREATE TABLE IF NOT EXISTS `wa_ai_settings` (
   CONSTRAINT `wa_ai_settings_singleton` CHECK (`id` = 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `wa_ai_agents` (
+  `id`             INT NOT NULL AUTO_INCREMENT,
+  `name`           VARCHAR(128) NOT NULL,
+  `slug`           VARCHAR(64)  NOT NULL,
+  `system_prompt`  TEXT NULL,
+  `knowledge_base` JSON NULL,
+  `model`          VARCHAR(64) NOT NULL DEFAULT 'gemini-2.5-flash',
+  `temperature`    DECIMAL(3,2) NOT NULL DEFAULT 0.30,
+  `max_tokens`     INT NOT NULL DEFAULT 1024,
+  `enabled`        TINYINT(1) NOT NULL DEFAULT 1,
+  `is_default`     TINYINT(1) NOT NULL DEFAULT 0,
+  `created_at`     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_slug` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `wa_send_log` (
   `id`           BIGINT NOT NULL AUTO_INCREMENT,
   `endpoint`     VARCHAR(64) NOT NULL,
@@ -1820,6 +1847,8 @@ CREATE TABLE IF NOT EXISTS `wa_send_log` (
 
 INSERT IGNORE INTO `wa_session_state` (`id`, `status`) VALUES (1, 'NOT_REGISTERED');
 INSERT IGNORE INTO `wa_ai_settings` (`id`) VALUES (1);
+INSERT IGNORE INTO `wa_ai_agents` (`id`, `name`, `slug`, `system_prompt`, `enabled`, `is_default`)
+VALUES (1, 'General', 'general', 'Eres un asistente de atención al cliente vía WhatsApp. Responde de forma breve, amable y útil.', 1, 1);
 
 SET FOREIGN_KEY_CHECKS = 1;
 COMMIT;

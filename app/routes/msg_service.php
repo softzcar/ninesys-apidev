@@ -131,18 +131,21 @@ return function (App $app) {
     });
 
     /**
-     * GET /internal/business-hours/{id_empresa}
+     * GET /internal/business-hours
      *
      * Devuelve el horario laboral de la empresa, parseado y validado, para que
      * msg_ninesys pueda calcular timeouts de asignación en minutos hábiles
      * (Fase D.3).
      *
+     * Convención de identificación de tenant:
+     *   Header `Authorization: {id_empresa}` (misma que el resto de rutas de
+     *   la app — ver communications.php, orders.php, config.php).
+     *
      * Contrato de respuesta por cada caso (la IA/cliente debe poder distinguir
      * entre "no hay horario configurado", "el JSON está roto" y "falta una
      * clave"):
      *   200 { id_empresa, nombre, horario_laboral: { horaInicioManana, ... } }
-     *   400 { error: 'bad_request', message }
-     *   401 { error: 'unauthorized', message }
+     *   400 { error: 'bad_request', message }   (Authorization ausente/inválido)
      *   404 { error: 'not_found', message }   (empresa no existe o inactiva)
      *   422 { error: 'unprocessable_entity', message, reason, ... }
      *   500 { error: 'internal_error', message }
@@ -155,7 +158,7 @@ return function (App $app) {
      *   - horario_laboral_invalid_time_format  (+ `invalid: {...}`)
      *   - dias_laborales_not_array
      */
-    $app->get('/internal/business-hours/{id_empresa}', function (Request $request, Response $response, $args) {
+    $app->get('/internal/business-hours', function (Request $request, Response $response) {
         $respondJson = function (array $payload, int $status) use ($response) {
             $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
             return $response
@@ -163,22 +166,14 @@ return function (App $app) {
                 ->withStatus($status);
         };
 
-        // --- 1. Validar token interno (constant-time) ---
-        $providedToken = $request->getHeaderLine('X-Internal-Token');
-        $expectedToken = getenv('MSG_SERVICE_INTERNAL_TOKEN') ?: '';
-        if ($expectedToken === '' || !hash_equals($expectedToken, $providedToken)) {
-            return $respondJson([
-                'error'   => 'unauthorized',
-                'message' => 'Token interno inválido o ausente.',
-            ], 401);
-        }
-
-        // --- 2. Validar id_empresa ---
-        $idEmpresa = filter_var($args['id_empresa'] ?? null, FILTER_VALIDATE_INT);
+        // --- 1. Leer id_empresa desde el header Authorization (convención del
+        //     resto de la app: el valor del header es directamente el id). ---
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
         if ($idEmpresa === false || $idEmpresa <= 0) {
             return $respondJson([
                 'error'   => 'bad_request',
-                'message' => 'id_empresa debe ser un entero positivo.',
+                'message' => 'Header Authorization ausente o inválido. Debe contener id_empresa (entero positivo).',
             ], 400);
         }
 

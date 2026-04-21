@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** ¿Es necesario guardar en la tabla rendimiento el registro si el desperdicio es CERO? ¿Que sentido tiene?
+- **Fecha y Hora:** 2026-04-09 14:47:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/inventory.php`, `app/routes/reports.php`
+- **Commits Relacionados:**
+    - Backend: `d8d98da`
+- **Acción Realizada:** Se optimizó el endpoint `update-insumo` para omitir la creación de registros en la tabla `rendimiento` cuando tanto la cantidad consumida como el desperdicio son cero. Además, se actualizó el reporte de "Material consumido por orden" (`/reportes/material-consumido-por-orden/{id_orden}`) para usar los nuevos nombres de columnas (`cantidad` en lugar de `metros`) y la nueva lógica de identificación de empleados y departamentos mediante LEFT JOINs a tablas maestras.
+- **Inconvenientes y Desafíos:** El reporte de materiales estaba roto debido al renombramiento previo de la columna `metros` a `cantidad`.
+- **Decisión Final y Justificación:** Se decidió permitir registros con desperdicio cero SOLO si hay consumo positivo, para no falsear las estadísticas de eficiencia global. Si ambos son cero, el registro se ignora. Se normalizó la consulta del reporte para que sea agnóstica a los cambios de esquema anteriores.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`
+- **Resultado:** Éxito
+- **Verificación:** Despliegue exitoso a Hostinger (VPS Desarrollo).
+- **Logro Conseguido:** Limpieza de registros redundantes en la base de datos y restauración del reporte de consumo de materiales por orden con la nueva estructura de datos.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/608727ad-f85e-4137-a0be-964bc6ec8cd9/task.md)
+- **Observaciones de Gemini:** La tabla rendimiento ha sido completamente migrada a la nueva estructura de id_empleado único.
+- **Respuesta de Gemini:** Se explicó la importancia de los ceros para el cálculo de eficiencia y se confirmó la aplicación de los filtros y corrección del reporte.

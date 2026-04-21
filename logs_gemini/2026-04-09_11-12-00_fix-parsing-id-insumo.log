@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** He probado la nueva interfaz rápidamente y me doy cuenta que a nivel de el frontend parece estar funcionando correctamente... no está guardando el desperdicio... el identificador que enviamos contiene texto "87 | Licra Sport Lat"
+- **Fecha y Hora:** 2026-04-09 11:12:00
+- **Proyecto(s):** Frontend
+- **Archivos Involucrados:** `app_multi/components/empleados/SseOrdenesAsignadasModalExtra.vue`
+- **Commits Relacionados:**
+    - Frontend: `47da461`
+- **Acción Realizada:** Se modificó el método `postInventarioMovimientos` para extraer únicamente el ID numérico del valor de `id_insumo` antes de enviarlo al backend, evitando errores de truncamiento de datos en MySQL (Strict Mode).
+- **Inconvenientes y Desafíos:** El payload del frontend enviaba una cadena compuesta ("id | nombre") que provocaba fallos en el backend al comparar con un campo INTEGER.
+- **Decisión Final y Justificación:** Parsear el ID en el frontend asegura que el contrato con la API se cumpla con datos limpios sin requerir cambios pesados en la lógica de búsqueda del servidor.
+- **Herramienta(s) Utilizada(s):** `multi_replace_file_content`, `run_command`
+- **Resultado:** Éxito
+- **Verificación:** Se confirmó el envío de IDs limpios en el payload y se realizó el despliegue a Hostinger.
+- **Logro Conseguido:** Restauración de la capacidad de guardar movimientos de inventario y desperdicio desde el dashboard de empleados.
+- **Referencias de Sesión (Contexto):** 
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/608727ad-f85e-4137-a0be-964bc6ec8cd9/task.md)
+- **Observaciones de Gemini:** Se detectó que el servidor Hostinger es más estricto con los tipos de datos que el entorno de desarrollo previo.
+- **Respuesta de Gemini:** Se informó al usuario sobre la corrección del parsing del ID y el despliegue realizado.

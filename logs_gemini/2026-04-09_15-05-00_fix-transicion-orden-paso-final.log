@@ -1,0 +1,14 @@
+- **Solicitud del Usuario:** Al terminar una tarea donde solo hay un departamento asignado (o es el último), el estatus de la orden sigue siendo 'activa' en lugar de pasar a 'terminada'. Ejemplo Orden 4552.
+- **Fecha y Hora:** 2026-04-09 15:05:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/manufacturing.php`
+- **Commits Relacionados:**
+    - Backend: `3283673`
+- **Acción Realizada:** Se corrigió la lógica de avance de pasos de producción en los endpoints `/registrar-paso-empleado`, `/lotes/{id}/finalizar-departamento`, `/lotes/{id}/finalizar-impresion` y `/lotes/{id}/finalizar-corte`. El sistema ahora consulta la tabla `lotes_detalles` para identificar el siguiente paso REAL requerido para la orden específica, en lugar de simplemente saltar al siguiente departamento global de la empresa. Al no encontrar más pasos requeridos, la orden cambia automáticamente su estatus a `terminada`.
+- **Inconvenientes y Desafíos:** La lógica previa era lineal y global, lo que causaba que órdenes que no requerían ciertos departamentos (como impresión o bordado) se quedaran estancadas esperando una asignación en esos pasos inexistentes para ellas.
+- **Decisión Final y Justificación:** El uso de `id_orden` como filtro en el descubrimiento del siguiente paso asegura que el flujo de trabajo sea dinámico y adaptado a lo planificado en la autorización de la orden.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`, `deploy_backend.sh`
+- **Resultado:** Éxito
+- **Verificación:** Validación de lógica mediante inspección de código y despliegue exitoso al VPS de Hostinger (Desarrollo).
+- **Logro Conseguido:** Automatización total del cierre de órdenes al finalizar la producción, independientemente de la cantidad de departamentos involucrados.
+- **Observaciones de Gemini:** Se detectó una inconsistencia histórica en el archivo `manufacturing.php` donde algunos procesos de lote no actualizaban el estatus de la tabla `ordenes`; esto ha sido unificado.
