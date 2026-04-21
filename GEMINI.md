@@ -60,6 +60,9 @@
 > **No asumas, no sugieras si no es necesario, y NO te equivoques de opción en los scripts.**
 
 - **Prohibición de Despliegue Automático:** Queda terminantemente prohibido el uso de `SafeToAutoRun: true` en cualquier herramienta que involucre comandos de red o despliegue a servidores remotos.
+- **🛑 SCRIPTS DE DESPLIEGUE — UBICACIÓN CENTRALIZADA:** Todos los scripts de despliegue deben ejecutarse ÚNICAMENTE desde `/home/developer/Escritorio/niesys/ninesys-hub/bin/`. Los scripts en directorios individuales del proyecto pueden estar DESACTUALIZADOS en rutas de VPS. **NO ejecutar scripts de despliegue que no estén en `ninesys-hub/bin/`.**
+  - Frontend: `ninesys-hub/bin/deploy.sh` (opción 2 para Hostinger)
+  - Backend: `ninesys-hub/bin/deploy_backend.sh` (opción 2 para Hostinger)
 - **Workflow Obligatorio:** Antes de interactuar con CUALQUIER servidor remoto (incluyendo Hostinger), DEBES ejecutar el workflow: `/.agent/workflows/validar-seguridad-despliegue.md`.
 
 - **Servidor de Producción (Contabo - `nineteencustom.com`):** 
