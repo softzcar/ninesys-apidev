@@ -1779,6 +1779,23 @@ CREATE TABLE IF NOT EXISTS `wa_vendor_state` (
                  ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Mapeo LID ↔ JID-fono para contactos de WhatsApp.
+-- WhatsApp puede entregar mensajes con remoteJid = `<numero>@lid`
+-- (privacy feature) sin teléfono real. Se popula desde los eventos
+-- contacts.upsert/update, chats.phoneNumberShare y messaging-history.set
+-- de Baileys. Permite identificar al cliente en `customers.phone` cuando
+-- el chat llega por LID.
+CREATE TABLE IF NOT EXISTS `wa_lid_phone_map` (
+  `lid_jid`       VARCHAR(100) NOT NULL,
+  `phone_jid`     VARCHAR(100) NOT NULL,
+  `pushname`      VARCHAR(255) DEFAULT NULL,
+  `first_seen_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_seen_at`  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                  ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`lid_jid`),
+  KEY `idx_phone_jid` (`phone_jid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `wa_messages` (
   `id`            BIGINT NOT NULL AUTO_INCREMENT,
   `jid`           VARCHAR(64) NOT NULL,
