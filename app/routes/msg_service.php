@@ -425,6 +425,7 @@ return function (App $app) {
      *   {
      *     "id_empresa": 163,
      *     "search_term": "remera",
+     *     "product_count": 1,
      *     "products": [
      *       {
      *         "id": 5,
@@ -432,8 +433,10 @@ return function (App $app) {
      *         "description": "...",
      *         "is_physical": true,
      *         "is_design": false,
-     *         "price_min": 12.50,
-     *         "price_max": 15.00,
+     *         "prices": [
+     *           {"price": 15.00, "descripcion": "Precio X 1"},
+     *           {"price": 12.50, "descripcion": "Precio X 3"}
+     *         ],
      *         "categories": ["Prendas", "Casual"],
      *         "attributes": [
      *           {"name": "Color", "values": ["Rojo", "Azul"]}
@@ -514,28 +517,32 @@ return function (App $app) {
             // Búsqueda por nombre o descripción, solo productos físicos o diseños
             $likePattern = '%' . $searchTerm . '%';
             $dbName = "`{$tenantDb}`";  // Backticks para seguridad
-            $sql = <<<SQL
-                SELECT p._id as id, p.product as name, p.product_description as description,
-                       p.fisico as is_physical, p.es_diseno as is_design,
-                       p.category_ids, MIN(pp.price) as price_min, MAX(pp.price) as price_max
+
+            // Obtener productos sin agrupar por precio
+            $sqlProducts = <<<SQL
+                SELECT DISTINCT p._id as id, p.product as name, p.product_description as description,
+                       p.fisico as is_physical, p.es_diseno as is_design, p.category_ids
                 FROM {$dbName}.products p
-                LEFT JOIN {$dbName}.products_prices pp ON p._id = pp.id_product
                 WHERE (p.product LIKE ? OR p.product_description LIKE ?)
                   AND (p.fisico = 1 OR p.es_diseno = 1)
-                GROUP BY p._id
                 ORDER BY p.product ASC
                 LIMIT {$limit}
             SQL;
 
-            $products = $tenantConnection->goQuery($sql, [$likePattern, $likePattern]);
+            $products = $tenantConnection->goQuery($sqlProducts, [$likePattern, $likePattern]);
             if (isset($products['status']) && $products['status'] === 'error') {
                 throw new \Exception($products['message'] ?? 'Error desconocido');
             }
 
-            // --- 5. Enriquecer cada producto con categorías y atributos ---
+            // --- 5. Enriquecer cada producto con categorías, atributos y TODOS los precios ---
             $enriched = [];
             foreach ((array)$products as $p) {
                 $productId = (int)$p['id'];
+
+                // Obtener TODOS los precios de este producto
+                $sqlPrices = "SELECT price, descripcion FROM {$dbName}.products_prices
+                              WHERE id_product = ? ORDER BY price DESC";
+                $prices = $tenantConnection->goQuery($sqlPrices, [$productId]) ?? [];
 
                 // Obtener categorías (category_ids es "1,2,5")
                 $categories = [];
@@ -572,14 +579,24 @@ return function (App $app) {
                     }
                 }
 
+                // Formatear precios: convertir a array de {price, descripcion}
+                $formattedPrices = [];
+                if (!isset($prices['status'])) {
+                    foreach ((array)$prices as $pr) {
+                        $formattedPrices[] = [
+                            'price' => (float)$pr['price'],
+                            'descripcion' => $pr['descripcion'] ?? '',
+                        ];
+                    }
+                }
+
                 $enriched[] = [
                     'id' => $productId,
                     'name' => $p['name'],
                     'description' => $p['description'] ?? '',
                     'is_physical' => (bool)(int)$p['is_physical'],
                     'is_design' => (bool)(int)$p['is_design'],
-                    'price_min' => $p['price_min'] ? (float)$p['price_min'] : null,
-                    'price_max' => $p['price_max'] ? (float)$p['price_max'] : null,
+                    'prices' => $formattedPrices,
                     'categories' => $categories,
                     'attributes' => $attributes,
                 ];
