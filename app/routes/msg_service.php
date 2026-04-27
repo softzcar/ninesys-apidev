@@ -389,6 +389,27 @@ return function (App $app) {
     });
 
     /**
+     * GET /internal/catalog-test/{id}
+     *
+     * Test endpoint with path parameter to verify Slim can handle routes with params.
+     */
+    $app->get('/internal/catalog-test/{id}', function (Request $request, Response $response, $args) {
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus($status);
+        };
+
+        return $respondJson([
+            'ok' => true,
+            'message' => 'Path parameters work correctly',
+            'received_id' => $args['id'] ?? 'not found',
+            'timestamp' => date('c'),
+        ], 200);
+    });
+
+    /**
      * GET /internal/catalog/:idEmpresa?search=término
      *
      * Devuelve el catálogo de productos de una empresa para enriquecer
