@@ -369,6 +369,26 @@ return function (App $app) {
     });
 
     /**
+     * GET /internal/catalog-test
+     *
+     * Simple test endpoint to verify routes are being loaded correctly.
+     */
+    $app->get('/internal/catalog-test', function (Request $request, Response $response) {
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus($status);
+        };
+
+        return $respondJson([
+            'ok' => true,
+            'message' => 'Catalog routes are loaded correctly',
+            'timestamp' => date('c'),
+        ], 200);
+    });
+
+    /**
      * GET /internal/catalog/:idEmpresa?search=término
      *
      * Devuelve el catálogo de productos de una empresa para enriquecer
