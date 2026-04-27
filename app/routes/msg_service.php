@@ -368,4 +368,199 @@ return function (App $app) {
             ->withStatus(200);
     });
 
+    /**
+     * GET /internal/catalog/:idEmpresa?search=término
+     *
+     * Devuelve el catálogo de productos de una empresa para enriquecer
+     * respuestas de IA (búsqueda por nombre, precios, atributos, categorías).
+     *
+     * Convención de identificación: header `Authorization: {id_empresa}`
+     *
+     * Parámetros query:
+     *   - search: término de búsqueda (nombre o descripción)
+     *   - limit: máximo de productos (default 20)
+     *
+     * Respuesta (200):
+     *   {
+     *     "id_empresa": 163,
+     *     "search_term": "remera",
+     *     "products": [
+     *       {
+     *         "id": 5,
+     *         "name": "Remera Básica",
+     *         "description": "...",
+     *         "is_physical": true,
+     *         "is_design": false,
+     *         "price_min": 12.50,
+     *         "price_max": 15.00,
+     *         "categories": ["Prendas", "Casual"],
+     *         "attributes": [
+     *           {"name": "Color", "values": ["Rojo", "Azul"]}
+     *         ]
+     *       }
+     *     ]
+     *   }
+     *
+     * Errores:
+     *   400: Authorization ausente/inválido
+     *   404: empresa no existe
+     *   500: error al conectar a la BD del tenant
+     */
+    $app->get('/internal/catalog/{id_empresa}', function (Request $request, Response $response, $args) {
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus($status);
+        };
+
+        // --- 1. Validar Authorization header ---
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson([
+                'error' => 'bad_request',
+                'message' => 'Header Authorization ausente o inválido.',
+            ], 400);
+        }
+
+        // --- 2. Parámetros query ---
+        $searchTerm = trim($request->getQueryParams()['search'] ?? '');
+        $limit = (int) ($request->getQueryParams()['limit'] ?? 20);
+        $limit = min(max($limit, 1), 100); // Clamp entre 1 y 100
+
+        // --- 3. Obtener credenciales del tenant ---
+        try {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $sql = 'SELECT id_empresa, db_host, db_user, db_password, db_name
+                    FROM empresas
+                    WHERE id_empresa = ?';
+            $rows = $localConnection->goQuery($sql, [$idEmpresa]);
+            $localConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][catalog] Error consultando empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson([
+                'error' => 'internal_error',
+                'message' => 'No se pudo consultar la base central de empresas.',
+            ], 500);
+        }
+
+        if (isset($rows['status']) && $rows['status'] === 'error') {
+            error_log('[msg_service][catalog] Error SQL empresa ' . $idEmpresa);
+            return $respondJson([
+                'error' => 'internal_error',
+                'message' => 'Error al ejecutar la consulta de empresa.',
+            ], 500);
+        }
+
+        if (empty($rows)) {
+            return $respondJson([
+                'error' => 'not_found',
+                'message' => "Empresa {$idEmpresa} no existe.",
+            ], 404);
+        }
+
+        $empresa = $rows[0];
+        $tenantDb = $empresa['db_name'];
+        $tenantUser = $empresa['db_user'];
+        $tenantPass = $empresa['db_password'];
+        $tenantHost = $empresa['db_host'];
+
+        // --- 4. Conectar a la BD del tenant y obtener productos ---
+        try {
+            $tenantConnection = new LocalDB();
+
+            // Búsqueda por nombre o descripción, solo productos físicos o diseños
+            $likePattern = '%' . $searchTerm . '%';
+            $dbName = "`{$tenantDb}`";  // Backticks para seguridad
+            $sql = <<<SQL
+                SELECT p._id as id, p.product as name, p.product_description as description,
+                       p.fisico as is_physical, p.es_diseno as is_design,
+                       p.category_ids, MIN(pp.price) as price_min, MAX(pp.price) as price_max
+                FROM {$dbName}.products p
+                LEFT JOIN {$dbName}.products_prices pp ON p._id = pp.id_product
+                WHERE (p.product LIKE ? OR p.product_description LIKE ?)
+                  AND (p.fisico = 1 OR p.es_diseno = 1)
+                GROUP BY p._id
+                ORDER BY p.product ASC
+                LIMIT {$limit}
+            SQL;
+
+            $products = $tenantConnection->goQuery($sql, [$likePattern, $likePattern]);
+            if (isset($products['status']) && $products['status'] === 'error') {
+                throw new \Exception($products['message'] ?? 'Error desconocido');
+            }
+
+            // --- 5. Enriquecer cada producto con categorías y atributos ---
+            $enriched = [];
+            foreach ((array)$products as $p) {
+                $productId = (int)$p['id'];
+
+                // Obtener categorías (category_ids es "1,2,5")
+                $categories = [];
+                if (!empty($p['category_ids'])) {
+                    $catIds = array_map('intval', explode(',', $p['category_ids']));
+                    $catIds = implode(',', $catIds);
+                    $catSql = "SELECT nombre FROM {$dbName}.categories WHERE _id IN ({$catIds}) ORDER BY nombre";
+                    $catRows = $tenantConnection->goQuery($catSql);
+                    if (!isset($catRows['status'])) {
+                        $categories = array_column((array)$catRows, 'nombre');
+                    }
+                }
+
+                // Obtener atributos (solo si el producto es físico o diseño)
+                $attributes = [];
+                if ((int)$p['is_physical'] === 1 || (int)$p['is_design'] === 1) {
+                    $attrSql = <<<SQL
+                        SELECT pa._id as id, pa.attribute_name as name,
+                               GROUP_CONCAT(pav.attribute_value ORDER BY pav.attribute_value) as values
+                        FROM {$dbName}.products_attributes pa
+                        JOIN {$dbName}.products_attributes_values pav ON pa._id = pav.id_product_attribute
+                        WHERE pav.id_product = ?
+                        GROUP BY pa._id
+                        ORDER BY pa.attribute_name ASC
+                    SQL;
+                    $attrRows = $tenantConnection->goQuery($attrSql, [$productId]);
+                    if (!isset($attrRows['status'])) {
+                        foreach ((array)$attrRows as $attr) {
+                            $attributes[] = [
+                                'name' => $attr['name'],
+                                'values' => array_map('trim', explode(',', $attr['values'])),
+                            ];
+                        }
+                    }
+                }
+
+                $enriched[] = [
+                    'id' => $productId,
+                    'name' => $p['name'],
+                    'description' => $p['description'] ?? '',
+                    'is_physical' => (bool)(int)$p['is_physical'],
+                    'is_design' => (bool)(int)$p['is_design'],
+                    'price_min' => $p['price_min'] ? (float)$p['price_min'] : null,
+                    'price_max' => $p['price_max'] ? (float)$p['price_max'] : null,
+                    'categories' => $categories,
+                    'attributes' => $attributes,
+                ];
+            }
+
+            $tenantConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][catalog] Error conectando tenant ' . $idEmpresa . ': ' . $e->getMessage() . ' — ' . $e->getFile() . ':' . $e->getLine());
+            error_log('[msg_service][catalog] Stack: ' . $e->getTraceAsString());
+            return $respondJson([
+                'error' => 'internal_error',
+                'message' => 'Error al conectar a la base de datos del tenant.',
+            ], 500);
+        }
+
+        // --- 6. Respuesta exitosa ---
+        return $respondJson([
+            'id_empresa' => $idEmpresa,
+            'search_term' => $searchTerm,
+            'product_count' => count($enriched),
+            'products' => $enriched,
+        ], 200);
+    });
+
 };

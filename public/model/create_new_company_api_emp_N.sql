@@ -1797,22 +1797,26 @@ CREATE TABLE IF NOT EXISTS `wa_lid_phone_map` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `wa_messages` (
-  `id`            BIGINT NOT NULL AUTO_INCREMENT,
-  `jid`           VARCHAR(64) NOT NULL,
-  `wa_message_id` VARCHAR(128) NULL,
-  `from_me`       TINYINT(1) NOT NULL,
-  `sender`        VARCHAR(64) NULL,
-  `type`          ENUM('text','image','audio','video','document','sticker','location','contact','system')
-                  NOT NULL DEFAULT 'text',
-  `body`          MEDIUMTEXT NULL,
-  `media_url`     VARCHAR(512) NULL,
-  `media_mime`    VARCHAR(128) NULL,
-  `via`           ENUM('human','api','ai','template') NOT NULL DEFAULT 'api',
-  `sent_by_user`  INT NULL,
-  `status`        ENUM('pending','sent','delivered','read','failed') NOT NULL DEFAULT 'pending',
-  `ts`            BIGINT NOT NULL,
-  `created_at`    DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `deleted_at`    DATETIME NULL,
+  `id`                   BIGINT NOT NULL AUTO_INCREMENT,
+  `jid`                  VARCHAR(64) NOT NULL,
+  `wa_message_id`        VARCHAR(128) NULL,
+  `from_me`              TINYINT(1) NOT NULL,
+  `sender`               VARCHAR(64) NULL,
+  `type`                 ENUM('text','image','audio','video','document','sticker','location','contact','system')
+                         NOT NULL DEFAULT 'text',
+  `body`                 MEDIUMTEXT NULL,
+  `transcript`           TEXT           NULL,
+  `transcript_lang`      VARCHAR(8)     NULL,
+  `transcript_cost_usd`  DECIMAL(10,6)  NULL,
+  `transcript_error`     VARCHAR(255)   NULL,
+  `media_url`            VARCHAR(512) NULL,
+  `media_mime`           VARCHAR(128) NULL,
+  `via`                  ENUM('human','api','ai','template') NOT NULL DEFAULT 'api',
+  `sent_by_user`         INT NULL,
+  `status`               ENUM('pending','sent','delivered','read','failed') NOT NULL DEFAULT 'pending',
+  `ts`                   BIGINT NOT NULL,
+  `created_at`           DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at`           DATETIME NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_wa_msg` (`wa_message_id`),
   KEY `idx_conv` (`jid`, `ts`),
@@ -1876,8 +1880,37 @@ CREATE TABLE IF NOT EXISTS `wa_send_log` (
   KEY `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Acumulado mensual de consumo por proveedor de IA (Whisper, Gemini).
+-- usd_micros = millonésimas de USD (1e-6). Int para ser aditivo sin
+-- errores de float; evita redondear a 0 los costos por llamada pequeños
+-- (una nota de voz de 30s en Whisper cuesta ~$0.003 = 3000 micros).
+CREATE TABLE IF NOT EXISTS `wa_usage_monthly` (
+  `year_month`  CHAR(7)     NOT NULL,
+  `provider`    VARCHAR(16) NOT NULL,
+  `usd_micros`  BIGINT      NOT NULL DEFAULT 0,
+  `call_count`  INT         NOT NULL DEFAULT 0,
+  `updated_at`  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                    ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`year_month`, `provider`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Config STT por tenant (singleton id=1). Toggle, tope mensual en USD,
+-- umbral de audio largo (handoff humano sin transcribir) e idioma hint.
+CREATE TABLE IF NOT EXISTS `wa_tenant_config` (
+  `id`                      TINYINT       NOT NULL DEFAULT 1,
+  `stt_enabled`             TINYINT(1)    NOT NULL DEFAULT 1,
+  `stt_monthly_usd_limit`   DECIMAL(10,2) NOT NULL DEFAULT 3.00,
+  `stt_long_audio_seconds`  INT           NOT NULL DEFAULT 120,
+  `stt_language`            VARCHAR(8)    NOT NULL DEFAULT 'es',
+  `updated_at`              TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                                  ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `wa_tenant_config_singleton` CHECK (`id` = 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT IGNORE INTO `wa_session_state` (`id`, `status`) VALUES (1, 'NOT_REGISTERED');
 INSERT IGNORE INTO `wa_ai_settings` (`id`) VALUES (1);
+INSERT IGNORE INTO `wa_tenant_config` (`id`) VALUES (1);
 INSERT IGNORE INTO `wa_ai_agents` (`id`, `name`, `slug`, `system_prompt`, `enabled`, `is_default`)
 VALUES (1, 'General', 'general', 'Eres un asistente de atención al cliente vía WhatsApp. Responde de forma breve, amable y útil.', 1, 1);
 
