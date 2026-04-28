@@ -2026,6 +2026,9 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             imo.valor_inicial,
             imo.valor_final,
             inv.cantidad cantidad_inventario,
+            inv.rendimiento,
+            inv.tipo_insumo,
+            inv.unidad,
             imo.moment fecha_del_consumo,
             (
                 SELECT SUM(op.cantidad * COALESCE(pia.cantidad, 0))
