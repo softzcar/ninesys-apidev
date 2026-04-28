@@ -523,13 +523,13 @@ return function (App $app) {
                 SELECT DISTINCT p._id as id, p.product as name, p.product_description as description,
                        p.fisico as is_physical, p.es_diseno as is_design, p.category_ids
                 FROM {$dbName}.products p
-                WHERE (p.product LIKE ? OR p.product_description LIKE ?)
+                WHERE p.product LIKE ?
                   AND (p.fisico = 1 OR p.es_diseno = 1)
                 ORDER BY p.product ASC
                 LIMIT {$limit}
             SQL;
 
-            $products = $tenantConnection->goQuery($sqlProducts, [$likePattern, $likePattern]);
+            $products = $tenantConnection->goQuery($sqlProducts, [$likePattern]);
             if (isset($products['status']) && $products['status'] === 'error') {
                 throw new \Exception($products['message'] ?? 'Error desconocido');
             }
@@ -619,6 +619,293 @@ return function (App $app) {
             'product_count' => count($enriched),
             'products' => $enriched,
         ], 200);
+    });
+
+    /**
+     * GET /internal/cliente/{id_empresa}/by-phone?phone={telefono}
+     *
+     * Busca un cliente en la tabla customers del tenant por número de teléfono.
+     * Si existe, también devuelve el id del último vendedor que lo atendió
+     * (buscando en presupuestos y ordenes, en ese orden).
+     *
+     * Header: Authorization: {id_empresa}
+     *
+     * Respuesta 200 — cliente encontrado:
+     *   { "found": true, "customer": { "_id", "first_name", "last_name", "cedula",
+     *     "phone", "email", "address" }, "last_vendedor_id": int|null }
+     * Respuesta 200 — no encontrado:
+     *   { "found": false }
+     */
+    $app->get('/internal/cliente/{id_empresa}/by-phone', function (Request $request, Response $response, $args) {
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+
+        $phone = trim($request->getQueryParams()['phone'] ?? '');
+        if ($phone === '') {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Parámetro phone requerido.'], 400);
+        }
+
+        try {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $localConnection->goQuery(
+                'SELECT db_name FROM empresas WHERE id_empresa = ? AND activo = 1',
+                [$idEmpresa]
+            );
+            $localConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][cliente/by-phone] Error central empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar empresa.'], 500);
+        }
+
+        if (empty($rows) || isset($rows['status'])) {
+            return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe o está inactiva."], 404);
+        }
+
+        $dbName = '`' . $rows[0]['db_name'] . '`';
+
+        try {
+            $tenantConnection = new LocalDB();
+
+            $customers = $tenantConnection->goQuery(
+                "SELECT _id, first_name, last_name, cedula, phone, email, address
+                 FROM {$dbName}.customers WHERE phone = ? LIMIT 1",
+                [$phone]
+            );
+
+            if (isset($customers['status']) || empty($customers)) {
+                $tenantConnection->disconnect();
+                return $respondJson(['found' => false], 200);
+            }
+
+            $customer = $customers[0];
+            $customerId = (int) $customer['_id'];
+
+            // Buscar último vendedor en presupuestos, luego en ordenes
+            $lastVendedorId = null;
+            $vendedorRows = $tenantConnection->goQuery(
+                "SELECT responsable FROM {$dbName}.presupuestos
+                 WHERE id_wp = ? AND responsable IS NOT NULL ORDER BY _id DESC LIMIT 1",
+                [$customerId]
+            );
+            if (!empty($vendedorRows) && !isset($vendedorRows['status'])) {
+                $lastVendedorId = (int) $vendedorRows[0]['responsable'];
+            }
+
+            if (!$lastVendedorId) {
+                $vendedorRows = $tenantConnection->goQuery(
+                    "SELECT responsable FROM {$dbName}.ordenes
+                     WHERE id_wp = ? AND responsable IS NOT NULL ORDER BY _id DESC LIMIT 1",
+                    [$customerId]
+                );
+                if (!empty($vendedorRows) && !isset($vendedorRows['status'])) {
+                    $lastVendedorId = (int) $vendedorRows[0]['responsable'];
+                }
+            }
+
+            $tenantConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][cliente/by-phone] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar cliente.'], 500);
+        }
+
+        return $respondJson([
+            'found'            => true,
+            'customer'         => [
+                '_id'        => $customerId,
+                'first_name' => $customer['first_name'],
+                'last_name'  => $customer['last_name'],
+                'cedula'     => $customer['cedula'],
+                'phone'      => $customer['phone'],
+                'email'      => $customer['email'],
+                'address'    => $customer['address'],
+            ],
+            'last_vendedor_id' => $lastVendedorId,
+        ], 200);
+    });
+
+    /**
+     * POST /internal/cliente/{id_empresa}
+     *
+     * Crea un nuevo cliente en la tabla customers del tenant.
+     * Si ya existe uno con el mismo teléfono o cédula, lo actualiza (upsert).
+     *
+     * Header: Authorization: {id_empresa}
+     * Body JSON: { nombre, apellido, cedula, telefono, email?, direccion? }
+     *
+     * Respuesta 200: { "id_customer": int, "upserted": bool }
+     */
+    $app->post('/internal/cliente/{id_empresa}', function (Request $request, Response $response, $args) {
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+
+        $body = json_decode((string) $request->getBody(), true) ?? [];
+        $nombre    = addslashes(trim($body['nombre']    ?? ''));
+        $apellido  = addslashes(trim($body['apellido']  ?? ''));
+        $cedula    = addslashes(trim($body['cedula']    ?? ''));
+        $telefono  = addslashes(trim($body['telefono']  ?? ''));
+        $email     = addslashes(strtolower(trim($body['email']    ?? '')));
+        $direccion = addslashes(trim($body['direccion'] ?? ''));
+
+        if ($nombre === '' || $telefono === '') {
+            return $respondJson(['error' => 'bad_request', 'message' => 'nombre y telefono son requeridos.'], 400);
+        }
+
+        if ($email === '') {
+            $randomString = substr(str_shuffle('abcdefghijklmnopqrstuvwxyz0123456789'), 0, 8);
+            $email = strtolower(substr($nombre, 0, 1)) . $randomString . '@email.com';
+        }
+
+        try {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $localConnection->goQuery(
+                'SELECT db_name FROM empresas WHERE id_empresa = ? AND activo = 1',
+                [$idEmpresa]
+            );
+            $localConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][cliente/crear] Error central empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar empresa.'], 500);
+        }
+
+        if (empty($rows) || isset($rows['status'])) {
+            return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe."], 404);
+        }
+
+        $dbName = '`' . $rows[0]['db_name'] . '`';
+
+        try {
+            $tenantConnection = new LocalDB();
+
+            $conditions = ["phone = '$telefono'"];
+            if ($cedula !== '' && $cedula !== 'none') {
+                $conditions[] = "cedula = '$cedula'";
+            }
+            $existingRows = $tenantConnection->goQuery(
+                "SELECT _id FROM {$dbName}.customers WHERE (" . implode(' OR ', $conditions) . ") LIMIT 1"
+            );
+
+            if (!empty($existingRows) && !isset($existingRows['status'])) {
+                $customerId = (int) $existingRows[0]['_id'];
+                $tenantConnection->goQuery(
+                    "UPDATE {$dbName}.customers
+                     SET first_name = '$nombre', last_name = '$apellido', cedula = '$cedula',
+                         phone = '$telefono', email = '$email', address = '$direccion'
+                     WHERE _id = $customerId"
+                );
+                $tenantConnection->disconnect();
+                return $respondJson(['id_customer' => $customerId, 'upserted' => true], 200);
+            }
+
+            $createResult = $tenantConnection->goQuery(
+                "INSERT INTO {$dbName}.customers (first_name, last_name, cedula, phone, email, address)
+                 VALUES ('$nombre', '$apellido', '$cedula', '$telefono', '$email', '$direccion')"
+            );
+            $tenantConnection->disconnect();
+
+            if (!isset($createResult['insert_id'])) {
+                error_log('[msg_service][cliente/crear] insert_id ausente para empresa ' . $idEmpresa);
+                return $respondJson(['error' => 'internal_error', 'message' => 'No se pudo crear el cliente.'], 500);
+            }
+
+            return $respondJson(['id_customer' => (int) $createResult['insert_id'], 'upserted' => false], 200);
+        } catch (\Throwable $e) {
+            error_log('[msg_service][cliente/crear] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al crear cliente.'], 500);
+        }
+    });
+
+    /**
+     * PATCH /internal/presupuesto/{id_presupuesto}/vendedor
+     *
+     * Asigna un vendedor (campo responsable) a un presupuesto existente.
+     *
+     * Header: Authorization: {id_empresa}
+     * Body JSON: { "id_vendedor": int }
+     *
+     * Respuesta 200: { "ok": true }
+     */
+    $app->patch('/internal/presupuesto/{id_presupuesto}/vendedor', function (Request $request, Response $response, $args) {
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+
+        $idPresupuesto = filter_var($args['id_presupuesto'] ?? null, FILTER_VALIDATE_INT);
+        if ($idPresupuesto === false || $idPresupuesto <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'id_presupuesto inválido.'], 400);
+        }
+
+        $body = json_decode((string) $request->getBody(), true) ?? [];
+        $idVendedor = filter_var($body['id_vendedor'] ?? null, FILTER_VALIDATE_INT);
+        if ($idVendedor === false || $idVendedor <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'id_vendedor inválido.'], 400);
+        }
+
+        try {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $localConnection->goQuery(
+                'SELECT db_name FROM empresas WHERE id_empresa = ? AND activo = 1',
+                [$idEmpresa]
+            );
+            $localConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][presupuesto/vendedor] Error central empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar empresa.'], 500);
+        }
+
+        if (empty($rows) || isset($rows['status'])) {
+            return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe."], 404);
+        }
+
+        $dbName = '`' . $rows[0]['db_name'] . '`';
+
+        try {
+            $tenantConnection = new LocalDB();
+
+            $existing = $tenantConnection->goQuery(
+                "SELECT _id FROM {$dbName}.presupuestos WHERE _id = ? LIMIT 1",
+                [$idPresupuesto]
+            );
+
+            if (empty($existing) || isset($existing['status'])) {
+                $tenantConnection->disconnect();
+                return $respondJson(['error' => 'not_found', 'message' => "Presupuesto {$idPresupuesto} no encontrado."], 404);
+            }
+
+            $tenantConnection->goQuery(
+                "UPDATE {$dbName}.presupuestos SET responsable = ? WHERE _id = ?",
+                [$idVendedor, $idPresupuesto]
+            );
+
+            $tenantConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][presupuesto/vendedor] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al actualizar presupuesto.'], 500);
+        }
+
+        return $respondJson(['ok' => true], 200);
     });
 
 };
