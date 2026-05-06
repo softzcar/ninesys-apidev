@@ -408,6 +408,14 @@ return function (App $app) {
                 'gastos_por_tipo' => $gastosPorTipo
             ];
 
+            if ($debug) {
+                $finalResponse['debug_gastos'] = [
+                    'sql' => $sqlGastosReales,
+                    'params' => [':inicio' => $inicio, ':fin' => $fin],
+                    'raw_results' => $gastosRealesRaw,
+                    'company_db' => $companyDB
+                ];
+            }
             $response->getBody()->write(json_encode($finalResponse, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } catch (Exception $e) {
