@@ -368,22 +368,21 @@ return function (App $app) {
                 $finalResponse['tareas_data'] = $dbEmpresas->goQuery($sqlTareas);
             }
 
-            // 12. Gastos (Combinación de Registros Reales + Proporción de Plantillas)
+                        // 12. Gastos (Combinación de Registros Reales + Proporción de Plantillas)
             
-            // A. Registros Reales en el periodo
+            // A. Registros Reales estrictamente en el periodo
             $sqlGastosReales = "SELECT tipo, moneda, SUM(monto) as total 
                                 FROM $companyDB.gastos_registros 
                                 WHERE fecha_de_gasto BETWEEN :inicio AND :fin 
                                 GROUP BY tipo, moneda";
             $gastosRealesRaw = $dbEmpresas->goQuery($sqlGastosReales, [':inicio' => $inicio, ':fin' => $fin]);
 
-            // B. Plantillas Proporcionales (Para asegurar que siempre haya datos si están configurados)
-            // Calculamos cuántas semanas/días representa el periodo para prorratear la plantilla mensual
+            // B. Plantillas Proporcionales (Basado en la tabla 'gastos')
             $fecha_inicio_dt = new DateTime($inicio);
             $fecha_fin_dt = new DateTime($fin);
             $intervalo = $fecha_inicio_dt->diff($fecha_fin_dt);
             $dias_periodo = $intervalo->days + 1;
-            $factor_mensual = $dias_periodo / 30.44; // Promedio de días al mes
+            $factor_mensual = $dias_periodo / 30.44;
 
             $sqlPlantillas = "SELECT tipo, moneda, SUM(monto) as total_mensual 
                               FROM $companyDB.gastos 
@@ -397,56 +396,45 @@ return function (App $app) {
                 'adicional' => []
             ];
 
-            // Combinar ambos: Priorizamos reales, pero si reales es cero para un tipo, usamos plantilla
-            $tempGastos = []; // Para acumular por tipo/moneda
+            // Mapa para acumular resultados finales
+            $finalGastosMap = [];
 
-            // Procesar Reales
-            if (is_array($gastosRealesRaw) && !isset($gastosRealesRaw['status'])) {
-                foreach ($gastosRealesRaw as $gr) {
-                    $t = strtolower($gr['tipo']);
-                    $m = $gr['moneda'];
-                    $tempGastos[$t][$m] = ($tempGastos[$t][$m] ?? 0) + (float)$gr['total'];
-                }
-            }
-
-            // Procesar Plantillas (Solo si no hay reales para ese tipo/moneda en este periodo, 
-            // o podrías querer sumarlos, pero usualmente si no hay reales usamos la estimación)
+            // 1. Inicializar mapa con plantillas (lo que DEBERÍA gastarse)
             if (is_array($plantillasRaw) && !isset($plantillasRaw['status'])) {
                 foreach ($plantillasRaw as $pr) {
                     $t = strtolower($pr['tipo']);
                     $m = $pr['moneda'];
-                    $monto_estimado = (float)$pr['total_mensual'] * $factor_mensual;
-                    
-                    // Si no hubo registros reales de este tipo en el periodo, usamos la plantilla
-                    if (!isset($tempGastos[$t][$m]) || $tempGastos[$t][$m] == 0) {
-                        $tempGastos[$t][$m] = $monto_estimado;
+                    $monto_proporcional = (float)$pr['total_mensual'] * $factor_mensual;
+                    if ($monto_proporcional > 0) {
+                        $finalGastosMap[$t][$m] = $monto_proporcional;
                     }
                 }
             }
 
-            // Convertir a formato de respuesta
-            foreach ($tempGastos as $tipo => $monedas) {
-                foreach ($monedas as $moneda => $total) {
-                    $gastosPorTipo[$tipo][] = ['moneda' => $moneda, 'total' => $total];
+            // 2. Sobreescribir con registros reales si existen en el periodo
+            if (is_array($gastosRealesRaw) && !isset($gastosRealesRaw['status'])) {
+                foreach ($gastosRealesRaw as $gr) {
+                    $t = strtolower($gr['tipo']);
+                    $m = $gr['moneda'];
+                    $monto_real = (float)$gr['total'];
+                    if ($monto_real > 0) {
+                        // Si hay gasto real, reemplazamos la estimación de la plantilla para ese tipo/moneda
+                        $finalGastosMap[$t][$m] = $monto_real;
+                    }
                 }
             }
-            $gastosRealesRaw = $dbEmpresas->goQuery($sqlGastosReales, [':inicio' => $inicio, ':fin' => $fin]);
-            
-            $gastosPorTipo = [
-                'fijo' => [],
-                'variable' => [],
-                'adicional' => []
-            ];
-            
 
-
-            // Gastos Fijos (Plantilla - Mantener por compatibilidad si es necesario)
-            $sqlGastos = "SELECT SUM(CASE periodicidad WHEN 'mensual' THEN monto / 4.33 WHEN 'trimestral' THEN monto / 13 WHEN 'semestral' THEN monto / 26 WHEN 'anual' THEN monto / 52 ELSE 0 END) AS total_gastos_semanales FROM $companyDB.empresas_gastos WHERE id_empresa = $id_empresa AND estatus = 'activo'";
-            $gastosResult = $dbEmpresas->goQuery($sqlGastos);
-            $totalGastosSemanales = (!empty($gastosResult) && isset($gastosResult[0]['total_gastos_semanales'])) ? (float)$gastosResult[0]['total_gastos_semanales'] : 0;
-
-            $totalProductosPeriodo = !empty($reporteData) ? array_sum(array_column($reporteData, 'total_productos')) : 0;
-            $costoOperativoPorProducto = $totalProductosPeriodo > 0 ? ($totalGastosSemanales / $totalProductosPeriodo) : 0;
+            // 3. Convertir mapa a formato de respuesta esperado por el frontend
+            foreach ($finalGastosMap as $tipo => $monedas) {
+                if (isset($gastosPorTipo[$tipo])) {
+                    foreach ($monedas as $moneda => $total) {
+                        $gastosPorTipo[$tipo][] = [
+                            'moneda' => $moneda,
+                            'total' => round($total, 2)
+                        ];
+                    }
+                }
+            }
 
             $finalResponse['costos_operativos'] = [
                 'total_gastos_semanales' => $totalGastosSemanales,
