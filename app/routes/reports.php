@@ -157,7 +157,7 @@ return function (App $app) {
                 }
 
                 $debugMaps = [];
-                if ($debug) {
+                if (false) {
                     $debugMaps = [
                         'movs' => [],
                         'pagos' => [],
@@ -268,7 +268,7 @@ return function (App $app) {
                     $row['tiempo_de_produccion'] = $tiempoMap[$id] ?? 0;
                     $row['empleados_asignados'] = $empAsigMap[$id] ?? '';
                     $row['reposiciones'] = $reposMap[$id] ?? 0;
-                    if ($debug) {
+                    if (false) {
                         $row['debug_movimientos_insumos'] = $debugMaps['movs'][$id] ?? 0;
                         $row['debug_pagos'] = $debugMaps['pagos'][$id] ?? 0;
                         $row['debug_tintas'] = $debugMaps['tintas'][$id] ?? 0;
@@ -280,7 +280,7 @@ return function (App $app) {
                 $finalResponse['reporte_data'] = $reporteData;
                 $finalResponse['tintas_consumidas'] = $tintasDetalle;
                 $finalResponse['tintas_resumen'] = $tintasResumenFinal;
-                if ($debug) {
+                if (false) {
                     $finalResponse['debug'] = [
                         'id_empresa' => $id_empresa,
                         'inicio' => $inicio,
@@ -368,66 +368,60 @@ return function (App $app) {
                 $finalResponse['tareas_data'] = $dbEmpresas->goQuery($sqlTareas);
             }
 
-                                    // 12. Gastos (Reglas: Fijos siempre por plantilla, Variables/Adicionales por registro real)
-            
-            // A. Registros Reales en el periodo
-            $sqlGastosReales = "SELECT tipo, moneda, SUM(monto) as total 
-                                FROM $companyDB.gastos_registros 
-                                WHERE fecha_de_gasto BETWEEN :inicio AND :fin 
-                                GROUP BY tipo, moneda";
-            $gastosRealesRaw = $dbEmpresas->goQuery($sqlGastosReales, [':inicio' => $inicio, ':fin' => $fin]);
-
-            // B. Plantillas Proporcionales (Solo para GASTOS FIJOS)
+                                                // 12. Gastos (Reglas: Fijos siempre por plantilla, Variables/Adicionales por registro real)
             $fecha_inicio_dt = new DateTime($inicio);
             $fecha_fin_dt = new DateTime($fin);
             $intervalo = $fecha_inicio_dt->diff($fecha_fin_dt);
             $dias_periodo = $intervalo->days + 1;
             $factor_mensual = $dias_periodo / 30.44;
 
+            // A. Plantillas Fijas
             $sqlPlantillasFijas = "SELECT moneda, SUM(monto) as total_mensual 
                                    FROM $companyDB.gastos 
                                    WHERE estatus = 'activo' AND tipo = 'fijo'
                                    GROUP BY moneda";
             $plantillasFijasRaw = $dbEmpresas->goQuery($sqlPlantillasFijas);
 
-            $gastosPorTipo = [
-                'fijo' => [],
-                'variable' => [],
-                'adicional' => []
-            ];
+            // B. Registros Reales
+            $sqlGastosReales = "SELECT tipo, moneda, SUM(monto) as total 
+                                FROM $companyDB.gastos_registros 
+                                WHERE fecha_de_gasto BETWEEN :inicio AND :fin 
+                                GROUP BY tipo, moneda";
+            $gastosRealesRaw = $dbEmpresas->goQuery($sqlGastosReales, [':inicio' => $inicio, ':fin' => $fin]);
 
-            // 1. Procesar Gastos FIJOS (Priorizamos plantilla prorrateada como base mínima)
+            $gastosPorTipo = ['fijo' => [], 'variable' => [], 'adicional' => []];
             $fijosMap = [];
+            $totalGastosFijosUSD = 0; // Para el resumen compatible
+
             if (is_array($plantillasFijasRaw) && !isset($plantillasFijasRaw['status'])) {
                 foreach ($plantillasFijasRaw as $pf) {
                     $m = $pf['moneda'];
-                    $fijosMap[$m] = (float)$pf['total_mensual'] * $factor_mensual;
+                    $monto = (float)$pf['total_mensual'] * $factor_mensual;
+                    $fijosMap[$m] = $monto;
                 }
             }
-            
-            // 2. Procesar Registros Reales
+
             if (is_array($gastosRealesRaw) && !isset($gastosRealesRaw['status'])) {
                 foreach ($gastosRealesRaw as $gr) {
                     $tipo = strtolower($gr['tipo']);
                     $moneda = $gr['moneda'];
                     $monto = (float)$gr['total'];
-                    
                     if ($tipo === 'fijo') {
-                        // Si registraron un gasto fijo real, lo usamos si es mayor que la plantilla o lo sumamos.
-                        // Según requerimiento "podemos tomar ese monto siempre", se asume la plantilla es la base.
-                        // Usaremos el mayor entre el registro real y la plantilla para no duplicar ni omitir.
                         $fijosMap[$moneda] = max(($fijosMap[$moneda] ?? 0), $monto);
                     } else {
-                        // Variables y Adicionales: SOLO si hay registro real
                         $gastosPorTipo[$tipo][] = ['moneda' => $moneda, 'total' => round($monto, 2)];
                     }
                 }
             }
 
-            // 3. Añadir los fijos finales al resultado
             foreach ($fijosMap as $moneda => $total) {
                 $gastosPorTipo['fijo'][] = ['moneda' => $moneda, 'total' => round($total, 2)];
             }
+
+            // Variables de compatibilidad
+            $totalProductosPeriodo = !empty($reporteData) ? array_sum(array_column($reporteData, 'total_productos')) : 0;
+            $totalGastosSemanales = 0; // Se mantiene por legacy si el frontend lo pide
+            $costoOperativoPorProducto = 0;
 
             $finalResponse['costos_operativos'] = [
                 'total_gastos_semanales' => $totalGastosSemanales,
@@ -436,7 +430,7 @@ return function (App $app) {
                 'gastos_por_tipo' => $gastosPorTipo
             ];
 
-            if ($debug) {
+            if (false) {
                 $count_total = $dbEmpresas->goQuery("SELECT COUNT(*) as total FROM $companyDB.gastos_registros");
                 $count_period = $dbEmpresas->goQuery("SELECT COUNT(*) as total FROM $companyDB.gastos_registros WHERE fecha_de_gasto >= '2026-04-01'");
                 $sample_gastos = $dbEmpresas->goQuery("SELECT * FROM $companyDB.gastos");
