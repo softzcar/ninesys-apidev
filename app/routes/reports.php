@@ -409,12 +409,16 @@ return function (App $app) {
             ];
 
             if ($debug) {
-                $sample = $dbEmpresas->goQuery("SELECT * FROM $companyDB.gastos_registros ORDER BY _id DESC LIMIT 10");
+                $count_total = $dbEmpresas->goQuery("SELECT COUNT(*) as total FROM $companyDB.gastos_registros");
+                $count_period = $dbEmpresas->goQuery("SELECT COUNT(*) as total FROM $companyDB.gastos_registros WHERE fecha_de_gasto >= '2026-04-01'");
+                $sample_gastos = $dbEmpresas->goQuery("SELECT * FROM $companyDB.gastos");
                 $finalResponse['debug_gastos'] = [
                     'sql' => $sqlGastosReales,
                     'params' => [':inicio' => $inicio, ':fin' => $fin],
                     'raw_results' => $gastosRealesRaw,
-                    'sample_data' => $sample,
+                    'registros_desde_abril' => $count_period[0]['total'] ?? 0,
+                    'registros_totales' => $count_total[0]['total'] ?? 0,
+                    'plantillas_gastos' => $sample_gastos,
                     'company_db' => $companyDB
                 ];
             }
