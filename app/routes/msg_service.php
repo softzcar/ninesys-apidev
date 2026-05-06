@@ -546,9 +546,11 @@ return function (App $app) {
 
                 // Obtener categorías (category_ids es "1,2,5")
                 $categories = [];
+                $firstCategoryId = 0;
                 if (!empty($p['category_ids'])) {
-                    $catIds = array_map('intval', explode(',', $p['category_ids']));
-                    $catIds = implode(',', $catIds);
+                    $catIdsArr = array_map('intval', explode(',', $p['category_ids']));
+                    $firstCategoryId = $catIdsArr[0];
+                    $catIds = implode(',', $catIdsArr);
                     $catSql = "SELECT nombre FROM {$dbName}.categories WHERE _id IN ({$catIds}) ORDER BY nombre";
                     $catRows = $tenantConnection->goQuery($catSql);
                     if (!isset($catRows['status'])) {
@@ -598,6 +600,7 @@ return function (App $app) {
                     'is_design' => (bool)(int)$p['is_design'],
                     'prices' => $formattedPrices,
                     'categories' => $categories,
+                    'category_id' => $firstCategoryId,
                     'attributes' => $attributes,
                 ];
             }

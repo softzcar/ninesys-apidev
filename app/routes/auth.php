@@ -311,6 +311,100 @@ return function (App $app) {
         return $response;
     });
 
+    /** * Refresh Session Data */
+    $app->get('/refresh-session/{id}', function (Request $request, Response $response, array $args) {
+        $id_usuario = $args['id'];
+        $object = ['debug' => []];
+
+        $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+
+        // 1. Obtener datos del usuario
+        $sql_user = 'SELECT id_usuario, email, `password`, nombre, telefono, departamento, id_empresa, activo, acceso, comision FROM empresas_usuarios WHERE id_usuario = ?';
+        $credenciales = $localConnection->goQuery($sql_user, [$id_usuario]);
+
+        if (empty($credenciales)) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'Usuario no encontrado']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+        }
+
+        $usuario_data = $credenciales[0];
+
+        // 2. Obtener datos de la empresa
+        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, `db_name` FROM empresas WHERE id_empresa = ?';
+        $data_empresa = $localConnection->goQuery($sql_empresa, [$usuario_data['id_empresa']]);
+
+        if (empty($data_empresa)) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'Empresa no encontrada']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+        }
+
+        $empresa_data = $data_empresa[0];
+
+        // 3. Preparar respuesta similar a la estructura de login
+        $object['msg'] = 'Datos actualizados';
+        $object['data']['access'] = true;
+        $object['data']['id_empleado'] = $usuario_data['id_usuario'];
+        $object['data']['departamento'] = $usuario_data['departamento'];
+        $object['data']['nombre'] = $usuario_data['nombre'];
+        $object['data']['username'] = $usuario_data['email'];
+        $object['data']['email'] = $usuario_data['email'];
+        $object['data']['comision'] = $usuario_data['comision'];
+        $object['data']['acceso'] = intval($usuario_data['acceso']);
+
+        $object['datos_empresa'] = [
+            'nombre' => $empresa_data['nombre'],
+            'numero_registro_legal' => $empresa_data['numero_registro_legal'],
+            'direccion' => $empresa_data['direccion'],
+            'telefono' => $empresa_data['telefono'],
+            'email' => $empresa_data['email'],
+            'pais' => $empresa_data['pais'],
+            'horario_laboral' => json_decode($empresa_data['horario_laboral']),
+            'tipos_de_monedas' => json_decode($empresa_data['tipos_de_monedas'])
+        ];
+
+        $object['datos_usuario'] = [
+            'nombre' => $usuario_data['nombre'],
+            'telefono' => $usuario_data['telefono'],
+            'id_empleado' => $usuario_data['id_usuario']
+        ];
+
+        // 4. Consultar gastos fijos de la empresa (Global)
+        $sql_gastos = 'SELECT _id, nombre, descripcion, monto, moneda, periodicidad, estatus FROM empresas_gastos WHERE id_empresa = ? AND estatus = "activo"';
+        $gastos_data = $localConnection->goQuery($sql_gastos, [$usuario_data['id_empresa']]);
+        if (!empty($gastos_data)) {
+            $object['datos_empresa']['gastos_fijos'] = $gastos_data;
+        }
+
+        // 5. Obtener datos de personalización (Local de la empresa)
+        if (!empty($empresa_data['db_name'])) {
+            $companyDsn = 'mysql:host=' . $empresa_data['db_host'] . ';dbname=' . $empresa_data['db_name'];
+            $localConnection->switchDatabase($companyDsn, $empresa_data['db_user'], $empresa_data['db_password']);
+
+            $sql_config = 'SELECT sys_mostrar_detalle_terminar_indicidual, sys_mostrar_rollo_en_empleado_corte, sys_mostrar_rollo_en_empleado_estampado, sys_mostrar_insumo_en_empleado_costura, sys_mostrar_insumo_en_empleado_limpieza, sys_mostrar_insumo_en_empleado_revision, sys_comision_de_costura, multiplicador_precio FROM config WHERE _id = 1';
+            $config_data = $localConnection->goQuery($sql_config);
+
+            if (!empty($config_data)) {
+                $object['datos_personalizacion'] = [
+                    'sys_mostrar_detalle_terminar_indicidual' => (bool) $config_data[0]['sys_mostrar_detalle_terminar_indicidual'],
+                    'sys_mostrar_rollo_en_empleado_corte' => (bool) $config_data[0]['sys_mostrar_rollo_en_empleado_corte'],
+                    'sys_mostrar_rollo_en_empleado_estampado' => (bool) $config_data[0]['sys_mostrar_rollo_en_empleado_estampado'],
+                    'sys_mostrar_insumo_en_empleado_costura' => (bool) $config_data[0]['sys_mostrar_insumo_en_empleado_costura'],
+                    'sys_mostrar_insumo_en_empleado_limpieza' => (bool) $config_data[0]['sys_mostrar_insumo_en_empleado_limpieza'],
+                    'sys_mostrar_insumo_en_empleado_revision' => (bool) $config_data[0]['sys_mostrar_insumo_en_empleado_revision'],
+                    'sys_comision_de_costura' => (bool) $config_data[0]['sys_comision_de_costura'],
+                    'multiplicador_precio' => (float) $config_data[0]['multiplicador_precio'],
+                ];
+            }
+        }
+
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    });
+
     /** * Login mensajes */
     $app->post('/verify-credentials', function (Request $request, Response $response, $args) {
         $datosAcceso = $request->getParsedBody();
@@ -345,7 +439,7 @@ return function (App $app) {
             $ban = true;
 
             // VERIFICAR QUE LA EMPRESA ESTÉ ACTIVA
-            if (!$resp[0]['empresa_activa']) {
+            if (!$Ban = $resp[0]['empresa_activa']) {
                 $ban = false;
                 $object['access'] = false;
                 $object['msg'] = 'La empresa ' . $resp[0]['empresa_nombre'] . ' no se encuentra activa';

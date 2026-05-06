@@ -198,22 +198,43 @@ return function (App $app) {
         $response->getBody()->write(json_encode(['message' => 'Monedas guardadas correctamente']));
         return $response
             ->withHeader('Content-Type', 'application/json')
-            ->withHeader('Access-Control-Allow-Origin', '*') // CORS FIX
+            ->withHeader('Access-Control-Allow-Origin', '*')
             ->withStatus(200);
     });
 
     // CONFIGURACIÓN WIZARD - HORARIO
     $app->post('/configuracion/horario', function (Request $request, Response $response, array $args) {
-        $data = json_decode($request->getBody()->getContents(), true);
-        $employeeId = $data['id_empleado'] ?? null;
+        $rawBody = $request->getBody()->getContents();
+        $data = json_decode($rawBody, true);
 
-        if (!$employeeId) {
-            $response->getBody()->write(json_encode(['error' => 'ID de empleado requerido']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        if (!is_array($data)) {
+            $data = $request->getParsedBody();
+            if (empty($data)) {
+                parse_str($rawBody, $parsed);
+                if (!empty($parsed)) {
+                    $data = $parsed;
+                }
+            }
         }
 
-        // Extraer datos de horario (excluir id_empleado)
-        $horarioData = array_diff_key($data, ['id_empleado' => '']);
+        $employeeId = $data['id_empleado'] ?? null;
+        $horaInicioManana = $data['horaInicioManana'] ?? null;
+        $horaFinManana = $data['horaFinManana'] ?? null;
+        $horaInicioTarde = $data['horaInicioTarde'] ?? null;
+        $horaFinTarde = $data['horaFinTarde'] ?? null;
+        $diasLaborales = $data['diasLaborales'] ?? null;
+
+        if (is_string($diasLaborales)) {
+            $diasLaborales = json_decode($diasLaborales, true);
+        }
+
+        if (!$employeeId) {
+            $response->getBody()->write(json_encode(['error' => 'ID de empleado requerido.']));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withHeader('Access-Control-Allow-Origin', '*')
+                ->withStatus(400);
+        }
 
         // Conectar a la base de datos de empresas
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
@@ -225,37 +246,48 @@ return function (App $app) {
         if (empty($empresaResult) || !isset($empresaResult[0]['id_empresa'])) {
             $localConnection->disconnect();
             $response->getBody()->write(json_encode(['error' => 'Empleado no encontrado']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withHeader('Access-Control-Allow-Origin', '*')
+                ->withStatus(404);
         }
 
         $companyId = $empresaResult[0]['id_empresa'];
 
-        // Actualizar horario_laboral como JSON
-        $horarioJson = json_encode($horarioData);
+        $horarioLaboral = [
+            'horaInicioManana' => (float)$horaInicioManana,
+            'horaFinManana' => (float)$horaFinManana,
+            'horaInicioTarde' => (float)$horaInicioTarde,
+            'horaFinTarde' => (float)$horaFinTarde,
+            'diasLaborales' => is_array($diasLaborales) ? $diasLaborales : []
+        ];
+
+        $horarioJson = json_encode($horarioLaboral);
         $sql = 'UPDATE empresas SET horario_laboral = ? WHERE id_empresa = ?';
         $result = $localConnection->goQuery($sql, [$horarioJson, $companyId]);
         $localConnection->disconnect();
 
         if (isset($result['status']) && $result['status'] === 'error') {
             $response->getBody()->write(json_encode(['error' => 'Error al guardar horario: ' . $result['message']]));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withHeader('Access-Control-Allow-Origin', '*')
+                ->withStatus(500);
         }
 
-        $response->getBody()->write(json_encode(['message' => 'Horario guardado correctamente']));
+        $response->getBody()->write(json_encode(['message' => 'Horario laboral guardado correctamente']));
         return $response
             ->withHeader('Content-Type', 'application/json')
+            ->withHeader('Access-Control-Allow-Origin', '*')
             ->withStatus(200);
     });
 
-    // CONFIGURACIÓN PERSONALIZACION
-
+    // CONFIGURACIÓN WIZARD - PERSONALIZACIÓN
     $app->post('/configuracion/personalizacion', function (Request $request, Response $response) {
         try {
-            // Obtener el contenido JSON del body
             $json = $request->getBody()->getContents();
             $data = json_decode($json, true);
 
-            // Verificar que el JSON sea válido
             if (json_last_error() !== JSON_ERROR_NONE) {
                 $response->getBody()->write(json_encode([
                     'success' => false,
@@ -267,51 +299,36 @@ return function (App $app) {
             $id_empleado = $data['id_empleado'] ?? null;
             $personalizacion = $data['personalizacion'] ?? null;
 
-            // Validar datos requeridos
-            if (!$id_empleado || !$personalizacion) {
+            if (!$id_empleado || !is_array($personalizacion)) {
                 $response->getBody()->write(json_encode([
                     'success' => false,
-                    'message' => 'Faltan datos requeridos: id_empleado y personalizacion'
+                    'message' => 'Faltan datos requeridos: id_empleado y personalizacion (array)'
                 ]));
                 return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
             }
 
-            // Conectar a la base de datos de empresas
             $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
-
-            // Obtener información de conexión de la empresa usando el id_empleado
             $sql_empresa = 'SELECT id_empresa FROM empresas_usuarios WHERE id_usuario = ?';
             $conn = $localConnection->goQuery($sql_empresa, [$id_empleado]);
 
             if (!$conn || empty($conn)) {
-                $response->getBody()->write(json_encode([
-                    'success' => false,
-                    'message' => 'Empleado no encontrado'
-                ]));
+                $response->getBody()->write(json_encode(['success' => false, 'message' => 'Empleado no encontrado']));
                 return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
             }
 
             $id_empresa = $conn[0]['id_empresa'];
-
-            // Obtener detalles de conexión de la empresa
             $connectionDetails = $localConnection->getConnectionDetails($id_empresa);
 
             if (!$connectionDetails) {
-                $response->getBody()->write(json_encode([
-                    'success' => false,
-                    'message' => 'No se pudieron obtener los detalles de conexión de la empresa'
-                ]));
+                $response->getBody()->write(json_encode(['success' => false, 'message' => 'No se encontraron los datos de conexión de la empresa']));
                 return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
             }
 
-            // Cambiar a la base de datos de la empresa
             $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
             $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
 
-            // Verificar si ya existe un registro de config para esta empresa
-            $existingConfig = $localConnection->goQuery('SELECT _id FROM config WHERE _id = 1');
+            $existingConfig = $localConnection->goQuery('SELECT * FROM config WHERE _id = 1');
 
-            // Preparar valores para la consulta (7 campos ahora)
             $valores = [
                 $personalizacion['sys_mostrar_detalle_terminar_indicidual'] ? 1 : 0,
                 $personalizacion['sys_mostrar_rollo_en_empleado_corte'] ? 1 : 0,
@@ -322,16 +339,7 @@ return function (App $app) {
                 $personalizacion['sys_comision_de_costura'] ? 1 : 0
             ];
 
-            $debug_info = [
-                'id_empleado' => $id_empleado,
-                'id_empresa' => $id_empresa,
-                'personalizacion_recibida' => $personalizacion,
-                'valores_a_guardar' => $valores,
-                'config_existe' => !empty($existingConfig)
-            ];
-
             if ($existingConfig && !empty($existingConfig)) {
-                // Actualizar registro existente
                 $updateQuery = '
                 UPDATE config SET
                     sys_mostrar_detalle_terminar_indicidual = ?,
@@ -343,18 +351,8 @@ return function (App $app) {
                     sys_comision_de_costura = ?
                 WHERE _id = 1
             ';
-
-                $updateResult = $localConnection->goQuery($updateQuery, $valores);
-
-                $debug_info['sql_ejecutado'] = $updateQuery;
-                $debug_info['parametros'] = $valores;
-                $debug_info['resultado_update'] = $updateResult;
-
-                // Verificar si realmente se actualizó
-                $checkUpdate = $localConnection->goQuery('SELECT * FROM config WHERE _id = 1');
-                $debug_info['config_despues_update'] = $checkUpdate[0] ?? null;
+                $localConnection->goQuery($updateQuery, $valores);
             } else {
-                // Crear nuevo registro
                 $insertQuery = '
                 INSERT INTO config (
                     _id,
@@ -368,159 +366,108 @@ return function (App $app) {
                     created_at
                 ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, NOW())
             ';
-
-                $insertResult = $localConnection->goQuery($insertQuery, $valores);
-
-                $debug_info['sql_ejecutado'] = $insertQuery;
-                $debug_info['parametros'] = $valores;
-                $debug_info['resultado_insert'] = $insertResult;
+                $localConnection->goQuery($insertQuery, $valores);
             }
 
-            $response->getBody()->write(json_encode([
-                'success' => true,
-                'message' => 'Opciones de personalización guardadas correctamente',
-                'debug_info' => $debug_info
-            ]));
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode(['success' => true, 'message' => 'Opciones de personalización guardadas correctamente']));
             return $response->withHeader('Content-Type', 'application/json');
         } catch (Exception $e) {
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => 'Error interno del servidor: ' . $e->getMessage(),
-                'debug_info' => [
-                    'error' => $e->getMessage(),
-                    'line' => $e->getLine(),
-                    'file' => $e->getFile()
-                ]
-            ]));
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Error interno del servidor: ' . $e->getMessage()]));
             return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
         }
     });
 
     // CONFIGURACIÓN DE GASTOS FIJOS
-
     $app->post('/configuracion/gastos', function (Request $request, Response $response) {
         try {
-            // Obtener el contenido JSON del body
             $json = $request->getBody()->getContents();
             $data = json_decode($json, true);
 
-            // Verificar que el JSON sea válido
             if (json_last_error() !== JSON_ERROR_NONE) {
-                $response->getBody()->write(json_encode([
-                    'success' => false,
-                    'message' => 'JSON inválido'
-                ]));
+                $response->getBody()->write(json_encode(['success' => false, 'message' => 'JSON inválido']));
                 return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
             }
 
             $id_empleado = $data['id_empleado'] ?? null;
             $gastos = $data['gastos'] ?? null;
 
-            // Validar datos requeridos
             if (!$id_empleado || !is_array($gastos)) {
-                $response->getBody()->write(json_encode([
-                    'success' => false,
-                    'message' => 'Faltan datos requeridos: id_empleado y gastos (array)'
-                ]));
+                $response->getBody()->write(json_encode(['success' => false, 'message' => 'Faltan datos requeridos: id_empleado y gastos (array)']));
                 return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
             }
 
-            // Conectar a la base de datos de empresas
             $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
-
-            // Obtener id_empresa del empleado
             $sql_empresa = 'SELECT id_empresa FROM empresas_usuarios WHERE id_usuario = ?';
             $conn = $localConnection->goQuery($sql_empresa, [$id_empleado]);
 
             if (!$conn || empty($conn)) {
-                $response->getBody()->write(json_encode([
-                    'success' => false,
-                    'message' => 'Empleado no encontrado'
-                ]));
+                $response->getBody()->write(json_encode(['success' => false, 'message' => 'Empleado no encontrado']));
                 return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
             }
 
             $id_empresa = $conn[0]['id_empresa'];
 
-            $debug_info = [
-                'id_empleado' => $id_empleado,
-                'id_empresa' => $id_empresa,
-                'gastos_recibidos' => $gastos
-            ];
+            // 1. ELIMINAR Y REINSERTAR EN TABLA GLOBAL (empresas_gastos)
+            $localConnection->goQuery('DELETE FROM empresas_gastos WHERE id_empresa = ?', [$id_empresa]);
 
-            // Eliminar gastos existentes para esta empresa
-            $deleteQuery = 'DELETE FROM empresas_gastos WHERE id_empresa = ?';
-            $deleteResult = $localConnection->goQuery($deleteQuery, [$id_empresa]);
-            $debug_info['resultado_delete'] = $deleteResult;
-
-            // Insertar los nuevos gastos
-            $insertCount = 0;
             foreach ($gastos as $gasto) {
-                // Validar campos requeridos
-                if (empty($gasto['nombre']) || !isset($gasto['monto'])) {
-                    continue;  // Saltar gastos inválidos
-                }
-
-                $insertQuery = '
-                INSERT INTO empresas_gastos (
-                    id_empresa,
-                    nombre,
-                    descripcion,
-                    monto,
-                    moneda,
-                    periodicidad,
-                    estatus,
-                    fecha_creacion
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
-            ';
-
-                $insertResult = $localConnection->goQuery($insertQuery, [
-                    $id_empresa,
-                    $gasto['nombre'],
-                    $gasto['descripcion'] ?? '',
-                    $gasto['monto'],
-                    $gasto['moneda'] ?? 'USD',
-                    $gasto['periodicidad'] ?? 'mensual',
-                    $gasto['estatus'] ?? 'activo'
-                ]);
-
-                if ($insertResult) {
-                    $insertCount++;
-                }
-
-                $debug_info['sql_ejecutado'] = $insertQuery;
-                $debug_info['ultimo_parametro'] = [
-                    $id_empresa,
-                    $gasto['nombre'],
-                    $gasto['descripcion'] ?? '',
-                    $gasto['monto'],
-                    $gasto['moneda'] ?? 'USD',
-                    $gasto['periodicidad'] ?? 'mensual',
-                    $gasto['estatus'] ?? 'activo'
-                ];
+                if (empty($gasto['nombre']) || !isset($gasto['monto'])) continue;
+                
+                $localConnection->goQuery('
+                    INSERT INTO empresas_gastos (id_empresa, nombre, descripcion, monto, moneda, periodicidad, estatus, fecha_creacion) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())', 
+                    [
+                        $id_empresa,
+                        $gasto['nombre'],
+                        $gasto['descripcion'] ?? '',
+                        $gasto['monto'],
+                        $gasto['moneda'] ?? 'USD',
+                        $gasto['periodicidad'] ?? 'mensual',
+                        $gasto['estatus'] ?? 'activo'
+                    ]
+                );
             }
 
-            $debug_info['gastos_insertados'] = $insertCount;
+            // 2. ACTUALIZAR TAMBIÉN EN LA BASE DE DATOS LOCAL DE LA EMPRESA (tabla gastos)
+            $connectionDetails = $localConnection->getConnectionDetails($id_empresa);
+            if ($connectionDetails) {
+                $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
+                $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
 
-            $response->getBody()->write(json_encode([
-                'success' => true,
-                'message' => "Gastos fijos guardados correctamente. Se insertaron $insertCount gastos.",
-                'debug_info' => $debug_info
-            ]));
+                // Eliminar gastos fijos previos en la tabla local
+                $localConnection->goQuery("DELETE FROM gastos WHERE tipo = 'fijo'");
+
+                foreach ($gastos as $gasto) {
+                    if (empty($gasto['nombre']) || !isset($gasto['monto'])) continue;
+                    
+                    $localConnection->goQuery('
+                        INSERT INTO gastos (nombre, descripcion, monto, moneda, periodicidad, tipo, estatus) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?)', 
+                        [
+                            $gasto['nombre'],
+                            $gasto['descripcion'] ?? '',
+                            $gasto['monto'],
+                            $gasto['moneda'] ?? 'USD',
+                            $gasto['periodicidad'] ?? 'mensual',
+                            'fijo',
+                            $gasto['estatus'] ?? 'activo'
+                        ]
+                    );
+                }
+            }
+
+            $localConnection->disconnect();
+
+            $response->getBody()->write(json_encode(['success' => true, 'message' => "Gastos fijos guardados correctamente en global y local."]));
             return $response->withHeader('Content-Type', 'application/json');
         } catch (Exception $e) {
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => 'Error interno del servidor: ' . $e->getMessage(),
-                'debug_info' => [
-                    'error' => $e->getMessage(),
-                    'line' => $e->getLine(),
-                    'file' => $e->getFile()
-                ]
-            ]));
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Error interno del servidor: ' . $e->getMessage()]));
             return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
         }
     });
+
     // =================================================================
     // ENDPOINTS PARA GESTIÓN DE PLANTILLAS DE GASTOS (LOCAL)
     // =================================================================
@@ -609,8 +556,6 @@ return function (App $app) {
             $fields = [];
             $params = [];
             foreach ($data as $key => $value) {
-                // Evitar inyección base de nombres de campos si fuera dinámico, 
-                // pero aquí confiamos en el input filtrado o validado si fuera necesario.
                 $fields[] = "$key = ?";
                 $params[] = $value;
             }
@@ -662,19 +607,16 @@ return function (App $app) {
             $conditions = [];
             $params = [];
 
-            // Filtro por tipo (fijo / variable / adicional)
             if (!empty($q['tipo'])) {
                 $conditions[] = 'tipo = ?';
                 $params[] = $q['tipo'];
             }
 
-            // Filtro por periodo exacto (YYYY-MM) — usado por GastosAdicionales
             if (!empty($q['periodo'])) {
                 $conditions[] = 'periodo = ?';
                 $params[] = $q['periodo'];
             }
 
-            // Filtro por rango de fechas — usado por GastosHistorial
             if (!empty($q['desde'])) {
                 $conditions[] = 'fecha_de_gasto >= ?';
                 $params[] = $q['desde'];
@@ -700,7 +642,6 @@ return function (App $app) {
 
     /**
      * POST /gastos/registros
-     * Registra un nuevo pago de gasto (fijo, variable o adicional).
      */
     $app->post('/gastos/registros', function (Request $request, Response $response, array $args) {
         $data = $request->getParsedBody();
@@ -733,7 +674,6 @@ return function (App $app) {
 
             $result = $db->goQuery($sql, $params);
 
-            // goQuery retorna ['insert_id' => X] en INSERTs o ['status' => 'error'] si falló
             if (isset($result['status']) && $result['status'] === 'error') {
                 throw new Exception($result['message'] ?? 'Error desconocido al insertar.');
             }
@@ -751,7 +691,6 @@ return function (App $app) {
 
     /**
      * PUT /gastos/registros/{id}
-     * Edita un registro de gasto y guarda auditoría obligatoria.
      */
     $app->put('/gastos/registros/{id}', function (Request $request, Response $response, array $args) {
         $id_registro = $args['id'];
@@ -766,14 +705,11 @@ return function (App $app) {
         try {
             $db = new LocalDB();
             
-            // 1. Obtener datos actuales para la bitácora
             $current = $db->goQuery('SELECT monto FROM gastos_registros WHERE _id = ?', [$id_registro]);
             if (empty($current)) throw new Exception('Registro de gasto no encontrado.');
             $monto_anterior = $current[0]['monto'];
 
-            // 2. Actualizar el registro
             $fields = []; $params = [];
-            // Campos permitidos para actualizar (whitelist)
             $camposPermitidos = ['nombre', 'descripcion', 'monto', 'moneda', 'fecha_de_gasto'];
             foreach ($data as $key => $value) {
                 if (!in_array($key, $camposPermitidos)) continue;
@@ -788,7 +724,6 @@ return function (App $app) {
             $params[] = $id_registro;
             $db->goQuery('UPDATE gastos_registros SET ' . implode(', ', $fields) . ' WHERE _id = ?', $params);
 
-            // 3. Insertar en auditoría
             $sqlAudit = 'INSERT INTO gastos_auditoria 
                 (id_registro, accion, id_usuario, nombre_usuario, monto_anterior, monto_nuevo, detalle) 
                 VALUES (?, ?, ?, ?, ?, ?, ?)';
@@ -816,18 +751,12 @@ return function (App $app) {
 
     /**
      * DELETE /gastos/registros/{id}
-     * Elimina un registro de gasto y guarda auditoría.
      */
     $app->delete('/gastos/registros/{id}', function (Request $request, Response $response, array $args) {
         $id_registro = $args['id'];
-
-        // Axios con {data: ...} en DELETE envía como body con content-type application/x-www-form-urlencoded
-        // También soportamos query params como fallback
         $bodyRaw = $request->getBody()->getContents();
         parse_str($bodyRaw, $bodyData);
         $queryParams = $request->getQueryParams();
-
-        // Combinar: body tiene prioridad sobre query params
         $auditData = array_merge($queryParams, $bodyData);
 
         if (empty($auditData['id_usuario']) || empty($auditData['nombre_usuario'])) {
@@ -838,12 +767,10 @@ return function (App $app) {
         try {
             $db = new LocalDB();
 
-            // 1. Obtener datos actuales para la bitácora
             $current = $db->goQuery('SELECT monto, nombre FROM gastos_registros WHERE _id = ?', [$id_registro]);
             if (empty($current)) throw new Exception('Registro no encontrado.');
             $monto_anterior = $current[0]['monto'];
 
-            // 2. Registrar auditoría ANTES de eliminar
             $sqlAudit = 'INSERT INTO gastos_auditoria 
                 (id_registro, accion, id_usuario, nombre_usuario, monto_anterior, monto_nuevo, detalle) 
                 VALUES (?, ?, ?, ?, ?, ?, ?)';
@@ -860,7 +787,6 @@ return function (App $app) {
                 $auditData['detalle'] ?? 'Eliminación manual de registro'
             ]);
 
-            // 3. Eliminar el registro
             $db->goQuery('DELETE FROM gastos_registros WHERE _id = ?', [$id_registro]);
             $db->disconnect();
 
@@ -874,7 +800,6 @@ return function (App $app) {
 
     /**
      * GET /gastos/auditoria
-     * Obtiene el historial general de auditoría con filtros.
      */
     $app->get('/gastos/auditoria', function (Request $request, Response $response, array $args) {
         try {
@@ -913,7 +838,6 @@ return function (App $app) {
 
     /**
      * GET /gastos/auditoria/{id_registro}
-     * Obtiene el historial de auditoría para un registro específico.
      */
     $app->get('/gastos/auditoria/{id_registro}', function (Request $request, Response $response, array $args) {
         try {
@@ -932,7 +856,6 @@ return function (App $app) {
 
     /**
      * GET /gastos/pendientes
-     * Obtiene las plantillas de gastos que aún no tienen un registro de pago en el periodo base (mes actual).
      */
     $app->get('/gastos/pendientes', function (Request $request, Response $response, array $args) {
         try {
@@ -960,17 +883,13 @@ return function (App $app) {
         }
     });
 
-    // FIN GESTIÓN GASTOS (LOCAL POR EMPRESA)
-
     /**
      * POST /config/multiplicador-precio
-     * Actualiza el multiplicador de precio para conversión USD → VES
      */
     $app->post('/config/multiplicador-precio', function (Request $request, Response $response, $args) {
         $data = $request->getParsedBody();
         $object = ['success' => false];
 
-        // Validar que se recibió el multiplicador
         if (!isset($data['multiplicador_precio'])) {
             $object['message'] = 'El campo multiplicador_precio es requerido';
             $response->getBody()->write(json_encode($object));
@@ -978,17 +897,13 @@ return function (App $app) {
         }
 
         $multiplicador = floatval($data['multiplicador_precio']);
-
-        // Validar rango
         if ($multiplicador < 0 || $multiplicador > 100) {
             $object['message'] = 'El multiplicador debe estar entre 0 y 100';
             $response->getBody()->write(json_encode($object));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
-        // Obtener la empresa del header Authorization
         $id_empresa = $request->getHeader('Authorization')[0] ?? 0;
-
         if (!$id_empresa || $id_empresa == 0) {
             $object['message'] = 'No se pudo identificar la empresa';
             $response->getBody()->write(json_encode($object));
@@ -997,8 +912,6 @@ return function (App $app) {
 
         try {
             $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
-
-            // Obtener credenciales de la empresa
             $connectionDetails = $localConnection->getConnectionDetails($id_empresa);
 
             if (!$connectionDetails) {
@@ -1007,11 +920,9 @@ return function (App $app) {
                 return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
             }
 
-            // Conectar a la base de datos de la empresa
             $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
             $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
 
-            // Actualizar el multiplicador en la tabla config
             $sql = 'UPDATE config SET multiplicador_precio = ? WHERE _id = 1';
             $result = $localConnection->goQuery($sql, [$multiplicador]);
 
@@ -1024,9 +935,7 @@ return function (App $app) {
                 $object['message'] = 'No se pudo actualizar el multiplicador';
                 $statusCode = 500;
             }
-
             $localConnection->disconnect();
-
         } catch (Exception $e) {
             $object['message'] = 'Error al actualizar el multiplicador: ' . $e->getMessage();
             $statusCode = 500;
@@ -1036,4 +945,4 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus($statusCode);
     });
 
-}; // Fin de la función que envuelve las rutas
+};
