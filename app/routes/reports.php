@@ -368,7 +368,32 @@ return function (App $app) {
                 $finalResponse['tareas_data'] = $dbEmpresas->goQuery($sqlTareas);
             }
 
-            // 12. Gastos Fijos (Siempre se incluyen para evitar errores en el Frontend)
+            // 12. Gastos Reales por Tipo y Moneda (Basado en registros)
+            $sqlGastosReales = "SELECT tipo, moneda, SUM(monto) as total 
+                                FROM $companyDB.gastos_registros 
+                                WHERE fecha_de_gasto BETWEEN :inicio AND :fin 
+                                GROUP BY tipo, moneda";
+            $gastosRealesRaw = $dbEmpresas->goQuery($sqlGastosReales, [':inicio' => $inicio, ':fin' => $fin]);
+            
+            $gastosPorTipo = [
+                'fijo' => [],
+                'variable' => [],
+                'adicional' => []
+            ];
+            
+            if (is_array($gastosRealesRaw) && !isset($gastosRealesRaw['status'])) {
+                foreach ($gastosRealesRaw as $gr) {
+                    $tipo = strtolower($gr['tipo']);
+                    if (isset($gastosPorTipo[$tipo])) {
+                        $gastosPorTipo[$tipo][] = [
+                            'moneda' => $gr['moneda'],
+                            'total' => (float)$gr['total']
+                        ];
+                    }
+                }
+            }
+
+            // Gastos Fijos (Plantilla - Mantener por compatibilidad si es necesario)
             $sqlGastos = "SELECT SUM(CASE periodicidad WHEN 'mensual' THEN monto / 4.33 WHEN 'trimestral' THEN monto / 13 WHEN 'semestral' THEN monto / 26 WHEN 'anual' THEN monto / 52 ELSE 0 END) AS total_gastos_semanales FROM $companyDB.empresas_gastos WHERE id_empresa = $id_empresa AND estatus = 'activo'";
             $gastosResult = $dbEmpresas->goQuery($sqlGastos);
             $totalGastosSemanales = (!empty($gastosResult) && isset($gastosResult[0]['total_gastos_semanales'])) ? (float)$gastosResult[0]['total_gastos_semanales'] : 0;
@@ -379,7 +404,8 @@ return function (App $app) {
             $finalResponse['costos_operativos'] = [
                 'total_gastos_semanales' => $totalGastosSemanales,
                 'total_productos_periodo' => $totalProductosPeriodo,
-                'costo_operativo_por_producto' => $costoOperativoPorProducto
+                'costo_operativo_por_producto' => $costoOperativoPorProducto,
+                'gastos_por_tipo' => $gastosPorTipo
             ];
 
             $response->getBody()->write(json_encode($finalResponse, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE));
