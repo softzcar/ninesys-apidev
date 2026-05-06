@@ -368,11 +368,68 @@ return function (App $app) {
                 $finalResponse['tareas_data'] = $dbEmpresas->goQuery($sqlTareas);
             }
 
-            // 12. Gastos Reales por Tipo y Moneda (Basado en registros)
+            // 12. Gastos (Combinación de Registros Reales + Proporción de Plantillas)
+            
+            // A. Registros Reales en el periodo
             $sqlGastosReales = "SELECT tipo, moneda, SUM(monto) as total 
                                 FROM $companyDB.gastos_registros 
                                 WHERE fecha_de_gasto BETWEEN :inicio AND :fin 
                                 GROUP BY tipo, moneda";
+            $gastosRealesRaw = $dbEmpresas->goQuery($sqlGastosReales, [':inicio' => $inicio, ':fin' => $fin]);
+
+            // B. Plantillas Proporcionales (Para asegurar que siempre haya datos si están configurados)
+            // Calculamos cuántas semanas/días representa el periodo para prorratear la plantilla mensual
+            $fecha_inicio_dt = new DateTime($inicio);
+            $fecha_fin_dt = new DateTime($fin);
+            $intervalo = $fecha_inicio_dt->diff($fecha_fin_dt);
+            $dias_periodo = $intervalo->days + 1;
+            $factor_mensual = $dias_periodo / 30.44; // Promedio de días al mes
+
+            $sqlPlantillas = "SELECT tipo, moneda, SUM(monto) as total_mensual 
+                              FROM $companyDB.gastos 
+                              WHERE estatus = 'activo' 
+                              GROUP BY tipo, moneda";
+            $plantillasRaw = $dbEmpresas->goQuery($sqlPlantillas);
+
+            $gastosPorTipo = [
+                'fijo' => [],
+                'variable' => [],
+                'adicional' => []
+            ];
+
+            // Combinar ambos: Priorizamos reales, pero si reales es cero para un tipo, usamos plantilla
+            $tempGastos = []; // Para acumular por tipo/moneda
+
+            // Procesar Reales
+            if (is_array($gastosRealesRaw) && !isset($gastosRealesRaw['status'])) {
+                foreach ($gastosRealesRaw as $gr) {
+                    $t = strtolower($gr['tipo']);
+                    $m = $gr['moneda'];
+                    $tempGastos[$t][$m] = ($tempGastos[$t][$m] ?? 0) + (float)$gr['total'];
+                }
+            }
+
+            // Procesar Plantillas (Solo si no hay reales para ese tipo/moneda en este periodo, 
+            // o podrías querer sumarlos, pero usualmente si no hay reales usamos la estimación)
+            if (is_array($plantillasRaw) && !isset($plantillasRaw['status'])) {
+                foreach ($plantillasRaw as $pr) {
+                    $t = strtolower($pr['tipo']);
+                    $m = $pr['moneda'];
+                    $monto_estimado = (float)$pr['total_mensual'] * $factor_mensual;
+                    
+                    // Si no hubo registros reales de este tipo en el periodo, usamos la plantilla
+                    if (!isset($tempGastos[$t][$m]) || $tempGastos[$t][$m] == 0) {
+                        $tempGastos[$t][$m] = $monto_estimado;
+                    }
+                }
+            }
+
+            // Convertir a formato de respuesta
+            foreach ($tempGastos as $tipo => $monedas) {
+                foreach ($monedas as $moneda => $total) {
+                    $gastosPorTipo[$tipo][] = ['moneda' => $moneda, 'total' => $total];
+                }
+            }
             $gastosRealesRaw = $dbEmpresas->goQuery($sqlGastosReales, [':inicio' => $inicio, ':fin' => $fin]);
             
             $gastosPorTipo = [
@@ -381,17 +438,7 @@ return function (App $app) {
                 'adicional' => []
             ];
             
-            if (is_array($gastosRealesRaw) && !isset($gastosRealesRaw['status'])) {
-                foreach ($gastosRealesRaw as $gr) {
-                    $tipo = strtolower($gr['tipo']);
-                    if (isset($gastosPorTipo[$tipo])) {
-                        $gastosPorTipo[$tipo][] = [
-                            'moneda' => $gr['moneda'],
-                            'total' => (float)$gr['total']
-                        ];
-                    }
-                }
-            }
+
 
             // Gastos Fijos (Plantilla - Mantener por compatibilidad si es necesario)
             $sqlGastos = "SELECT SUM(CASE periodicidad WHEN 'mensual' THEN monto / 4.33 WHEN 'trimestral' THEN monto / 13 WHEN 'semestral' THEN monto / 26 WHEN 'anual' THEN monto / 52 ELSE 0 END) AS total_gastos_semanales FROM $companyDB.empresas_gastos WHERE id_empresa = $id_empresa AND estatus = 'activo'";
