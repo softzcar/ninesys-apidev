@@ -409,10 +409,12 @@ return function (App $app) {
             ];
 
             if ($debug) {
+                $sample = $dbEmpresas->goQuery("SELECT * FROM $companyDB.gastos_registros ORDER BY _id DESC LIMIT 10");
                 $finalResponse['debug_gastos'] = [
                     'sql' => $sqlGastosReales,
                     'params' => [':inicio' => $inicio, ':fin' => $fin],
                     'raw_results' => $gastosRealesRaw,
+                    'sample_data' => $sample,
                     'company_db' => $companyDB
                 ];
             }
