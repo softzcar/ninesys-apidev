@@ -182,9 +182,9 @@ return function (App $app) {
                      p.responsable as id_empleado, 
                      u.nombre as empleado,
                      p.observaciones,
-                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'atributo', pa.attribute_name)) 
-                      FROM presupuestos_productos pp 
-                      LEFT JOIN sizes s ON pp.id_size = s._id 
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'corte', pp.corte, 'atributo', pa.attribute_name))
+                      FROM presupuestos_productos pp
+                      LEFT JOIN sizes s ON pp.id_size = s._id
                       LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
                       WHERE pp.id_orden = p._id) as productos_json
               FROM presupuestos p
@@ -212,6 +212,7 @@ return function (App $app) {
               'cantidad' => $p['cantidad'] ?? 0,
               'talla' => $p['talla'] ?? 'N/A',
               'tela' => $p['tela'] ?? 'N/A',
+              'corte' => $p['corte'] ?? '',
               'atributo' => $p['atributo'] ?? $attrText
             ];
           }, $prods);
@@ -372,9 +373,9 @@ return function (App $app) {
                      p.responsable as id_empleado, 
                      u.nombre as empleado,
                      p.observaciones,
-                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'atributo', pa.attribute_name)) 
-                      FROM presupuestos_productos pp 
-                      LEFT JOIN sizes s ON pp.id_size = s._id 
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'corte', pp.corte, 'atributo', pa.attribute_name))
+                      FROM presupuestos_productos pp
+                      LEFT JOIN sizes s ON pp.id_size = s._id
                       LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
                       WHERE pp.id_orden = p._id) as productos_json
               FROM presupuestos p
@@ -400,6 +401,7 @@ return function (App $app) {
                     'cantidad' => $p['cantidad'] ?? 0,
                     'talla' => $p['talla'] ?? 'N/A',
                     'tela' => $p['tela'] ?? 'N/A',
+                    'corte' => $p['corte'] ?? '',
                     'atributo' => $p['atributo'] ?? $attrText
                 ];
             }, $prods);
@@ -445,9 +447,9 @@ return function (App $app) {
                      p.responsable as id_empleado, 
                      u.nombre as empleado,
                      p.observaciones,
-                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'atributo', pa.attribute_name)) 
-                      FROM presupuestos_productos pp 
-                      LEFT JOIN sizes s ON pp.id_size = s._id 
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'corte', pp.corte, 'atributo', pa.attribute_name))
+                      FROM presupuestos_productos pp
+                      LEFT JOIN sizes s ON pp.id_size = s._id
                       LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
                       WHERE pp.id_orden = p._id) as productos_json
               FROM presupuestos p
@@ -473,6 +475,7 @@ return function (App $app) {
                     'cantidad' => $p['cantidad'] ?? 0,
                     'talla' => $p['talla'] ?? 'N/A',
                     'tela' => $p['tela'] ?? 'N/A',
+                    'corte' => $p['corte'] ?? '',
                     'atributo' => $p['atributo'] ?? $attrText
                 ];
             }, $prods);
