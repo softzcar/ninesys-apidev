@@ -768,12 +768,15 @@ return function (App $app) {
                 ELSE inv.insumo
             END as nombre_insumo,    
             inv.color,
-            COALESCE(inv.costo, 0) as costo,    
-            COALESCE(inv.rendimiento, 1) as rendimiento,       
-            COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0) as cantidad_utilizada,
-            COALESCE(inv.cantidad, 0) as cantidad_restante, 
+            COALESCE(inv.rendimiento, 1) as rendimiento,
+            ROUND(
+                (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1))
+                / COALESCE(NULLIF(inv.rendimiento, 0), 1),
+            4) AS costo,
+            ROUND(COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0) * COALESCE(inv.rendimiento, 1), 2) as cantidad_utilizada,
+            ROUND(COALESCE(inv.cantidad, 0) * COALESCE(inv.rendimiento, 1), 2) as cantidad_restante,
             ROUND((COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) * COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0), 2) AS total_insumo,
-            COALESCE(inv.unidad, "un") as unidad,    
+            "Mts" as unidad,
             COALESCE(inv.departamento, imo.departamento, "N/A") as departamento
         FROM
             inventario_movimientos imo
