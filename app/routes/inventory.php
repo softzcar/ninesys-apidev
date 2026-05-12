@@ -1352,23 +1352,24 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
         // Guardar en rendimiento (Abierto a todos los departamentos) para cálculo de eficiencia
         if (!empty($miInsumo['id_orden'])) {
-            $cantidad_consumida = isset($miInsumo['cantidad_consumida']) && $miInsumo['cantidad_consumida'] ? floatval($miInsumo['cantidad_consumida']) : 0;
+            // Variable separada para no pisar $cantidad_consumida (stock restante calculado arriba)
+            $cantidad_input_rendimiento = isset($miInsumo['cantidad_consumida']) && $miInsumo['cantidad_consumida'] ? floatval($miInsumo['cantidad_consumida']) : 0;
             $valor_desperdicio = isset($miInsumo['valor']) && $miInsumo['valor'] ? floatval($miInsumo['valor']) : 0;
 
             // Solo guardar si hay algo que reportar (consumo o desperdicio)
-            if ($cantidad_consumida > 0 || $valor_desperdicio > 0) {
+            if ($cantidad_input_rendimiento > 0 || $valor_desperdicio > 0) {
                 // 1- Determinar si el registro existe para ESTA orden, ESTE insumo y ESTE departamento
                 $id_insumo_query = !empty($miInsumo['id_insumo']) && $miInsumo['id_insumo'] !== 'null' && $miInsumo['id_insumo'] !== null ? intval($miInsumo['id_insumo']) : 'NULL';
-                
+
                 $sql_exist = "SELECT COUNT(id_orden) as total FROM rendimiento WHERE id_orden = {$miInsumo['id_orden']} AND id_insumo " . ($id_insumo_query === 'NULL' ? "IS NULL" : "= $id_insumo_query") . " AND id_departamento = {$miInsumo['id_departamento']}";
                 $exist = $localConnection->goQuery($sql_exist);
 
                 // Si exist > 0, es un registro existente -> UPDATE
                 if ($exist[0]['total'] > 0) {
-                    $sql = "UPDATE rendimiento SET cantidad = {$cantidad_consumida}, desperdicio = {$valor_desperdicio}, id_empleado = {$miInsumo['id_empleado']} WHERE id_orden = {$miInsumo['id_orden']} AND id_insumo " . ($id_insumo_query === 'NULL' ? "IS NULL" : "= $id_insumo_query") . " AND id_departamento = {$miInsumo['id_departamento']};";
+                    $sql = "UPDATE rendimiento SET cantidad = {$cantidad_input_rendimiento}, desperdicio = {$valor_desperdicio}, id_empleado = {$miInsumo['id_empleado']} WHERE id_orden = {$miInsumo['id_orden']} AND id_insumo " . ($id_insumo_query === 'NULL' ? "IS NULL" : "= $id_insumo_query") . " AND id_departamento = {$miInsumo['id_departamento']};";
                 } else {
                     // Si no existe -> INSERT
-                    $sql = "INSERT INTO rendimiento (id_orden, id_insumo, id_departamento, id_empleado, cantidad, desperdicio) VALUES ({$miInsumo['id_orden']}, {$id_insumo_query}, {$miInsumo['id_departamento']}, {$miInsumo['id_empleado']}, {$cantidad_consumida}, {$valor_desperdicio});";
+                    $sql = "INSERT INTO rendimiento (id_orden, id_insumo, id_departamento, id_empleado, cantidad, desperdicio) VALUES ({$miInsumo['id_orden']}, {$id_insumo_query}, {$miInsumo['id_departamento']}, {$miInsumo['id_empleado']}, {$cantidad_input_rendimiento}, {$valor_desperdicio});";
                 }
 
                 $object['response_rendimiento'] = json_encode($localConnection->goQuery($sql));
