@@ -1725,7 +1725,7 @@ CREATE TABLE IF NOT EXISTS `wa_session_state` (
   `phone_number` VARCHAR(32)  NULL,
   `pushname`     VARCHAR(128) NULL,
   `status`       ENUM('NOT_REGISTERED','INITIALIZING','REQUIRES_QR','AUTHENTICATED',
-                      'READY','PAUSED','ERROR','DISCONNECTED')
+                      'READY','PAUSED','ERROR','DISCONNECTED','DEGRADED')
                  NOT NULL DEFAULT 'NOT_REGISTERED',
   `last_error`   TEXT NULL,
   `qr_attempts`  INT NOT NULL DEFAULT 0,
