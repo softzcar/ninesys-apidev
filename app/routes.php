@@ -34,6 +34,11 @@ return function (App $app) {
       if (empty($line))
         continue;
 
+      // Saltar líneas de comentario entre statements (-- y #) para que no
+      // contaminen el inicio del siguiente statement y hagan que sea descartado
+      if (empty($currentStatement) && preg_match('/^(--|#)/', $line))
+        continue;
+
       // Manejar cambios de delimitador
       if (preg_match('/^DELIMITER\s+(\S+)$/i', $line, $matches)) {
         $delimiter = $matches[1];
