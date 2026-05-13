@@ -4018,7 +4018,7 @@ return function (App $app) {
                 sub_ldea.id_orden,
                 SUM(
                     CASE 
-                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND sub_ldea.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 
+                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
                         ELSE 0 
                     END
@@ -4034,7 +4034,6 @@ return function (App $app) {
             WHERE sub_ldea.id_orden IN ($idsStr)
             $empleadoCondition
             AND sub_ldea.fecha_inicio IS NOT NULL
-            AND sub_ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
             GROUP BY sub_ldea.id_orden
         )
         SELECT 
@@ -4058,7 +4057,6 @@ return function (App $app) {
                     WHERE ldea_sub.id_orden = o._id
                     AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
                     AND ldea_sub.fecha_terminado IS NOT NULL
-                    AND ldea_sub.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
                 )
             ) AS totalProjectedTerminadas,
 
@@ -4073,7 +4071,6 @@ return function (App $app) {
                     AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
                     AND ldea_sub.fecha_terminado IS NULL
                     AND ldea_sub.fecha_inicio IS NOT NULL
-                    AND ldea_sub.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
                 )
             ) AS totalProjectedEnCurso,
             
@@ -4130,7 +4127,6 @@ return function (App $app) {
         $whereClause
         " . ($id_empleado ? " AND ldea.id_empleado = $id_empleado" : "") . "
         AND ldea.fecha_inicio IS NOT NULL
-        AND ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
         ORDER BY ldea.fecha_inicio DESC
       ";
       
