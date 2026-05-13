@@ -8,3 +8,14 @@
 - Verificación: Se llamó al endpoint en producción tras el deploy. Para dryfit blanco (rendimiento=4): costo=$1.3141/mts, cantidad_utilizada=37.64 mts / 40.04 mts. Para papel sublimación (rendimiento=1): costo=$0.4000/mts, cantidad_utilizada=160.69 mts. Los total_insumo ($49.46, $52.62, $64.28) no cambiaron.
 - Observaciones: El error humano de registro (peso del rollo vs consumo neto) es una problemática separada que el administrador corrige con la rutina existente. La normalización a metros es una mejora de visualización independiente al problema de datos.
 - Respuesta de Claude: Se normalizó el endpoint para que todas las columnas del modal de detalle de insumos expresen cantidades en metros y costo por metro, independientemente de si el insumo se almacena en Kg o Mts en el inventario.
+
+---
+
+- Solicitud del Usuario: En el modal de detalle de insumos (orden 4558, prueba controlada), la columna "Consumido (mts)" mostraba valores inflados (83.64 mts y 299 mts) cuando el consumo real era de 1 mts de cada material.
+- Archivos Involucrados:
+    - `app/routes/inventory.php` (endpoint POST /inventario-movimientos/empleados/update-insumo, línea 1355)
+- Diagnóstico: La variable `$cantidad_consumida` (stock restante calculado correctamente en los bloques tela/Corte/else) era sobrescrita en el bloque de "rendimiento" (línea 1355) con el valor crudo de `$miInsumo['cantidad_consumida']` (los metros ingresados por el empleado). Resultado: el INSERT a `inventario_movimientos` guardaba `valor_final = metros_input` en lugar de `valor_final = stock_restante`, produciendo deltas masivos en el reporte.
+- Acción Realizada: Se renombró la variable en línea 1355 de `$cantidad_consumida` a `$cantidad_input_rendimiento` para aislar su scope al bloque de rendimiento. Se actualizaron las referencias en líneas 1359, 1368, 1371. Se corrigieron manualmente los movimientos 1999 y 2000 (orden 4558) en la BD (valor_final 1.00 → 299.00 y 21.66 respectivamente).
+- Herramienta(s) Utilizada(s): Edit (inventory.php), mysql (corrección BD), deploy_backend.sh (Hostinger).
+- Resultado: Éxito. Commit: 01b6aec. Verificado con curl: cantidad_utilizada=1 mts para ambos insumos.
+- Observaciones: Este bug afectaba todos los departamentos. Los movimientos históricos con valores inflados (órdenes 4392, 4561 ya corregidas por otro motivo) también pueden tener este origen en algunos casos.
