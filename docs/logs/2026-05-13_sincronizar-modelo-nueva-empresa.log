@@ -1,0 +1,78 @@
+# Sincronización modelo SQL nueva empresa con api_emp_163
+
+- **Fecha:** 2026-05-13
+- **Rama:** refactor/modular-routes
+- **Archivo afectado:** `public/model/create_new_company_api_emp_N.sql`
+- **Estado:** ✅ Completado y commiteado
+
+---
+
+## Contexto
+
+El archivo `create_new_company_api_emp_N.sql` es la plantilla usada para crear la base de datos de nuevas empresas. Se detectaron discrepancias entre su estructura y la base de datos de referencia `api_emp_163` en el VPS de Hostinger. Se realizó una comparación exhaustiva tabla por tabla y se aplicaron todas las correcciones necesarias.
+
+---
+
+## Cambios aplicados (commit `db38e4b`)
+
+### Tabla reemplazada
+- **`consumibles`** → eliminada (no existe en producción). Reemplazada por **`servicios_maquinas`** (sí existe en producción) con sus índices `idx_maquina` e `idx_estado`.
+
+### Correcciones de precisión decimal
+- `abonos.abono`: `decimal(12,4)` → `decimal(12,2)`
+- `abonos.descuento`: `decimal(12,4)` → `decimal(12,2)`
+- `presupuestos.pago_descuento`: `decimal(12,4)` → `decimal(12,2)`
+- `presupuestos.pago_total`: `decimal(12,4)` → `decimal(12,2)`
+- `presupuestos.pago_abono`: `decimal(12,4)` → `decimal(12,2)`
+
+### Correcciones de tipo/longitud
+- `inventario.tipo_insumo`: eliminado valor `'empaque'` del enum (no existe en producción)
+- `presupuestos_productos.talla`: `varchar(8)` → `varchar(32)`
+- `gastos.moneda`: `varchar(3)` → `varchar(10)`
+- `gastos_registros.moneda`: `varchar(3)` → `varchar(10)`
+
+### Campo faltante agregado
+- `lotes_detalles_empleados_asignados.id_reposicion int(11) DEFAULT NULL` (existía en producción, faltaba en el SQL)
+
+### Correcciones de orden de columnas
+- `inventario_movimientos`: `id_reposicion` movida al final (después de `moment`)
+- `rendimiento`: `id_empleado`, `id_departamento` movidos al final (después de `moment`)
+- `presupuestos_productos`: `id_products_attributes`, `id_size`, `id_tela` movidos al final (después de `moment`)
+- `products_tiempos_de_produccion`: `usa_desperdicio` movida al final (después de `moment`)
+
+### Correcciones de collation
+- `inventario_movimientos_historial`: `utf8mb4_spanish_ci` → `utf8mb4_unicode_ci`
+- `inventario_remanentes`: `utf8mb4_spanish_ci` → `utf8mb4_general_ci`
+
+### Correcciones de índices
+- `gastos_auditoria`: eliminados `KEY idx_registro` y `KEY idx_fecha_accion` (no existen en producción)
+- `ordenes_fila_orden`: agregado `ADD INDEX idx_id_orden (id_orden)` en sección INDICES ADICIONALES
+
+### wa_ai_settings actualizado
+- Default de `provider`: `'gemini'` → `'anthropic'`
+- Default de `model`: `'gemini-2.5-flash'` → `'claude-sonnet-4-6'`
+- Agregado campo `always_ai tinyint(1) NOT NULL DEFAULT 0`
+- Corregido orden de columnas (`respond_in_groups` y `always_ai` al final)
+
+---
+
+## Cambios adicionales (commit `d88e13d`)
+
+### catalogo_telas
+- Fecha hardcodeada `'2025-09-25 16:51:19'` → `CURRENT_TIMESTAMP`
+
+### wa_ai_agents — agente id=2 agregado
+- Nombre: `Ventas`, slug: `ventas`
+- Tomado directamente de `api_emp_163` vía mysqldump
+- `model`: `gemini-2.5-flash`, `temperature`: 0.15, `max_tokens`: 3000
+- Incluye `system_prompt` completo y `knowledge_base` JSON de Nineteen Custom
+- `INSERT IGNORE` para idempotencia
+
+---
+
+## Commits generados
+
+| Hash | Descripción |
+|---|---|
+| `db38e4b` | fix(model): sincronizar create_new_company_api_emp_N.sql con estructura de api_emp_163 |
+| `d88e13d` | fix(model): corregir fecha hardcodeada en catalogo_telas y agregar agente Ventas por defecto |
