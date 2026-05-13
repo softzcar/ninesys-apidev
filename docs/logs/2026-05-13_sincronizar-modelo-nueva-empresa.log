@@ -76,3 +76,17 @@ El archivo `create_new_company_api_emp_N.sql` es la plantilla usada para crear l
 |---|---|
 | `db38e4b` | fix(model): sincronizar create_new_company_api_emp_N.sql con estructura de api_emp_163 |
 | `d88e13d` | fix(model): corregir fecha hardcodeada en catalogo_telas y agregar agente Ventas por defecto |
+| `644ea5d` | fix(wa-session): agregar estado DEGRADED al ENUM de wa_session_state.status |
+
+---
+
+## Fix post-deploy: wa_session_state DEGRADED (2026-05-13)
+
+Tras el deploy se detectó `WARN_DATA_TRUNCATED` en `ntmsg-app` al intentar escribir `status='DEGRADED'`.
+
+**Causa:** El valor `'DEGRADED'` no existía en el ENUM de `wa_session_state.status`. msg_ninesys lo usa intencionalmente cuando se agotan los intentos de reconexión de WhatsApp.
+
+**Solución aplicada:**
+- `create_new_company_api_emp_N.sql`: `'DISCONNECTED'` → `'DISCONNECTED','DEGRADED'` en el ENUM
+- `ALTER TABLE` ejecutado en `api_emp_163` y `api_emp_183` en el VPS directamente
+- Commit `644ea5d` + redeploy a Hostinger
