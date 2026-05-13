@@ -547,8 +547,7 @@ CREATE TABLE `lotes_detalles_empleados_asignados` (
   `procentaje_comision` decimal(8, 2) NOT NULL DEFAULT 0.00 COMMENT 'Porcentaje para el cálculo de la comisión',
   `terminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Indica si la tarea se ha terminado para la lista de verificación en el módulo de empleados',
   `fecha_inicio` timestamp NULL DEFAULT NULL COMMENT 'Indica el momento en que el empleado indica que iniciado',
-  `fecha_terminado` timestamp NULL DEFAULT NULL COMMENT 'Indica el momento en que el empleado indica que ha terminado la tarea',
-  `id_reposicion` int(11) DEFAULT NULL COMMENT 'ID de la reposición'
+  `fecha_terminado` timestamp NULL DEFAULT NULL COMMENT 'Indica el momento en que el empleado indica que ha terminado la tarea'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Empleados asignados a tareas de producción con su porcentaje';
 CREATE TABLE `lotes_detalles_empleados_asignados_pausas` (
   `_id` int(11) NOT NULL,
