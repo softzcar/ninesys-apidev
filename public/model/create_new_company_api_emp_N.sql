@@ -14,8 +14,8 @@ CREATE TABLE `abonos` (
   `_id` int(11) NOT NULL COMMENT 'ID de la talba',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del empleado',
-  `abono` decimal(12, 4) NOT NULL DEFAULT 0.0000 COMMENT 'monto del abono',
-  `descuento` decimal(12, 4) DEFAULT 0.0000 COMMENT 'Descuento del abono',
+  `abono` decimal(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'monto del abono',
+  `descuento` decimal(12, 2) DEFAULT 0.00 COMMENT 'Descuento del abono',
   `nota_credito` decimal(12, 2) DEFAULT 0.00 COMMENT 'Nota de crédito (devolución al cliente)',
   `detalle` varchar(60) DEFAULT NULL COMMENT 'Descripción del abono',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha del abono'
@@ -116,19 +116,23 @@ CREATE TABLE `check_tareas` (
   `id_departamento` int(11) DEFAULT NULL COMMENT 'ID del departamento',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fin de tarea'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Lista de verificación de tareas por empleado. Controla el checklist de actividades completadas durante el proceso de producción de cada orden.';
-CREATE TABLE `consumibles` (
-  `_id` int(11) NOT NULL COMMENT 'ID único del registro',
-  `id_maquina` int(11) DEFAULT NULL COMMENT 'ID del aparato asignado',
-  `maquina_tipo` varchar(50) DEFAULT 'impresora' COMMENT 'Tipo de máquina (impresora, etc)',
-  `nombre` varchar(255) NOT NULL COMMENT 'Nombre/Descripción del consumible',
-  `categoria` varchar(50) DEFAULT NULL COMMENT 'insumo, repuesto, etc',
-  `serial_id` varchar(100) DEFAULT NULL COMMENT 'Serial o ID único del fabricante',
-  `estado` varchar(20) NOT NULL DEFAULT 'disponible' COMMENT 'disponible, instalado, agotado',
-  `fecha_inicio` datetime DEFAULT NULL COMMENT 'Fecha de instalación',
-  `fecha_fin` datetime DEFAULT NULL COMMENT 'Fecha de retiro/agotamiento',
+CREATE TABLE `servicios_maquinas` (
+  `_id` int(11) NOT NULL AUTO_INCREMENT,
+  `id_maquina` int(11) DEFAULT NULL,
+  `maquina_tipo` varchar(50) DEFAULT 'impresora',
+  `tipo_servicio` varchar(255) NOT NULL,
+  `descripcion` text DEFAULT NULL,
+  `tecnico` varchar(255) DEFAULT NULL,
+  `costo` decimal(10, 2) DEFAULT 0.00,
+  `estado` enum('pendiente','en_proceso','completado','cancelado') DEFAULT 'pendiente',
+  `fecha_servicio` datetime DEFAULT NULL,
+  `proxima_fecha` datetime DEFAULT NULL,
   `notas` text DEFAULT NULL,
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Registro de consumibles y repuestos con seguimiento de vida útil.';
+  `moment` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`_id`),
+  KEY `idx_maquina` (`id_maquina`, `maquina_tipo`),
+  KEY `idx_estado` (`estado`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 CREATE TABLE `config` (
   `_id` int(11) NOT NULL,
   `app_key` text DEFAULT NULL,
@@ -367,7 +371,7 @@ CREATE TABLE `inventario` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico',
   `sku` varchar(128) DEFAULT NULL COMMENT 'SKU del Item de inventario',
   `id_catalogo` int(11) DEFAULT NULL COMMENT 'ID de catalogo_insumos_productos',
-  `tipo_insumo` enum('general','tela','tinta','papel','repuesto','bisutería','empaque') NOT NULL DEFAULT 'general' COMMENT 'Categoría de insumo para lógica de consumo',
+  `tipo_insumo` enum('general','tela','tinta','papel','repuesto','bisutería') NOT NULL DEFAULT 'general' COMMENT 'Categoría de insumo para lógica de consumo',
   `insumo` varchar(45) DEFAULT NULL COMMENT 'Nombre del insumo',
   `unidad` varchar(6) DEFAULT NULL COMMENT 'Unidd de medida del articulo CD, LTS, ML UND',
   `costo` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio de costo del insumo',
@@ -401,9 +405,9 @@ CREATE TABLE `inventario_movimientos` (
   `departamento` varchar(20) DEFAULT NULL COMMENT 'Nombre del departamento',
   `valor_inicial` decimal(7, 2) DEFAULT NULL COMMENT 'Valor inicial del insumo',
   `valor_final` decimal(7, 2) DEFAULT NULL COMMENT 'Valor Final del insumo ',
-  `id_reposicion` int(11) DEFAULT NULL COMMENT 'ID de la reposición',
   `fecha` datetime NOT NULL DEFAULT current_timestamp() COMMENT 'fecha del registro',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro',
+  `id_reposicion` int(11) DEFAULT NULL COMMENT 'ID de la reposición'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de movimientos de inventario de insumos. Almacena cada consumo de material vinculado a orden, producto, empleado y departamento.';
 CREATE TABLE `inventario_movimientos_historial` (
   `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID único del registro',
@@ -417,7 +421,7 @@ CREATE TABLE `inventario_movimientos_historial` (
   PRIMARY KEY (`_id`),
   INDEX `idx_movimiento` (`id_movimiento`),
   INDEX `idx_fecha` (`fecha_modificacion`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Historial de cambios en inventario_movimientos. Registra modificaciones de material_consumido para auditoría y trazabilidad.';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Historial de cambios en inventario_movimientos. Registra modificaciones de material_consumido para auditoría y trazabilidad.';
 CREATE TABLE `inventario_remanentes` (
   `_id` int(11) NOT NULL AUTO_INCREMENT,
   `id_insumo` int(11) NOT NULL,
@@ -428,14 +432,14 @@ CREATE TABLE `inventario_remanentes` (
   `fecha` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`_id`),
   KEY `id_insumo` (`id_insumo`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Historial de remanentes (retazos/sobrantes) de insumos al ser terminados.';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT = 'Historial de remanentes (retazos/sobrantes) de insumos al ser terminados.';
 
 CREATE TABLE `gastos` (
   `_id` int(11) NOT NULL AUTO_INCREMENT,
   `nombre` varchar(255) NOT NULL,
   `descripcion` text DEFAULT NULL,
   `monto` decimal(12,2) NOT NULL DEFAULT 0.00,
-  `moneda` varchar(3) NOT NULL DEFAULT 'USD',
+  `moneda` varchar(10) NOT NULL DEFAULT 'USD',
   `periodicidad` enum('mensual','trimestral','semestral','anual','único') NOT NULL DEFAULT 'mensual',
   `tipo` enum('fijo','variable') NOT NULL DEFAULT 'fijo',
   `estatus` enum('activo','inactivo') NOT NULL DEFAULT 'activo',
@@ -450,7 +454,7 @@ CREATE TABLE `gastos_registros` (
   `nombre` varchar(255) NOT NULL,
   `descripcion` text DEFAULT NULL,
   `monto` decimal(12,2) NOT NULL,
-  `moneda` varchar(3) NOT NULL DEFAULT 'USD',
+  `moneda` varchar(10) NOT NULL DEFAULT 'USD',
   `fecha_de_gasto` date NOT NULL,
   `periodo` varchar(7) DEFAULT NULL COMMENT 'Formato YYYY-MM',
   `id_usuario` int(11) DEFAULT NULL,
@@ -471,9 +475,7 @@ CREATE TABLE `gastos_auditoria` (
   `monto_nuevo` decimal(12,2) DEFAULT NULL,
   `detalle` text NOT NULL,
   `fecha_accion` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`_id`),
-  KEY `idx_registro` (`id_registro`),
-  KEY `idx_fecha_accion` (`fecha_accion`)
+  PRIMARY KEY (`_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Auditoría de cambios en los registros de gastos';
 CREATE TABLE `inventario_corte` (
   `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID único del registro',
@@ -545,7 +547,8 @@ CREATE TABLE `lotes_detalles_empleados_asignados` (
   `procentaje_comision` decimal(8, 2) NOT NULL DEFAULT 0.00 COMMENT 'Porcentaje para el cálculo de la comisión',
   `terminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Indica si la tarea se ha terminado para la lista de verificación en el módulo de empleados',
   `fecha_inicio` timestamp NULL DEFAULT NULL COMMENT 'Indica el momento en que el empleado indica que iniciado',
-  `fecha_terminado` timestamp NULL DEFAULT NULL COMMENT 'Indica el momento en que el empleado indica que ha terminado la tarea'
+  `fecha_terminado` timestamp NULL DEFAULT NULL COMMENT 'Indica el momento en que el empleado indica que ha terminado la tarea',
+  `id_reposicion` int(11) DEFAULT NULL COMMENT 'ID de la reposición'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Empleados asignados a tareas de producción con su porcentaje';
 CREATE TABLE `lotes_detalles_empleados_asignados_pausas` (
   `_id` int(11) NOT NULL,
@@ -839,9 +842,9 @@ CREATE TABLE `presupuestos` (
   `observaciones` longtext DEFAULT NULL COMMENT 'Detalles de la orden',
   `fecha_creacion` date DEFAULT NULL,
   `token` varchar(45) DEFAULT NULL COMMENT 'Token random',
-  `pago_descuento` decimal(12, 4) NOT NULL DEFAULT 0.0000 COMMENT 'Descuento sobre le monto de la orden',
-  `pago_total` decimal(12, 4) DEFAULT 0.0000 COMMENT 'Montototal de la orden',
-  `pago_abono` decimal(12, 4) DEFAULT 0.0000 COMMENT 'Monto abonado',
+  `pago_descuento` decimal(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Descuento sobre le monto de la orden',
+  `pago_total` decimal(12, 2) DEFAULT 0.00 COMMENT 'Montototal de la orden',
+  `pago_abono` decimal(12, 2) DEFAULT 0.00 COMMENT 'Monto abonado',
   `pago_comision` varchar(9) NOT NULL DEFAULT 'pendiente' COMMENT 'Los valores puedes ser pendiente: cuando aun no se ha pagado el total de la orden al vendedor, pagado, cuando se ha  terminado de pagar la totalidad de comisiones al vendedor, anulado, cuando por algun motivo no se terminará de pagar el vanededor y el administrador decide anular los pagos de esta orden',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Creación del registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
@@ -853,16 +856,16 @@ CREATE TABLE `presupuestos_productos` (
   `category_name` varchar(20) DEFAULT NULL COMMENT 'NOMBRE de la categoria en woocommerce',
   `name` varchar(240) DEFAULT NULL COMMENT 'Nombre del producto',
   `cantidad` int(11) NOT NULL DEFAULT 0 COMMENT 'Cantidad del producto',
-  `talla` varchar(8) DEFAULT NULL COMMENT 'Talla del producto',
+  `talla` varchar(32) DEFAULT NULL COMMENT 'Talla del producto',
   `corte` varchar(32) DEFAULT NULL COMMENT 'Dama, caballero, niño',
   `id_catalogo_telas` int(11) DEFAULT NULL COMMENT 'IDde el catálogo de telas',
   `tela` varchar(128) DEFAULT NULL COMMENT 'Tela principal seleccionada desde Comercialización',
-  `id_products_attributes` int(11) DEFAULT NULL COMMENT 'ID de la variante del producto',
-  `id_size` int(11) DEFAULT NULL COMMENT 'ID de la talla',
-  `id_tela` int(11) DEFAULT NULL COMMENT 'ID de la tela a utilizar del catálogo de telas',
   `precio_unitario` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio del producto',
   `precio_woo` decimal(10, 0) DEFAULT NULL COMMENT 'Precio de Woocommerce',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
+  `moment` timestamp NOT NULL DEFAULT current_timestamp(),
+  `id_products_attributes` int(11) DEFAULT NULL COMMENT 'ID de la variante del producto',
+  `id_size` int(11) DEFAULT NULL COMMENT 'ID de la talla',
+  `id_tela` int(11) DEFAULT NULL COMMENT 'ID de la tela a utilizar del catálogo de telas'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
 CREATE TABLE `products` (
   `_id` bigint(20) UNSIGNED NOT NULL,
@@ -1034,8 +1037,8 @@ CREATE TABLE `products_tiempos_de_produccion` (
   `id_product` int(11) DEFAULT NULL COMMENT 'ID del producto',
   `id_departamento` int(11) DEFAULT NULL COMMENT 'ID del departamento',
   `tiempo` int(11) NOT NULL DEFAULT 1 COMMENT 'Tiempo de producción en segundos',
-  `usa_desperdicio` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Indica si el producto solicita desperdicio en este departamento',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro',
+  `usa_desperdicio` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Indica si el producto solicita desperdicio en este departamento'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Tiempos estándar de producción. Define minutos estimados por producto y departamento para proyección de entregas.';
 
 INSERT INTO `products_tiempos_de_produccion` (`_id`, `id_product`, `id_departamento`, `tiempo`, `moment`) VALUES
@@ -1074,13 +1077,13 @@ INSERT INTO `product_insumos_asignados` (`_id`, `id_product`, `id_catalogo_insum
 (16, 1, 3, 4, 4, 6.00, 'Und');
 CREATE TABLE `rendimiento` (
   `_id` int(11) NOT NULL,
-  `id_empleado` int(11) DEFAULT NULL,
-  `id_departamento` int(11) DEFAULT NULL,
   `id_orden` int(11) DEFAULT NULL,
   `id_insumo` int(11) DEFAULT NULL COMMENT 'Numero de rollo',
   `cantidad` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Cantidad de material utilizado',
   `desperdicio` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'peso en gramos del material sobrante',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
+  `moment` timestamp NOT NULL DEFAULT current_timestamp(),
+  `id_empleado` int(11) DEFAULT NULL,
+  `id_departamento` int(11) DEFAULT NULL
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Datos para el calculo de el rendimiento del material';
 CREATE TABLE `reposiciones` (
   `_id` int(11) NOT NULL COMMENT 'ID unico de la tabla',
@@ -1197,10 +1200,6 @@ ALTER TABLE `categories`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `check_tareas`
 ADD PRIMARY KEY (`_id`);
-ALTER TABLE `consumibles`
-ADD PRIMARY KEY (`_id`),
-  ADD KEY `id_maquina` (`id_maquina`),
-  ADD KEY `estado` (`estado`);
 ALTER TABLE `config`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `customers`
@@ -1466,8 +1465,6 @@ ALTER TABLE `tintas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `tintas_recargas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
-ALTER TABLE `consumibles`
-MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `tinta_filtro`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 -- =====================================================
@@ -1691,6 +1688,9 @@ ALTER TABLE `lotes_detalles_empleados_asignados`
 ALTER TABLE `ordenes`
   ADD INDEX `idx_status` (`status`);
 
+ALTER TABLE `ordenes_fila_orden`
+  ADD INDEX `idx_id_orden` (`id_orden`);
+
 ALTER TABLE `ordenes_productos`
   ADD INDEX `idx_orden_woo` (`id_orden`, `id_woo`);
 
@@ -1836,16 +1836,17 @@ CREATE TABLE IF NOT EXISTS `wa_templates` (
 
 CREATE TABLE IF NOT EXISTS `wa_ai_settings` (
   `id`             TINYINT NOT NULL DEFAULT 1,
-  `provider`          ENUM('anthropic','gemini') NOT NULL DEFAULT 'gemini',
+  `provider`          ENUM('anthropic','gemini') NOT NULL DEFAULT 'anthropic',
   `enabled`           TINYINT(1) NOT NULL DEFAULT 0,
-  `model`             VARCHAR(64) NOT NULL DEFAULT 'gemini-2.5-flash',
+  `model`             VARCHAR(64) NOT NULL DEFAULT 'claude-sonnet-4-6',
   `system_prompt`     TEXT NULL,
   `temperature`       DECIMAL(3,2) NOT NULL DEFAULT 0.30,
   `max_tokens`        INT NOT NULL DEFAULT 1024,
-  `respond_in_groups` TINYINT(1) NOT NULL DEFAULT 0,
   `handoff_rules`     JSON NULL,
   `knowledge_base`    JSON NULL,
   `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `respond_in_groups` TINYINT(1) NOT NULL DEFAULT 0,
+  `always_ai`         TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0=handoff normal; 1=IA siempre activa (solo notifica, no pasa a modo humano)',
   PRIMARY KEY (`id`),
   CONSTRAINT `wa_ai_settings_singleton` CHECK (`id` = 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
