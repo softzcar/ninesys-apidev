@@ -593,12 +593,6 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
       }
 
-      // Verificar que el usuario no esté activo
-      if ($usuario['activo']) {
-        $response->getBody()->write(json_encode(['error' => 'No se puede eliminar un usuario activo']));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
-      }
-
       // 1. Obtener datos de la empresa y Validar seguridad (ID 163 intocable)
       $id_empresa = $usuario['id_empresa'];
       if ($id_empresa == 163) {
