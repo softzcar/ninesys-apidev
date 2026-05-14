@@ -1835,8 +1835,8 @@ CREATE TABLE IF NOT EXISTS `wa_templates` (
 
 CREATE TABLE IF NOT EXISTS `wa_ai_settings` (
   `id`             TINYINT NOT NULL DEFAULT 1,
-  `provider`          ENUM('anthropic','gemini') NOT NULL DEFAULT 'anthropic',
-  `enabled`           TINYINT(1) NOT NULL DEFAULT 0,
+  `provider`          ENUM('anthropic','gemini') NOT NULL DEFAULT 'gemini',
+  `enabled`           TINYINT(1) NOT NULL DEFAULT 1,
   `model`             VARCHAR(64) NOT NULL DEFAULT 'claude-sonnet-4-6',
   `system_prompt`     TEXT NULL,
   `temperature`       DECIMAL(3,2) NOT NULL DEFAULT 0.30,
