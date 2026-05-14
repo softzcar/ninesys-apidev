@@ -1075,10 +1075,10 @@ return function (App $app) {
               $monto_exc = 0;
 
             $id_lotes_exc = $excProd['id_lotes_detalles'];
-            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = 0 AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = {$id_lotes_exc} AND detalle = 'Corte-Excedente' LIMIT 1";
+            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion IS NULL AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = {$id_lotes_exc} AND detalle = 'Corte-Excedente' LIMIT 1";
             $checkExc = $localConnection->goQuery($sqlCheckExc);
             if (empty($checkExc)) {
-              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES ({$miEmpleado['id_orden']}, 0, {$miEmpleado['id_departamento']}, {$comision_exc}, 'variable', {$excedente_piezas}, {$id_lotes_exc}, 'aprobado', {$monto_exc}, {$miEmpleado['id_empleado']}, 'Corte-Excedente');";
+              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES ({$miEmpleado['id_orden']}, NULL, {$miEmpleado['id_departamento']}, {$comision_exc}, 'variable', {$excedente_piezas}, {$id_lotes_exc}, 'aprobado', {$monto_exc}, {$miEmpleado['id_empleado']}, 'Corte-Excedente');";
               $object['sql_pagos_excedente'][] = $sqlExcIns;
               $localConnection->goQuery($sqlExcIns);
             }
@@ -2362,10 +2362,10 @@ return function (App $app) {
             if ($salario_tipo === 'Salario')
               $monto_exc = 0;
 
-            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = ? AND id_reposicion = 0 AND id_empleado = ? AND id_departamento = ? AND id_lotes_detalles = ? AND detalle = 'Corte-Excedente' LIMIT 1";
+            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = ? AND id_reposicion IS NULL AND id_empleado = ? AND id_departamento = ? AND id_lotes_detalles = ? AND detalle = 'Corte-Excedente' LIMIT 1";
             $checkExc = $localConnection->goQuery($sqlCheckExc, [$id_orden_actual, $id_emp_asignado, $id_departamento, $id_lotes_detalles]);
             if (empty($checkExc)) {
-              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, 0, ?, ?, ?, ?, ?, 'aprobado', ?, ?, 'Corte-Excedente')";
+              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, 'aprobado', ?, ?, 'Corte-Excedente')";
               $localConnection->goQuery($sqlExcIns, [$id_orden_actual, $id_departamento, $comision_exc, $comision_tipo, $excedente_piezas, $id_lotes_detalles, $monto_exc, $id_emp_asignado]);
             }
           }
