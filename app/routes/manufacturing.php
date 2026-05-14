@@ -881,10 +881,11 @@ return function (App $app) {
           $piezas = $localConnection->goQuery($sqlUnidades)[0]['unidades'];
         }
 
-        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
+        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : 'NULL';
+        $id_reposicion_cond = ($id_reposicion_val === 'NULL') ? 'id_reposicion IS NULL' : "id_reposicion = $id_reposicion_val";
 
         // CHECK DUPLICATE BEFORE INSERT (Revised to include product ID)
-        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND $id_reposicion_cond AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
@@ -957,9 +958,10 @@ return function (App $app) {
         }
 
         $id_reposicion_val = isset($miEmpleado['id_reposicion']) ? $miEmpleado['id_reposicion'] : 'NULL';
+        $id_reposicion_cond = ($id_reposicion_val === 'NULL') ? 'id_reposicion IS NULL' : "id_reposicion = $id_reposicion_val";
 
         // CHECK DUPLICATE BEFORE INSERT (Revised to include product ID)
-        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND $id_reposicion_cond AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
@@ -1036,10 +1038,11 @@ return function (App $app) {
           $montoTotalVariable = 0;
         }
 
-        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
+        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : 'NULL';
+        $id_reposicion_cond = ($id_reposicion_val === 'NULL') ? 'id_reposicion IS NULL' : "id_reposicion = $id_reposicion_val";
 
         // CHECK DUPLICATE BEFORE INSERT (Revised to be assignment-based)
-        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND $id_reposicion_cond AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
@@ -1845,11 +1848,11 @@ return function (App $app) {
             $total_monto_pago = 0;
 
           // 4. Registrar Pago
-          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = 0 LIMIT 1";
+          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion IS NULL LIMIT 1";
           $check_pago = $localConnection->goQuery($sql_check_pago, [$id_orden_actual, $id_emp_asignado, $id_departamento]);
 
           if (empty($check_pago)) {
-            $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, 0, ?, ?, ?, ?, ?, "aprobado", ?, ?, ?)';
+            $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, "aprobado", ?, ?, ?)';
             $localConnection->goQuery($sql_pago, [$id_orden_actual, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
           }
 
@@ -2106,8 +2109,8 @@ return function (App $app) {
         $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
         if (!empty($resp_comision)) {
           $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
-          $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-          $params_pago = [$id_orden_actual, 0, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
+          $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          $params_pago = [$id_orden_actual, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
           $localConnection->goQuery($sql_pago, $params_pago);
         }
 
@@ -2317,12 +2320,12 @@ return function (App $app) {
           if ($salario_tipo === 'Salario')
             $total_monto_pago = 0;
 
-          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = 0 LIMIT 1";
+          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion IS NULL LIMIT 1";
           $check_pago = $localConnection->goQuery($sql_check_pago, [$id_orden_actual, $id_emp_asignado, $id_departamento]);
 
           if (empty($check_pago)) {
-            $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-            $localConnection->goQuery($sql_pago, [$id_orden_actual, 0, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, 'aprobado', $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
+            $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            $localConnection->goQuery($sql_pago, [$id_orden_actual, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, 'aprobado', $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
           }
 
           // EXCEDENTES CORTE (Todos los tipos de comisión: variable, fija, porcentaje)
