@@ -495,29 +495,91 @@ return function (App $app) {
     // =================================================================
     $app->get('/reportes/mano-obra-por-orden/{id_orden}', function (Request $request, Response $response, array $args) {
         $id_orden = $args['id_orden'];
+        $id_empresa = ID_EMPRESA;
 
-        $sql = 'SELECT
-                    p._id AS id_pago,
-                    p.id_empleado,
-                    eu.nombre AS nombre_empleado,
-                    p.detalle AS departamento,
-                    p.cantidad,
-                    p.monto_pago,
-                    (SELECT COALESCE(SUM(monto), 0) FROM pagos_abonos WHERE id_pago = p._id) AS total_bonos,
-                    (SELECT COALESCE(SUM(monto), 0) FROM pagos_descuentos WHERE id_pago = p._id) AS total_descuentos,
-                    (SELECT COALESCE(SUM(monto), 0) FROM pagos_salarios WHERE id_pago = p._id) AS total_salario_pagado
-                FROM
-                    pagos p
-                JOIN
-                    api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario
-                WHERE
-                    p.id_orden = ?
-                ORDER BY
-                    eu.nombre, p.detalle';
+        $sqlPagos = 'SELECT
+                        p._id AS id_pago,
+                        p.id_empleado,
+                        eu.nombre AS nombre_empleado,
+                        p.detalle AS departamento,
+                        p.cantidad,
+                        p.monto_pago,
+                        (SELECT COALESCE(SUM(monto), 0) FROM pagos_abonos WHERE id_pago = p._id) AS total_bonos,
+                        (SELECT COALESCE(SUM(monto), 0) FROM pagos_descuentos WHERE id_pago = p._id) AS total_descuentos,
+                        (SELECT COALESCE(SUM(monto), 0) FROM pagos_salarios WHERE id_pago = p._id) AS total_salario_pagado
+                    FROM
+                        pagos p
+                    JOIN
+                        api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario
+                    WHERE
+                        p.id_orden = ?
+                    ORDER BY
+                        eu.nombre, p.detalle';
+
         $db = new LocalDB();
-        $data = $db->goQuery($sql, [$id_orden]);
+        $pagosData = $db->goQuery($sqlPagos, [$id_orden]);
+
+        // Load work schedule to compute costo_por_hora
+        $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
+        $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
+        $horarioResult = $dbEmpresas->goQuery("SELECT horario_laboral FROM empresas WHERE id_empresa = ?", [$id_empresa]);
+        $horario_laboral = (!empty($horarioResult) && isset($horarioResult[0]['horario_laboral'])) ? $horarioResult[0]['horario_laboral'] : null;
+        $horarioObj = $horario_laboral ? json_decode($horario_laboral, true) : null;
+        $horasDia = 0;
+        $diasSemana = 0;
+        if (is_array($horarioObj)) {
+            $horasDia = (float)($horarioObj['horaFinManana'] ?? 0) - (float)($horarioObj['horaInicioManana'] ?? 0);
+            $horasDia += (float)($horarioObj['horaFinTarde'] ?? 0) - (float)($horarioObj['horaInicioTarde'] ?? 0);
+            $diasSemana = is_array($horarioObj['diasLaborales'] ?? null) ? count($horarioObj['diasLaborales']) : 0;
+        }
+        $horasSemana = max(0, $horasDia) * max(0, $diasSemana);
+        $dbEmpresas->disconnect();
+
+        // Salary employees who worked on this order (from task records)
+        $sqlSalarios = "SELECT
+                            ldea.id_empleado,
+                            eu.nombre AS nombre_empleado,
+                            eu.salario_monto,
+                            eu.salario_periodo,
+                            SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS horas_trabajadas
+                        FROM lotes_detalles_empleados_asignados ldea
+                        JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                        WHERE ldea.id_orden = ?
+                        AND ldea.fecha_inicio IS NOT NULL
+                        AND eu.salario_tipo IN ('Salario', 'Salario más Comisión')
+                        GROUP BY ldea.id_empleado, eu.nombre, eu.salario_monto, eu.salario_periodo";
+
+        $salariosRaw = $db->goQuery($sqlSalarios, [$id_orden]);
         $db->disconnect();
-        $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
+
+        $salariosData = [];
+        if (is_array($salariosRaw)) {
+            foreach ($salariosRaw as $row) {
+                $monto = (float)($row['salario_monto'] ?? 0);
+                $periodo = strtolower((string)($row['salario_periodo'] ?? ''));
+                $factorSemanas = 0;
+                if ($periodo === 'semanal') $factorSemanas = 1;
+                elseif ($periodo === 'quincenal') $factorSemanas = 2;
+                elseif ($periodo === 'mensual') $factorSemanas = 4.33;
+                elseif ($periodo === 'bimensual') $factorSemanas = 8.66;
+                elseif ($periodo === 'trimestral') $factorSemanas = 13;
+                elseif ($periodo === 'semestral') $factorSemanas = 26;
+                elseif ($periodo === 'anual') $factorSemanas = 52;
+                $horasPeriodo = $horasSemana > 0 && $factorSemanas > 0 ? ($horasSemana * $factorSemanas) : 0;
+                $costoPorHora = $horasPeriodo > 0 ? round($monto / $horasPeriodo, 4) : 0;
+                $horasTrabajadas = (float)($row['horas_trabajadas'] ?? 0);
+                $salariosData[] = [
+                    'id_empleado' => $row['id_empleado'],
+                    'nombre_empleado' => $row['nombre_empleado'],
+                    'horas_trabajadas' => round($horasTrabajadas, 2),
+                    'costo_por_hora' => $costoPorHora,
+                    'salario_proporcional' => round($costoPorHora * $horasTrabajadas, 2),
+                ];
+            }
+        }
+
+        $result = ['pagos' => $pagosData, 'salarios' => $salariosData];
+        $response->getBody()->write(json_encode($result, JSON_NUMERIC_CHECK));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     });
 
