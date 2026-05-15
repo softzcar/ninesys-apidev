@@ -976,13 +976,13 @@ return function (App $app) {
               a._id AS id_lotes_detalles,
               a.procentaje_comision,
               ( IF(a.id_departamento = 3,
-                  (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id),
+                  COALESCE(NULLIF((SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad),
                   c.cantidad
                 ) ) AS cantidad,
               IFNULL(pc.comision, 0) AS comision_producto,
-              1 AS factor_empleado, 
+              1 AS factor_empleado,
               ( IF(a.id_departamento = 3,
-                  (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id),
+                  COALESCE(NULLIF((SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad),
                   c.cantidad
                 ) * IFNULL(pc.comision, 0) ) AS monto_comision_por_producto,
               c.id_woo AS id_producto
