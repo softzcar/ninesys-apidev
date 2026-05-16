@@ -1108,6 +1108,7 @@ return function (App $app) {
             JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
             JOIN pagos_salarios ps ON ps.id_pago = a._id
             WHERE ps.numero_semana = ' . $args['semana'] . ' AND a.fecha_pago IS NOT NULL
+            AND a.detalle NOT IN (\'Comercialización\', \'Diseño\', \'ajuste\', \'personalización\')
             ORDER BY
             c.nombre ASC,
             a.id_orden ASC,
