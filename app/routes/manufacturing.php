@@ -3599,8 +3599,13 @@ return function (App $app) {
                 cip.id_departamento,
                 
                 -- Consumo Estándar (Meta): en la misma unidad de destino que cantidad_real.
-                -- Si el insumo tiene rendimiento (Kg→Mt), multiplicamos aquí igual que en cantidad_real.
-                SUM(op.cantidad * pia.cantidad * COALESCE(inv_rend.rendimiento, 1)) AS cantidad_estandar,
+                -- Aplicar rendimiento (Kg→Mt) SOLO cuando pia.unidad es Kg; si ya está en Mt, no convertir.
+                SUM(op.cantidad * pia.cantidad *
+                    CASE WHEN pia.unidad = 'Kg' AND inv_rend.rendimiento IS NOT NULL
+                         THEN inv_rend.rendimiento
+                         ELSE 1
+                    END
+                ) AS cantidad_estandar,
 
                 -- Unidad: 'Mt' cuando el insumo es Kg con rendimiento (tela); limpia 'null' string.
                 MAX(CASE
