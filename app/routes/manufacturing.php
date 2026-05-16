@@ -3623,7 +3623,13 @@ return function (App $app) {
                 ), 0) AS cantidad_real
 
             FROM ordenes_productos op
-            JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
+            -- Deduplicar product_insumos_asignados por (producto, talla, catálogo) para evitar duplicados.
+            JOIN (
+                SELECT id_product, id_talla, id_catalogo_insumos_productos,
+                       MAX(cantidad) AS cantidad, MAX(unidad) AS unidad
+                FROM product_insumos_asignados
+                GROUP BY id_product, id_talla, id_catalogo_insumos_productos
+            ) pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
             JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
             -- Subquery agrupada por catálogo para obtener rendimiento sin multiplicar filas.
             LEFT JOIN (
