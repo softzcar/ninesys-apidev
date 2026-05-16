@@ -865,16 +865,23 @@ return function (App $app) {
 
         $totalComimision = $totalComimision * ($porcentajeAsignado / 100);
 
-        // EXCEDENTE CORTE: Si es el dpto de Corte y no es reposición, usar cantidad real de inventario_corte
+        // CORTE: Siempre usar inventario_corte como fuente de piezas (incluye excedentes).
+        // Si hay registro en inventario_corte, ese es el número real de piezas mandadas a cortar.
         if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
           $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = {$miEmpleado['id_orden']}";
           $rspExcedente = $localConnection->goQuery($sqlExcedente);
           $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
-          if ($cantidad_real > $piezas) {
-            $excedente = $cantidad_real - floatval($piezas);
-            // Aplicar porcentaje a la cantidad total
+          if ($cantidad_real > 0) {
+            // Recalcular comisión completa sobre las piezas reales cortadas (no solo el excedente)
+            $piezas_orden = floatval($piezas);
             $piezas = $cantidad_real * ($porcentajeAsignado / 100);
-            $totalComimision += ($excedente * $miEmpleado['precio_unitario_promedio'] * ($comisionValue / 100) * ($porcentajeAsignado / 100));
+            if ($cantidad_real > $piezas_orden) {
+              // Excedente: recalcular comisión total sobre todas las piezas cortadas
+              $totalComimision = $cantidad_real * $miEmpleado['precio_unitario_promedio'] * ($comisionValue / 100) * ($porcentajeAsignado / 100);
+            } else {
+              // Sin excedente o menos piezas: pagar exactamente lo cortado
+              $totalComimision = $cantidad_real * $miEmpleado['precio_unitario_promedio'] * ($comisionValue / 100) * ($porcentajeAsignado / 100);
+            }
           }
         }
 
@@ -936,17 +943,16 @@ return function (App $app) {
         $comimision = $respComision[0]['comision_fija'];
         $totalComimision = $respComision[0]['total_comision_fija'];
 
-        // EXCEDENTE CORTE: Si es el dpto de Corte y no es reposición, sumar piezas reales de inventario_corte
+        // CORTE: Siempre usar inventario_corte como fuente de piezas (incluye excedentes).
         if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
           $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = {$miEmpleado['id_orden']}";
           $rspExcedente = $localConnection->goQuery($sqlExcedente);
           $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
-          if ($cantidad_real > $piezas) {
-            $excedente = $cantidad_real - floatval($piezas);
+          if ($cantidad_real > 0) {
             $porcentajeFija = floatval($respComision[0]['procentaje_comision']) > 0 ? floatval($respComision[0]['procentaje_comision']) : 100;
-            // Aplicar porcentaje a la cantidad total
+            // Recalcular comisión completa sobre las piezas reales cortadas
             $piezas = $cantidad_real * ($porcentajeFija / 100);
-            $totalComimision += ($excedente * floatval($comimision) * ($porcentajeFija / 100));
+            $totalComimision = $cantidad_real * floatval($comimision) * ($porcentajeFija / 100);
           }
         }
 
@@ -3084,13 +3090,19 @@ return function (App $app) {
             (SELECT valor_final FROM inventario_movimientos WHERE id_orden = a.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_final,
             c.prioridad,
             (z.unidades_produccion + IFNULL((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0)) AS unidades_solicitadas,
-            -- Unidades: para Corte suman el excedente pactado; para otros departamentos solo la cantidad original
+            -- Unidades: para Corte usar piezas mandadas a cortar (inventario_corte), con fallback a ajustes y cantidad original.
             IF({$args['id_departamento']} = 3,
-                (a.cantidad + IFNULL((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0)),
+                COALESCE(
+                    (SELECT SUM(ic2.cantidad) FROM inventario_corte ic2 WHERE ic2.id_ordenes_productos = a._id AND ic2.id_orden = a.id_orden),
+                    (a.cantidad + IFNULL((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0))
+                ),
                 a.cantidad
             ) AS unidades,
             IF({$args['id_departamento']} = 3,
-                (a.cantidad + IFNULL((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0)),
+                COALESCE(
+                    (SELECT SUM(ic2.cantidad) FROM inventario_corte ic2 WHERE ic2.id_ordenes_productos = a._id AND ic2.id_orden = a.id_orden),
+                    (a.cantidad + IFNULL((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0))
+                ),
                 a.cantidad
             ) AS piezas_actuales,
             y.fecha_inicio,
@@ -3567,6 +3579,8 @@ return function (App $app) {
   $app->get('/reports/input-efficiency/{id_ordenes}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
     $ids_ordenes = $args['id_ordenes']; // Comma separated IDs
+    $params = $request->getQueryParams();
+    $id_departamento = isset($params['id_departamento']) ? intval($params['id_departamento']) : null;
 
     // Validate IDs to prevent SQL injection
     $idsArray = explode(',', $ids_ordenes);
@@ -3584,23 +3598,40 @@ return function (App $app) {
 
     $idsString = implode(',', $cleanIds);
 
+    // Para Corte (id_departamento=3): usar piezas de inventario_corte como base de la Meta,
+    // ya que el cortador puede mandar a cortar más piezas que las de la orden.
+    $isCorte = ($id_departamento === 3);
+
+    $ic_join = $isCorte
+      ? "LEFT JOIN (
+                SELECT id_ordenes_productos, SUM(cantidad) AS cantidad_cortada
+                FROM inventario_corte
+                WHERE id_orden IN ($idsString)
+                GROUP BY id_ordenes_productos
+            ) ic_corte ON ic_corte.id_ordenes_productos = op._id"
+      : "";
+
+    $piezas_expr = $isCorte
+      ? "COALESCE(ic_corte.cantidad_cortada, op.cantidad)"
+      : "op.cantidad";
+
     $sql = "
             SELECT
                 COALESCE((
-                  SELECT MAX(im.id_insumo) 
-                  FROM inventario_movimientos im 
-                  LEFT JOIN inventario inv ON inv._id = im.id_insumo 
-                  WHERE im.id_orden IN ($idsString) 
+                  SELECT MAX(im.id_insumo)
+                  FROM inventario_movimientos im
+                  LEFT JOIN inventario inv ON inv._id = im.id_insumo
+                  WHERE im.id_orden IN ($idsString)
                     AND (inv.id_catalogo = cip._id OR im.id_catalogo_insumos_prodcutos = cip._id)
                     AND im.fecha >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
                 ), (SELECT MAX(_id) FROM inventario WHERE id_catalogo = cip._id)) AS id_insumo,
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
                 cip.id_departamento,
-                
-                -- Consumo Estándar (Meta): en la misma unidad de destino que cantidad_real.
+
+                -- Consumo Estándar (Meta): para Corte usa piezas de inventario_corte; otros usan op.cantidad.
                 -- Aplicar rendimiento (Kg→Mt) SOLO cuando pia.unidad es Kg; si ya está en Mt, no convertir.
-                SUM(op.cantidad * pia.cantidad *
+                SUM($piezas_expr * pia.cantidad *
                     CASE WHEN pia.unidad = 'Kg' AND inv_rend.rendimiento IS NOT NULL
                          THEN inv_rend.rendimiento
                          ELSE 1
@@ -3628,6 +3659,7 @@ return function (App $app) {
                 ), 0) AS cantidad_real
 
             FROM ordenes_productos op
+            $ic_join
             -- Deduplicar product_insumos_asignados por (producto, talla, catálogo) para evitar duplicados.
             JOIN (
                 SELECT id_product, id_talla, id_catalogo_insumos_productos,
