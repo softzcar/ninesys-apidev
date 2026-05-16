@@ -3598,22 +3598,16 @@ return function (App $app) {
 
     $idsString = implode(',', $cleanIds);
 
-    // Para Corte (id_departamento=3): usar piezas de inventario_corte como base de la Meta,
-    // ya que el cortador puede mandar a cortar más piezas que las de la orden.
-    $isCorte = ($id_departamento === 3);
-
-    $ic_join = $isCorte
-      ? "LEFT JOIN (
+    // Siempre hacer LEFT JOIN a inventario_corte: si hay piezas registradas a cortar
+    // (excedentes incluidos), esas son la base real de Meta. Fallback a op.cantidad.
+    $ic_join = "LEFT JOIN (
                 SELECT id_ordenes_productos, SUM(cantidad) AS cantidad_cortada
                 FROM inventario_corte
                 WHERE id_orden IN ($idsString)
                 GROUP BY id_ordenes_productos
-            ) ic_corte ON ic_corte.id_ordenes_productos = op._id"
-      : "";
+            ) ic_corte ON ic_corte.id_ordenes_productos = op._id";
 
-    $piezas_expr = $isCorte
-      ? "COALESCE(ic_corte.cantidad_cortada, op.cantidad)"
-      : "op.cantidad";
+    $piezas_expr = "COALESCE(ic_corte.cantidad_cortada, op.cantidad)";
 
     $sql = "
             SELECT
