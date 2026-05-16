@@ -735,60 +735,67 @@ return function (App $app) {
           }
         }
       } else {
-        // ONLY execute main order logic if NOT a reposition (or if we want repositions to trigger main        // --- 1. REGISTRAR FIN DE TAREA DEL EMPLEADO ACTUAL ---
-        $id_orden_seguro = intval($miEmpleado['id_orden']);
-        $sqlTerminarActual = "UPDATE lotes_detalles_empleados_asignados SET 
-            fecha_terminado = '{$now}', 
-            progreso = 'terminada' 
-            WHERE id_orden = {$id_orden_seguro} 
-            AND id_empleado = {$miEmpleado['id_empleado']} 
-            AND id_departamento = {$miEmpleado['id_departamento']}";
-        
-        if (isset($miEmpleado['id_lotes_detalles']) && $miEmpleado['id_lotes_detalles'] !== 'undefined' && $miEmpleado['id_lotes_detalles'] !== null) {
-            $sqlTerminarActual .= " AND _id = " . intval($miEmpleado['id_lotes_detalles']);
+        // ONLY execute main order logic if NOT a reposition (or if we want repositions to trigger main logic, but usually not)
+
+        // --- VERIFICAR SI HAY OTROS EMPLEADOS PENDIENTES ---
+        // Antes de avanzar el paso de la orden, verificamos si hay otros empleados asignados a este departamento
+        // que aún no han terminado su tarea.
+        $sqlCheckPending = "SELECT COUNT(*) as pending 
+                            FROM lotes_detalles_empleados_asignados 
+                            WHERE id_orden = {$miEmpleado['id_orden']} 
+                            AND id_departamento = {$miEmpleado['id_departamento']} 
+                            AND (progreso != 'terminada' AND progreso != 'terminado')
+                            AND id_empleado != {$miEmpleado['id_empleado']}";
+        // Eliminamos filtros de reposición para asegurar que contamos tareas principales si estamos en flujo principal
+        // Opcional: AND (id_reposicion IS NULL OR id_reposicion = 0)
+
+        $checkResults = $localConnection->goQuery($sqlCheckPending);
+        $pendingCount = 0;
+        if (!empty($checkResults) && isset($checkResults[0]['pending'])) {
+          $pendingCount = intval($checkResults[0]['pending']);
         }
-        $localConnection->goQuery($sqlTerminarActual);
 
-        // --- 2. BARRIDO TOTAL: ¿QUEDA ALGO PENDIENTE EN TODA LA ORDEN? ---
-        // Buscamos cualquier asignación en cualquier departamento que aún no tenga fecha_terminado
-        $sqlGlobalCheck = "SELECT COUNT(*) as cuenta FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND fecha_terminado IS NULL";
-        $resGlobal = $localConnection->goQuery($sqlGlobalCheck, [$id_orden_seguro]);
-        $totalPendientesOrden = is_array($resGlobal) ? intval($resGlobal[0]['cuenta'] ?? 0) : 1;
-
-        if ($totalPendientesOrden === 0) {
-          // --- CIERRE DE ORDEN (SIN CONDICIONES) ---
-          $localConnection->beginTransaction();
-          try {
-            $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?;", [$id_orden_seguro]);
-            $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ?;", [$id_orden_seguro]);
-            $localConnection->commit();
-            $object['msg_extra'] = "Orden {$id_orden_seguro} finalizada globalmente.";
-          } catch (Exception $e) {
-            if ($localConnection->inTransaction()) $localConnection->rollback();
-            throw $e;
-          }
+        if ($pendingCount > 0) {
+          // Hay otros empleados pendientes. NO avanzamos el lote.
+          // Solo se registrará el fin de tarea del empleado actual (más abajo en el código) y su pago.
+          $object['msg_extra'] = "Orden no avanzada. Quedan $pendingCount empleados pendientes en este paso.";
+          $response_update2 = null;
         } else {
-          // --- LA ORDEN SIGUE ACTIVA -> ACTUALIZAR PASO ACTUAL SI EL DEP. TERMINÓ ---
-          $sqlDeptCheck = "SELECT COUNT(*) as pending FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND id_departamento = ? AND fecha_terminado IS NULL";
-          $resDept = $localConnection->goQuery($sqlDeptCheck, [$id_orden_seguro, $miEmpleado['id_departamento']]);
-          $pendingInDept = intval($resDept[0]['pending'] ?? 0);
+          // Todos han terminado (o este es el último). Avanzamos el paso.
 
-          if ($pendingInDept === 0) {
-            // El departamento actual terminó, buscamos el siguiente asignado
-            $sqlNextStep = "SELECT d.departamento, d._id as id_departamento
-                            FROM lotes_detalles_empleados_asignados ldea
-                            JOIN departamentos d ON ldea.id_departamento = d._id
-                            WHERE ldea.id_orden = ? AND ldea.fecha_terminado IS NULL
-                            ORDER BY d.orden_proceso ASC
-                            LIMIT 1";
-            $resNext = $localConnection->goQuery($sqlNextStep, [$id_orden_seguro]);
-            
-            if (is_array($resNext) && count($resNext) > 0) {
-              $localConnection->goQuery("UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?", 
-                                        [$resNext[0]['departamento'], $resNext[0]['id_departamento'], $id_orden_seguro]);
+          $current_orden_proceso = intval($miEmpleado['orden_proceso']);
+
+          // LÓGICA CORREGIDA: Buscar el siguiente departamento en la secuencia de producción
+          $sqlDep = 'SELECT _id AS id_departamento, departamento, orden_proceso
+                     FROM departamentos
+                     WHERE asignar_numero_de_paso = 1 AND orden_proceso > ?
+                     ORDER BY orden_proceso ASC
+                     LIMIT 1';
+          $object['sql_select_next_departament'] = $sqlDep;
+          $response_departamentos = $localConnection->goQuery($sqlDep, [$current_orden_proceso]);
+
+          // Verificar si existe el departamento, de no ser así indica que es el último paso.
+          if (empty($response_departamentos)) {
+            // Es el último paso debemos asignar terminado o el paso que viene despues de el último despues de producción
+            $localConnection->beginTransaction();
+            try {
+              $sqlLote = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?;";
+              $localConnection->goQuery($sqlLote, [$miEmpleado['id_orden']]);
+
+              $sqlOrden = "UPDATE ordenes SET `status` = 'terminada' WHERE _id = ?;";
+              $localConnection->goQuery($sqlOrden, [$miEmpleado['id_orden']]);
+
+              $localConnection->commit();
+            } catch (Exception $e) {
+              $localConnection->rollback();
+              throw $e;
             }
           } else {
-            $object['msg_extra'] = "Quedan $pendingInDept empleados pendientes en este departamento.";
+            // El paso existe, lo actualizamos para el semáforo y progressbar
+            $departmentName = $response_departamentos[0]['departamento'] ?? 'terminado';  // Usar el nombre del departamento
+            $next_department_id = $response_departamentos[0]['id_departamento'];  // Usar el ID correcto del departamento
+            $sql5 = "UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?;";
+            $localConnection->goQuery($sql5, [$departmentName, $next_department_id, $miEmpleado['id_orden']]);
           }
         }
       } // End else !es_reposicion
@@ -881,11 +888,10 @@ return function (App $app) {
           $piezas = $localConnection->goQuery($sqlUnidades)[0]['unidades'];
         }
 
-        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : 'NULL';
-        $id_reposicion_cond = ($id_reposicion_val === 'NULL') ? 'id_reposicion IS NULL' : "id_reposicion = $id_reposicion_val";
+        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
 
         // CHECK DUPLICATE BEFORE INSERT (Revised to include product ID)
-        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND $id_reposicion_cond AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
@@ -958,10 +964,9 @@ return function (App $app) {
         }
 
         $id_reposicion_val = isset($miEmpleado['id_reposicion']) ? $miEmpleado['id_reposicion'] : 'NULL';
-        $id_reposicion_cond = ($id_reposicion_val === 'NULL') ? 'id_reposicion IS NULL' : "id_reposicion = $id_reposicion_val";
 
         // CHECK DUPLICATE BEFORE INSERT (Revised to include product ID)
-        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND $id_reposicion_cond AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
@@ -976,13 +981,13 @@ return function (App $app) {
               a._id AS id_lotes_detalles,
               a.procentaje_comision,
               ( IF(a.id_departamento = 3,
-                  COALESCE(NULLIF((SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad),
+                  (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id),
                   c.cantidad
                 ) ) AS cantidad,
               IFNULL(pc.comision, 0) AS comision_producto,
-              1 AS factor_empleado,
+              1 AS factor_empleado, 
               ( IF(a.id_departamento = 3,
-                  COALESCE(NULLIF((SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad),
+                  (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id),
                   c.cantidad
                 ) * IFNULL(pc.comision, 0) ) AS monto_comision_por_producto,
               c.id_woo AS id_producto
@@ -1038,11 +1043,10 @@ return function (App $app) {
           $montoTotalVariable = 0;
         }
 
-        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : 'NULL';
-        $id_reposicion_cond = ($id_reposicion_val === 'NULL') ? 'id_reposicion IS NULL' : "id_reposicion = $id_reposicion_val";
+        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
 
         // CHECK DUPLICATE BEFORE INSERT (Revised to be assignment-based)
-        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND $id_reposicion_cond AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
@@ -1075,10 +1079,10 @@ return function (App $app) {
               $monto_exc = 0;
 
             $id_lotes_exc = $excProd['id_lotes_detalles'];
-            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion IS NULL AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = {$id_lotes_exc} AND detalle = 'Corte-Excedente' LIMIT 1";
+            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = 0 AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = {$id_lotes_exc} AND detalle = 'Corte-Excedente' LIMIT 1";
             $checkExc = $localConnection->goQuery($sqlCheckExc);
             if (empty($checkExc)) {
-              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES ({$miEmpleado['id_orden']}, NULL, {$miEmpleado['id_departamento']}, {$comision_exc}, 'variable', {$excedente_piezas}, {$id_lotes_exc}, 'aprobado', {$monto_exc}, {$miEmpleado['id_empleado']}, 'Corte-Excedente');";
+              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES ({$miEmpleado['id_orden']}, 0, {$miEmpleado['id_departamento']}, {$comision_exc}, 'variable', {$excedente_piezas}, {$id_lotes_exc}, 'aprobado', {$monto_exc}, {$miEmpleado['id_empleado']}, 'Corte-Excedente');";
               $object['sql_pagos_excedente'][] = $sqlExcIns;
               $localConnection->goQuery($sqlExcIns);
             }
@@ -1086,6 +1090,13 @@ return function (App $app) {
         }
       }
 
+      $sqlTerminar = "UPDATE lotes_detalles_empleados_asignados SET 
+          fecha_terminado = '{$now}', 
+          progreso = 'terminada' 
+          WHERE id_orden = {$miEmpleado['id_orden']} 
+          AND id_empleado = {$miEmpleado['id_empleado']} 
+          AND id_departamento = {$miEmpleado['id_departamento']};";
+      $localConnection->goQuery($sqlTerminar);
     } // Cierre if ($miEmpleado['tipo'] === 'fin')
 
     $localConnection->disconnect();
@@ -1650,18 +1661,8 @@ return function (App $app) {
 
       if (!empty($consumos_lote)) {
         foreach ($consumos_lote as $consumo) {
-          // --- VALIDACIÓN ESTRICTA: No permitir consumos sin insumo válido ---
-          if (empty($consumo['id_insumo']) || intval($consumo['id_insumo']) <= 0) {
-            $response->getBody()->write(json_encode([
-              'error' => 'Cada consumo debe tener un insumo (material/rollo) seleccionado. No se permite registrar consumos sin especificar el material.',
-              'code' => 'INSUMO_REQUERIDO',
-              'received' => $consumo
-            ]));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
-          }
-          if (!isset($consumo['cantidad_total']) || floatval($consumo['cantidad_total']) <= 0) {
-            continue; // Saltar consumos con cantidad 0 (no es error, solo no hay consumo)
-          }
+          if (empty($consumo['id_insumo']) || !isset($consumo['cantidad_total']))
+            continue;
 
           $id_insumo_actual = intval($consumo['id_insumo']);
           $cantidad_total_consumida = floatval($consumo['cantidad_total']);
@@ -1755,36 +1756,12 @@ return function (App $app) {
       foreach ($ordenes_del_lote as $order) {
         $id_orden_actual = $order['id_orden'];
 
-        // ¿SE HA TERMINADO LA ORDEN COMPLETA? (Lógica sugerida por el usuario + Seguridad de tareas requeridas)
-        // 1. Verificamos si queda algún empleado asignado a esta orden que no haya terminado
-        $sqlAsignadosPendientes = "SELECT COUNT(*) as cuenta FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND fecha_terminado IS NULL";
-        $resAsignados = $localConnection->goQuery($sqlAsignadosPendientes, [$id_orden_actual]);
-        
-        // 2. Verificamos si queda alguna tarea requerida en lotes_detalles pendiente de terminar (incluye las no asignadas aún)
-        $sqlTareasPendientes = "SELECT COUNT(*) as cuenta FROM lotes_detalles WHERE id_orden = ? AND fecha_terminado IS NULL";
-        $resTareas = $localConnection->goQuery($sqlTareasPendientes, [$id_orden_actual]);
-
-        $numAsignados = is_array($resAsignados) ? intval($resAsignados[0]['cuenta'] ?? 0) : 1;
-        $numTareas = is_array($resTareas) ? intval($resTareas[0]['cuenta'] ?? 0) : 1;
-
-        if ($numAsignados === 0 && $numTareas === 0) {
-          // LA ORDEN HA TERMINADO REALMENTE
+        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
+        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+        if (empty($next_dep_info)) {
           $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?", [$id_orden_actual]);
-          $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ?", [$id_orden_actual]);
         } else {
-          // LA ORDEN SIGUE ACTIVA -> Actualizar a qué departamento global se ha movido (el siguiente pendiente con menor orden_proceso)
-          $sqlNextGlobal = "SELECT d.departamento, d._id as id_departamento
-                            FROM lotes_detalles ld
-                            JOIN departamentos d ON ld.id_departamento = d._id
-                            WHERE ld.id_orden = ? AND ld.fecha_terminado IS NULL
-                            ORDER BY d.orden_proceso ASC
-                            LIMIT 1";
-          $nextGlobal = $localConnection->goQuery($sqlNextGlobal, [$id_orden_actual]);
-          
-          if (is_array($nextGlobal) && count($nextGlobal) > 0) {
-            $localConnection->goQuery("UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?", 
-                                      [$nextGlobal[0]['departamento'], $nextGlobal[0]['id_departamento'], $id_orden_actual]);
-          }
+          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
         }
 
         // UNIFICACIÓN DE LÓGICA DE PAGO (Replicando registrar-paso-empleado para multi-asignados)
@@ -1848,11 +1825,11 @@ return function (App $app) {
             $total_monto_pago = 0;
 
           // 4. Registrar Pago
-          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion IS NULL LIMIT 1";
+          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = 0 LIMIT 1";
           $check_pago = $localConnection->goQuery($sql_check_pago, [$id_orden_actual, $id_emp_asignado, $id_departamento]);
 
           if (empty($check_pago)) {
-            $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, "aprobado", ?, ?, ?)';
+            $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, 0, ?, ?, ?, ?, ?, "aprobado", ?, ?, ?)';
             $localConnection->goQuery($sql_pago, [$id_orden_actual, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
           }
 
@@ -2065,36 +2042,12 @@ return function (App $app) {
 
       foreach ($ordenes_del_lote as $order) {
         $id_orden_actual = $order['id_orden'];
-        // ¿SE HA TERMINADO LA ORDEN COMPLETA? (Lógica sugerida por el usuario + Seguridad de tareas requeridas)
-        // 1. Verificamos si queda algún empleado asignado a esta orden que no haya terminado
-        $sqlAsignadosPendientes = "SELECT COUNT(*) as cuenta FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND fecha_terminado IS NULL";
-        $resAsignados = $localConnection->goQuery($sqlAsignadosPendientes, [$id_orden_actual]);
-        
-        // 2. Verificamos si queda alguna tarea requerida en lotes_detalles pendiente de terminar (incluye las no asignadas aún)
-        $sqlTareasPendientes = "SELECT COUNT(*) as cuenta FROM lotes_detalles WHERE id_orden = ? AND fecha_terminado IS NULL";
-        $resTareas = $localConnection->goQuery($sqlTareasPendientes, [$id_orden_actual]);
-
-        $numAsignados = is_array($resAsignados) ? intval($resAsignados[0]['cuenta'] ?? 0) : 1;
-        $numTareas = is_array($resTareas) ? intval($resTareas[0]['cuenta'] ?? 0) : 1;
-
-        if ($numAsignados === 0 && $numTareas === 0) {
-          // LA ORDEN HA TERMINADO REALMENTE
+        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
+        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+        if (empty($next_dep_info)) {
           $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?", [$id_orden_actual]);
-          $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ?", [$id_orden_actual]);
         } else {
-          // LA ORDEN SIGUE ACTIVA -> Actualizar a qué departamento global se ha movido (el siguiente pendiente con menor orden_proceso)
-          $sqlNextGlobal = "SELECT d.departamento, d._id as id_departamento
-                            FROM lotes_detalles ld
-                            JOIN departamentos d ON ld.id_departamento = d._id
-                            WHERE ld.id_orden = ? AND ld.fecha_terminado IS NULL
-                            ORDER BY d.orden_proceso ASC
-                            LIMIT 1";
-          $nextGlobal = $localConnection->goQuery($sqlNextGlobal, [$id_orden_actual]);
-          
-          if (is_array($nextGlobal) && count($nextGlobal) > 0) {
-            $localConnection->goQuery("UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?", 
-                                      [$nextGlobal[0]['departamento'], $nextGlobal[0]['id_departamento'], $id_orden_actual]);
-          }
+          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
         }
 
         $sql_comision_empleado = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
@@ -2109,8 +2062,8 @@ return function (App $app) {
         $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
         if (!empty($resp_comision)) {
           $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
-          $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-          $params_pago = [$id_orden_actual, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
+          $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          $params_pago = [$id_orden_actual, 0, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
           $localConnection->goQuery($sql_pago, $params_pago);
         }
 
@@ -2233,36 +2186,12 @@ return function (App $app) {
         $id_orden_actual = $order['id_orden'];
 
         // Lógica de actualización de paso en `lotes`
-        // ¿SE HA TERMINADO LA ORDEN COMPLETA? (Lógica sugerida por el usuario + Seguridad de tareas requeridas)
-        // 1. Verificamos si queda algún empleado asignado a esta orden que no haya terminado
-        $sqlAsignadosPendientes = "SELECT COUNT(*) as cuenta FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND fecha_terminado IS NULL";
-        $resAsignados = $localConnection->goQuery($sqlAsignadosPendientes, [$id_orden_actual]);
-        
-        // 2. Verificamos si queda alguna tarea requerida en lotes_detalles pendiente de terminar (incluye las no asignadas aún)
-        $sqlTareasPendientes = "SELECT COUNT(*) as cuenta FROM lotes_detalles WHERE id_orden = ? AND fecha_terminado IS NULL";
-        $resTareas = $localConnection->goQuery($sqlTareasPendientes, [$id_orden_actual]);
-
-        $numAsignados = is_array($resAsignados) ? intval($resAsignados[0]['cuenta'] ?? 0) : 1;
-        $numTareas = is_array($resTareas) ? intval($resTareas[0]['cuenta'] ?? 0) : 1;
-
-        if ($numAsignados === 0 && $numTareas === 0) {
-          // LA ORDEN HA TERMINADO REALMENTE
+        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
+        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+        if (empty($next_dep_info)) {
           $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?", [$id_orden_actual]);
-          $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ?", [$id_orden_actual]);
         } else {
-          // LA ORDEN SIGUE ACTIVA -> Actualizar a qué departamento global se ha movido (el siguiente pendiente con menor orden_proceso)
-          $sqlNextGlobal = "SELECT d.departamento, d._id as id_departamento
-                            FROM lotes_detalles ld
-                            JOIN departamentos d ON ld.id_departamento = d._id
-                            WHERE ld.id_orden = ? AND ld.fecha_terminado IS NULL
-                            ORDER BY d.orden_proceso ASC
-                            LIMIT 1";
-          $nextGlobal = $localConnection->goQuery($sqlNextGlobal, [$id_orden_actual]);
-          
-          if (is_array($nextGlobal) && count($nextGlobal) > 0) {
-            $localConnection->goQuery("UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?", 
-                                      [$nextGlobal[0]['departamento'], $nextGlobal[0]['id_departamento'], $id_orden_actual]);
-          }
+          $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
         }
 
         // Lógica de Pagos y actualización de estados
@@ -2320,12 +2249,12 @@ return function (App $app) {
           if ($salario_tipo === 'Salario')
             $total_monto_pago = 0;
 
-          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion IS NULL LIMIT 1";
+          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = 0 LIMIT 1";
           $check_pago = $localConnection->goQuery($sql_check_pago, [$id_orden_actual, $id_emp_asignado, $id_departamento]);
 
           if (empty($check_pago)) {
-            $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-            $localConnection->goQuery($sql_pago, [$id_orden_actual, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, 'aprobado', $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
+            $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            $localConnection->goQuery($sql_pago, [$id_orden_actual, 0, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, 'aprobado', $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
           }
 
           // EXCEDENTES CORTE (Todos los tipos de comisión: variable, fija, porcentaje)
@@ -2362,10 +2291,10 @@ return function (App $app) {
             if ($salario_tipo === 'Salario')
               $monto_exc = 0;
 
-            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = ? AND id_reposicion IS NULL AND id_empleado = ? AND id_departamento = ? AND id_lotes_detalles = ? AND detalle = 'Corte-Excedente' LIMIT 1";
+            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = ? AND id_reposicion = 0 AND id_empleado = ? AND id_departamento = ? AND id_lotes_detalles = ? AND detalle = 'Corte-Excedente' LIMIT 1";
             $checkExc = $localConnection->goQuery($sqlCheckExc, [$id_orden_actual, $id_emp_asignado, $id_departamento, $id_lotes_detalles]);
             if (empty($checkExc)) {
-              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, 'aprobado', ?, ?, 'Corte-Excedente')";
+              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, 0, ?, ?, ?, ?, ?, 'aprobado', ?, ?, 'Corte-Excedente')";
               $localConnection->goQuery($sqlExcIns, [$id_orden_actual, $id_departamento, $comision_exc, $comision_tipo, $excedente_piezas, $id_lotes_detalles, $monto_exc, $id_emp_asignado]);
             }
           }
@@ -3197,7 +3126,6 @@ return function (App $app) {
             a.tela,
             (SELECT tela FROM catalogo_telas WHERE _id = a.id_tela) AS tela_vendedor,
             tp.tiempo AS tiempo_produccion,
-            tp.usa_desperdicio,
             y.procentaje_comision,
             c.paso,
             d.status,
@@ -3670,21 +3598,8 @@ return function (App $app) {
                 cip.nombre AS nombre_insumo,
                 cip.id_departamento,
                 
-                -- Consumo Estándar (Meta): SOLO sumamos la meta si hay consumo real registrado para esta orden e insumo en los últimos 30 días.
-                -- Esto evita inflar la meta con órdenes en las que el empleado aún no ha trabajado o consumido material.
-                SUM(
-                  CASE 
-                    WHEN (
-                      SELECT COUNT(*) 
-                      FROM inventario_movimientos im_check 
-                      LEFT JOIN inventario inv_check ON inv_check._id = im_check.id_insumo
-                      WHERE im_check.id_orden = op.id_orden 
-                      AND (im_check.id_catalogo_insumos_prodcutos = cip._id OR inv_check.id_catalogo = cip._id)
-                      AND im_check.fecha >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-                    ) > 0 THEN op.cantidad * pia.cantidad 
-                    ELSE 0 
-                  END
-                ) AS cantidad_estandar,
+                -- Consumo Estándar (Meta): cantidad × cantidad_por_unidad del catálogo, siempre visible.
+                SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
                 
                 -- Limpieza de unidad: Evitar 'null' string
                 MAX(CASE WHEN pia.unidad IS NULL OR pia.unidad = 'null' THEN 'Und' ELSE pia.unidad END) AS unidad,
@@ -3978,7 +3893,6 @@ return function (App $app) {
     try {
       $id_ordenes = isset($body['id_ordenes']) ? $body['id_ordenes'] : null; // Array of IDs
       $id_empleado = isset($body['id_empleado']) ? intval($body['id_empleado']) : null;
-      $id_departamento = isset($body['id_departamento']) ? intval($body['id_departamento']) : null;
       $limit = isset($body['limit']) ? intval($body['limit']) : 100;
 
       // Limit max IDs to prevent heavy queries
@@ -3999,57 +3913,21 @@ return function (App $app) {
       // OPTIMIZACIÓN: Si se filtra por empleado, incluir también las órdenes que terminó HOY
       // para que aparezcan en el reporte de eficiencia aunque ya no estén "activas" en su lista.
       if ($id_empleado) {
-        $deptWhere = $id_departamento
-          ? "AND id_departamento = $id_departamento"
-          : "AND id_departamento = (SELECT id_departamento FROM lotes_detalles_empleados_asignados WHERE id_orden IN ($idsStr) LIMIT 1)";
         $whereClause = "WHERE (o._id IN ($idsStr) OR o._id IN (
-            SELECT DISTINCT id_orden
-            FROM lotes_detalles_empleados_asignados
-            WHERE id_empleado = $id_empleado
+            SELECT DISTINCT id_orden 
+            FROM lotes_detalles_empleados_asignados 
+            WHERE id_empleado = $id_empleado 
             AND DATE(fecha_terminado) = CURDATE()
-            $deptWhere
+            AND id_departamento = (SELECT id_departamento FROM lotes_detalles_empleados_asignados WHERE id_orden IN ($idsStr) LIMIT 1)
         ))";
       }
 
       // --- OPTIMIZACIÓN: Usar CTE y evitar subconsultas correlacionadas ---
 
-      // Filtro de empleado (y departamento si se especificó) para el cálculo de tiempo real
+      // Filtro de empleado para el cálculo de tiempo real
       $empleadoCondition = "";
       if ($id_empleado) {
         $empleadoCondition = "AND sub_ldea.id_empleado = $id_empleado";
-        if ($id_departamento) {
-          $empleadoCondition .= " AND sub_ldea.id_departamento = $id_departamento";
-        }
-      }
-
-      // Filtros de departamento para subqueries de tiempo proyectado
-      $empValue = $id_empleado ?: "ldea_sub.id_empleado";
-      if ($id_departamento) {
-        $deptProjTerminadas = "= $id_departamento";
-        $deptProjEnCurso   = "= $id_departamento";
-        $deptProjTotal     = "= $id_departamento";
-      } else {
-        $deptProjTerminadas = "IN (
-                    SELECT DISTINCT ldea_sub.id_departamento
-                    FROM lotes_detalles_empleados_asignados ldea_sub
-                    WHERE ldea_sub.id_orden = o._id
-                    AND ldea_sub.id_empleado = $empValue
-                    AND ldea_sub.fecha_terminado IS NOT NULL
-                )";
-        $deptProjEnCurso = "IN (
-                    SELECT DISTINCT ldea_sub.id_departamento
-                    FROM lotes_detalles_empleados_asignados ldea_sub
-                    WHERE ldea_sub.id_orden = o._id
-                    AND ldea_sub.id_empleado = $empValue
-                    AND ldea_sub.fecha_terminado IS NULL
-                    AND ldea_sub.fecha_inicio IS NOT NULL
-                )";
-        $deptProjTotal = "IN (
-                    SELECT DISTINCT ldea_sub.id_departamento
-                    FROM lotes_detalles_empleados_asignados ldea_sub
-                    WHERE ldea_sub.id_orden = o._id
-                    AND ldea_sub.id_empleado = $empValue
-                )";
       }
 
       $sql = "
@@ -4058,7 +3936,7 @@ return function (App $app) {
                 sub_ldea.id_orden,
                 SUM(
                     CASE 
-                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN
+                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND sub_ldea.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
                         ELSE 0 
                     END
@@ -4074,6 +3952,7 @@ return function (App $app) {
             WHERE sub_ldea.id_orden IN ($idsStr)
             $empleadoCondition
             AND sub_ldea.fecha_inicio IS NOT NULL
+            AND sub_ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
             GROUP BY sub_ldea.id_orden
         )
         SELECT 
@@ -4086,28 +3965,48 @@ return function (App $app) {
             COALESCE(tc.tiempo_terminado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealTerminadas,
             COALESCE(tc.tiempo_en_curso, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealEnCurso,
             
-            -- Tiempos Proyectados (filtrados por departamento cuando se especifica)
+            -- Tiempos Proyectados (Correlacionados por producto y estado real de la tarea)
             (
                 SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
                 FROM products_tiempos_de_produccion ptp_sub
                 WHERE ptp_sub.id_product = op.id_woo
-                AND ptp_sub.id_departamento $deptProjTerminadas
+                AND ptp_sub.id_departamento IN (
+                    SELECT DISTINCT ldea_sub.id_departamento
+                    FROM lotes_detalles_empleados_asignados ldea_sub
+                    WHERE ldea_sub.id_orden = o._id
+                    AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
+                    AND ldea_sub.fecha_terminado IS NOT NULL
+                    AND ldea_sub.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+                )
             ) AS totalProjectedTerminadas,
 
             (
                 SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
                 FROM products_tiempos_de_produccion ptp_sub
                 WHERE ptp_sub.id_product = op.id_woo
-                AND ptp_sub.id_departamento $deptProjEnCurso
+                AND ptp_sub.id_departamento IN (
+                    SELECT DISTINCT ldea_sub.id_departamento
+                    FROM lotes_detalles_empleados_asignados ldea_sub
+                    WHERE ldea_sub.id_orden = o._id
+                    AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
+                    AND ldea_sub.fecha_terminado IS NULL
+                    AND ldea_sub.fecha_inicio IS NOT NULL
+                    AND ldea_sub.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+                )
             ) AS totalProjectedEnCurso,
-
+            
             -- Legacy / Totales
             (COALESCE(tc.tiempo_terminado, 0) + COALESCE(tc.tiempo_en_curso, 0)) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
             (
                 SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
                 FROM products_tiempos_de_produccion ptp_sub
                 WHERE ptp_sub.id_product = op.id_woo
-                AND ptp_sub.id_departamento $deptProjTotal
+                AND ptp_sub.id_departamento IN (
+                    SELECT DISTINCT ldea_sub.id_departamento
+                    FROM lotes_detalles_empleados_asignados ldea_sub
+                    WHERE ldea_sub.id_orden = o._id
+                    AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
+                )
             ) AS tiempo_proyectado_segundos,
 
             (
@@ -4121,7 +4020,6 @@ return function (App $app) {
                 WHERE ldea_check.id_orden = o._id
                   AND ldea_check.fecha_inicio IS NOT NULL
                   " . ($id_empleado ? "AND ldea_check.id_empleado = $id_empleado" : "") . "
-                  " . ($id_departamento ? "AND ldea_check.id_departamento = $id_departamento" : "") . "
             ) AS tarea_terminada
         FROM 
             ordenes o
@@ -4149,8 +4047,8 @@ return function (App $app) {
         JOIN ordenes o ON o._id = ldea.id_orden
         $whereClause
         " . ($id_empleado ? " AND ldea.id_empleado = $id_empleado" : "") . "
-        " . ($id_departamento ? " AND ldea.id_departamento = $id_departamento" : "") . "
         AND ldea.fecha_inicio IS NOT NULL
+        AND ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
         ORDER BY ldea.fecha_inicio DESC
       ";
       
