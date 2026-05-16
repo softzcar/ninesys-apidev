@@ -3598,16 +3598,21 @@ return function (App $app) {
                 cip.nombre AS nombre_insumo,
                 cip.id_departamento,
                 
-                -- Consumo Estándar (Meta): cantidad × cantidad_por_unidad del catálogo, siempre visible.
-                SUM(op.cantidad * pia.cantidad) AS cantidad_estandar,
-                
-                -- Limpieza de unidad: Evitar 'null' string
-                MAX(CASE WHEN pia.unidad IS NULL OR pia.unidad = 'null' THEN 'Und' ELSE pia.unidad END) AS unidad,
-                
-                -- Rendimiento: Ahora retornamos 1 porque el cálculo real ya viene convertido a la unidad destino (Metros)
-                1.0 AS rendimiento, 
+                -- Consumo Estándar (Meta): en la misma unidad de destino que cantidad_real.
+                -- Si el insumo tiene rendimiento (Kg→Mt), multiplicamos aquí igual que en cantidad_real.
+                SUM(op.cantidad * pia.cantidad * COALESCE(inv_rend.rendimiento, 1)) AS cantidad_estandar,
 
-                -- Consumo Real: Suma de movimientos registrados en los últimos 30 días
+                -- Unidad: 'Mt' cuando el insumo es Kg con rendimiento (tela); limpia 'null' string.
+                MAX(CASE
+                  WHEN pia.unidad IS NULL OR pia.unidad = 'null' THEN 'Und'
+                  WHEN pia.unidad = 'Kg' AND inv_rend.rendimiento IS NOT NULL THEN 'Mt'
+                  ELSE pia.unidad
+                END) AS unidad,
+
+                -- Rendimiento fijo a 1 porque la conversión ya está aplicada en cantidad_estandar y cantidad_real.
+                1.0 AS rendimiento,
+
+                -- Consumo Real: ya viene multiplicado por rendimiento desde el inventario (Kg→Mt).
                 COALESCE((
                     SELECT SUM(ABS(im_sub.valor_final - im_sub.valor_inicial) * COALESCE(inv_sub.rendimiento, 1))
                     FROM inventario_movimientos im_sub
@@ -3620,7 +3625,14 @@ return function (App $app) {
             FROM ordenes_productos op
             JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
             JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
-            
+            -- Subquery agrupada por catálogo para obtener rendimiento sin multiplicar filas.
+            LEFT JOIN (
+                SELECT id_catalogo, MAX(rendimiento) AS rendimiento
+                FROM inventario
+                WHERE rendimiento > 1
+                GROUP BY id_catalogo
+            ) inv_rend ON inv_rend.id_catalogo = cip._id
+
             WHERE op.id_orden IN ($idsString)
             GROUP BY cip._id, cip.nombre, cip.id_departamento
         ";
