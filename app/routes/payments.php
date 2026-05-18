@@ -63,22 +63,39 @@ return function (App $app) {
       return $id > 0;
     });
     $listaDeIdPagos = array_values($listaDeIdPagos);
-    $cantidadDePagos = count($listaDeIdPagos);
 
-    // ========== VALIDACIONES ==========
-    if ($cantidadDePagos === 0) {
-      return ApiResponse::validationError($response, 'No se proporcionaron IDs de pago válidos');
-    }
+    $salario  = floatval($data['salario']  ?? 0);
+    $comision = floatval($data['comision'] ?? 0);
+    $bonosRaw = $data['bonos'] ?? '0';
+    $hayConceptos = $salario > 0 || $comision > 0 || ($bonosRaw !== '0' && $bonosRaw !== '');
 
     // ========== INICIAR TRANSACCIÓN ==========
     $localConnection->beginTransaction();
 
     try {
+      // Si no hay órdenes pendientes pero sí hay conceptos (salario/bono), crear registro ancla
+      if (count($listaDeIdPagos) === 0 && $hayConceptos) {
+        $idEmpleadoVirtual = $data['id_empleado'] ?? null;
+        if ($idEmpleadoVirtual) {
+          $sqlVirtual = "INSERT INTO pagos (id_empleado, detalle, monto_pago, comision, comision_tipo, cantidad, fecha_pago, estatus) VALUES (?, 'Pago Nomina', 0, 0, 'fija', 1, ?, 'aprobado')";
+          $resVirtual = $localConnection->goQuery($sqlVirtual, [$idEmpleadoVirtual, $now]);
+          if (isset($resVirtual['insert_id'])) {
+            $listaDeIdPagos = [$resVirtual['insert_id']];
+          }
+        }
+      }
+
+      // ========== VALIDACIÓN FINAL ==========
+      if (count($listaDeIdPagos) === 0) {
+        $localConnection->rollback();
+        return ApiResponse::validationError($response, 'No se proporcionaron IDs de pago válidos');
+      }
+
+      $cantidadDePagos = count($listaDeIdPagos);
+
       // Procesar bonos, descuentos, salario y comisión
       $totalBonos = 0;
       $totalDescuentos = 0;
-      $salario = floatval($data['salario'] ?? 0);
-      $comision = floatval($data['comision'] ?? 0);
 
       // Procesar bonos
       if (isset($data['bonos']) && $data['bonos'] !== '0') {
