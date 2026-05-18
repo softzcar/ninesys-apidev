@@ -166,16 +166,15 @@ return function (App $app) {
         }
       }
 
-      // Calcular el monto total del pago y el monto por cada registro de pago
+      // monto_pago ya tiene la comisión correcta desde el registro original (manufacturing/orders).
+      // Solo marcar como pagado; salario/bonos/descuentos van en sus tablas separadas.
       $montoTotalPago = ($salarioMontoReal + $comision + $totalBonos) - $totalDescuentos;
-      $montoPorRegistroDePago = $montoTotalPago / $cantidadDePagos;
 
       // Crear placeholders (?) para la cláusula IN
       $placeholders = implode(',', array_fill(0, count($listaDeIdPagos), '?'));
 
-      // Actualizar pagos con fecha_pago y el monto_pago DIVIDIDO
-      $sql = "UPDATE pagos SET fecha_pago = ?, monto_pago = ? WHERE _id IN ({$placeholders})";
-      $params = array_merge([$now, $montoPorRegistroDePago], $listaDeIdPagos);
+      $sql = "UPDATE pagos SET fecha_pago = ? WHERE _id IN ({$placeholders})";
+      $params = array_merge([$now], $listaDeIdPagos);
       $localConnection->goQuery($sql, $params);
 
       // ========== CONFIRMAR TRANSACCIÓN ==========
@@ -355,10 +354,11 @@ return function (App $app) {
           // Crear placeholders (?) para la cláusula IN
           $placeholders = implode(',', array_fill(0, count($idsParaPago), '?'));
 
-          // Actualizar pagos con fecha_pago y el monto_pago DIVIDIDO
+          // monto_pago ya tiene la comisión correcta desde el registro original (manufacturing/orders).
+          // Solo marcar como pagado; salario/bonos/descuentos van en sus tablas separadas.
           $fechaActual = $pagoData['fecha_pago'] ?? $now;
-          $sql = "UPDATE pagos SET fecha_pago = ?, monto_pago = ? WHERE _id IN ({$placeholders})";
-          $params = array_merge([$fechaActual, $montoPorRegistroDePago], $idsParaPago);
+          $sql = "UPDATE pagos SET fecha_pago = ? WHERE _id IN ({$placeholders})";
+          $params = array_merge([$fechaActual], $idsParaPago);
           $localConnection->goQuery($sql, $params);
         }
       }
