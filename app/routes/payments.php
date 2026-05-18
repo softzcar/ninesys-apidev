@@ -76,12 +76,14 @@ return function (App $app) {
       // Si no hay órdenes pendientes pero sí hay conceptos (salario/bono), crear registro ancla
       if (count($listaDeIdPagos) === 0 && $hayConceptos) {
         $idEmpleadoVirtual = $data['id_empleado'] ?? null;
-        if ($idEmpleadoVirtual) {
-          $sqlVirtual = "INSERT INTO pagos (id_empleado, detalle, monto_pago, comision, comision_tipo, cantidad, fecha_pago, estatus) VALUES (?, 'Pago Nomina', 0, 0, 'fija', 1, ?, 'aprobado')";
-          $resVirtual = $localConnection->goQuery($sqlVirtual, [$idEmpleadoVirtual, $now]);
-          if (isset($resVirtual['insert_id'])) {
-            $listaDeIdPagos = [$resVirtual['insert_id']];
-          }
+        if (!$idEmpleadoVirtual) {
+          $localConnection->rollback();
+          return ApiResponse::validationError($response, 'Se requiere id_empleado para pagos sin órdenes pendientes');
+        }
+        $sqlVirtual = "INSERT INTO pagos (id_empleado, detalle, monto_pago, comision, comision_tipo, cantidad, fecha_pago, estatus) VALUES (?, 'Pago Nomina', 0, 0, 'fija', 1, ?, 'aprobado')";
+        $resVirtual = $localConnection->goQuery($sqlVirtual, [$idEmpleadoVirtual, $now]);
+        if (isset($resVirtual['insert_id'])) {
+          $listaDeIdPagos = [$resVirtual['insert_id']];
         }
       }
 
