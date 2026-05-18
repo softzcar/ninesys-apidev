@@ -3942,6 +3942,7 @@ return function (App $app) {
     try {
       $id_ordenes = isset($body['id_ordenes']) ? $body['id_ordenes'] : null; // Array of IDs
       $id_empleado = isset($body['id_empleado']) ? intval($body['id_empleado']) : null;
+      $id_departamento = isset($body['id_departamento']) ? intval($body['id_departamento']) : null;
       $limit = isset($body['limit']) ? intval($body['limit']) : 100;
 
       // Limit max IDs to prevent heavy queries
@@ -3962,39 +3963,75 @@ return function (App $app) {
       // OPTIMIZACIÓN: Si se filtra por empleado, incluir también las órdenes que terminó HOY
       // para que aparezcan en el reporte de eficiencia aunque ya no estén "activas" en su lista.
       if ($id_empleado) {
+        $deptWhere = $id_departamento
+          ? "AND id_departamento = $id_departamento"
+          : "AND id_departamento = (SELECT id_departamento FROM lotes_detalles_empleados_asignados WHERE id_orden IN ($idsStr) LIMIT 1)";
         $whereClause = "WHERE (o._id IN ($idsStr) OR o._id IN (
-            SELECT DISTINCT id_orden 
-            FROM lotes_detalles_empleados_asignados 
-            WHERE id_empleado = $id_empleado 
+            SELECT DISTINCT id_orden
+            FROM lotes_detalles_empleados_asignados
+            WHERE id_empleado = $id_empleado
             AND DATE(fecha_terminado) = CURDATE()
-            AND id_departamento = (SELECT id_departamento FROM lotes_detalles_empleados_asignados WHERE id_orden IN ($idsStr) LIMIT 1)
+            $deptWhere
         ))";
       }
 
       // --- OPTIMIZACIÓN: Usar CTE y evitar subconsultas correlacionadas ---
 
-      // Filtro de empleado para el cálculo de tiempo real
+      // Filtro de empleado (y departamento si se especificó) para el cálculo de tiempo real
       $empleadoCondition = "";
       if ($id_empleado) {
         $empleadoCondition = "AND sub_ldea.id_empleado = $id_empleado";
+        if ($id_departamento) {
+          $empleadoCondition .= " AND sub_ldea.id_departamento = $id_departamento";
+        }
+      }
+
+      // Filtros de departamento para subqueries de tiempo proyectado
+      $empValue = $id_empleado ?: "ldea_sub.id_empleado";
+      if ($id_departamento) {
+        $deptProjTerminadas = "= $id_departamento";
+        $deptProjEnCurso   = "= $id_departamento";
+        $deptProjTotal     = "= $id_departamento";
+      } else {
+        $deptProjTerminadas = "IN (
+                    SELECT DISTINCT ldea_sub.id_departamento
+                    FROM lotes_detalles_empleados_asignados ldea_sub
+                    WHERE ldea_sub.id_orden = o._id
+                    AND ldea_sub.id_empleado = $empValue
+                    AND ldea_sub.fecha_terminado IS NOT NULL
+                )";
+        $deptProjEnCurso = "IN (
+                    SELECT DISTINCT ldea_sub.id_departamento
+                    FROM lotes_detalles_empleados_asignados ldea_sub
+                    WHERE ldea_sub.id_orden = o._id
+                    AND ldea_sub.id_empleado = $empValue
+                    AND ldea_sub.fecha_terminado IS NULL
+                    AND ldea_sub.fecha_inicio IS NOT NULL
+                )";
+        $deptProjTotal = "IN (
+                    SELECT DISTINCT ldea_sub.id_departamento
+                    FROM lotes_detalles_empleados_asignados ldea_sub
+                    WHERE ldea_sub.id_orden = o._id
+                    AND ldea_sub.id_empleado = $empValue
+                )";
       }
 
       $sql = "
         WITH TiemposCalculados AS (
-            SELECT 
+            SELECT
                 sub_ldea.id_orden,
                 SUM(
-                    CASE 
-                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND sub_ldea.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 
+                    CASE
+                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND sub_ldea.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
-                        ELSE 0 
+                        ELSE 0
                     END
                 ) AS tiempo_terminado,
                 SUM(
-                    CASE 
-                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                    CASE
+                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN
                             TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
-                        ELSE 0 
+                        ELSE 0
                     END
                 ) AS tiempo_en_curso
             FROM lotes_detalles_empleados_asignados sub_ldea
@@ -4004,58 +4041,38 @@ return function (App $app) {
             AND sub_ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
             GROUP BY sub_ldea.id_orden
         )
-        SELECT 
+        SELECT
             o._id AS id_orden,
             o.status,
             op.name AS producto,
             op.cantidad,
-            
+
             -- Tiempos Reales (divididos por productos físicos para balancear la suma agrupada)
             COALESCE(tc.tiempo_terminado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealTerminadas,
             COALESCE(tc.tiempo_en_curso, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealEnCurso,
-            
-            -- Tiempos Proyectados (Correlacionados por producto y estado real de la tarea)
+
+            -- Tiempos Proyectados (filtrados por departamento cuando se especifica)
             (
                 SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
                 FROM products_tiempos_de_produccion ptp_sub
                 WHERE ptp_sub.id_product = op.id_woo
-                AND ptp_sub.id_departamento IN (
-                    SELECT DISTINCT ldea_sub.id_departamento
-                    FROM lotes_detalles_empleados_asignados ldea_sub
-                    WHERE ldea_sub.id_orden = o._id
-                    AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
-                    AND ldea_sub.fecha_terminado IS NOT NULL
-                    AND ldea_sub.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-                )
+                AND ptp_sub.id_departamento $deptProjTerminadas
             ) AS totalProjectedTerminadas,
 
             (
                 SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
                 FROM products_tiempos_de_produccion ptp_sub
                 WHERE ptp_sub.id_product = op.id_woo
-                AND ptp_sub.id_departamento IN (
-                    SELECT DISTINCT ldea_sub.id_departamento
-                    FROM lotes_detalles_empleados_asignados ldea_sub
-                    WHERE ldea_sub.id_orden = o._id
-                    AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
-                    AND ldea_sub.fecha_terminado IS NULL
-                    AND ldea_sub.fecha_inicio IS NOT NULL
-                    AND ldea_sub.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-                )
+                AND ptp_sub.id_departamento $deptProjEnCurso
             ) AS totalProjectedEnCurso,
-            
+
             -- Legacy / Totales
             (COALESCE(tc.tiempo_terminado, 0) + COALESCE(tc.tiempo_en_curso, 0)) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
             (
                 SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
                 FROM products_tiempos_de_produccion ptp_sub
                 WHERE ptp_sub.id_product = op.id_woo
-                AND ptp_sub.id_departamento IN (
-                    SELECT DISTINCT ldea_sub.id_departamento
-                    FROM lotes_detalles_empleados_asignados ldea_sub
-                    WHERE ldea_sub.id_orden = o._id
-                    AND ldea_sub.id_empleado = " . ($id_empleado ?: "ldea_sub.id_empleado") . "
-                )
+                AND ptp_sub.id_departamento $deptProjTotal
             ) AS tiempo_proyectado_segundos,
 
             (
@@ -4069,6 +4086,7 @@ return function (App $app) {
                 WHERE ldea_check.id_orden = o._id
                   AND ldea_check.fecha_inicio IS NOT NULL
                   " . ($id_empleado ? "AND ldea_check.id_empleado = $id_empleado" : "") . "
+                  " . ($id_departamento ? "AND ldea_check.id_departamento = $id_departamento" : "") . "
             ) AS tarea_terminada
         FROM 
             ordenes o
