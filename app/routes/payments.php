@@ -140,12 +140,8 @@ return function (App $app) {
           $resultUsuario = $localConnection->goQuery($sql, [$idEmpleado]);
           $periodo = isset($resultUsuario[0]['salario_periodo']) ? $resultUsuario[0]['salario_periodo'] : 'semanal';
           
-          // Refuerzo de cálculo: Si el salario viene del mes completo, prorratear
-          if ($periodo === 'semanal') {
-            $salarioMontoReal = $salario / 4;
-          } elseif ($periodo === 'quincenal') {
-            $salarioMontoReal = $salario / 2;
-          }
+          // El frontend ya envía monto_salario prorateado (periodo × semanas pendientes).
+          // No dividir aquí: $salarioMontoReal = $salario (asignado arriba).
 
           // Calcular el índice del periodo según la frecuencia para el histórico
           $numeroPeriodo = intval(date('W')); // Default: semana
@@ -322,12 +318,8 @@ return function (App $app) {
             $resultUsuario = $localConnection->goQuery($sql, [$idEmpleado]);
             $periodo = isset($resultUsuario[0]['salario_periodo']) ? $resultUsuario[0]['salario_periodo'] : 'semanal';
 
-            // Refuerzo de cálculo: Si el salario viene del mes completo, prorratear
-            if ($periodo === 'semanal') {
-              $salarioMontoReal = $salario / 4;
-            } elseif ($periodo === 'quincenal') {
-              $salarioMontoReal = $salario / 2;
-            }
+            // El frontend ya envía monto_salario prorateado (periodo × semanas pendientes).
+            // No dividir aquí: $salarioMontoReal = $salario (asignado arriba).
 
             // Calcular el índice del periodo según la frecuencia para el histórico
             $numeroPeriodo = intval(date('W')); // Default: semana
