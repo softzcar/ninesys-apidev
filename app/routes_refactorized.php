@@ -813,8 +813,8 @@ return function (App $app) {
       $nombre = 'Administrador';  // Definir nombre por defecto para el administrador
 
       // 4. Crear registro en empresas_usuarios
-      $stmt = $pdo->prepare('INSERT INTO empresas_usuarios (email, password, departamento, id_empresa, activo, acceso, comision, comision_tipo, comision_porcentaje) VALUES (?, ?, ?, ?, 1, 1, 1.00, ?, 0.00)');
-      $stmt->execute([$email, $password_generated, 'Administración', $id_empresa, 'fija']);
+      $stmt = $pdo->prepare('INSERT INTO empresas_usuarios (email, password, departamento, id_empresa, activo, acceso, comision, comision_tipo, comision_porcentaje, salario_monto, salario_periodo) VALUES (?, ?, ?, ?, 1, 1, 1.00, ?, 0.00, ?, ?)');
+      $stmt->execute([$email, $password_generated, 'Administración', $id_empresa, 'fija', 200.00, 'semanal']);
       $id_usuario = $pdo->lastInsertId();
       error_log("DEBUG: Usuario creado con ID: {$id_usuario}");
 
@@ -834,80 +834,80 @@ return function (App $app) {
       $empleados_ejemplo = [
         [
           'nombre' => 'Empleado Impresión',
-          'email' => 'juan.perez@empresa' . $id_empresa . '.com',
+          'email' => 'impresion@empresa' . $id_empresa . '.com',
           'telefono' => '5841255501820',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Impresión',
           'id_departamento' => 1,
           'comision' => 1.00,
           'comision_tipo' => 'fija',
-          'salario_monto' => 400.00,
+          'salario_monto' => 200.00,
           'id_seguridad_social' => '43245432312',
           'dni' => '43543123'
 
         ],
         [
           'nombre' => 'Empleado Estampado',
-          'email' => 'maria.gonzalez@empresa' . $id_empresa . '.com',
+          'email' => 'estampado@empresa' . $id_empresa . '.com',
           'telefono' => '5841487633910',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Estampado',
           'id_departamento' => 2,
           'comision' => 1.00,
           'comision_tipo' => 'fija',
-          'salario_monto' => 400.00,
+          'salario_monto' => 200.00,
           'id_seguridad_social' => '9097897876',
           'dni' => '87987765'
         ],
         [
           'nombre' => 'Empleado Corte',
-          'email' => 'carlos.rodriguez@empresa' . $id_empresa . '.com',
+          'email' => 'corte@empresa' . $id_empresa . '.com',
           'telefono' => '5841623477050',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Corte',
           'id_departamento' => 3,
           'comision' => 1.00,
           'comision_tipo' => 'fija',
-          'salario_monto' => 400.00,
+          'salario_monto' => 200.00,
           'id_seguridad_social' => '878878323433',
           'dni' => '23890763'
         ],
         [
           'nombre' => 'Empleado Costura',
-          'email' => 'ana.martinez@empresa' . $id_empresa . '.com',
+          'email' => 'costura@empresa' . $id_empresa . '.com',
           'telefono' => '5842211299380',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Costura',
           'id_departamento' => 4,
           'comision' => 1.00,
           'comision_tipo' => 'fija',
-          'salario_monto' => 400.00,
+          'salario_monto' => 200.00,
           'id_seguridad_social' => '908787676566',
           'dni' => '12900834'
         ],
         [
           'nombre' => 'Empleado Diseño',
-          'email' => 'luisa.fernandez@empresa' . $id_empresa . '.com',
+          'email' => 'diseno@empresa' . $id_empresa . '.com',
           'telefono' => '5842460154200',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Diseño',
           'id_departamento' => 7,
           'comision' => 1.50,
           'comision_tipo' => 'fija',
-          'salario_monto' => 400.00,
+          'salario_monto' => 200.00,
           'id_seguridad_social' => '6678768768787',
           'dni' => '19899767'
         ],
         [
           'nombre' => 'Empleado Comercialización',
-          'email' => 'roberto.diaz@empresa' . $id_empresa . '.com',
+          'email' => 'ventas@empresa' . $id_empresa . '.com',
           'telefono' => '5841472588060',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Comercialización',
           'id_departamento' => 6,
           'comision' => 5.00,
           'comision_tipo' => 'variable',
-          'salario_monto' => 400.00,
+          'salario_monto' => 200.00,
           'id_seguridad_social' => '132234778653',
           'dni' => '20874445'
         ]
@@ -918,7 +918,7 @@ return function (App $app) {
       // Crear cada empleado de ejemplo
       foreach ($empleados_ejemplo as $empleado_data) {
         // Crear registro en empresas_usuarios
-        $stmt = $pdo->prepare('INSERT INTO empresas_usuarios (nombre, email, telefono, password, departamento, id_empresa, activo, acceso, comision, comision_tipo, comision_porcentaje, salario_monto, id_seguridad_social, dni) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, 0.00, ?, ?, ?)');
+        $stmt = $pdo->prepare('INSERT INTO empresas_usuarios (nombre, email, telefono, password, departamento, id_empresa, activo, acceso, comision, comision_tipo, comision_porcentaje, salario_monto, id_seguridad_social, dni, salario_periodo) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, 0.00, ?, ?, ?, ?)');
         $stmt->execute([
           $empleado_data['nombre'],
           $empleado_data['email'],
@@ -930,7 +930,8 @@ return function (App $app) {
           $empleado_data['comision_tipo'],
           $empleado_data['salario_monto'],
           $empleado_data['id_seguridad_social'],
-          $empleado_data['dni']
+          $empleado_data['dni'],
+          'semanal'
         ]);
         $id_empleado = $pdo->lastInsertId();
 
@@ -961,12 +962,12 @@ return function (App $app) {
           'email' => $email,
           'departamento' => 'Administración',
           'id_departamento' => 5,
-          'salario_base' => 600.00,
+          'salario_base' => 200.00,
           'bonos_fijos' => 50.00
         ]
       ], array_map(function ($emp) {
         return array_merge($emp, [
-          'salario_base' => 450.00, // Salario base por defecto
+          'salario_base' => 200.00, // Salario base por defecto
           'bonos_fijos' => 25.00   // Bonos fijos por defecto
         ]);
       }, $empleados_creados));
@@ -980,7 +981,7 @@ return function (App $app) {
           'USD',
           $empleado['bonos_fijos'],
           date('Y-m-d'),
-          1
+          0
         ]);
         error_log("DEBUG: Registro en empleados_salario creado para empleado ID: {$empleado['id_empleado']}");
       }

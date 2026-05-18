@@ -1041,10 +1041,10 @@ CREATE TABLE `products_tiempos_de_produccion` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Tiempos estándar de producción. Define minutos estimados por producto y departamento para proyección de entregas.';
 
 INSERT INTO `products_tiempos_de_produccion` (`_id`, `id_product`, `id_departamento`, `tiempo`, `moment`) VALUES
-(1, 1, 1, 1800, CURRENT_TIMESTAMP),
-(2, 1, 2, 2400, CURRENT_TIMESTAMP),
-(3, 1, 3, 1200, CURRENT_TIMESTAMP),
-(4, 1, 4, 1800, CURRENT_TIMESTAMP);
+(1, 1, 1, 60, CURRENT_TIMESTAMP),
+(2, 1, 2, 60, CURRENT_TIMESTAMP),
+(3, 1, 3, 60, CURRENT_TIMESTAMP),
+(4, 1, 4, 60, CURRENT_TIMESTAMP);
 CREATE TABLE `product_insumos_asignados` (
   `_id` int(11) NOT NULL,
   `id_product` int(11) DEFAULT NULL COMMENT 'ID del prodducto',
