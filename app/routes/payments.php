@@ -1000,8 +1000,23 @@ return function (App $app) {
   });
 
   $app->get('/pagos/historico/{semana}', function (Request $request, Response $response, array $args) {
-    // $data = $request->getParsedBody();
     $localConnection = new LocalDB();
+    $queryParams = $request->getQueryParams();
+
+    // Preferir filtro por rango de fechas (consistente con reporte-empleado).
+    // Fallback a numero_semana para compatibilidad con llamadas sin fecha.
+    $fechaInicio = isset($queryParams['fecha_inicio']) ? $queryParams['fecha_inicio'] : null;
+    $fechaFin    = isset($queryParams['fecha_fin'])    ? $queryParams['fecha_fin']    : null;
+
+    if ($fechaInicio && $fechaFin) {
+      $whereFechaPago  = "DATE(a.fecha_pago) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+      $whereFechaPagoP = "DATE(p.fecha_pago) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+    } else {
+      $semana = intval($args['semana']);
+      $anioActual = intval(date('Y'));
+      $whereFechaPago  = "ps.numero_semana = {$semana} AND YEAR(a.fecha_pago) = {$anioActual}";
+      $whereFechaPagoP = "ps.numero_semana = {$semana} AND YEAR(p.fecha_pago) = {$anioActual}";
+    }
 
     // PAGOS VENDEDORES
     $sql = "SELECT
@@ -1028,9 +1043,9 @@ return function (App $app) {
         ordenes d ON a.id_orden = d._id
         LEFT JOIN
         metodos_de_pago e ON e._id = a.id_metodos_de_pago
-        JOIN
+        LEFT JOIN
         pagos_salarios ps ON ps.id_pago = a._id
-        WHERE ps.numero_semana = {$args['semana']} AND a.fecha_pago IS NOT NULL AND a.detalle = 'Comercialización'
+        WHERE {$whereFechaPago} AND a.fecha_pago IS NOT NULL AND a.detalle = 'Comercialización'
         GROUP BY
         a._id
         ORDER BY
@@ -1042,46 +1057,44 @@ return function (App $app) {
     // CONSULTAS ADICIONALES PARA DETALLES DE RECIBO (Salarios, Bonos, Descuentos)
 
     // 1. Salarios
-    $sqlSalarios = "SELECT 
-        SUM(ps.monto) as monto, 
-        ps.tipo_salario, 
-        p.id_empleado 
-        FROM pagos_salarios ps 
-        JOIN pagos p ON ps.id_pago = p._id 
-        WHERE ps.numero_semana = {$args['semana']} AND p.fecha_pago IS NOT NULL
-        GROUP BY p.id_empleado"; // Agrupamos por empleado porque el salario es por periodo, no por orden individual necesariamente para el recibo global
+    $sqlSalarios = "SELECT
+        SUM(ps.monto) as monto,
+        ps.tipo_salario,
+        p.id_empleado
+        FROM pagos_salarios ps
+        JOIN pagos p ON ps.id_pago = p._id
+        WHERE {$whereFechaPagoP} AND p.fecha_pago IS NOT NULL
+        GROUP BY p.id_empleado";
 
     $salariosData = $localConnection->goQuery($sqlSalarios);
     $object['data']['salarios_detalles'] = $salariosData ?: [];
 
     // 2. Bonos (Abonos extra)
-    $sqlBonos = "SELECT 
-        pa.monto, 
-        pa.descripcion, 
-        p.id_empleado 
-        FROM pagos_abonos pa 
-        JOIN pagos p ON pa.id_pago = p._id 
-        JOIN pagos_salarios ps ON ps.id_pago = p._id
-        WHERE ps.numero_semana = {$args['semana']} AND p.fecha_pago IS NOT NULL";
+    $sqlBonos = "SELECT
+        pa.monto,
+        pa.descripcion,
+        p.id_empleado
+        FROM pagos_abonos pa
+        JOIN pagos p ON pa.id_pago = p._id
+        WHERE {$whereFechaPagoP} AND p.fecha_pago IS NOT NULL";
 
     $bonosData = $localConnection->goQuery($sqlBonos);
     $object['data']['bonos_detalles'] = $bonosData ?: [];
 
     // 3. Descuentos
-    $sqlDescuentos = "SELECT 
-        pd.monto, 
-        pd.descripcion, 
-        p.id_empleado 
-        FROM pagos_descuentos pd 
-        JOIN pagos p ON pd.id_pago = p._id 
-        JOIN pagos_salarios ps ON ps.id_pago = p._id
-        WHERE ps.numero_semana = {$args['semana']} AND p.fecha_pago IS NOT NULL";
+    $sqlDescuentos = "SELECT
+        pd.monto,
+        pd.descripcion,
+        p.id_empleado
+        FROM pagos_descuentos pd
+        JOIN pagos p ON pd.id_pago = p._id
+        WHERE {$whereFechaPagoP} AND p.fecha_pago IS NOT NULL";
 
     $descuentosData = $localConnection->goQuery($sqlDescuentos);
     $object['data']['descuentos_detalles'] = $descuentosData ?: [];
 
 
-    // PAGOS ESPLEADOS
+    // PAGOS EMPLEADOS
     $sql = 'SELECT
             a._id id_pago,
             NULL as cod,
@@ -1106,8 +1119,8 @@ return function (App $app) {
             pagos a
             LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
             JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
-            JOIN pagos_salarios ps ON ps.id_pago = a._id
-            WHERE ps.numero_semana = ' . $args['semana'] . ' AND a.fecha_pago IS NOT NULL
+            LEFT JOIN pagos_salarios ps ON ps.id_pago = a._id
+            WHERE ' . $whereFechaPago . ' AND a.fecha_pago IS NOT NULL
             AND a.detalle NOT IN (\'Comercialización\', \'Diseño\', \'ajuste\', \'personalización\')
             ORDER BY
             c.nombre ASC,
@@ -1130,7 +1143,7 @@ return function (App $app) {
         FROM
             pagos p
         JOIN revisiones r ON p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado
-        WHERE WEEK(p.fecha_pago, 1) = ' . $args['semana'] . ' AND p.fecha_pago IS NOT NULL
+        WHERE ' . $whereFechaPagoP . ' AND p.fecha_pago IS NOT NULL
         GROUP BY p._id
         ';
     $object['sql_disenos'] = $sql;
