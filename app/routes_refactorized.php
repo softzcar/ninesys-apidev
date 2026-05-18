@@ -900,7 +900,7 @@ return function (App $app) {
         ],
         [
           'nombre' => 'Empleado Comercialización',
-          'email' => 'ventas@empresa' . $id_empresa . '.com',
+          'email' => 'comercializacion@empresa' . $id_empresa . '.com',
           'telefono' => '5841472588060',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Comercialización',

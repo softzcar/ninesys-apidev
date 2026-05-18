@@ -910,7 +910,7 @@ return function (App $app) {
       $empleados_ejemplo = [
         [
           'nombre' => 'Empleado Impresión',
-          'email' => 'juan.perez@empresa' . $id_empresa . '.com',
+          'email' => 'impresion@empresa' . $id_empresa . '.com',
           'telefono' => '5841255501820',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Impresión',
@@ -924,7 +924,7 @@ return function (App $app) {
         ],
         [
           'nombre' => 'Empleado Estampado',
-          'email' => 'maria.gonzalez@empresa' . $id_empresa . '.com',
+          'email' => 'estampado@empresa' . $id_empresa . '.com',
           'telefono' => '5841487633910',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Estampado',
@@ -937,7 +937,7 @@ return function (App $app) {
         ],
         [
           'nombre' => 'Empleado Corte',
-          'email' => 'carlos.rodriguez@empresa' . $id_empresa . '.com',
+          'email' => 'corte@empresa' . $id_empresa . '.com',
           'telefono' => '5841623477050',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Corte',
@@ -950,7 +950,7 @@ return function (App $app) {
         ],
         [
           'nombre' => 'Empleado Costura',
-          'email' => 'ana.martinez@empresa' . $id_empresa . '.com',
+          'email' => 'costura@empresa' . $id_empresa . '.com',
           'telefono' => '5842211299380',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Costura',
@@ -963,7 +963,7 @@ return function (App $app) {
         ],
         [
           'nombre' => 'Empleado Diseño',
-          'email' => 'luisa.fernandez@empresa' . $id_empresa . '.com',
+          'email' => 'diseno@empresa' . $id_empresa . '.com',
           'telefono' => '5842460154200',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Diseño',
@@ -976,7 +976,7 @@ return function (App $app) {
         ],
         [
           'nombre' => 'Empleado Comercialización',
-          'email' => 'roberto.diaz@empresa' . $id_empresa . '.com',
+          'email' => 'comercializacion@empresa' . $id_empresa . '.com',
           'telefono' => '5841472588060',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Comercialización',
