@@ -203,7 +203,6 @@ return function (App $app) {
       return ApiResponse::success($response, 'Pago procesado correctamente', [
         'cantidad_pagos' => $cantidadDePagos,
         'monto_total_pagado' => $montoTotalPago,
-        'monto_por_registro' => $montoPorRegistroDePago
       ]);
 
     } catch (\Throwable $e) {
