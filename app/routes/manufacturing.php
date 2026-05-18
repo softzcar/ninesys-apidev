@@ -895,10 +895,11 @@ return function (App $app) {
           $piezas = $localConnection->goQuery($sqlUnidades)[0]['unidades'];
         }
 
-        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
+        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : 'NULL';
+        $id_reposicion_cond = ($id_reposicion_val === 'NULL') ? 'id_reposicion IS NULL' : "id_reposicion = $id_reposicion_val";
 
         // CHECK DUPLICATE BEFORE INSERT (Revised to include product ID)
-        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND $id_reposicion_cond AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
@@ -970,9 +971,10 @@ return function (App $app) {
         }
 
         $id_reposicion_val = isset($miEmpleado['id_reposicion']) ? $miEmpleado['id_reposicion'] : 'NULL';
+        $id_reposicion_cond = ($id_reposicion_val === 'NULL') ? 'id_reposicion IS NULL' : "id_reposicion = $id_reposicion_val";
 
         // CHECK DUPLICATE BEFORE INSERT (Revised to include product ID)
-        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND $id_reposicion_cond AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_lotes_detalles = $id_lotes_detalles LIMIT 1";
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
@@ -1049,10 +1051,11 @@ return function (App $app) {
           $montoTotalVariable = 0;
         }
 
-        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : '0';
+        $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : 'NULL';
+        $id_reposicion_cond = ($id_reposicion_val === 'NULL') ? 'id_reposicion IS NULL' : "id_reposicion = $id_reposicion_val";
 
         // CHECK DUPLICATE BEFORE INSERT (Revised to be assignment-based)
-        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND id_reposicion = $id_reposicion_val AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
+        $sqlCheck = "SELECT _id FROM pagos WHERE id_orden = {$miEmpleado['id_orden']} AND $id_reposicion_cond AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
