@@ -50,7 +50,12 @@ perform_backend_deploy() {
         echo '>>> En el servidor: Fetching cambios...' && \
         git fetch origin && \
         echo '>>> En el servidor: Resetting --hard origin/$BRANCH...' && \
-        git reset --hard origin/$BRANCH"
+        git reset --hard origin/$BRANCH && \
+        echo '>>> Reseteando OPcache PHP...' && \
+        echo '<?php opcache_reset(); echo \"ok\";' > $REMOTE_PATH/public/opcache_reset.php && \
+        curl -s https://api.nineteengreen.com/opcache_reset.php && \
+        rm $REMOTE_PATH/public/opcache_reset.php && \
+        echo ' - OPcache reseteado'"
 
     if [ $? -eq 0 ]; then
         echo "✅ DESPLIEGUE EN $TARGET COMPLETADO CON ÉXITO"
