@@ -353,15 +353,15 @@ return function (App $app) {
     $idProductVal = intval($data['id_product']);
     $idDeptoVal = intval($data['id_departamento']);
 
-    $sqlUpdatePagos = "UPDATE pagos p 
-        JOIN lotes_detalles_empleados_asignados a ON p.id_lotes_detalles = a._id 
+    $sqlUpdatePagos = "UPDATE pagos p
+        JOIN lotes_detalles_empleados_asignados a ON p.id_lotes_detalles = a._id
         SET p.monto_pago = (
               SELECT SUM(
-                  IFNULL(pc.comision, 0) * 
+                  IFNULL(pc.comision, 0) *
                   ( IF(a.id_departamento = 3,
-                      (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op._id),
+                      COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op._id), 0), op.cantidad),
                       op.cantidad
-                    ) ) * 
+                    ) ) *
                   (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
               )
               FROM ordenes_productos op
@@ -383,9 +383,9 @@ return function (App $app) {
           p.cantidad = (
               SELECT SUM(
                   ( IF(a.id_departamento = 3,
-                      (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op3._id),
+                      COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op3._id), 0), op3.cantidad),
                       op3.cantidad
-                    ) ) * 
+                    ) ) *
                   (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
               )
               FROM ordenes_productos op3
@@ -394,17 +394,17 @@ return function (App $app) {
                 AND (p_woo3.fisico = 1 OR p_woo3.fisico IS NULL)
                 AND (p_woo3.es_diseno = 0 OR p_woo3.es_diseno IS NULL)
           )
-        WHERE p.fecha_pago IS NULL 
-          AND p.comision_tipo = 'variable' 
+        WHERE p.fecha_pago IS NULL
+          AND p.comision_tipo = 'variable'
           AND a.id_departamento = {$idDeptoVal}
           AND p.detalle != 'Corte-Excedente'
           AND EXISTS (
-              SELECT 1 FROM ordenes_productos op_ex 
+              SELECT 1 FROM ordenes_productos op_ex
               WHERE op_ex.id_orden = a.id_orden AND op_ex.id_woo = {$idProductVal}
           )
           AND (
-              SELECT eu.salario_tipo 
-              FROM api_empresas.empresas_usuarios eu 
+              SELECT eu.salario_tipo
+              FROM api_empresas.empresas_usuarios eu
               WHERE eu.id_usuario = a.id_empleado
           ) != 'Salario'";
 
@@ -479,15 +479,15 @@ return function (App $app) {
         $idProductVal = intval($id_product);
         $idDeptoVal = intval($id_departamento);
 
-        $sqlUpdatePagos = "UPDATE pagos p 
-        JOIN lotes_detalles_empleados_asignados a ON p.id_lotes_detalles = a._id 
+        $sqlUpdatePagos = "UPDATE pagos p
+        JOIN lotes_detalles_empleados_asignados a ON p.id_lotes_detalles = a._id
         SET p.monto_pago = (
               SELECT SUM(
-                  IFNULL(pc.comision, 0) * 
+                  IFNULL(pc.comision, 0) *
                   ( IF(a.id_departamento = 3,
-                      (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op._id),
+                      COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op._id), 0), op.cantidad),
                       op.cantidad
-                    ) ) * 
+                    ) ) *
                   (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
               )
               FROM ordenes_productos op
@@ -509,9 +509,9 @@ return function (App $app) {
           p.cantidad = (
               SELECT SUM(
                   ( IF(a.id_departamento = 3,
-                      (SELECT IFNULL(SUM(ic.cantidad), 0) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op3._id),
+                      COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op3._id), 0), op3.cantidad),
                       op3.cantidad
-                    ) ) * 
+                    ) ) *
                   (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
               )
               FROM ordenes_productos op3
@@ -520,17 +520,17 @@ return function (App $app) {
                 AND (p_woo3.fisico = 1 OR p_woo3.fisico IS NULL)
                 AND (p_woo3.es_diseno = 0 OR p_woo3.es_diseno IS NULL)
           )
-        WHERE p.fecha_pago IS NULL 
-          AND p.comision_tipo = 'variable' 
+        WHERE p.fecha_pago IS NULL
+          AND p.comision_tipo = 'variable'
           AND a.id_departamento = {$idDeptoVal}
           AND p.detalle != 'Corte-Excedente'
           AND EXISTS (
-              SELECT 1 FROM ordenes_productos op_ex 
+              SELECT 1 FROM ordenes_productos op_ex
               WHERE op_ex.id_orden = a.id_orden AND op_ex.id_woo = {$idProductVal}
           )
           AND (
-              SELECT eu.salario_tipo 
-              FROM api_empresas.empresas_usuarios eu 
+              SELECT eu.salario_tipo
+              FROM api_empresas.empresas_usuarios eu
               WHERE eu.id_usuario = a.id_empleado
           ) != 'Salario'";
 
