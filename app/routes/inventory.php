@@ -1886,7 +1886,9 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                       a.id_woo id_product,
                       a.name producto,
                       (SELECT nombre FROM sizes WHERE _id = a.talla) talla,
-                      a.cantidad unidades,
+                      IF(b.id_departamento = 3,
+                          COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = a._id), 0), a.cantidad),
+                          a.cantidad) AS unidades,
                       (SELECT tela FROM catalogo_telas WHERE _id = a.id_tela) AS tela_vendedor,
                       b.id_departamento,
                       (SELECT departamento FROM departamentos WHERE _id = b.id_departamento) departamento,
@@ -1894,7 +1896,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                       b.unidad unidad_de_medida,
                       b.id_catalogo_insumos_productos,
                       (SELECT nombre FROM catalogo_insumos_productos WHERE _id = b.id_catalogo_insumos_productos) catalogo,
-                      tp.usa_desperdicio
+                      tp.usa_desperdicio,
+                      COALESCE((SELECT MIN(i.tipo_insumo) FROM inventario i WHERE i.id_catalogo = b.id_catalogo_insumos_productos), 'general') AS tipo_insumo
                   FROM
                       ordenes_productos a
                   LEFT JOIN product_insumos_asignados b ON b.id_product = a.id_woo
