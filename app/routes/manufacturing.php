@@ -872,16 +872,16 @@ return function (App $app) {
           $rspExcedente = $localConnection->goQuery($sqlExcedente);
           $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
           if ($cantidad_real > 0) {
-            // Recalcular comisión completa sobre las piezas reales cortadas (no solo el excedente)
-            $piezas_orden = floatval($piezas);
             $piezas = $cantidad_real * ($porcentajeAsignado / 100);
-            if ($cantidad_real > $piezas_orden) {
-              // Excedente: recalcular comisión total sobre todas las piezas cortadas
-              $totalComimision = $cantidad_real * $miEmpleado['precio_unitario_promedio'] * ($comisionValue / 100) * ($porcentajeAsignado / 100);
-            } else {
-              // Sin excedente o menos piezas: pagar exactamente lo cortado
-              $totalComimision = $cantidad_real * $miEmpleado['precio_unitario_promedio'] * ($comisionValue / 100) * ($porcentajeAsignado / 100);
-            }
+            $sqlMontoPct = "SELECT IFNULL(SUM(ic.cantidad * op.precio_unitario * ({$comisionValue} / 100)), 0) AS monto
+                FROM inventario_corte ic
+                JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos
+                JOIN products p ON p._id = op.id_woo
+                WHERE ic.id_orden = {$miEmpleado['id_orden']}
+                  AND (p.fisico = 1 OR p.fisico IS NULL)
+                  AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+            $rspMontoPct = $localConnection->goQuery($sqlMontoPct);
+            $totalComimision = floatval($rspMontoPct[0]['monto'] ?? 0) * ($porcentajeAsignado / 100);
           }
         }
 
@@ -2236,18 +2236,34 @@ return function (App $app) {
           $comision_guardar = $comision_value_emp;
 
           if ($comision_tipo === 'porcentaje') {
-            $sql_calc = "SELECT SUM(c.cantidad) as total_piezas, SUM(c.cantidad * c.precio_unitario * ($comision_value_emp / 100)) AS total_monto FROM ordenes_productos c JOIN products p ON c.id_woo = p._id WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+            $sql_calc = "SELECT IFNULL(SUM(ic.cantidad), 0) AS total_piezas, IFNULL(SUM(ic.cantidad * op.precio_unitario * ($comision_value_emp / 100)), 0) AS total_monto FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos JOIN products p ON p._id = op.id_woo WHERE ic.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual]);
-            $cantidad_piezas = $res_calc[0]['total_piezas'] ?? 0;
-            $total_monto_pago = ($res_calc[0]['total_monto'] ?? 0) * ($procentaje_comision_asignado / 100);
+            $cantidad_real_lote = floatval($res_calc[0]['total_piezas'] ?? 0);
+            if ($cantidad_real_lote > 0) {
+              $cantidad_piezas = $cantidad_real_lote * ($procentaje_comision_asignado / 100);
+              $total_monto_pago = floatval($res_calc[0]['total_monto'] ?? 0) * ($procentaje_comision_asignado / 100);
+            } else {
+              $sql_calc_fb = "SELECT SUM(c.cantidad) as total_piezas, SUM(c.cantidad * c.precio_unitario * ($comision_value_emp / 100)) AS total_monto FROM ordenes_productos c JOIN products p ON c.id_woo = p._id WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+              $res_calc_fb = $localConnection->goQuery($sql_calc_fb, [$id_orden_actual]);
+              $cantidad_piezas = $res_calc_fb[0]['total_piezas'] ?? 0;
+              $total_monto_pago = ($res_calc_fb[0]['total_monto'] ?? 0) * ($procentaje_comision_asignado / 100);
+            }
           } elseif ($comision_tipo === 'fija') {
-            $sql_calc = "SELECT SUM(c.cantidad) as total_piezas FROM ordenes_productos c JOIN products p ON c.id_woo = p._id WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+            $sql_calc = "SELECT IFNULL(SUM(ic.cantidad), 0) AS total_piezas FROM inventario_corte ic WHERE ic.id_orden = ?";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual]);
-            $cantidad_piezas = $res_calc[0]['total_piezas'] ?? 0;
-            $total_monto_pago = ($cantidad_piezas * $comision_value_emp) * ($procentaje_comision_asignado / 100);
+            $cantidad_real_lote = floatval($res_calc[0]['total_piezas'] ?? 0);
+            if ($cantidad_real_lote > 0) {
+              $cantidad_piezas = $cantidad_real_lote * ($procentaje_comision_asignado / 100);
+              $total_monto_pago = ($cantidad_real_lote * $comision_value_emp) * ($procentaje_comision_asignado / 100);
+            } else {
+              $sql_calc_fb = "SELECT SUM(c.cantidad) as total_piezas FROM ordenes_productos c JOIN products p ON c.id_woo = p._id WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+              $res_calc_fb = $localConnection->goQuery($sql_calc_fb, [$id_orden_actual]);
+              $cantidad_piezas = $res_calc_fb[0]['total_piezas'] ?? 0;
+              $total_monto_pago = ($cantidad_piezas * $comision_value_emp) * ($procentaje_comision_asignado / 100);
+            }
           } else {
-            $sql_calc = "SELECT c.cantidad, IFNULL(pc.comision, 0) AS com_prod FROM ordenes_productos c JOIN products p ON c.id_woo = p._id LEFT JOIN products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = ? WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
-            $res_calc = $localConnection->goQuery($sql_calc, [$id_departamento, $id_orden_actual]);
+            $sql_calc = "SELECT COALESCE(NULLIF(SUM(ic.cantidad), 0), op.cantidad) AS cantidad, IFNULL(pc.comision, 0) AS com_prod FROM ordenes_productos op JOIN products p ON p._id = op.id_woo LEFT JOIN inventario_corte ic ON ic.id_ordenes_productos = op._id AND ic.id_orden = ? LEFT JOIN products_comisiones pc ON pc.id_product = op.id_woo AND pc.id_departamento = ? WHERE op.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL) GROUP BY op._id";
+            $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual, $id_departamento, $id_orden_actual]);
             $comision_guardar = $res_calc[0]['com_prod'] ?? 0;
             foreach ($res_calc as $prod) {
               $cantidad_piezas += $prod['cantidad'];
