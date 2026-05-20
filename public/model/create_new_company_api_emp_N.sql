@@ -393,7 +393,10 @@ INSERT INTO `inventario` (`_id`, `sku`, `id_catalogo`, `tipo_insumo`, `insumo`, 
 (4, 'TIN_M_001', 4, 'tinta', 'Tinta Magenta', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'MAGENTA', NULL, NULL, 'Tinta magenta para impresoras', 'Impresión', CURRENT_TIMESTAMP),
 (5, 'TIN_Y_001', 4, 'tinta', 'Tinta Yellow', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'YELLOW', NULL, NULL, 'Tinta yellow para impresoras', 'Impresión', CURRENT_TIMESTAMP),
 (6, 'TIN_K_001', 4, 'tinta', 'Tinta Black', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'BLACK', NULL, NULL, 'Tinta negra para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(7, 'BOT_001', 3, 'general', 'Botones blancos', 'Und', 0.50, 1.0, 1000.00, 1000.00, 'BLANCO', NULL, NULL, 'Botones blancos para prendas', 'Costura', CURRENT_TIMESTAMP);
+(7, 'BOT_001', 3, 'general', 'Botones blancos', 'Und', 0.50, 1.0, 1000.00, 1000.00, 'BLANCO', NULL, NULL, 'Botones blancos para prendas', 'Costura', CURRENT_TIMESTAMP),
+(8, 'TEL_002', 5, 'tela', 'Tela Licra', 'Kg', 50.00, 4.0, 25.00, 25.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP),
+(9, 'TEL_003', 2, 'tela', 'Tela Atlética', 'Kg', 40.00, 4.0, 22.00, 22.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP),
+(10, 'TEL_005', 6, 'tela', 'Tela Algodón', 'Kg', 65.00, 4.0, 25.00, 25.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP);
 CREATE TABLE `inventario_movimientos` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la  orden - lote',
@@ -917,6 +920,19 @@ VALUES (
     'Diseño Gráfico de pruebas',
     '1',
     '2025-09-25 13:36:26'
+  ),
+  (
+    3,
+    'Franela Sublimada',
+    'FRA_SUB_001',
+    1,
+    0,
+    NULL,
+    0.00,
+    0,
+    NULL,
+    '1',
+    CURRENT_TIMESTAMP
   );
 CREATE TABLE `products_attributes` (
   `_id` int(11) NOT NULL,
@@ -946,11 +962,15 @@ INSERT INTO `products_comisiones` (
     `comision`
   )
 VALUES (1, 1, 1, 0.50),
-(2, 1, 2, 0.50), 
+(2, 1, 2, 0.50),
 (3, 1, 3, 0.50),
 (4, 1, 4, 0.50),
 (5, 1, 6, 0.50),
-(6, 1, 7, 0.50);
+(6, 1, 7, 0.50),
+(7, 3, 1, 0.60),
+(8, 3, 2, 0.50),
+(9, 3, 3, 0.25),
+(10, 3, 4, 0.30);
 CREATE TABLE `empleados_salario` (
   `id_empleado` INT(11) UNSIGNED NOT NULL COMMENT 'ID del empleado (Referencia a la tabla principal de empleados)',
   `sueldo_base` DECIMAL(10, 2) NOT NULL DEFAULT 0.00 COMMENT 'Salario mensual fijo antes de cualquier deducción o bono.',
@@ -1023,7 +1043,8 @@ CREATE TABLE `pagos_descuentos` (
 INSERT INTO `products_prices` (`_id`, `id_product`, `price`, `descripcion`) VALUES
 (1, 1, 25.00, 'Detal'),
 (2, 1, 22.00, 'Mayor'),
-(3, 2, 15.00, 'Unitario');
+(3, 2, 15.00, 'Unitario'),
+(4, 3, 20.00, 'Detal');
 CREATE TABLE `products_sizes_eficiencia` (
   `_id` int(11) NOT NULL COMMENT 'ID único',
   `id_size` int(11) DEFAULT NULL COMMENT 'ID de la talla',
@@ -1044,7 +1065,11 @@ INSERT INTO `products_tiempos_de_produccion` (`_id`, `id_product`, `id_departame
 (1, 1, 1, 60, CURRENT_TIMESTAMP),
 (2, 1, 2, 60, CURRENT_TIMESTAMP),
 (3, 1, 3, 60, CURRENT_TIMESTAMP),
-(4, 1, 4, 60, CURRENT_TIMESTAMP);
+(4, 1, 4, 60, CURRENT_TIMESTAMP),
+(5, 3, 3, 60, CURRENT_TIMESTAMP),
+(6, 3, 1, 60, CURRENT_TIMESTAMP),
+(7, 3, 2, 60, CURRENT_TIMESTAMP),
+(8, 3, 4, 60, CURRENT_TIMESTAMP);
 CREATE TABLE `product_insumos_asignados` (
   `_id` int(11) NOT NULL,
   `id_product` int(11) DEFAULT NULL COMMENT 'ID del prodducto',
@@ -1073,7 +1098,22 @@ INSERT INTO `product_insumos_asignados` (`_id`, `id_product`, `id_catalogo_insum
 (13, 1, 3, 4, 1, 6.00, 'Und'),
 (14, 1, 3, 4, 2, 6.00, 'Und'),
 (15, 1, 3, 4, 3, 6.00, 'Und'),
-(16, 1, 3, 4, 4, 6.00, 'Und');
+(16, 1, 3, 4, 4, 6.00, 'Und'),
+-- Franela Sublimada: Impresión — Papel para sublimación (cat 1)
+(17, 3, 1, 1, 1, 1.00, 'Mt'),
+(18, 3, 1, 1, 2, 1.00, 'Mt'),
+(19, 3, 1, 1, 3, 1.00, 'Mt'),
+(20, 3, 1, 1, 4, 1.00, 'Mt'),
+-- Franela Sublimada: Estampado — Tela Algodón (cat 6)
+(21, 3, 6, 2, 1, 1.00, 'Mt'),
+(22, 3, 6, 2, 2, 1.00, 'Mt'),
+(23, 3, 6, 2, 3, 1.00, 'Mt'),
+(24, 3, 6, 2, 4, 1.00, 'Mt'),
+-- Franela Sublimada: Estampado — Tela Licra (cat 5)
+(25, 3, 5, 2, 1, 0.50, 'Mt'),
+(26, 3, 5, 2, 2, 0.50, 'Mt'),
+(27, 3, 5, 2, 3, 0.50, 'Mt'),
+(28, 3, 5, 2, 4, 0.50, 'Mt');
 CREATE TABLE `rendimiento` (
   `_id` int(11) NOT NULL,
   `id_orden` int(11) DEFAULT NULL,
