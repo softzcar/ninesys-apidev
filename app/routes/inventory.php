@@ -2951,6 +2951,778 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
     });
 
+    // === NUEVAS RUTAS PARA CARGA DIRECTA DE EXCEL (SOPORTE FRONTEND LEGACY) ===
+    $app->get('/api/inventario/carga-directa', function (Request $request, Response $response) {
+        $db = new LocalDB();
+        $empresa = $db->goQuery('SELECT nombre_empresa FROM api_empresas.empresas WHERE _id = ?', [ID_EMPRESA]);
+        $db->disconnect();
+        $companyName = !empty($empresa) && is_array($empresa) ? $empresa[0]['nombre_empresa'] : 'Empresa ' . ID_EMPRESA;
+
+        $html = '<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carga Directa de Inventario - Ninesys</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0b0f19 0%, #111827 50%, #1e1b4b 100%);
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: \'Outfit\', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 680px;
+            z-index: 10;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .logo-container {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 64px;
+            height: 64px;
+            background: var(--accent-gradient);
+            border-radius: 18px;
+            margin-bottom: 1.25rem;
+            box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4);
+            animation: pulse-glow 3s infinite alternate;
+        }
+
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 5px 15px -5px rgba(99, 102, 241, 0.4); }
+            100% { box-shadow: 0 15px 35px 5px rgba(139, 92, 246, 0.6); }
+        }
+
+        .logo-icon {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff 30%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 1.05rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .badge {
+            display: inline-block;
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            padding: 0.25rem 0.75rem;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .form-group {
+            margin-bottom: 2rem;
+        }
+
+        .drop-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 3.5rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.02);
+            position: relative;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--accent-primary);
+            background: rgba(99, 102, 241, 0.05);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.1) inset;
+        }
+
+        .drop-zone-icon {
+            font-size: 3rem;
+            color: var(--accent-primary);
+            margin-bottom: 1rem;
+            display: block;
+            transition: transform 0.3s ease;
+        }
+
+        .drop-zone:hover .drop-zone-icon {
+            transform: translateY(-5px);
+        }
+
+        .drop-zone-text {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text-main);
+        }
+
+        .drop-zone-subtext {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        #excel_file {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .file-selected-indicator {
+            display: none;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            margin-top: 1rem;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            color: #34d399;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 1rem 1.5rem;
+            border-radius: 16px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            color: #fff;
+            background: var(--accent-gradient);
+            box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px -5px rgba(139, 92, 246, 0.5);
+            filter: brightness(1.1);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .btn.loading .spinner {
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <div class="logo-container">
+                    <span class="logo-icon">N</span>
+                </div>
+                <h1>Carga Directa de Inventario</h1>
+                <p class="subtitle">Importación masiva de insumos vía Excel</p>
+                <span class="badge">' . htmlspecialchars($companyName) . '</span>
+            </div>
+
+            <form id="upload-form" method="POST" enctype="multipart/form-data">
+                <div class="form-group">
+                    <div class="drop-zone" id="drop-zone">
+                        <span class="drop-zone-icon">📥</span>
+                        <p class="drop-zone-text">Arrastra tu archivo aquí o haz clic para explorar</p>
+                        <p class="drop-zone-subtext">Formatos permitidos: .xlsx (Plantilla del sistema)</p>
+                        <input type="file" name="excel_file" id="excel_file" accept=".xlsx" required>
+                    </div>
+                    <div class="file-selected-indicator" id="file-indicator">
+                        <span>✔</span>
+                        <span id="selected-filename">Archivo seleccionado</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn" id="submit-btn">
+                    <span class="spinner"></span>
+                    <span class="btn-text">Subir y Procesar Inventario</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById(\'excel_file\');
+        const dropZone = document.getElementById(\'drop-zone\');
+        const indicator = document.getElementById(\'file-indicator\');
+        const filenameSpan = document.getElementById(\'selected-filename\');
+        const form = document.getElementById(\'upload-form\');
+        const btn = document.getElementById(\'submit-btn\');
+
+        fileInput.addEventListener(\'change\', () => {
+            if (fileInput.files.length > 0) {
+                filenameSpan.textContent = fileInput.files[0].name;
+                indicator.style.display = \'flex\';
+            } else {
+                indicator.style.display = \'none\';
+            }
+        });
+
+        [\'dragenter\', \'dragover\'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.add(\'dragover\');
+            }, false);
+        });
+
+        [\'dragleave\', \'drop\'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.remove(\'dragover\');
+            }, false);
+        });
+
+        form.addEventListener(\'submit\', () => {
+            btn.disabled = true;
+            btn.classList.add(\'loading\');
+        });
+    </script>
+</body>
+</html>';
+
+        $response->getBody()->write($html);
+        return $response->withHeader('Content-Type', 'text/html')->withStatus(200);
+    });
+
+    $app->post('/api/inventario/carga-directa', function (Request $request, Response $response) {
+        $uploadedFiles = $request->getUploadedFiles();
+        $uploadedFile = $uploadedFiles['excel_file'] ?? null;
+
+        $db = new LocalDB();
+        $empresa = $db->goQuery('SELECT nombre_empresa FROM api_empresas.empresas WHERE _id = ?', [ID_EMPRESA]);
+        $companyName = !empty($empresa) && is_array($empresa) ? $empresa[0]['nombre_empresa'] : 'Empresa ' . ID_EMPRESA;
+
+        $success = false;
+        $processed_count = 0;
+        $error_list = [];
+        $error_message = null;
+
+        if (!$uploadedFile || $uploadedFile->getError() !== UPLOAD_ERR_OK) {
+            $error_message = 'No se subió ningún archivo o hubo un error en la carga.';
+        } else {
+            $directory = __DIR__ . '/../../public/downloads/carga_inventario';
+            if (!is_dir($directory)) {
+                mkdir($directory, 0755, true);
+            }
+            $extension = pathinfo($uploadedFile->getClientFilename(), PATHINFO_EXTENSION);
+            $filename = bin2hex(random_bytes(8)) . '.' . $extension;
+            $filepath = $directory . DIRECTORY_SEPARATOR . $filename;
+            
+            try {
+                $uploadedFile->moveTo($filepath);
+
+                // Cargar el spreadsheet
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($filepath);
+                $worksheet = $spreadsheet->getSheetByName('Inventario');
+                if (!$worksheet) {
+                    $worksheet = $spreadsheet->getActiveSheet();
+                }
+
+                $rows = $worksheet->toArray(null, true, true, true);
+
+                if (file_exists($filepath)) {
+                    unlink($filepath);
+                }
+
+                // Cargar mapeos de departamentos
+                $departamentos_db = $db->goQuery('SELECT _id, departamento FROM departamentos');
+                $departamento_map = [];
+                if (is_array($departamentos_db)) {
+                    $departamento_map = array_column($departamentos_db, '_id', 'departamento');
+                }
+
+                // Cargar mapeos de catálogo
+                $catalogo_insumos_db = $db->goQuery('SELECT _id, nombre FROM catalogo_insumos_productos');
+                $catalogo_insumo_map = [];
+                if (is_array($catalogo_insumos_db)) {
+                    $catalogo_insumo_map = array_column($catalogo_insumos_db, '_id', 'nombre');
+                }
+
+                // Iterar desde fila 2
+                for ($i = 2; $i <= count($rows); $i++) {
+                    $row = $rows[$i];
+                    
+                    $sku = $row['A'] ?? null;
+                    $nombre_inventario = $row['B'] ?? null;
+                    $tipo_insumo_excel = $row['C'] ?? null;
+                    $nombre_catalogo_excel = $row['D'] ?? null;
+                    $cantidad = $row['E'] ?? null;
+                    $unidad_excel = $row['F'] ?? null;
+                    $costo = $row['G'] ?? null;
+                    $rendimiento = $row['H'] ?? null;
+                    $departamento_nombre_excel = $row['I'] ?? null;
+
+                    // Si toda la fila está vacía, se ignora
+                    if (empty($sku) && empty($nombre_inventario) && empty($tipo_insumo_excel) && empty($nombre_catalogo_excel) && empty($cantidad) && empty($unidad_excel) && empty($costo) && empty($departamento_nombre_excel)) {
+                        continue;
+                    }
+
+                    // Validar campos requeridos
+                    if (empty($sku) || empty($nombre_inventario) || empty($tipo_insumo_excel) || empty($nombre_catalogo_excel) || is_null($cantidad) || $cantidad === '' || empty($unidad_excel) || is_null($costo) || $costo === '' || empty($departamento_nombre_excel)) {
+                        $error_list[] = "Fila {$i}: Registro incompleto. Por favor, asegúrese de rellenar todas las columnas requeridas.";
+                        continue;
+                    }
+
+                    // Mapear departamento
+                    $departamento_id = $departamento_map[$departamento_nombre_excel] ?? null;
+                    if ($departamento_id === null) {
+                        $error_list[] = "Fila {$i}: Departamento '{$departamento_nombre_excel}' no válido o no existente.";
+                        continue;
+                    }
+
+                    // Mapear catálogo
+                    $id_catalogo = $catalogo_insumo_map[$nombre_catalogo_excel] ?? null;
+                    if ($id_catalogo === null) {
+                        $error_list[] = "Fila {$i}: Producto del catálogo '{$nombre_catalogo_excel}' no válido o no existente.";
+                        continue;
+                    }
+
+                    // Mapear unidad
+                    $unidad_map = [
+                        'Metros' => 'Mts', 'Kilos' => 'Kg', 'Unidades' => 'Und', 'Mililitros' => 'Ml',
+                        'Mts' => 'Mts', 'Kg' => 'Kg', 'Und' => 'Und', 'Ml' => 'Ml'
+                    ];
+                    $unidad = $unidad_map[$unidad_excel] ?? $unidad_excel;
+                    $tipo_insumo = strtolower(trim($tipo_insumo_excel));
+
+                    // INSERT incondicional
+                    $insert_sql = 'INSERT INTO inventario (id_catalogo, tipo_insumo, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, departamento, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+                    $db->goQuery($insert_sql, [
+                        $id_catalogo,
+                        $tipo_insumo,
+                        $nombre_inventario,
+                        $unidad,
+                        $costo,
+                        $rendimiento,
+                        $cantidad,
+                        $cantidad,
+                        $departamento_nombre_excel,
+                        $sku
+                    ]);
+                    
+                    $processed_count++;
+                }
+
+                $success = true;
+
+            } catch (\Exception $e) {
+                $error_message = 'Error al procesar el archivo Excel: ' . $e->getMessage();
+                if (file_exists($filepath)) {
+                    unlink($filepath);
+                }
+            }
+        }
+
+        $db->disconnect();
+
+        // Generar respuesta HTML elegante para los resultados
+        $html = '<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados de la Carga Masiva - Ninesys</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0b0f19 0%, #111827 50%, #1e1b4b 100%);
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: \'Outfit\', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 680px;
+            z-index: 10;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo-container {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 64px;
+            height: 64px;
+            background: var(--accent-gradient);
+            border-radius: 18px;
+            margin-bottom: 1.25rem;
+            box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4);
+        }
+
+        .logo-icon {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff 30%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 1.05rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .badge {
+            display: inline-block;
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            padding: 0.25rem 0.75rem;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .results-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .results-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+
+        .stat-card.success-border {
+            border-color: rgba(16, 185, 129, 0.2);
+            background: rgba(16, 185, 129, 0.02);
+        }
+
+        .stat-card.error-border {
+            border-color: rgba(239, 68, 68, 0.2);
+            background: rgba(239, 68, 68, 0.02);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .stat-value.success-text {
+            color: var(--success);
+        }
+
+        .stat-value.error-text {
+            color: var(--error);
+        }
+
+        .alerts-card {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 18px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            text-align: left;
+        }
+
+        .alerts-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #fca5a5;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .alerts-list {
+            list-style: none;
+            max-height: 200px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        .alerts-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .alerts-list::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 99px;
+        }
+
+        .alerts-list::-webkit-scrollbar-thumb {
+            background: rgba(239, 68, 68, 0.3);
+            border-radius: 99px;
+        }
+
+        .alerts-list li {
+            padding: 0.6rem 0;
+            font-size: 0.9rem;
+            color: #fca5a5;
+            border-bottom: 1px solid rgba(239, 68, 68, 0.1);
+        }
+
+        .alerts-list li:last-child {
+            border-bottom: none;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 1rem 1.5rem;
+            border-radius: 16px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <div class="logo-container">
+                    <span class="logo-icon">N</span>
+                </div>
+                <h1>Carga Directa de Inventario</h1>
+                <p class="subtitle">Resultado del procesamiento</p>
+                <span class="badge">' . htmlspecialchars($companyName) . '</span>
+            </div>';
+
+        if ($error_message) {
+            $html .= '
+            <div class="alerts-card">
+                <div class="alerts-header">
+                    <span>⚠️</span>
+                    <span>Error Crítico</span>
+                </div>
+                <p style="color: #fca5a5; font-size: 1rem;">' . htmlspecialchars($error_message) . '</p>
+            </div>';
+        } else {
+            $errorCount = count($error_list);
+            $successClass = $processed_count > 0 ? 'success-border' : '';
+            $errorClass = $errorCount > 0 ? 'error-border' : '';
+
+            $html .= '
+            <div class="results-header">
+                <span style="font-size: 1.5rem;">' . ($errorCount === 0 ? '🎉' : '⚠️') . '</span>
+                <span class="results-title">' . ($errorCount === 0 ? '¡Procesado con éxito!' : 'Procesado con advertencias') . '</span>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card ' . $successClass . '">
+                    <div class="stat-label">Insumos Creados</div>
+                    <div class="stat-value success-text">' . $processed_count . '</div>
+                </div>
+                <div class="stat-card ' . $errorClass . '">
+                    <div class="stat-label">Filas Omitidas/Errores</div>
+                    <div class="stat-value error-text">' . $errorCount . '</div>
+                </div>
+            </div>';
+
+            if ($errorCount > 0) {
+                $html .= '
+                <div class="alerts-card">
+                    <div class="alerts-header">
+                        <span>📋</span>
+                        <span>Listado de Observaciones</span>
+                    </div>
+                    <ul class="alerts-list">';
+                foreach ($error_list as $err) {
+                    $html .= '<li>' . htmlspecialchars($err) . '</li>';
+                }
+                $html .= '
+                    </ul>
+                </div>';
+            }
+        }
+
+        $html .= '
+            <a href="/api/inventario/carga-directa" class="btn">Subir otro archivo</a>
+        </div>
+    </div>
+</body>
+</html>';
+
+        $response->getBody()->write($html);
+        return $response->withHeader('Content-Type', 'text/html')->withStatus(200);
+    });
+
     /** FIN INVENTARIO */
 
 }; // Fin de la función que envuelve las rutas
