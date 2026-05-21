@@ -2953,10 +2953,240 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
     // === NUEVAS RUTAS PARA CARGA DIRECTA DE EXCEL (SOPORTE FRONTEND LEGACY) ===
     $app->get('/api/inventario/carga-directa', function (Request $request, Response $response) {
+        $queryParams = $request->getQueryParams();
+        $empresa_id = isset($queryParams['empresa']) ? (int) $queryParams['empresa'] : null;
+
+        if (!$empresa_id) {
+            // Renderizar selector de empresa
+            $html = '<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso Carga Directa - Ninesys</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0b0f19 0%, #111827 50%, #1e1b4b 100%);
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: \'Outfit\', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        .logo-container {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 64px;
+            height: 64px;
+            background: var(--accent-gradient);
+            border-radius: 18px;
+            margin-bottom: 1.25rem;
+        }
+
+        .logo-icon { font-size: 1.75rem; font-weight: 800; color: #fff; }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #fff 30%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle { font-size: 0.95rem; color: var(--text-muted); margin-bottom: 2rem; }
+
+        .input-group { margin-bottom: 1.5rem; text-align: left; }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #a5b4fc;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        input {
+            width: 100%;
+            padding: 1rem 1.25rem;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+            color: #fff;
+            font-family: inherit;
+            font-size: 1.05rem;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 1rem;
+            border-radius: 14px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            color: #fff;
+            background: var(--accent-gradient);
+            box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 25px -5px rgba(139, 92, 246, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo-container"><span class="logo-icon">N</span></div>
+        <h1>Acceso a Carga Directa</h1>
+        <p class="subtitle">Introduzca su código de empresa para ingresar</p>
+        <form onsubmit="event.preventDefault(); window.location.href=\'?empresa=\' + document.getElementById(\'empresa_input\').value;">
+            <div class="input-group">
+                <label for="empresa_input">Código de Empresa</label>
+                <input type="number" id="empresa_input" placeholder="Ej. 163" required min="1">
+            </div>
+            <button type="submit" class="btn">Ingresar al Portal</button>
+        </form>
+    </div>
+</body>
+</html>';
+            $response->getBody()->write($html);
+            return $response->withHeader('Content-Type', 'text/html')->withStatus(200);
+        }
+
         $db = new LocalDB();
-        $empresa = $db->goQuery('SELECT nombre_empresa FROM api_empresas.empresas WHERE _id = ?', [ID_EMPRESA]);
+        $conn_details = $db->getConnectionDetails($empresa_id);
+
+        if (!$conn_details) {
+            // Renderizar pantalla de error de empresa no encontrada
+            $html = '<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empresa no encontrada - Ninesys</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0b0f19 0%, #111827 50%, #1e1b4b 100%);
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --error: #ef4444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: \'Outfit\', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        .icon { font-size: 3.5rem; margin-bottom: 1.25rem; display: block; }
+
+        h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; color: #fff; }
+
+        .subtitle { font-size: 0.95rem; color: var(--text-muted); margin-bottom: 2rem; }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 1rem;
+            border-radius: 14px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            background: rgba(255, 255, 255, 0.06);
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .btn:hover { background: rgba(255, 255, 255, 0.1); transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="icon">🔍❌</span>
+        <h1>Empresa no encontrada</h1>
+        <p class="subtitle">El código de empresa ' . htmlspecialchars((string)$empresa_id) . ' no corresponde a un cliente activo en el sistema.</p>
+        <a href="/api/inventario/carga-directa" class="btn">Regresar al selector</a>
+    </div>
+</body>
+</html>';
+            $db->disconnect();
+            $response->getBody()->write($html);
+            return $response->withHeader('Content-Type', 'text/html')->withStatus(200);
+        }
+
+        $companyName = $conn_details['nombre'] ?? 'Empresa ' . $empresa_id;
         $db->disconnect();
-        $companyName = !empty($empresa) && is_array($empresa) ? $empresa[0]['nombre_empresa'] : 'Empresa ' . ID_EMPRESA;
 
         $html = '<!DOCTYPE html>
 <html lang="es">
@@ -3196,6 +3426,16 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         .btn.loading .spinner {
             display: inline-block;
         }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 1.5rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.3s ease;
+        }
+        .back-link:hover { color: #fff; }
     </style>
 </head>
 <body>
@@ -3210,7 +3450,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 <span class="badge">' . htmlspecialchars($companyName) . '</span>
             </div>
 
-            <form id="upload-form" method="POST" enctype="multipart/form-data">
+            <form id="upload-form" method="POST" action="?empresa=' . $empresa_id . '" enctype="multipart/form-data">
                 <div class="form-group">
                     <div class="drop-zone" id="drop-zone">
                         <span class="drop-zone-icon">📥</span>
@@ -3229,6 +3469,9 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                     <span class="btn-text">Subir y Procesar Inventario</span>
                 </button>
             </form>
+            <div style="text-align: center;">
+                <a href="/api/inventario/carga-directa" class="back-link">⬅ Cambiar de Empresa</a>
+            </div>
         </div>
     </div>
 
@@ -3276,12 +3519,24 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     });
 
     $app->post('/api/inventario/carga-directa', function (Request $request, Response $response) {
-        $uploadedFiles = $request->getUploadedFiles();
-        $uploadedFile = $uploadedFiles['excel_file'] ?? null;
+        $queryParams = $request->getQueryParams();
+        $empresa_id = isset($queryParams['empresa']) ? (int) $queryParams['empresa'] : null;
 
         $db = new LocalDB();
-        $empresa = $db->goQuery('SELECT nombre_empresa FROM api_empresas.empresas WHERE _id = ?', [ID_EMPRESA]);
-        $companyName = !empty($empresa) && is_array($empresa) ? $empresa[0]['nombre_empresa'] : 'Empresa ' . ID_EMPRESA;
+
+        if (!$empresa_id || !($conn_details = $db->getConnectionDetails($empresa_id))) {
+            $html = '<h2>Error: Empresa no válida</h2>';
+            $db->disconnect();
+            $response->getBody()->write($html);
+            return $response->withHeader('Content-Type', 'text/html')->withStatus(400);
+        }
+
+        $companyDsn = 'mysql:host=' . $conn_details['db_host'] . ';dbname=' . $conn_details['db_name'];
+        $db->switchDatabase($companyDsn, $conn_details['db_user'], $conn_details['db_password']);
+        $companyName = $conn_details['nombre'] ?? 'Empresa ' . $empresa_id;
+
+        $uploadedFiles = $request->getUploadedFiles();
+        $uploadedFile = $uploadedFiles['excel_file'] ?? null;
 
         $success = false;
         $processed_count = 0;
@@ -3713,7 +3968,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
 
         $html .= '
-            <a href="/api/inventario/carga-directa" class="btn">Subir otro archivo</a>
+            <a href="/api/inventario/carga-directa?empresa=' . $empresa_id . '" class="btn">Subir otro archivo</a>
         </div>
     </div>
 </body>
