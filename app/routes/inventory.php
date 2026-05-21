@@ -1169,6 +1169,46 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
         $localConnection = new LocalDB();
 
+        // --- BYPASS PARA INSUMOS PRECARGADOS (SOLO RENDIMIENTO Y DESPERDICIO) ---
+        if (isset($miInsumo['solo_rendimiento']) && (filter_var($miInsumo['solo_rendimiento'], FILTER_VALIDATE_BOOLEAN) || $miInsumo['solo_rendimiento'] == 'true' || $miInsumo['solo_rendimiento'] === true)) {
+            $object['solo_rendimiento_active'] = true;
+            if (!empty($miInsumo['id_orden'])) {
+                $cantidad_input_rendimiento = isset($miInsumo['cantidad_consumida']) && $miInsumo['cantidad_consumida'] ? floatval($miInsumo['cantidad_consumida']) : 0;
+                $valor_desperdicio = isset($miInsumo['valor']) && $miInsumo['valor'] ? floatval($miInsumo['valor']) : 0;
+
+                // Solo guardar si hay algo que reportar (consumo o desperdicio)
+                if ($cantidad_input_rendimiento > 0 || $valor_desperdicio > 0) {
+                    $id_insumo_query = !empty($miInsumo['id_insumo']) ? intval($miInsumo['id_insumo']) : 'NULL';
+
+                    // Si no hay id_departamento especificado, buscamos el ID correspondiente en la base de datos
+                    if (!isset($miInsumo['id_departamento'])) {
+                        $miInsumo['departamento'] = $miInsumo['departamento'] ?? 'N/A';
+                        $sql_id_dep = "SELECT _id FROM departamentos WHERE departamento = '{$miInsumo['departamento']}' LIMIT 1";
+                        $res_id_dep = $localConnection->goQuery($sql_id_dep);
+                        $miInsumo['id_departamento'] = !empty($res_id_dep) ? $res_id_dep[0]['_id'] : 0;
+                    }
+
+                    $sql_exist = "SELECT COUNT(id_orden) as total FROM rendimiento WHERE id_orden = {$miInsumo['id_orden']} AND id_insumo = $id_insumo_query AND id_departamento = {$miInsumo['id_departamento']}";
+                    $exist = $localConnection->goQuery($sql_exist);
+
+                    if ($exist[0]['total'] > 0) {
+                        $sql = "UPDATE rendimiento SET cantidad = {$cantidad_input_rendimiento}, desperdicio = {$valor_desperdicio}, id_empleado = {$miInsumo['id_empleado']} WHERE id_orden = {$miInsumo['id_orden']} AND id_insumo = $id_insumo_query AND id_departamento = {$miInsumo['id_departamento']};";
+                    } else {
+                        $sql = "INSERT INTO rendimiento (id_orden, id_insumo, id_departamento, id_empleado, cantidad, desperdicio) VALUES ({$miInsumo['id_orden']}, $id_insumo_query, {$miInsumo['id_departamento']}, {$miInsumo['id_empleado']}, {$cantidad_input_rendimiento}, {$valor_desperdicio});";
+                    }
+
+                    $object['response_rendimiento'] = json_encode($localConnection->goQuery($sql));
+                    $object['update_success'] = true;
+                } else {
+                    $object['response_rendimiento'] = "Ignorado: Consumo y Desperdicio son Cero";
+                    $object['update_success'] = true;
+                }
+            }
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode($object));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        }
+
         // Verifcar si es reposicion y actualizar el campor `terminada`
         if ($miInsumo['es_reposicion'] == 1) {
             // $sql = "UPDATE reposiciones SET terminada = 1 WHERE id_orden = {$miInsumo['id_orden']} AND id_empleado = {$miInsumo['id_empleado']};";
