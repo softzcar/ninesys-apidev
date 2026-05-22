@@ -1853,6 +1853,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                       a.id_woo id_product,
                       a.name producto,
                       (SELECT nombre FROM sizes WHERE _id = a.talla) talla,
+                      a.cantidad AS cantidad_original,
                       IF(b.id_departamento = 3,
                           COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = a._id), 0), a.cantidad),
                           a.cantidad) AS unidades,
