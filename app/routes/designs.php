@@ -396,7 +396,13 @@ return function (App $app) {
         LEFT JOIN api_empresas.empresas_usuarios e ON
             e.id_usuario = a.id_empleado
         WHERE
-            b.status = 'activa' OR b.status = 'pausada' OR b.status = 'En espera'
+            (b.status = 'activa' OR b.status = 'pausada' OR b.status = 'En espera')
+            AND EXISTS (
+                SELECT 1 
+                FROM ordenes_productos op
+                JOIN products p ON op.id_woo = p._id
+                WHERE op.id_orden = b._id AND p.es_diseno = 1
+            )
         ORDER BY
             b._id DESC;
          ";
