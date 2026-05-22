@@ -389,8 +389,13 @@ return function (App $app) {
             a.linkdrive
         FROM
             ordenes b
+        LEFT JOIN (
+            SELECT id_orden, MIN(_id) as first_id
+            FROM disenos
+            GROUP BY id_orden
+        ) d_first ON b._id = d_first.id_orden
         LEFT JOIN disenos a ON
-            b._id = a.id_orden
+            a._id = d_first.first_id
         LEFT JOIN customers cus ON
             b.id_wp = cus._id
         LEFT JOIN api_empresas.empresas_usuarios e ON
