@@ -433,7 +433,7 @@ return function (App $app) {
         FROM
             products a
         WHERE
-            a.es_diseno = 1'
+            a.es_diseno = 1
         ORDER BY product ASC;
         ";
     $object['disenos']['productos'] = $localConnection->goQuery($sql);
