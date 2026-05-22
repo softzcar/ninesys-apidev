@@ -2683,30 +2683,33 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
             // Filtro por disponibilidad
             if ($filtroStock === 'enStock') {
-                $conditions[] = "cantidad <> 0";
+                $conditions[] = "cantidad > 0";
             } else if ($filtroStock === 'terminados') {
-                $conditions[] = "cantidad = 0";
+                $conditions[] = "(cantidad_inicial - cantidad) > 0";
             }
-            // Si es 'todos', no se agregan condiciones de cantidad
 
             $where = !empty($conditions) ? " WHERE " . implode(" AND ", $conditions) : "";
 
-            $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, tipo_insumo, cantidad, cantidad_inicial, color, departamento, moment 
+            $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, tipo_insumo, cantidad, cantidad_inicial, (cantidad_inicial - cantidad) as cantidad_consumida, color, departamento, moment 
                     FROM inventario 
                     {$where} 
                     ORDER BY insumo ASC";
             
             $items = $localConnection->goQuery($sql, $queryParams);
 
-            // Obtener lista dinámica de departamentos que tienen stock
+            // Obtener lista dinámica de departamentos que tienen stock o consumo
             $sqlDeps = "SELECT DISTINCT departamento FROM inventario WHERE cantidad > 0 AND departamento IS NOT NULL AND departamento != '' ORDER BY departamento ASC";
             $resDeps = $localConnection->goQuery($sqlDeps);
             $availableDepartments = array_map(function($d) { return $d['departamento']; }, $resDeps);
 
-            // ====== DATOS PARA GRÁFICOS (filtrados por departamento y fechas) ======
+            // ====== DATOS PARA GRÁFICOS ======
             $chartData = [];
             $deptWhere = ($departamento && $departamento !== 'Todas' && $departamento !== 'todos')
                 ? "AND i.departamento = '" . addslashes($departamento) . "'"
+                : "";
+            
+            $deptWhereDirect = ($departamento && $departamento !== 'Todas' && $departamento !== 'todos')
+                ? "AND departamento = '" . addslashes($departamento) . "'"
                 : "";
 
             // Rango de fechas para gráficos (por defecto últimos 30días)
@@ -2720,82 +2723,128 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 $fechaWhereTintas = "moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
             }
 
-            // 1. Telas e Insumos Más Usados (Top 5 - filtrado por dept y fechas)
-            $sqlMateriales = "SELECT 
-                                i.insumo as label, 
-                                ROUND(SUM((im.valor_inicial - im.valor_final) * IF(i.tipo_insumo = 'tela', COALESCE(NULLIF(i.rendimiento, 0), 1), 1)), 2) as value,
-                                IF(i.tipo_insumo = 'tela', 'Mts', i.unidad) as unidad
+            // 1. Telas e Insumos (Top 5)
+            if ($filtroStock === 'enStock') {
+                $sqlMateriales = "SELECT 
+                                    insumo as label, 
+                                    cantidad as value,
+                                    unidad
+                                FROM inventario 
+                                WHERE cantidad > 0
+                                  {$deptWhereDirect}
+                                ORDER BY cantidad DESC 
+                                LIMIT 5";
+            } else {
+                $sqlMateriales = "SELECT 
+                                    i.insumo as label, 
+                                    ROUND(SUM((im.valor_inicial - im.valor_final) * IF(i.tipo_insumo = 'tela', COALESCE(NULLIF(i.rendimiento, 0), 1), 1)), 2) as value,
+                                    IF(i.tipo_insumo = 'tela', 'Mts', i.unidad) as unidad
+                                FROM inventario_movimientos im 
+                                JOIN inventario i ON im.id_insumo = i._id 
+                                WHERE {$fechaWhere}
+                                  AND (im.valor_inicial - im.valor_final) > 0
+                                  {$deptWhere}
+                                GROUP BY i.sku 
+                                ORDER BY value DESC 
+                                LIMIT 5";
+            }
+            $chartData['materiales'] = $localConnection->goQuery($sqlMateriales) ?: [];
+
+            // 2. Distribución de Tintas por Color
+            if ($filtroStock === 'enStock') {
+                $sqlTintas = "SELECT 
+                                ROUND(SUM(CASE WHEN sku LIKE '%CYAN%' OR insumo LIKE '%Cyan%' THEN cantidad ELSE 0 END), 2) as C,
+                                ROUND(SUM(CASE WHEN sku LIKE '%MAGENTA%' OR insumo LIKE '%Magenta%' THEN cantidad ELSE 0 END), 2) as M,
+                                ROUND(SUM(CASE WHEN sku LIKE '%AMARILLO%' OR insumo LIKE '%Yellow%' OR insumo LIKE '%Amarillo%' THEN cantidad ELSE 0 END), 2) as Y,
+                                ROUND(SUM(CASE WHEN sku LIKE '%NEGRO%' OR insumo LIKE '%Black%' OR insumo LIKE '%Negro%' THEN cantidad ELSE 0 END), 2) as K,
+                                ROUND(SUM(CASE WHEN sku LIKE '%BLANCO%' OR insumo LIKE '%White%' OR insumo LIKE '%Blanco%' THEN cantidad ELSE 0 END), 2) as W
+                            FROM inventario
+                            WHERE tipo_insumo = 'tinta' AND cantidad > 0
+                              {$deptWhereDirect}";
+                $tintasResult = $localConnection->goQuery($sqlTintas);
+                if (!empty($tintasResult)) {
+                    $t = $tintasResult[0];
+                    $chartData['tintas'] = [
+                        'labels' => ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'],
+                        'values' => [floatval($t['C'] ?? 0), floatval($t['M'] ?? 0), floatval($t['Y'] ?? 0), floatval($t['K'] ?? 0), floatval($t['W'] ?? 0)],
+                        'colors' => ['#00FFFF', '#FF00FF', '#FFFF00', '#000000', '#FFFFFF']
+                    ];
+                } else {
+                    $chartData['tintas'] = ['labels' => [], 'values' => [], 'colors' => []];
+                }
+            } else {
+                $tintaFilterByDept = "";
+                if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos' && $departamento !== 'Impresión' && $departamento !== 'Impresion') {
+                    $tintaFilterByDept = "AND id_orden IN (
+                        SELECT DISTINCT im.id_orden 
+                        FROM inventario_movimientos im
+                        JOIN inventario i ON im.id_insumo = i._id
+                        WHERE i.departamento = '" . addslashes($departamento) . "'
+                        AND im.id_orden IS NOT NULL AND im.id_orden != 0
+                    )";
+                }
+
+                $sqlTintas = "SELECT 
+                                ROUND(SUM(COALESCE(c, 0)), 2) as C, 
+                                ROUND(SUM(COALESCE(m, 0)), 2) as M, 
+                                ROUND(SUM(COALESCE(y, 0)), 2) as Y, 
+                                ROUND(SUM(COALESCE(k, 0)), 2) as K, 
+                                ROUND(SUM(COALESCE(w, 0)), 2) as W 
+                            FROM tintas 
+                            WHERE {$fechaWhereTintas}
+                            {$tintaFilterByDept}";
+                $tintasResult = $localConnection->goQuery($sqlTintas);
+                if (!empty($tintasResult)) {
+                    $t = $tintasResult[0];
+                    $chartData['tintas'] = [
+                        'labels' => ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'],
+                        'values' => [floatval($t['C'] ?? 0), floatval($t['M'] ?? 0), floatval($t['Y'] ?? 0), floatval($t['K'] ?? 0), floatval($t['W'] ?? 0)],
+                        'colors' => ['#00FFFF', '#FF00FF', '#FFFF00', '#000000', '#FFFFFF']
+                    ];
+                } else {
+                    $chartData['tintas'] = ['labels' => [], 'values' => [], 'colors' => []];
+                }
+            }
+
+            // 3. Consumo de Papel / Stock de Papel
+            if ($filtroStock === 'enStock') {
+                $sqlPapel = "SELECT 
+                                insumo as label, 
+                                cantidad as value 
+                            FROM inventario 
+                            WHERE (tipo_insumo = 'papel' OR insumo LIKE '%Papel%')
+                              AND cantidad > 0
+                              {$deptWhereDirect}
+                            ORDER BY cantidad DESC
+                            LIMIT 5";
+                $chartData['papel'] = $localConnection->goQuery($sqlPapel) ?: [];
+            } else {
+                $papelFilterByDept = "";
+                if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos' && $departamento !== 'Impresión' && $departamento !== 'Impresion') {
+                    $papelFilterByDept = "AND im.id_orden IN (
+                        SELECT DISTINCT im2.id_orden 
+                        FROM inventario_movimientos im2
+                        JOIN inventario i2 ON im2.id_insumo = i2._id
+                        WHERE i2.departamento = '" . addslashes($departamento) . "'
+                        AND im2.id_orden IS NOT NULL AND im2.id_orden != 0
+                    )";
+                } else {
+                    $papelFilterByDept = $deptWhere;
+                }
+
+                $sqlPapel = "SELECT 
+                                CONCAT('Sem ', WEEK(im.moment, 1)) as label, 
+                                ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value 
                             FROM inventario_movimientos im 
                             JOIN inventario i ON im.id_insumo = i._id 
                             WHERE {$fechaWhere}
+                              AND (i.tipo_insumo = 'papel' OR i.insumo LIKE '%Papel%')
                               AND (im.valor_inicial - im.valor_final) > 0
-                              {$deptWhere}
-                            GROUP BY i.sku 
-                            ORDER BY value DESC 
-                            LIMIT 5";
-            $chartData['materiales'] = $localConnection->goQuery($sqlMateriales) ?: [];
-
-            // 2. Distribución de Tintas por Color (filtrado por dept y fechas)
-            // Las tintas no tienen departamento directo, se vinculan vía id_orden a los movimientos de ese dept
-            $tintaFilterByDept = "";
-            if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos' && $departamento !== 'Impresión' && $departamento !== 'Impresion') {
-                $tintaFilterByDept = "AND id_orden IN (
-                    SELECT DISTINCT im.id_orden 
-                    FROM inventario_movimientos im
-                    JOIN inventario i ON im.id_insumo = i._id
-                    WHERE i.departamento = '" . addslashes($departamento) . "'
-                    AND im.id_orden IS NOT NULL AND im.id_orden != 0
-                )";
+                              {$papelFilterByDept}
+                            GROUP BY WEEK(im.moment, 1)
+                            ORDER BY MIN(im.moment) ASC";
+                $chartData['papel'] = $localConnection->goQuery($sqlPapel) ?: [];
             }
-
-            $sqlTintas = "SELECT 
-                            ROUND(SUM(COALESCE(c, 0)), 2) as C, 
-                            ROUND(SUM(COALESCE(m, 0)), 2) as M, 
-                            ROUND(SUM(COALESCE(y, 0)), 2) as Y, 
-                            ROUND(SUM(COALESCE(k, 0)), 2) as K, 
-                            ROUND(SUM(COALESCE(w, 0)), 2) as W 
-                        FROM tintas 
-                        WHERE {$fechaWhereTintas}
-                        {$tintaFilterByDept}";
-            $tintasResult = $localConnection->goQuery($sqlTintas);
-            if (!empty($tintasResult)) {
-                $t = $tintasResult[0];
-                $chartData['tintas'] = [
-                    'labels' => ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'],
-                    'values' => [$t['C'], $t['M'], $t['Y'], $t['K'], $t['W']],
-                    'colors' => ['#00FFFF', '#FF00FF', '#FFFF00', '#000000', '#FFFFFF']
-                ];
-            } else {
-                $chartData['tintas'] = ['labels' => [], 'values' => [], 'colors' => []];
-            }
-
-            // 3. Consumo de Papel (Agrupado por Semana - filtrado por dept y fechas)
-            // Al igual que las tintas, si el depto no es global o Impresión, filtramos por las órdenes del depto
-            $papelFilterByDept = "";
-            if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos' && $departamento !== 'Impresión' && $departamento !== 'Impresion') {
-                $papelFilterByDept = "AND im.id_orden IN (
-                    SELECT DISTINCT im2.id_orden 
-                    FROM inventario_movimientos im2
-                    JOIN inventario i2 ON im2.id_insumo = i2._id
-                    WHERE i2.departamento = '" . addslashes($departamento) . "'
-                    AND im2.id_orden IS NOT NULL AND im2.id_orden != 0
-                )";
-            } else {
-                $papelFilterByDept = $deptWhere;
-            }
-
-            $sqlPapel = "SELECT 
-                            CONCAT('Sem ', WEEK(im.moment, 1)) as label, 
-                            ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value 
-                        FROM inventario_movimientos im 
-                        JOIN inventario i ON im.id_insumo = i._id 
-                        WHERE {$fechaWhere}
-                          AND (i.tipo_insumo = 'papel' OR i.insumo LIKE '%Papel%')
-                          AND (im.valor_inicial - im.valor_final) > 0
-                          {$papelFilterByDept}
-                        GROUP BY WEEK(im.moment, 1)
-                        ORDER BY MIN(im.moment) ASC";
-            $chartData['papel'] = $localConnection->goQuery($sqlPapel) ?: [];
             // ====== FIN DATOS GRÁFICOS ======
 
             $localConnection->disconnect();
