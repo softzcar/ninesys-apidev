@@ -654,7 +654,13 @@ return function (App $app) {
                 WHERE
                     a.id_empleado = {$args['id_empleado']} 
                     AND a.terminado = 0 
-                    AND(b.status = 'activa' OR b.status = 'pausada' OR b.status = 'En espera')
+                    AND (b.status = 'activa' OR b.status = 'pausada' OR b.status = 'En espera')
+                    AND EXISTS (
+                        SELECT 1 
+                        FROM ordenes_productos op
+                        JOIN products p ON op.id_woo = p._id
+                        WHERE op.id_orden = b._id AND p.es_diseno = 1
+                    )
                 GROUP BY c._id
                 ORDER BY
                     a.id_orden
@@ -684,6 +690,12 @@ return function (App $app) {
                 b.id_orden = a.id_orden
             WHERE
                 a.id_empleado = {$args['id_empleado']} AND b.id_empleado = {$args['id_empleado']} AND a.estatus LIKE 'Esperando Respuesta' 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM ordenes_productos op
+                    JOIN products p ON op.id_woo = p._id
+                    WHERE op.id_orden = a.id_orden AND p.es_diseno = 1
+                )
             ORDER BY
                 a.id_orden
             ASC
@@ -691,7 +703,7 @@ return function (App $app) {
     $obj['sql_revisiones'] = $sql;
     $obj['revisiones'] = $localConnection->goQuery($sql);
 
-    $sql = 'SELECT a.id_diseno, a.tipo, a.cantidad, b.id_orden FROM disenos_ajustes_y_personalizaciones a JOIN disenos b ON b._id = a.id_diseno WHERE b.id_empleado = ' . $args['id_empleado'];
+    $sql = 'SELECT a.id_diseno, a.tipo, a.cantidad, b.id_orden FROM disenos_ajustes_y_personalizaciones a JOIN disenos b ON b._id = a.id_diseno WHERE b.id_empleado = ' . $args['id_empleado'] . ' AND EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON op.id_woo = p._id WHERE op.id_orden = b.id_orden AND p.es_diseno = 1)';
     $obj['ajustes'] = $localConnection->goQuery($sql);
 
     $sql = 'SELECT pro._id id_producto, pro.product, pro.comision FROM products pro WHERE pro.es_diseno = 1 ORDER BY pro.product ASC;';
