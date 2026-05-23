@@ -2727,12 +2727,13 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             if ($filtroStock === 'enStock') {
                 $sqlMateriales = "SELECT 
                                     insumo as label, 
-                                    cantidad as value,
+                                    ROUND(SUM(cantidad), 2) as value,
                                     unidad
                                 FROM inventario 
                                 WHERE cantidad > 0
                                   {$deptWhereDirect}
-                                ORDER BY cantidad DESC 
+                                GROUP BY sku, insumo, unidad
+                                ORDER BY value DESC 
                                 LIMIT 5";
             } else {
                 $sqlMateriales = "SELECT 
@@ -2810,12 +2811,13 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             if ($filtroStock === 'enStock') {
                 $sqlPapel = "SELECT 
                                 insumo as label, 
-                                cantidad as value 
+                                ROUND(SUM(cantidad), 2) as value 
                             FROM inventario 
                             WHERE (tipo_insumo = 'papel' OR insumo LIKE '%Papel%')
                               AND cantidad > 0
                               {$deptWhereDirect}
-                            ORDER BY cantidad DESC
+                            GROUP BY sku, insumo
+                            ORDER BY value DESC
                             LIMIT 5";
                 $chartData['papel'] = $localConnection->goQuery($sqlPapel) ?: [];
             } else {
