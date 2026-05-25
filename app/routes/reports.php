@@ -27,7 +27,12 @@ return function (App $app) {
             $params = [];
 
             if ($inicio && $fin) {
-                $whereConditions[] = 'DATE(a.moment) BETWEEN :inicio AND :fin';
+                $companyDB = LOCAL_DB;
+                $whereConditions[] = "a._id IN (
+                    SELECT DISTINCT id_orden 
+                    FROM $companyDB.lotes_detalles_empleados_asignados 
+                    WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
+                )";
                 $params[':inicio'] = $inicio;
                 $params[':fin'] = $fin;
             }

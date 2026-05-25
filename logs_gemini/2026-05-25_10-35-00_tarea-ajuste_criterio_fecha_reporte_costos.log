@@ -1,0 +1,28 @@
+- **Solicitud del Usuario:** PAra el reporte de Costos de producción debemos tomar el mismo criterio del reporte semanal para filtrar las ordenes pues nos interesa saber que ordenes se terminaron y no cunaod fueron creadas, vamos a adecuar esta cosnulta correctamente
+- **Fecha y Hora:** 2026-05-25 10:35:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+    - [reports.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/reports.php) (Alineación de consulta en el endpoint `GET /reportes/costos-produccion/{inicio}/{fin}`)
+- **Commits Relacionados:**
+    - Backend: Commit en rama `refactor/modular-routes`
+- **Acción Realizada:**
+    1. **Identificación de la Discrepancia**: Confirmamos que la discrepancia matemática entre la cantidad total de productos fabricados en `/reportes/semanal` (2234.8) y `/reporte-costos-produccion` (1219.2) se debía a que el reporte semanal filtra las órdenes por su fecha de finalización física en el taller (`fecha_terminado` de las tareas de los empleados), mientras que el reporte de costos lo hacía por la fecha de creación del pedido (`moment`).
+    2. **Refactorización de la Consulta SQL**:
+        - Modificamos la cláusula WHERE de la consulta base de costos de producción para que las órdenes se filtren mediante una subconsulta evaluando `fecha_terminado` en `lotes_detalles_empleados_asignados`, garantizando la unificación de criterios en ambos reportes.
+        - Definimos de forma defensiva `$companyDB = LOCAL_DB;` antes del bloque de condición para asegurar la correcta interpolación dinámica en el string de la consulta.
+    3. **Bloque de Filtro Actualizado**:
+       ```php
+       if ($inicio && $fin) {
+           $companyDB = LOCAL_DB;
+           $whereConditions[] = "a._id IN (
+               SELECT DISTINCT id_orden 
+               FROM $companyDB.lotes_detalles_empleados_asignados 
+               WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
+           )";
+           $params[':inicio'] = $inicio;
+           $params[':fin'] = $fin;
+       }
+       ```
+    4. **Siguiente Paso**: Realizar el deploy (push local y git checkout en el VPS de desarrollo `vps-ninesys`) para aplicar y verificar los cambios.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `write_to_file`
+- **Resultado:** Modificación exitosa del backend.
