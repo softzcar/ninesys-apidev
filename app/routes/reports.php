@@ -517,6 +517,35 @@ return function (App $app) {
                 }
             }
 
+            // D. Mantenimiento de Impresoras (Servicios técnicos) en el periodo
+            $sqlMantenimiento = "SELECT s._id, s.costo, s.fecha_servicio, s.tipo_servicio, s.descripcion, s.tecnico, s.id_maquina, ci.codigo_interno as maquina_nombre
+                                 FROM $companyDB.servicios_maquinas s
+                                 LEFT JOIN $companyDB.catalogo_impresoras ci ON s.id_maquina = ci._id AND s.maquina_tipo = 'impresora'
+                                 WHERE s.estado = 'completado' 
+                                   AND s.maquina_tipo = 'impresora'
+                                   AND DATE(s.fecha_servicio) BETWEEN :inicio AND :fin
+                                 ORDER BY s.fecha_servicio DESC";
+            $mantenimientoRaw = $dbEmpresas->goQuery($sqlMantenimiento, [':inicio' => $inicio, ':fin' => $fin]);
+
+            $totalMantenimientoPeriodo = 0;
+            $mantenimientoDetalles = [];
+            if (is_array($mantenimientoRaw) && !isset($mantenimientoRaw['status'])) {
+                foreach ($mantenimientoRaw as $mant) {
+                    $costo = (float)$mant['costo'];
+                    $totalMantenimientoPeriodo += $costo;
+                    
+                    $mantenimientoDetalles[] = [
+                        'id_servicio' => $mant['_id'],
+                        'maquina_nombre' => $mant['maquina_nombre'] ?? 'Desconocida',
+                        'tipo_servicio' => $mant['tipo_servicio'],
+                        'descripcion' => $mant['descripcion'] ?? '',
+                        'tecnico' => $mant['tecnico'] ?? '',
+                        'costo' => round($costo, 2),
+                        'fecha_servicio' => $mant['fecha_servicio']
+                    ];
+                }
+            }
+
             // Variables de compatibilidad
             $totalProductosPeriodo = !empty($reporteData) ? array_sum(array_column($reporteData, 'total_productos')) : 0;
             $totalGastosSemanales = 0; // Se mantiene por legacy si el frontend lo pide
@@ -528,7 +557,9 @@ return function (App $app) {
                 'costo_operativo_por_producto' => $costoOperativoPorProducto,
                 'gastos_por_tipo' => $gastosPorTipo,
                 'total_remanentes_periodo' => round($totalRemanentesPeriodo, 2),
-                'remanentes_detalles' => $remanentesDetalles
+                'remanentes_detalles' => $remanentesDetalles,
+                'total_mantenimiento_periodo' => round($totalMantenimientoPeriodo, 2),
+                'mantenimiento_detalles' => $mantenimientoDetalles
             ];
 
             if (false) {
