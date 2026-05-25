@@ -480,6 +480,26 @@ return function (App $app) {
                 $gastosPorTipo['fijo'][] = ['moneda' => $moneda, 'total' => round($total, 2)];
             }
 
+            // C. Remanentes (Pérdida por material descartado) en el periodo
+            $sqlRemanentes = "SELECT ir.cantidad, i.costo, i.cantidad_inicial 
+                              FROM $companyDB.inventario_remanentes ir 
+                              JOIN $companyDB.inventario i ON ir.id_insumo = i._id 
+                              WHERE ir.fecha BETWEEN :inicio AND :fin";
+            $remanentesRaw = $dbEmpresas->goQuery($sqlRemanentes, [':inicio' => $inicio, ':fin' => $fin]);
+            
+            $totalRemanentesPeriodo = 0;
+            if (is_array($remanentesRaw) && !isset($remanentesRaw['status'])) {
+                foreach ($remanentesRaw as $rem) {
+                    $cant = (float)$rem['cantidad'];
+                    $costo = (float)$rem['costo'];
+                    $cant_ini = (float)$rem['cantidad_inicial'];
+                    
+                    // Evitar división por cero
+                    $costUnit = $costo / ($cant_ini > 0 ? $cant_ini : 1);
+                    $totalRemanentesPeriodo += $cant * $costUnit;
+                }
+            }
+
             // Variables de compatibilidad
             $totalProductosPeriodo = !empty($reporteData) ? array_sum(array_column($reporteData, 'total_productos')) : 0;
             $totalGastosSemanales = 0; // Se mantiene por legacy si el frontend lo pide
@@ -489,7 +509,8 @@ return function (App $app) {
                 'total_gastos_semanales' => $totalGastosSemanales,
                 'total_productos_periodo' => $totalProductosPeriodo,
                 'costo_operativo_por_producto' => $costoOperativoPorProducto,
-                'gastos_por_tipo' => $gastosPorTipo
+                'gastos_por_tipo' => $gastosPorTipo,
+                'total_remanentes_periodo' => round($totalRemanentesPeriodo, 2)
             ];
 
             if (false) {
