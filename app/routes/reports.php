@@ -280,13 +280,53 @@ return function (App $app) {
                     $tintasResumenFinal[] = ['id_orden' => $id, 'total_tinta_consumo_ml' => round($data['ml'], 2), 'total_tinta_costo' => round($data['cost'], 2)];
                 }
 
+                // --- 8.5. Calcular Salarios Fijos de Empleados No Trackeados ---
+                $fecha_inicio_dt = new DateTime($inicio);
+                $fecha_fin_dt = new DateTime($fin);
+                $intervalo = $fecha_inicio_dt->diff($fecha_fin_dt);
+                $dias_periodo = $intervalo->days + 1;
+                $factor_mensual = $dias_periodo / 30.44;
+
+                $totalProductosPeriodo = !empty($productosMap) ? array_sum($productosMap) : 0;
+                
+                $totalSalarioMensualNoTracked = 0;
+                if ($inicio && $fin) {
+                    $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto 
+                                     FROM api_empresas.empresas_usuarios 
+                                     WHERE id_empresa = :id_empresa 
+                                       AND activo = 1 
+                                       AND salario_tipo IN ('Salario', 'Salario más Comisión') 
+                                       AND id_usuario NOT IN (
+                                           SELECT DISTINCT id_empleado 
+                                           FROM $companyDB.lotes_detalles_empleados_asignados 
+                                           WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
+                                       )";
+                    $noTrackedRaw = $dbEmpresas->goQuery($sqlNoTracked, [':id_empresa' => $id_empresa, ':inicio' => $inicio, ':fin' => $fin]);
+                    
+                    if (is_array($noTrackedRaw) && !isset($noTrackedRaw['status'])) {
+                        foreach ($noTrackedRaw as $emp) {
+                            $totalSalarioMensualNoTracked += (float)($emp['salario_monto'] ?? 0);
+                        }
+                    }
+                }
+                
+                $totalSalariosFijosNoTrackedPeriodo = $totalSalarioMensualNoTracked * $factor_mensual;
+                $costoSalarioNoTrackedPorProducto = 0;
+                if ($totalProductosPeriodo > 0) {
+                    $costoSalarioNoTrackedPorProducto = $totalSalariosFijosNoTrackedPeriodo / $totalProductosPeriodo;
+                }
+
                 // 9. Combinar Datos en reporteData
                 foreach ($reporteData as &$row) {
                     $id = $row['id_orden'];
                     $row['vendedor'] = $vendedoresMap[$row['id_vendedor']] ?? 'Desconocido';
                     $row['total_productos'] = $productosMap[$id] ?? 0;
                     $row['costos_de_insumos'] = $insumosMap[$id] ?? 0;
-                    $row['costo_mano_de_obra'] = $pagosMap[$id] ?? 0;
+                    
+                    // Distribuir el salario proporcional no trackeado
+                    $proporcional = $costoSalarioNoTrackedPorProducto * $row['total_productos'];
+                    $row['costo_mano_de_obra'] = ($pagosMap[$id] ?? 0) + $proporcional;
+                    
                     $row['tiempo_de_produccion'] = $tiempoMap[$id] ?? 0;
                     $row['empleados_asignados'] = $empAsigMap[$id] ?? '';
                     $row['reposiciones'] = $reposMap[$id] ?? 0;
@@ -615,6 +655,79 @@ return function (App $app) {
                     'horas_trabajadas' => round($horasTrabajadas, 2),
                     'costo_por_hora' => $costoPorHora,
                     'salario_proporcional' => round($costoPorHora * $horasTrabajadas, 2),
+                ];
+            }
+        }
+
+        // Distribuir proporcionalmente los salarios fijos de empleados no trackeados si se proveen fechas de periodo
+        $queryParams = $request->getQueryParams();
+        $inicio = $queryParams['inicio'] ?? null;
+        $fin = $queryParams['fin'] ?? null;
+        
+        if ($inicio && $fin) {
+            $companyDB = LOCAL_DB;
+            $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
+            $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
+            
+            // 1. Obtener total de productos fabricados en el periodo
+            $sqlTotalProdPeriodo = "SELECT SUM(op.cantidad) as total 
+                                    FROM $companyDB.ordenes_productos op
+                                    JOIN $companyDB.ordenes o ON op.id_orden = o._id
+                                    WHERE o.status IN ('terminada', 'entregada')
+                                      AND o._id IN (
+                                          SELECT DISTINCT id_orden 
+                                          FROM $companyDB.lotes_detalles_empleados_asignados 
+                                          WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
+                                      )";
+            $prodPeriodoRaw = $dbEmpresas->goQuery($sqlTotalProdPeriodo, [':inicio' => $inicio, ':fin' => $fin]);
+            $totalProductosPeriodo = (float)($prodPeriodoRaw[0]['total'] ?? 0);
+            
+            // 2. Obtener empleados activos con salario fijo que no trackean tiempo
+            $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto 
+                             FROM api_empresas.empresas_usuarios 
+                             WHERE id_empresa = :id_empresa 
+                               AND activo = 1 
+                               AND salario_tipo IN ('Salario', 'Salario más Comisión') 
+                               AND id_usuario NOT IN (
+                                   SELECT DISTINCT id_empleado 
+                                   FROM $companyDB.lotes_detalles_empleados_asignados 
+                                   WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
+                               )";
+            $noTrackedRaw = $dbEmpresas->goQuery($sqlNoTracked, [':id_empresa' => $id_empresa, ':inicio' => $inicio, ':fin' => $fin]);
+            
+            $dias_periodo = (new DateTime($inicio))->diff(new DateTime($fin))->days + 1;
+            $factor_mensual = $dias_periodo / 30.44;
+            
+            $totalSalarioMensualNoTracked = 0;
+            if (is_array($noTrackedRaw) && !isset($noTrackedRaw['status'])) {
+                foreach ($noTrackedRaw as $emp) {
+                    $totalSalarioMensualNoTracked += (float)($emp['salario_monto'] ?? 0);
+                }
+            }
+            $totalSalariosFijosNoTrackedPeriodo = $totalSalarioMensualNoTracked * $factor_mensual;
+            
+            $costoSalarioNoTrackedPorProducto = 0;
+            if ($totalProductosPeriodo > 0) {
+                $costoSalarioNoTrackedPorProducto = $totalSalariosFijosNoTrackedPeriodo / $totalProductosPeriodo;
+            }
+            
+            // 3. Obtener cantidad de productos de la orden actual
+            $dbTemp = new LocalDB();
+            $sqlOrderProd = "SELECT SUM(cantidad) as total FROM $companyDB.ordenes_productos WHERE id_orden = ?";
+            $orderProdRaw = $dbTemp->goQuery($sqlOrderProd, [$id_orden]);
+            $totalProductosOrden = (float)($orderProdRaw[0]['total'] ?? 0);
+            $dbTemp->disconnect();
+            
+            $salario_fijo_no_trackeado = $costoSalarioNoTrackedPorProducto * $totalProductosOrden;
+            $dbEmpresas->disconnect();
+            
+            if ($salario_fijo_no_trackeado > 0) {
+                $salariosData[] = [
+                    'id_empleado' => null,
+                    'nombre_empleado' => 'Salarios Fijos Distribuidos (Diseño, Ventas, Prod.)',
+                    'horas_trabajadas' => null,
+                    'costo_por_hora' => null,
+                    'salario_proporcional' => round($salario_fijo_no_trackeado, 2)
                 ];
             }
         }
