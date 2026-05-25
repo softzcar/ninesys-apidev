@@ -2688,6 +2688,48 @@ return function (App $app) {
               GROUP BY op._id";
       $productos = $localConnection->goQuery($sql);
 
+      // Buscar piezas cortadas previamente disponibles
+      foreach ($productos as &$prod) {
+        $talla = $prod['talla'];
+        $tela = $prod['tela'];
+        $corte = $prod['corte'];
+
+        $sqlDisp = "SELECT ic.id_orden, (ic.cantidad - op.cantidad) as cantidad, ic.moment 
+                    FROM inventario_corte ic
+                    JOIN ordenes_productos op ON ic.id_ordenes_productos = op._id
+                    JOIN ordenes o ON ic.id_orden = o._id
+                    WHERE ic.talla = ? 
+                      AND ic.tela = ? 
+                      AND ic.corte = ? 
+                      AND ic.id_orden <> ?
+                      AND ic.cantidad > op.cantidad
+                      AND o.status <> 'cancelada'
+                    
+                    UNION ALL
+                    
+                    SELECT id_orden, cantidad, moment 
+                    FROM inventario_corte 
+                    WHERE talla = ? 
+                      AND tela = ? 
+                      AND corte = ? 
+                      AND estado = 'disponible'
+                      AND id_orden <> ?
+                    
+                    ORDER BY moment ASC";
+        $disp = $localConnection->goQuery($sqlDisp, [
+          $talla,
+          $tela,
+          $corte,
+          $id_orden,
+          $talla,
+          $tela,
+          $corte,
+          $id_orden
+        ]);
+        $prod['disponibles'] = $disp ?: [];
+      }
+      unset($prod); // Romper referencia
+
       $response->getBody()->write(json_encode([
         'productos' => $productos ?: []
       ]));

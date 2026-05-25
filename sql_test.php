@@ -1,6 +1,6 @@
 <?php
 define('ID_EMPRESA', 174);
-define('DB_HOST', 'localhost');
+define('DB_HOST', '127.0.0.1');
 define('DB_USER_EMP', 'api_user_174');
 define('DB_PASS_EMP', 'f57f3765d314c3f25584bfb1');
 define('DB_NAME_EMP', 'api_emp_174');

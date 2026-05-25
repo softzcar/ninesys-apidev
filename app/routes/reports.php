@@ -65,16 +65,33 @@ return function (App $app) {
                     $monto = (float)($emp['salario_monto'] ?? 0);
                     $periodo = strtolower((string)($emp['salario_periodo'] ?? ''));
                     $factorSemanas = 0;
-                    if ($periodo === 'semanal') $factorSemanas = 1;
-                    else if ($periodo === 'quincenal') $factorSemanas = 2;
-                    else if ($periodo === 'mensual') $factorSemanas = 4.33;
-                    else if ($periodo === 'bimensual') $factorSemanas = 8.66;
-                    else if ($periodo === 'trimestral') $factorSemanas = 13;
-                    else if ($periodo === 'semestral') $factorSemanas = 26;
-                    else if ($periodo === 'anual') $factorSemanas = 52;
+                    $salarioPeriodo = 0;
+
+                    if ($periodo === 'semanal') {
+                        $salarioPeriodo = $monto / 4;
+                        $factorSemanas = 1;
+                    } else if ($periodo === 'quincenal') {
+                        $salarioPeriodo = $monto / 2;
+                        $factorSemanas = 2;
+                    } else if ($periodo === 'mensual') {
+                        $salarioPeriodo = $monto;
+                        $factorSemanas = 4.33;
+                    } else if ($periodo === 'bimensual') {
+                        $salarioPeriodo = $monto * 2;
+                        $factorSemanas = 8.66;
+                    } else if ($periodo === 'trimestral') {
+                        $salarioPeriodo = $monto * 3;
+                        $factorSemanas = 13;
+                    } else if ($periodo === 'semestral') {
+                        $salarioPeriodo = $monto * 6;
+                        $factorSemanas = 26;
+                    } else if ($periodo === 'anual') {
+                        $salarioPeriodo = $monto * 12;
+                        $factorSemanas = 52;
+                    }
 
                     $horasPeriodo = $horasSemana > 0 && $factorSemanas > 0 ? ($horasSemana * $factorSemanas) : 0;
-                    $emp['costo_por_hora'] = $horasPeriodo > 0 ? round($monto / $horasPeriodo, 4) : 0;
+                    $emp['costo_por_hora'] = $horasPeriodo > 0 ? round($salarioPeriodo / $horasPeriodo, 4) : 0;
                 }
             }
             $finalResponse['costo_hora_empleado'] = $salariosData;
@@ -560,18 +577,37 @@ return function (App $app) {
         $salariosData = [];
         if (is_array($salariosRaw)) {
             foreach ($salariosRaw as $row) {
-                $monto = (float)($row['salario_monto'] ?? 0);
+                $montoMensual = (float)($row['salario_monto'] ?? 0);
                 $periodo = strtolower((string)($row['salario_periodo'] ?? ''));
+                
+                $salarioPeriodo = 0;
                 $factorSemanas = 0;
-                if ($periodo === 'semanal') $factorSemanas = 1;
-                elseif ($periodo === 'quincenal') $factorSemanas = 2;
-                elseif ($periodo === 'mensual') $factorSemanas = 4.33;
-                elseif ($periodo === 'bimensual') $factorSemanas = 8.66;
-                elseif ($periodo === 'trimestral') $factorSemanas = 13;
-                elseif ($periodo === 'semestral') $factorSemanas = 26;
-                elseif ($periodo === 'anual') $factorSemanas = 52;
+                
+                if ($periodo === 'semanal') {
+                    $salarioPeriodo = $montoMensual / 4;
+                    $factorSemanas = 1;
+                } elseif ($periodo === 'quincenal') {
+                    $salarioPeriodo = $montoMensual / 2;
+                    $factorSemanas = 2;
+                } elseif ($periodo === 'mensual') {
+                    $salarioPeriodo = $montoMensual;
+                    $factorSemanas = 4.33;
+                } elseif ($periodo === 'bimensual') {
+                    $salarioPeriodo = $montoMensual * 2;
+                    $factorSemanas = 8.66;
+                } elseif ($periodo === 'trimestral') {
+                    $salarioPeriodo = $montoMensual * 3;
+                    $factorSemanas = 13;
+                } elseif ($periodo === 'semestral') {
+                    $salarioPeriodo = $montoMensual * 6;
+                    $factorSemanas = 26;
+                } elseif ($periodo === 'anual') {
+                    $salarioPeriodo = $montoMensual * 12;
+                    $factorSemanas = 52;
+                }
+                
                 $horasPeriodo = $horasSemana > 0 && $factorSemanas > 0 ? ($horasSemana * $factorSemanas) : 0;
-                $costoPorHora = $horasPeriodo > 0 ? round($monto / $horasPeriodo, 4) : 0;
+                $costoPorHora = $horasPeriodo > 0 ? round($salarioPeriodo / $horasPeriodo, 4) : 0;
                 $horasTrabajadas = (float)($row['horas_trabajadas'] ?? 0);
                 $salariosData[] = [
                     'id_empleado' => $row['id_empleado'],
