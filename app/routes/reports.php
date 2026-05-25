@@ -430,7 +430,7 @@ return function (App $app) {
                 $finalResponse['tareas_data'] = $dbEmpresas->goQuery($sqlTareas);
             }
 
-                                                // 12. Gastos (Reglas: Fijos siempre por plantilla, Variables/Adicionales por registro real)
+                // 12. Gastos (Reglas: Fijos siempre por plantilla, Variables/Adicionales por registro real)
             $fecha_inicio_dt = new DateTime($inicio);
             $fecha_fin_dt = new DateTime($fin);
             $intervalo = $fecha_inicio_dt->diff($fecha_fin_dt);
@@ -438,46 +438,89 @@ return function (App $app) {
             $factor_mensual = $dias_periodo / 30.44;
 
             // A. Plantillas Fijas
-            $sqlPlantillasFijas = "SELECT moneda, SUM(monto) as total_mensual 
+            $sqlPlantillasFijas = "SELECT nombre, descripcion, monto, moneda, periodicidad 
                                    FROM $companyDB.gastos 
-                                   WHERE estatus = 'activo' AND tipo = 'fijo'
-                                   GROUP BY moneda";
+                                   WHERE estatus = 'activo' AND tipo = 'fijo'";
             $plantillasFijasRaw = $dbEmpresas->goQuery($sqlPlantillasFijas);
 
             // B. Registros Reales
-            $sqlGastosReales = "SELECT tipo, moneda, SUM(monto) as total 
+            $sqlGastosReales = "SELECT _id, tipo, nombre, descripcion, monto, moneda, fecha_de_gasto 
                                 FROM $companyDB.gastos_registros 
                                 WHERE fecha_de_gasto BETWEEN :inicio AND :fin 
-                                GROUP BY tipo, moneda";
+                                ORDER BY fecha_de_gasto DESC";
             $gastosRealesRaw = $dbEmpresas->goQuery($sqlGastosReales, [':inicio' => $inicio, ':fin' => $fin]);
 
             $gastosPorTipo = ['fijo' => [], 'variable' => [], 'adicional' => []];
             $fijosMap = [];
-            $totalGastosFijosUSD = 0; // Para el resumen compatible
-
+            $fijosTemplatesSum = [];
+            $fijosRealesSum = [];
+            
+            $fijosPlantillasDetalles = [];
             if (is_array($plantillasFijasRaw) && !isset($plantillasFijasRaw['status'])) {
                 foreach ($plantillasFijasRaw as $pf) {
                     $m = $pf['moneda'];
-                    $monto = (float)$pf['total_mensual'] * $factor_mensual;
-                    $fijosMap[$m] = $monto;
+                    $monto_mensual = (float)$pf['monto'];
+                    $monto_prorrateado = $monto_mensual * $factor_mensual;
+                    
+                    $fijosTemplatesSum[$m] = ($fijosTemplatesSum[$m] ?? 0) + $monto_prorrateado;
+                    
+                    $fijosPlantillasDetalles[] = [
+                        'nombre' => $pf['nombre'],
+                        'descripcion' => $pf['descripcion'] ?? '',
+                        'monto_mensual' => round($monto_mensual, 2),
+                        'monto_prorrateado' => round($monto_prorrateado, 2),
+                        'moneda' => $m,
+                        'periodicidad' => $pf['periodicidad']
+                    ];
                 }
             }
+
+            $realesDetalles = ['fijo' => [], 'variable' => [], 'adicional' => []];
+            $realesAgrupadosPorTipo = ['fijo' => [], 'variable' => [], 'adicional' => []];
 
             if (is_array($gastosRealesRaw) && !isset($gastosRealesRaw['status'])) {
                 foreach ($gastosRealesRaw as $gr) {
                     $tipo = strtolower($gr['tipo']);
-                    $moneda = $gr['moneda'];
-                    $monto = (float)$gr['total'];
-                    if ($tipo === 'fijo') {
-                        $fijosMap[$moneda] = max(($fijosMap[$moneda] ?? 0), $monto);
-                    } else {
-                        $gastosPorTipo[$tipo][] = ['moneda' => $moneda, 'total' => round($monto, 2)];
+                    if (!in_array($tipo, ['fijo', 'variable', 'adicional'])) {
+                        $tipo = 'adicional';
                     }
+                    $moneda = $gr['moneda'];
+                    $monto = (float)$gr['monto'];
+                    
+                    if ($tipo === 'fijo') {
+                        $fijosRealesSum[$moneda] = ($fijosRealesSum[$moneda] ?? 0) + $monto;
+                    } else {
+                        $realesAgrupadosPorTipo[$tipo][$moneda] = ($realesAgrupadosPorTipo[$tipo][$moneda] ?? 0) + $monto;
+                    }
+                    
+                    $realesDetalles[$tipo][] = [
+                        '_id' => $gr['_id'],
+                        'nombre' => $gr['nombre'],
+                        'descripcion' => $gr['descripcion'] ?? '',
+                        'monto' => round($monto, 2),
+                        'moneda' => $moneda,
+                        'fecha_de_gasto' => $gr['fecha_de_gasto']
+                    ];
                 }
+            }
+
+            // Para gastos fijos: tomamos el máximo por moneda entre plantilla prorrateada y el registro real
+            $todasMonedasFijas = array_unique(array_merge(array_keys($fijosTemplatesSum), array_keys($fijosRealesSum)));
+            foreach ($todasMonedasFijas as $moneda) {
+                $tempSum = $fijosTemplatesSum[$moneda] ?? 0;
+                $realSum = $fijosRealesSum[$moneda] ?? 0;
+                $fijosMap[$moneda] = max($tempSum, $realSum);
             }
 
             foreach ($fijosMap as $moneda => $total) {
                 $gastosPorTipo['fijo'][] = ['moneda' => $moneda, 'total' => round($total, 2)];
+            }
+
+            // Para variables y adicionales: totalizamos a partir de los reales
+            foreach (['variable', 'adicional'] as $t) {
+                foreach ($realesAgrupadosPorTipo[$t] as $moneda => $total) {
+                    $gastosPorTipo[$t][] = ['moneda' => $moneda, 'total' => round($total, 2)];
+                }
             }
 
             // C. Remanentes (Pérdida por material descartado) en el periodo
@@ -556,6 +599,8 @@ return function (App $app) {
                 'total_productos_periodo' => $totalProductosPeriodo,
                 'costo_operativo_por_producto' => $costoOperativoPorProducto,
                 'gastos_por_tipo' => $gastosPorTipo,
+                'gastos_plantillas_fijas' => $fijosPlantillasDetalles,
+                'gastos_reales_detalles' => $realesDetalles,
                 'total_remanentes_periodo' => round($totalRemanentesPeriodo, 2),
                 'remanentes_detalles' => $remanentesDetalles,
                 'total_mantenimiento_periodo' => round($totalMantenimientoPeriodo, 2),
