@@ -481,13 +481,16 @@ return function (App $app) {
             }
 
             // C. Remanentes (Pérdida por material descartado) en el periodo
-            $sqlRemanentes = "SELECT ir.cantidad, i.costo, i.cantidad_inicial 
+            $sqlRemanentes = "SELECT ir.cantidad, ir.fecha, ir.motivo, ir.observacion,
+                                     i.sku, i.insumo as nombre_insumo, i.costo, i.cantidad_inicial 
                               FROM $companyDB.inventario_remanentes ir 
                               JOIN $companyDB.inventario i ON ir.id_insumo = i._id 
-                              WHERE ir.fecha BETWEEN :inicio AND :fin";
+                              WHERE ir.fecha BETWEEN :inicio AND :fin
+                              ORDER BY ir.fecha DESC";
             $remanentesRaw = $dbEmpresas->goQuery($sqlRemanentes, [':inicio' => $inicio, ':fin' => $fin]);
             
             $totalRemanentesPeriodo = 0;
+            $remanentesDetalles = [];
             if (is_array($remanentesRaw) && !isset($remanentesRaw['status'])) {
                 foreach ($remanentesRaw as $rem) {
                     $cant = (float)$rem['cantidad'];
@@ -496,7 +499,21 @@ return function (App $app) {
                     
                     // Evitar división por cero
                     $costUnit = $costo / ($cant_ini > 0 ? $cant_ini : 1);
-                    $totalRemanentesPeriodo += $cant * $costUnit;
+                    $totalItem = $cant * $costUnit;
+                    $totalRemanentesPeriodo += $totalItem;
+                    
+                    $remanentesDetalles[] = [
+                        'sku' => $rem['sku'],
+                        'nombre_insumo' => $rem['nombre_insumo'],
+                        'cantidad' => $cant,
+                        'costo' => $costo,
+                        'cantidad_inicial' => $cant_ini,
+                        'costo_unitario' => round($costUnit, 4),
+                        'total_perdida' => round($totalItem, 2),
+                        'fecha' => $rem['fecha'],
+                        'motivo' => $rem['motivo'],
+                        'observacion' => $rem['observacion']
+                    ];
                 }
             }
 
@@ -510,7 +527,8 @@ return function (App $app) {
                 'total_productos_periodo' => $totalProductosPeriodo,
                 'costo_operativo_por_producto' => $costoOperativoPorProducto,
                 'gastos_por_tipo' => $gastosPorTipo,
-                'total_remanentes_periodo' => round($totalRemanentesPeriodo, 2)
+                'total_remanentes_periodo' => round($totalRemanentesPeriodo, 2),
+                'remanentes_detalles' => $remanentesDetalles
             ];
 
             if (false) {
