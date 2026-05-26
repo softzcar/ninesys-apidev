@@ -1,5 +1,7 @@
 <?php
-require_once __DIR__ . '/../src/LocalDB.php';
+require __DIR__ . '/../vendor/autoload.php';
+require '../app/config.php';
+require '../app/app_loader.php';
 
 header('Content-Type: application/json');
 
