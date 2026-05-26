@@ -1009,61 +1009,134 @@ return function (App $app) {
     $localConnection = new LocalDB();
     $sql = 'SELECT * FROM ordenes_productos WHERE _id = ' . $data['id_ordenes_productos'];
     $producto = $localConnection->goQuery($sql)[0];
+    $id_orden = $producto['id_orden'];
 
     $myDate = new CustomTime();
     $now = $myDate->today();
 
-    // Verificamos si se ha enviado la solicitud desde PRoduccion, lelgan los dos id de emploados
+    // 1. OBTENER ORDEN PROCESO ACTUAL DE LA ORDEN PRINCIPAL
+    // Buscamos el primer paso de departamento activo que esté incompleto en la orden principal
+    $sqlActiveDepts = "SELECT dep.orden_proceso, dep.departamento
+                       FROM lotes_detalles_empleados_asignados ldea
+                       JOIN departamentos dep ON dep._id = ldea.id_departamento
+                       WHERE ldea.id_orden = {$id_orden} AND ldea.fecha_terminado IS NULL
+                       ORDER BY dep.orden_proceso ASC LIMIT 1";
+    $activeDeptRes = $localConnection->goQuery($sqlActiveDepts);
+    
+    // Si no hay tareas pendientes de la orden, buscamos el departamento de mayor orden_proceso de la orden ya terminado
+    if (empty($activeDeptRes)) {
+      $sqlMaxFinished = "SELECT dep.orden_proceso, dep.departamento
+                         FROM lotes_detalles_empleados_asignados ldea
+                         JOIN departamentos dep ON dep._id = ldea.id_departamento
+                         WHERE ldea.id_orden = {$id_orden}
+                         ORDER BY dep.orden_proceso DESC LIMIT 1";
+      $activeDeptRes = $localConnection->goQuery($sqlMaxFinished);
+    }
+
+    $orden_proceso_actual_orden = 9999; // Valor alto por defecto si no hay info
+    $nombre_departamento_actual = "Finalizado";
+    if (!empty($activeDeptRes)) {
+      $orden_proceso_actual_orden = intval($activeDeptRes[0]['orden_proceso']);
+      $nombre_departamento_actual = $activeDeptRes[0]['departamento'];
+    }
+
+    // 2. CONSULTAR ORDEN PROCESO DE LOS DEPARTAMENTOS DE LA REPOSICIÓN
+    $id_depto_inicio = intval($data['id_departamento']);
+    $id_depto_fin = intval($data['id_departamento_solicitante']);
+
+    $sqlDeptoInfo = "SELECT _id, orden_proceso, departamento FROM departamentos WHERE _id IN ({$id_depto_inicio}, {$id_depto_fin})";
+    $deptoInfoRes = $localConnection->goQuery($sqlDeptoInfo);
+
+    $orden_proceso_inicio = 0;
+    $orden_proceso_fin = 0;
+    $nombre_depto_inicio = "";
+    $nombre_depto_fin = "";
+    foreach ($deptoInfoRes as $dep) {
+      if ($dep['_id'] == $id_depto_inicio) {
+        $orden_proceso_inicio = intval($dep['orden_proceso']);
+        $nombre_depto_inicio = $dep['departamento'];
+      }
+      if ($dep['_id'] == $id_depto_fin) {
+        $orden_proceso_fin = intval($dep['orden_proceso']);
+        $nombre_depto_fin = $dep['departamento'];
+      }
+    }
+
+    // 3. VALIDAR LA REGLA DE PROGRESIÓN (Inicio < orden_proceso_actual_orden)
+    // No se puede iniciar un retrabajo/reposición en un departamento que la orden principal no ha completado aún
+    if ($orden_proceso_inicio >= $orden_proceso_actual_orden) {
+      $localConnection->disconnect();
+      $errorMsg = "No se puede emitir la reposición iniciando en el departamento de '{$nombre_depto_inicio}'. La orden principal aún está en curso o no ha pasado de '{$nombre_departamento_actual}'.";
+      $response->getBody()->write(json_encode(['status' => 'error', 'message' => $errorMsg]));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(400);
+    }
+
+    // Verificamos si se ha enviado la solicitud desde PRoduccion (Supervisor)
     if (isset($data['id_empleado_emisor'])) {
-      // Crear estructura de datos aprobada inmediatamente para la creación directa desde el Panel de Control
-      // Mapeamos el departamento de inicio (id_departamento) a la columna 'id_departamento' (paso activo actual),
-      // y el departamento de finalización (id_departamento_solicitante) a la columna 'id_departamento_solicitante' (destino final).
+      // 4. AUTO-ASIGNACIÓN (OPCIÓN A):
+      // Buscamos los empleados originales que trabajaron o están asignados a estos departamentos para esta orden.
+      
+      // Empleado que cometió el error (id_empleado_emisor en la base de datos de reposiciones es el emisor del error,
+      // mientras que id_empleado es el responsable asignado para corregirlo en el paso inicial).
+      
+      // Empleado original para el departamento de INICIO de la reposición
+      $sqlEmpInicio = "SELECT id_empleado 
+                       FROM lotes_detalles_empleados_asignados 
+                       WHERE id_orden = {$id_orden} AND id_departamento = {$id_depto_inicio} AND (id_reposicion IS NULL OR id_reposicion = 0)
+                       LIMIT 1";
+      $empInicioRes = $localConnection->goQuery($sqlEmpInicio);
+      $id_empleado_inicio = !empty($empInicioRes) ? intval($empInicioRes[0]['id_empleado']) : NULL;
+
+      // Empleado original para el departamento de FIN de la reposición (quien detectó el error / responsable de la etapa final)
+      $sqlEmpFin = "SELECT id_empleado 
+                    FROM lotes_detalles_empleados_asignados 
+                    WHERE id_orden = {$id_orden} AND id_departamento = {$id_depto_fin} AND (id_reposicion IS NULL OR id_reposicion = 0)
+                    LIMIT 1";
+      $empFinRes = $localConnection->goQuery($sqlEmpFin);
+      $id_empleado_fin = !empty($empFinRes) ? intval($empFinRes[0]['id_empleado']) : NULL;
+
+      // Fallback si no se encontró en el histórico, usar el id_empleado logueado
+      if (is_null($id_empleado_inicio)) {
+        $id_empleado_inicio = intval($data['id_empleado_emisor']);
+      }
+      if (is_null($id_empleado_fin)) {
+        $id_empleado_fin = intval($data['id_empleado_emisor']);
+      }
+
       $campos = '(moment, aprobada, id_orden, id_empleado, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, id_departamento_solicitante, id_departamento)';
       $values = '(';
       $values .= "'" . $now . "',";
       $values .= '1,'; // Reposición aprobada automáticamente
-      $values .= '' . $producto['id_orden'] . ',';
-      $values .= '' . $data['id_empleado'] . ','; // Empleado asignado para corregir
-      $values .= '' . $data['id_empleado_emisor'] . ','; // Empleado que cometió el error
-      $values .= '' . $producto['_id'] . ',';
-      $values .= '' . $data['cantidad'] . ',';
-      $values .= "'" . $data['detalle'] . "',";
+      $values .= $id_orden . ',';
+      $values .= $id_empleado_inicio . ','; // Empleado asignado para corregir (auto-asignado histórico)
+      $values .= $id_empleado_fin . ','; // Empleado que cometió/detectó el error (auto-asignado histórico)
+      $values .= $producto['_id'] . ',';
+      $values .= intval($data['cantidad']) . ',';
+      $values .= "'" . $localConnection->goQuery("SELECT quote(?)", [$data['detalle']])[0]["quote(?)"] . "',";
 
-      // Destino final (donde termina): Departamento asignado ($data['id_departamento_solicitante'])
-      if (isset($data['id_departamento_solicitante'])) {
-        $values .= intval($data['id_departamento_solicitante']) . ',';
-      } else {
-        $values .= 'NULL,';
-      }
-
-      // Paso activo inicial (donde inicia): Departamento de inicio del error ($data['id_departamento'])
-      if (isset($data['id_departamento'])) {
-        $values .= intval($data['id_departamento']);
-      } else {
-        $values .= 'NULL';
-      }
-
+      $values .= $id_depto_fin . ','; // Destino final (donde termina)
+      $values .= $id_depto_inicio; // Paso activo inicial (donde inicia)
       $values .= ')';
     } else {
-      // Si no viene id_empleado_emisor, asumimos que es la creación desde el módulo de empleados
-      // Añadimos id_departamento_solicitante aquí
+      // Si no viene id_empleado_emisor, asumimos que es la creación desde el módulo de empleados (Solicitud de Empleado)
+      // Esta requiere aprobación posterior
       $campos = '(moment, aprobada, id_orden, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, id_departamento_solicitante)';
       $values = '(';
       $values .= "'" . $now . "',";
       $values .= 'NULL,';
-      $values .= '' . $producto['id_orden'] . ',';
-      $values .= '' . $data['id_empleado'] . ',';
-      $values .= '' . $producto['_id'] . ',';
-      $values .= '' . $data['cantidad'] . ',';
-      $values .= "'" . $data['detalle'] . "',";
-      // Aseguramos que id_departamento_solicitante esté presente en los datos POST
-      if (isset($data['id_departamento_solicitante'])) {
-        $values .= intval($data['id_departamento_solicitante']);
-      } else {
-        $values .= 'NULL';  // O 0, dependiendo de cómo manejes IDs nulos/vacíos
-      }
+      $values .= $id_orden . ',';
+      $values .= intval($data['id_empleado']) . ',';
+      $values .= $producto['_id'] . ',';
+      $values .= intval($data['cantidad']) . ',';
+      $values .= "'" . $localConnection->goQuery("SELECT quote(?)", [$data['detalle']])[0]["quote(?)"] . "',";
+      $values .= $id_depto_fin;
       $values .= ')';
-    }  // Fin del else (creación desde módulo de empleados)
+    }
+
+    // Limpiamos los quotes simples agregados por SELECT quote(?) para evitar sintaxis inválida de inserción SQL
+    $values = str_replace(["'\"'", "\"'\""], ["'", "'"], $values);
 
     $sql = 'INSERT INTO reposiciones ' . $campos . ' VALUES ' . $values;
     $object['sql_insert_reposiciones'] = $sql;
