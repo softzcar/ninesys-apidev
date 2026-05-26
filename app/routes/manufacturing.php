@@ -6,6 +6,14 @@ use Slim\App;
 
 return function (App $app) {
 
+  $app->get('/tmp-saneamiento-reposicion-jesus', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    $localConnection->goQuery("UPDATE reposiciones SET id_empleado = 5 WHERE _id = 43");
+    $localConnection->disconnect();
+    $response->getBody()->write("OK SANEADO");
+    return $response->withHeader('Content-Type', 'text/plain');
+  });
+
 
   /**
    * =================================================================
