@@ -659,6 +659,10 @@ return function (App $app) {
           $sqlInsertTracking = "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision, id_reposicion) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0, {$id_repo});";
           $localConnection->goQuery($sqlInsertTracking);
         }
+
+        // BIND REPOSITION TO THE CLAIMING OPERATOR
+        $sqlUpdateRepoEmployee = "UPDATE reposiciones SET id_empleado = {$miEmpleado['id_empleado']} WHERE _id = {$id_repo};";
+        $localConnection->goQuery($sqlUpdateRepoEmployee);
       } else {
         // Regular Order logic: original behavior
         $sqlUpdateTracking = "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . " AND id_departamento = " . $miEmpleado['id_departamento'] . ";";
