@@ -1077,7 +1077,7 @@ return function (App $app) {
       $id_empleado_fin = !is_null($id_empleado_actual_orden) ? $id_empleado_actual_orden : intval($data['id_empleado_supervisor'] ?? 0);
       $id_empleado_inicio = intval($data['id_empleado']);
 
-      $campos = '(moment, aprobada, id_orden, id_empleado, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, id_departamento_solicitante, id_departamento)';
+      $campos = '(moment, aprobada, id_orden, id_empleado, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, detalle, id_departamento_solicitante, id_departamento)';
       $values = '(';
       $values .= "'" . $now . "',";
       $values .= '1,'; // Reposición aprobada automáticamente
@@ -1086,7 +1086,9 @@ return function (App $app) {
       $values .= $id_empleado_fin . ','; // Empleado destinatario del final (quien recibe el material al terminar)
       $values .= $producto['_id'] . ',';
       $values .= intval($data['cantidad']) . ',';
-      $values .= "'" . $localConnection->goQuery("SELECT quote(?) AS q", [$data['detalle']])[0]["q"] . "',";
+      $escaped_detalle = "'" . $localConnection->goQuery("SELECT quote(?) AS q", [$data['detalle']])[0]["q"] . "'";
+      $values .= $escaped_detalle . ','; // detalle_emisor
+      $values .= $escaped_detalle . ','; // detalle (supervisor direct description fallback)
       $values .= $id_depto_fin . ','; // Destino final
       $values .= $id_depto_inicio; // Paso activo inicial
       $values .= ')';
