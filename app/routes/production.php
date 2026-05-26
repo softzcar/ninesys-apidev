@@ -1014,9 +1014,11 @@ return function (App $app) {
     $myDate = new CustomTime();
     $now = $myDate->today();
 
-    // 1. OBTENER ORDEN PROCESO ACTUAL DE LA ORDEN PRINCIPAL
-    // Buscamos el primer paso de departamento activo que esté incompleto en la orden principal
-    $sqlActiveDepts = "SELECT dep.orden_proceso, dep.departamento
+    // 1. DETERMINAR SI ES CREADA DIRECTAMENTE POR EL SUPERVISOR
+    $es_supervisor = isset($data['creado_por_supervisor']) && $data['creado_por_supervisor'] == '1';
+
+    // 2. OBTENER ORDEN PROCESO ACTUAL DE LA ORDEN PRINCIPAL, ASÍ COMO EL DEPARTAMENTO Y OPERARIO ACTIVOS
+    $sqlActiveDepts = "SELECT dep.orden_proceso, dep.departamento, ldea.id_departamento, ldea.id_empleado
                        FROM lotes_detalles_empleados_asignados ldea
                        JOIN departamentos dep ON dep._id = ldea.id_departamento
                        WHERE ldea.id_orden = {$id_orden} AND ldea.fecha_terminado IS NULL
@@ -1025,7 +1027,7 @@ return function (App $app) {
     
     // Si no hay tareas pendientes de la orden, buscamos el departamento de mayor orden_proceso de la orden ya terminado
     if (empty($activeDeptRes)) {
-      $sqlMaxFinished = "SELECT dep.orden_proceso, dep.departamento
+      $sqlMaxFinished = "SELECT dep.orden_proceso, dep.departamento, ldea.id_departamento, ldea.id_empleado
                          FROM lotes_detalles_empleados_asignados ldea
                          JOIN departamentos dep ON dep._id = ldea.id_departamento
                          WHERE ldea.id_orden = {$id_orden}
@@ -1035,103 +1037,82 @@ return function (App $app) {
 
     $orden_proceso_actual_orden = 9999; // Valor alto por defecto si no hay info
     $nombre_departamento_actual = "Finalizado";
+    $id_depto_actual_orden = NULL;
+    $id_empleado_actual_orden = NULL;
+
     if (!empty($activeDeptRes)) {
       $orden_proceso_actual_orden = intval($activeDeptRes[0]['orden_proceso']);
       $nombre_departamento_actual = $activeDeptRes[0]['departamento'];
+      $id_depto_actual_orden = intval($activeDeptRes[0]['id_departamento']);
+      $id_empleado_actual_orden = !empty($activeDeptRes[0]['id_empleado']) ? intval($activeDeptRes[0]['id_empleado']) : NULL;
     }
 
-    // 2. CONSULTAR ORDEN PROCESO DE LOS DEPARTAMENTOS DE LA REPOSICIÓN
+    // 3. CONSULTAR ORDEN PROCESO DE LOS DEPARTAMENTOS DE LA REPOSICIÓN
     $id_depto_inicio = intval($data['id_departamento']);
-    $id_depto_fin = intval($data['id_departamento_solicitante']);
-
-    $sqlDeptoInfo = "SELECT _id, orden_proceso, departamento FROM departamentos WHERE _id IN ({$id_depto_inicio}, {$id_depto_fin})";
-    $deptoInfoRes = $localConnection->goQuery($sqlDeptoInfo);
-
+    
+    // Consultar orden_proceso del departamento de inicio
+    $sqlDeptoInicioInfo = "SELECT orden_proceso, departamento FROM departamentos WHERE _id = {$id_depto_inicio}";
+    $deptoInicioRes = $localConnection->goQuery($sqlDeptoInicioInfo);
+    
     $orden_proceso_inicio = 0;
-    $orden_proceso_fin = 0;
     $nombre_depto_inicio = "";
-    $nombre_depto_fin = "";
-    foreach ($deptoInfoRes as $dep) {
-      if ($dep['_id'] == $id_depto_inicio) {
-        $orden_proceso_inicio = intval($dep['orden_proceso']);
-        $nombre_depto_inicio = $dep['departamento'];
-      }
-      if ($dep['_id'] == $id_depto_fin) {
-        $orden_proceso_fin = intval($dep['orden_proceso']);
-        $nombre_depto_fin = $dep['departamento'];
-      }
+    if (!empty($deptoInicioRes)) {
+      $orden_proceso_inicio = intval($deptoInicioRes[0]['orden_proceso']);
+      $nombre_depto_inicio = $deptoInicioRes[0]['departamento'];
     }
 
-    // 3. VALIDAR LA REGLA DE PROGRESIÓN DE INICIO (Inicio < orden_proceso_actual_orden)
-    // No se puede iniciar un retrabajo/reposición en un departamento que la orden principal no ha completado aún
-    if ($orden_proceso_inicio >= $orden_proceso_actual_orden) {
+    // 4. VALIDAR LA REGLA DE PROGRESIÓN DE INICIO (Inicio <= orden_proceso_actual_orden)
+    if ($orden_proceso_inicio > $orden_proceso_actual_orden) {
       $localConnection->disconnect();
-      $errorMsg = "No se puede emitir la reposición iniciando en el departamento de '{$nombre_depto_inicio}'. La orden principal aún está en curso o no ha pasado de '{$nombre_departamento_actual}'.";
+      $errorMsg = "No se puede emitir la reposición iniciando en el departamento de '{$nombre_depto_inicio}'. El paso de inicio no puede ser posterior a la etapa actual de la orden principal ('{$nombre_departamento_actual}').";
       $response->getBody()->write(json_encode(['status' => 'error', 'message' => $errorMsg]));
       return $response
         ->withHeader('Content-Type', 'application/json')
         ->withStatus(400);
     }
 
-    // 3b. VALIDAR QUE EL DEPARTAMENTO DE FINALIZACIÓN NO SEA POSTERIOR AL DEPARTAMENTO ACTUAL DE LA ORDEN PRINCIPAL
-    if ($orden_proceso_fin > $orden_proceso_actual_orden) {
-      $localConnection->disconnect();
-      $errorMsg = "No se puede emitir la reposición finalizando en el departamento de '{$nombre_depto_fin}'. El paso de destino no puede ser posterior a la etapa actual de la orden principal ('{$nombre_departamento_actual}').";
-      $response->getBody()->write(json_encode(['status' => 'error', 'message' => $errorMsg]));
-      return $response
-        ->withHeader('Content-Type', 'application/json')
-        ->withStatus(400);
-    }
-
-    // Verificamos si se ha enviado la solicitud desde PRoduccion (Supervisor)
-    if (isset($data['id_empleado_emisor'])) {
-      // 4. AUTO-ASIGNACIÓN (OPCIÓN A):
-      // Buscamos los empleados originales que trabajaron o están asignados a estos departamentos para esta orden.
-      
-      // Empleado que cometió el error (id_empleado_emisor en la base de datos de reposiciones es el emisor del error,
-      // mientras que id_empleado es el responsable asignado para corregirlo en el paso inicial).
-      
-      // Empleado original para el departamento de INICIO de la reposición
-      $sqlEmpInicio = "SELECT id_empleado 
-                       FROM lotes_detalles_empleados_asignados 
-                       WHERE id_orden = {$id_orden} AND id_departamento = {$id_depto_inicio} AND (id_reposicion IS NULL OR id_reposicion = 0)
-                       LIMIT 1";
-      $empInicioRes = $localConnection->goQuery($sqlEmpInicio);
-      $id_empleado_inicio = !empty($empInicioRes) ? intval($empInicioRes[0]['id_empleado']) : NULL;
-
-      // Empleado original para el departamento de FIN de la reposición (quien detectó el error / responsable de la etapa final)
-      $sqlEmpFin = "SELECT id_empleado 
-                    FROM lotes_detalles_empleados_asignados 
-                    WHERE id_orden = {$id_orden} AND id_departamento = {$id_depto_fin} AND (id_reposicion IS NULL OR id_reposicion = 0)
-                    LIMIT 1";
-      $empFinRes = $localConnection->goQuery($sqlEmpFin);
-      $id_empleado_fin = !empty($empFinRes) ? intval($empFinRes[0]['id_empleado']) : NULL;
-
-      // Fallback si no se encontró en el histórico, usar el id_empleado logueado
-      if (is_null($id_empleado_inicio)) {
-        $id_empleado_inicio = intval($data['id_empleado_emisor']);
-      }
-      if (is_null($id_empleado_fin)) {
-        $id_empleado_fin = intval($data['id_empleado_emisor']);
-      }
+    if ($es_supervisor) {
+      // Flujo de Supervisor: Aprobación directa, destino y emisor resueltos dinámicamente
+      $id_depto_fin = !is_null($id_depto_actual_orden) ? $id_depto_actual_orden : $id_depto_inicio;
+      $id_empleado_fin = !is_null($id_empleado_actual_orden) ? $id_empleado_actual_orden : intval($data['id_empleado_supervisor'] ?? 0);
+      $id_empleado_inicio = intval($data['id_empleado']);
 
       $campos = '(moment, aprobada, id_orden, id_empleado, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, id_departamento_solicitante, id_departamento)';
       $values = '(';
       $values .= "'" . $now . "',";
       $values .= '1,'; // Reposición aprobada automáticamente
       $values .= $id_orden . ',';
-      $values .= $id_empleado_inicio . ','; // Empleado asignado para corregir (auto-asignado histórico)
-      $values .= $id_empleado_fin . ','; // Empleado que cometió/detectó el error (auto-asignado histórico)
+      $values .= $id_empleado_inicio . ','; // Empleado asignado para corregir
+      $values .= $id_empleado_fin . ','; // Empleado destinatario del final (quien recibe el material al terminar)
       $values .= $producto['_id'] . ',';
       $values .= intval($data['cantidad']) . ',';
       $values .= "'" . $localConnection->goQuery("SELECT quote(?)", [$data['detalle']])[0]["quote(?)"] . "',";
-
-      $values .= $id_depto_fin . ','; // Destino final (donde termina)
-      $values .= $id_depto_inicio; // Paso activo inicial (donde inicia)
+      $values .= $id_depto_fin . ','; // Destino final
+      $values .= $id_depto_inicio; // Paso activo inicial
       $values .= ')';
     } else {
-      // Si no viene id_empleado_emisor, asumimos que es la creación desde el módulo de empleados (Solicitud de Empleado)
-      // Esta requiere aprobación posterior
+      // Flujo ordinario: Solicitud de empleado
+      $id_depto_fin = intval($data['id_departamento_solicitante']);
+
+      // 3b. VALIDAR QUE EL DEPARTAMENTO DE FINALIZACIÓN NO SEA POSTERIOR AL DEPARTAMENTO ACTUAL DE LA ORDEN PRINCIPAL
+      $sqlDeptoFinInfo = "SELECT orden_proceso, departamento FROM departamentos WHERE _id = {$id_depto_fin}";
+      $deptoFinRes = $localConnection->goQuery($sqlDeptoFinInfo);
+      $orden_proceso_fin = 0;
+      $nombre_depto_fin = "";
+      if (!empty($deptoFinRes)) {
+        $orden_proceso_fin = intval($deptoFinRes[0]['orden_proceso']);
+        $nombre_depto_fin = $deptoFinRes[0]['departamento'];
+      }
+
+      if ($orden_proceso_fin > $orden_proceso_actual_orden) {
+        $localConnection->disconnect();
+        $errorMsg = "No se puede emitir la reposición finalizando en el departamento de '{$nombre_depto_fin}'. El paso de destino no puede ser posterior a la etapa actual de la orden principal ('{$nombre_departamento_actual}').";
+        $response->getBody()->write(json_encode(['status' => 'error', 'message' => $errorMsg]));
+        return $response
+          ->withHeader('Content-Type', 'application/json')
+          ->withStatus(400);
+      }
+
       $campos = '(moment, aprobada, id_orden, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, id_departamento_solicitante)';
       $values = '(';
       $values .= "'" . $now . "',";
