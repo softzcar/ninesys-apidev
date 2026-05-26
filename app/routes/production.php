@@ -1062,11 +1062,21 @@ return function (App $app) {
       }
     }
 
-    // 3. VALIDAR LA REGLA DE PROGRESIÓN (Inicio < orden_proceso_actual_orden)
+    // 3. VALIDAR LA REGLA DE PROGRESIÓN DE INICIO (Inicio < orden_proceso_actual_orden)
     // No se puede iniciar un retrabajo/reposición en un departamento que la orden principal no ha completado aún
     if ($orden_proceso_inicio >= $orden_proceso_actual_orden) {
       $localConnection->disconnect();
       $errorMsg = "No se puede emitir la reposición iniciando en el departamento de '{$nombre_depto_inicio}'. La orden principal aún está en curso o no ha pasado de '{$nombre_departamento_actual}'.";
+      $response->getBody()->write(json_encode(['status' => 'error', 'message' => $errorMsg]));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(400);
+    }
+
+    // 3b. VALIDAR QUE EL DEPARTAMENTO DE FINALIZACIÓN NO SEA POSTERIOR AL DEPARTAMENTO ACTUAL DE LA ORDEN PRINCIPAL
+    if ($orden_proceso_fin > $orden_proceso_actual_orden) {
+      $localConnection->disconnect();
+      $errorMsg = "No se puede emitir la reposición finalizando en el departamento de '{$nombre_depto_fin}'. El paso de destino no puede ser posterior a la etapa actual de la orden principal ('{$nombre_departamento_actual}').";
       $response->getBody()->write(json_encode(['status' => 'error', 'message' => $errorMsg]));
       return $response
         ->withHeader('Content-Type', 'application/json')
