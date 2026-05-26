@@ -1014,28 +1014,30 @@ return function (App $app) {
 
     // Verificamos si se ha enviado la solicitud desde PRoduccion, lelgan los dos id de emploados
     if (isset($data['id_empleado_emisor'])) {
-      // crear estructura de datos para los dos empleados
+      // Crear estructura de datos aprobada inmediatamente para la creación directa desde el Panel de Control
+      // Mapeamos el departamento asignado (id_departamento_solicitante) a la columna 'id_departamento' (paso activo actual),
+      // y el departamento del error (id_departamento) a la columna 'id_departamento_solicitante' (destino final).
       $campos = '(moment, aprobada, id_orden, id_empleado, id_empleado_emisor, id_ordenes_productos, unidades, detalle_emisor, id_departamento_solicitante, id_departamento)';
       $values = '(';
       $values .= "'" . $now . "',";
-      $values .= 'NULL,';
+      $values .= '1,'; // Reposición aprobada automáticamente
       $values .= '' . $producto['id_orden'] . ',';
-      $values .= '' . $data['id_empleado'] . ',';
-      $values .= '' . $data['id_empleado_emisor'] . ',';
+      $values .= '' . $data['id_empleado'] . ','; // Empleado asignado para corregir
+      $values .= '' . $data['id_empleado_emisor'] . ','; // Empleado que cometió el error
       $values .= '' . $producto['_id'] . ',';
       $values .= '' . $data['cantidad'] . ',';
       $values .= "'" . $data['detalle'] . "',";
 
-      // Añadimos id_departamento_solicitante
-      if (isset($data['id_departamento_solicitante'])) {
-        $values .= intval($data['id_departamento_solicitante']) . ',';
+      // Destino final (donde termina): Departamento del error ($data['id_departamento'])
+      if (isset($data['id_departamento'])) {
+        $values .= intval($data['id_departamento']) . ',';
       } else {
         $values .= 'NULL,';
       }
 
-      // Añadimos id_departamento (visibilidad)
-      if (isset($data['id_departamento'])) {
-        $values .= intval($data['id_departamento']);
+      // Paso activo inicial (donde inicia): Departamento asignado ($data['id_departamento_solicitante'])
+      if (isset($data['id_departamento_solicitante'])) {
+        $values .= intval($data['id_departamento_solicitante']);
       } else {
         $values .= 'NULL';
       }
