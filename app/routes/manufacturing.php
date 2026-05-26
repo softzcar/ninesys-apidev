@@ -697,7 +697,7 @@ return function (App $app) {
 
           // Find Next Department
           // Logic: Next department must be > current and <= solicitor
-          $sqlNext = "SELECT _id, orden_proceso FROM departamentos WHERE orden_proceso > {$currentOp} AND orden_proceso <= {$solicitorOp} ORDER BY orden_proceso ASC LIMIT 1";
+          $sqlNext = "SELECT _id, orden_proceso FROM departamentos WHERE asignar_numero_de_paso = 1 AND orden_proceso > {$currentOp} AND orden_proceso <= {$solicitorOp} ORDER BY orden_proceso ASC LIMIT 1";
           $nextDept = $localConnection->goQuery($sqlNext);
 
           if (!empty($nextDept)) {
