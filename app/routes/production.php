@@ -1086,7 +1086,7 @@ return function (App $app) {
       $values .= $id_empleado_fin . ','; // Empleado destinatario del final (quien recibe el material al terminar)
       $values .= $producto['_id'] . ',';
       $values .= intval($data['cantidad']) . ',';
-      $values .= "'" . $localConnection->goQuery("SELECT quote(?)", [$data['detalle']])[0]["quote(?)"] . "',";
+      $values .= "'" . $localConnection->goQuery("SELECT quote(?) AS q", [$data['detalle']])[0]["q"] . "',";
       $values .= $id_depto_fin . ','; // Destino final
       $values .= $id_depto_inicio; // Paso activo inicial
       $values .= ')';
@@ -1121,7 +1121,7 @@ return function (App $app) {
       $values .= intval($data['id_empleado']) . ',';
       $values .= $producto['_id'] . ',';
       $values .= intval($data['cantidad']) . ',';
-      $values .= "'" . $localConnection->goQuery("SELECT quote(?)", [$data['detalle']])[0]["quote(?)"] . "',";
+      $values .= "'" . $localConnection->goQuery("SELECT quote(?) AS q", [$data['detalle']])[0]["q"] . "',";
       $values .= $id_depto_fin;
       $values .= ')';
     }
