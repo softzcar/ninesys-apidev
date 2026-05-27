@@ -453,8 +453,9 @@ return function (App $app) {
         a._id id_reposicion,
         a.id_orden,
         a.id_departamento_solicitante,
+        a.id_departamento,
         c._id id_ordenes_productos,
-        b.nombre empleado,  
+        b.nombre empleado,
         a.detalle_emisor,
         DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
         DATE_FORMAT(a.moment, '%I:%i %p') AS hora,
@@ -466,8 +467,8 @@ return function (App $app) {
         FROM
             reposiciones a
         LEFT JOIN ordenes_fila_reposiciones d ON d.id_reposicion = a._id
-        LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor 
-        JOIN ordenes_productos c ON c._id = a.id_ordenes_productos 
+        LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor
+        JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
         WHERE
             (a.aprobada IS NULL OR (a.aprobada = 0 AND a.detalle IS NULL)) AND a.id_empleado IS NULL
         ORDER BY d.orden_fila ASC;
@@ -811,6 +812,120 @@ return function (App $app) {
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
+  });
+
+  // -----------------------------------------------------------------------
+  // GET /reposicion/{id_reposicion}/departamentos-cola
+  // Devuelve la cadena de departamentos entre inicio y destino de una
+  // reposición, marcando cuáles están excluidos.
+  // -----------------------------------------------------------------------
+  $app->get('/reposicion/{id_reposicion}/departamentos-cola', function (Request $request, Response $response, array $args) {
+    $id_reposicion = intval($args['id_reposicion']);
+    if ($id_reposicion <= 0) {
+      $response->getBody()->write(json_encode(['error' => 'ID inválido']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection = new LocalDB();
+
+    // Obtener datos de la reposición (departamento inicio y destino)
+    $repoData = $localConnection->goQuery(
+      "SELECT id_departamento_solicitante, id_departamento FROM reposiciones WHERE _id = {$id_reposicion}"
+    );
+
+    if (empty($repoData)) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'Reposición no encontrada']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+    }
+
+    $id_depto_inicio = intval($repoData[0]['id_departamento_solicitante']);
+    $id_depto_fin    = intval($repoData[0]['id_departamento']);
+
+    // Obtener orden_proceso de inicio y fin
+    $opData = $localConnection->goQuery(
+      "SELECT _id, orden_proceso FROM departamentos WHERE _id IN ({$id_depto_inicio}, {$id_depto_fin})"
+    );
+
+    $op_inicio = 0;
+    $op_fin    = 0;
+    foreach ($opData as $row) {
+      if ((int)$row['_id'] === $id_depto_inicio) $op_inicio = (int)$row['orden_proceso'];
+      if ((int)$row['_id'] === $id_depto_fin)    $op_fin    = (int)$row['orden_proceso'];
+    }
+
+    // Obtener toda la cadena de departamentos intermedios
+    $sql = "SELECT
+        d._id AS id_departamento,
+        d.departamento,
+        d.orden_proceso,
+        CASE WHEN rde.id_departamento IS NOT NULL THEN 1 ELSE 0 END AS excluido,
+        CASE WHEN d._id = {$id_depto_inicio} THEN 1 ELSE 0 END AS es_inicio,
+        CASE WHEN d._id = {$id_depto_fin}    THEN 1 ELSE 0 END AS es_destino
+      FROM departamentos d
+      LEFT JOIN reposiciones_departamentos_excluidos rde
+        ON rde.id_reposicion = {$id_reposicion} AND rde.id_departamento = d._id
+      WHERE d.asignar_numero_de_paso = 1
+        AND d.orden_proceso >= {$op_inicio}
+        AND d.orden_proceso <= {$op_fin}
+      ORDER BY d.orden_proceso ASC";
+
+    $departamentos = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($departamentos));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
+  // -----------------------------------------------------------------------
+  // POST /reposicion/{id_reposicion}/excluir-departamento
+  // Body: { id_departamento: int, excluir: bool }
+  // Agrega o elimina una exclusión. Inicio y destino no pueden excluirse.
+  // -----------------------------------------------------------------------
+  $app->post('/reposicion/{id_reposicion}/excluir-departamento', function (Request $request, Response $response, array $args) {
+    $id_reposicion = intval($args['id_reposicion']);
+    $data = $request->getParsedBody();
+    $id_departamento = intval($data['id_departamento'] ?? 0);
+    $excluir = filter_var($data['excluir'] ?? true, FILTER_VALIDATE_BOOLEAN);
+
+    if ($id_reposicion <= 0 || $id_departamento <= 0) {
+      $response->getBody()->write(json_encode(['error' => 'Parámetros inválidos']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection = new LocalDB();
+
+    // Verificar que la reposición existe y obtener inicio/fin
+    $repoData = $localConnection->goQuery(
+      "SELECT id_departamento_solicitante, id_departamento FROM reposiciones WHERE _id = {$id_reposicion}"
+    );
+    if (empty($repoData)) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'Reposición no encontrada']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+    }
+
+    $id_depto_inicio = intval($repoData[0]['id_departamento_solicitante']);
+    $id_depto_fin    = intval($repoData[0]['id_departamento']);
+
+    // No se puede excluir el departamento de inicio ni el de destino
+    if ($id_departamento === $id_depto_inicio || $id_departamento === $id_depto_fin) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'No se puede excluir el departamento de inicio ni el de destino']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    if ($excluir) {
+      $sql = "INSERT IGNORE INTO reposiciones_departamentos_excluidos (id_reposicion, id_departamento) VALUES ({$id_reposicion}, {$id_departamento})";
+    } else {
+      $sql = "DELETE FROM reposiciones_departamentos_excluidos WHERE id_reposicion = {$id_reposicion} AND id_departamento = {$id_departamento}";
+    }
+
+    $result = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode(['success' => true, 'excluido' => $excluir, 'result' => $result]));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 
   /**

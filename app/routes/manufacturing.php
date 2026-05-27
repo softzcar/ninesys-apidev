@@ -701,7 +701,16 @@ return function (App $app) {
 
           // Find Next Department
           // Logic: Next department must be > current and <= solicitor
-          $sqlNext = "SELECT _id, orden_proceso FROM departamentos WHERE asignar_numero_de_paso = 1 AND orden_proceso > {$currentOp} AND orden_proceso <= {$solicitorOp} ORDER BY orden_proceso ASC LIMIT 1";
+          // Saltar departamentos excluidos por el supervisor para esta reposición específica
+          $sqlNext = "SELECT _id, orden_proceso FROM departamentos
+            WHERE asignar_numero_de_paso = 1
+              AND orden_proceso > {$currentOp}
+              AND orden_proceso <= {$solicitorOp}
+              AND _id NOT IN (
+                SELECT id_departamento FROM reposiciones_departamentos_excluidos
+                WHERE id_reposicion = {$repoId}
+              )
+            ORDER BY orden_proceso ASC LIMIT 1";
           $nextDept = $localConnection->goQuery($sqlNext);
 
           if (!empty($nextDept)) {

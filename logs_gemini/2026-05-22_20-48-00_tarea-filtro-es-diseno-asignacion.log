@@ -1,0 +1,18 @@
+[TAREA: FILTRADO DE ORDENES POR ES_DISENO EN ASIGNACION]
+Fecha y Hora: 2026-05-22T20:48:00-04:00
+Autor: Antigravity AI
+Estado: COMPLETADO
+
+DESCRIPCION DE LOS CAMBIOS:
+1. Se modificó el endpoint GET `/disenos` en `ninesys-api/app/routes/designs.php` para restringir la consulta que alimenta la tabla de asignación de diseños (`/diseno/asignacion`).
+2. Se implementó una cláusula `EXISTS` en la consulta SQL para garantizar que únicamente se muestren las órdenes que contengan al menos un producto con `es_diseno = 1` en la tabla de productos (`products`):
+```sql
+AND EXISTS (
+    SELECT 1 
+    FROM ordenes_productos op
+    JOIN products p ON op.id_woo = p._id
+    WHERE op.id_orden = b._id AND p.es_diseno = 1
+)
+```
+3. Se verificaron la sintaxis mediante `php -l` y se desplegaron los cambios con éxito en el entorno de desarrollo Hostinger (`vps-ninesys`).
+4. Se validó de forma remota que el endpoint responde adecuadamente y filtra de forma correcta órdenes que no cumplen con los requisitos de diseño (como la Orden #5 del reporte del usuario).
