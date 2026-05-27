@@ -475,6 +475,38 @@ return function (App $app) {
         ";
       $obj['reposiciones_solicitadas'] = $localConnection->goQuery($sql);
 
+      // BUSCAR REPOSICIONES EN CURSO (APROBADAS Y NO TERMINADAS)
+      $sql = "SELECT
+        a._id id_reposicion,
+        a.id_orden,
+        a.id_departamento_solicitante,
+        a.id_departamento,
+        dep.departamento AS nombre_departamento,
+        c._id id_ordenes_productos,
+        b.nombre emisor,
+        e.nombre empleado,
+        a.detalle_emisor,
+        a.detalle,
+        DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
+        DATE_FORMAT(a.moment, '%I:%i %p') AS hora,
+        c.name producto,
+        a.unidades,
+        c.talla,
+        c.corte,
+        c.tela
+        FROM
+            reposiciones a
+        LEFT JOIN ordenes_fila_reposiciones d ON d.id_reposicion = a._id
+        LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor
+        LEFT JOIN api_empresas.empresas_usuarios e ON e.id_usuario = a.id_empleado
+        LEFT JOIN departamentos dep ON dep._id = a.id_departamento
+        JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
+        WHERE
+            a.aprobada = 1 AND a.terminada = 0
+        ORDER BY d.orden_fila ASC;
+        ";
+      $obj['reposiciones_en_curso'] = $localConnection->goQuery($sql);
+
       // Deetalles de los productos
       $sql = "SELECT
         a._id id_orden,
