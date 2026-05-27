@@ -470,7 +470,7 @@ return function (App $app) {
         LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor
         JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
         WHERE
-            (a.aprobada IS NULL OR (a.aprobada = 0 AND a.detalle IS NULL)) AND a.id_empleado IS NULL
+            (a.aprobada IS NULL OR (a.aprobada = 0 AND a.detalle IS NULL)) AND a.id_empleado IS NULL AND a.eliminada = 0
         ORDER BY d.orden_fila ASC;
         ";
       $obj['reposiciones_solicitadas'] = $localConnection->goQuery($sql);
@@ -502,7 +502,7 @@ return function (App $app) {
         LEFT JOIN departamentos dep ON dep._id = a.id_departamento
         JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
         WHERE
-            a.aprobada = 1 AND a.terminada = 0 AND a.id_empleado IS NOT NULL AND a.id_empleado <> '' AND a.id_empleado <> 0
+            a.aprobada = 1 AND a.terminada = 0 AND a.id_empleado IS NOT NULL AND a.id_empleado <> '' AND a.id_empleado <> 0 AND a.eliminada = 0
         ORDER BY d.orden_fila ASC;
         ";
       $obj['reposiciones_en_curso'] = $localConnection->goQuery($sql);
@@ -833,7 +833,7 @@ return function (App $app) {
         JOIN ordenes_productos c ON
             a.id_ordenes_productos = c._id
         WHERE
-            a.id_ordenes_productos = ' . $args['id_ordenes_productos'] . ' AND a.id_orden = ' . $args['id_orden'];
+            a.id_ordenes_productos = ' . $args['id_ordenes_productos'] . ' AND a.id_orden = ' . $args['id_orden'] . ' AND a.eliminada = 0';
     $object['sql'] = $sql;
     $object['data'] = $localConnection->goQuery($sql);
 
@@ -1352,6 +1352,24 @@ return function (App $app) {
       $aprobacion = $localConnection->goQuery($sql);
       $object['resp_reposiciones'] = $aprobacion;
     }
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->post('/produccion/reposicion/eliminar', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    $id_reposicion = intval($data['id_reposicion']);
+
+    $sql = "UPDATE reposiciones SET eliminada = 1 WHERE _id = {$id_reposicion}";
+    $object['response'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
 
