@@ -839,20 +839,26 @@ return function (App $app) {
       return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
     }
 
-    $id_depto_inicio = intval($repoData[0]['id_departamento_solicitante']);
-    $id_depto_fin    = intval($repoData[0]['id_departamento']);
+    $id_depto_a = intval($repoData[0]['id_departamento_solicitante']);
+    $id_depto_b = intval($repoData[0]['id_departamento']);
 
-    // Obtener orden_proceso de inicio y fin
+    // Obtener orden_proceso de ambos departamentos
     $opData = $localConnection->goQuery(
-      "SELECT _id, orden_proceso FROM departamentos WHERE _id IN ({$id_depto_inicio}, {$id_depto_fin})"
+      "SELECT _id, orden_proceso FROM departamentos WHERE _id IN ({$id_depto_a}, {$id_depto_b})"
     );
 
-    $op_inicio = 0;
-    $op_fin    = 0;
+    $op_a = 0;
+    $op_b = 0;
     foreach ($opData as $row) {
-      if ((int)$row['_id'] === $id_depto_inicio) $op_inicio = (int)$row['orden_proceso'];
-      if ((int)$row['_id'] === $id_depto_fin)    $op_fin    = (int)$row['orden_proceso'];
+      if ((int)$row['_id'] === $id_depto_a) $op_a = (int)$row['orden_proceso'];
+      if ((int)$row['_id'] === $id_depto_b) $op_b = (int)$row['orden_proceso'];
     }
+
+    // El inicio siempre es el de menor orden_proceso y el fin el de mayor orden_proceso
+    $op_inicio = min($op_a, $op_b);
+    $op_fin    = max($op_a, $op_b);
+    $id_depto_inicio = ($op_a === $op_inicio) ? $id_depto_a : $id_depto_b;
+    $id_depto_fin    = ($op_b === $op_fin) ? $id_depto_b : $id_depto_a;
 
     // Obtener toda la cadena de departamentos intermedios
     $sql = "SELECT
