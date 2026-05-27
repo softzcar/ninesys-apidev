@@ -64,35 +64,8 @@ return function (App $app) {
   });
 
   // =========================================================
-  // MIGRACIÓN TEMPORAL — ELIMINAR TRAS EJECUTAR
-  // GET /migrations/create-reposiciones-departamentos-excluidos
+  // BATCH: Actualizar orden de filas de reposiciones (1 request)
   // =========================================================
-  $app->get('/migrations/create-reposiciones-departamentos-excluidos', function (Request $request, Response $response) {
-    $localConnection = new LocalDB();
-    $sql = "CREATE TABLE IF NOT EXISTS reposiciones_departamentos_excluidos (
-        _id INT AUTO_INCREMENT PRIMARY KEY,
-        id_reposicion INT NOT NULL,
-        id_departamento INT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uk_repo_depto (id_reposicion, id_departamento),
-        CONSTRAINT fk_rde_reposicion FOREIGN KEY (id_reposicion)
-            REFERENCES reposiciones(_id) ON DELETE CASCADE,
-        CONSTRAINT fk_rde_departamento FOREIGN KEY (id_departamento)
-            REFERENCES departamentos(_id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-    $result = $localConnection->goQuery($sql);
-    $check  = $localConnection->goQuery("SHOW TABLES LIKE 'reposiciones_departamentos_excluidos'");
-    $localConnection->disconnect();
-    $response->getBody()->write(json_encode([
-      'success' => !empty($check),
-      'tabla' => 'reposiciones_departamentos_excluidos',
-      'result' => $result,
-      'message' => 'ELIMINAR ESTE ENDPOINT TRAS VERIFICAR'
-    ]));
-    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-  });
-
-
   $app->post('/reposiciones/actualizar-filas-batch', function (Request $request, Response $response) {
     // Slim no parsea application/json automáticamente; leemos el cuerpo raw
     $rawBody = (string) $request->getBody();

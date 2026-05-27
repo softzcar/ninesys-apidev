@@ -1139,6 +1139,13 @@ CREATE TABLE `reposiciones` (
   `terminada` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Indica si el empleado al que se le asignó la reposicion ya la terminó',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'moment'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Control de reposiciones durante el proceso de fabricacion';
+CREATE TABLE `reposiciones_departamentos_excluidos` (
+  `_id` INT AUTO_INCREMENT PRIMARY KEY COMMENT 'ID único',
+  `id_reposicion` INT NOT NULL COMMENT 'ID de la reposición',
+  `id_departamento` INT NOT NULL COMMENT 'ID del departamento excluido de la cola',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de registro',
+  UNIQUE KEY `uk_repo_depto` (`id_reposicion`, `id_departamento`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Departamentos excluidos de la cola de una reposición. Permite al supervisor omitir pasos intermedios en el encadenamiento automático de departamentos.';
 CREATE TABLE `retiros` (
   `_id` int(11) NOT NULL,
   `id_empleado` int(11) DEFAULT NULL,
@@ -1698,6 +1705,12 @@ ADD CONSTRAINT `repos_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_i
 ADD CONSTRAINT `repos_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
 ADD CONSTRAINT `repos_ibfk_3` FOREIGN KEY (`id_departamento_solicitante`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
 ADD CONSTRAINT `repos_ibfk_4` FOREIGN KEY (`id_ordenes_productos`) REFERENCES `ordenes_productos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- reposiciones_departamentos_excluidos
+ALTER TABLE `reposiciones_departamentos_excluidos`
+ADD CONSTRAINT `rde_ibfk_1` FOREIGN KEY (`id_reposicion`) REFERENCES `reposiciones` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT `rde_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 
 -- revisiones
 ALTER TABLE `revisiones`
