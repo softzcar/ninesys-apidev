@@ -1364,6 +1364,10 @@ return function (App $app) {
 
   $app->post('/produccion/reposicion/eliminar', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
+    if (empty($data)) {
+      $rawBody = $request->getBody()->getContents();
+      $data = json_decode($rawBody, true);
+    }
     $localConnection = new LocalDB();
 
     $id_reposicion = intval($data['id_reposicion']);
