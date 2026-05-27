@@ -1137,6 +1137,7 @@ CREATE TABLE `reposiciones` (
   `detalle_emisor` text DEFAULT NULL COMMENT 'Detalle de el empleado emisor',
   `aprobada` tinyint(1) DEFAULT 0 COMMENT 'Determina si la reposición has sido aprobada es true, si no es false, si en null aún no se ha indicado el estado de la reposicion',
   `terminada` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Indica si el empleado al que se le asignó la reposicion ya la terminó',
+  `eliminada` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Indica si la reposición ha sido eliminada de forma lógica',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'moment'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Control de reposiciones durante el proceso de fabricacion';
 CREATE TABLE `reposiciones_departamentos_excluidos` (
