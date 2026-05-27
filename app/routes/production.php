@@ -928,6 +928,16 @@ return function (App $app) {
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 
+  $app->get('/temp-check-repo/{id}', function (Request $request, Response $response, array $args) {
+    $id = intval($args['id']);
+    $db = new LocalDB();
+    $repo = $db->goQuery("SELECT _id, id_orden, id_departamento_solicitante, id_departamento FROM reposiciones WHERE _id = {$id}");
+    $deptos = $db->goQuery("SELECT _id, departamento, orden_proceso, asignar_numero_de_paso FROM departamentos ORDER BY orden_proceso ASC");
+    $db->disconnect();
+    $response->getBody()->write(json_encode(['repo' => $repo, 'departamentos' => $deptos], JSON_PRETTY_PRINT));
+    return $response->withHeader('Content-Type', 'application/json');
+  });
+
   /**
    * REPORTE DE REPOSICIONES
    * - Si en `estaus_orden` se recibe el parámetro `todas` vamos a mosntrar las TODAS laordenes incuyendo las canceladas
