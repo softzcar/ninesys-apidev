@@ -890,7 +890,20 @@ return function (App $app) {
   // -----------------------------------------------------------------------
   $app->post('/reposicion/{id_reposicion}/excluir-departamento', function (Request $request, Response $response, array $args) {
     $id_reposicion = intval($args['id_reposicion']);
-    $data = $request->getParsedBody();
+    
+    $rawBody = $request->getBody()->getContents();
+    $data = json_decode($rawBody, true);
+
+    if (!is_array($data)) {
+      $data = $request->getParsedBody();
+      if (empty($data)) {
+        parse_str($rawBody, $parsed);
+        if (!empty($parsed)) {
+          $data = $parsed;
+        }
+      }
+    }
+
     $id_departamento = intval($data['id_departamento'] ?? 0);
     $excluir = filter_var($data['excluir'] ?? true, FILTER_VALIDATE_BOOLEAN);
 
