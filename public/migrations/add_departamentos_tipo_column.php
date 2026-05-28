@@ -38,7 +38,7 @@ try {
     $pdoEmpresas->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Obtener todas las empresas activas con base de datos configurada
-    $stmt = $pdoEmpresas->query("SELECT _id, nombre, db_host, db_user, db_password, db_name FROM empresas WHERE activo = 1 AND db_name IS NOT NULL AND db_name != ''");
+    $stmt = $pdoEmpresas->query("SELECT id_empresa, nombre, db_host, db_user, db_password, db_name FROM empresas WHERE activo = 1 AND db_name IS NOT NULL AND db_name != ''");
     $empresas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($empresas as $empresa) {
