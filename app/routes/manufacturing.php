@@ -565,15 +565,28 @@ return function (App $app) {
     $now = $myDate->today();
 
     // 0- Preparar datos
-    if ($data['departamento'] === 'Impresión') {
+    $tipo = 'general';
+    if (isset($data['id_departamento'])) {
+      $deptRow = $localConnection->goQuery("SELECT tipo FROM departamentos WHERE _id = " . intval($data['id_departamento']));
+      if (!empty($deptRow)) {
+        $tipo = $deptRow[0]['tipo'];
+      }
+    } else if (isset($data['departamento'])) {
+      $deptRow = $localConnection->goQuery("SELECT tipo FROM departamentos WHERE departamento = '" . $data['departamento'] . "'");
+      if (!empty($deptRow)) {
+        $tipo = $deptRow[0]['tipo'];
+      }
+    }
+
+    if ($tipo === 'impresion') {
       $campo_valor = 'metros';
       $campo_empleado = 'id_empleado_impresion';
     }
-    if ($data['departamento'] === 'Estampado') {
+    if ($tipo === 'estampado') {
       $campo_valor = 'id_insumo';
       $campo_empleado = 'id_empleado_estampado';
     }
-    if ($data['departamento'] === 'Corte') {
+    if ($tipo === 'corte') {
       $campo_valor = 'desperdicio';
       $campo_empleado = 'id_empleado_corte';
     }
@@ -878,9 +891,16 @@ return function (App $app) {
 
         $totalComimision = $totalComimision * ($porcentajeAsignado / 100);
 
+        // Resolve type of department
+        $deptTipo = 'general';
+        $deptRow = $localConnection->goQuery("SELECT tipo FROM departamentos WHERE _id = " . intval($miEmpleado['id_departamento']));
+        if (!empty($deptRow)) {
+          $deptTipo = $deptRow[0]['tipo'];
+        }
+
         // CORTE: Siempre usar inventario_corte como fuente de piezas (incluye excedentes).
         // Si hay registro en inventario_corte, ese es el número real de piezas mandadas a cortar.
-        if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
+        if ($deptTipo === 'corte' && !$miEmpleado['es_reposicion']) {
           $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = {$miEmpleado['id_orden']}";
           $rspExcedente = $localConnection->goQuery($sqlExcedente);
           $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
@@ -957,8 +977,15 @@ return function (App $app) {
         $comimision = $respComision[0]['comision_fija'];
         $totalComimision = $respComision[0]['total_comision_fija'];
 
+        // Resolve type of department
+        $deptTipo = 'general';
+        $deptRow = $localConnection->goQuery("SELECT tipo FROM departamentos WHERE _id = " . intval($miEmpleado['id_departamento']));
+        if (!empty($deptRow)) {
+          $deptTipo = $deptRow[0]['tipo'];
+        }
+
         // CORTE: Siempre usar inventario_corte como fuente de piezas (incluye excedentes).
-        if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
+        if ($deptTipo === 'corte' && !$miEmpleado['es_reposicion']) {
           $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = {$miEmpleado['id_orden']}";
           $rspExcedente = $localConnection->goQuery($sqlExcedente);
           $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
@@ -1077,8 +1104,15 @@ return function (App $app) {
           $localConnection->goQuery($sql);
         }
 
+        // Resolve type of department
+        $deptTipo = 'general';
+        $deptRow = $localConnection->goQuery("SELECT tipo FROM departamentos WHERE _id = " . intval($miEmpleado['id_departamento']));
+        if (!empty($deptRow)) {
+          $deptTipo = $deptRow[0]['tipo'];
+        }
+
         // EXCEDENTE CORTE (Comisión Variable): Para Corte, insertar pago extra por piezas excedentes
-        if (intval($miEmpleado['id_departamento']) === 3 && !$miEmpleado['es_reposicion']) {
+        if ($deptTipo === 'corte' && !$miEmpleado['es_reposicion']) {
           $sqlExcVar = "SELECT
               lca.id_ordenes_productos,
               (lca.cantidad_ajustada - lca.cantidad_solicitada) AS excedente,
@@ -2998,7 +3032,12 @@ return function (App $app) {
     // Si es Corte (ID 3), buscar cantidad real cortada en inventario_corte
     // El excedente = cantidad_real_cortada - cantidad_solicitada
     $excedentesMap = [];
-    if ($id_departamento === 3) {
+    $deptTipo = 'general';
+    $deptRow = $localConnection->goQuery("SELECT tipo FROM departamentos WHERE _id = " . intval($id_departamento));
+    if (!empty($deptRow)) {
+      $deptTipo = $deptRow[0]['tipo'];
+    }
+    if ($deptTipo === 'corte') {
       $sqlExc = "SELECT id_ordenes_productos, cantidad AS cantidad_real FROM inventario_corte WHERE id_orden = {$args['id_orden']}";
       $excedentes = $localConnection->goQuery($sqlExc);
       foreach ($excedentes as $exc) {

@@ -793,7 +793,7 @@ return function (App $app) {
   $app->get('/departamentos', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT _id, departamento, id_modulo, enviar_mensaje, orden_proceso, asignar_numero_de_paso FROM departamentos ORDER BY orden_proceso ASC';
+    $sql = 'SELECT _id, departamento, id_modulo, enviar_mensaje, orden_proceso, asignar_numero_de_paso, tipo FROM departamentos ORDER BY orden_proceso ASC';
     $data = $localConnection->goQuery($sql);
     $localConnection->disconnect();
 
@@ -807,7 +807,7 @@ return function (App $app) {
   $app->get('/departamentos-empleado/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "SELECT a.id_departamento, b.departamento, b.orden_proceso from api_empresas.empresas_usuarios_departamentos a JOIN departamentos b On b._id = a.id_departamento WHERE a.id_empleado = {$args['id_empleado']}";
+    $sql = "SELECT a.id_departamento, b.departamento, b.orden_proceso, b.tipo from api_empresas.empresas_usuarios_departamentos a JOIN departamentos b On b._id = a.id_departamento WHERE a.id_empleado = {$args['id_empleado']}";
     $data = $localConnection->goQuery($sql);
     $localConnection->disconnect();
 
@@ -827,7 +827,9 @@ return function (App $app) {
     $resTotal = $localConnection->goQuery($sql);
     $totalDepartamentos = intval($resTotal[0]['total_departamentos']);
 
-    $sql = "INSERT INTO departamentos (orden_proceso, enviar_mensaje, id_modulo, asignar_numero_de_paso, departamento) VALUES ({$totalDepartamentos}, {$data['enviar_mensaje']}, {$data['modulo']}, {$data['asignar_paso']}, '{$data['departamento']}')";
+    $tipo = isset($data['tipo']) ? $data['tipo'] : 'general';
+
+    $sql = "INSERT INTO departamentos (orden_proceso, enviar_mensaje, id_modulo, asignar_numero_de_paso, departamento, tipo) VALUES ({$totalDepartamentos}, {$data['enviar_mensaje']}, {$data['modulo']}, {$data['asignar_paso']}, '{$data['departamento']}', '{$tipo}')";
     $object['response'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
@@ -843,7 +845,9 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $sql = "UPDATE departamentos SET enviar_mensaje = {$data['enviar_mensaje']}, asignar_numero_de_paso = {$data['asignar_paso']}, id_modulo = {$data['modulo']}, departamento = '" . $data['departamento'] . "' WHERE _id = " . $data['id_departamento'];
+    $tipo = isset($data['tipo']) ? $data['tipo'] : 'general';
+
+    $sql = "UPDATE departamentos SET enviar_mensaje = {$data['enviar_mensaje']}, asignar_numero_de_paso = {$data['asignar_paso']}, id_modulo = {$data['modulo']}, departamento = '" . $data['departamento'] . "', tipo = '{$tipo}' WHERE _id = " . $data['id_departamento'];
     $object['response'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();

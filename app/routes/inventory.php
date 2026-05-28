@@ -1884,7 +1884,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                       a.name producto,
                       (SELECT nombre FROM sizes WHERE _id = a.talla) talla,
                       a.cantidad AS cantidad_original,
-                      IF(b.id_departamento = 3,
+                      IF((SELECT tipo FROM departamentos WHERE _id = b.id_departamento) = 'corte',
                           COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = a._id), 0), a.cantidad),
                           a.cantidad) AS unidades,
                       (SELECT tela FROM catalogo_telas WHERE _id = a.id_tela) AS tela_vendedor,

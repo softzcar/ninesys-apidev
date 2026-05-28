@@ -267,6 +267,7 @@ CREATE TABLE `departamentos` (
   `asignar_numero_de_paso` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Interviene en proceso Es un paso de proceso de fabricación',
   `enviar_mensaje` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Enviar mensaje al cliente al iniciar el paso',
   `mensaje` text DEFAULT NULL COMMENT 'Mensaje para el cliente máximo 255 caracters',
+  `tipo` varchar(50) NOT NULL DEFAULT 'general' COMMENT 'Tipo de comportamiento del departamento (general, corte, impresion, estampado, costura)',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de creación'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Departamentos de la empresa con su orden en el flujo de producción. Define la secuencia de pasos de manufactura y configuración de mensajes al cliente.';
 INSERT INTO `departamentos` (
@@ -277,6 +278,7 @@ INSERT INTO `departamentos` (
     `asignar_numero_de_paso`,
     `enviar_mensaje`,
     `mensaje`,
+    `tipo`,
     `moment`
   )
 VALUES (
@@ -287,6 +289,7 @@ VALUES (
     1,
     1,
     NULL,
+    'impresion',
     '2025-09-24 19:50:20'
   ),
   (
@@ -297,6 +300,7 @@ VALUES (
     1,
     1,
     NULL,
+    'estampado',
     '2025-09-24 19:50:20'
   ),
   (
@@ -307,6 +311,7 @@ VALUES (
     1,
     1,
     NULL,
+    'corte',
     '2025-09-24 19:50:20'
   ),
   (
@@ -317,6 +322,7 @@ VALUES (
     1,
     1,
     NULL,
+    'costura',
     '2025-09-24 19:50:20'
   ),
   (
@@ -327,6 +333,7 @@ VALUES (
     0,
     0,
     NULL,
+    'general',
     '2025-09-24 19:50:20'
   ),
   (
@@ -337,6 +344,7 @@ VALUES (
     0,
     0,
     NULL,
+    'general',
     '2025-09-24 19:50:20'
   ),
   (
@@ -347,6 +355,7 @@ VALUES (
     0,
     0,
     NULL,
+    'general',
     '2025-09-24 19:50:20'
   ),
   (
@@ -357,6 +366,7 @@ VALUES (
     0,
     0,
     NULL,
+    'general',
     '2025-09-24 19:50:20'
   );
 CREATE TABLE `disenos` (
