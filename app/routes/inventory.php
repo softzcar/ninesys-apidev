@@ -824,6 +824,10 @@ return function (App $app) {
         $createdInsumos = [];
 
         try {
+            $id_catalogo_tintas = (isset($miInsumo['id_catalogo_tintas']) && $miInsumo['id_catalogo_tintas'] !== 'null' && $miInsumo['id_catalogo_tintas'] !== '')
+                ? intval($miInsumo['id_catalogo_tintas'])
+                : "NULL";
+
             if (isset($miInsumo['es_tinta']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN) && isset($miInsumo['cantidad']) && intval($miInsumo['cantidad']) > 1) {
                 for ($i = 0; $i < intval($miInsumo['cantidad']); $i++) {
                     $currentCantidad = (isset($miInsumo['mililitros']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN)) ? $miInsumo['mililitros'] : 1;
@@ -838,7 +842,7 @@ return function (App $app) {
                     $result = $localConnection->goQuery($sql);
                     $lastId = $localConnection->getLastID();
 
-                    $sqlTinta = "INSERT INTO `tinta_filtro`(`id_inventario`, `color`) VALUES ({$lastId}, '{$miInsumo['color']}')";
+                    $sqlTinta = "INSERT INTO `tinta_filtro`(`id_inventario`, `color`, `id_catalogo_tintas`) VALUES ({$lastId}, '{$miInsumo['color']}', {$id_catalogo_tintas})";
                     $localConnection->goQuery($sqlTinta);
 
                     $newInsumo = $miInsumo;
@@ -864,7 +868,7 @@ return function (App $app) {
                 $lastId = $localConnection->getLastID();
 
                 if (isset($miInsumo['es_tinta']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN)) {
-                    $sqlTinta = "INSERT INTO `tinta_filtro`(`id_inventario`, `color`) VALUES ({$lastId}, '{$miInsumo['color']}')";
+                    $sqlTinta = "INSERT INTO `tinta_filtro`(`id_inventario`, `color`, `id_catalogo_tintas`) VALUES ({$lastId}, '{$miInsumo['color']}', {$id_catalogo_tintas})";
                     $localConnection->goQuery($sqlTinta);
                 }
 
@@ -1793,7 +1797,9 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         a.insumo,
         b.color,
         a.costo,
-        a.cantidad
+        a.cantidad,
+        b.id_catalogo_tintas,
+        (SELECT nombre FROM catalogo_tintas WHERE _id = b.id_catalogo_tintas) AS tipo_tinta
         FROM
         inventario a
         JOIN tinta_filtro b ON b.id_inventario = a._id

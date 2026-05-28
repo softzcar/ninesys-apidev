@@ -20,6 +20,127 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  /** * CATALOGO TINTAS (Con migración auto-ejecutable para Empresa 194) */
+  $app->get('/catalogo-tintas', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+
+    try {
+      // 1. Crear catalogo_tintas si no existe
+      $localConnection->goQuery("CREATE TABLE IF NOT EXISTS `catalogo_tintas` (
+        `_id` int(11) NOT NULL AUTO_INCREMENT,
+        `nombre` varchar(128) NOT NULL,
+        `moment` timestamp NOT NULL DEFAULT current_timestamp(),
+        PRIMARY KEY (`_id`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;");
+
+      // 2. Poblar catalogo_tintas si está vacío
+      $count = $localConnection->goQuery("SELECT COUNT(*) as total FROM `catalogo_tintas`");
+      if (empty($count) || intval($count[0]['total'] ?? 0) === 0) {
+        $localConnection->goQuery("INSERT INTO `catalogo_tintas` (`_id`, `nombre`) VALUES
+          (1, 'Tinta de Sublimación'),
+          (2, 'Tinta DTF (Direct to Film)'),
+          (3, 'Tinta DTG (Direct to Garment)'),
+          (4, 'Tinta Ácida'),
+          (5, 'Tinta Reactiva'),
+          (6, 'Tinta de Pigmento Textil (Directo a Tela)'),
+          (7, 'Tinta UV Textil / Eco-Solvente'),
+          (8, 'Plastisol'),
+          (9, 'Tinta de Base Agua'),
+          (10, 'Tintas de Descarga'),
+          (11, 'Tintas de Silicona'),
+          (12, 'Pastas de Pigmento'),
+          (13, 'Pastas Reactivas y Dispersas'),
+          (14, 'Tintas Metalizadas / Escarchadas (Glitter)'),
+          (15, 'Tintas Fotocromáticas'),
+          (16, 'Tintas Fluorescentes / Neón'),
+          (17, 'Tintas Fosforescentes (Glow in the dark)'),
+          (18, 'Tintas Foil / Adhesivos'),
+          (19, 'Tintas de Alto Relieve (Puff / Espumantes)'),
+          (20, 'Tintas Reflectivas');");
+      }
+
+      // 3. Alterar tinta_filtro si no tiene id_catalogo_tintas
+      $columns = $localConnection->goQuery("SHOW COLUMNS FROM `tinta_filtro` LIKE 'id_catalogo_tintas'");
+      if (empty($columns)) {
+        // Añadir columna id_catalogo_tintas
+        $localConnection->goQuery("ALTER TABLE `tinta_filtro` ADD COLUMN `id_catalogo_tintas` int(11) DEFAULT NULL;");
+
+        // Rellenar valores por defecto (Tinta de Sublimación = 1)
+        $localConnection->goQuery("UPDATE `tinta_filtro` SET `id_catalogo_tintas` = 1;");
+
+        // Añadir la constraint de clave foránea
+        $localConnection->goQuery("ALTER TABLE `tinta_filtro` ADD CONSTRAINT `tinta_filtro_ibfk_2` FOREIGN KEY (`id_catalogo_tintas`) REFERENCES `catalogo_tintas` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;");
+      }
+    } catch (\Exception $e) {
+      error_log("Error en migración auto-ejecutable de catalogo_tintas: " . $e->getMessage());
+    }
+
+    $sql = 'SELECT * FROM catalogo_tintas ORDER BY nombre';
+    $object['data'] = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->post('/catalogo-tintas', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    $nombre = $data['nombre'] ?? '';
+
+    $sql = "INSERT INTO catalogo_tintas (nombre) VALUES ('$nombre')";
+    $result = $localConnection->goQuery($sql);
+    $lastId = $localConnection->getLastID();
+
+    $sqlNew = "SELECT * FROM catalogo_tintas WHERE _id = $lastId";
+    $newItem = $localConnection->goQuery($sqlNew);
+
+    $object['response'] = $result;
+    $object['data'] = $newItem[0] ?? null;
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->post('/catalogo-tintas/{_id}/{nombre}', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+    $values = "nombre='" . $args['nombre'] . "'";
+    $sql = 'UPDATE catalogo_tintas SET ' . $values . ' WHERE _id = ' . $args['_id'] . ';';
+    $localConnection->goQuery($sql);
+
+    $sqlAll = 'SELECT * FROM catalogo_tintas ORDER BY nombre';
+    $object['data'] = $localConnection->goQuery($sqlAll);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->post('/catalogo-tintas/eliminar', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    $body = $request->getParsedBody();
+    $id = isset($body['id']) ? intval($body['id']) : 0;
+
+    $sql = "DELETE FROM catalogo_tintas WHERE _id = $id";
+    $object['response'] = $localConnection->goQuery($sql);
+    
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   /** * CATALOGO INSUMOS PRODUCTOS */
   $app->get('/catalogo-insumos-productos', function (Request $request, Response $response) {
     $localConnection = new LocalDB();

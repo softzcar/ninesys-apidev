@@ -101,6 +101,33 @@ CREATE TABLE `catalogo_telas` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de telas disponibles. Almacena tipos de tela con características para selección en órdenes de producción.';
 INSERT INTO `catalogo_telas` (`_id`, `tela`, `moment`)
 VALUES (1, 'Tela de Prueba', CURRENT_TIMESTAMP);
+CREATE TABLE `catalogo_tintas` (
+  `_id` int(11) NOT NULL COMMENT 'ID único del catálogo de tintas',
+  `nombre` varchar(128) NOT NULL COMMENT 'Nombre del tipo de tinta',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo maestro de tipos de tintas.';
+
+INSERT INTO `catalogo_tintas` (`_id`, `nombre`, `moment`) VALUES
+(1, 'Tinta de Sublimación', CURRENT_TIMESTAMP),
+(2, 'Tinta DTF (Direct to Film)', CURRENT_TIMESTAMP),
+(3, 'Tinta DTG (Direct to Garment)', CURRENT_TIMESTAMP),
+(4, 'Tinta Ácida', CURRENT_TIMESTAMP),
+(5, 'Tinta Reactiva', CURRENT_TIMESTAMP),
+(6, 'Tinta de Pigmento Textil (Directo a Tela)', CURRENT_TIMESTAMP),
+(7, 'Tinta UV Textil / Eco-Solvente', CURRENT_TIMESTAMP),
+(8, 'Plastisol', CURRENT_TIMESTAMP),
+(9, 'Tinta de Base Agua', CURRENT_TIMESTAMP),
+(10, 'Tintas de Descarga', CURRENT_TIMESTAMP),
+(11, 'Tintas de Silicona', CURRENT_TIMESTAMP),
+(12, 'Pastas de Pigmento', CURRENT_TIMESTAMP),
+(13, 'Pastas Reactivas y Dispersas', CURRENT_TIMESTAMP),
+(14, 'Tintas Metalizadas / Escarchadas (Glitter)', CURRENT_TIMESTAMP),
+(15, 'Tintas Fotocromáticas', CURRENT_TIMESTAMP),
+(16, 'Tintas Fluorescentes / Neón', CURRENT_TIMESTAMP),
+(17, 'Tintas Fosforescentes (Glow in the dark)', CURRENT_TIMESTAMP),
+(18, 'Tintas Foil / Adhesivos', CURRENT_TIMESTAMP),
+(19, 'Tintas de Alto Relieve (Puff / Espumantes)', CURRENT_TIMESTAMP),
+(20, 'Tintas Reflectivas', CURRENT_TIMESTAMP);
 CREATE TABLE `categories` (
   `_id` int(11) NOT NULL COMMENT 'ID único de la categoría',
   `nombre` varchar(100) DEFAULT NULL COMMENT 'Nombre de la categoría'
@@ -1206,15 +1233,16 @@ CREATE TABLE `tintas_recargas` (
 CREATE TABLE `tinta_filtro` (
   `_id` int(11) NOT NULL,
   `id_inventario` int(11) DEFAULT NULL COMMENT 'Id del insumo',
+  `id_catalogo_tintas` int(11) DEFAULT NULL COMMENT 'ID del tipo de tinta en el catálogo',
   `color` varchar(1) NOT NULL COMMENT 'Color de la tinta C, M, Y, K, W',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Indica cuales insumos son tintas para filtrar las tintas';
 
-INSERT INTO `tinta_filtro` (`_id`, `id_inventario`, `color`, `moment`) VALUES
-(1, 3, 'C', CURRENT_TIMESTAMP),
-(2, 4, 'M', CURRENT_TIMESTAMP),
-(3, 5, 'Y', CURRENT_TIMESTAMP),
-(4, 6, 'K', CURRENT_TIMESTAMP);
+INSERT INTO `tinta_filtro` (`_id`, `id_inventario`, `id_catalogo_tintas`, `color`, `moment`) VALUES
+(1, 3, 1, 'C', CURRENT_TIMESTAMP),
+(2, 4, 1, 'M', CURRENT_TIMESTAMP),
+(3, 5, 1, 'Y', CURRENT_TIMESTAMP),
+(4, 6, 1, 'K', CURRENT_TIMESTAMP);
 ALTER TABLE `abonos`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`, `id_empleado`),
@@ -1392,6 +1420,8 @@ ALTER TABLE `tintas_recargas`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `tinta_filtro`
 ADD PRIMARY KEY (`_id`);
+ALTER TABLE `catalogo_tintas`
+ADD PRIMARY KEY (`_id`);
 ALTER TABLE `abonos`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID de la talba';
 ALTER TABLE `aprobacion_clientes`
@@ -1513,6 +1543,8 @@ MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `tintas_recargas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `tinta_filtro`
+MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
+ALTER TABLE `catalogo_tintas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 -- =====================================================
 -- FOREIGN KEYS - 95 FKs
@@ -1730,7 +1762,8 @@ ADD CONSTRAINT `tintas_rec_ibfk_2` FOREIGN KEY (`id_catalogo_impresora`) REFEREN
 
 -- tinta_filtro
 ALTER TABLE `tinta_filtro`
-ADD CONSTRAINT `tinta_filtro_ibfk_1` FOREIGN KEY (`id_inventario`) REFERENCES `inventario` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+  ADD CONSTRAINT `tinta_filtro_ibfk_1` FOREIGN KEY (`id_inventario`) REFERENCES `inventario` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `tinta_filtro_ibfk_2` FOREIGN KEY (`id_catalogo_tintas`) REFERENCES `catalogo_tintas` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- =====================================================
 -- INDICES ADICIONALES PARA OPTIMIZACION
