@@ -7,7 +7,6 @@
 define('RUNNING_MIGRATION', true);
 
 $rootDir = realpath(__DIR__ . '/../../');
-require_once $rootDir . '/app/lib/config.php';
 
 // Cargar variables de entorno
 $envFile = $rootDir . '/.env';
@@ -22,6 +21,8 @@ if (file_exists($envFile)) {
         }
     }
 }
+
+require_once $rootDir . '/app/lib/config.php';
 
 // Configuración de la base de datos principal de empresas
 $empresasDsn  = defined('EMPRESAS_DNS')  ? EMPRESAS_DNS  : ('mysql:host=' . (getenv('DB_HOST') ?: 'localhost') . ';dbname=' . (getenv('DB_NAME') ?: 'api_empresas'));
