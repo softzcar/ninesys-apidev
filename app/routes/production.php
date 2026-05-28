@@ -150,11 +150,36 @@ return function (App $app) {
   });
 
   // SSE DATA
-  // SSE PRODUCCION
+  // NEW LIGHTWEIGHT CHECK-VERSION ENDPOINT FOR POLLING
+  $app->get('/sse/produccion/check-version', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+
+    $sql = "SELECT CONCAT(
+        (SELECT COUNT(*) FROM ordenes WHERE status IN ('activa', 'pausada', 'En espera')),
+        '-',
+        (SELECT COALESCE(MAX(_id), 0) FROM ordenes WHERE status IN ('activa', 'pausada', 'En espera')),
+        '-',
+        (SELECT COUNT(*) FROM reposiciones WHERE (aprobada IS NULL OR (aprobada = 0 AND detalle IS NULL)) AND id_empleado IS NULL AND eliminada = 0),
+        '-',
+        (SELECT COUNT(*) FROM reposiciones WHERE aprobada = 1 AND terminada = 0 AND id_empleado IS NOT NULL AND eliminada = 0)
+    ) as checksum";
+
+    $result = $localConnection->goQuery($sql);
+    $checksum = !empty($result) ? $result[0]['checksum'] : '';
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode(['checksum' => $checksum]));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  // OPTIMIZED SSE PRODUCCION ENDPOINT
   $app->get('/sse/produccion', function (Request $request, Response $response, array $args) {  // /lotes/en-proceso
     $localConnection = new LocalDB();
 
-    // EMPLEADOS ASIGANDOS A TAREAS
+    // EMPLEADOS ASIGNADOS A TAREAS (Filtro corregido para usar IN)
     $sql = "SELECT
                 ord._id id_orden,
                 ord.status status_orden,
@@ -168,73 +193,11 @@ return function (App $app) {
             JOIN lotes_detalles_empleados_asignados loa ON loa.id_orden = ord._id
             JOIN api_empresas.empresas_usuarios emp on emp.id_usuario = loa.id_empleado 
             JOIN departamentos dep ON dep._id = loa.id_departamento 
-            WHERE ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status OR ord.status = 'pausada'
+            WHERE ord.status IN ('En espera', 'activa', 'pausada')
         ";
     $obj['emp_asignados'] = $localConnection->goQuery($sql);
 
-    // ITEMS DE LISTA DE PRODUCCIÓN
-    $sql = "SELECT DISTINCT
-            a._id AS orden,
-            f.orden_fila,
-            a._id AS vinculada,
-            CONCAT(
-                cus.first_name,
-                ' ',
-                cus.last_name
-            ) AS cliente,
-            b.prioridad,
-            b.paso,
-            d.estatus AS estatus_revision,
-            a.fecha_inicio AS inicio,
-            a.fecha_entrega AS entrega,
-            -- a.observaciones AS detalles,
-            'CARGAR DINAMICAMNNTE' detalles,
-            n.borrador AS detalle_empleado,
-            a._id AS acciones,
-            a.status AS estatus,
-            c._id AS id_diseno,
-            (
-            SELECT
-                SUM(o.cantidad)
-            FROM
-                ordenes_productos o
-            JOIN products p ON
-                o.id_woo = p._id
-            WHERE
-                id_orden = a._id AND p.fisico = 1
-        ) AS unidades,
-        COALESCE(e.nombre, 'Sin asignar') AS disenador
-        FROM
-            ordenes a
-        LEFT JOIN ordenes_borrador_empleado n ON
-            a._id = n.id_orden
-        JOIN lotes b ON
-            a._id = b.id_orden
-        LEFT JOIN customers cus ON
-            cus._id = a.id_wp
-        LEFT JOIN disenos c ON
-            a._id = c.id_orden
-        LEFT JOIN revisiones d ON
-            d.id_diseno = c._id
-        LEFT JOIN api_empresas.empresas_usuarios e
-        ON
-            e.id_usuario =(
-                CASE WHEN c.id_empleado = 0 THEN 0 ELSE c.id_empleado
-            END
-        )
-        LEFT JOIN ordenes_fila_orden f ON f.id_orden = a._id
-        WHERE
-            (
-                a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera'
-            )
-        GROUP BY
-            a._id
-        ORDER BY f.orden_fila ASC;
-        ";
-    $obj['items_old'] = $localConnection->goQuery($sql);
-
-    // ITEMS DE LISTA DE PRODUCCIÓN
-    // Modificado para calcular paso y progreso desde lotes_detalles_empleados_asignados
+    // ITEMS DE LISTA DE PRODUCCIÓN (Subconsulta prog_info acotada a órdenes activas)
     $sql = "SELECT
             a._id AS orden,
             f.orden_fila,
@@ -246,8 +209,6 @@ return function (App $app) {
             ) AS cliente,
             b.prioridad,
             -- Paso calculado desde lotes_detalles_empleados_asignados
-            -- Si paso_actual es NULL (todos terminados), mostrar 'Terminado'
-            -- Si no hay departamentos asignados, mostrar 'Por asignar'
             CASE 
                 WHEN prog_info.total_departamentos = 0 OR prog_info.total_departamentos IS NULL THEN 'Por asignar'
                 WHEN prog_info.paso_actual IS NULL THEN 'Terminado'
@@ -273,10 +234,6 @@ return function (App $app) {
             ) AS unidades,
             COALESCE(e.nombre, 'Sin asignar') AS disenador,
 
-            /* ================================================================== */
-            /* INICIO: COLUMNAS DE PROGRESO DESDE lotes_detalles_empleados_asignados */
-            /* ================================================================== */
-
             COALESCE(prog_info.departamentos_terminados, 0) AS progreso_paso_valor,
             COALESCE(prog_info.total_departamentos, 0) AS progreso_total_pasos,
             COALESCE(
@@ -284,10 +241,6 @@ return function (App $app) {
                     (prog_info.departamentos_terminados * 100) / NULLIF(prog_info.total_departamentos, 0)
                 ), 0
             ) AS progreso_porcentaje
-
-            /* ================================================================== */
-            /* FIN: COLUMNAS DE PROGRESO                                          */
-            /* ================================================================== */
 
         FROM
             ordenes a
@@ -299,13 +252,11 @@ return function (App $app) {
         LEFT JOIN api_empresas.empresas_usuarios e ON e.id_usuario = c.id_empleado
         LEFT JOIN ordenes_fila_orden f ON f.id_orden = a._id
         LEFT JOIN (
-            -- Subconsulta para calcular progreso real desde lotes_detalles_empleados_asignados
+            -- Subconsulta acotada a órdenes activas para evitar scan completo de históricos
             SELECT
                 ldea.id_orden,
                 COUNT(DISTINCT ldea.id_departamento) AS total_departamentos,
                 COUNT(DISTINCT CASE WHEN ldea.fecha_terminado IS NOT NULL THEN ldea.id_departamento END) AS departamentos_terminados,
-                -- Departamento actual: el primero (por orden_proceso) que no tiene fecha_terminado
-                -- Si todos están terminados, retorna NULL (se maneja arriba con CASE)
                 (
                     SELECT dep.departamento
                     FROM lotes_detalles_empleados_asignados ldea2
@@ -317,21 +268,22 @@ return function (App $app) {
                 ) AS paso_actual
             FROM
                 lotes_detalles_empleados_asignados ldea
+            JOIN ordenes ord2 ON ord2._id = ldea.id_orden
+            WHERE ord2.status IN ('activa', 'pausada', 'En espera')
             GROUP BY
                 ldea.id_orden
         ) AS prog_info ON a._id = prog_info.id_orden
         WHERE
             a.status IN ('activa', 'pausada', 'En espera')
         GROUP BY
-            a._id -- Se agrupa por el ID de la orden para obtener una fila por orden.
+            a._id
         ORDER BY
             f.orden_fila ASC;
     ";
-
     $obj['items'] = $localConnection->goQuery($sql);
 
-    // ITEMS POR ASIGNAR
-    $sql = 'SELECT
+    // ITEMS POR ASIGNAR (Acotados a órdenes activas)
+    $sql = "SELECT
             lot.id_orden,
             lot.id_ordenes_productos,
             lot.id_empleado id_empleado_asignado,
@@ -345,9 +297,9 @@ return function (App $app) {
         LEFT JOIN api_empresas.empresas_usuarios emp
         ON
             lot.id_empleado = emp.id_usuario
-        LEFT JOIN ordenes ord ON ord._id = lot.id_orden
-        WHERE lot.id_empleado IS NULL
-        ';
+        JOIN ordenes ord ON ord._id = lot.id_orden
+        WHERE lot.id_empleado IS NULL AND ord.status IN ('activa', 'pausada', 'En espera')
+        ";
     $obj['por_asignar'] = $localConnection->goQuery($sql);
 
     // IDENTIFICAR QUE DEPARTAMENTOS ESTAN ASIGNADOS
@@ -392,39 +344,23 @@ return function (App $app) {
             b.id_orden = a._id
         LEFT JOIN products_comisiones pc ON pc.id_product = b.id_woo
         WHERE
-            (a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera') AND b.category_name != 'Diseños' -- AND p.fisico = 1
+            (a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera') AND b.category_name != 'Diseños'
         ORDER BY b._id DESC, c.piezas_actuales DESC";
 
     $obj['orden_productos'] = $localConnection->goQuery($sql);
 
-    $key = 0;
-    foreach ($obj['orden_productos'] as $producto) {
-      $data[$key]['_id'] = $producto['_id'];
-      $data[$key]['id_orden'] = $producto['id_orden'];
-      $data[$key]['id_lotes'] = $producto['id_lotes'];
-      $data[$key]['id_woo'] = $producto['id_woo'];
-      $data[$key]['id_woo'] = $producto['id_woo'];
-      $data[$key]['fisico'] = $producto['fisico'];
-      $data[$key]['category_name'] = $producto['category_name'];
-      //    $data[$key]['comisiones'] = json_decode($producto['comisiones'], true);
-      $data[$key]['cantidad'] = $producto['cantidad'];
-      $data[$key]['piezas_actuales'] = $producto['piezas_actuales'];
-      $data[$key]['talla'] = $producto['talla'];
-      $data[$key]['corte'] = $producto['corte'];
-      $data[$key]['tela'] = $producto['tela'];
-      $data[$key]['precio_unitario'] = $producto['precio_unitario'];
-      $data[$key]['precio_woo'] = $producto['precio_woo'];
-      $data[$key]['moment'] = $producto['moment'];
-      $key++;
-    }
-
-    if (isset($data)) {
-      $obj['orden_productos'] = $data;
-
-      $sql = "SELECT b._id, b.id_orden, b.id_woo, b.progreso, b.unidades_solicitadas cantidad, b.id_ordenes_productos, b.id_empleado, b.departamento, b.id_departamento, b.unidades_solicitadas, b.comision, 'CARGAR DINAMINAMENTE' detalles, /*b.detalles,*/ b.fecha_inicio, b.fecha_terminado, b.moment FROM lotes_detalles b JOIN ordenes a ON a._id = b.id_orden WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera'";
+    // Bucle redundante PHP eliminado. Se mapea la respuesta directamente si no está vacía.
+    if (!empty($obj['orden_productos'])) {
+      $sql = "SELECT b._id, b.id_orden, b.id_woo, b.progreso, b.unidades_solicitadas cantidad, b.id_ordenes_productos, b.id_empleado, b.departamento, b.id_departamento, b.unidades_solicitadas, b.comision, 'CARGAR DINAMINAMENTE' detalles, b.fecha_inicio, b.fecha_terminado, b.moment FROM lotes_detalles b JOIN ordenes a ON a._id = b.id_orden WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera'";
       $obj['lote_detalles'] = $localConnection->goQuery($sql);
 
-      $sql = 'SELECT _id id_lotes_fisicos, piezas_actuales, tela, talla, corte, categoria, moment FROM lotes_fisicos';
+      // Optimización de lotes_fisicos: filtrar por productos activos de órdenes activas para evitar scan completo
+      $sql = "SELECT DISTINCT lf._id id_lotes_fisicos, lf.piezas_actuales, lf.tela, lf.talla, lf.corte, lf.categoria, lf.moment 
+              FROM lotes_fisicos lf
+              JOIN ordenes_productos op ON (op.tela = lf.tela AND op.talla = lf.talla AND op.corte = lf.corte)
+              JOIN products p ON p._id = op.id_woo
+              JOIN ordenes o ON o._id = op.id_orden
+              WHERE o.status IN ('activa', 'pausada', 'En espera') AND p.fisico = 1";
       $obj['lotes_fisicos'] = $localConnection->goQuery($sql);
 
       $sql = "SELECT
@@ -507,7 +443,7 @@ return function (App $app) {
         ";
       $obj['reposiciones_en_curso'] = $localConnection->goQuery($sql);
 
-      // Deetalles de los productos
+      // Detalles de los productos
       $sql = "SELECT
         a._id id_orden,
         b._id id_lotes_detalles,
@@ -528,12 +464,11 @@ return function (App $app) {
             b.id_orden ASC;";
       $obj['productos'] = $localConnection->goQuery($sql);
 
-      // EMPLEADOS
+      // EMPLEADOS (a.password removido por seguridad)
       $sql = 'SELECT
             a.id_usuario AS _id,
             a.id_usuario AS acciones,
             a.email AS username,
-            a.password,
             a.nombre,
             a.email,
             a.departamento,
@@ -549,7 +484,7 @@ return function (App $app) {
         LEFT JOIN ' . LOCAL_DB . '.departamentos c ON c._id = b.id_departamento
         WHERE
             a.activo = 1  AND a.id_empresa = ' . ID_EMPRESA . ' GROUP BY 
-            a.id_usuario, a.email, a.password, a.nombre, a.departamento, 
+            a.id_usuario, a.email, a.nombre, a.departamento, 
             a.comision, a.comision_tipo, a.acceso;
             ';
       $items = $localConnection->goQuery($sql);
