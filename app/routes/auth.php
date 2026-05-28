@@ -342,6 +342,10 @@ return function (App $app) {
 
         $empresa_data = $data_empresa[0];
 
+        // 2b. Obtener módulos del sistema
+        $sql_modulos = 'SELECT _id, modulo, folder, descripcion from api_empresas.modulos ORDER BY modulo ASC';
+        $object['modulos'] = $localConnection->goQuery($sql_modulos);
+
         // 3. Preparar respuesta similar a la estructura de login
         $object['msg'] = 'Datos actualizados';
         $object['data']['access'] = true;
