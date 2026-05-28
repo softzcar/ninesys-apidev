@@ -925,6 +925,23 @@ return function (App $app) {
         $object['sql'] = $sql;
         $object['data'] = json_encode($localConnection->goQuery($sql));
 
+        if (isset($miInsumo['tipo_insumo']) && $miInsumo['tipo_insumo'] === 'tinta') {
+            $color = $miInsumo['color'] ?? '';
+            $id_catalogo_tintas = (isset($miInsumo['id_catalogo_tintas']) && $miInsumo['id_catalogo_tintas'] !== 'null' && $miInsumo['id_catalogo_tintas'] !== '')
+                ? intval($miInsumo['id_catalogo_tintas'])
+                : "NULL";
+            
+            // Check if record exists in tinta_filtro
+            $checkSql = "SELECT _id FROM tinta_filtro WHERE id_inventario = " . intval($miInsumo['_id']);
+            $checkRes = $localConnection->goQuery($checkSql);
+            if (!empty($checkRes)) {
+                $sqlTinta = "UPDATE tinta_filtro SET color = '{$color}', id_catalogo_tintas = {$id_catalogo_tintas} WHERE id_inventario = " . intval($miInsumo['_id']);
+            } else {
+                $sqlTinta = "INSERT INTO tinta_filtro (id_inventario, color, id_catalogo_tintas) VALUES (" . intval($miInsumo['_id']) . ", '{$color}', {$id_catalogo_tintas})";
+            }
+            $localConnection->goQuery($sqlTinta);
+        }
+
         $localConnection->disconnect();
 
         $response->getBody()->write(json_encode($object));
@@ -1704,51 +1721,58 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
         if ($args['departamento'] === 'todos') {
             $sql = 'SELECT
-                _id,
-                _id rollo,
-                sku,
-                insumo,
-                id_catalogo AS id_catalogo_producto,
-                cantidad cantidad_inicial,
-                cantidad cantidad_final,
-                cantidad,
-                ROUND((rendimiento * cantidad), 2) AS metros,
-                unidad,
-                costo,
-                rendimiento,
-                tipo_insumo,
-                departamento,
-                moment
+                i._id,
+                i._id rollo,
+                i.sku,
+                i.insumo,
+                i.id_catalogo AS id_catalogo_producto,
+                i.cantidad cantidad_inicial,
+                i.cantidad cantidad_final,
+                i.cantidad,
+                ROUND((i.rendimiento * i.cantidad), 2) AS metros,
+                i.unidad,
+                i.costo,
+                i.rendimiento,
+                i.tipo_insumo,
+                i.departamento,
+                i.moment,
+                tf.color,
+                tf.id_catalogo_tintas
             FROM
-                inventario
+                inventario i
+            LEFT JOIN
+                tinta_filtro tf ON tf.id_inventario = i._id
             WHERE
-                cantidad > 0
+                i.cantidad > 0
             ORDER BY
-                insumo ASC;';
+                i.insumo ASC;';
         } else {
             $sql = "SELECT
-                _id,
-                _id rollo,
-                sku,
-                insumo,
-                id_catalogo AS id_catalogo_producto,
-                cantidad cantidad_inicial,
-                cantidad cantidad_final,
-                cantidad,
-                ROUND((rendimiento * cantidad),
-                2) AS metros,
-                unidad,
-                costo,
-                rendimiento,
-                tipo_insumo,
-                departamento,
-                moment
+                i._id,
+                i._id rollo,
+                i.sku,
+                i.insumo,
+                i.id_catalogo AS id_catalogo_producto,
+                i.cantidad cantidad_inicial,
+                i.cantidad cantidad_final,
+                i.cantidad,
+                ROUND((i.rendimiento * i.cantidad), 2) AS metros,
+                i.unidad,
+                i.costo,
+                i.rendimiento,
+                i.tipo_insumo,
+                i.departamento,
+                i.moment,
+                tf.color,
+                tf.id_catalogo_tintas
             FROM
-                inventario
+                inventario i
+            LEFT JOIN
+                tinta_filtro tf ON tf.id_inventario = i._id
             WHERE
-                departamento = '" . $args['departamento'] . "' AND cantidad > 0
+                i.departamento = '" . $args['departamento'] . "' AND i.cantidad > 0
             ORDER BY
-                insumo ASC;";
+                i.insumo ASC;";
         }
         $object['sql'] = $sql;
         $object['items'] = $localConnection->goQuery($sql);
