@@ -1,0 +1,38 @@
+- **Solicitud del Usuario:** Corregir por qué en la página principal (Dashboard de Administración) el gráfico "Top 10 Productos (Semana)" no mostraba datos, cuando en /reportes/semanal sí se cargaban datos al seleccionar un rango de fechas.
+
+- **Fecha y Hora:** 2026-05-28 17:30:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - app/routes/reports.php — endpoint GET /reportes/semanal-detallado
+
+- **Causa Raíz:**
+  El endpoint /reportes/semanal-detallado tenía un early return cuando la consulta de órdenes (`$orders`) devolvía vacío (sin órdenes en status 'terminada'/'entregada' en la semana actual). Ese early return respondía con `{'items': []}` sin incluir `topProducts` ni `allProducts`, aunque las queries de esos campos usan el rango de fechas directamente contra `lotes_detalles_empleados_asignados` y NO dependen del filtro de status de la orden. El frontend recibía `res.data.topProducts = undefined` → mostraba "Sin datos de productos en esta semana."
+
+- **Acción Realizada:**
+  Se movieron las queries `$sqlTop` (Top 10 Productos) y `$sqlAll` (Resumen de todos los productos) para ejecutarse ANTES del early return. El early return fue actualizado para incluir `topProducts` y `allProducts` en la respuesta:
+  ```php
+  // Antes:
+  if (empty($orders)) {
+      $response->getBody()->write(json_encode(['items' => []]));
+      return ...;
+  }
+  // ... queries de topProducts y allProducts al final
+
+  // Después:
+  $topProducts = $db->goQuery($sqlTop, [$inicio, $fin]);
+  $allProducts = $db->goQuery($sqlAll, [$inicio, $fin]);
+  if (empty($orders)) {
+      $response->getBody()->write(json_encode(['items' => [], 'topProducts' => $topProducts ?: [], 'allProducts' => $allProducts ?: []]));
+      return ...;
+  }
+  // ... resto del procesamiento usa las variables ya computadas
+  ```
+
+- **Commits Relacionados:**
+  - Backend: 5a45a18 — "fix: corregir early return en semanal-detallado que bloqueaba topProducts"
+  - Frontend: ver log de app_multi
+
+- **Despliegue:** Desplegado en Hostinger (vps-ninesys / api.nineteengreen.com) via deploy_backend.sh opción 2. OPcache reseteado.
+
+- **Resultado:** Éxito. El gráfico muestra datos correctamente.
+- **Verificación:** Confirmado visualmente por el usuario en el navegador.
