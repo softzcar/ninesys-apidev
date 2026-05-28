@@ -1,38 +1,70 @@
-- **Solicitud del Usuario:** Corregir por qué en la página principal (Dashboard de Administración) el gráfico "Top 10 Productos (Semana)" no mostraba datos, cuando en /reportes/semanal sí se cargaban datos al seleccionar un rango de fechas.
+- **Solicitud del Usuario:** Corregir por qué en la página principal (Dashboard de Administración) el gráfico "Top 10 Productos (Semana)" no mostraba datos, cuando en /reportes/semanal sí se cargaban datos al seleccionar un rango de fechas. El usuario adjuntó capturas de pantalla mostrando el gráfico vacío en el dashboard y con datos en /reportes/semanal usando el rango 18 may - 31 may 2026.
 
 - **Fecha y Hora:** 2026-05-28 17:30:00
+
 - **Proyecto(s):** Backend (ninesys-api)
+
 - **Archivos Involucrados:**
-  - app/routes/reports.php — endpoint GET /reportes/semanal-detallado
-
-- **Causa Raíz:**
-  El endpoint /reportes/semanal-detallado tenía un early return cuando la consulta de órdenes (`$orders`) devolvía vacío (sin órdenes en status 'terminada'/'entregada' en la semana actual). Ese early return respondía con `{'items': []}` sin incluir `topProducts` ni `allProducts`, aunque las queries de esos campos usan el rango de fechas directamente contra `lotes_detalles_empleados_asignados` y NO dependen del filtro de status de la orden. El frontend recibía `res.data.topProducts = undefined` → mostraba "Sin datos de productos en esta semana."
-
-- **Acción Realizada:**
-  Se movieron las queries `$sqlTop` (Top 10 Productos) y `$sqlAll` (Resumen de todos los productos) para ejecutarse ANTES del early return. El early return fue actualizado para incluir `topProducts` y `allProducts` en la respuesta:
-  ```php
-  // Antes:
-  if (empty($orders)) {
-      $response->getBody()->write(json_encode(['items' => []]));
-      return ...;
-  }
-  // ... queries de topProducts y allProducts al final
-
-  // Después:
-  $topProducts = $db->goQuery($sqlTop, [$inicio, $fin]);
-  $allProducts = $db->goQuery($sqlAll, [$inicio, $fin]);
-  if (empty($orders)) {
-      $response->getBody()->write(json_encode(['items' => [], 'topProducts' => $topProducts ?: [], 'allProducts' => $allProducts ?: []]));
-      return ...;
-  }
-  // ... resto del procesamiento usa las variables ya computadas
-  ```
+  - `app/routes/reports.php` — endpoint GET `/reportes/semanal-detallado` (líneas ~912-1142)
 
 - **Commits Relacionados:**
-  - Backend: 5a45a18 — "fix: corregir early return en semanal-detallado que bloqueaba topProducts"
-  - Frontend: ver log de app_multi
+  - Frontend: N/A
+  - Backend: `5a45a18` — "fix: corregir early return en semanal-detallado que bloqueaba topProducts"
+  - Log: `2ee6f59` — "docs: agregar log de tarea fix-top10-productos-dashboard-admin"
 
-- **Despliegue:** Desplegado en Hostinger (vps-ninesys / api.nineteengreen.com) via deploy_backend.sh opción 2. OPcache reseteado.
+- **Acción Realizada:**
+  Se identificó que el endpoint `/reportes/semanal-detallado` ejecutaba un early return cuando `$orders` (órdenes con status 'terminada'/'entregada' en el rango de fechas) estaba vacío, respondiendo únicamente `{'items': []}` sin calcular `topProducts` ni `allProducts`.
 
-- **Resultado:** Éxito. El gráfico muestra datos correctamente.
-- **Verificación:** Confirmado visualmente por el usuario en el navegador.
+  Las queries de `$sqlTop` y `$sqlAll` usan el rango de fechas `$inicio`/`$fin` directamente contra `lotes_detalles_empleados_asignados.fecha_terminado`, sin depender del filtro de status de la orden. Por lo tanto, podían retornar datos aunque `$orders` estuviera vacío (semana en curso con tareas completadas pero sin órdenes marcadas como terminadas/entregadas).
+
+  **Corrección aplicada:** Se movieron las queries `$sqlTop` y `$sqlAll` para ejecutarse ANTES del early return. El early return fue actualizado para incluir ambos resultados en la respuesta:
+
+  ```php
+  // ANTES (incorrecto):
+  $orders = $db->goQuery($sqlOrders, [$inicio, $fin]);
+  if (empty($orders)) {
+      $response->getBody()->write(json_encode(['items' => []])); // ← topProducts nunca se calculaba
+      return $response->withStatus(200);
+  }
+  // ... más adelante:
+  $topProducts = $db->goQuery($sqlTop, [$inicio, $fin]);
+  $allProducts = $db->goQuery($sqlAll, [$inicio, $fin]);
+
+  // DESPUÉS (correcto):
+  $orders = $db->goQuery($sqlOrders, [$inicio, $fin]);
+  $topProducts = $db->goQuery($sqlTop, [$inicio, $fin]); // ← se ejecuta siempre
+  $allProducts = $db->goQuery($sqlAll, [$inicio, $fin]); // ← se ejecuta siempre
+  if (empty($orders)) {
+      $response->getBody()->write(json_encode([
+          'items' => [],
+          'topProducts' => $topProducts ?: [],
+          'allProducts' => $allProducts ?: []
+      ]));
+      return $response->withStatus(200);
+  }
+  // ... resto del procesamiento usa variables ya computadas
+  ```
+
+  Despliegue realizado en Hostinger vía `ninesys-hub/bin/deploy_backend.sh` opción 2. OPcache PHP reseteado automáticamente por el script.
+
+- **Inconvenientes y Desafíos:**
+  El bug no era evidente a primera vista porque ambas páginas (`/` dashboard y `/reportes/semanal`) llaman al mismo endpoint. La diferencia era que el usuario en `/reportes/semanal` había seleccionado un rango de 2 semanas (18 may - 31 may) que incluía órdenes terminadas, mientras que el dashboard usaba solo la semana actual (25 - 31 may) donde no había órdenes en status 'terminada'/'entregada' aún — pero sí había tareas completadas en `lotes_detalles_empleados_asignados`.
+
+- **Decisión Final y Justificación:**
+  Se optó por mover las queries de productos antes del early return en lugar de duplicarlas dentro del bloque condicional, para evitar redundancia de código y mantener una sola fuente de verdad para esas queries. Esto también garantiza que `$topProducts` y `$allProducts` estén disponibles para el bloque de respuesta final sin necesidad de recalcularlos.
+
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (git add, git commit, deploy_backend.sh)
+
+- **Resultado:** Éxito.
+
+- **Verificación:** El usuario confirmó visualmente en el navegador que el gráfico "Top 10 Productos (Semana)" muestra datos correctamente en el Dashboard de Administración tras el despliegue. Captura de pantalla del gráfico con datos (Total: 25) confirmada por el usuario.
+
+- **Logro Conseguido:** El gráfico "Top 10 Productos (Semana)" del Dashboard de Administración ahora muestra correctamente los productos fabricados durante la semana actual, sin requerir que las órdenes estén en status 'terminada'/'entregada'. Esto da visibilidad inmediata del trabajo en curso de producción.
+
+- **Referencias de Sesión (Contexto):**
+  - Task: N/A
+  - Walkthrough: N/A
+
+- **Observaciones de Claude:** El bug era una condición de carrera lógica entre dos queries del mismo endpoint: una filtraba por status de orden y la otra solo por rango de fechas. El early return fue diseñado para optimizar cuando no hay órdenes terminadas, pero inadvertidamente bloqueaba un cálculo independiente. La solución es mínimamente invasiva y no altera el comportamiento del endpoint para el caso normal (cuando sí hay órdenes).
+
+- **Respuesta de Claude:** Se identificó y corrigió el early return en el endpoint `/reportes/semanal-detallado` que bloqueaba el cálculo de `topProducts`. Fix desplegado en Hostinger exitosamente. El gráfico del dashboard ahora muestra datos correctamente.
