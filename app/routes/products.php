@@ -843,7 +843,7 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $sql = "UPDATE departamentos SET enviar_mensaje = {$data['enviar_mensaje']}, asignar_numero_de_paso = {$data['asignar_paso']}, departamento = '" . $data['departamento'] . "' WHERE _id = " . $data['id_departamento'];
+    $sql = "UPDATE departamentos SET enviar_mensaje = {$data['enviar_mensaje']}, asignar_numero_de_paso = {$data['asignar_paso']}, id_modulo = {$data['modulo']}, departamento = '" . $data['departamento'] . "' WHERE _id = " . $data['id_departamento'];
     $object['response'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
