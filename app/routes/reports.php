@@ -950,10 +950,46 @@ return function (App $app) {
                 ORDER BY a._id DESC";
             
             $orders = $db->goQuery($sqlOrders, [$inicio, $fin]);
-            
+
+            // 5. Obtener Ranking de Productos Top 10 (usa rango de fechas, no depende de orders)
+            $sqlTop = "SELECT
+                    p.product AS name,
+                    SUM(op.cantidad) AS value
+                FROM ordenes_productos op
+                JOIN ordenes o ON o._id = op.id_orden
+                JOIN products p ON p._id = op.id_woo
+                WHERE o._id IN (
+                    SELECT DISTINCT id_orden
+                    FROM lotes_detalles_empleados_asignados
+                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
+                )
+                AND (p.fisico = 1 OR p.fisico IS NULL)
+                AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+                GROUP BY p._id
+                ORDER BY value DESC
+                LIMIT 10";
+            $topProducts = $db->goQuery($sqlTop, [$inicio, $fin]);
+
+            // 6. Obtener Resumen de Todos los Productos para el Modal (Alfabético)
+            $sqlAll = "SELECT
+                    p.product AS name,
+                    SUM(op.cantidad) AS value
+                FROM ordenes_productos op
+                JOIN products p ON p._id = op.id_woo
+                WHERE op.id_orden IN (
+                    SELECT DISTINCT id_orden
+                    FROM lotes_detalles_empleados_asignados
+                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
+                )
+                AND (p.fisico = 1 OR p.fisico IS NULL)
+                AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+                GROUP BY p._id
+                ORDER BY p.product ASC";
+            $allProducts = $db->goQuery($sqlAll, [$inicio, $fin]);
+
             if (empty($orders)) {
                 $db->disconnect();
-                $response->getBody()->write(json_encode(['items' => []]));
+                $response->getBody()->write(json_encode(['items' => [], 'topProducts' => $topProducts ?: [], 'allProducts' => $allProducts ?: []]));
                 return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
             }
 
@@ -1024,42 +1060,6 @@ return function (App $app) {
                 WHERE o._id IN ($idsString)";
             $timeEff = $db->goQuery($sqlTime);
 
-            // 5. Obtener Ranking de Productos Top 10
-            $sqlTop = "SELECT 
-                    p.product AS name,
-                    SUM(op.cantidad) AS value
-                FROM ordenes_productos op
-                JOIN ordenes o ON o._id = op.id_orden
-                JOIN products p ON p._id = op.id_woo
-                WHERE o._id IN (
-                    SELECT DISTINCT id_orden 
-                    FROM lotes_detalles_empleados_asignados 
-                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
-                )
-                AND (p.fisico = 1 OR p.fisico IS NULL)
-                AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
-                GROUP BY p._id
-                ORDER BY value DESC
-                LIMIT 10";
-            $topProducts = $db->goQuery($sqlTop, [$inicio, $fin]);
-
-            // 6. Obtener Resumen de Todos los Productos para el Modal (Alfabético)
-            $sqlAll = "SELECT 
-                    p.product AS name,
-                    SUM(op.cantidad) AS value
-                FROM ordenes_productos op
-                JOIN products p ON p._id = op.id_woo
-                WHERE op.id_orden IN (
-                    SELECT DISTINCT id_orden 
-                    FROM lotes_detalles_empleados_asignados 
-                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
-                )
-                AND (p.fisico = 1 OR p.fisico IS NULL)
-                AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
-                GROUP BY p._id
-                ORDER BY p.product ASC";
-            $allProducts = $db->goQuery($sqlAll, [$inicio, $fin]);
-            
             $db->disconnect();
             
             // Agrupar tareas por ID de orden para un mapeo eficiente
