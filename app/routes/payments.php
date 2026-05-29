@@ -952,24 +952,32 @@ return function (App $app) {
       : 0.0;
 
     // 5. Bonos del periodo
-    $sqlBonos = "SELECT pa.descripcion, SUM(pa.monto) AS monto
-      FROM pagos_abonos pa
-      JOIN pagos p ON pa.id_pago = p._id
-      WHERE p.id_empleado = {$idEmpleado} {$whereFechaP}
-      GROUP BY pa.descripcion";
-    $bonosRes = $localConnection->goQuery($sqlBonos);
-    if (!is_array($bonosRes))
+    if ($pendiente) {
       $bonosRes = [];
+    } else {
+      $sqlBonos = "SELECT pa.descripcion, SUM(pa.monto) AS monto
+        FROM pagos_abonos pa
+        JOIN pagos p ON pa.id_pago = p._id
+        WHERE p.id_empleado = {$idEmpleado} {$whereFechaP}
+        GROUP BY pa.descripcion";
+      $bonosRes = $localConnection->goQuery($sqlBonos);
+      if (!is_array($bonosRes))
+        $bonosRes = [];
+    }
 
     // 6. Descuentos del periodo
-    $sqlDescuentos = "SELECT pd.descripcion, SUM(pd.monto) AS monto
-      FROM pagos_descuentos pd
-      JOIN pagos p ON pd.id_pago = p._id
-      WHERE p.id_empleado = {$idEmpleado} {$whereFechaP}
-      GROUP BY pd.descripcion";
-    $descuentosRes = $localConnection->goQuery($sqlDescuentos);
-    if (!is_array($descuentosRes))
+    if ($pendiente) {
       $descuentosRes = [];
+    } else {
+      $sqlDescuentos = "SELECT pd.descripcion, SUM(pd.monto) AS monto
+        FROM pagos_descuentos pd
+        JOIN pagos p ON pd.id_pago = p._id
+        WHERE p.id_empleado = {$idEmpleado} {$whereFechaP}
+        GROUP BY pd.descripcion";
+      $descuentosRes = $localConnection->goQuery($sqlDescuentos);
+      if (!is_array($descuentosRes))
+        $descuentosRes = [];
+    }
 
     // 7. Calcular totales
     $totalComision = array_reduce($pagosDetalle, function ($carry, $item) {

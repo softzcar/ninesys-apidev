@@ -575,19 +575,7 @@ return function (App $app) {
         throw new Exception('Error al insertar abono: ' . ($resultAbono['message'] ?? 'desconocido'));
       }
 
-      // INSERTAR EN PAGOS_DESCUENTOS SI HAY DESCUENTO
-      if ($descuento_val > 0) {
-        $sql_last_abono = "SELECT MAX(_id) as last_id FROM abonos WHERE id_orden = " . intval($datosAbono['id']);
-        $res_last_abono = $localConnection->goQuery($sql_last_abono);
-        $id_abono_creado = $res_last_abono[0]['last_id'] ?? null;
 
-        $detalleDescuento = isset($datosAbono['descuentoDetalle']) ? $datosAbono['descuentoDetalle'] : 'Descuento en abono';
-
-        if ($id_abono_creado) {
-          $sql_pagos_descuentos = "INSERT INTO pagos_descuentos (id_pago, monto, descripcion) VALUES ({$id_abono_creado}, {$descuento_val}, '" . addslashes($detalleDescuento) . "')";
-          $localConnection->goQuery($sql_pagos_descuentos);
-        }
-      }
 
       // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
       $tasa_peso = isset($datosAbono['tasa_peso']) && is_numeric($datosAbono['tasa_peso']) ? floatval($datosAbono['tasa_peso']) : 1;
@@ -2575,17 +2563,7 @@ $object['sales_commission_ISSET'][] = false;
       $localConnection->goQuery($sql_insert_desc);
       $object['sql_nuevo_descuento'] = $sql_insert_desc;
 
-      // 5.2. REGISTRAR EN PAGOS_DESCUENTOS (Vinculado al abono)
-      // Obtener el ID del abono recién insertado
-      $sql_last_abono = "SELECT MAX(_id) as last_id FROM abonos WHERE id_orden = {$id_orden_a_editar}";
-      $res_last_abono = $localConnection->goQuery($sql_last_abono);
-      $id_abono_creado = $res_last_abono[0]['last_id'];
 
-      if ($id_abono_creado) {
-        $sql_pagos_descuentos = "INSERT INTO pagos_descuentos (id_pago, monto, descripcion) VALUES ({$id_abono_creado}, {$nuevo_descuento}, '" . addslashes($detalle_descuento) . "')";
-        $localConnection->goQuery($sql_pagos_descuentos);
-        $object['sql_pagos_descuentos'] = $sql_pagos_descuentos;
-      }
     }
 
     // 5. REGISTRAR NUEVOS ABONOS Y COMISIONES (Solo sobre el nuevo pago)
