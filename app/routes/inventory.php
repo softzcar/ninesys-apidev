@@ -2699,6 +2699,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $params = $request->getQueryParams();
             $departamento = $params['departamento'] ?? null;
             $filtroStock = $params['filtroStock'] ?? 'enStock';
+            $limiteGrafico = isset($params['limiteGrafico']) ? intval($params['limiteGrafico']) : 5;
 
             $localConnection = new LocalDB();
             
@@ -2753,7 +2754,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 $fechaWhereTintas = "moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
             }
 
-            // 1. Telas e Insumos (Top 5)
+            // 1. Telas e Insumos
+            $limitSql = $limiteGrafico > 0 ? " LIMIT " . $limiteGrafico : "";
             if ($filtroStock === 'enStock') {
                 $sqlMateriales = "SELECT 
                                     insumo as label, 
@@ -2764,7 +2766,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                                   {$deptWhereDirect}
                                 GROUP BY sku, insumo, unidad
                                 ORDER BY value DESC 
-                                LIMIT 5";
+                                {$limitSql}";
             } else {
                 $sqlMateriales = "SELECT 
                                     i.insumo as label, 
@@ -2777,7 +2779,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                                   {$deptWhere}
                                 GROUP BY i.sku 
                                 ORDER BY value DESC 
-                                LIMIT 5";
+                                {$limitSql}";
             }
             $chartData['materiales'] = $localConnection->goQuery($sqlMateriales) ?: [];
 
@@ -2877,6 +2879,55 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                             ORDER BY MIN(im.moment) ASC";
                 $chartData['papel'] = $localConnection->goQuery($sqlPapel) ?: [];
             }
+
+            // 4. Valorización Financiera ($)
+            if ($filtroStock === 'enStock') {
+                if (!$departamento || $departamento === 'Todas' || $departamento === 'todos') {
+                    $sqlCostos = "SELECT 
+                                    COALESCE(NULLIF(departamento, ''), 'Sin Asignar') as label, 
+                                    ROUND(SUM(cantidad * costo), 2) as value
+                                FROM inventario 
+                                WHERE cantidad > 0
+                                GROUP BY departamento
+                                ORDER BY value DESC";
+                } else {
+                    $sqlCostos = "SELECT 
+                                    insumo as label, 
+                                    ROUND(SUM(cantidad * costo), 2) as value
+                                FROM inventario 
+                                WHERE cantidad > 0
+                                  AND departamento = '" . addslashes($departamento) . "'
+                                GROUP BY sku, insumo
+                                ORDER BY value DESC 
+                                LIMIT 5";
+                }
+            } else {
+                if (!$departamento || $departamento === 'Todas' || $departamento === 'todos') {
+                    $sqlCostos = "SELECT 
+                                    COALESCE(NULLIF(i.departamento, ''), 'Sin Asignar') as label, 
+                                    ROUND(SUM((im.valor_inicial - im.valor_final) * i.costo), 2) as value
+                                FROM inventario_movimientos im 
+                                JOIN inventario i ON im.id_insumo = i._id 
+                                WHERE {$fechaWhere}
+                                  AND (im.valor_inicial - im.valor_final) > 0
+                                GROUP BY i.departamento
+                                ORDER BY value DESC";
+                } else {
+                    $sqlCostos = "SELECT 
+                                    i.insumo as label, 
+                                    ROUND(SUM((im.valor_inicial - im.valor_final) * i.costo), 2) as value
+                                FROM inventario_movimientos im 
+                                JOIN inventario i ON im.id_insumo = i._id 
+                                WHERE {$fechaWhere}
+                                  AND (im.valor_inicial - im.valor_final) > 0
+                                  AND i.departamento = '" . addslashes($departamento) . "'
+                                GROUP BY i.sku 
+                                ORDER BY value DESC 
+                                LIMIT 5";
+                }
+            }
+            $chartData['costos'] = $localConnection->goQuery($sqlCostos) ?: [];
+
             // ====== FIN DATOS GRÁFICOS ======
 
             $localConnection->disconnect();
