@@ -2700,6 +2700,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $departamento = $params['departamento'] ?? null;
             $filtroStock = $params['filtroStock'] ?? 'enStock';
             $limiteGrafico = isset($params['limiteGrafico']) ? intval($params['limiteGrafico']) : 5;
+            // Filtro por tipo de tinta (viene del catálogo). 'Todas' = sin filtro
+            $tipoTinta = $params['tipoTinta'] ?? 'Todas';
 
             $localConnection = new LocalDB();
             
@@ -2719,6 +2721,13 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 $conditions[] = "(cantidad_inicial - cantidad) > 0";
             }
 
+            // Filtro por tipo de tinta: solo aplica sobre registros tipo 'tinta'
+            $tipoTintaId = null;
+            if ($tipoTinta !== 'Todas' && is_numeric($tipoTinta)) {
+                $tipoTintaId = intval($tipoTinta);
+                $conditions[] = "(_id NOT IN (SELECT id_inventario FROM tinta_filtro) OR _id IN (SELECT id_inventario FROM tinta_filtro WHERE id_catalogo_tintas = {$tipoTintaId}))";
+            }
+
             $where = !empty($conditions) ? " WHERE " . implode(" AND ", $conditions) : "";
 
             $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, tipo_insumo, cantidad, cantidad_inicial, (cantidad_inicial - cantidad) as cantidad_consumida, color, departamento, moment 
@@ -2733,6 +2742,21 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $resDeps = $localConnection->goQuery($sqlDeps);
             $availableDepartments = array_map(function($d) { return $d['departamento']; }, $resDeps);
 
+            // Obtener tipos de tinta disponibles según departamento y filtroStock activos
+            $tintaTypeDeptWhere = ($departamento && $departamento !== 'Todas' && $departamento !== 'todos')
+                ? "AND i.departamento = '" . addslashes($departamento) . "'"
+                : "";
+            $tintaTypeStockWhere = ($filtroStock === 'enStock') ? "AND i.cantidad > 0" : "AND (i.cantidad_inicial - i.cantidad) > 0";
+            $sqlTintaTypes = "SELECT DISTINCT ct._id, ct.nombre
+                              FROM catalogo_tintas ct
+                              INNER JOIN tinta_filtro tf ON tf.id_catalogo_tintas = ct._id
+                              INNER JOIN inventario i ON i._id = tf.id_inventario
+                              WHERE i.tipo_insumo = 'tinta'
+                                {$tintaTypeStockWhere}
+                                {$tintaTypeDeptWhere}
+                              ORDER BY ct.nombre ASC";
+            $availableTintaTypes = $localConnection->goQuery($sqlTintaTypes) ?: [];
+
             // ====== DATOS PARA GRÁFICOS ======
             $chartData = [];
             $deptWhere = ($departamento && $departamento !== 'Todas' && $departamento !== 'todos')
@@ -2741,6 +2765,11 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             
             $deptWhereDirect = ($departamento && $departamento !== 'Todas' && $departamento !== 'todos')
                 ? "AND departamento = '" . addslashes($departamento) . "'"
+                : "";
+
+            // WHERE adicional para filtrar tintas por tipo en los JOINs
+            $tipoTintaJoinWhere = ($tipoTintaId !== null)
+                ? "AND ct._id = {$tipoTintaId}"
                 : "";
 
             // Rango de fechas para gráficos (por defecto últimos 30días)
@@ -2785,15 +2814,21 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
             // 2. Distribución de Tintas por Color
             if ($filtroStock === 'enStock') {
-                $sqlTintas = "SELECT 
-                                ROUND(SUM(CASE WHEN sku LIKE '%CYAN%' OR insumo LIKE '%Cyan%' THEN cantidad ELSE 0 END), 2) as C,
-                                ROUND(SUM(CASE WHEN sku LIKE '%MAGENTA%' OR insumo LIKE '%Magenta%' THEN cantidad ELSE 0 END), 2) as M,
-                                ROUND(SUM(CASE WHEN sku LIKE '%AMARILLO%' OR insumo LIKE '%Yellow%' OR insumo LIKE '%Amarillo%' THEN cantidad ELSE 0 END), 2) as Y,
-                                ROUND(SUM(CASE WHEN sku LIKE '%NEGRO%' OR insumo LIKE '%Black%' OR insumo LIKE '%Negro%' THEN cantidad ELSE 0 END), 2) as K,
-                                ROUND(SUM(CASE WHEN sku LIKE '%BLANCO%' OR insumo LIKE '%White%' OR insumo LIKE '%Blanco%' THEN cantidad ELSE 0 END), 2) as W
-                            FROM inventario
-                            WHERE tipo_insumo = 'tinta' AND cantidad > 0
-                              {$deptWhereDirect}";
+                // Usamos tinta_filtro.color (C/M/Y/K/W) para clasificar con precisión
+                // y filtramos por tipo de tinta usando JOIN con catalogo_tintas
+                $sqlTintas = "SELECT
+                                ROUND(SUM(CASE WHEN tf.color = 'C' THEN i.cantidad ELSE 0 END), 2) as C,
+                                ROUND(SUM(CASE WHEN tf.color = 'M' THEN i.cantidad ELSE 0 END), 2) as M,
+                                ROUND(SUM(CASE WHEN tf.color = 'Y' THEN i.cantidad ELSE 0 END), 2) as Y,
+                                ROUND(SUM(CASE WHEN tf.color = 'K' THEN i.cantidad ELSE 0 END), 2) as K,
+                                ROUND(SUM(CASE WHEN tf.color = 'W' THEN i.cantidad ELSE 0 END), 2) as W
+                            FROM inventario i
+                            INNER JOIN tinta_filtro tf ON tf.id_inventario = i._id
+                            LEFT JOIN catalogo_tintas ct ON ct._id = tf.id_catalogo_tintas
+                            WHERE i.tipo_insumo = 'tinta'
+                              AND i.cantidad > 0
+                              {$deptWhereDirect}
+                              {$tipoTintaJoinWhere}";
                 $tintasResult = $localConnection->goQuery($sqlTintas);
                 if (!empty($tintasResult)) {
                     $t = $tintasResult[0];
@@ -2947,6 +2982,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 'items' => $items ?? [],
                 'fields' => $fields,
                 'availableDepartments' => $availableDepartments,
+                'availableTintaTypes' => $availableTintaTypes,
                 'chartData' => $chartData
             ], JSON_NUMERIC_CHECK));
 
