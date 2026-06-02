@@ -203,7 +203,7 @@ return function (App $app) {
         api_empresas.empresas_usuarios a 
     JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado
     WHERE
-        b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Administración'))  AND a.id_empresa = " . ID_EMPRESA;
+        b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Comecialización', 'Administración'))  AND a.id_empresa = " . ID_EMPRESA;
     $object['vendedores'] = $localConnection->goQuery($sqlv);
     $object['SQL'] = $sqlv;
 
@@ -378,7 +378,7 @@ return function (App $app) {
                 api_empresas.empresas_usuarios a 
             JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado
             WHERE
-                b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Administración')) AND a.id_empresa = " . ID_EMPRESA . " 
+                b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Comecialización', 'Administración')) AND a.id_empresa = " . ID_EMPRESA . " 
             ORDER BY nombre ASC";
     $object['vendedores'] = $localConnection->goQuery($sqlv);
 
