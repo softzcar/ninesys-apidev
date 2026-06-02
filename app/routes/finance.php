@@ -196,14 +196,14 @@ return function (App $app) {
     $object['pagos'] = $pagos;
 
     // Buscar todos los empleados que sean vendedres o administradores
-    $sqlv = "SELECT
+    $sqlv = "SELECT DISTINCT
         id_usuario _id,
         nombre
     FROM
         api_empresas.empresas_usuarios a 
     JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado
     WHERE
-        (b.id_departamento = 7 OR b.id_departamento = 8)  AND a.id_empresa = " . ID_EMPRESA;
+        b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Administración'))  AND a.id_empresa = " . ID_EMPRESA;
     $object['vendedores'] = $localConnection->goQuery($sqlv);
     $object['SQL'] = $sqlv;
 
@@ -371,14 +371,14 @@ return function (App $app) {
     $object['data']['retiros'] = $localConnection->goQuery($sql);
 
     // Obtener lista de vendedores para el select del frontend
-    $sqlv = "SELECT
+    $sqlv = "SELECT DISTINCT
                 id_usuario _id,
                 nombre
             FROM
                 api_empresas.empresas_usuarios a 
             JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado
             WHERE
-                (b.id_departamento = 7 OR b.id_departamento = 8) AND a.id_empresa = " . ID_EMPRESA . " 
+                b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Administración')) AND a.id_empresa = " . ID_EMPRESA . " 
             ORDER BY nombre ASC";
     $object['vendedores'] = $localConnection->goQuery($sqlv);
 

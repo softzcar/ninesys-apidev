@@ -351,79 +351,13 @@ return function (App $app) {
                     ];
                 }
 
-                // 10. BATCH: Eficiencia de Insumos (Unificado con Reporte Semanal: Meta vs Real)
-                $sqlInsumosResumen = "SELECT 
-                        op.id_orden,
-                        SUM(op.cantidad * pia.cantidad) AS meta,
-                        COALESCE((
-                            SELECT SUM(ABS(im_sub.valor_final - im_sub.valor_inicial) * COALESCE(inv_sub.rendimiento, 1))
-                            FROM $companyDB.inventario_movimientos im_sub
-                            LEFT JOIN $companyDB.inventario inv_sub ON inv_sub._id = im_sub.id_insumo
-                            WHERE im_sub.id_orden = op.id_orden
-                        ), 0) AS `real`
-                    FROM $companyDB.ordenes_productos op
-                    LEFT JOIN $companyDB.product_insumos_asignados pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
-                    WHERE op.id_orden IN ($orderIdsStr)
-                    GROUP BY op.id_orden";
-                
-                $insumosResumenRaw = $dbEmpresas->goQuery($sqlInsumosResumen);
-                $eficienciaMap = [];
-                if (!empty($insumosResumenRaw) && !isset($insumosResumenRaw['status'])) {
-                    foreach ($insumosResumenRaw as &$ir) {
-                        $meta = (float)($ir['meta'] ?? 0);
-                        $real = (float)($ir['real'] ?? 0);
-                        if ($meta == 0) {
-                            $ir['eficiencia'] = "Sin insumos asignados";
-                        } else {
-                            $ir['eficiencia'] = ($real > 0) ? round(($meta / $real) * 100, 2) : 100;
-                        }
-                        $eficienciaMap[$ir['id_orden']] = $ir['eficiencia'];
-                    }
-                }
-                
-                // Integrar eficiencia directamente en reporteData
+                // Integrar eficiencia como 0 por compatibilidad
                 foreach ($reporteData as &$row) {
-                    $row['eficiencia_insumos'] = $eficienciaMap[$row['id_orden']] ?? "Sin insumos asignados";
+                    $row['eficiencia_insumos'] = 0;
                 }
 
-                $finalResponse['insumos_resumen'] = $insumosResumenRaw;
-
-                // Detalle para el modal (Eficiencia por Insumo)
-                $sqlInsumosDetalles = "SELECT 
-                        a._id id_inventario_movimientos, 
-                        a.id_orden, 
-                        a.id_producto, 
-                        d.product producto, 
-                        c.insumo,
-                        (ABS(a.valor_inicial - a.valor_final) * COALESCE(c.rendimiento, 1)) as `real`,
-                        COALESCE((
-                            SELECT SUM(op_sub.cantidad * pia_sub.cantidad)
-                            FROM $companyDB.ordenes_productos op_sub
-                            JOIN $companyDB.product_insumos_asignados pia_sub ON pia_sub.id_product = op_sub.id_woo AND pia_sub.id_talla = op_sub.id_size
-                            WHERE op_sub.id_orden = a.id_orden 
-                              AND pia_sub.id_catalogo_insumos_productos = COALESCE(a.id_catalogo_insumos_prodcutos, c.id_catalogo)
-                        ), 0) as meta
-                    FROM $companyDB.inventario_movimientos a 
-                    LEFT JOIN $companyDB.inventario c ON a.id_insumo = c._id 
-                    LEFT JOIN $companyDB.products d ON a.id_producto = d._id 
-                    WHERE a.id_orden IN ($orderIdsStr) 
-                    ORDER BY a.id_orden ASC";
-                
-                $insDetRaw = $dbEmpresas->goQuery($sqlInsumosDetalles);
-                if (!empty($insDetRaw) && !isset($insDetRaw['status'])) {
-                    foreach ($insDetRaw as &$idr) {
-                        $m = (float)($idr['meta'] ?? 0);
-                        $r = (float)($idr['real'] ?? 0);
-                        if ($m == 0) {
-                            $idr['eficiencia'] = "Sin insumos asignados";
-                        } else {
-                            $idr['eficiencia'] = ($r > 0) ? round(($m / $r) * 100, 2) : 100;
-                        }
-                    }
-                    $finalResponse['insumos_detalles'] = $insDetRaw;
-                } else {
-                    $finalResponse['insumos_detalles'] = [];
-                }
+                $finalResponse['insumos_resumen'] = [];
+                $finalResponse['insumos_detalles'] = [];
 
                 // 11. Tareas de Empleados
                 $sqlTareas = "SELECT a.id_orden, a.id_empleado, a.fecha_inicio, a.fecha_terminado, TIME_TO_SEC(TIMEDIFF(a.fecha_terminado, a.fecha_inicio)) / 60 AS minutos_transcurridos FROM $companyDB.lotes_detalles_empleados_asignados a WHERE a.id_orden IN ($orderIdsStr) AND a.fecha_terminado IS NOT NULL";
