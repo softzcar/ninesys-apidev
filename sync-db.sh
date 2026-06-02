@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-VPS_ALIAS="vps-ninesys"
+VPS_ALIAS="vps-contabo-dev"
 LOCAL_USER="dev_user"
 LOCAL_PASS="dev_pass"
 TEMP_DIR="/tmp"

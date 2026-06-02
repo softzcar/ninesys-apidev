@@ -61,16 +61,16 @@
 
 - **Prohibición de Despliegue Automático:** Queda terminantemente prohibido el uso de `SafeToAutoRun: true` en cualquier herramienta que involucre comandos de red o despliegue a servidores remotos.
 - **🛑 SCRIPTS DE DESPLIEGUE — UBICACIÓN CENTRALIZADA:** Todos los scripts de despliegue deben ejecutarse ÚNICAMENTE desde `/home/developer/Escritorio/niesys/ninesys-hub/bin/`. Los scripts en directorios individuales del proyecto pueden estar DESACTUALIZADOS en rutas de VPS. **NO ejecutar scripts de despliegue que no estén en `ninesys-hub/bin/`.**
-  - Frontend: `ninesys-hub/bin/deploy.sh` (opción 2 para Hostinger)
-  - Backend: `ninesys-hub/bin/deploy_backend.sh` (opción 2 para Hostinger)
-- **Workflow Obligatorio:** Antes de interactuar con CUALQUIER servidor remoto (incluyendo Hostinger), DEBES ejecutar el workflow: `/.agent/workflows/validar-seguridad-despliegue.md`.
+  - Frontend: `ninesys-hub/bin/deploy.sh` (opción 2 para Desarrollo Contabo)
+  - Backend: `ninesys-hub/bin/deploy_backend.sh` (opción 2 para Desarrollo Contabo)
+- **Workflow Obligatorio:** Antes de interactuar con CUALQUIER servidor remoto (incluyendo Contabo Desarrollo), DEBES ejecutar el workflow: `/.agent/workflows/validar-seguridad-despliegue.md`.
 
 - **Servidor de Producción (Contabo - `nineteencustom.com`):** 
     - Solo el VPS de Contabo contiene la base de datos de producción real.
     - Se deja quieto hasta que el usuario lo pida explícitamente.
 - **Entorno Local:**
     - **⚠️ IMPORTANTE:** **NO** utilizar MySQL local (`localhost` / `127.0.0.1`) para pruebas de lógica de negocio o datos de Ninesys. El entorno local solo sirve para pruebas visuales del Frontend (`npm run dev`) y edición de archivos.
-    - Los registros de base de datos siempre deben consultarse o modificarse en los VPS respectivos (Hostinger para pruebas, Contabo para producción) mediante SSH o las herramientas habilitadas para tal fin.
+    - Los registros de base de datos siempre deben consultarse o modificarse en los VPS respectivos (Contabo Dev para pruebas/desarrollo, Contabo Prod para producción) mediante SSH o las herramientas habilitadas para tal fin.
 
 ---
 
@@ -178,9 +178,9 @@ El reinicio de una empresa **elimina permanentemente** todos los datos operacion
 
 ### Script de Reinicio
 
-**Ubicación:** `/home/developer/Escritorio/Antigravity/ninesys-apidev/scripts/reset_company_database.sh`
+**Ubicación:** `/home/developer/Escritorio/niesys/ninesys-hub/bin/reset_company_database.sh`
 
-**Documentación completa:** `scripts/README_RESET_DATABASE.md`
+**Documentación completa:** `ninesys-hub/bin/reset_company_database.sh`
 
 ### Cómo Reiniciar una Empresa en el VPS
 
@@ -189,23 +189,23 @@ El script debe ejecutarse **directamente en el VPS**, no en local.
 #### Paso 1: Copiar el script al VPS
 
 ```bash
-cd /home/developer/Escritorio/Antigravity/ninesys-apidev
-scp scripts/reset_company_database.sh vps-ninesys:/tmp/reset_company_database.sh
+cd /home/developer/Escritorio/niesys/ninesys-hub/bin
+scp reset_company_database.sh vps-contabo-dev:/tmp/reset_company_database.sh
 ```
 
 #### Paso 2: Ejecutar en el VPS
 
 ```bash
-ssh vps-ninesys "chmod +x /tmp/reset_company_database.sh && /tmp/reset_company_database.sh <ID_EMPRESA>"
+ssh vps-contabo-dev "chmod +x /tmp/reset_company_database.sh && /tmp/reset_company_database.sh <ID_EMPRESA>"
 ```
 
 **Ejemplos:**
 ```bash
-# Reiniciar empresa 174 (pruebas)
-ssh vps-ninesys "chmod +x /tmp/reset_company_database.sh && /tmp/reset_company_database.sh 174"
+# Reiniciar empresa 174 (pruebas/desarrollo)
+ssh vps-contabo-dev "chmod +x /tmp/reset_company_database.sh && /tmp/reset_company_database.sh 174"
 
-# Reiniciar empresa 163 (producción - ⚠️ usar con extrema precaución)
-ssh vps-ninesys "chmod +x /tmp/reset_company_database.sh && /tmp/reset_company_database.sh 163"
+# Reiniciar empresa 163 (producción - ⚠️ usar con extrema precaución, solo en vps-contabo-prod)
+ssh vps-contabo-prod "chmod +x /tmp/reset_company_database.sh && /tmp/reset_company_database.sh 163"
 ```
 
 #### Paso 3: Proporcionar confirmaciones
@@ -261,10 +261,10 @@ Si necesitas restaurar un backup:
 
 ```bash
 # Listar backups disponibles en el VPS
-ssh vps-ninesys "ls -lh /home/backups/company_resets/"
+ssh vps-contabo-dev "ls -lh /home/backups/company_resets/"
 
 # Restaurar un backup específico
-ssh vps-ninesys "mysql -u root api_emp_174 < /home/backups/company_resets/backup_api_emp_174_20260206_113511.sql"
+ssh vps-contabo-dev "mysql -u root api_emp_174 < /home/backups/company_resets/backup_api_emp_174_20260206_113511.sql"
 ```
 
 ### Notas Importantes
@@ -280,6 +280,6 @@ Para actualizar la aplicación en el servidor de producción (VPS Contabo), **SO
 
 ```bash
 # RECUERDA: Solo ejecutar esto si el usuario lo pide explícitamente
-ssh vps-contabo "cd /home/api.nineteencustom.com/public_html && git fetch origin && git checkout refactor/modular-routes && git pull origin refactor/modular-routes"
+ssh vps-contabo-prod "cd /home/api.nineteencustom.com/public_html && git fetch origin && git checkout refactor/modular-routes && git pull origin refactor/modular-routes"
 ```
 
