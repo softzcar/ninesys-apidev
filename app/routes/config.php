@@ -330,13 +330,13 @@ return function (App $app) {
             $existingConfig = $localConnection->goQuery('SELECT * FROM config WHERE _id = 1');
 
             $valores = [
-                $personalizacion['sys_mostrar_detalle_terminar_indicidual'] ? 1 : 0,
-                $personalizacion['sys_mostrar_rollo_en_empleado_corte'] ? 1 : 0,
-                $personalizacion['sys_mostrar_rollo_en_empleado_estampado'] ? 1 : 0,
-                $personalizacion['sys_mostrar_insumo_en_empleado_costura'] ? 1 : 0,
-                $personalizacion['sys_mostrar_insumo_en_empleado_limpieza'] ? 1 : 0,
-                $personalizacion['sys_mostrar_insumo_en_empleado_revision'] ? 1 : 0,
-                $personalizacion['sys_comision_de_costura'] ? 1 : 0
+                ($personalizacion['sys_mostrar_detalle_terminar_indicidual'] ?? 0) ? 1 : 0,
+                ($personalizacion['sys_mostrar_rollo_en_empleado_corte'] ?? 0) ? 1 : 0,
+                ($personalizacion['sys_mostrar_rollo_en_empleado_estampado'] ?? 0) ? 1 : 0,
+                ($personalizacion['sys_mostrar_insumo_en_empleado_costura'] ?? 0) ? 1 : 0,
+                ($personalizacion['sys_mostrar_insumo_en_empleado_limpieza'] ?? 0) ? 1 : 0,
+                ($personalizacion['sys_mostrar_insumo_en_empleado_revision'] ?? 0) ? 1 : 0,
+                ($personalizacion['sys_comision_de_costura'] ?? 0) ? 1 : 0
             ];
 
             if ($existingConfig && !empty($existingConfig)) {

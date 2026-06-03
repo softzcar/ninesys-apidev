@@ -15,7 +15,7 @@ class CustomTime
 
     public function __construct($days = "-32 days")
     {
-        $this->newDate = new DateTime("now", new DateTimeZone("America/Caracas"));
+        $this->newDate = new DateTime("now", new DateTimeZone(date_default_timezone_get()));
         $this->days = $days;
     }
 

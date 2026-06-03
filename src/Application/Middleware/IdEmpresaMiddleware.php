@@ -28,7 +28,7 @@ class IdEmpresaMiddleware implements Middleware
                 ]);
                 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-                $sql = 'SELECT db_host, db_user, db_password, nombre, db_name FROM empresas WHERE id_empresa = :id_empresa';
+                $sql = 'SELECT db_host, db_user, db_password, nombre, db_name, pais FROM empresas WHERE id_empresa = :id_empresa';
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute(['id_empresa' => $id_empresa]);
 
@@ -44,6 +44,9 @@ class IdEmpresaMiddleware implements Middleware
                 // o simplemente nos aseguramos que LOCAL_DNS no apunte a un host externo inesperado.
                 
                 if ($connectionDetails) {
+                    $pais = $connectionDetails['pais'] ?? null;
+                    $timezone = $this->getTimezoneByCountry($pais);
+                    date_default_timezone_set($timezone);
                     $targetHost = $connectionDetails['db_host'];
                     // Si el servidor es 'development' pero la base de datos de la empresa no es local ni del dominio dev,
                     // podríamos bloquearlo. Pero lo más seguro es confiar en que el ID_EMPRESA en este servidor
@@ -82,5 +85,32 @@ class IdEmpresaMiddleware implements Middleware
         }
 
         return $handler->handle($request);
+    }
+
+    private function getTimezoneByCountry(?string $country): string
+    {
+        if (!$country) {
+            return 'America/Caracas';
+        }
+
+        $country = mb_strtolower(trim($country), 'UTF-8');
+
+        $map = [
+            'venezuela' => 'America/Caracas',
+            'colombia' => 'America/Bogota',
+            'ecuador' => 'America/Guayaquil',
+            'peru' => 'America/Lima',
+            'chile' => 'America/Santiago',
+            'argentina' => 'America/Argentina/Buenos_Aires',
+            'españa' => 'Europe/Madrid',
+            'espana' => 'Europe/Madrid',
+            'panama' => 'America/Panama',
+            'mexico' => 'America/Mexico_City',
+            'eeuu' => 'America/New_York',
+            'usa' => 'America/New_York',
+            'united states' => 'America/New_York',
+        ];
+
+        return $map[$country] ?? 'America/Caracas';
     }
 }

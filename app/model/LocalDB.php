@@ -30,12 +30,13 @@ class LocalDB
     try {
       // Forzar localhost para evitar cuelgues de TCP con 127.0.0.1 en entornos LiteSpeed
       $sanitizedDSN = str_replace('127.0.0.1', 'localhost', $this->dsn);
+      $timezoneOffset = date('P');
       $this->pdo = new PDO(
         $sanitizedDSN,
         $this->user,
         $this->pass,
         array(
-          PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
+          PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8; SET time_zone = '{$timezoneOffset}';"
         )
       );
       $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
