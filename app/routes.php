@@ -453,7 +453,7 @@ return function (App $app) {
 
       foreach ($users as $user) {
         // Consulta datos de empresa
-        $sql_empresa = 'SELECT nombre, numero_registro_legal, direccion, telefono, email, pais FROM empresas WHERE id_empresa = ?';
+        $sql_empresa = 'SELECT nombre, numero_registro_legal, direccion, telefono, email, pais, timezone FROM empresas WHERE id_empresa = ?';
         $stmt_empresa = $pdo->prepare($sql_empresa);
         $stmt_empresa->execute([$user['id_empresa']]);
         $empresa_data = $stmt_empresa->fetch(PDO::FETCH_ASSOC);

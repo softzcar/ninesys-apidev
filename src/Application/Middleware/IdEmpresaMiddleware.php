@@ -28,7 +28,7 @@ class IdEmpresaMiddleware implements Middleware
                 ]);
                 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-                $sql = 'SELECT db_host, db_user, db_password, nombre, db_name, pais FROM empresas WHERE id_empresa = :id_empresa';
+                $sql = 'SELECT db_host, db_user, db_password, nombre, db_name, pais, timezone FROM empresas WHERE id_empresa = :id_empresa';
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute(['id_empresa' => $id_empresa]);
 
@@ -45,7 +45,10 @@ class IdEmpresaMiddleware implements Middleware
                 
                 if ($connectionDetails) {
                     $pais = $connectionDetails['pais'] ?? null;
-                    $timezone = $this->getTimezoneByCountry($pais);
+                    $timezone = $connectionDetails['timezone'] ?? null;
+                    if (empty($timezone)) {
+                        $timezone = $this->getTimezoneByCountry($pais);
+                    }
                     date_default_timezone_set($timezone);
                     $targetHost = $connectionDetails['db_host'];
                     // Si el servidor es 'development' pero la base de datos de la empresa no es local ni del dominio dev,

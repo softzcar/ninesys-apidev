@@ -48,7 +48,7 @@ return function (App $app) {
         }
 
         // Paso 3: Obtener datos de la empresa
-        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, `db_name` FROM empresas WHERE id_empresa = ?';
+        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, `db_name` FROM empresas WHERE id_empresa = ?';
         $object['debug'][] = 'Obteniendo datos de la empresa.';
         $data_empresa = $localConnection->goQuery($sql_empresa, [$usuario_data['id_empresa']]);
 
@@ -103,7 +103,8 @@ return function (App $app) {
                     'direccion' => $empresa_data['direccion'],
                     'telefono' => $empresa_data['telefono'],
                     'email' => $empresa_data['email'],
-                    'pais' => $empresa_data['pais']
+                    'pais' => $empresa_data['pais'],
+                    'timezone' => $empresa_data['timezone'] ?? null
                 ],
                 'datos_usuario' => [
                     'nombre' => $usuario_data['nombre'],
@@ -231,6 +232,7 @@ return function (App $app) {
         $object['empresa']['horario_laboral'] = json_decode($empresa_data['horario_laboral']);
         $object['empresa']['tipos_de_monedas'] = json_decode($empresa_data['tipos_de_monedas']);
         $object['empresa']['pais'] = $empresa_data['pais'];
+        $object['empresa']['timezone'] = $empresa_data['timezone'] ?? null;
         $object['empresa']['numero_registro_legal'] = $empresa_data['numero_registro_legal'];
         $object['empresa']['activo'] = $empresa_data['activo'];
 
@@ -255,6 +257,7 @@ return function (App $app) {
                 'telefono' => $empresa_data['telefono'],
                 'email' => $empresa_data['email'],
                 'pais' => $empresa_data['pais'],
+                'timezone' => $empresa_data['timezone'] ?? null,
                 'horario_laboral' => json_decode($empresa_data['horario_laboral']),
                 'tipos_de_monedas' => json_decode($empresa_data['tipos_de_monedas'])
             ];
@@ -331,7 +334,7 @@ return function (App $app) {
         $usuario_data = $credenciales[0];
 
         // 2. Obtener datos de la empresa
-        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, `db_name` FROM empresas WHERE id_empresa = ?';
+        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, `db_name` FROM empresas WHERE id_empresa = ?';
         $data_empresa = $localConnection->goQuery($sql_empresa, [$usuario_data['id_empresa']]);
 
         if (empty($data_empresa)) {
@@ -364,6 +367,7 @@ return function (App $app) {
             'telefono' => $empresa_data['telefono'],
             'email' => $empresa_data['email'],
             'pais' => $empresa_data['pais'],
+            'timezone' => $empresa_data['timezone'] ?? null,
             'horario_laboral' => json_decode($empresa_data['horario_laboral']),
             'tipos_de_monedas' => json_decode($empresa_data['tipos_de_monedas'])
         ];

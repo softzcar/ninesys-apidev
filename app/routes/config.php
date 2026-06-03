@@ -90,6 +90,11 @@ return function (App $app) {
             $params[] = $data['pais'];
         }
 
+        if (isset($data['timezone'])) {
+            $updateFields[] = 'timezone = ?';
+            $params[] = $data['timezone'];
+        }
+
         if (isset($data['direccion'])) {
             $updateFields[] = 'direccion = ?';
             $params[] = $data['direccion'];

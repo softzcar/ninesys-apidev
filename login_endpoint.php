@@ -38,7 +38,7 @@
         $object['data']['orden_proceso'] = 0;
       } else {
         // OBTENER DATOS DE LA EMPRESA
-        $sql = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, `db_name` FROM empresas WHERE id_empresa = ' . $credenciales[0]['id_empresa'];
+        $sql = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, `db_name` FROM empresas WHERE id_empresa = ' . $credenciales[0]['id_empresa'];
         $object['debug'][] = "Obteniendo datos de la empresa: " . $sql;
         $data_empresa = $localConnection->goQuery($sql);
 
@@ -154,6 +154,7 @@
         $object['empresa']['horario_laboral'] = json_decode($data_empresa[0]['horario_laboral']);
         $object['empresa']['tipos_de_monedas'] = json_decode($data_empresa[0]['tipos_de_monedas']);
         $object['empresa']['pais'] = $data_empresa[0]['pais'];
+        $object['empresa']['timezone'] = $data_empresa[0]['timezone'] ?? null;
         $object['empresa']['numero_registro_legal'] = $data_empresa[0]['numero_registro_legal'];
         $object['empresa']['activo'] = $data_empresa[0]['activo'];
 
