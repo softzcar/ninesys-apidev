@@ -408,6 +408,17 @@ return function (App $app) {
     // OBTENER PAGOS DE DISEÑADORES
     $localConnection = new LocalDB();
 
+    $queryParams = $request->getQueryParams();
+    $fechaInicio = $queryParams['fecha_inicio'] ?? null;
+    $fechaFin = $queryParams['fecha_fin'] ?? null;
+
+    $whereFecha = "";
+    if (!empty($fechaInicio) && !empty($fechaFin)) {
+      $fechaInicioSan = preg_replace('/[^0-9\-]/', '', $fechaInicio);
+      $fechaFinSan = preg_replace('/[^0-9\-]/', '', $fechaFin);
+      $whereFecha = " AND (DATE(p.moment) BETWEEN '{$fechaInicioSan}' AND '{$fechaFinSan}')";
+    }
+
     // DISEÑADORES
     $sql = 'SELECT
                 p._id id_pago,
@@ -458,7 +469,7 @@ return function (App $app) {
                 pagos p
             JOIN revisiones r ON
                 p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado AND r.estatus = "Aprobado"
-            WHERE p.fecha_pago IS NULL AND p.detalle IN ("Diseño", "ajuste", "personalización")
+            WHERE p.fecha_pago IS NULL AND p.detalle IN ("Diseño", "ajuste", "personalización")' . $whereFecha . '
             GROUP BY p._id
         ';
     $object['data']['diseno'] = $localConnection->goQuery($sql);
@@ -555,6 +566,17 @@ return function (App $app) {
   $app->get('/pagos/semana/empleados', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
+    $queryParams = $request->getQueryParams();
+    $fechaInicio = $queryParams['fecha_inicio'] ?? null;
+    $fechaFin = $queryParams['fecha_fin'] ?? null;
+
+    $whereFecha = "";
+    if (!empty($fechaInicio) && !empty($fechaFin)) {
+      $fechaInicioSan = preg_replace('/[^0-9\-]/', '', $fechaInicio);
+      $fechaFinSan = preg_replace('/[^0-9\-]/', '', $fechaFin);
+      $whereFecha = " AND (DATE(COALESCE(b.fecha_terminado, a.moment)) BETWEEN '{$fechaInicioSan}' AND '{$fechaFinSan}')";
+    }
+
     $id_empresa = intval(str_replace('api_emp_', '', LOCAL_DB));
 
     // --- 1. Consulta para empleados con COMISIÓN FIJA ---
@@ -595,7 +617,7 @@ return function (App $app) {
                 WHERE
                     a.fecha_pago IS NULL
                     AND a.comision_tipo = 'fija'
-                    AND (a.id_lotes_detalles IS NOT NULL OR (a.detalle NOT IN ('Comercialización', 'Diseño') AND a.id_orden > 0))";
+                    AND (a.id_lotes_detalles IS NOT NULL OR (a.detalle NOT IN ('Comercialización', 'Diseño') AND a.id_orden > 0)) {$whereFecha}";
 
     $pagos_fijos = $localConnection->goQuery($sql_fija);
     if (!is_array($pagos_fijos) || (isset($pagos_fijos['status']) && $pagos_fijos['status'] === 'error')) {
@@ -638,7 +660,7 @@ return function (App $app) {
                     WHERE
                         a.fecha_pago IS NULL
                         AND a.comision_tipo = 'variable'
-                        AND (a.id_lotes_detalles IS NOT NULL OR (a.detalle NOT IN ('Comercialización', 'Diseño') AND a.id_orden > 0))";
+                        AND (a.id_lotes_detalles IS NOT NULL OR (a.detalle NOT IN ('Comercialización', 'Diseño') AND a.id_orden > 0)) {$whereFecha}";
 
     $pagos_variables = $localConnection->goQuery($sql_variable);
     if (!is_array($pagos_variables) || (isset($pagos_variables['status']) && $pagos_variables['status'] === 'error')) {
@@ -682,7 +704,7 @@ return function (App $app) {
                     WHERE
                         a.fecha_pago IS NULL
                         AND a.comision_tipo = 'porcentaje'
-                        AND (a.id_lotes_detalles IS NOT NULL OR (a.detalle NOT IN ('Comercialización', 'Diseño') AND a.id_orden > 0))";
+                        AND (a.id_lotes_detalles IS NOT NULL OR (a.detalle NOT IN ('Comercialización', 'Diseño') AND a.id_orden > 0)) {$whereFecha}";
 
     $pagos_porcentaje = $localConnection->goQuery($sql_porcentaje);
     if (!is_array($pagos_porcentaje) || (isset($pagos_porcentaje['status']) && $pagos_porcentaje['status'] === 'error')) {
@@ -759,6 +781,17 @@ return function (App $app) {
     // OBTERER PAGOS DE VENDEDORES
     $localConnection = new LocalDB();
 
+    $queryParams = $request->getQueryParams();
+    $fechaInicio = $queryParams['fecha_inicio'] ?? null;
+    $fechaFin = $queryParams['fecha_fin'] ?? null;
+
+    $whereFecha = "";
+    if (!empty($fechaInicio) && !empty($fechaFin)) {
+      $fechaInicioSan = preg_replace('/[^0-9\-]/', '', $fechaInicio);
+      $fechaFinSan = preg_replace('/[^0-9\-]/', '', $fechaFin);
+      $whereFecha = " AND (DATE(a.moment) BETWEEN '{$fechaInicioSan}' AND '{$fechaFinSan}')";
+    }
+
     $sql = "SELECT
                 a._id AS id_pago,
                 a.id_orden,
@@ -790,7 +823,7 @@ return function (App $app) {
             LEFT JOIN metodos_de_pago e ON
                 e._id = a.id_metodos_de_pago
             WHERE
-                a.fecha_pago IS NULL AND d.status != 'cancelada' AND a.detalle = 'Comercialización'
+                a.fecha_pago IS NULL AND d.status != 'cancelada' AND a.detalle = 'Comercialización' {$whereFecha}
             GROUP BY
                 a._id
             ORDER BY
