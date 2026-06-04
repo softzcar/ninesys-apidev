@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** en el query de los empleados vamos a arreglar que los empleados que retorne sean los empleados activos
+- **Fecha y Hora:** 2026-06-04 10:26:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** 
+    - [app/routes/employees.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/employees.php)
+    - [app/routes/production.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/production.php)
+- **Commits Relacionados:**
+    - Frontend: `6b3426c`
+    - Backend: `6c1cc94`
+- **Acción Realizada:** Se agregaron filtros `activo = 1` a las consultas de la tabla `empleados` en la base de datos dentro de `app/routes/employees.php` y `app/routes/production.php`. Con esto se garantiza que solo se retornen empleados con estado activo cuando se consultan los listados de empleados o personal de producción.
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** Aplicar el filtro de forma directa en las consultas SQL del backend asegura que los datos se filtren desde el origen antes de ser enviados al frontend, previniendo visualizaciones inconsistentes y garantizando el cumplimiento de la regla de negocio.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`
+- **Resultado:** Éxito
+- **Verificación:** Se revisó la sintaxis SQL modificada y se constató que todas las consultas relevantes a la tabla `empleados` ahora contienen la condición `activo = 1` o `e.activo = 1`.
+- **Logro Conseguido:** Se restringió el listado de personal a usuarios activos en las consultas del API, complementando la visualización correcta de filtros y dropdowns en la interfaz de usuario.
+- **Referencias de Sesión (Contexto):**
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/92c1615d-2081-4f17-b324-342572c550f2/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/92c1615d-2081-4f17-b324-342572c550f2/walkthrough.md)
+
+- **Observaciones de Gemini:** Este cambio previene la asignación accidental de tareas a empleados dados de baja en el sistema.
+- **Respuesta de Gemini:** Se ha actualizado el backend en `ninesys-api` modificando los archivos `employees.php` y `production.php` para restringir la obtención de empleados a aquellos que tengan `activo = 1`. Con esto, tanto la carga en el frontend como el procesamiento del personal en los endpoints de producción manejan exclusivamente personal activo.
