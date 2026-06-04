@@ -575,7 +575,7 @@ return function (App $app) {
     $obj[0]['sql'] = $sql;
     $obj[0]['name'] = 'items';
 
-    $sql = "SELECT _id id_empleado, nombre FROM empleados WHERE departamento = 'Corte'";
+    $sql = "SELECT _id id_empleado, nombre FROM empleados WHERE departamento = 'Corte' AND activo = 1";
     $obj[1]['sql'] = $sql;
     $obj[1]['name'] = 'empleados';
 

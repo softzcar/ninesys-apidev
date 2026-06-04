@@ -399,7 +399,7 @@ return function (App $app) {
     $app->get('/empleados/produccion/asignacion', function (Request $request, Response $response) {
         $localConnection = new LocalDB();
 
-        $sql = 'SELECT _id, username, nombre, comision, departamento FROM empleados ORDER BY nombre ASC';
+        $sql = 'SELECT _id, username, nombre, comision, departamento FROM empleados WHERE activo = 1 ORDER BY nombre ASC';
         $object['response'] = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();
@@ -490,7 +490,7 @@ return function (App $app) {
         $object['fields'][4]['label'] = 'Salida Tarde';
 
         // OBTENER TODOS LOS EMPLEADOS
-        $sql = 'SELECT * FROM empleados ORDER BY nombre ASC';
+        $sql = 'SELECT * FROM empleados WHERE activo = 1 ORDER BY nombre ASC';
         $object['empleados'] = $localConnection->goQuery($sql);
 
         // TODO las dos variables siguinetes estan mal arreglar esto
@@ -516,7 +516,7 @@ return function (App $app) {
         LEFT JOIN asistencias b ON
         b.id_empleado = a._id
         WHERE
-        (a._id > 0  AND b.moment LIKE '" . $fecha . "%') OR (a._id > 0 AND b.moment IS NULL)
+        a.activo = 1 AND ((b.moment LIKE '" . $fecha . "%') OR (b.moment IS NULL))
          ORDER BY a.nombre ASC;";
         $object['sql_diarias'] = $sql;
         $mod_date = strtotime($date . '+ 0 days');
