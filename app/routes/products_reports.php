@@ -157,6 +157,18 @@ return function (App $app) {
                 $params['fecha_fin'] = $fecha_fin;
             }
 
+            $paramsUnion = [];
+            $dateCond1 = "";
+            $dateCond2 = "";
+            if ($fecha_inicio && $fecha_fin) {
+                $dateCond1 = " AND DATE(o.moment) BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
+                $dateCond2 = " AND DATE(o.moment) BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
+                $paramsUnion['fecha_inicio_1'] = $fecha_inicio;
+                $paramsUnion['fecha_fin_1'] = $fecha_fin;
+                $paramsUnion['fecha_inicio_2'] = $fecha_inicio;
+                $paramsUnion['fecha_fin_2'] = $fecha_fin;
+            }
+
             // 7. Cantidad total de piezas reales producidas por producto
             $cantRealRaw = $db->goQuery("
                 SELECT op.id_woo as id_producto, SUM(op.cantidad) AS total_cantidad
@@ -207,14 +219,28 @@ return function (App $app) {
 
             // 10. Tiempos reales laborados (segundos)
             $tiempoRealRaw = $db->goQuery("
-                SELECT op.id_woo as id_producto, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
-                FROM lotes_detalles_empleados_asignados ldea
-                JOIN lotes_detalles ld ON (ldea.id_lotes_detalles = ld._id OR (ldea.id_lotes_detalles IS NULL AND ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento))
-                JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
-                JOIN ordenes o ON ldea.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') $dateCond
-                GROUP BY op.id_woo
-            ", $params);
+                SELECT id_producto, SUM(total_tiempo) AS total_tiempo
+                FROM (
+                    SELECT op.id_woo as id_producto, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON ldea.id_lotes_detalles = ld._id
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE o.status IN ('terminada', 'entregada') $dateCond1
+                    GROUP BY op.id_woo
+                    
+                    UNION ALL
+                    
+                    SELECT op.id_woo as id_producto, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE ldea.id_lotes_detalles IS NULL AND o.status IN ('terminada', 'entregada') $dateCond2
+                    GROUP BY op.id_woo
+                ) as combined
+                GROUP BY id_producto
+            ", $paramsUnion);
             $realTiempoMap = [];
             if (is_array($tiempoRealRaw)) {
                 foreach ($tiempoRealRaw as $r) {
@@ -225,15 +251,30 @@ return function (App $app) {
             // 11. Salarios proporcionales por horas de empleados fijos
             $costoHoraMap = $getSalarios($db, $dbEmpresas, $id_empresa);
             $salariosHorasRaw = $db->goQuery("
-                SELECT op.id_woo as id_producto, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
-                FROM lotes_detalles_empleados_asignados ldea
-                JOIN lotes_detalles ld ON (ldea.id_lotes_detalles = ld._id OR (ldea.id_lotes_detalles IS NULL AND ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento))
-                JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
-                JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
-                JOIN ordenes o ON ldea.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond
-                GROUP BY op.id_woo, ldea.id_empleado
-            ", $params);
+                SELECT id_producto, id_empleado, SUM(total_horas) AS total_horas
+                FROM (
+                    SELECT op.id_woo as id_producto, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON ldea.id_lotes_detalles = ld._id
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond1
+                    GROUP BY op.id_woo, ldea.id_empleado
+                    
+                    UNION ALL
+                    
+                    SELECT op.id_woo as id_producto, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE ldea.id_lotes_detalles IS NULL AND o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond2
+                    GROUP BY op.id_woo, ldea.id_empleado
+                ) as combined
+                GROUP BY id_producto, id_empleado
+            ", $paramsUnion);
             
             $realSalarioFijoMap = [];
             if (is_array($salariosHorasRaw)) {
@@ -448,6 +489,18 @@ return function (App $app) {
                 $params['fecha_fin'] = $fecha_fin;
             }
 
+            $paramsUnion = [];
+            $dateCond1 = "";
+            $dateCond2 = "";
+            if ($fecha_inicio && $fecha_fin) {
+                $dateCond1 = " AND DATE(o.moment) BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
+                $dateCond2 = " AND DATE(o.moment) BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
+                $paramsUnion['fecha_inicio_1'] = $fecha_inicio;
+                $paramsUnion['fecha_fin_1'] = $fecha_fin;
+                $paramsUnion['fecha_inicio_2'] = $fecha_inicio;
+                $paramsUnion['fecha_fin_2'] = $fecha_fin;
+            }
+
             $cantRealRaw = $db->goQuery("
                 SELECT op.id_woo as id_producto, SUM(op.cantidad) AS total_cantidad
                 FROM ordenes_productos op
@@ -494,14 +547,28 @@ return function (App $app) {
             }
 
             $tiempoRealRaw = $db->goQuery("
-                SELECT op.id_woo as id_producto, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
-                FROM lotes_detalles_empleados_asignados ldea
-                JOIN lotes_detalles ld ON (ldea.id_lotes_detalles = ld._id OR (ldea.id_lotes_detalles IS NULL AND ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento))
-                JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
-                JOIN ordenes o ON ldea.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') $dateCond
-                GROUP BY op.id_woo
-            ", $params);
+                SELECT id_producto, SUM(total_tiempo) AS total_tiempo
+                FROM (
+                    SELECT op.id_woo as id_producto, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON ldea.id_lotes_detalles = ld._id
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE o.status IN ('terminada', 'entregada') $dateCond1
+                    GROUP BY op.id_woo
+                    
+                    UNION ALL
+                    
+                    SELECT op.id_woo as id_producto, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE ldea.id_lotes_detalles IS NULL AND o.status IN ('terminada', 'entregada') $dateCond2
+                    GROUP BY op.id_woo
+                ) as combined
+                GROUP BY id_producto
+            ", $paramsUnion);
             $realTiempoMap = [];
             if (is_array($tiempoRealRaw)) {
                 foreach ($tiempoRealRaw as $r) {
@@ -511,15 +578,30 @@ return function (App $app) {
 
             $costoHoraMap = $getSalarios($db, $dbEmpresas, $id_empresa);
             $salariosHorasRaw = $db->goQuery("
-                SELECT op.id_woo as id_producto, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
-                FROM lotes_detalles_empleados_asignados ldea
-                JOIN lotes_detalles ld ON (ldea.id_lotes_detalles = ld._id OR (ldea.id_lotes_detalles IS NULL AND ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento))
-                JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
-                JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
-                JOIN ordenes o ON ldea.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond
-                GROUP BY op.id_woo, ldea.id_empleado
-            ", $params);
+                SELECT id_producto, id_empleado, SUM(total_horas) AS total_horas
+                FROM (
+                    SELECT op.id_woo as id_producto, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON ldea.id_lotes_detalles = ld._id
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond1
+                    GROUP BY op.id_woo, ldea.id_empleado
+                    
+                    UNION ALL
+                    
+                    SELECT op.id_woo as id_producto, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE ldea.id_lotes_detalles IS NULL AND o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond2
+                    GROUP BY op.id_woo, ldea.id_empleado
+                ) as combined
+                GROUP BY id_producto, id_empleado
+            ", $paramsUnion);
             
             $realSalarioFijoMap = [];
             if (is_array($salariosHorasRaw)) {
@@ -739,12 +821,24 @@ return function (App $app) {
             $teoricoTiempo = is_array($tiemposRaw) ? $tiemposRaw : [];
 
             // --- HISTORIAL DE DATOS REALES REGISTRADOS POR TALLA EN TALLER ---
-            $params = [$id_producto];
+            $params = [':id_producto' => $id_producto];
             $dateCond = "";
             if ($fecha_inicio && $fecha_fin) {
-                $dateCond = " AND DATE(o.moment) BETWEEN ? AND ? ";
-                $params[] = $fecha_inicio;
-                $params[] = $fecha_fin;
+                $dateCond = " AND DATE(o.moment) BETWEEN :fecha_inicio AND :fecha_fin ";
+                $params['fecha_inicio'] = $fecha_inicio;
+                $params['fecha_fin'] = $fecha_fin;
+            }
+
+            $paramsUnion = [':id_producto' => $id_producto];
+            $dateCond1 = "";
+            $dateCond2 = "";
+            if ($fecha_inicio && $fecha_fin) {
+                $dateCond1 = " AND DATE(o.moment) BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
+                $dateCond2 = " AND DATE(o.moment) BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
+                $paramsUnion['fecha_inicio_1'] = $fecha_inicio;
+                $paramsUnion['fecha_fin_1'] = $fecha_fin;
+                $paramsUnion['fecha_inicio_2'] = $fecha_inicio;
+                $paramsUnion['fecha_fin_2'] = $fecha_fin;
             }
 
             // 7. Cantidad producida por talla
@@ -752,7 +846,7 @@ return function (App $app) {
                 SELECT op.id_size as id_talla, SUM(op.cantidad) AS total_cantidad
                 FROM ordenes_productos op
                 JOIN ordenes o ON op.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') AND op.id_woo = ? $dateCond
+                WHERE o.status IN ('terminada', 'entregada') AND op.id_woo = :id_producto $dateCond
                 GROUP BY op.id_size
             ", $params);
             
@@ -765,14 +859,28 @@ return function (App $app) {
 
             // 8. Tiempos reales laborados por talla
             $tiempoRealRaw = $db->goQuery("
-                SELECT op.id_size as id_talla, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
-                FROM lotes_detalles_empleados_asignados ldea
-                JOIN lotes_detalles ld ON (ldea.id_lotes_detalles = ld._id OR (ldea.id_lotes_detalles IS NULL AND ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento))
-                JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
-                JOIN ordenes o ON ldea.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') AND op.id_woo = ? $dateCond
-                GROUP BY op.id_size
-            ", $params);
+                SELECT id_talla, SUM(total_tiempo) AS total_tiempo
+                FROM (
+                    SELECT op.id_size as id_talla, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON ldea.id_lotes_detalles = ld._id
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE o.status IN ('terminada', 'entregada') AND op.id_woo = :id_producto $dateCond1
+                    GROUP BY op.id_size
+                    
+                    UNION ALL
+                    
+                    SELECT op.id_size as id_talla, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE ldea.id_lotes_detalles IS NULL AND o.status IN ('terminada', 'entregada') AND op.id_woo = :id_producto $dateCond2
+                    GROUP BY op.id_size
+                ) as combined
+                GROUP BY id_talla
+            ", $paramsUnion);
             
             $realTiempoMap = [];
             if (is_array($tiempoRealRaw)) {
@@ -788,7 +896,7 @@ return function (App $app) {
                 JOIN lotes_detalles ld ON p.id_lotes_detalles = ld._id
                 JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
                 JOIN ordenes o ON p.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') AND op.id_woo = ? $dateCond
+                WHERE o.status IN ('terminada', 'entregada') AND op.id_woo = :id_producto $dateCond
                 GROUP BY op.id_size
             ", $params);
             $realPagosMap = [];
@@ -801,15 +909,30 @@ return function (App $app) {
             // 10. Salarios por hora y horas por talla
             $costoHoraMap = $getSalarios($db, $dbEmpresas, $id_empresa);
             $salariosHorasRaw = $db->goQuery("
-                SELECT op.id_size as id_talla, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
-                FROM lotes_detalles_empleados_asignados ldea
-                JOIN lotes_detalles ld ON (ldea.id_lotes_detalles = ld._id OR (ldea.id_lotes_detalles IS NULL AND ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento))
-                JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
-                JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
-                JOIN ordenes o ON ldea.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') AND op.id_woo = ? $dateCond
-                GROUP BY op.id_size, ldea.id_empleado
-            ", $params);
+                SELECT id_talla, id_empleado, SUM(total_horas) AS total_horas
+                FROM (
+                    SELECT op.id_size as id_talla, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON ldea.id_lotes_detalles = ld._id
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') AND op.id_woo = :id_producto $dateCond1
+                    GROUP BY op.id_size, ldea.id_empleado
+                    
+                    UNION ALL
+                    
+                    SELECT op.id_size as id_talla, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
+                    FROM lotes_detalles_empleados_asignados ldea
+                    JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
+                    JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                    JOIN ordenes o ON ldea.id_orden = o._id
+                    WHERE ldea.id_lotes_detalles IS NULL AND o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') AND op.id_woo = :id_producto $dateCond2
+                    GROUP BY op.id_size, ldea.id_empleado
+                ) as combined
+                GROUP BY id_talla, id_empleado
+            ", $paramsUnion);
             
             $realSalarioFijoMap = [];
             if (is_array($salariosHorasRaw)) {
@@ -832,7 +955,7 @@ return function (App $app) {
                 FROM inventario_movimientos im
                 JOIN inventario inv ON im.id_insumo = inv._id
                 JOIN ordenes o ON im.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') AND im.id_producto = ? $dateCond
+                WHERE o.status IN ('terminada', 'entregada') AND im.id_producto = :id_producto $dateCond
                 GROUP BY im.id_catalogo_insumos_prodcutos
             ", $params);
 
