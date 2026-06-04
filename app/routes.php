@@ -156,6 +156,9 @@ return function (App $app) {
   // RUTAS DE REPORTES
   (require __DIR__ . '/routes/reports.php')($app);
 
+  // REPORTES ANALÍTICOS DE COSTOS DE PRODUCTOS
+  (require __DIR__ . '/routes/products_reports.php')($app);
+
   // RUTAS DE PAGOS
   (require __DIR__ . '/routes/payments.php')($app);
 
