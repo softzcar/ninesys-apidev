@@ -61,7 +61,11 @@ return function (App $app) {
 
   // 2. POST /crm/oportunidades/nueva - Registrar una nueva oportunidad de venta
   $app->post('/crm/oportunidades/nueva', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
+    $rawBody = $request->getBody()->getContents();
+    $data = json_decode($rawBody, true);
+    if (!is_array($data)) {
+      $data = $request->getParsedBody() ?? [];
+    }
     $localConnection = new LocalDB();
 
     try {
@@ -98,7 +102,11 @@ return function (App $app) {
 
   // 3. PUT /crm/oportunidades/estado - Mover lead en el embudo (Kanban)
   $app->put('/crm/oportunidades/estado', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
+    $rawBody = $request->getBody()->getContents();
+    $data = json_decode($rawBody, true);
+    if (!is_array($data)) {
+      $data = $request->getParsedBody() ?? [];
+    }
     $localConnection = new LocalDB();
 
     try {
@@ -234,7 +242,11 @@ return function (App $app) {
 
   // 7. POST /crm/notas/nueva - Agregar nota a la bitácora
   $app->post('/crm/notas/nueva', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
+    $rawBody = $request->getBody()->getContents();
+    $data = json_decode($rawBody, true);
+    if (!is_array($data)) {
+      $data = $request->getParsedBody() ?? [];
+    }
     $localConnection = new LocalDB();
 
     try {
@@ -283,7 +295,11 @@ return function (App $app) {
 
   // 9. POST /crm/soporte/nueva - Registrar incidencia de soporte
   $app->post('/crm/soporte/nueva', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
+    $rawBody = $request->getBody()->getContents();
+    $data = json_decode($rawBody, true);
+    if (!is_array($data)) {
+      $data = $request->getParsedBody() ?? [];
+    }
     $localConnection = new LocalDB();
 
     try {
@@ -309,7 +325,11 @@ return function (App $app) {
 
   // 9.5 PUT /crm/soporte/estado - Actualizar estado de soporte (ej: resolver ticket)
   $app->put('/crm/soporte/estado', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
+    $rawBody = $request->getBody()->getContents();
+    $data = json_decode($rawBody, true);
+    if (!is_array($data)) {
+      $data = $request->getParsedBody() ?? [];
+    }
     $localConnection = new LocalDB();
 
     try {
@@ -332,7 +352,11 @@ return function (App $app) {
 
   // 10. POST /crm/campanas/enviar - Enviar campaña de WhatsApp a clientes segmentados por producto
   $app->post('/crm/campanas/enviar', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
+    $rawBody = $request->getBody()->getContents();
+    $data = json_decode($rawBody, true);
+    if (!is_array($data)) {
+      $data = $request->getParsedBody() ?? [];
+    }
     $localConnection = new LocalDB();
 
     try {
