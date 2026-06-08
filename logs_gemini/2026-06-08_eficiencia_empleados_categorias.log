@@ -1,0 +1,7 @@
+Fecha: 2026-06-08
+Tarea: Arreglar actualización del gráfico de eficiencia del período por empleado al filtrar por categoría en el reporte semanal.
+Cambios Frontend:
+- Modificado /app_multi/pages/reportes/semanal.vue para almacenar las tareas de eficiencia brutas en rawEmployeeTareas.
+- Convertido employeeEfficiencyData en propiedad computada reactiva.
+- La propiedad computada filtra rawEmployeeTareas basándose en las órdenes visibles en filteredItems antes de agrupar y calcular la eficiencia por empleado.
+- Con esto, al seleccionar una categoría en el filtro superior, las órdenes se filtran, y el gráfico de eficiencia de empleados se actualiza de forma automática y reactiva.
