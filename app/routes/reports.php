@@ -874,11 +874,13 @@ return function (App $app) {
                         AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
                     ) AS total_unidades,
                     (
-                        SELECT GROUP_CONCAT(DISTINCT op2.id_category ORDER BY op2.id_category SEPARATOR ',')
+                        SELECT GROUP_CONCAT(DISTINCT cat2._id ORDER BY cat2._id SEPARATOR ',')
                         FROM ordenes_productos op2
+                        JOIN products p2 ON p2._id = op2.id_woo
+                        JOIN categories cat2 ON FIND_IN_SET(cat2._id, p2.category_ids)
                         WHERE op2.id_orden = a._id
-                        AND op2.id_category IS NOT NULL
-                        AND op2.id_category > 0
+                        AND (p2.fisico = 1 OR p2.fisico IS NULL)
+                        AND (p2.es_diseno = 0 OR p2.es_diseno IS NULL)
                     ) AS _category_ids
                 FROM ordenes a
                 LEFT JOIN customers cus ON cus._id = a.id_wp
@@ -929,23 +931,27 @@ return function (App $app) {
             $allProducts = $db->goQuery($sqlAll, [$inicio, $fin]);
 
             // 7. Obtener Categorías únicas involucradas en los productos de las órdenes del período
+            // Usamos products.category_ids + categories para obtener el nombre REAL de categoría
+            // (ordenes_productos.category_name puede tener datos incorrectos como 'Uncategorized')
             $sqlCategories = "SELECT
-                    MIN(op.id_category) AS id_category,
-                    op.category_name
+                    cat._id AS id_category,
+                    cat.nombre AS category_name
                 FROM ordenes_productos op
-                WHERE op.category_name IS NOT NULL
-                AND op.category_name != ''
-                AND op.category_name != 'Diseños'
-                AND op.category_name != 'Uncategorized'
-                AND op.id_orden IN (
+                JOIN products p ON p._id = op.id_woo
+                JOIN categories cat ON FIND_IN_SET(cat._id, p.category_ids)
+                WHERE op.id_orden IN (
                     SELECT DISTINCT id_orden
                     FROM lotes_detalles_empleados_asignados
                     WHERE DATE(fecha_terminado) BETWEEN ? AND ?
                 )
-                GROUP BY op.category_name
-                ORDER BY op.category_name ASC";
+                AND (p.fisico = 1 OR p.fisico IS NULL)
+                AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+                GROUP BY cat._id, cat.nombre
+                ORDER BY cat.nombre ASC";
             $categories = $db->goQuery($sqlCategories, [$inicio, $fin]);
             $categories = is_array($categories) && !isset($categories['status']) ? $categories : [];
+            // Renombrar clave 'nombre' → 'category_name' si es necesario (ya se hace en el SELECT)
+            
 
             if (empty($orders)) {
                 $db->disconnect();
