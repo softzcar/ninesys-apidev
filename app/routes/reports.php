@@ -872,7 +872,14 @@ return function (App $app) {
                         WHERE op.id_orden = a._id 
                         AND (p.fisico = 1 OR p.fisico IS NULL)
                         AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
-                    ) AS total_unidades
+                    ) AS total_unidades,
+                    (
+                        SELECT GROUP_CONCAT(DISTINCT op2.id_category ORDER BY op2.id_category SEPARATOR ',')
+                        FROM ordenes_productos op2
+                        WHERE op2.id_orden = a._id
+                        AND op2.id_category IS NOT NULL
+                        AND op2.id_category > 0
+                    ) AS _category_ids
                 FROM ordenes a
                 LEFT JOIN customers cus ON cus._id = a.id_wp
                 WHERE a.status IN ('terminada', 'entregada')
@@ -921,9 +928,28 @@ return function (App $app) {
                 ORDER BY p.product ASC";
             $allProducts = $db->goQuery($sqlAll, [$inicio, $fin]);
 
+            // 7. Obtener Categorías únicas involucradas en los productos de las órdenes del período
+            $sqlCategories = "SELECT DISTINCT
+                    op.id_category,
+                    op.category_name
+                FROM ordenes_productos op
+                WHERE op.id_category IS NOT NULL
+                AND op.id_category > 0
+                AND op.id_orden IN (
+                    SELECT DISTINCT id_orden
+                    FROM lotes_detalles_empleados_asignados
+                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
+                )
+                AND op.category_name IS NOT NULL
+                AND op.category_name != ''
+                AND op.category_name != 'Diseños'
+                ORDER BY op.category_name ASC";
+            $categories = $db->goQuery($sqlCategories, [$inicio, $fin]);
+            $categories = is_array($categories) && !isset($categories['status']) ? $categories : [];
+
             if (empty($orders)) {
                 $db->disconnect();
-                $response->getBody()->write(json_encode(['items' => [], 'topProducts' => $topProducts ?: [], 'allProducts' => $allProducts ?: []]));
+                $response->getBody()->write(json_encode(['items' => [], 'topProducts' => $topProducts ?: [], 'allProducts' => $allProducts ?: [], 'categories' => $categories]));
                 return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
             }
 
@@ -1064,7 +1090,8 @@ return function (App $app) {
             $response->getBody()->write(json_encode([
                 'items' => $finalItems,
                 'topProducts' => $topProducts ?: [],
-                'allProducts' => $allProducts ?: []
+                'allProducts' => $allProducts ?: [],
+                'categories' => $categories
             ]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 
