@@ -603,7 +603,7 @@ return function (App $app) {
   // PRUEBA DE CONEXION DIRECTA A LA BASE DE DATOS `ninetengreen` de Wordpress
   $app->get('/wp/products', function (Request $request, Response $response) {
     $woo = new WooMe();
-    $object['data'] = $woo->getAllProducts();
+    $object['data'] = json_decode($woo->getAllProducts());
 
     $response->getBody()->write(json_encode($object));
 
@@ -614,7 +614,7 @@ return function (App $app) {
 
   $app->get('/wp/products/{id_product}', function (Request $request, Response $response) {
     $woo = new WooMe();
-    $object['data'] = $woo->getAllProducts();
+    $object['data'] = json_decode($woo->getAllProducts());
 
     $response->getBody()->write(json_encode($object));
 
