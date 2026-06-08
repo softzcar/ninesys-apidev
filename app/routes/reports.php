@@ -929,20 +929,20 @@ return function (App $app) {
             $allProducts = $db->goQuery($sqlAll, [$inicio, $fin]);
 
             // 7. Obtener Categorías únicas involucradas en los productos de las órdenes del período
-            $sqlCategories = "SELECT DISTINCT
-                    op.id_category,
+            $sqlCategories = "SELECT
+                    MIN(op.id_category) AS id_category,
                     op.category_name
                 FROM ordenes_productos op
-                WHERE op.id_category IS NOT NULL
-                AND op.id_category > 0
+                WHERE op.category_name IS NOT NULL
+                AND op.category_name != ''
+                AND op.category_name != 'Diseños'
+                AND op.category_name != 'Uncategorized'
                 AND op.id_orden IN (
                     SELECT DISTINCT id_orden
                     FROM lotes_detalles_empleados_asignados
                     WHERE DATE(fecha_terminado) BETWEEN ? AND ?
                 )
-                AND op.category_name IS NOT NULL
-                AND op.category_name != ''
-                AND op.category_name != 'Diseños'
+                GROUP BY op.category_name
                 ORDER BY op.category_name ASC";
             $categories = $db->goQuery($sqlCategories, [$inicio, $fin]);
             $categories = is_array($categories) && !isset($categories['status']) ? $categories : [];
