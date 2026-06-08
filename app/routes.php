@@ -214,6 +214,9 @@ return function (App $app) {
   // Protegidas por token interno compartido (header X-Internal-Token).
   (require __DIR__ . '/routes/msg_service.php')($app);
 
+  // RUTAS DEL MODULO DE CRM
+  (require __DIR__ . '/routes/crm.php')($app);
+
   /** PROXY PARA TASAS DE CAMBIO (CORS FIX) */
   $app->get('/bcv-rates', function (Request $request, Response $response) {
     $url = 'https://bcv.justcarlux.dev/api/v1/rates';
