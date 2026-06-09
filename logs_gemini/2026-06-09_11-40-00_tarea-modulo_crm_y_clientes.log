@@ -1,0 +1,13 @@
+Fecha: 2026-06-09
+Tarea: Implementación y correcciones en el módulo de CRM, Ficha de Cliente y firma de Axios.
+Cambios Backend:
+- Se implementaron 12 endpoints en app/routes/crm.php para Kanban, notas, tickets y métricas del Dashboard.
+- Se integró id_woo en los listados locales de órdenes y presupuestos del cliente para permitir filtrado en el frontend.
+- Se corrigió la doble serialización JSON en los endpoints de productos de WooCommerce.
+- Se corrigió el parseo de cuerpos crudos JSON para endpoints de actualización del CRM.
+Cambios Frontend:
+- Se rediseñó la tabla de clientes en gestion.vue desplazando acciones al extremo derecho, quitando el cebra y compactando columnas redundantes (Cédula, Email, Dirección).
+- Se implementaron filtros reactivos de Ciudad y Producto comprado en el listado de clientes.
+- Se optimizó el cajón de detalle del cliente (ClientDetailDrawer.vue) con pestañas dinámicas, formularios integrados y tarjetas de compras/cotizaciones colapsables que mantienen visibles el Total y Abonado en el encabezado.
+- Se implementó filtrado reactivo de tarjetas por producto comprado en la ficha CRM.
+- Se corrigió la firma interceptada en axios-interceptor.js para admitir tanto (config) como (url, config), eliminando el bug 405 Method Not Allowed en el wizard de órdenes.
