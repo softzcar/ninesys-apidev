@@ -146,7 +146,7 @@ return function (App $app) {
         foreach ($ordenes as $o) {
           $id_orden = intval($o['_id']);
           
-          $sqlP = "SELECT name, cantidad, precio_unitario, talla, corte, tela
+          $sqlP = "SELECT id_woo, name, cantidad, precio_unitario, talla, corte, tela
                    FROM ordenes_productos
                    WHERE id_orden = ?";
           $productos = $localConnection->goQuery($sqlP, [$id_orden]);
@@ -183,7 +183,7 @@ return function (App $app) {
         foreach ($presupuestos as $p) {
           $id_presupuesto = intval($p['_id']);
           
-          $sqlP = "SELECT name, cantidad, precio_unitario, talla, corte, tela
+          $sqlP = "SELECT id_woo, name, cantidad, precio_unitario, talla, corte, tela
                    FROM presupuestos_productos
                    WHERE id_orden = ?";
           $productos = $localConnection->goQuery($sqlP, [$id_presupuesto]);
