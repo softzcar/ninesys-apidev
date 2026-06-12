@@ -712,6 +712,41 @@ return function (App $app) {
         $object['insumos_consumidos'] = $localConnection->goQuery($sql);
 
         if (!is_null($id_orden) && intval($id_orden) > 0) {
+            // Mapeo heredado para compatibilidad
+            $legacyMap = [
+                'C' => 'cyan',
+                'M' => 'magenta',
+                'Y' => 'yellow',
+                'K' => 'black',
+                'W' => 'white'
+            ];
+
+            // Buscar los colores que realmente se usaron en la orden
+            $usedColorsQuery = $localConnection->goQuery("SELECT DISTINCT cct.codigo, cct.nombre, cct.color_hex FROM tintas t JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id WHERE t.id_orden = $id_orden");
+            $coloresDetalles = [];
+            if (is_array($usedColorsQuery) && !isset($usedColorsQuery['status']) && !empty($usedColorsQuery)) {
+                foreach ($usedColorsQuery as $uc) {
+                    $code = strtoupper(trim($uc['codigo']));
+                    $key = $legacyMap[$code] ?? strtolower($code);
+                    $coloresDetalles[] = [
+                        'codigo' => $uc['codigo'],
+                        'nombre' => $uc['nombre'],
+                        'key' => $key
+                    ];
+                }
+            } else {
+                // Default fallback a CMYKW
+                $coloresDetalles = [
+                    ['codigo' => 'C', 'nombre' => 'Cyan', 'key' => 'cyan'],
+                    ['codigo' => 'M', 'nombre' => 'Magenta', 'key' => 'magenta'],
+                    ['codigo' => 'Y', 'nombre' => 'Yellow', 'key' => 'yellow'],
+                    ['codigo' => 'K', 'nombre' => 'Black', 'key' => 'black'],
+                    ['codigo' => 'W', 'nombre' => 'White', 'key' => 'white']
+                ];
+            }
+            $object['colores_detalles'] = $coloresDetalles;
+
+            // Obtener consumos de tintas
             $tintasRawRows = $localConnection->goQuery("SELECT t.id_orden, t.id_catalogo_impresoras, cct.codigo AS color_code, t.cantidad FROM tintas t JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id WHERE t.id_orden = $id_orden");
             $tintasRows = [];
             if (is_array($tintasRawRows) && !isset($tintasRawRows['status'])) {
@@ -722,13 +757,11 @@ return function (App $app) {
                         $grouped[$pid] = [
                             'id_orden' => $row['id_orden'],
                             'id_catalogo_impresoras' => $pid,
-                            'c' => 0, 'm' => 0, 'y' => 0, 'k' => 0, 'w' => 0
+                            'colores_dinamicos' => []
                         ];
                     }
-                    $colKey = strtolower($row['color_code']);
-                    if (in_array($colKey, ['c', 'm', 'y', 'k', 'w'])) {
-                        $grouped[$pid][$colKey] = (float)$row['cantidad'];
-                    }
+                    $code = strtoupper(trim($row['color_code']));
+                    $grouped[$pid]['colores_dinamicos'][$code] = (float)$row['cantidad'];
                 }
                 $tintasRows = array_values($grouped);
             }
@@ -743,22 +776,24 @@ return function (App $app) {
                 $printerIds = array_values(array_unique(array_filter($printerIds)));
                 $printerIdsStr = !empty($printerIds) ? implode(',', $printerIds) : '';
 
+                // Fallback de costos por ml en inventario usando código completo
                 $fallbackRaw = $localConnection->goQuery("SELECT cct.codigo AS color_code, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) AS cost_ml FROM inventario inv JOIN catalogo_colores_tintas cct ON inv.id_color_tinta = cct._id WHERE inv.tipo_insumo = 'tinta'");
                 $fallbackMap = [];
                 if (is_array($fallbackRaw) && !isset($fallbackRaw['status'])) {
                     foreach ($fallbackRaw as $fr) {
-                        $colKey = strtoupper(substr(trim($fr['color_code'] ?? ''), 0, 1));
+                        $colKey = strtoupper(trim($fr['color_code'] ?? ''));
                         if ($colKey) $fallbackMap[$colKey] = (float)($fr['cost_ml'] ?? 0);
                     }
                 }
 
+                // Costo por impresora
                 $costMap = [];
                 if (!empty($printerIdsStr)) {
                     $recargasRaw = $localConnection->goQuery("SELECT tr.id_catalogo_impresora, cct.codigo AS color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) AS cost_ml FROM tintas_recargas tr JOIN inventario inv ON tr.id_insumo = inv._id JOIN catalogo_colores_tintas cct ON tr.id_color_tinta = cct._id WHERE tr.id_catalogo_impresora IN ($printerIdsStr) ORDER BY tr.fecha_recarga DESC");
                     if (is_array($recargasRaw) && !isset($recargasRaw['status'])) {
                         foreach ($recargasRaw as $rr) {
                             $pid = (int)$rr['id_catalogo_impresora'];
-                            $colKey = strtoupper(substr(trim($rr['color'] ?? ''), 0, 1));
+                            $colKey = strtoupper(trim($rr['color'] ?? ''));
                             if ($colKey && !isset($costMap[$pid][$colKey])) $costMap[$pid][$colKey] = (float)($rr['cost_ml'] ?? 0);
                         }
                     }
@@ -769,24 +804,36 @@ return function (App $app) {
                     $pid = (int)($tr['id_catalogo_impresoras'] ?? 0);
                     $totalMl = 0;
                     $totalCost = 0;
-                    foreach (['c' => 'C', 'm' => 'M', 'y' => 'Y', 'k' => 'K', 'w' => 'W'] as $key => $colorCode) {
-                        $ml = (float)($tr[$key] ?? 0);
+
+                    // Mapeo legacy
+                    $tr_c = (float)($tr['colores_dinamicos']['C'] ?? 0);
+                    $tr_m = (float)($tr['colores_dinamicos']['M'] ?? 0);
+                    $tr_y = (float)($tr['colores_dinamicos']['Y'] ?? 0);
+                    $tr_k = (float)($tr['colores_dinamicos']['K'] ?? 0);
+                    $tr_w = (float)($tr['colores_dinamicos']['W'] ?? 0);
+
+                    // Mapeo dinámico para todos los colores
+                    $dynamicData = [];
+                    foreach ($tr['colores_dinamicos'] as $colorCode => $ml) {
                         $totalMl += $ml;
                         $costMl = $costMap[$pid][$colorCode] ?? ($fallbackMap[$colorCode] ?? 0);
                         $totalCost += ($ml * $costMl);
+
+                        $keyName = $legacyMap[$colorCode] ?? strtolower($colorCode);
+                        $dynamicData[$keyName] = $ml;
                     }
 
-                    $tintasOut[] = [
+                    $tintasOut[] = array_merge([
                         'id_orden' => (int)$tr['id_orden'],
-                        'cyan' => (float)($tr['c'] ?? 0),
-                        'magenta' => (float)($tr['m'] ?? 0),
-                        'yellow' => (float)($tr['y'] ?? 0),
-                        'black' => (float)($tr['k'] ?? 0),
-                        'white' => (float)($tr['w'] ?? 0),
+                        'cyan' => $tr_c,
+                        'magenta' => $tr_m,
+                        'yellow' => $tr_y,
+                        'black' => $tr_k,
+                        'white' => $tr_w,
                         'total_tinta' => round($totalMl, 2),
                         'total_tinta_consumo_ml' => round($totalMl, 2),
                         'total_tinta_costo' => round($totalCost, 2),
-                    ];
+                    ], $dynamicData);
                 }
 
                 $object['tintas'] = $tintasOut;
