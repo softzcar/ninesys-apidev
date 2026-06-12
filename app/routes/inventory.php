@@ -721,7 +721,7 @@ return function (App $app) {
         ];
 
         // 2. Buscar los colores que realmente se usaron en este filtro (orden o fechas)
-        $usedColorsQuery = $localConnection->goQuery("SELECT DISTINCT cct.codigo, cct.nombre, cct.color_hex FROM tintas t JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id $where");
+        $usedColorsQuery = $localConnection->goQuery("SELECT DISTINCT cct.codigo, cct.nombre, cct.color_hex FROM tintas imo JOIN catalogo_colores_tintas cct ON imo.id_color_tinta = cct._id $where");
         $coloresDetalles = [];
         if (is_array($usedColorsQuery) && !isset($usedColorsQuery['status']) && !empty($usedColorsQuery)) {
             foreach ($usedColorsQuery as $uc) {
