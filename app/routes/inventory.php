@@ -712,8 +712,28 @@ return function (App $app) {
         $object['insumos_consumidos'] = $localConnection->goQuery($sql);
 
         if (!is_null($id_orden) && intval($id_orden) > 0) {
-            $tintasRows = $localConnection->goQuery("SELECT id_orden, id_catalogo_impresoras, c, m, y, k, w FROM tintas WHERE id_orden = $id_orden");
-            if (!is_array($tintasRows) || isset($tintasRows['status']) || empty($tintasRows)) {
+            $tintasRawRows = $localConnection->goQuery("SELECT t.id_orden, t.id_catalogo_impresoras, cct.codigo AS color_code, t.cantidad FROM tintas t JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id WHERE t.id_orden = $id_orden");
+            $tintasRows = [];
+            if (is_array($tintasRawRows) && !isset($tintasRawRows['status'])) {
+                $grouped = [];
+                foreach ($tintasRawRows as $row) {
+                    $pid = (int)$row['id_catalogo_impresoras'];
+                    if (!isset($grouped[$pid])) {
+                        $grouped[$pid] = [
+                            'id_orden' => $row['id_orden'],
+                            'id_catalogo_impresoras' => $pid,
+                            'c' => 0, 'm' => 0, 'y' => 0, 'k' => 0, 'w' => 0
+                        ];
+                    }
+                    $colKey = strtolower($row['color_code']);
+                    if (in_array($colKey, ['c', 'm', 'y', 'k', 'w'])) {
+                        $grouped[$pid][$colKey] = (float)$row['cantidad'];
+                    }
+                }
+                $tintasRows = array_values($grouped);
+            }
+
+            if (empty($tintasRows)) {
                 $object['tintas'] = [];
             } else {
                 $printerIds = [];
@@ -723,7 +743,7 @@ return function (App $app) {
                 $printerIds = array_values(array_unique(array_filter($printerIds)));
                 $printerIdsStr = !empty($printerIds) ? implode(',', $printerIds) : '';
 
-                $fallbackRaw = $localConnection->goQuery("SELECT tf.color AS color_code, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) AS cost_ml FROM tinta_filtro tf JOIN inventario inv ON tf.id_inventario = inv._id");
+                $fallbackRaw = $localConnection->goQuery("SELECT cct.codigo AS color_code, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) AS cost_ml FROM inventario inv JOIN catalogo_colores_tintas cct ON inv.id_color_tinta = cct._id WHERE inv.tipo_insumo = 'tinta'");
                 $fallbackMap = [];
                 if (is_array($fallbackRaw) && !isset($fallbackRaw['status'])) {
                     foreach ($fallbackRaw as $fr) {
@@ -734,7 +754,7 @@ return function (App $app) {
 
                 $costMap = [];
                 if (!empty($printerIdsStr)) {
-                    $recargasRaw = $localConnection->goQuery("SELECT tr.id_catalogo_impresora, tr.color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) AS cost_ml FROM tintas_recargas tr JOIN inventario inv ON tr.id_insumo = inv._id WHERE tr.id_catalogo_impresora IN ($printerIdsStr) ORDER BY tr.fecha_recarga DESC");
+                    $recargasRaw = $localConnection->goQuery("SELECT tr.id_catalogo_impresora, cct.codigo AS color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) AS cost_ml FROM tintas_recargas tr JOIN inventario inv ON tr.id_insumo = inv._id JOIN catalogo_colores_tintas cct ON tr.id_color_tinta = cct._id WHERE tr.id_catalogo_impresora IN ($printerIdsStr) ORDER BY tr.fecha_recarga DESC");
                     if (is_array($recargasRaw) && !isset($recargasRaw['status'])) {
                         foreach ($recargasRaw as $rr) {
                             $pid = (int)$rr['id_catalogo_impresora'];
@@ -772,7 +792,7 @@ return function (App $app) {
                 $object['tintas'] = $tintasOut;
             }
         } else {
-            $object['tintas'] = $localConnection->goQuery("SELECT id_orden, c AS cyan, m AS magenta, y AS yellow, k AS black, w AS white, (COALESCE(c, 0) + COALESCE(m, 0) + COALESCE(y, 0) + COALESCE(k, 0) + COALESCE(w, 0)) AS total_tinta_consumo_ml, (COALESCE(c, 0) + COALESCE(m, 0) + COALESCE(y, 0) + COALESCE(k, 0) + COALESCE(w, 0)) AS total_tinta, 0 AS total_tinta_costo FROM tintas imo $where ORDER BY id_orden ASC");
+            $object['tintas'] = $localConnection->goQuery("SELECT imo.id_orden, SUM(CASE WHEN cct.codigo = 'C' THEN imo.cantidad ELSE 0 END) AS cyan, SUM(CASE WHEN cct.codigo = 'M' THEN imo.cantidad ELSE 0 END) AS magenta, SUM(CASE WHEN cct.codigo = 'Y' THEN imo.cantidad ELSE 0 END) AS yellow, SUM(CASE WHEN cct.codigo = 'K' THEN imo.cantidad ELSE 0 END) AS black, SUM(CASE WHEN cct.codigo = 'W' THEN imo.cantidad ELSE 0 END) AS white, SUM(imo.cantidad) AS total_tinta_consumo_ml, SUM(imo.cantidad) AS total_tinta, 0 AS total_tinta_costo FROM tintas imo JOIN catalogo_colores_tintas cct ON imo.id_color_tinta = cct._id $where GROUP BY imo.id_orden ORDER BY imo.id_orden ASC");
         }
         $localConnection->disconnect();
 
@@ -827,6 +847,10 @@ return function (App $app) {
             $id_catalogo_tintas = (isset($miInsumo['id_catalogo_tintas']) && $miInsumo['id_catalogo_tintas'] !== 'null' && $miInsumo['id_catalogo_tintas'] !== '')
                 ? intval($miInsumo['id_catalogo_tintas'])
                 : "NULL";
+                
+            $id_color_tinta = (isset($miInsumo['id_color_tinta']) && $miInsumo['id_color_tinta'] !== 'null' && $miInsumo['id_color_tinta'] !== '')
+                ? intval($miInsumo['id_color_tinta'])
+                : "NULL";
 
             if (isset($miInsumo['es_tinta']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN) && isset($miInsumo['cantidad']) && intval($miInsumo['cantidad']) > 1) {
                 for ($i = 0; $i < intval($miInsumo['cantidad']); $i++) {
@@ -837,13 +861,10 @@ return function (App $app) {
                         : "NULL";
 
                     $tipo_insumo = $miInsumo['tipo_insumo'] ?? 'general';
-                    $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$currentCantidad}, {$currentCantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}')";
-                    $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, cantidad_inicial, sku, id_catalogo, tipo_insumo) VALUES ' . $values;
+                    $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$currentCantidad}, {$currentCantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}', {$id_color_tinta}, {$id_catalogo_tintas})";
+                    $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, cantidad_inicial, sku, id_catalogo, tipo_insumo, id_color_tinta, id_catalogo_tintas) VALUES ' . $values;
                     $result = $localConnection->goQuery($sql);
                     $lastId = $localConnection->getLastID();
-
-                    $sqlTinta = "INSERT INTO `tinta_filtro`(`id_inventario`, `color`, `id_catalogo_tintas`) VALUES ({$lastId}, '{$miInsumo['color']}', {$id_catalogo_tintas})";
-                    $localConnection->goQuery($sqlTinta);
 
                     $newInsumo = $miInsumo;
                     $newInsumo['_id'] = $lastId;
@@ -862,15 +883,10 @@ return function (App $app) {
                     : "NULL";
 
                 $tipo_insumo = $miInsumo['tipo_insumo'] ?? 'general';
-                $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$cantidad}, {$cantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}')";
-                $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, cantidad_inicial, sku, id_catalogo, tipo_insumo) VALUES ' . $values;
+                $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$cantidad}, {$cantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}', {$id_color_tinta}, {$id_catalogo_tintas})";
+                $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, cantidad_inicial, sku, id_catalogo, tipo_insumo, id_color_tinta, id_catalogo_tintas) VALUES ' . $values;
                 $result = $localConnection->goQuery($sql);
                 $lastId = $localConnection->getLastID();
-
-                if (isset($miInsumo['es_tinta']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN)) {
-                    $sqlTinta = "INSERT INTO `tinta_filtro`(`id_inventario`, `color`, `id_catalogo_tintas`) VALUES ({$lastId}, '{$miInsumo['color']}', {$id_catalogo_tintas})";
-                    $localConnection->goQuery($sqlTinta);
-                }
 
                 $newInsumo = $miInsumo;
                 $newInsumo['_id'] = $lastId;
@@ -905,6 +921,14 @@ return function (App $app) {
         $miInsumo = $request->getParsedBody();
         $localConnection = new LocalDB();
 
+        $id_color_tinta = (isset($miInsumo['id_color_tinta']) && $miInsumo['id_color_tinta'] !== 'null' && $miInsumo['id_color_tinta'] !== '')
+            ? intval($miInsumo['id_color_tinta'])
+            : "NULL";
+
+        $id_catalogo_tintas = (isset($miInsumo['id_catalogo_tintas']) && $miInsumo['id_catalogo_tintas'] !== 'null' && $miInsumo['id_catalogo_tintas'] !== '')
+            ? intval($miInsumo['id_catalogo_tintas'])
+            : "NULL";
+
         // Crear estructura de valores para insertar nuevo cliente
         $values = "insumo='" . $miInsumo['insumo'] . "',";
         $values .= "unidad='" . $miInsumo['unidad'] . "',";
@@ -919,28 +943,13 @@ return function (App $app) {
             : ((isset($miInsumo['id_catalogo']) && $miInsumo['id_catalogo'] !== 'null' && $miInsumo['id_catalogo'] !== '') ? "'" . $miInsumo['id_catalogo'] . "'" : 'NULL');
 
         $values .= "id_catalogo=" . $id_catalogo . ",";
+        $values .= "id_color_tinta=" . $id_color_tinta . ",";
+        $values .= "id_catalogo_tintas=" . $id_catalogo_tintas . ",";
         $values .= "tipo_insumo='" . ($miInsumo['tipo_insumo'] ?? 'general') . "'";
 
         $sql = 'UPDATE inventario SET ' . $values . ' WHERE _id = ' . $miInsumo['_id'];
         $object['sql'] = $sql;
         $object['data'] = json_encode($localConnection->goQuery($sql));
-
-        if (isset($miInsumo['tipo_insumo']) && $miInsumo['tipo_insumo'] === 'tinta') {
-            $color = $miInsumo['color'] ?? '';
-            $id_catalogo_tintas = (isset($miInsumo['id_catalogo_tintas']) && $miInsumo['id_catalogo_tintas'] !== 'null' && $miInsumo['id_catalogo_tintas'] !== '')
-                ? intval($miInsumo['id_catalogo_tintas'])
-                : "NULL";
-            
-            // Check if record exists in tinta_filtro
-            $checkSql = "SELECT _id FROM tinta_filtro WHERE id_inventario = " . intval($miInsumo['_id']);
-            $checkRes = $localConnection->goQuery($checkSql);
-            if (!empty($checkRes)) {
-                $sqlTinta = "UPDATE tinta_filtro SET color = '{$color}', id_catalogo_tintas = {$id_catalogo_tintas} WHERE id_inventario = " . intval($miInsumo['_id']);
-            } else {
-                $sqlTinta = "INSERT INTO tinta_filtro (id_inventario, color, id_catalogo_tintas) VALUES (" . intval($miInsumo['_id']) . ", '{$color}', {$id_catalogo_tintas})";
-            }
-            $localConnection->goQuery($sqlTinta);
-        }
 
         $localConnection->disconnect();
 
@@ -1733,15 +1742,16 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 i.unidad,
                 i.costo,
                 i.rendimiento,
-                IF(tf.color IS NOT NULL, \'tinta\', i.tipo_insumo) AS tipo_insumo,
+                i.tipo_insumo,
                 i.departamento,
                 i.moment,
-                tf.color,
-                tf.id_catalogo_tintas
+                cct.codigo AS color,
+                i.id_color_tinta,
+                i.id_catalogo_tintas
             FROM
                 inventario i
             LEFT JOIN
-                tinta_filtro tf ON tf.id_inventario = i._id
+                catalogo_colores_tintas cct ON i.id_color_tinta = cct._id
             WHERE
                 i.cantidad > 0
             ORDER BY
@@ -1760,15 +1770,16 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 i.unidad,
                 i.costo,
                 i.rendimiento,
-                IF(tf.color IS NOT NULL, 'tinta', i.tipo_insumo) AS tipo_insumo,
+                i.tipo_insumo,
                 i.departamento,
                 i.moment,
-                tf.color,
-                tf.id_catalogo_tintas
+                cct.codigo AS color,
+                i.id_color_tinta,
+                i.id_catalogo_tintas
             FROM
                 inventario i
             LEFT JOIN
-                tinta_filtro tf ON tf.id_inventario = i._id
+                catalogo_colores_tintas cct ON i.id_color_tinta = cct._id
             WHERE
                 i.departamento = '" . $args['departamento'] . "' AND i.cantidad > 0
             ORDER BY
@@ -1819,15 +1830,17 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         a._id id_insumo,
         a.sku,
         a.insumo,
-        b.color,
+        cct.codigo AS color,
+        a.id_color_tinta,
         a.costo,
         a.cantidad,
-        b.id_catalogo_tintas,
-        (SELECT nombre FROM catalogo_tintas WHERE _id = b.id_catalogo_tintas) AS tipo_tinta
+        a.id_catalogo_tintas,
+        ct.nombre AS tipo_tinta
         FROM
         inventario a
-        JOIN tinta_filtro b ON b.id_inventario = a._id
-        WHERE a.cantidad >= 1';
+        LEFT JOIN catalogo_colores_tintas cct ON a.id_color_tinta = cct._id
+        LEFT JOIN catalogo_tintas ct ON a.id_catalogo_tintas = ct._id
+        WHERE a.tipo_insumo = \'tinta\' AND a.cantidad >= 1';
 
         $data = $localConnection->goQuery($sql);
 
@@ -2725,7 +2738,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $tipoTintaId = null;
             if ($tipoTinta !== 'Todas' && is_numeric($tipoTinta)) {
                 $tipoTintaId = intval($tipoTinta);
-                $conditions[] = "(_id NOT IN (SELECT id_inventario FROM tinta_filtro) OR _id IN (SELECT id_inventario FROM tinta_filtro WHERE id_catalogo_tintas = {$tipoTintaId}))";
+                $conditions[] = "(tipo_insumo != 'tinta' OR id_catalogo_tintas = {$tipoTintaId})";
             }
 
             $where = !empty($conditions) ? " WHERE " . implode(" AND ", $conditions) : "";
@@ -2749,8 +2762,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $tintaTypeStockWhere = ($filtroStock === 'enStock') ? "AND i.cantidad > 0" : "AND (i.cantidad_inicial - i.cantidad) > 0";
             $sqlTintaTypes = "SELECT DISTINCT ct._id, ct.nombre
                               FROM catalogo_tintas ct
-                              INNER JOIN tinta_filtro tf ON tf.id_catalogo_tintas = ct._id
-                              INNER JOIN inventario i ON i._id = tf.id_inventario
+                              INNER JOIN inventario i ON i.id_catalogo_tintas = ct._id
                               WHERE i.tipo_insumo = 'tinta'
                                 {$tintaTypeStockWhere}
                                 {$tintaTypeDeptWhere}
@@ -2814,17 +2826,16 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
             // 2. Distribución de Tintas por Color
             if ($filtroStock === 'enStock') {
-                // Usamos tinta_filtro.color (C/M/Y/K/W) para clasificar con precisión
-                // y filtramos por tipo de tinta usando JOIN con catalogo_tintas
+                // Usamos catalogo_colores_tintas.codigo (C/M/Y/K/W) para clasificar con precisión
                 $sqlTintas = "SELECT
-                                ROUND(SUM(CASE WHEN tf.color = 'C' THEN i.cantidad ELSE 0 END), 2) as C,
-                                ROUND(SUM(CASE WHEN tf.color = 'M' THEN i.cantidad ELSE 0 END), 2) as M,
-                                ROUND(SUM(CASE WHEN tf.color = 'Y' THEN i.cantidad ELSE 0 END), 2) as Y,
-                                ROUND(SUM(CASE WHEN tf.color = 'K' THEN i.cantidad ELSE 0 END), 2) as K,
-                                ROUND(SUM(CASE WHEN tf.color = 'W' THEN i.cantidad ELSE 0 END), 2) as W
+                                ROUND(SUM(CASE WHEN cct.codigo = 'C' THEN i.cantidad ELSE 0 END), 2) as C,
+                                ROUND(SUM(CASE WHEN cct.codigo = 'M' THEN i.cantidad ELSE 0 END), 2) as M,
+                                ROUND(SUM(CASE WHEN cct.codigo = 'Y' THEN i.cantidad ELSE 0 END), 2) as Y,
+                                ROUND(SUM(CASE WHEN cct.codigo = 'K' THEN i.cantidad ELSE 0 END), 2) as K,
+                                ROUND(SUM(CASE WHEN cct.codigo = 'W' THEN i.cantidad ELSE 0 END), 2) as W
                             FROM inventario i
-                            INNER JOIN tinta_filtro tf ON tf.id_inventario = i._id
-                            LEFT JOIN catalogo_tintas ct ON ct._id = tf.id_catalogo_tintas
+                            LEFT JOIN catalogo_colores_tintas cct ON i.id_color_tinta = cct._id
+                            LEFT JOIN catalogo_tintas ct ON ct._id = i.id_catalogo_tintas
                             WHERE i.tipo_insumo = 'tinta'
                               AND i.cantidad > 0
                               {$deptWhereDirect}
@@ -2843,7 +2854,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             } else {
                 $tintaFilterByDept = "";
                 if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos' && $departamento !== 'Impresión' && $departamento !== 'Impresion') {
-                    $tintaFilterByDept = "AND id_orden IN (
+                    $tintaFilterByDept = "AND t.id_orden IN (
                         SELECT DISTINCT im.id_orden 
                         FROM inventario_movimientos im
                         JOIN inventario i ON im.id_insumo = i._id
@@ -2853,12 +2864,13 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 }
 
                 $sqlTintas = "SELECT 
-                                ROUND(SUM(COALESCE(c, 0)), 2) as C, 
-                                ROUND(SUM(COALESCE(m, 0)), 2) as M, 
-                                ROUND(SUM(COALESCE(y, 0)), 2) as Y, 
-                                ROUND(SUM(COALESCE(k, 0)), 2) as K, 
-                                ROUND(SUM(COALESCE(w, 0)), 2) as W 
-                            FROM tintas 
+                                ROUND(SUM(CASE WHEN cct.codigo = 'C' THEN t.cantidad ELSE 0 END), 2) as C, 
+                                ROUND(SUM(CASE WHEN cct.codigo = 'M' THEN t.cantidad ELSE 0 END), 2) as M, 
+                                ROUND(SUM(CASE WHEN cct.codigo = 'Y' THEN t.cantidad ELSE 0 END), 2) as Y, 
+                                ROUND(SUM(CASE WHEN cct.codigo = 'K' THEN t.cantidad ELSE 0 END), 2) as K, 
+                                ROUND(SUM(CASE WHEN cct.codigo = 'W' THEN t.cantidad ELSE 0 END), 2) as W 
+                            FROM tintas t
+                            LEFT JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id
                             WHERE {$fechaWhereTintas}
                             {$tintaFilterByDept}";
                 $tintasResult = $localConnection->goQuery($sqlTintas);

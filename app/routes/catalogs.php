@@ -20,7 +20,7 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  /** * CATALOGO TINTAS (Con migración auto-ejecutable para Empresa 194) */
+  /** * CATALOGO TINTAS (Con migración auto-ejecutable y adaptativa al nuevo modelo) */
   $app->get('/catalogo-tintas', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
 
@@ -59,20 +59,132 @@ return function (App $app) {
           (20, 'Tintas Reflectivas');");
       }
 
-      // 3. Alterar tinta_filtro si no tiene id_catalogo_tintas
-      $columns = $localConnection->goQuery("SHOW COLUMNS FROM `tinta_filtro` LIKE 'id_catalogo_tintas'");
-      if (empty($columns)) {
-        // Añadir columna id_catalogo_tintas
-        $localConnection->goQuery("ALTER TABLE `tinta_filtro` ADD COLUMN `id_catalogo_tintas` int(11) DEFAULT NULL;");
+      // 3. Crear catalogo_colores_tintas si no existe
+      $localConnection->goQuery("CREATE TABLE IF NOT EXISTS `catalogo_colores_tintas` (
+        `_id` int(11) NOT NULL AUTO_INCREMENT,
+        `codigo` varchar(16) NOT NULL,
+        `nombre` varchar(64) NOT NULL,
+        `color_hex` varchar(7) DEFAULT '#808080',
+        `moment` timestamp NOT NULL DEFAULT current_timestamp(),
+        PRIMARY KEY (`_id`),
+        UNIQUE KEY `uk_codigo_color` (`codigo`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;");
 
-        // Rellenar valores por defecto (Tinta de Sublimación = 1)
-        $localConnection->goQuery("UPDATE `tinta_filtro` SET `id_catalogo_tintas` = 1;");
+      // Poblar colores por defecto si está vacío
+      $countColores = $localConnection->goQuery("SELECT COUNT(*) as total FROM `catalogo_colores_tintas`");
+      if (empty($countColores) || intval($countColores[0]['total'] ?? 0) === 0) {
+        $localConnection->goQuery("INSERT INTO `catalogo_colores_tintas` (`_id`, `codigo`, `nombre`, `color_hex`) VALUES
+          (1, 'C', 'Cyan', '#00FFFF'),
+          (2, 'M', 'Magenta', '#FF00FF'),
+          (3, 'Y', 'Yellow', '#FFFF00'),
+          (4, 'K', 'Black', '#343A40'),
+          (5, 'W', 'White', '#FFFFFF');");
+      }
 
-        // Añadir la constraint de clave foránea
-        $localConnection->goQuery("ALTER TABLE `tinta_filtro` ADD CONSTRAINT `tinta_filtro_ibfk_2` FOREIGN KEY (`id_catalogo_tintas`) REFERENCES `catalogo_tintas` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;");
+      // 4. Crear impresoras_colores si no existe
+      $localConnection->goQuery("CREATE TABLE IF NOT EXISTS `impresoras_colores` (
+        `id_catalogo_impresora` int(11) NOT NULL,
+        `id_color_tinta` int(11) NOT NULL,
+        PRIMARY KEY (`id_catalogo_impresora`, `id_color_tinta`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;");
+
+      // Poblar impresoras_colores de forma predictiva según la configuración actual
+      $countImpCol = $localConnection->goQuery("SELECT COUNT(*) as total FROM `impresoras_colores`");
+      if (empty($countImpCol) || intval($countImpCol[0]['total'] ?? 0) === 0) {
+        $impresorasExistentes = $localConnection->goQuery("SELECT _id, tipo_tecnologia FROM `catalogo_impresoras`");
+        if (is_array($impresorasExistentes)) {
+          foreach ($impresorasExistentes as $imp) {
+            $impId = intval($imp['_id']);
+            $tech = strtoupper(trim($imp['tipo_tecnologia'] ?? ''));
+            if ($tech === 'CMYK') {
+              $localConnection->goQuery("INSERT IGNORE INTO `impresoras_colores` (id_catalogo_impresora, id_color_tinta) VALUES ($impId, 1), ($impId, 2), ($impId, 3), ($impId, 4)");
+            } else if ($tech === 'CMYKW' || empty($tech)) {
+              $localConnection->goQuery("INSERT IGNORE INTO `impresoras_colores` (id_catalogo_impresora, id_color_tinta) VALUES ($impId, 1), ($impId, 2), ($impId, 3), ($impId, 4), ($impId, 5)");
+            }
+          }
+        }
+      }
+
+      // 5. Agregar id_catalogo_tintas a catalogo_impresoras si no existe
+      $columnsImp = $localConnection->goQuery("SHOW COLUMNS FROM `catalogo_impresoras` LIKE 'id_catalogo_tintas'");
+      if (empty($columnsImp)) {
+        $localConnection->goQuery("ALTER TABLE `catalogo_impresoras` ADD COLUMN `id_catalogo_tintas` int(11) DEFAULT NULL;");
+        $localConnection->goQuery("ALTER TABLE `catalogo_impresoras` ADD CONSTRAINT `fk_impresoras_cat_tintas` FOREIGN KEY (`id_catalogo_tintas`) REFERENCES `catalogo_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;");
+        // Mapear tecnología por defecto a las existentes (Sublimación = 1 para impresora 1, DTF = 2 para impresora 2, fallback a 1)
+        $localConnection->goQuery("UPDATE `catalogo_impresoras` SET `id_catalogo_tintas` = 1 WHERE `_id` = 1;");
+        $localConnection->goQuery("UPDATE `catalogo_impresoras` SET `id_catalogo_tintas` = 2 WHERE `_id` = 2;");
+        $localConnection->goQuery("UPDATE `catalogo_impresoras` SET `id_catalogo_tintas` = 1 WHERE `id_catalogo_tintas` IS NULL;");
+      }
+
+      // 6. Agregar columnas id_color_tinta e id_catalogo_tintas a inventario si no existen
+      $columnsInvColor = $localConnection->goQuery("SHOW COLUMNS FROM `inventario` LIKE 'id_color_tinta'");
+      if (empty($columnsInvColor)) {
+        $localConnection->goQuery("ALTER TABLE `inventario` ADD COLUMN `id_color_tinta` int(11) DEFAULT NULL;");
+        $localConnection->goQuery("ALTER TABLE `inventario` ADD COLUMN `id_catalogo_tintas` int(11) DEFAULT NULL;");
+        $localConnection->goQuery("ALTER TABLE `inventario` ADD CONSTRAINT `fk_inventario_color` FOREIGN KEY (`id_color_tinta`) REFERENCES `catalogo_colores_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;");
+        $localConnection->goQuery("ALTER TABLE `inventario` ADD CONSTRAINT `fk_inventario_catalogo_tintas` FOREIGN KEY (`id_catalogo_tintas`) REFERENCES `catalogo_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;");
+
+        // Si la tabla tinta_filtro existe, migrar datos
+        $tablesFilter = $localConnection->goQuery("SHOW TABLES LIKE 'tinta_filtro'");
+        if (!empty($tablesFilter)) {
+          $localConnection->goQuery("UPDATE `inventario` inv 
+                                     JOIN `tinta_filtro` tf ON inv._id = tf.id_inventario 
+                                     JOIN `catalogo_colores_tintas` cct ON tf.color = cct.codigo
+                                     SET inv.id_color_tinta = cct._id, inv.id_catalogo_tintas = tf.id_catalogo_tintas;");
+          $localConnection->goQuery("DROP TABLE `tinta_filtro`;");
+        }
+      }
+
+      // 7. Modificar tintas_recargas si usa campo color y no id_color_tinta
+      $columnsRecargasNew = $localConnection->goQuery("SHOW COLUMNS FROM `tintas_recargas` LIKE 'id_color_tinta'");
+      if (empty($columnsRecargasNew)) {
+        $localConnection->goQuery("ALTER TABLE `tintas_recargas` ADD COLUMN `id_color_tinta` int(11) DEFAULT NULL;");
+        $localConnection->goQuery("ALTER TABLE `tintas_recargas` ADD CONSTRAINT `fk_recargas_color` FOREIGN KEY (`id_color_tinta`) REFERENCES `catalogo_colores_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;");
+        
+        $columnsRecargasOld = $localConnection->goQuery("SHOW COLUMNS FROM `tintas_recargas` LIKE 'color'");
+        if (!empty($columnsRecargasOld)) {
+          $localConnection->goQuery("UPDATE `tintas_recargas` tr 
+                                     JOIN `catalogo_colores_tintas` cct ON tr.color = cct.codigo 
+                                     SET tr.id_color_tinta = cct._id;");
+          $localConnection->goQuery("ALTER TABLE `tintas_recargas` DROP COLUMN `color`;");
+        }
+      }
+
+      // 8. Modificar tintas si tiene columnas estáticas c, m, y, k, w
+      $columnsTintasOld = $localConnection->goQuery("SHOW COLUMNS FROM `tintas` LIKE 'c'");
+      if (!empty($columnsTintasOld)) {
+        // Crear tabla temporal
+        $localConnection->goQuery("CREATE TABLE IF NOT EXISTS `tintas_nueva` (
+          `_id` int(11) NOT NULL AUTO_INCREMENT,
+          `id_catalogo_impresoras` int(11) DEFAULT NULL,
+          `id_orden` int(11) DEFAULT NULL,
+          `id_empleado` int(11) DEFAULT NULL,
+          `id_color_tinta` int(11) NOT NULL,
+          `cantidad` decimal(7, 2) NOT NULL DEFAULT 0.00,
+          `moment` timestamp NOT NULL DEFAULT current_timestamp(),
+          PRIMARY KEY (`_id`),
+          CONSTRAINT `fk_tintas_impresoras_n` FOREIGN KEY (`id_catalogo_impresoras`) REFERENCES `catalogo_impresoras` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+          CONSTRAINT `fk_tintas_ordenes_n` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT `fk_tintas_colores_n` FOREIGN KEY (`id_color_tinta`) REFERENCES `catalogo_colores_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;");
+
+        // Migrar histórico
+        $localConnection->goQuery("INSERT INTO `tintas_nueva` (id_catalogo_impresoras, id_orden, id_empleado, id_color_tinta, cantidad, moment)
+                                   SELECT id_catalogo_impresoras, id_orden, id_empleado, 1, c, moment FROM `tintas` WHERE c IS NOT NULL AND c > 0
+                                   UNION ALL
+                                   SELECT id_catalogo_impresoras, id_orden, id_empleado, 2, m, moment FROM `tintas` WHERE m IS NOT NULL AND m > 0
+                                   UNION ALL
+                                   SELECT id_catalogo_impresoras, id_orden, id_empleado, 3, y, moment FROM `tintas` WHERE y IS NOT NULL AND y > 0
+                                   UNION ALL
+                                   SELECT id_catalogo_impresoras, id_orden, id_empleado, 4, k, moment FROM `tintas` WHERE k IS NOT NULL AND k > 0
+                                   UNION ALL
+                                   SELECT id_catalogo_impresoras, id_orden, id_empleado, 5, w, moment FROM `tintas` WHERE w IS NOT NULL AND w > 0;");
+
+        // Renombrar vieja y poner la nueva
+        $localConnection->goQuery("RENAME TABLE `tintas` TO `tintas_old`, `tintas_nueva` TO `tintas`;");
       }
     } catch (\Exception $e) {
-      error_log("Error en migración auto-ejecutable de catalogo_tintas: " . $e->getMessage());
+      error_log("Error en migración auto-ejecutable y adaptativa del catálogo de tintas y colores: " . $e->getMessage());
     }
 
     $sql = 'SELECT * FROM catalogo_tintas ORDER BY nombre';
@@ -132,6 +244,82 @@ return function (App $app) {
 
     $sql = "DELETE FROM catalogo_tintas WHERE _id = $id";
     $object['response'] = $localConnection->goQuery($sql);
+    
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  /** * CATALOGO COLORES TINTAS */
+  $app->get('/catalogo-colores-tintas', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    $sql = 'SELECT * FROM catalogo_colores_tintas ORDER BY nombre';
+    $object['data'] = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->post('/catalogo-colores-tintas', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    $codigo = $data['codigo'] ?? '';
+    $nombre = $data['nombre'] ?? '';
+    $color_hex = $data['color_hex'] ?? '#808080';
+
+    $sql = "INSERT INTO catalogo_colores_tintas (codigo, nombre, color_hex) VALUES (?, ?, ?)";
+    $result = $localConnection->goQuery($sql, [$codigo, $nombre, $color_hex]);
+    $lastId = $localConnection->getLastID();
+
+    $sqlNew = "SELECT * FROM catalogo_colores_tintas WHERE _id = ?";
+    $newItem = $localConnection->goQuery($sqlNew, [$lastId]);
+
+    $object['response'] = $result;
+    $object['data'] = $newItem[0] ?? null;
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->post('/catalogo-colores-tintas/{_id}', function (Request $request, Response $response, array $args) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+    
+    $codigo = $data['codigo'] ?? '';
+    $nombre = $data['nombre'] ?? '';
+    $color_hex = $data['color_hex'] ?? '#808080';
+
+    $sql = 'UPDATE catalogo_colores_tintas SET codigo = ?, nombre = ?, color_hex = ? WHERE _id = ?';
+    $localConnection->goQuery($sql, [$codigo, $nombre, $color_hex, $args['_id']]);
+
+    $sqlAll = 'SELECT * FROM catalogo_colores_tintas ORDER BY nombre';
+    $object['data'] = $localConnection->goQuery($sqlAll);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->post('/catalogo-colores-tintas/eliminar', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    $body = $request->getParsedBody();
+    $id = isset($body['id']) ? intval($body['id']) : 0;
+
+    $sql = "DELETE FROM catalogo_colores_tintas WHERE _id = ?";
+    $object['response'] = $localConnection->goQuery($sql, [$id]);
     
     $localConnection->disconnect();
 

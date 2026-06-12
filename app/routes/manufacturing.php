@@ -521,33 +521,30 @@ return function (App $app) {
     $misTintas = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    // PREPARAR FECHAS
-    $myDate = new CustomTime();
-    $now = $myDate->today();
+    $id_orden = intval($misTintas['id_orden'] ?? 0);
+    $id_empleado = intval($misTintas['id_empleado'] ?? 0);
+    $id_impresora = intval($misTintas['id_impresora'] ?? 0);
+    $colores = $misTintas['colores'] ?? []; // Mapa de [id_color_tinta => cantidad]
 
-    // Crear estructura de valores para insertar nuevo cliente
-    $values = '(';
-    $values .= (isset($misTintas['c']) && $misTintas['c'] !== '' && $misTintas['c'] !== null && $misTintas['c'] !== 'null') ? "'" . $misTintas['c'] . "'" : 'NULL';
-    $values .= ',';
-    $values .= (isset($misTintas['m']) && $misTintas['m'] !== '' && $misTintas['m'] !== null && $misTintas['m'] !== 'null') ? "'" . $misTintas['m'] . "'" : 'NULL';
-    $values .= ',';
-    $values .= (isset($misTintas['y']) && $misTintas['y'] !== '' && $misTintas['y'] !== null && $misTintas['y'] !== 'null') ? "'" . $misTintas['y'] . "'" : 'NULL';
-    $values .= ',';
-    $values .= (isset($misTintas['k']) && $misTintas['k'] !== '' && $misTintas['k'] !== null && $misTintas['k'] !== 'null') ? "'" . $misTintas['k'] . "'" : 'NULL';
-    $values .= ',';
-    $values .= (isset($misTintas['w']) && $misTintas['w'] !== '' && $misTintas['w'] !== null && $misTintas['w'] !== 'null') ? "'" . $misTintas['w'] . "'" : 'NULL';
-    $values .= ',';
-    $values .= "'" . $misTintas['id_orden'] . "',";
-    $values .= "'" . $misTintas['id_empleado'] . "',";
-    $values .= "'" . $misTintas['id_impresora'] . "')";
+    $object = [];
 
-    $sql = 'INSERT INTO tintas (`c`, `m`, `y`, `k`, `w`, `id_orden`, `id_empleado`, `id_catalogo_impresoras`) VALUES ' . $values;
-    $object['sql'] = $sql;
-
-    $object['response'] = json_encode($localConnection->goQuery($sql));
+    try {
+      if ($id_orden > 0 && $id_impresora > 0 && !empty($colores)) {
+        foreach ($colores as $id_color => $cantidad) {
+          $cantidad = floatval($cantidad);
+          if ($cantidad > 0) {
+            $sql = 'INSERT INTO tintas (id_catalogo_impresoras, id_orden, id_empleado, id_color_tinta, cantidad) VALUES (?, ?, ?, ?, ?)';
+            $localConnection->goQuery($sql, [$id_impresora, $id_orden, $id_empleado, intval($id_color), $cantidad]);
+          }
+        }
+      }
+      $object['status'] = 'success';
+    } catch (Exception $e) {
+      $object['status'] = 'error';
+      $object['message'] = $e->getMessage();
+    }
 
     $localConnection->disconnect();
-
     $response->getBody()->write(json_encode($object));
 
     return $response
@@ -1781,25 +1778,23 @@ return function (App $app) {
         foreach ($consumo_tintas as $tinta) {
           $id_orden_tinta = intval($tinta['id_orden'] ?? 0);
           $id_impresora = intval($tinta['id_impresora'] ?? 0);
-          $tinta_c = floatval($tinta['c'] ?? 0);
-          $tinta_m = floatval($tinta['m'] ?? 0);
-          $tinta_y = floatval($tinta['y'] ?? 0);
-          $tinta_k = floatval($tinta['k'] ?? 0);
-          $tinta_w = floatval($tinta['w'] ?? 0);
+          $colores_consumo = $tinta['colores'] ?? []; // Mapa de [id_color_tinta => cantidad]
 
-          if ($id_orden_tinta > 0 && $id_impresora > 0) {
-            $sql_tinta = 'INSERT INTO tintas (c, m, y, k, w, id_orden, id_empleado, id_catalogo_impresoras, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
-            $localConnection->goQuery($sql_tinta, [
-              $tinta_c,
-              $tinta_m,
-              $tinta_y,
-              $tinta_k,
-              $tinta_w,
-              $id_orden_tinta,
-              $id_empleado,
-              $id_impresora,
-              $now
-            ]);
+          if ($id_orden_tinta > 0 && $id_impresora > 0 && !empty($colores_consumo)) {
+            foreach ($colores_consumo as $id_color => $cantidad) {
+              $cantidad = floatval($cantidad);
+              if ($cantidad > 0) {
+                $sql_tinta = 'INSERT INTO tintas (id_catalogo_impresoras, id_orden, id_empleado, id_color_tinta, cantidad, moment) VALUES (?, ?, ?, ?, ?, ?)';
+                $localConnection->goQuery($sql_tinta, [
+                  $id_impresora,
+                  $id_orden_tinta,
+                  $id_empleado,
+                  intval($id_color),
+                  $cantidad,
+                  $now
+                ]);
+              }
+            }
           }
         }
       }
@@ -2070,27 +2065,25 @@ return function (App $app) {
       // Procesar cada impresora del array
       foreach ($consumo_tintas as $tinta) {
         $id_impresora = intval($tinta['id_impresora']);
-        $tinta_c = floatval($tinta['c'] ?? 0);
-        $tinta_m = floatval($tinta['m'] ?? 0);
-        $tinta_y = floatval($tinta['y'] ?? 0);
-        $tinta_k = floatval($tinta['k'] ?? 0);
-        $tinta_w = floatval($tinta['w'] ?? 0);
+        $colores = $tinta['colores'] ?? []; // Mapa de [id_color => cantidad]
 
         foreach ($ordenes_del_lote as $order) {
           $proporcion = intval($order['unidades_orden']) / $gran_total_unidades_lote;
-          $sql_tinta = 'INSERT INTO tintas (c, m, y, k, w, id_orden, id_empleado, id_catalogo_impresoras, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
-          $params_tinta = [
-            $tinta_c * $proporcion,
-            $tinta_m * $proporcion,
-            $tinta_y * $proporcion,
-            $tinta_k * $proporcion,
-            $tinta_w * $proporcion,
-            $order['id_orden'],
-            $id_empleado,
-            $id_impresora,
-            $now
-          ];
-          $localConnection->goQuery($sql_tinta, $params_tinta);
+          foreach ($colores as $id_color => $cantidad) {
+            $cantidad_proporcional = floatval($cantidad) * $proporcion;
+            if ($cantidad_proporcional > 0) {
+              $sql_tinta = 'INSERT INTO tintas (id_catalogo_impresoras, id_orden, id_empleado, id_color_tinta, cantidad, moment) VALUES (?, ?, ?, ?, ?, ?)';
+              $params_tinta = [
+                $id_impresora,
+                $order['id_orden'],
+                $id_empleado,
+                intval($id_color),
+                $cantidad_proporcional,
+                $now
+              ];
+              $localConnection->goQuery($sql_tinta, $params_tinta);
+            }
+          }
         }
       }
 

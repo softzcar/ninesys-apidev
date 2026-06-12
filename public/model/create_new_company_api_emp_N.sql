@@ -70,13 +70,45 @@ CREATE TABLE `catalogo_impresoras` (
   `capacidad_contenedor` decimal(7, 2) DEFAULT NULL COMMENT 'Capacidad del contenedor de la tinta',
   `ubicacion` varchar(100) DEFAULT NULL COMMENT 'Ubicación física para ayudar al empleado a identificarla. Ej: Taller de Estampado',
   `tipo_tecnologia` varchar(50) DEFAULT NULL COMMENT 'Tecnología para agrupar o filtrar. Ej: Sublimación, DTG, DTF',
+  `id_catalogo_tintas` int(11) DEFAULT NULL COMMENT 'ID de la tecnología de tinta en catalogo_tintas',
   `estado` varchar(20) NOT NULL DEFAULT 'activa' COMMENT 'Estado actual. Ej: activa, inactiva, en_mantenimiento',
   `notas` text DEFAULT NULL COMMENT 'Cualquier información adicional relevante.',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de impresoras de la empresa. Almacena información de equipos de impresión para asignación de trabajos y control de producción.';
-INSERT INTO `catalogo_impresoras` (`_id`, `codigo_interno`, `marca`, `modelo`, `capacidad_contenedor`, `ubicacion`, `tipo_tecnologia`, `estado`, `notas`, `moment`) VALUES
-(1, 'IMPRESORA PRINCIPAL', 'EPSON', 'EPS_9902', 1000.00, 'PISO 1', 'CMYK', 'activa', 'Impresora con cabezales originales', CURRENT_TIMESTAMP),
-(2, 'IMPRESORA SECUNDARIA', 'Mimaki', 'MK_09890', 750.00, 'PISO 2', 'CMYKW', 'activa', 'Impresora para usar solo con tintas originales', CURRENT_TIMESTAMP);
+INSERT INTO `catalogo_impresoras` (`_id`, `codigo_interno`, `marca`, `modelo`, `capacidad_contenedor`, `ubicacion`, `tipo_tecnologia`, `id_catalogo_tintas`, `estado`, `notas`, `moment`) VALUES
+(1, 'IMPRESORA PRINCIPAL', 'EPSON', 'EPS_9902', 1000.00, 'PISO 1', 'CMYK', 1, 'activa', 'Impresora con cabezales originales', CURRENT_TIMESTAMP),
+(2, 'IMPRESORA SECUNDARIA', 'Mimaki', 'MK_09890', 750.00, 'PISO 2', 'CMYKW', 2, 'activa', 'Impresora para usar solo con tintas originales', CURRENT_TIMESTAMP);
+
+CREATE TABLE `catalogo_colores_tintas` (
+  `_id` int(11) NOT NULL COMMENT 'ID único del color de tinta',
+  `codigo` varchar(16) NOT NULL COMMENT 'Código corto del color (ej. C, M, Y, K, W, V)',
+  `nombre` varchar(64) NOT NULL COMMENT 'Nombre completo del color/insumo',
+  `color_hex` varchar(7) DEFAULT '#808080' COMMENT 'Color hexadecimal para representación visual',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo maestro de colores y canales de tintas.';
+
+INSERT INTO `catalogo_colores_tintas` (`_id`, `codigo`, `nombre`, `color_hex`) VALUES
+(1, 'C', 'Cyan', '#00FFFF'),
+(2, 'M', 'Magenta', '#FF00FF'),
+(3, 'Y', 'Yellow', '#FFFF00'),
+(4, 'K', 'Black', '#343A40'),
+(5, 'W', 'White', '#FFFFFF');
+
+CREATE TABLE `impresoras_colores` (
+  `id_catalogo_impresora` int(11) NOT NULL COMMENT 'ID de la impresora',
+  `id_color_tinta` int(11) NOT NULL COMMENT 'ID del color asignado'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Tabla de relación entre impresoras y canales de color.';
+
+INSERT INTO `impresoras_colores` (`id_catalogo_impresora`, `id_color_tinta`) VALUES
+(1, 1),
+(1, 2),
+(1, 3),
+(1, 4),
+(2, 1),
+(2, 2),
+(2, 3),
+(2, 4),
+(2, 5);
 CREATE TABLE `catalogo_insumos_productos` (
   `_id` int(11) NOT NULL COMMENT 'ID único del catálogo',
   `nombre` varchar(128) NOT NULL COMMENT 'Nombre del tipo de insumo',
@@ -456,6 +488,8 @@ CREATE TABLE `inventario` (
   `sku` varchar(128) DEFAULT NULL COMMENT 'SKU del Item de inventario',
   `id_catalogo` int(11) DEFAULT NULL COMMENT 'ID de catalogo_insumos_productos',
   `tipo_insumo` enum('general','tela','tinta','papel','repuesto','bisutería') NOT NULL DEFAULT 'general' COMMENT 'Categoría de insumo para lógica de consumo',
+  `id_color_tinta` int(11) DEFAULT NULL COMMENT 'ID del color de tinta si aplica',
+  `id_catalogo_tintas` int(11) DEFAULT NULL COMMENT 'ID de la tecnología de tinta si aplica',
   `insumo` varchar(45) DEFAULT NULL COMMENT 'Nombre del insumo',
   `unidad` varchar(6) DEFAULT NULL COMMENT 'Unidd de medida del articulo CD, LTS, ML UND',
   `costo` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio de costo del insumo',
@@ -470,17 +504,17 @@ CREATE TABLE `inventario` (
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de insumos disponibles en inventario. Almacena materiales de producción con SKU, cantidad actual e inicial, costo, unidad de medida y departamento asignado.';
 
-INSERT INTO `inventario` (`_id`, `sku`, `id_catalogo`, `tipo_insumo`, `insumo`, `unidad`, `costo`, `rendimiento`, `cantidad`, `cantidad_inicial`, `color`, `ancho`, `elongacion`, `detalles`, `departamento`, `moment`) VALUES
-(1, 'PAP_001', 1, 'general', 'Papel de pruebas', 'Mts', 20.00, 1.0, 250.00, 250.00, 'BLANCO', 0.90, NULL, 'Papel para pruebas de impresión', 'Impresión', CURRENT_TIMESTAMP),
-(2, 'TEL_001', 6, 'tela', 'Tela de pruebas', 'Kg', 80.00, 3.96, 24.00, 24.00, 'BLANCO', 1.50, 'HORIZONTAL', 'Tela para pruebas de estampado', 'Estampado', CURRENT_TIMESTAMP),
-(3, 'TIN_C_001', 4, 'tinta', 'Tinta Cyan', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'CYAN', NULL, NULL, 'Tinta cyan para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(4, 'TIN_M_001', 4, 'tinta', 'Tinta Magenta', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'MAGENTA', NULL, NULL, 'Tinta magenta para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(5, 'TIN_Y_001', 4, 'tinta', 'Tinta Yellow', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'YELLOW', NULL, NULL, 'Tinta yellow para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(6, 'TIN_K_001', 4, 'tinta', 'Tinta Black', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'BLACK', NULL, NULL, 'Tinta negra para impresoras', 'Impresión', CURRENT_TIMESTAMP),
-(7, 'BOT_001', 3, 'general', 'Botones blancos', 'Und', 0.50, 1.0, 1000.00, 1000.00, 'BLANCO', NULL, NULL, 'Botones blancos para prendas', 'Costura', CURRENT_TIMESTAMP),
-(8, 'TEL_002', 5, 'tela', 'Tela Licra', 'Kg', 50.00, 4.0, 25.00, 25.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP),
-(9, 'TEL_003', 2, 'tela', 'Tela Atlética', 'Kg', 40.00, 4.0, 22.00, 22.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP),
-(10, 'TEL_005', 6, 'tela', 'Tela Algodón', 'Kg', 65.00, 4.0, 25.00, 25.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP);
+INSERT INTO `inventario` (`_id`, `sku`, `id_catalogo`, `tipo_insumo`, `id_color_tinta`, `id_catalogo_tintas`, `insumo`, `unidad`, `costo`, `rendimiento`, `cantidad`, `cantidad_inicial`, `color`, `ancho`, `elongacion`, `detalles`, `departamento`, `moment`) VALUES
+(1, 'PAP_001', 1, 'general', NULL, NULL, 'Papel de pruebas', 'Mts', 20.00, 1.0, 250.00, 250.00, 'BLANCO', 0.90, NULL, 'Papel para pruebas de impresión', 'Impresión', CURRENT_TIMESTAMP),
+(2, 'TEL_001', 6, 'tela', NULL, NULL, 'Tela de pruebas', 'Kg', 80.00, 3.96, 24.00, 24.00, 'BLANCO', 1.50, 'HORIZONTAL', 'Tela para pruebas de estampado', 'Estampado', CURRENT_TIMESTAMP),
+(3, 'TIN_C_001', 4, 'tinta', 1, 1, 'Tinta Cyan', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'CYAN', NULL, NULL, 'Tinta cyan para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(4, 'TIN_M_001', 4, 'tinta', 2, 1, 'Tinta Magenta', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'MAGENTA', NULL, NULL, 'Tinta magenta para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(5, 'TIN_Y_001', 4, 'tinta', 3, 1, 'Tinta Yellow', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'YELLOW', NULL, NULL, 'Tinta yellow para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(6, 'TIN_K_001', 4, 'tinta', 4, 1, 'Tinta Black', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'BLACK', NULL, NULL, 'Tinta negra para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(7, 'BOT_001', 3, 'general', NULL, NULL, 'Botones blancos', 'Und', 0.50, 1.0, 1000.00, 1000.00, 'BLANCO', NULL, NULL, 'Botones blancos para prendas', 'Costura', CURRENT_TIMESTAMP),
+(8, 'TEL_002', 5, 'tela', NULL, NULL, 'Tela Licra', 'Kg', 50.00, 4.0, 25.00, 25.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP),
+(9, 'TEL_003', 2, 'tela', NULL, NULL, 'Tela Atlética', 'Kg', 40.00, 4.0, 22.00, 22.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP),
+(10, 'TEL_005', 6, 'tela', NULL, NULL, 'Tela Algodón', 'Kg', 65.00, 4.0, 25.00, 25.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP);
 CREATE TABLE `inventario_movimientos` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la  orden - lote',
@@ -1267,39 +1301,23 @@ INSERT INTO `sizes` (`_id`, `nombre`) VALUES
 (4, 'XL');
 CREATE TABLE `tintas` (
   `_id` int(11) NOT NULL,
-  `c` decimal(7, 2) DEFAULT NULL COMMENT 'Cyan',
-  `m` decimal(7, 2) DEFAULT NULL COMMENT 'Magenta',
-  `y` decimal(7, 2) DEFAULT NULL COMMENT 'Yellow',
-  `k` decimal(7, 2) DEFAULT NULL COMMENT 'Black',
-  `w` decimal(7, 2) DEFAULT NULL COMMENT 'White',
   `id_catalogo_impresoras` int(11) DEFAULT NULL COMMENT 'ID del catálogo de impresoras',
   `id_orden` int(11) DEFAULT NULL COMMENT 'Id de la Orden',
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del empleado que imprimió',
+  `id_color_tinta` int(11) NOT NULL COMMENT 'ID del color de la tinta consumida',
+  `cantidad` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Cantidad consumida en ml/g',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registra el consumo de tintas por orden';
 CREATE TABLE `tintas_recargas` (
   `_id` int(11) NOT NULL,
   `id_insumo` int(11) DEFAULT NULL,
   `id_catalogo_impresora` int(11) DEFAULT NULL COMMENT 'ID catalodo de imoresoras',
-  `color` varchar(1) DEFAULT NULL COMMENT 'Color de la tinta',
+  `id_color_tinta` int(11) DEFAULT NULL COMMENT 'ID del color de la tinta recargado',
   `cantidad` decimal(7, 2) DEFAULT NULL COMMENT 'Cantidad en ML',
   `nivel_tanque_previo` decimal(10, 2) DEFAULT NULL,
   `fecha_recarga` timestamp NULL DEFAULT NULL COMMENT 'Fecha de la recarga',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Recargas de tinta';
-CREATE TABLE `tinta_filtro` (
-  `_id` int(11) NOT NULL,
-  `id_inventario` int(11) DEFAULT NULL COMMENT 'Id del insumo',
-  `id_catalogo_tintas` int(11) DEFAULT NULL COMMENT 'ID del tipo de tinta en el catálogo',
-  `color` varchar(1) NOT NULL COMMENT 'Color de la tinta C, M, Y, K, W',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Indica cuales insumos son tintas para filtrar las tintas';
-
-INSERT INTO `tinta_filtro` (`_id`, `id_inventario`, `id_catalogo_tintas`, `color`, `moment`) VALUES
-(1, 3, 1, 'C', CURRENT_TIMESTAMP),
-(2, 4, 1, 'M', CURRENT_TIMESTAMP),
-(3, 5, 1, 'Y', CURRENT_TIMESTAMP),
-(4, 6, 1, 'K', CURRENT_TIMESTAMP);
 ALTER TABLE `abonos`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`, `id_empleado`),
@@ -1492,12 +1510,18 @@ ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden_2` (`id_orden`, `id_diseno`);
 ALTER TABLE `sizes`
 ADD PRIMARY KEY (`_id`);
+ALTER TABLE `catalogo_colores_tintas`
+ADD PRIMARY KEY (`_id`),
+  ADD UNIQUE KEY `uk_codigo_color` (`codigo`);
+ALTER TABLE `impresoras_colores`
+ADD PRIMARY KEY (`id_catalogo_impresora`, `id_color_tinta`);
 ALTER TABLE `tintas`
-ADD PRIMARY KEY (`_id`);
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `idx_tintas_color` (`id_color_tinta`),
+  ADD KEY `idx_tintas_impresora` (`id_catalogo_impresoras`);
 ALTER TABLE `tintas_recargas`
-ADD PRIMARY KEY (`_id`);
-ALTER TABLE `tinta_filtro`
-ADD PRIMARY KEY (`_id`);
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `idx_recargas_color` (`id_color_tinta`);
 ALTER TABLE `catalogo_tintas`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `abonos`
@@ -1628,11 +1652,11 @@ MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id de la tabla';
 ALTER TABLE `sizes`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT,
   AUTO_INCREMENT = 2;
+ALTER TABLE `catalogo_colores_tintas`
+MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID único del color de tinta';
 ALTER TABLE `tintas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `tintas_recargas`
-MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
-ALTER TABLE `tinta_filtro`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `catalogo_tintas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
@@ -1857,26 +1881,36 @@ ALTER TABLE `reposiciones_departamentos_excluidos`
 ADD CONSTRAINT `rde_ibfk_1` FOREIGN KEY (`id_reposicion`) REFERENCES `reposiciones` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `rde_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
-
 -- revisiones
 ALTER TABLE `revisiones`
 ADD CONSTRAINT `revisiones_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `revisiones_ibfk_2` FOREIGN KEY (`id_diseno`) REFERENCES `disenos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- catalogo_impresoras
+ALTER TABLE `catalogo_impresoras`
+  ADD CONSTRAINT `fk_impresoras_cat_tintas` FOREIGN KEY (`id_catalogo_tintas`) REFERENCES `catalogo_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- impresoras_colores
+ALTER TABLE `impresoras_colores`
+  ADD CONSTRAINT `fk_imp_col_impresora` FOREIGN KEY (`id_catalogo_impresora`) REFERENCES `catalogo_impresoras` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_imp_col_color` FOREIGN KEY (`id_color_tinta`) REFERENCES `catalogo_colores_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- inventario
+ALTER TABLE `inventario`
+  ADD CONSTRAINT `fk_inventario_color` FOREIGN KEY (`id_color_tinta`) REFERENCES `catalogo_colores_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_inventario_catalogo_tintas` FOREIGN KEY (`id_catalogo_tintas`) REFERENCES `catalogo_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
 -- tintas
 ALTER TABLE `tintas`
-ADD CONSTRAINT `tintas_ibfk_1` FOREIGN KEY (`id_catalogo_impresoras`) REFERENCES `catalogo_impresoras` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT `tintas_ibfk_2` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+  ADD CONSTRAINT `tintas_ibfk_1` FOREIGN KEY (`id_catalogo_impresoras`) REFERENCES `catalogo_impresoras` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `tintas_ibfk_2` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_tintas_color` FOREIGN KEY (`id_color_tinta`) REFERENCES `catalogo_colores_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- tintas_recargas
 ALTER TABLE `tintas_recargas`
-ADD CONSTRAINT `tintas_rec_ibfk_1` FOREIGN KEY (`id_insumo`) REFERENCES `inventario` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT `tintas_rec_ibfk_2` FOREIGN KEY (`id_catalogo_impresora`) REFERENCES `catalogo_impresoras` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
-
--- tinta_filtro
-ALTER TABLE `tinta_filtro`
-  ADD CONSTRAINT `tinta_filtro_ibfk_1` FOREIGN KEY (`id_inventario`) REFERENCES `inventario` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `tinta_filtro_ibfk_2` FOREIGN KEY (`id_catalogo_tintas`) REFERENCES `catalogo_tintas` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+  ADD CONSTRAINT `tintas_rec_ibfk_1` FOREIGN KEY (`id_insumo`) REFERENCES `inventario` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `tintas_rec_ibfk_2` FOREIGN KEY (`id_catalogo_impresora`) REFERENCES `catalogo_impresoras` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_recargas_color` FOREIGN KEY (`id_color_tinta`) REFERENCES `catalogo_colores_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- =====================================================
 -- INDICES ADICIONALES PARA OPTIMIZACION

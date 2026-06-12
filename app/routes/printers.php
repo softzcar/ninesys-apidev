@@ -18,7 +18,7 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
       }
 
-      $sql = 'INSERT INTO catalogo_impresoras (codigo_interno, marca, modelo, ubicacion, tipo_tecnologia, estado, notas) VALUES (?, ?, ?, ?, ?, ?, ?)';
+      $sql = 'INSERT INTO catalogo_impresoras (codigo_interno, marca, modelo, ubicacion, tipo_tecnologia, id_catalogo_tintas, capacidad_contenedor, estado, notas) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
       $params = [
         $data['codigo_interno'],
@@ -26,12 +26,22 @@ return function (App $app) {
         $data['modelo'] ?? null,
         $data['ubicacion'] ?? null,
         $data['tipo_tecnologia'] ?? null,
+        (isset($data['id_catalogo_tintas']) && $data['id_catalogo_tintas'] !== 'null' && $data['id_catalogo_tintas'] !== '') ? intval($data['id_catalogo_tintas']) : null,
+        (isset($data['capacidad_contenedor']) && $data['capacidad_contenedor'] !== 'null' && $data['capacidad_contenedor'] !== '') ? floatval($data['capacidad_contenedor']) : null,
         $data['estado'] ?? 'activa',  // Valor por defecto 'activa'
         $data['notas'] ?? null
       ];
 
       $localConnection->goQuery($sql, $params);
       $new_id = $localConnection->getLastID();
+
+      // Guardar canales asociados
+      $canales = $data['canales'] ?? [];
+      if (is_array($canales)) {
+        foreach ($canales as $id_color) {
+          $localConnection->goQuery('INSERT IGNORE INTO impresoras_colores (id_catalogo_impresora, id_color_tinta) VALUES (?, ?)', [$new_id, intval($id_color)]);
+        }
+      }
 
       $response->getBody()->write(json_encode(['message' => 'Impresora creada exitosamente.', 'id' => $new_id]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(201);  // 201 Created
@@ -58,11 +68,20 @@ return function (App $app) {
                     ci.codigo_interno, 
                     ci.marca, 
                     ci.modelo, 
+                    ci.capacidad_contenedor,
                     ci.ubicacion, 
                     ci.tipo_tecnologia, 
+                    ci.id_catalogo_tintas,
+                    ctt.nombre AS tecnologia_nombre,
                     ci.estado, 
                     ci.notas, 
                     ci.moment,
+                    (
+                        SELECT CONCAT('[', GROUP_CONCAT(JSON_OBJECT('id_color', ic.id_color_tinta, 'codigo', cct.codigo, 'nombre', cct.nombre, 'color_hex', cct.color_hex)), ']')
+                        FROM impresoras_colores ic
+                        JOIN catalogo_colores_tintas cct ON ic.id_color_tinta = cct._id
+                        WHERE ic.id_catalogo_impresora = ci._id
+                    ) AS canales_colores,
                     CONCAT(
                         '[',
                         GROUP_CONCAT(
@@ -70,7 +89,7 @@ return function (App $app) {
                                 'id', tr._id,
                                 'id_catalogo_impresora', tr.id_catalogo_impresora,
                                 'id_insumo', tr.id_insumo,
-                                'color', tr.color,
+                                'color', cct_tr.codigo,
                                 'cantidad', tr.cantidad,
                                 'nivel_tanque_previo', COALESCE(tr.nivel_tanque_previo, 0),
                                 'fecha_recarga', tr.fecha_recarga
@@ -81,31 +100,31 @@ return function (App $app) {
                 FROM 
                     catalogo_impresoras ci
                 LEFT JOIN 
+                    catalogo_tintas ctt ON ci.id_catalogo_tintas = ctt._id
+                LEFT JOIN 
                     tintas_recargas tr ON ci._id = tr.id_catalogo_impresora
+                LEFT JOIN 
+                    catalogo_colores_tintas cct_tr ON tr.id_color_tinta = cct_tr._id
                 GROUP BY 
-                    ci._id, ci.codigo_interno, ci.marca, ci.modelo, ci.ubicacion, ci.tipo_tecnologia, ci.estado, ci.notas, ci.moment
+                    ci._id, ci.codigo_interno, ci.marca, ci.modelo, ci.capacidad_contenedor, ci.ubicacion, ci.tipo_tecnologia, ci.id_catalogo_tintas, ctt.nombre, ci.estado, ci.notes, ci.notas, ci.moment
                 ORDER BY 
                     ci._id DESC";
       $data = $localConnection->goQuery($sql);
 
       // --- 1. Obtener Consumo Detallado para calcular por ciclo ---
       $sqlConsumo = "
-        SELECT id_catalogo_impresoras, 'C' AS color, c AS cantidad, moment FROM tintas WHERE c > 0
-        UNION ALL
-        SELECT id_catalogo_impresoras, 'M' AS color, m AS cantidad, moment FROM tintas WHERE m > 0
-        UNION ALL
-        SELECT id_catalogo_impresoras, 'Y' AS color, y AS cantidad, moment FROM tintas WHERE y > 0
-        UNION ALL
-        SELECT id_catalogo_impresoras, 'K' AS color, k AS cantidad, moment FROM tintas WHERE k > 0
-        UNION ALL
-        SELECT id_catalogo_impresoras, 'W' AS color, w AS cantidad, moment FROM tintas WHERE w > 0
-        ORDER BY moment ASC
+        SELECT t.id_catalogo_impresoras, cct.codigo AS color, t.cantidad, t.moment 
+        FROM tintas t 
+        JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id 
+        WHERE t.cantidad > 0 
+        ORDER BY t.moment ASC
       ";
       $allConsumos = $localConnection->goQuery($sqlConsumo);
 
       // Procesar cada impresora para calcular sus ciclos de tinta
       foreach ($data as &$row) {
-        $row['tintas_recargas'] = json_decode($row['tintas_recargas'], true);
+        $row['canales_colores'] = json_decode($row['canales_colores'] ?? '[]', true) ?? [];
+        $row['tintas_recargas'] = json_decode($row['tintas_recargas'] ?? '[]', true);
         if (!$row['tintas_recargas'] || (count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0]['id'] === null)) {
           $row['tintas_recargas'] = [];
           continue;
@@ -179,6 +198,7 @@ return function (App $app) {
       $localConnection->disconnect();
     }
   });
+
   $app->get('/impresoras-tintas-actual[/{id_impresora}]', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
     try {
@@ -190,19 +210,18 @@ return function (App $app) {
 
         WITH 
         -- =======================================================================================
-        -- PASO 1: "Desglosar" el consumo. La tabla `tintas` tiene una columna por color.
-        -- La convertimos a un formato largo (una fila por consumo de color) para facilitar los cálculos.
+        -- PASO 1: "Desglosar" el consumo. La tabla `tintas` ahora tiene una fila por color.
         -- =======================================================================================
         consumo_desglosado AS (
-            SELECT id_catalogo_impresoras, 'C' AS color, c AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE c > 0
-            UNION ALL
-            SELECT id_catalogo_impresoras, 'M' AS color, m AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE m > 0
-            UNION ALL
-            SELECT id_catalogo_impresoras, 'Y' AS color, y AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE y > 0
-            UNION ALL
-            SELECT id_catalogo_impresoras, 'K' AS color, k AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE k > 0
-            UNION ALL
-            SELECT id_catalogo_impresoras, 'W' AS color, w AS consumo, t.moment AS fecha_orden FROM tintas t JOIN ordenes o ON t.id_orden = o._id WHERE w > 0
+            SELECT 
+                t.id_catalogo_impresoras, 
+                cct.codigo AS color, 
+                t.cantidad AS consumo, 
+                t.moment AS fecha_orden 
+            FROM tintas t 
+            JOIN ordenes o ON t.id_orden = o._id 
+            JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id
+            WHERE t.cantidad > 0
         ),
 
         -- =======================================================================================
@@ -211,21 +230,24 @@ return function (App $app) {
         stats_recargas AS (
             SELECT
                 tr.id_catalogo_impresora,
-                tr.color,
+                cct.codigo AS color,
                 SUM(tr.cantidad) AS total_recargado_historico_ml,
                 MAX(tr.fecha_recarga) AS fecha_ultima_recarga,
                 -- Obtenemos la cantidad de la última recarga y el nivel previo
-                (SELECT tr2.cantidad FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1) AS ultima_cantidad_recargada_ml,
-                (SELECT tr2.nivel_tanque_previo FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1) AS nivel_tanque_previo_actual,
+                (SELECT tr2.cantidad FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.id_color_tinta = tr.id_color_tinta ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1) AS ultima_cantidad_recargada_ml,
+                (SELECT tr2.nivel_tanque_previo FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.id_color_tinta = tr.id_color_tinta ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1) AS nivel_tanque_previo_actual,
                 -- Obtenemos los datos de la PENÚLTIMA recarga para calcular el desperdicio del ciclo que cerró
-                (SELECT tr2.fecha_recarga FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1 OFFSET 1) AS fecha_penultima_recarga,
-                (SELECT tr2.cantidad FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1 OFFSET 1) AS cantidad_penultima_recarga,
-                (SELECT tr2.nivel_tanque_previo FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.color = tr.color ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1 OFFSET 1) AS nivel_tanque_previo_penultima
+                (SELECT tr2.fecha_recarga FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.id_color_tinta = tr.id_color_tinta ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1 OFFSET 1) AS fecha_penultima_recarga,
+                (SELECT tr2.cantidad FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.id_color_tinta = tr.id_color_tinta ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1 OFFSET 1) AS cantidad_penultima_recarga,
+                (SELECT tr2.nivel_tanque_previo FROM tintas_recargas tr2 WHERE tr2.id_catalogo_impresora = tr.id_catalogo_impresora AND tr2.id_color_tinta = tr.id_color_tinta ORDER BY tr2.fecha_recarga DESC, tr2._id DESC LIMIT 1 OFFSET 1) AS nivel_tanque_previo_penultima
             FROM
                 tintas_recargas tr
+            JOIN
+                catalogo_colores_tintas cct ON tr.id_color_tinta = cct._id
             GROUP BY
                 tr.id_catalogo_impresora,
-                tr.color
+                cct.codigo,
+                tr.id_color_tinta
         ),
 
         -- =======================================================================================
@@ -305,15 +327,6 @@ return function (App $app) {
         SQL;
       $data = $localConnection->goQuery($sql);
 
-      // Decodificar el JSON de tintas_recargas para cada fila
-      /* foreach ($data as &$row) {
-          $row['tintas_recargas'] = json_decode($row['tintas_recargas'], true);
-          // Si no hay recargas, json_decode puede devolver null o un array con un solo null. Aseguramos un array vacío.
-          if ($row['tintas_recargas'] === null || (is_array($row['tintas_recargas']) && count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0] === null)) {
-              $row['tintas_recargas'] = [];
-          }
-      } */
-
       $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     } catch (Exception $e) {
@@ -346,24 +359,37 @@ return function (App $app) {
       // Construir la consulta de actualización dinámicamente
       $fields = [];
       $params = [];
-      $allowed_fields = ['codigo_interno', 'marca', 'modelo', 'ubicacion', 'tipo_tecnologia', 'estado', 'notas'];
+      $allowed_fields = ['codigo_interno', 'marca', 'modelo', 'ubicacion', 'tipo_tecnologia', 'id_catalogo_tintas', 'capacidad_contenedor', 'estado', 'notas'];
 
       foreach ($data as $key => $value) {
         if (in_array($key, $allowed_fields)) {
           $fields[] = "`{$key}` = ?";
-          $params[] = $value;
+          if ($value === 'null' || $value === '') {
+            $params[] = null;
+          } else {
+            $params[] = $value;
+          }
         }
       }
 
-      if (empty($fields)) {
-        $response->getBody()->write(json_encode(['error' => 'No se proporcionaron campos para actualizar.']));
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      // Ejecutar actualización de datos básicos si hay campos
+      if (!empty($fields)) {
+        $sql = 'UPDATE catalogo_impresoras SET ' . implode(', ', $fields) . ' WHERE _id = ?';
+        $params[] = $id_impresora;
+        $localConnection->goQuery($sql, $params);
       }
 
-      $sql = 'UPDATE catalogo_impresoras SET ' . implode(', ', $fields) . ' WHERE _id = ?';
-      $params[] = $id_impresora;
-
-      $localConnection->goQuery($sql, $params);
+      // Actualizar canales asociados si se envían
+      if (isset($data['canales'])) {
+        $localConnection->goQuery('DELETE FROM impresoras_colores WHERE id_catalogo_impresora = ?', [$id_impresora]);
+        $canales = is_array($data['canales']) ? $data['canales'] : explode(',', $data['canales']);
+        foreach ($canales as $id_color) {
+          $id_color = intval(trim($id_color));
+          if ($id_color > 0) {
+            $localConnection->goQuery('INSERT IGNORE INTO impresoras_colores (id_catalogo_impresora, id_color_tinta) VALUES (?, ?)', [$id_impresora, $id_color]);
+          }
+        }
+      }
 
       $response->getBody()->write(json_encode(['message' => 'Impresora actualizada exitosamente.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
@@ -386,9 +412,17 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
+      $id_color_tinta = $data['id_color_tinta'] ?? null;
+      if (empty($id_color_tinta) && !empty($data['color'])) {
+        $colorRow = $localConnection->goQuery('SELECT _id FROM catalogo_colores_tintas WHERE codigo = ? OR nombre = ? LIMIT 1', [$data['color'], $data['color']]);
+        if (!empty($colorRow)) {
+          $id_color_tinta = intval($colorRow[0]['_id']);
+        }
+      }
+
       // Validación básica
-      if (empty($data['id_impresora']) || empty($data['id_insumo']) || empty($data['color']) || empty($data['mililitros'])) {
-        $response->getBody()->write(json_encode(['error' => 'Faltan campos obligatorios.']));
+      if (empty($data['id_impresora']) || empty($data['id_insumo']) || empty($id_color_tinta) || empty($data['mililitros'])) {
+        $response->getBody()->write(json_encode(['error' => 'Faltan campos obligatorios o el color de tinta no es válido.']));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
       }
 
@@ -396,12 +430,12 @@ return function (App $app) {
       $myDate = new CustomTime();
       $now = $myDate->today();
 
-      $sql = 'INSERT INTO tintas_recargas (id_catalogo_impresora, id_insumo, color, cantidad, nivel_tanque_previo, fecha_recarga) VALUES (?, ?, ?, ?, ?, ?)';
+      $sql = 'INSERT INTO tintas_recargas (id_catalogo_impresora, id_insumo, id_color_tinta, cantidad, nivel_tanque_previo, fecha_recarga) VALUES (?, ?, ?, ?, ?, ?)';
 
       $params = [
         $data['id_impresora'],
         $data['id_insumo'],
-        $data['color'],
+        $id_color_tinta,
         $data['mililitros'],
         $data['nivel_tanque_previo'] ?? null,
         $now
