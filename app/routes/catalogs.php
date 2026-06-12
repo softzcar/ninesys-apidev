@@ -168,17 +168,17 @@ return function (App $app) {
           CONSTRAINT `fk_tintas_colores_n` FOREIGN KEY (`id_color_tinta`) REFERENCES `catalogo_colores_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;");
 
-        // Migrar histórico
+        // Migrar histórico (usando NULLIF para evitar fallos de clave foránea si hay id_catalogo_impresoras = 0)
         $localConnection->goQuery("INSERT INTO `tintas_nueva` (id_catalogo_impresoras, id_orden, id_empleado, id_color_tinta, cantidad, moment)
-                                   SELECT id_catalogo_impresoras, id_orden, id_empleado, 1, c, moment FROM `tintas` WHERE c IS NOT NULL AND c > 0
+                                   SELECT NULLIF(id_catalogo_impresoras, 0), id_orden, id_empleado, 1, c, moment FROM `tintas` WHERE c IS NOT NULL AND c > 0
                                    UNION ALL
-                                   SELECT id_catalogo_impresoras, id_orden, id_empleado, 2, m, moment FROM `tintas` WHERE m IS NOT NULL AND m > 0
+                                   SELECT NULLIF(id_catalogo_impresoras, 0), id_orden, id_empleado, 2, m, moment FROM `tintas` WHERE m IS NOT NULL AND m > 0
                                    UNION ALL
-                                   SELECT id_catalogo_impresoras, id_orden, id_empleado, 3, y, moment FROM `tintas` WHERE y IS NOT NULL AND y > 0
+                                   SELECT NULLIF(id_catalogo_impresoras, 0), id_orden, id_empleado, 3, y, moment FROM `tintas` WHERE y IS NOT NULL AND y > 0
                                    UNION ALL
-                                   SELECT id_catalogo_impresoras, id_orden, id_empleado, 4, k, moment FROM `tintas` WHERE k IS NOT NULL AND k > 0
+                                   SELECT NULLIF(id_catalogo_impresoras, 0), id_orden, id_empleado, 4, k, moment FROM `tintas` WHERE k IS NOT NULL AND k > 0
                                    UNION ALL
-                                   SELECT id_catalogo_impresoras, id_orden, id_empleado, 5, w, moment FROM `tintas` WHERE w IS NOT NULL AND w > 0;");
+                                   SELECT NULLIF(id_catalogo_impresoras, 0), id_orden, id_empleado, 5, w, moment FROM `tintas` WHERE w IS NOT NULL AND w > 0;");
 
         // Renombrar vieja y poner la nueva
         $localConnection->goQuery("RENAME TABLE `tintas` TO `tintas_old`, `tintas_nueva` TO `tintas`;");
