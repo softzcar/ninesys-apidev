@@ -88,11 +88,18 @@ CREATE TABLE `catalogo_colores_tintas` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo maestro de colores y canales de tintas.';
 
 INSERT INTO `catalogo_colores_tintas` (`_id`, `codigo`, `nombre`, `color_hex`) VALUES
-(1, 'C', 'Cyan', '#00FFFF'),
-(2, 'M', 'Magenta', '#FF00FF'),
-(3, 'Y', 'Yellow', '#FFFF00'),
-(4, 'K', 'Black', '#343A40'),
-(5, 'W', 'White', '#FFFFFF');
+(1,  'C',    'Cyan',          '#00FFFF'),
+(2,  'M',    'Magenta',       '#FF00FF'),
+(3,  'Y',    'Yellow',        '#FFFF00'),
+(4,  'K',    'Black',         '#343A40'),
+(5,  'W',    'White',         '#FFFFFF'),
+(6,  'BRNZ', 'Barniz',        '#E0F7FA'),
+(7,  'LC',   'Light Cyan',    '#80FFFF'),
+(8,  'LM',   'Light Magenta', '#FF80FF'),
+(9,  'OR',   'Orange',        '#FFA500'),
+(10, 'GR',   'Green',         '#008000'),
+(11, 'RD',   'Red',           '#FF0000'),
+(12, 'BL',   'Blue',          '#0000FF');
 
 CREATE TABLE `impresoras_colores` (
   `id_catalogo_impresora` int(11) NOT NULL COMMENT 'ID de la impresora',
@@ -1653,7 +1660,8 @@ ALTER TABLE `sizes`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT,
   AUTO_INCREMENT = 2;
 ALTER TABLE `catalogo_colores_tintas`
-MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID único del color de tinta';
+MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID único del color de tinta',
+  AUTO_INCREMENT = 13;
 ALTER TABLE `tintas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `tintas_recargas`
