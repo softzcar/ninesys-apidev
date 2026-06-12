@@ -29,7 +29,7 @@ return function (App $app) {
         (isset($data['id_catalogo_tintas']) && $data['id_catalogo_tintas'] !== 'null' && $data['id_catalogo_tintas'] !== '') ? intval($data['id_catalogo_tintas']) : null,
         (isset($data['capacidad_contenedor']) && $data['capacidad_contenedor'] !== 'null' && $data['capacidad_contenedor'] !== '') ? floatval($data['capacidad_contenedor']) : null,
         $data['estado'] ?? 'activa',  // Valor por defecto 'activa'
-        $data['notas'] ?? null
+        $data['notas'] ?? $data['notes'] ?? null
       ];
 
       $localConnection->goQuery($sql, $params);
@@ -106,7 +106,7 @@ return function (App $app) {
                 LEFT JOIN 
                     catalogo_colores_tintas cct_tr ON tr.id_color_tinta = cct_tr._id
                 GROUP BY 
-                    ci._id, ci.codigo_interno, ci.marca, ci.modelo, ci.capacidad_contenedor, ci.ubicacion, ci.tipo_tecnologia, ci.id_catalogo_tintas, ctt.nombre, ci.estado, ci.notes, ci.notas, ci.moment
+                    ci._id, ci.codigo_interno, ci.marca, ci.modelo, ci.capacidad_contenedor, ci.ubicacion, ci.tipo_tecnologia, ci.id_catalogo_tintas, ctt.nombre, ci.estado, ci.notas, ci.moment
                 ORDER BY 
                     ci._id DESC";
       $data = $localConnection->goQuery($sql);
@@ -354,6 +354,11 @@ return function (App $app) {
       if (!$existing) {
         $response->getBody()->write(json_encode(['error' => 'La impresora con el ID proporcionado no existe.']));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(404);  // Not Found
+      }
+
+      // Mapear notes a notas si viene del frontend
+      if (isset($data['notes']) && !isset($data['notas'])) {
+        $data['notas'] = $data['notes'];
       }
 
       // Construir la consulta de actualización dinámicamente
