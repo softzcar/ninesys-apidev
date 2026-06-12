@@ -227,12 +227,19 @@ return function (App $app) {
                 // 8. BATCH: Tintas
                 $tintasRaw = [];
                 if (!empty($orderIds)) {
-                    $tintasSql = "SELECT id_orden, moment, c, m, y, k, w, id_catalogo_impresoras FROM $companyDB.tintas WHERE id_orden IN ($orderIdsStr)";
+                    $tintasSql = "SELECT t.id_orden, t.moment, cct.codigo AS color_code, t.cantidad, t.id_catalogo_impresoras 
+                                  FROM $companyDB.tintas t
+                                  JOIN $companyDB.catalogo_colores_tintas cct ON t.id_color_tinta = cct._id
+                                  WHERE t.id_orden IN ($orderIdsStr)";
                     $tintasRaw = $dbEmpresas->goQuery($tintasSql);
                 }
 
                 // Obtener costos de tintas (Recargas e Inventario)
-                $recargasSql = "SELECT tr.id_catalogo_impresora, tr.color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) as cost_ml FROM $companyDB.tintas_recargas tr JOIN $companyDB.inventario inv ON tr.id_insumo = inv._id ORDER BY tr.fecha_recarga DESC";
+                $recargasSql = "SELECT tr.id_catalogo_impresora, cct.codigo AS color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) as cost_ml 
+                                FROM $companyDB.tintas_recargas tr 
+                                JOIN $companyDB.inventario inv ON tr.id_insumo = inv._id 
+                                JOIN $companyDB.catalogo_colores_tintas cct ON tr.id_color_tinta = cct._id
+                                ORDER BY tr.fecha_recarga DESC";
                 $recargasRaw = $dbEmpresas->goQuery($recargasSql);
                 $costMap = [];
                 if (is_array($recargasRaw) && !isset($recargasRaw['status'])) {
@@ -244,8 +251,11 @@ return function (App $app) {
                     }
                 }
 
-                // Fallback: tinta_filtro
-                $fallbackRaw = $dbEmpresas->goQuery("SELECT tf.color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) as cost_ml FROM $companyDB.tinta_filtro tf JOIN $companyDB.inventario inv ON tf.id_inventario = inv._id");
+                // Fallback: inventario con id_color_tinta
+                $fallbackRaw = $dbEmpresas->goQuery("SELECT cct.codigo AS color, (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) as cost_ml 
+                                                     FROM $companyDB.inventario inv 
+                                                     JOIN $companyDB.catalogo_colores_tintas cct ON inv.id_color_tinta = cct._id 
+                                                     WHERE inv.id_color_tinta IS NOT NULL");
                 $fallbackMap = [];
                 if (is_array($fallbackRaw) && !isset($fallbackRaw['status'])) {
                     foreach ($fallbackRaw as $fr) {
@@ -258,26 +268,32 @@ return function (App $app) {
                 $tintasResumenMap = [];
                 if (is_array($tintasRaw) && !isset($tintasRaw['status'])) {
                     foreach ($tintasRaw as $t) {
-                    $id = $t['id_orden'];
-                    $cost_total = 0;
-                    $total_ml = 0;
-                    foreach (['c', 'm', 'y', 'k', 'w'] as $col) {
-                        $ml = (float)($t[$col] ?? 0);
-                        $total_ml += $ml;
-                        $colKey = strtoupper(substr($col, 0, 1));
+                        $id = $t['id_orden'];
+                        $ml = (float)($t['cantidad'] ?? 0);
+                        $colKey = strtoupper(substr(trim($t['color_code'] ?? ''), 0, 1));
                         $costMl = $costMap[$t['id_catalogo_impresoras']][$colKey] ?? ($fallbackMap[$colKey] ?? 0);
-                        $cost_total += ($ml * $costMl);
+                        $cost_total = ($ml * $costMl);
+
+                        if (!isset($tintasResumenMap[$id])) {
+                            $tintasResumenMap[$id] = ['ml' => 0, 'cost' => 0];
+                        }
+                        $tintasResumenMap[$id]['ml'] += $ml;
+                        $tintasResumenMap[$id]['cost'] += $cost_total;
                     }
-                    $tintasDetalle[] = ['id_orden' => $id, 'total_tinta_consumo_ml' => round($total_ml, 2), 'total_tinta_costo' => round($cost_total, 2)];
-                    if (!isset($tintasResumenMap[$id])) $tintasResumenMap[$id] = ['ml' => 0, 'cost' => 0];
-                    $tintasResumenMap[$id]['ml'] += $total_ml;
-                    $tintasResumenMap[$id]['cost'] += $cost_total;
                 }
-            }
 
                 $tintasResumenFinal = [];
                 foreach ($tintasResumenMap as $id => $data) {
-                    $tintasResumenFinal[] = ['id_orden' => $id, 'total_tinta_consumo_ml' => round($data['ml'], 2), 'total_tinta_costo' => round($data['cost'], 2)];
+                    $tintasDetalle[] = [
+                        'id_orden' => $id, 
+                        'total_tinta_consumo_ml' => round($data['ml'], 2), 
+                        'total_tinta_costo' => round($data['cost'], 2)
+                    ];
+                    $tintasResumenFinal[] = [
+                        'id_orden' => $id, 
+                        'total_tinta_consumo_ml' => round($data['ml'], 2), 
+                        'total_tinta_costo' => round($data['cost'], 2)
+                    ];
                 }
 
                 // --- 8.5. Calcular Salarios Fijos de Empleados No Trackeados ---
