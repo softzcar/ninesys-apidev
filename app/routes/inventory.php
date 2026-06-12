@@ -711,42 +711,43 @@ return function (App $app) {
         ORDER BY imo.id_orden ASC, inv.insumo ASC';
         $object['insumos_consumidos'] = $localConnection->goQuery($sql);
 
-        if (!is_null($id_orden) && intval($id_orden) > 0) {
-            // Mapeo heredado para compatibilidad
-            $legacyMap = [
-                'C' => 'cyan',
-                'M' => 'magenta',
-                'Y' => 'yellow',
-                'K' => 'black',
-                'W' => 'white'
-            ];
+        // Mapeo heredado para compatibilidad
+        $legacyMap = [
+            'C' => 'cyan',
+            'M' => 'magenta',
+            'Y' => 'yellow',
+            'K' => 'black',
+            'W' => 'white'
+        ];
 
-            // Buscar los colores que realmente se usaron en la orden
-            $usedColorsQuery = $localConnection->goQuery("SELECT DISTINCT cct.codigo, cct.nombre, cct.color_hex FROM tintas t JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id WHERE t.id_orden = $id_orden");
-            $coloresDetalles = [];
-            if (is_array($usedColorsQuery) && !isset($usedColorsQuery['status']) && !empty($usedColorsQuery)) {
-                foreach ($usedColorsQuery as $uc) {
-                    $code = strtoupper(trim($uc['codigo']));
-                    $key = $legacyMap[$code] ?? strtolower($code);
-                    $coloresDetalles[] = [
-                        'codigo' => $uc['codigo'],
-                        'nombre' => $uc['nombre'],
-                        'key' => $key
-                    ];
-                }
-            } else {
-                // Default fallback a CMYKW
-                $coloresDetalles = [
-                    ['codigo' => 'C', 'nombre' => 'Cyan', 'key' => 'cyan'],
-                    ['codigo' => 'M', 'nombre' => 'Magenta', 'key' => 'magenta'],
-                    ['codigo' => 'Y', 'nombre' => 'Yellow', 'key' => 'yellow'],
-                    ['codigo' => 'K', 'nombre' => 'Black', 'key' => 'black'],
-                    ['codigo' => 'W', 'nombre' => 'White', 'key' => 'white']
+        // 2. Buscar los colores que realmente se usaron en este filtro (orden o fechas)
+        $usedColorsQuery = $localConnection->goQuery("SELECT DISTINCT cct.codigo, cct.nombre, cct.color_hex FROM tintas t JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id $where");
+        $coloresDetalles = [];
+        if (is_array($usedColorsQuery) && !isset($usedColorsQuery['status']) && !empty($usedColorsQuery)) {
+            foreach ($usedColorsQuery as $uc) {
+                $code = strtoupper(trim($uc['codigo']));
+                $key = $legacyMap[$code] ?? strtolower($code);
+                $coloresDetalles[] = [
+                    'codigo' => $uc['codigo'],
+                    'nombre' => $uc['nombre'],
+                    'key' => $key
                 ];
             }
-            $object['colores_detalles'] = $coloresDetalles;
+        } else {
+            // Default fallback a CMYKW
+            $coloresDetalles = [
+                ['codigo' => 'C', 'nombre' => 'Cyan', 'key' => 'cyan'],
+                ['codigo' => 'M', 'nombre' => 'Magenta', 'key' => 'magenta'],
+                ['codigo' => 'Y', 'nombre' => 'Yellow', 'key' => 'yellow'],
+                ['codigo' => 'K', 'nombre' => 'Black', 'key' => 'black'],
+                ['codigo' => 'W', 'nombre' => 'White', 'key' => 'white']
+            ];
+        }
+        $object['colores_detalles'] = $coloresDetalles;
 
-            // Obtener consumos de tintas
+        // 3. Procesamiento de consumos de tintas
+        if (!is_null($id_orden) && intval($id_orden) > 0) {
+            // Obtener consumos de tintas agrupados por impresora
             $tintasRawRows = $localConnection->goQuery("SELECT t.id_orden, t.id_catalogo_impresoras, cct.codigo AS color_code, t.cantidad FROM tintas t JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id WHERE t.id_orden = $id_orden");
             $tintasRows = [];
             if (is_array($tintasRawRows) && !isset($tintasRawRows['status'])) {
@@ -839,7 +840,39 @@ return function (App $app) {
                 $object['tintas'] = $tintasOut;
             }
         } else {
-            $object['tintas'] = $localConnection->goQuery("SELECT imo.id_orden, SUM(CASE WHEN cct.codigo = 'C' THEN imo.cantidad ELSE 0 END) AS cyan, SUM(CASE WHEN cct.codigo = 'M' THEN imo.cantidad ELSE 0 END) AS magenta, SUM(CASE WHEN cct.codigo = 'Y' THEN imo.cantidad ELSE 0 END) AS yellow, SUM(CASE WHEN cct.codigo = 'K' THEN imo.cantidad ELSE 0 END) AS black, SUM(CASE WHEN cct.codigo = 'W' THEN imo.cantidad ELSE 0 END) AS white, SUM(imo.cantidad) AS total_tinta_consumo_ml, SUM(imo.cantidad) AS total_tinta, 0 AS total_tinta_costo FROM tintas imo JOIN catalogo_colores_tintas cct ON imo.id_color_tinta = cct._id $where GROUP BY imo.id_orden ORDER BY imo.id_orden ASC");
+            // Búsqueda por rango o todas las órdenes: agrupadas por id_orden
+            $tintasRawRows = $localConnection->goQuery("SELECT imo.id_orden, cct.codigo AS color_code, imo.cantidad FROM tintas imo JOIN catalogo_colores_tintas cct ON imo.id_color_tinta = cct._id $where");
+            $tintasOut = [];
+            if (is_array($tintasRawRows) && !isset($tintasRawRows['status'])) {
+                $grouped = [];
+                foreach ($tintasRawRows as $row) {
+                    $oid = (int)$row['id_orden'];
+                    if (!isset($grouped[$oid])) {
+                        $grouped[$oid] = [
+                            'id_orden' => $oid,
+                            'total_tinta_consumo_ml' => 0,
+                            'total_tinta' => 0,
+                            'total_tinta_costo' => 0
+                        ];
+                        // Inicializar todos los colores en 0
+                        foreach ($coloresDetalles as $cd) {
+                            $grouped[$oid][$cd['key']] = 0.0;
+                        }
+                    }
+                    $code = strtoupper(trim($row['color_code']));
+                    $key = $legacyMap[$code] ?? strtolower($code);
+                    
+                    if (!isset($grouped[$oid][$key])) {
+                        $grouped[$oid][$key] = 0.0;
+                    }
+                    $ml = (float)$row['cantidad'];
+                    $grouped[$oid][$key] += $ml;
+                    $grouped[$oid]['total_tinta_consumo_ml'] += $ml;
+                    $grouped[$oid]['total_tinta'] += $ml;
+                }
+                $tintasOut = array_values($grouped);
+            }
+            $object['tintas'] = $tintasOut;
         }
         $localConnection->disconnect();
 
