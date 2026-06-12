@@ -292,6 +292,22 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  $app->post('/catalogo-colores-tintas/eliminar', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    $body = $request->getParsedBody();
+    $id = isset($body['id']) ? intval($body['id']) : 0;
+
+    $sql = "DELETE FROM catalogo_colores_tintas WHERE _id = ?";
+    $object['response'] = $localConnection->goQuery($sql, [$id]);
+    
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   $app->post('/catalogo-colores-tintas/{_id}', function (Request $request, Response $response, array $args) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
@@ -305,22 +321,6 @@ return function (App $app) {
 
     $sqlAll = 'SELECT * FROM catalogo_colores_tintas ORDER BY nombre';
     $object['data'] = $localConnection->goQuery($sqlAll);
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
-  $app->post('/catalogo-colores-tintas/eliminar', function (Request $request, Response $response) {
-    $localConnection = new LocalDB();
-    $body = $request->getParsedBody();
-    $id = isset($body['id']) ? intval($body['id']) : 0;
-
-    $sql = "DELETE FROM catalogo_colores_tintas WHERE _id = ?";
-    $object['response'] = $localConnection->goQuery($sql, [$id]);
-    
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
