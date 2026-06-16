@@ -1,0 +1,81 @@
+# TAREA: Migración a Producción — Nueva Empresa 194 y Actualización de Sistema
+# Fecha: 2026-06-16
+# Hora inicio: ~09:00 | Hora fin: ~11:00
+# Entorno: vps-contabo-prod (api.nineteencustom.com / app.nineteencustom.com)
+
+## CONTEXTO
+Se actualizó el sistema en producción con la última versión del VPS de desarrollo.
+Se creó una nueva empresa (ID 194) a partir de los datos históricos de la empresa legacy (ID 163).
+La empresa 163 queda como respaldo operativo con contraseñas sufijadas (_163).
+
+---
+
+## ACCIONES REALIZADAS
+
+### 1. Respaldos previos al despliegue
+- **API:** `/home/api.nineteencustom.com/` → `api_nineteencustom_prod.tar.gz`
+- **App:** `/home/app.nineteencustom.com/public_html/` → `app_nineteencustom_prod.tar.gz`
+- **BD Central:** `api_empresas` → `api_empresas_prod.sql.gz`
+- **BD Legacy:** `api_emp_163` → `api_emp_163_prod.sql.gz`
+
+### 2. Nueva empresa 194
+- Creada BD `api_emp_194` y usuario `api_user_194` en CyberPanel.
+- Registros comerciales duplicados en `api_empresas` con id_empresa=194.
+- 15 usuarios duplicados con contraseñas ORIGINALES (permiten login inmediato sin cambios).
+- Contraseñas de empresa 163 sufijadas con `_163` (ej: `sayerlin01` → `sayerlin01_163`).
+
+### 3. Migración de datos
+- Volcado completo de `api_emp_163` → `api_emp_194`.
+- Remapeo de IDs de empleado en tablas transaccionales (`ordenes`, `asignacion`, `pagos`, etc.).
+- Parches estructurales aplicados: columna `tipo` en departamentos, columnas de tintas en inventario, 15 tablas nuevas (CRM, gastos, colores).
+- Fusión del departamento redundante 17 ("Corte de Tela") → 3 ("Corte").
+- Capacidades de insumos saneadas (fallbacks automáticos, tintas a 1000 ML).
+- Galería CDN duplicada del directorio `163/` → `194/`.
+
+### 4. Despliegue de código
+- API actualizada a rama `refactor/modular-routes` en producción.
+- OPcache de PHP limpiada.
+- Bundle frontend transferido desde dev con reemplazo masivo `nineteengreen.com` → `nineteencustom.com`.
+- Watchdog de CyberPanel restaurado.
+
+---
+
+## INCIDENCIAS RESUELTAS
+
+### A. Permisos BD (api_user_194)
+- **Problema:** Login fallaba — `api_user_194` no tenía acceso a `api_empresas.*`.
+- **Solución:** `GRANT SELECT, EXECUTE ON api_empresas.* TO 'api_user_194'@'localhost';`
+
+### B. Columna `tipo` faltante en api_emp_163.departamentos
+- **Problema:** API nueva busca `c.tipo` en `departamentos`, columna inexistente en schema legacy.
+- **Solución:** `ALTER TABLE api_emp_163.departamentos ADD COLUMN tipo VARCHAR(50) NOT NULL DEFAULT 'general';`
+
+### C. Columna `eliminada` faltante en tabla `reposiciones`
+- **Problema:** Endpoint `/sse/produccion` filtra por `a.eliminada = 0`, columna inexistente en 194 y 163.
+- **Solución:**
+  ```sql
+  ALTER TABLE api_emp_194.reposiciones ADD COLUMN IF NOT EXISTS eliminada tinyint(1) NOT NULL DEFAULT 0;
+  ALTER TABLE api_emp_163.reposiciones ADD COLUMN IF NOT EXISTS eliminada tinyint(1) NOT NULL DEFAULT 0;
+  ```
+
+---
+
+## VERIFICACIÓN
+
+| Métrica                        | Esperado | Producción | Estado |
+|-------------------------------|----------|------------|--------|
+| Órdenes empresa 163 (legacy)  | 5679     | 5679       | ✅     |
+| Órdenes empresa 194 (nueva)   | 5679     | 5679       | ✅     |
+| Departamentos empresa 194     | 12       | 12         | ✅     |
+| Usuarios empresa 194          | 15       | 15         | ✅     |
+| Login empresa 163 (_163)      | 200 OK   | 200 OK     | ✅     |
+| Login empresa 194 (original)  | 200 OK   | 200 OK     | ✅     |
+| /sse/produccion sin errores   | JSON OK  | JSON OK    | ✅     |
+
+---
+
+## ARCHIVOS MODIFICADOS (Backend)
+- `app/routes/auth.php` — Lógica de login multi-empresa, lookup de empresa por base central.
+
+## ARCHIVOS MODIFICADOS (Frontend)
+- `components/menus/MenuLoader.vue` — Fix banner entorno de pruebas visible en producción.

@@ -1,0 +1,83 @@
+# TAREA: Filtro "POR ASIGNAR" en Órdenes en Curso — Página /test
+# Fecha: 2026-06-16
+# Hora inicio: ~11:10 | Hora fin: ~11:25
+# Entorno: Local + Producción (app.nineteencustom.com)
+
+## CONTEXTO
+Solicitud del usuario: agregar en la sección "Órdenes en curso" de la página `/test`
+un filtro que permita ver únicamente las órdenes que el componente semáforo
+(`progreso-tiempo-semaforo`) clasifica como **"POR ASIGNAR"** (sin empleado asignado
+ni proyección de tiempo calculada).
+
+---
+
+## ANÁLISIS PREVIO
+
+El componente `progreso-tiempo-semaforo.vue` muestra el texto "POR ASIGNAR" cuando
+`!this.ordenReactiva` (línea 325), es decir, cuando no existe ningún registro en
+`this.ordenesProyectadas2` con el `_id` o `id_orden` de la orden. Esta propiedad se
+comparte por referencia desde el componente padre.
+
+La lógica del filtro se implementó aprovechando exactamente ese mismo array:
+- Se construye un `Set` con los IDs de órdenes que SÍ tienen proyección.
+- El filtro excluye las órdenes presentes en ese Set.
+- Las que quedan son las "POR ASIGNAR".
+
+---
+
+## CAMBIOS IMPLEMENTADOS
+
+### Archivo: `components/produccionsse/controlDeProduccionPro.vue`
+
+1. **`data()`** — Nuevo campo `filterPorAsignar: false`
+
+2. **Template (sección de filtros, línea ~286)**
+   - Botón toggle con `id="filter-por-asignar"`
+   - Variante `outline-warning` (inactivo) / `warning` (activo)
+   - Icono `person-x` / `person-x-fill` según estado
+   - Badge "activo" visible cuando el filtro está encendido
+
+3. **Computed `isUserFiltering`**
+   - Agrega `|| this.filterPorAsignar` para que el filtro desactive el drag-and-drop
+     y muestre el botón "Limpiar Filtros"
+
+4. **Computed `itemsFiltrados` (getter)**
+   - Bloque nuevo al final del filtrado:
+     ```js
+     if (this.filterPorAsignar) {
+       const ordenesConProyeccion = new Set(
+         this.ordenesProyectadas2.map(o => o._id || o.id_orden)
+       );
+       filtered = filtered.filter(item => !ordenesConProyeccion.has(item.orden));
+     }
+     ```
+
+5. **Método `clearFilters()`**
+   - Agrega `this.filterPorAsignar = false;`
+
+---
+
+## DESPLIEGUE
+
+- Build generado con `npm run generate` (entorno producción).
+- Sincronizado con `rsync -avz --delete dist/ vps-contabo-prod:/home/app.nineteencustom.com/public_html/`
+- Backup remoto creado antes del rsync.
+- Verificado: `filterPorAsignar` presente en JS compilado de producción (`_nuxt/75e6b22.js`, `_nuxt/a86bbd5.js`).
+
+---
+
+## CORRECCIÓN ADICIONAL
+
+### `ninesys-hub/bin/deploy.sh`
+- **Problema:** `REMOTE_HOST="vps-contabo"` causaba error DNS al intentar desplegar a producción.
+- **Solución:** Corregido a `REMOTE_HOST="vps-contabo-prod"` (alias correcto en `~/.ssh/config`).
+
+---
+
+## ARCHIVOS MODIFICADOS
+
+| Repositorio     | Archivo                                                         | Tipo     |
+|-----------------|-----------------------------------------------------------------|----------|
+| `app_multi`     | `components/produccionsse/controlDeProduccionPro.vue`           | feat     |
+| `app_multi`     | `components/menus/MenuLoader.vue`                               | fix      |
+| `ninesys-hub`   | `bin/deploy.sh`                                                 | fix      |
