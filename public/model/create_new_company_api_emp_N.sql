@@ -2013,11 +2013,12 @@ CREATE TABLE IF NOT EXISTS `wa_conversations` (
 -- Estado de disponibilidad y límites de carga por vendedor (Fase D.2).
 -- user_id = id del empleado en la tabla de la empresa.
 CREATE TABLE IF NOT EXISTS `wa_vendor_state` (
-  `user_id`      INT NOT NULL PRIMARY KEY,
-  `is_available` TINYINT(1) NOT NULL DEFAULT 1,
-  `max_active`   INT NOT NULL DEFAULT 0,  -- 0 = sin tope
-  `updated_at`   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                 ON UPDATE CURRENT_TIMESTAMP
+  `user_id`           INT NOT NULL PRIMARY KEY,
+  `is_available`      TINYINT(1) NOT NULL DEFAULT 1,
+  `max_active`        INT NOT NULL DEFAULT 0,  -- 0 = sin tope
+  `allow_auto_assign` TINYINT(1) NOT NULL DEFAULT 1,
+  `updated_at`        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                      ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Mapeo LID ↔ JID-fono para contactos de WhatsApp.
