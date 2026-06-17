@@ -1,0 +1,23 @@
+- **Solicitud del Usuario:** acabo de terminar el insumo 837 en vps de desarrollo para la empresa 194 y NO aparecen al gestion d e remanentes / desplegaste el backend?
+- **Fecha y Hora:** 2026-06-16 17:32:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** [/home/developer/Escritorio/niesys/ninesys-api/app/routes/inventory.php]
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: 6bac129
+- **Acción Realizada:**
+    1. Se identificó que la validación manual en el backend requería que el remanente fuera mayor a cero (`floatval(remanente) > 0`).
+    2. Se modificó el condicional en `inventory.php` para aceptar remanentes mayores o iguales a cero (`floatval(remanente) >= 0`), permitiendo el registro de remanentes de valor 0.
+    3. Se confirmaron y agregaron los cambios locales en la rama `refactor/modular-routes`.
+    4. Se ejecutó el script de despliegue centralizado `echo 2 | ninesys-hub/bin/deploy_backend.sh` para actualizar el backend de desarrollo en Contabo.
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** Es lógico permitir remanentes de valor cero ya que indica la terminación total de un rollo o insumo sin ningún sobrante físico, lo cual requiere quedar registrado en la bitácora de remanentes.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`, `write_to_file`
+- **Resultado:** Éxito
+- **Verificación:** La salida del despliegue devolvió HEAD Remoto en `6bac129` con OPcache PHP reseteado correctamente.
+- **Logro Conseguido:** Permite registrar remanentes con valor `0` exitosamente para que sean visibles en la vista administrativa de remanentes.
+- **Referencias de Sesión (Contexto):**
+    - Task: [task.md](file:///home/developer/.gemini/antigravity/brain/9a107ab5-a848-425f-ae82-a2a121d579ef/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity/brain/9a107ab5-a848-425f-ae82-a2a121d579ef/walkthrough.md)
+- **Observaciones de Gemini:** La actualización del backend era indispensable para que el VPS de desarrollo pudiera aceptar y guardar remanentes de valor 0.
+- **Respuesta de Gemini:** El backend ha sido desplegado exitosamente en el servidor de desarrollo. Puedes probar restableciendo el stock o terminando otro insumo para ver los resultados en la vista de remanentes.

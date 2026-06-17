@@ -1416,8 +1416,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         // Because if auto_remanente is active, we already calculated and saved the real value above.
         $auto_active = (isset($miInsumo['auto_remanente']) && ($miInsumo['auto_remanente'] == 'true' || $miInsumo['auto_remanente'] === true));
 
-        // Adding check: remanente must be greater than or equal to 0
-        if (!$auto_active && isset($miInsumo['remanente']) && is_numeric($miInsumo['remanente']) && floatval($miInsumo['remanente']) >= 0) {
+        // Adding strict check: remanente must be greater than 0
+        if (!$auto_active && isset($miInsumo['remanente']) && is_numeric($miInsumo['remanente']) && floatval($miInsumo['remanente']) > 0) {
             $remanente_val = floatval($miInsumo['remanente']);
             $motivo = isset($miInsumo['motivo']) ? $miInsumo['motivo'] : 'Terminación (Manual)';
             $observacion = isset($miInsumo['observacion']) ? $miInsumo['observacion'] : '';
