@@ -1008,7 +1008,7 @@ class WooMe
 
   public function getAllCustomesrs()
   {
-    $sql = 'SELECT _id id, first_name, last_name, username, cedula, phone, address, email FROM customers';
+    $sql = 'SELECT _id id, first_name, last_name, username, cedula, phone, address, email, recibir_notificaciones FROM customers';
 
     $localConnection = new LocalDB();
     $data = $localConnection->goQuery($sql);
@@ -1097,7 +1097,7 @@ class WooMe
     }
   }
 
-  public function createCustomer($first_name, $last_name, $cedula, $phone, $email, $address)
+  public function createCustomer($first_name, $last_name, $cedula, $phone, $email, $address, $recibir_notificaciones = null)
   {
     $localConnection = new LocalDB();
 
@@ -1123,6 +1123,11 @@ class WooMe
         $address = null;
       }
 
+      $recibirVal = 1;
+      if ($recibir_notificaciones !== null) {
+        $recibirVal = (int)$recibir_notificaciones;
+      }
+
       $sql = "INSERT INTO `customers`(    
                 `first_name`,
                 `last_name`,
@@ -1130,7 +1135,8 @@ class WooMe
                 `cedula`,
                 `address`,
                 `phone`,
-                `email`
+                `email`,
+                `recibir_notificaciones`
             )
             VALUES(
                 '" . $first_name . "',
@@ -1139,7 +1145,8 @@ class WooMe
                 '" . $cedula . "',
                 '" . $address . "',
                 '" . $phone . "',
-                '" . $email . "'
+                '" . $email . "',
+                " . $recibirVal . "
                 )";
       $response['resp_insert'] = $localConnection->goQuery($sql);
     } else {
@@ -1151,7 +1158,7 @@ class WooMe
     return json_encode($response);
   }
 
-  public function updateCustomer($id, $first_name, $last_name, $cedula, $phone, $email, $address)
+  public function updateCustomer($id, $first_name, $last_name, $cedula, $phone, $email, $address, $recibir_notificaciones = null)
   {
     $bytes = random_bytes(6);
     $token = bin2hex($bytes);
@@ -1167,6 +1174,12 @@ class WooMe
       if ($email === 'none') {
         $email = 'none_' . $token . '@email.com';
       }
+      
+      $recibirSql = '';
+      if ($recibir_notificaciones !== null) {
+        $recibirSql = ", recibir_notificaciones = " . (int)$recibir_notificaciones;
+      }
+      
       $sql = "UPDATE customers SET 
                         first_name = '" . $first_name . "', 
                         last_name = '" . $last_name . "', 
@@ -1174,15 +1187,24 @@ class WooMe
                         phone = '" . $phone . "', 
                         email = '" . $email . "', 
                         address = '" . $address . "' 
+                        " . $recibirSql . "
                     WHERE _id = " . $id . ';';
     }
     // Si el cliente no existe, inserta un nuevo registro
     else {
       $username = $first_name . $token;
+      
+      $recibirCol = '';
+      $recibirVal = '';
+      if ($recibir_notificaciones !== null) {
+        $recibirCol = ", recibir_notificaciones";
+        $recibirVal = ", " . (int)$recibir_notificaciones;
+      }
+      
       $sql = 'INSERT INTO customers 
-                (_id, username, first_name, last_name, cedula, phone, email, address) 
+                (_id, username, first_name, last_name, cedula, phone, email, address' . $recibirCol . ') 
             VALUES 
-                (' . $id . ", '" . $username . "', '" . $first_name . "', '" . $last_name . "', '" . $cedula . "', '" . $phone . "', '" . $email . "', '" . $address . "');";
+                (' . $id . ", '" . $username . "', '" . $first_name . "', '" . $last_name . "', '" . $cedula . "', '" . $phone . "', '" . $email . "', '" . $address . "'" . $recibirVal . ");";
     }
     $sql .= 'SELECT * FROM customers WHERE _id = ' . $id;
 
