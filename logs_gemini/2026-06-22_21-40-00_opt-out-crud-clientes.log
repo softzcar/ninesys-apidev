@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** Integrar soporte para el campo `recibir_notificaciones` en el CRUD de clientes (creación, edición y listado) en el backend de Slim API.
+- **Fecha y Hora:** 2026-06-22 21:40:00
+- **Proyecto(s):** Backend API (ninesys-api)
+- **Archivos Involucrados:**
+    - ninesys-api/app/lib/woome.php
+    - ninesys-api/app/routes/products.php
+- **Commits Relacionados:**
+    - 2dcef0f feat: recibir_notificaciones en CRUD de clientes
+- **Acción Realizada:**
+    1. **woome.php**:
+        - Se modificó `getAllCustomesrs()` para que el query `SELECT` incluya explícitamente el campo `recibir_notificaciones`, permitiendo que el listado de clientes retorne esta preferencia.
+        - Se añadieron firmas opcionales (`$recibir_notificaciones = null`) a `createCustomer()` y `updateCustomer()`.
+        - En `createCustomer()`, si el parámetro no se provee (como en el caso de la creación desde los flujos de órdenes o presupuestos), se le asigna `1` por defecto. Se actualizó el query `INSERT` para guardar la preferencia.
+        - En `updateCustomer()`, se modificaron las ramas de `UPDATE` e `INSERT` para procesar y persistir la preferencia de notificaciones cuando se reciba explícitamente.
+    2. **products.php**:
+        - Se modificaron los endpoints POST `/customers/nuevo` y POST `/customers/edit1` para extraer `recibir_notificaciones` delParsedBody y pasarlo a las funciones correspondientes de la clase `WooMe`.
+- **Herramienta(s) Utilizada(s):** multi_replace_file_content, replace_file_content, run_command, write_to_file.
+- **Resultado:** Integración completa de la API. Las llamadas legadas y los flujos por defecto se comportan correctamente (creación rápida activa las notificaciones por defecto).
+- **Verificación:** Validación de sintaxis PHP exitosa (`php -l`). Cambios desplegados al VPS de desarrollo (`vps-contabo-dev`) y OPcache PHP reiniciado.
