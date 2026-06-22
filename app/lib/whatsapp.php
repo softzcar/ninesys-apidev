@@ -151,14 +151,77 @@ class WhatsAppAPIClient
         return $responseData;
     }
 
+    private function shouldSend($phone = null, $payload = null)
+    {
+        $targetPhone = null;
+        if (!empty($phone)) {
+            $targetPhone = $phone;
+        } elseif (is_array($payload) && isset($payload['phone_client'])) {
+            $targetPhone = $payload['phone_client'];
+        } elseif (is_numeric($payload)) {
+            // Es el id_orden, buscamos el teléfono del cliente
+            try {
+                $db = new LocalDB('', LOCAL_DNS, LOCAL_USER, LOCAL_PASS);
+                $sql = 'SELECT b.phone FROM ordenes a LEFT JOIN customers b ON b._id = a.id_wp WHERE a._id = ?';
+                $res = $db->goQuery($sql, [$payload]);
+                $db->disconnect();
+                if (!empty($res) && isset($res[0]['phone'])) {
+                    $targetPhone = $res[0]['phone'];
+                }
+            } catch (Exception $e) {
+                error_log("Error al buscar teléfono para orden $payload: " . $e->getMessage());
+            }
+        }
+
+        if (empty($targetPhone)) {
+            return true; // Si no hay teléfono, dejamos pasar
+        }
+
+        // Limpiar número
+        $cleanPhone = preg_replace('/[^0-9]/', '', $targetPhone);
+        if (empty($cleanPhone)) {
+            return true;
+        }
+
+        try {
+            $db = new LocalDB('', LOCAL_DNS, LOCAL_USER, LOCAL_PASS);
+            // Buscamos recibir_notificaciones de este número (coincidencia parcial final)
+            $sql = 'SELECT recibir_notificaciones FROM customers WHERE phone LIKE ? LIMIT 1';
+            $result = $db->goQuery($sql, ['%' . substr($cleanPhone, -9)]);
+            $db->disconnect();
+
+            if (!empty($result) && isset($result[0]['recibir_notificaciones'])) {
+                return (int)$result[0]['recibir_notificaciones'] === 1;
+            }
+        } catch (Exception $e) {
+            error_log("Error al verificar opt-out para el teléfono $targetPhone: " . $e->getMessage());
+        }
+
+        return true; // Por defecto enviar
+    }
+
     public function sendMessage($id_empresa, $payload)
     {
+        if (!$this->shouldSend(null, $payload)) {
+            return [
+                'success' => false,
+                'status' => 'skipped',
+                'message' => 'El cliente ha optado por no recibir mensajes automáticos.'
+            ];
+        }
         $url = $this->apiUrl . 'send-message/' . $id_empresa;
         return $this->makeRequest('POST', $url, $id_empresa, $payload);
     }
 
     public function sendMessageCustom($id_empresa, $id_orden, $phone, $msg)
     {
+        if (!$this->shouldSend($phone)) {
+            return [
+                'success' => false,
+                'status' => 'skipped',
+                'message' => 'El cliente ha optado por no recibir mensajes automáticos.'
+            ];
+        }
         $url = $this->apiUrl . 'send-message-custom/' . $id_empresa;
         $payload = [
             'phone' => $phone,
@@ -174,8 +237,15 @@ class WhatsAppAPIClient
         return $this->makeRequest('GET', $url, $id_empresa);
     }
 
-    public function sendDirectMessageToNode($id_empresa, $phone, $message)
+    public function sendDirectMessageToNode($id_empresa, $phone, $message, $isAutomatic = true)
     {
+        if ($isAutomatic && !$this->shouldSend($phone)) {
+            return [
+                'success' => false,
+                'status' => 'skipped',
+                'message' => 'El cliente ha optado por no recibir mensajes automáticos.'
+            ];
+        }
         $url = $this->apiUrl . 'send-direct-message/' . $id_empresa;
         $payload = [
             'phone' => $phone,

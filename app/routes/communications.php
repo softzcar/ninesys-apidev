@@ -216,7 +216,8 @@ return function (App $app) {
       $nodeApiResponse = $whatsAppApiClient->sendDirectMessageToNode(
         ID_EMPRESA,
         $clientPhone,
-        $message_to_send
+        $message_to_send,
+        false
       );
 
       // Determinar el código de estado HTTP basado en la respuesta del servicio

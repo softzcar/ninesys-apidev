@@ -3276,38 +3276,17 @@ $object['sales_commission_ISSET'][] = false;
         if (empty($clientPhone)) {
           $object['ws_response'] = 'Envío de WhatsApp omitido: No se encontró un número de teléfono para el cliente.';
         } else {
-          // Asumiendo que 'obtenerRespuestaBuscar' y la API de WhatsApp son externas y funcionan
           $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');  // Asegúrate que esta función esté definida
           $payload = $resultBuscar['object'];
           $payload['phone_client'] = $clientPhone;
           $payload['template'] = 'welcome';
 
-          $encoded_payload = json_encode($payload);
-          $ws_url = WS_API_URL . 'send-message/' . ID_EMPRESA;
+          $msgApi = new WhatsAppAPIClient(WS_API_URL);
+          $ws_result = $msgApi->sendMessage(ID_EMPRESA, $payload);
 
-          $ch = curl_init($ws_url);
-          curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-          curl_setopt($ch, CURLOPT_POST, true);
-          curl_setopt($ch, CURLOPT_POSTFIELDS, $encoded_payload);
-          curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Content-Length: ' . strlen($encoded_payload)
-          ]);
-          curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-
-          $ws_result = curl_exec($ch);
-          $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-          $curl_error = curl_error($ch);
-          curl_close($ch);
-
-          if ($ws_result === false) {
-            $object['ws_response'] = ['error' => 'Error de cURL', 'details' => $curl_error];
-          } else {
-            $object['ws_response'] = json_decode($ws_result, true);
-          }
-
+          $object['ws_response'] = $ws_result;
           $object['ws_payload_sent'] = $payload;
-          $object['ws_http_code'] = $http_code;
+          $object['ws_http_code'] = isset($ws_result['code']) ? $ws_result['code'] : (isset($ws_result['success']) && $ws_result['success'] ? 200 : 500);
         }
       } else {
         $object['ws_response'] = 'Envío de WhatsApp omitido por el usuario.';
