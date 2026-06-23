@@ -735,6 +735,158 @@ return function (App $app) {
     });
 
     /**
+     * GET /internal/ordenes/{id_empresa}/by-phone?phone={telefono}
+     *
+     * Busca las órdenes de un cliente en el tenant por número de teléfono.
+     * Devuelve el listado de órdenes con su estado, fecha de entrega, total,
+     * abonos, descuentos y saldo pendiente, además de los productos correspondientes.
+     *
+     * Header: Authorization: {id_empresa}
+     *
+     * Respuesta 200 — cliente encontrado:
+     *   {
+     *     "found": true,
+     *     "customer_id": int,
+     *     "customer_name": string,
+     *     "ordenes": [...]
+     *   }
+     * Respuesta 200 — no encontrado:
+     *   { "found": false }
+     */
+    $app->get('/internal/ordenes/{id_empresa}/by-phone', function (Request $request, Response $response, $args) {
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+
+        $phone = trim($request->getQueryParams()['phone'] ?? '');
+        if ($phone === '') {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Parámetro phone requerido.'], 400);
+        }
+
+        try {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $localConnection->goQuery(
+                'SELECT db_name FROM empresas WHERE id_empresa = ? AND activo = 1',
+                [$idEmpresa]
+            );
+            $localConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][ordenes/by-phone] Error central empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar empresa.'], 500);
+        }
+
+        if (empty($rows) || isset($rows['status'])) {
+            return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe o está inactiva."], 404);
+        }
+
+        $dbName = '`' . $rows[0]['db_name'] . '`';
+
+        try {
+            $tenantConnection = new LocalDB();
+
+            // 1. Buscar cliente por teléfono
+            $customers = $tenantConnection->goQuery(
+                "SELECT _id, first_name, last_name 
+                 FROM {$dbName}.customers WHERE phone = ? LIMIT 1",
+                [$phone]
+            );
+
+            if (isset($customers['status']) || empty($customers)) {
+                $tenantConnection->disconnect();
+                return $respondJson(['found' => false], 200);
+            }
+
+            $customer = $customers[0];
+            $customerId = (int) $customer['_id'];
+            $customerName = trim($customer['first_name'] . ' ' . $customer['last_name']);
+
+            // 2. Buscar todas las órdenes de este cliente (excepto canceladas)
+            $ordersQuery = "
+                SELECT 
+                    o._id AS id_orden, 
+                    o.status, 
+                    o.fecha_entrega, 
+                    o.pago_total,
+                    o.pago_descuento,
+                    o.pago_abono,
+                    IFNULL((SELECT SUM(a.abono) FROM {$dbName}.abonos a WHERE a.id_orden = o._id), 0) AS total_abonos,
+                    IFNULL((SELECT SUM(a.descuento) FROM {$dbName}.abonos a WHERE a.id_orden = o._id), 0) AS total_descuentos,
+                    IFNULL((SELECT SUM(a.nota_credito) FROM {$dbName}.abonos a WHERE a.id_orden = o._id), 0) AS total_notas_credito
+                FROM {$dbName}.ordenes o
+                WHERE o.id_wp = ? AND o.status != 'cancelada'
+                ORDER BY o._id DESC
+            ";
+
+            $orders = $tenantConnection->goQuery($ordersQuery, [$customerId]);
+            
+            if (isset($orders['status'])) {
+                throw new \Exception($orders['message'] ?? 'Error al buscar órdenes');
+            }
+
+            $formattedOrders = [];
+            foreach ((array)$orders as $o) {
+                $idOrden = (int) $o['id_orden'];
+                
+                // Buscar productos de la orden
+                $productsQuery = "
+                    SELECT name, cantidad, talla AS detalle_tallas 
+                    FROM {$dbName}.ordenes_productos 
+                    WHERE id_orden = ?
+                ";
+                $products = $tenantConnection->goQuery($productsQuery, [$idOrden]);
+                if (isset($products['status'])) {
+                    $products = [];
+                }
+
+                $totalAbonos = (float)$o['total_abonos'];
+                $totalDescuentos = (float)$o['total_descuentos'];
+                $totalNotasCredito = (float)$o['total_notas_credito'];
+                $pagoTotal = (float)$o['pago_total'];
+
+                // Calcular el saldo pendiente usando la fórmula de la base de datos
+                $saldoPendiente = $pagoTotal - $totalAbonos - $totalDescuentos + $totalNotasCredito;
+
+                $formattedOrders[] = [
+                    'id_orden' => $idOrden,
+                    'status' => $o['status'],
+                    'fecha_entrega' => $o['fecha_entrega'],
+                    'pago_total' => $pagoTotal,
+                    'total_abonos' => $totalAbonos,
+                    'total_descuentos' => $totalDescuentos,
+                    'saldo_pendiente' => $saldoPendiente,
+                    'productos' => array_map(function($p) {
+                        return [
+                            'name' => $p['name'],
+                            'cantidad' => (int)$p['cantidad'],
+                            'detalle_tallas' => $p['detalle_tallas'] ?? '',
+                        ];
+                    }, (array)$products)
+                ];
+            }
+
+            $tenantConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][ordenes/by-phone] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar órdenes.'], 500);
+        }
+
+        return $respondJson([
+            'found'         => true,
+            'customer_id'   => $customerId,
+            'customer_name' => $customerName,
+            'ordenes'       => $formattedOrders
+        ], 200);
+    });
+
+
+    /**
      * POST /internal/cliente/{id_empresa}
      *
      * Crea un nuevo cliente en la tabla customers del tenant.
