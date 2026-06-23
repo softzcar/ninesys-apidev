@@ -419,12 +419,15 @@ return function (App $app) {
      *
      * Parámetros query:
      *   - search: término de búsqueda (nombre o descripción)
+     *   - only_design: si es "1"/true, ignora "search" y devuelve TODOS los
+     *     productos con es_diseno=1 (catálogo completo de servicios de diseño)
      *   - limit: máximo de productos (default 20)
      *
      * Respuesta (200):
      *   {
      *     "id_empresa": 163,
      *     "search_term": "remera",
+     *     "only_design": false,
      *     "product_count": 1,
      *     "products": [
      *       {
@@ -470,6 +473,7 @@ return function (App $app) {
 
         // --- 2. Parámetros query ---
         $searchTerm = trim($request->getQueryParams()['search'] ?? '');
+        $onlyDesign = filter_var($request->getQueryParams()['only_design'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $limit = (int) ($request->getQueryParams()['limit'] ?? 20);
         $limit = min(max($limit, 1), 100); // Clamp entre 1 y 100
 
@@ -514,22 +518,31 @@ return function (App $app) {
         try {
             $tenantConnection = new LocalDB();
 
-            // Búsqueda por nombre o descripción, solo productos físicos o diseños
-            $likePattern = '%' . $searchTerm . '%';
+            // Búsqueda por nombre o descripción, solo productos físicos o diseños.
+            // Modo only_design=1: ignora "search" y lista TODOS los productos de
+            // diseño gráfico (es_diseno=1), para que la IA pueda mostrar el catálogo
+            // completo de servicios de diseño sin depender de un match de nombre.
             $dbName = "`{$tenantDb}`";  // Backticks para seguridad
+
+            if ($onlyDesign) {
+                $whereClause = 'p.es_diseno = 1';
+                $bindParams = [];
+            } else {
+                $whereClause = 'p.product LIKE ? AND (p.fisico = 1 OR p.es_diseno = 1)';
+                $bindParams = ['%' . $searchTerm . '%'];
+            }
 
             // Obtener productos sin agrupar por precio
             $sqlProducts = <<<SQL
                 SELECT DISTINCT p._id as id, p.product as name, p.product_description as description,
                        p.fisico as is_physical, p.es_diseno as is_design, p.category_ids
                 FROM {$dbName}.products p
-                WHERE p.product LIKE ?
-                  AND (p.fisico = 1 OR p.es_diseno = 1)
+                WHERE {$whereClause}
                 ORDER BY p.product ASC
                 LIMIT {$limit}
             SQL;
 
-            $products = $tenantConnection->goQuery($sqlProducts, [$likePattern]);
+            $products = $tenantConnection->goQuery($sqlProducts, $bindParams);
             if (isset($products['status']) && $products['status'] === 'error') {
                 throw new \Exception($products['message'] ?? 'Error desconocido');
             }
@@ -618,7 +631,8 @@ return function (App $app) {
         // --- 6. Respuesta exitosa ---
         return $respondJson([
             'id_empresa' => $idEmpresa,
-            'search_term' => $searchTerm,
+            'search_term' => $onlyDesign ? null : $searchTerm,
+            'only_design' => $onlyDesign,
             'product_count' => count($enriched),
             'products' => $enriched,
         ], 200);
