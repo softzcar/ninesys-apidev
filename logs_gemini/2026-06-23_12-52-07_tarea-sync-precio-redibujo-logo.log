@@ -1,0 +1,52 @@
+- **Solicitud del Usuario:** Tras detectar que "Redibujo de Logo" (cod 93, empresa 194) tenía `products.price=$10.00` pero `products_prices` (la fuente real usada para cotizar) en $5.00, el usuario pidió eliminar la dependencia de precios hardcodeados/desincronizados y tener una sola fuente de verdad. Se acotó el alcance, vía pregunta de clarificación, a: sincronizar solo el dato (sin tocar código de fallback en otros módulos).
+
+- **Fecha y Hora:** 2026-06-23 12:52:07 (America/Caracas, UTC-4)
+
+- **Proyecto(s):** Backend (dato, no código)
+
+- **Archivos Involucrados:** Ninguno (cambio de dato vía SQL directo en `vps-contabo-dev`, BD `api_emp_194`).
+
+- **Commits Relacionados:** N/A (no hay cambio de código).
+
+- **Acción Realizada:**
+  Antes de tocar nada se investigó (agente Explore) dónde se lee/escribe `products.price` en todo `ninesys-api`. Hallazgos clave:
+  - El endpoint `/internal/catalog/{id_empresa}` (usado por el agente de WhatsApp) **nunca leyó `products.price`** — ya usaba 100% `products_prices` desde antes de hoy. La función `fetchDesignServices` (msg_ninesys) tampoco tiene precios hardcodeados: todo viene dinámico del catálogo.
+  - `products.price` sí se lee en otros 4 módulos ajenos a esta tarea (reportes de márgenes, sync WooCommerce, y como fallback `COALESCE(pp.price, p.price)` en búsqueda/creación de órdenes).
+  - No existe ningún código que actualice `products.price` cuando se editan los tramos en `products_prices` — por eso quedó desincronizado (probablemente desde la creación/importación inicial del producto).
+
+  Se ejecutó un UPDATE puntual, acotado a los 3 productos de diseño de la empresa 194, sincronizando `products.price` con el precio más alto vigente en `products_prices` (la fuente activamente mantenida por los admins vía el formulario de edición de precios):
+  ```sql
+  UPDATE api_emp_194.products p
+  JOIN (
+    SELECT id_product, MAX(price) AS top_price
+    FROM api_emp_194.products_prices
+    WHERE id_product IN (91,92,93)
+    GROUP BY id_product
+  ) pp ON pp.id_product = p._id
+  SET p.price = pp.top_price
+  WHERE p._id IN (91,92,93);
+  ```
+  Resultado: cod 91 y 92 ya estaban en sync (sin cambio); cod 93 "Redibujo de Logo" pasó de $10.00 a $5.00.
+
+- **Inconvenientes y Desafíos:** Ninguno — el endpoint usado por la IA no depende de esta columna, por lo que el fix de datos no tiene riesgo de romper el flujo de presupuestos.
+
+- **Decisión Final y Justificación:**
+  Se limitó el alcance a sincronizar el dato (no a eliminar el fallback `COALESCE(pp.price, p.price)` en `orders.php`/`buscar.php`/`GeminiChatAssistant.php`, ni a migrar `products_reports.php`/`woome.php`), porque el usuario explícitamente eligió la opción mínima ante la pregunta de alcance — esos otros módulos afectan reportes financieros y la tienda WooCommerce de potencialmente otras empresas, y un cambio ahí requiere su propio análisis y aprobación por separado.
+
+- **Herramienta(s) Utilizada(s):** `Agent` (Explore, solo lectura), `Bash` (ssh + mysql)
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - `SELECT _id, price FROM products WHERE _id IN (91,92,93)` antes/después confirma: 91=$5.00 (sin cambio), 92=$15.00 (sin cambio), 93=$10.00→$5.00.
+  - `curl .../internal/catalog/194?only_design=1` tras el cambio devuelve los mismos precios que antes (sin regresión), confirmando que el endpoint nunca dependió de `products.price`.
+
+- **Logro Conseguido:** Los 3 servicios de diseño gráfico de la empresa 194 ahora tienen el mismo precio en `products.price` y `products_prices`, eliminando la desincronización puntual detectada hoy. Queda documentado que `products.price` es vestigial/no mantenido por el flujo normal de edición de precios — si en el futuro se decide depender menos de esa columna en reportes o WooCommerce, requiere una tarea separada con su propio análisis de impacto.
+
+- **Referencias de Sesión (Contexto):** Continuación directa de la tarea de servicios de diseño gráfico (ver `2026-06-23_12-42-06_tarea-catalogo-only-design.log`).
+
+- **⚠️ NOTA DE PERSISTENCIA:** Si se crean nuevos productos de diseño (o de cualquier tipo) a futuro, recordar que `products.price` no se sincroniza automáticamente con `products_prices` — cualquier reporte o integración que dependa de `products.price` puede mostrar valores desactualizados. No hay trigger ni código que lo mantenga en sync.
+
+- **Observaciones de Gemini:** N/A (tarea ejecutada con Claude Code).
+
+- **Respuesta de Gemini:** N/A.

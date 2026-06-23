@@ -1,0 +1,50 @@
+- **Solicitud del Usuario:** Enseñarle al agente de Ventas de WhatsApp (empresa 194) a manejar diseño gráfico: cuando el cliente indique que quiere agregar un logotipo, dibujo u otro arte gráfico, se debe agregar "diseño gráfico" como un ítem más del presupuesto (identificado por el campo `es_diseno` de la tabla `products`), y permitir que la IA muestre la lista de servicios de diseño disponibles. Se solicitó crear los endpoints necesarios en la API y desplegar obligatoriamente a desarrollo tras cualquier cambio de API.
+
+- **Fecha y Hora:** 2026-06-23 12:42:06 (America/Caracas, UTC-4)
+
+- **Proyecto(s):** Backend
+
+- **Archivos Involucrados:**
+  - `ninesys-api/app/routes/msg_service.php` — Archivo modificado. Se añadió el modo `only_design=1` al endpoint existente `GET /internal/catalog/{id_empresa}`.
+
+- **Commits Relacionados:**
+  - Frontend: N/A
+  - Backend: `806dcc6` — `feat(internal): add only_design filter to catalog endpoint` (rama `refactor/modular-routes`)
+
+- **Acción Realizada:**
+  Se extendió el endpoint `GET /internal/catalog/{id_empresa}` (ya existente, usado para enriquecer el contexto de la IA) para soportar un nuevo query param `only_design`:
+  1. Se lee `only_design` con `filter_var(..., FILTER_VALIDATE_BOOLEAN)`.
+  2. Si `only_design=1`: el `WHERE` del SQL de productos cambia a `p.es_diseno = 1` (sin bind params, ignora `search`), devolviendo TODOS los productos de diseño gráfico de la empresa, sin depender de un match de nombre.
+  3. Si no: se mantiene el comportamiento original (`WHERE p.product LIKE ? AND (p.fisico = 1 OR p.es_diseno = 1)`).
+  4. El resto del enriquecimiento (precios desde `products_prices`, categorías desde `categories` vía `category_ids`, atributos) NO se modificó — se reutiliza tal cual para ambos modos.
+  5. La respuesta JSON ahora incluye el campo `only_design` (booleano) para trazabilidad/debug.
+
+  Se verificó previamente en la BD remota (`api_emp_194`) que existen 5 productos con `es_diseno=1` (categoría `_id=17` "Diseños"): `cod 91 "Diseño Gráfico"`, `cod 92 "Diseño de Logo"`, `cod 93 "Redibujo de Logo"`, `cod 112 "Tipo carta/short/lanyar"` y `cod 113 "Cambio de Color"` (estos 2 últimos sin tramo de precio configurado en `products_prices`, por lo que se filtran en la capa de Node, no en SQL, para mantener el endpoint genérico).
+
+- **Inconvenientes y Desafíos:**
+  - Se detectó una discrepancia de datos: el campo `products.price` de "Redibujo de Logo" (cod 93) tiene $10.00, pero su tramo real en `products_prices` (la tabla que efectivamente usa el endpoint de catálogo para cotizar, igual que cualquier otra prenda) es de $5.00. El sistema usará $5.00 (el dato operativo real), no $10.00. Se reporta como dato a revisar por el usuario, no se corrigió en código porque es un problema de datos, no de lógica.
+  - El producto "Diseño Gráfico" (cod 91) tiene 2 filas en `products_prices` ($5.00 y $0.00) — se confirmó que el endpoint ya ordena `DESC` por precio, por lo que el precio relevante ($5.00) queda primero en el array.
+
+- **Decisión Final y Justificación:**
+  Se extendió el endpoint existente en vez de crear una ruta nueva, para no duplicar ~90 líneas de lógica de enriquecimiento (precios/categorías/atributos) que ya funciona genéricamente sobre cualquier conjunto de productos. Es el cambio menos invasivo posible y mantiene el contrato de respuesta JSON idéntico en estructura.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (php -l, git add/commit/push, ssh, curl, mysql, deploy_backend.sh opción 2)
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - `php -l` sin errores de sintaxis.
+  - Desplegado a Contabo Dev vía `ninesys-hub/bin/deploy_backend.sh` (opción 2). HEAD remoto confirmado en `806dcc6`.
+  - `curl -s -H "Authorization: 194" "https://api.nineteengreen.com/internal/catalog/194?only_design=1"` devuelve los 5 productos esperados, con `category_id: 17` en todos y los precios correctos desde `products_prices`.
+
+- **Logro Conseguido:**
+  El backend ahora puede entregar el catálogo completo de servicios de diseño gráfico de cualquier empresa sin depender de búsqueda por nombre, habilitando que el agente de WhatsApp ofrezca y cotice estos servicios como ítems reales del presupuesto.
+
+- **Referencias de Sesión (Contexto):**
+  - Continuación de la tarea de hoy sobre consulta de deuda/estado de cuenta (ver logs `2026-06-23_11-04-00` y `2026-06-23_11-19-00`).
+
+- **⚠️ NOTA DE PERSISTENCIA:** El modo `only_design=1` reutiliza toda la lógica de enriquecimiento del endpoint `/internal/catalog`. Cualquier cambio futuro a esa lógica (precios, categorías, atributos) afecta automáticamente a ambos modos (búsqueda normal y catálogo de diseño).
+
+- **Observaciones de Gemini:** N/A (tarea ejecutada con Claude Code, no con Gemini/Antigravity).
+
+- **Respuesta de Gemini:** N/A — Resultado entregado directamente al usuario por Claude Code: backend desplegado y verificado en Contabo Dev.

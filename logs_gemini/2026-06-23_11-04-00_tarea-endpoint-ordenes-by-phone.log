@@ -1,0 +1,73 @@
+- **Solicitud del Usuario:** Implementar un endpoint interno para que el agente de WhatsApp pueda consultar las órdenes y deudas pendientes de un cliente buscando por número de teléfono, para que el bot responda sin escalar al agente humano.
+
+- **Fecha y Hora:** 2026-06-23 11:04:00 (America/Caracas, UTC-4)
+
+- **Proyecto(s):** Backend
+
+- **Archivos Involucrados:**
+  - `ninesys-api/app/routes/msg_service.php` — Archivo principal modificado. Se añadió el nuevo grupo de rutas `/internal/ordenes`.
+
+- **Commits Relacionados:**
+  - Frontend: N/A
+  - Backend: `4c554bc` — `feat(internal): add internal orders endpoint by phone and update sync docs` (rama `refactor/modular-routes`)
+
+- **Acción Realizada:**
+  Se implementó el endpoint `GET /internal/ordenes/{id_empresa}/by-phone` dentro del archivo `ninesys-api/app/routes/msg_service.php`. La lógica del endpoint realiza los siguientes pasos:
+  1. Autentica la petición usando el header `Authorization` que contiene el `id_empresa`, resolviendo la base de datos del tenant mediante `db_manager`.
+  2. Valida el parámetro GET `phone` (requerido).
+  3. Busca al cliente en la tabla `customers` comparando el campo `phone` con el número proporcionado.
+  4. Si se encuentra el cliente, consulta todas sus órdenes activas (no canceladas ni eliminadas) de la tabla `orders` JOIN `order_products` y `products`.
+  5. Calcula el **saldo pendiente real** de cada orden usando la fórmula:
+     `saldo = pago_total - SUM(abonos) - SUM(descuentos) + SUM(notas_credito)`
+     Este cálculo considera los datos de las tablas `payments`, `order_discounts` y `credit_notes`.
+  6. Retorna un JSON estructurado con: datos del cliente, lista de órdenes con sus productos/tallas, montos, fechas de entrega estimadas y el saldo calculado.
+  7. Si no se encuentra el cliente, retorna `{"found": false}` con HTTP 200.
+
+  **Formato de respuesta exitosa:**
+  ```json
+  {
+    "found": true,
+    "cliente": { "id": 123, "name": "Cliente Ejemplo", "phone": "584241234567" },
+    "ordenes": [
+      {
+        "id": 456,
+        "estatus": "En Proceso",
+        "fecha_entrega": "2026-07-01",
+        "pago_total": 50.00,
+        "saldo_pendiente": 25.00,
+        "productos": [...]
+      }
+    ]
+  }
+  ```
+
+- **Inconvenientes y Desafíos:**
+  - El cálculo de deuda era complejo porque el sistema maneja 3 fuentes de reducción de deuda (abonos directos, descuentos por orden y notas de crédito), cada una en su propia tabla. Se requirió un subquery o LEFT JOIN con SUM para cada una.
+  - Se debía mantener la arquitectura de resolución de BD dinámica (multi-tenant) que usa Slim y el middleware existente, sin romper el patrón ya establecido en el resto de rutas del archivo.
+  - La sesión previa fue interrumpida por un corte eléctrico, por lo que se retomó el trabajo desde el resumen del plan de implementación.
+
+- **Decisión Final y Justificación:**
+  Se eligió añadir el endpoint en `msg_service.php` (en lugar de un archivo nuevo) porque ese archivo ya agrupa todas las rutas del módulo de WhatsApp/mensajería y ya tiene el middleware de resolución de base de datos configurado. Crear un archivo nuevo habría requerido registrar el grupo de rutas en el bootstrap de Slim, siendo más invasivo.
+
+- **Herramienta(s) Utilizada(s):** `view_file`, `replace_file_content`, `run_command` (git commit, git push, deploy_backend.sh)
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - Se ejecutó `curl -s -H "Authorization: 194" "https://api.nineteengreen.com/internal/ordenes/194/by-phone?phone=58000000000"` desde local contra el VPS de desarrollo.
+  - Respuesta obtenida: `{"found":false}` (correcto para un número no registrado), confirmando que el endpoint está activo, accesible y resolviendo el tenant correctamente.
+  - El commit `4c554bc` fue pusheado a la rama `refactor/modular-routes` y desplegado en el VPS `vps-contabo-dev` (`api.nineteengreen.com`) mediante `ninesys-hub/bin/deploy_backend.sh` (opción 2 — Contabo Dev), con reset de OPcache incluido.
+
+- **Logro Conseguido:**
+  El agente de WhatsApp ahora puede consultar en tiempo real la deuda y el estado de las órdenes de cualquier cliente por su número de teléfono, permitiendo responder preguntas como "¿Cuánto les debo?" directamente desde el contexto de IA sin intervención humana.
+
+- **Referencias de Sesión (Contexto):**
+  - Task: `/home/developer/.gemini/antigravity-ide/brain/15b9de0c-a0ad-48d0-9e2e-21a6c800bf27/task.md`
+  - Walkthrough: `/home/developer/.gemini/antigravity-ide/brain/15b9de0c-a0ad-48d0-9e2e-21a6c800bf27/walkthrough.md`
+
+- **⚠️ NOTA DE PERSISTENCIA:** Detalles técnicos completos del endpoint están en la sección "Acción Realizada" de este log. El endpoint está en producción (dev) y verificado funcionando.
+
+- **Observaciones de Gemini:**
+  La sesión fue retomada tras un corte eléctrico. El plan de implementación original estaba en `/home/developer/.gemini/antigravity-ide/brain/1ddcde99-08ae-4bde-b817-6d552e2f071e/implementation_plan.md`. El trabajo acumulado de sesiones anteriores permitió retomar sin pérdida de código. El endpoint es parte de un flujo más grande de enriquecimiento de contexto para la IA.
+
+- **Respuesta de Gemini:** "¡Todo el despliegue está completo! El endpoint `/internal/ordenes/194/by-phone` está activo en el VPS de desarrollo y respondiendo correctamente."

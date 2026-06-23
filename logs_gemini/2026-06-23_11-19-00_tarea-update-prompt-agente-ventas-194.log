@@ -1,0 +1,96 @@
+- **Solicitud del Usuario:** Actualizar el prompt del sistema del agente de Ventas de WhatsApp (id=2, empresa 194) para que incluya instrucciones explícitas sobre cómo responder consultas de deuda/estado de cuenta, y para que las reglas de HANDOFF_IA sean más estrictas: NO escalar cuando la información de órdenes ya está disponible en el contexto dinámico.
+
+- **Fecha y Hora:** 2026-06-23 11:19:00 (America/Caracas, UTC-4)
+
+- **Proyecto(s):** Backend (Configuración de IA / msg_ninesys — prompt persistido en BD)
+
+- **Archivos Involucrados:**
+  - `scratch/update_prompt_194.php` — Script PHP de actualización directa del prompt en la BD.
+  - BD remota: `api_emp_194` en `vps-contabo-dev` — tabla `wa_ai_agents`, fila `id = 2` (agente de Ventas), campo `system_prompt`.
+
+- **Commits Relacionados:**
+  - Frontend: N/A
+  - Backend: N/A (el script `update_prompt_194.php` es un script de mantenimiento/seed, no hace parte del código de la app, pero sus cambios están en el repositorio `ninesys-api` rama `refactor/modular-routes` dentro de la carpeta `scratch/`).
+
+- **Acción Realizada:**
+  **Paso 1 — Edición local del script:**
+  Se editó `scratch/update_prompt_194.php` para incluir dos secciones nuevas en el `system_prompt`:
+
+  **Sección añadida — `### 6. Consultas sobre Estado de Cuenta, Deuda y Fecha de Entrega`:**
+  Instrucciones explícitas para que la IA lea el bloque dinámico `=== ÓRDENES DEL CLIENTE ===` (inyectado por `contextEnricher.js`) y responda directamente. El formato de respuesta especificado al bot incluye:
+  - Listar TODAS las órdenes con saldo > 0 con: ID de orden (📄), fecha de entrega (📅), saldo pendiente (💰).
+  - Si saldo == 0 en todas las órdenes: responder que el cliente está al día.
+  - Si no hay órdenes en el contexto: indicar que se revisará manualmente (sin usar `[HANDOFF_IA]`).
+
+  **Reglas de `[HANDOFF_IA]` actualizadas:**
+  Se añadió una excepción explícita al listado de casos que NO deben usar `[HANDOFF_IA]`:
+  ```
+  - El cliente pregunta por su deuda, saldo o estado de cuenta Y el bloque
+    === ÓRDENES DEL CLIENTE === está presente en el contexto actual.
+  - El cliente pregunta por el estado de un pedido Y los datos están en el contexto.
+  ```
+  Esto contrarresta el comportamiento previo donde el bot escalaba al humano incluso cuando tenía la información disponible.
+
+  **Paso 2 — Upload al VPS:**
+  ```bash
+  scp scratch/update_prompt_194.php vps-contabo-dev:/home/api.nineteengreen.com/public_html/scratch/update_prompt_194.php
+  ```
+
+  **Paso 3 — Ejecución remota del script:**
+  ```bash
+  ssh vps-contabo-dev "php /home/api.nineteengreen.com/public_html/scratch/update_prompt_194.php"
+  ```
+
+  **Salida del script:**
+  ```
+  PROMPT_UPDATE_SUCCESS: El prompt del agente de Ventas (id=2) ha sido actualizado correctamente.
+  ```
+
+  **Paso 4 — Verificación en BD:**
+  Se consultó la BD directamente para confirmar:
+  ```sql
+  SELECT
+    system_prompt LIKE '%Estado de Cuenta%' AS has_estado_cuenta,
+    system_prompt LIKE '%HANDOFF_IA%' AS has_handoff_rules,
+    system_prompt LIKE '%ÓRDENES DEL CLIENTE%' AS has_ordenes_ctx
+  FROM wa_ai_agents WHERE id = 2;
+  ```
+  **Resultado:** `1 | 1 | 1` — Las 3 secciones están presentes en el prompt activo.
+
+- **Inconvenientes y Desafíos:**
+  - El prompt se almacena en la base de datos remota (no en archivos de configuración locales), por lo que cualquier cambio requiere: editar el script PHP localmente → subir el script al VPS → ejecutarlo remotamente. Este proceso de 3 pasos es propenso a errores si algún paso falla silenciosamente.
+  - La sesión fue interrumpida por un corte eléctrico antes de ejecutar el script, por lo que la tarea se retomó en una nueva sesión usando el plan de implementación guardado en `/home/developer/.gemini/antigravity-ide/brain/1ddcde99-...`.
+  - Riesgo de perder el prompt si el script tiene un error SQL: se mitigó verificando el contenido del script antes de ejecutarlo.
+
+- **Decisión Final y Justificación:**
+  Se optó por inyectar las instrucciones anti-handoff en **dos lugares**: (a) el prompt estático del sistema (esta tarea) y (b) el bloque dinámico de contexto en `contextEnricher.js` (tarea anterior). El doble refuerzo garantiza que la instrucción esté presente tanto en el contexto de sistema (siempre activo) como en el contexto del turno actual (más peso inmediato en la respuesta de Gemini).
+
+- **Herramienta(s) Utilizada(s):** `view_file`, `replace_file_content`, `run_command` (scp, ssh)
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - Script PHP ejecutado exitosamente en VPS dev: `PROMPT_UPDATE_SUCCESS`.
+  - Verificación SQL directa en BD `api_emp_194` confirma presencia de las 3 secciones clave: `has_estado_cuenta=1`, `has_handoff_rules=1`, `has_ordenes_ctx=1`.
+  - El agente PM2 `ntmsg-app` está `online` y lee el prompt de la BD en cada conversación nueva, por lo que el cambio es efectivo inmediatamente sin necesidad de reiniciar el servicio.
+
+- **Logro Conseguido:**
+  El agente virtual de WhatsApp de la Empresa 194 (Nineteen) ahora tiene instrucciones explícitas para responder preguntas de deuda y estado de cuenta directamente desde los datos del ERP, sin derivar al asesor humano. Esto cierra el ciclo completo de la funcionalidad: datos reales del ERP → contexto dinámico → prompt actualizado → respuesta autónoma del bot.
+
+- **Referencias de Sesión (Contexto):**
+  - Task: `/home/developer/.gemini/antigravity-ide/brain/15b9de0c-a0ad-48d0-9e2e-21a6c800bf27/task.md`
+  - Walkthrough: `/home/developer/.gemini/antigravity-ide/brain/15b9de0c-a0ad-48d0-9e2e-21a6c800bf27/walkthrough.md`
+  - Plan original: `/home/developer/.gemini/antigravity-ide/brain/1ddcde99-08ae-4bde-b817-6d552e2f071e/implementation_plan.md`
+
+- **⚠️ NOTA DE PERSISTENCIA:** El prompt completo está en `scratch/update_prompt_194.php`. Para futuras modificaciones del prompt del agente de Ventas (id=2), SIEMPRE editar ese archivo y volver a ejecutar el proceso de 3 pasos (editar → scp → ssh php). El prompt NO se puede editar directamente en la BD de forma segura sin ese script, ya que el script maneja el escaping correcto de caracteres especiales.
+
+- **Observaciones de Gemini:**
+  Este log cierra la implementación completa del sistema de consulta de deudas vía WhatsApp. El flujo completo es:
+  1. Cliente envía mensaje → `msg_ninesys` recibe y llama `contextEnricher.js`
+  2. `contextEnricher.js` llama `GET /internal/ordenes/194/by-phone?phone={phone}` → `ninesys-api`
+  3. `ninesys-api` consulta BD `api_emp_194` y retorna órdenes con saldos calculados
+  4. `contextEnricher.js` inyecta el bloque `=== ÓRDENES DEL CLIENTE ===` en el contexto
+  5. Gemini recibe el contexto enriquecido + el prompt actualizado → responde con detalles de deuda
+  6. Bot responde al cliente sin escalar.
+
+- **Respuesta de Gemini:** "¡Todo el despliegue está completo! El prompt en BD contiene las 3 secciones clave y el servicio de WhatsApp está online. Realiza pruebas enviando mensajes como '¿Cuánto les debo?' para validar el flujo completo."
