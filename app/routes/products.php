@@ -748,7 +748,10 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $woo = new WooMe();
     $recibir = isset($data['recibir_notificaciones']) ? $data['recibir_notificaciones'] : null;
-    $response->getBody()->write($woo->updateCustomer($data['id'], $data['first_name'], $data['last_name'], $data['cedula'], $data['phone'], $data['email'], $data['address'], $recibir));
+    $idCatalogoPais = isset($data['id_catalogo_pais']) && $data['id_catalogo_pais'] !== '' ? intval($data['id_catalogo_pais']) : null;
+    $idCatalogoEstado = isset($data['id_catalogo_estado']) && $data['id_catalogo_estado'] !== '' ? intval($data['id_catalogo_estado']) : null;
+    $idCatalogoCiudad = isset($data['id_catalogo_ciudad']) && $data['id_catalogo_ciudad'] !== '' ? intval($data['id_catalogo_ciudad']) : null;
+    $response->getBody()->write($woo->updateCustomer($data['id'], $data['first_name'], $data['last_name'], $data['cedula'], $data['phone'], $data['email'], $data['address'], $recibir, $idCatalogoPais, $idCatalogoEstado, $idCatalogoCiudad));
 
     return $response
       ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
@@ -761,6 +764,9 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $woo = new WooMe();
     $recibir = isset($data['recibir_notificaciones']) ? $data['recibir_notificaciones'] : null;
+    $idCatalogoPais = isset($data['id_catalogo_pais']) && $data['id_catalogo_pais'] !== '' ? intval($data['id_catalogo_pais']) : null;
+    $idCatalogoEstado = isset($data['id_catalogo_estado']) && $data['id_catalogo_estado'] !== '' ? intval($data['id_catalogo_estado']) : null;
+    $idCatalogoCiudad = isset($data['id_catalogo_ciudad']) && $data['id_catalogo_ciudad'] !== '' ? intval($data['id_catalogo_ciudad']) : null;
 
     $response->getBody()->write(
       $woo->createCustomer(
@@ -770,7 +776,10 @@ return function (App $app) {
         $data['phone'],
         $data['email'],
         $data['address'],
-        $recibir
+        $recibir,
+        $idCatalogoPais,
+        $idCatalogoEstado,
+        $idCatalogoCiudad
       )
     );
 

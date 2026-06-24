@@ -168,6 +168,9 @@ return function (App $app) {
   // RUTAS DE PRODUCTOS
   (require __DIR__ . '/routes/products.php')($app);
 
+  // RUTAS DE CATÁLOGO GEOGRÁFICO (país/estado/ciudad)
+  (require __DIR__ . '/routes/geografia.php')($app);
+
   // RUTAS DE PRODUCCIÓN
   (require __DIR__ . '/routes/production.php')($app);
 
