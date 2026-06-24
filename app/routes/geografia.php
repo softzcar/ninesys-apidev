@@ -571,10 +571,14 @@ return function (App $app) {
     }
 
     $sql = 'SELECT * FROM catalogo_paises ORDER BY nombre';
-    $object['data'] = $localConnection->goQuery($sql);
+    $rows = $localConnection->goQuery($sql);
+    $object['data'] = array_map(function ($row) {
+      $row['_id'] = (int) $row['_id'];
+      return $row;
+    }, $rows);
     $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    $response->getBody()->write(json_encode($object));
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
@@ -586,10 +590,15 @@ return function (App $app) {
     $idPais = intval($args['id_pais']);
 
     $sql = 'SELECT * FROM catalogo_estados WHERE id_pais = ? ORDER BY nombre';
-    $object['data'] = $localConnection->goQuery($sql, [$idPais]);
+    $rows = $localConnection->goQuery($sql, [$idPais]);
+    $object['data'] = array_map(function ($row) {
+      $row['_id'] = (int) $row['_id'];
+      $row['id_pais'] = (int) $row['id_pais'];
+      return $row;
+    }, $rows);
     $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    $response->getBody()->write(json_encode($object));
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
@@ -601,10 +610,15 @@ return function (App $app) {
     $idEstado = intval($args['id_estado']);
 
     $sql = 'SELECT * FROM catalogo_ciudades WHERE id_estado = ? ORDER BY nombre';
-    $object['data'] = $localConnection->goQuery($sql, [$idEstado]);
+    $rows = $localConnection->goQuery($sql, [$idEstado]);
+    $object['data'] = array_map(function ($row) {
+      $row['_id'] = (int) $row['_id'];
+      $row['id_estado'] = (int) $row['id_estado'];
+      return $row;
+    }, $rows);
     $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    $response->getBody()->write(json_encode($object));
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
