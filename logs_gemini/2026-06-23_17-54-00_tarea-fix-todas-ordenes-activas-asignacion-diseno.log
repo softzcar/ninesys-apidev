@@ -1,0 +1,51 @@
+[TAREA: FIX - MOSTRAR TODAS LAS ÓRDENES ACTIVAS EN /diseno/asignacion]
+Fecha y Hora: 2026-06-23T17:54:00-04:00
+Autor: Antigravity AI
+Estado: COMPLETADO
+
+- **Solicitud del Usuario:** La página `/diseno/asignacion` solo muestra órdenes que tienen algún ítem de diseño, pero debería mostrar todas las órdenes activas del vendedor. Es necesario poder asignar un diseñador a una orden sin diseño para arreglos menores.
+
+- **Proyecto(s):** Backend
+
+- **Archivos Involucrados:**
+    - `ninesys-api/app/routes/designs.php` (líneas 402-413)
+
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `25702cc` — "fix: mostrar todas las ordenes activas en /diseno/asignacion sin filtro es_diseno"
+
+- **Diagnóstico:**
+  El filtro estaba en el **backend** (API), en el endpoint `GET /disenos` (designs.php). En mayo de 2026 (commit previo) se agregó intencionalmente un `AND EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON op.id_woo = p._id WHERE op.id_orden = b._id AND p.es_diseno = 1)` para mostrar únicamente órdenes con productos de diseño.
+  El requisito cambió: ahora se requiere mostrar TODAS las órdenes activas para poder asignar diseñadores a órdenes sin ítems de diseño (para ajustes menores).
+
+- **Acción Realizada:**
+  1. Se analizó el componente Vue `/diseno/asignacion` → llama al store `disenos/getDisenos`.
+  2. El store llama a `GET /disenos` en la API.
+  3. Se identificó el filtro `AND EXISTS (... p.es_diseno = 1)` en el endpoint `GET /disenos` del archivo `designs.php` (líneas 404-410).
+  4. Se eliminó el bloque `AND EXISTS` de la cláusula `WHERE`, dejando solo:
+     ```sql
+     WHERE
+         (b.status = 'activa' OR b.status = 'pausada' OR b.status = 'En espera')
+     ```
+  5. Se verificó la sintaxis PHP con `php -l` → sin errores.
+  6. Se realizó el commit `25702cc` con el fix y los logs del día pendientes.
+  7. Se desplegó en **Desarrollo (Contabo Dev)** via `deploy_backend.sh` opción 2 → ✅ Éxito. HEAD remoto: `25702cc`.
+  8. Se desplegó en **Producción (Contabo Prod)** via `deploy_backend.sh` opción 1 → ✅ Éxito. HEAD remoto: `25702cc`. OPcache reseteado en ambos entornos.
+
+- **Inconvenientes y Desafíos:** Ninguno. El diagnóstico fue inmediato al revisar el log histórico `2026-05-22_20-48-00_tarea-filtro-es-diseno-asignacion.log` que documentaba la adición original del filtro.
+
+- **Decisión Final y Justificación:** Eliminar el filtro `AND EXISTS (es_diseno = 1)` es la solución correcta porque el requisito de negocio cambió: ahora el módulo de asignación de diseño debe permitir asignar un diseñador a CUALQUIER orden activa, no solo a las que tienen productos de diseño.
+
+- **Herramienta(s) Utilizada(s):** `view_file`, `grep_search`, `multi_replace_file_content`, `run_command`
+
+- **Resultado:** Éxito
+
+- **Verificación:** 
+  - `php -l designs.php` → "No syntax errors detected"
+  - Despliegue en Desarrollo: HEAD remoto `25702cc` ✅
+  - Despliegue en Producción: HEAD remoto `25702cc` ✅
+  - OPcache reseteado en ambos entornos ✅
+
+- **Logro Conseguido:** La página `/diseno/asignacion` ahora muestra todas las órdenes activas/pausadas/en espera del vendedor, sin restringirse solo a las que tienen productos de diseño. Esto permite asignar diseñadores para ajustes menores en cualquier tipo de orden.
+
+- **Observaciones de Gemini:** El log histórico de mayo de 2026 fue clave para entender de inmediato el origen del filtro y tomar la decisión correcta sin ambigüedad.

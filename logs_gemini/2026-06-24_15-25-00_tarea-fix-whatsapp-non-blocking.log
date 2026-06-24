@@ -1,0 +1,26 @@
+- **Solicitud del Usuario:** En la aplicacion en producción estoy recibiendo error en el enpoint `https://api.nineteencustom.com/ordenes/nueva/custom` al mometo de crear una nuea orden, el error es: {"success":false,"message":"Error al crear la orden: Fallo al iniciar sesión en la API de WhatsApp... 503 Service Unavailable"}. Parece ser un error con el servicio de whatsapp. En este momento el servicio de whatsapp NO está en linea, está desactivado deliveradamente, necesitamos que la API no genre estos ERRORES TAN ALAMARTES ENE STE CASO.
+- **Fecha y Hora:** 2026-06-24 15:25:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - [whatsapp.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/lib/whatsapp.php)
+    - [orders.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/orders.php)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: 3910e3b
+- **Acción Realizada:**
+    1. Se modificó la clase `WhatsAppAPIClient` en `whatsapp.php` envolviendo todos los métodos públicos (`sendMessage`, `sendMessageCustom`, `getWSSeesionInfo`, y `sendDirectMessageToNode`) en bloques `try-catch` robustos. Si la API de WhatsApp o la autenticación JWT fallan (por ejemplo, con un error HTTP 503), el cliente captura la excepción y retorna un array estructurado de error (`['success' => false, 'status' => 'failed', 'message' => ...]`) en lugar de arrojar una excepción y abortar la ejecución completa.
+    2. Se modificó el endpoint `POST /ordenes/nueva/custom` en `orders.php` envolviendo la llamada de envío de WhatsApp en un bloque `try-catch` de tipo `\Throwable`. Esto asegura que cualquier problema (red, autenticación o errores imprevistos) no interrumpa el flujo del endpoint y permita retornar una respuesta HTTP 200 de éxito al cliente indicando que la orden fue creada (dado que ya se realizó el `commit` de la transacción de base de datos).
+- **Inconvenientes y Desafíos:**
+    - El entorno de red del sandbox del agente de Antigravity tiene restricciones que bloquean las llamadas salientes a internet/DNS (`Temporary failure in name resolution`) y el cliente SSH local tiene conflictos con el propietario del archivo `/etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf` (`Bad owner or permissions`), lo que impide al agente realizar el push y deploy automático desde su consola.
+- **Decisión Final y Justificación:**
+    - Se resolvió realizar las modificaciones y el commit de Git de forma local en el espacio de trabajo del desarrollador. El despliegue final en el servidor de desarrollo (`vps-contabo-dev`) deberá ser completado manualmente por el usuario ejecutando el script interactivo `/home/developer/Escritorio/niesys/ninesys-hub/bin/deploy_backend.sh` (opción 2) desde su terminal principal del host, donde Git y SSH funcionan correctamente con acceso a internet.
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`, `write_to_file`.
+- **Resultado:** Parcial (Modificación y commit local exitosos, despliegue pendiente de ejecución por el usuario).
+- **Verificación:**
+    - Se ejecutó verificación de sintaxis local en ambos archivos con `php -l`, arrojando `No syntax errors detected`.
+- **Logro Conseguido:** Se eliminó la vulnerabilidad de caída crítica del endpoint de creación de órdenes cuando el servicio de WhatsApp se encuentra deliberadamente apagado o inactivo, logrando que el fallo de la notificación por mensajería sea silencioso y no bloqueante.
+- **Referencias de Sesión (Contexto):**
+    - Task: [task.md](file:///home/developer/.gemini/antigravity-ide/brain/581539ed-ff67-4aa7-abba-954238ad92ac/task.md)
+    - Walkthrough: [walkthrough.md](file:///home/developer/.gemini/antigravity-ide/brain/581539ed-ff67-4aa7-abba-954238ad92ac/walkthrough.md)
+- **Observaciones de Gemini:** N/A
+- **Respuesta de Gemini:** Se informó al usuario de los cambios y se le solicitó ejecutar el script de despliegue desde su terminal principal de desarrollo para finalizar la actualización en el servidor.

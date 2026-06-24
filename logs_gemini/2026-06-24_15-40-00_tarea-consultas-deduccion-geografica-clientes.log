@@ -1,0 +1,14 @@
+Tarea: Creación de consultas SQL para deducir y actualizar la información geográfica (país, estado, ciudad) de clientes anteriores a partir de su dirección escrita.
+Fecha: 2026-06-24 15:40:00
+
+Detalle:
+- Se analizó la estructura de las tablas geográficas agregadas recientemente en `ninesys-api/public/model/create_new_company_api_emp_N.sql`.
+- Las tablas involucradas son:
+  * `catalogo_paises` (id de Venezuela = 189)
+  * `catalogo_estados`
+  * `catalogo_ciudades`
+- Los nuevos campos de relación en `customers` son:
+  * `id_catalogo_pais`
+  * `id_catalogo_estado`
+  * `id_catalogo_ciudad`
+- Se crearon consultas SQL de diagnóstico, de asignación automática por coincidencia de texto, y plantillas de actualización manual mediante filtros por palabra clave en la dirección (`address LIKE '%...%'`).
