@@ -3263,30 +3263,40 @@ $object['sales_commission_ISSET'][] = false;
 
       // WhatsApp se envía DESPUÉS del commit (no es crítico si falla)
       if ($sendWhatsApp) {
-        // Usar el teléfono que viene del formulario directamente
-        $clientPhone = $arr['telefono'] ?? null;
+        try {
+          // Usar el teléfono que viene del formulario directamente
+          $clientPhone = $arr['telefono'] ?? null;
 
-        // Fallback: si no viene del formulario, intentar obtener de customers
-        if (empty($clientPhone)) {
-          $infoSql = 'SELECT b.phone FROM ordenes a LEFT JOIN customers b ON b._id = a.id_wp WHERE a._id = ' . $last_id;
-          $contactInfo = $localConnection->goQuery($infoSql)[0] ?? [];
-          $clientPhone = $contactInfo['phone'] ?? null;
-        }
+          // Fallback: si no viene del formulario, intentar obtener de customers
+          if (empty($clientPhone)) {
+            $infoSql = 'SELECT b.phone FROM ordenes a LEFT JOIN customers b ON b._id = a.id_wp WHERE a._id = ' . $last_id;
+            $contactInfo = $localConnection->goQuery($infoSql)[0] ?? [];
+            $clientPhone = $contactInfo['phone'] ?? null;
+          }
 
-        if (empty($clientPhone)) {
-          $object['ws_response'] = 'Envío de WhatsApp omitido: No se encontró un número de teléfono para el cliente.';
-        } else {
-          $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');  // Asegúrate que esta función esté definida
-          $payload = $resultBuscar['object'];
-          $payload['phone_client'] = $clientPhone;
-          $payload['template'] = 'welcome';
+          if (empty($clientPhone)) {
+            $object['ws_response'] = 'Envío de WhatsApp omitido: No se encontró un número de teléfono para el cliente.';
+          } else {
+            $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');  // Asegúrate que esta función esté definida
+            $payload = $resultBuscar['object'];
+            $payload['phone_client'] = $clientPhone;
+            $payload['template'] = 'welcome';
 
-          $msgApi = new WhatsAppAPIClient(WS_API_URL);
-          $ws_result = $msgApi->sendMessage(ID_EMPRESA, $payload);
+            $msgApi = new WhatsAppAPIClient(WS_API_URL);
+            $ws_result = $msgApi->sendMessage(ID_EMPRESA, $payload);
 
-          $object['ws_response'] = $ws_result;
-          $object['ws_payload_sent'] = $payload;
-          $object['ws_http_code'] = isset($ws_result['code']) ? $ws_result['code'] : (isset($ws_result['success']) && $ws_result['success'] ? 200 : 500);
+            $object['ws_response'] = $ws_result;
+            $object['ws_payload_sent'] = $payload;
+            $object['ws_http_code'] = isset($ws_result['code']) ? $ws_result['code'] : (isset($ws_result['success']) && $ws_result['success'] ? 200 : 500);
+          }
+        } catch (\Throwable $wse) {
+          error_log('Error no crítico al enviar WhatsApp en /ordenes/nueva/custom: ' . $wse->getMessage());
+          $object['ws_response'] = [
+            'success' => false,
+            'status' => 'failed',
+            'message' => 'Error al procesar el envío de WhatsApp: ' . $wse->getMessage()
+          ];
+          $object['ws_http_code'] = 500;
         }
       } else {
         $object['ws_response'] = 'Envío de WhatsApp omitido por el usuario.';

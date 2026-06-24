@@ -202,56 +202,92 @@ class WhatsAppAPIClient
 
     public function sendMessage($id_empresa, $payload)
     {
-        if (!$this->shouldSend(null, $payload)) {
+        try {
+            if (!$this->shouldSend(null, $payload)) {
+                return [
+                    'success' => false,
+                    'status' => 'skipped',
+                    'message' => 'El cliente ha optado por no recibir mensajes automáticos.'
+                ];
+            }
+            $url = $this->apiUrl . 'send-message/' . $id_empresa;
+            return $this->makeRequest('POST', $url, $id_empresa, $payload);
+        } catch (\Throwable $e) {
+            error_log('Error en WhatsAppAPIClient::sendMessage: ' . $e->getMessage());
             return [
                 'success' => false,
-                'status' => 'skipped',
-                'message' => 'El cliente ha optado por no recibir mensajes automáticos.'
+                'status' => 'failed',
+                'message' => 'Fallo al iniciar sesión en la API de WhatsApp o enviar mensaje: ' . $e->getMessage()
             ];
         }
-        $url = $this->apiUrl . 'send-message/' . $id_empresa;
-        return $this->makeRequest('POST', $url, $id_empresa, $payload);
     }
 
     public function sendMessageCustom($id_empresa, $id_orden, $phone, $msg)
     {
-        if (!$this->shouldSend($phone)) {
+        try {
+            if (!$this->shouldSend($phone)) {
+                return [
+                    'success' => false,
+                    'status' => 'skipped',
+                    'message' => 'El cliente ha optado por no recibir mensajes automáticos.'
+                ];
+            }
+            $url = $this->apiUrl . 'send-message-custom/' . $id_empresa;
+            $payload = [
+                'phone' => $phone,
+                'id_orden' => $id_orden,
+                'message' => $msg,
+            ];
+            return $this->makeRequest('POST', $url, $id_empresa, $payload);
+        } catch (\Throwable $e) {
+            error_log('Error en WhatsAppAPIClient::sendMessageCustom: ' . $e->getMessage());
             return [
                 'success' => false,
-                'status' => 'skipped',
-                'message' => 'El cliente ha optado por no recibir mensajes automáticos.'
+                'status' => 'failed',
+                'message' => 'Fallo al enviar mensaje custom en WhatsApp: ' . $e->getMessage()
             ];
         }
-        $url = $this->apiUrl . 'send-message-custom/' . $id_empresa;
-        $payload = [
-            'phone' => $phone,
-            'id_orden' => $id_orden,
-            'message' => $msg,
-        ];
-        return $this->makeRequest('POST', $url, $id_empresa, $payload);
     }
 
     public function getWSSeesionInfo($id_empresa)
     {
-        $url = $this->apiUrl . 'session-info/' . $id_empresa;
-        return $this->makeRequest('GET', $url, $id_empresa);
+        try {
+            $url = $this->apiUrl . 'session-info/' . $id_empresa;
+            return $this->makeRequest('GET', $url, $id_empresa);
+        } catch (\Throwable $e) {
+            error_log('Error en WhatsAppAPIClient::getWSSeesionInfo: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'status' => 'failed',
+                'message' => 'Fallo al obtener información de sesión de WhatsApp: ' . $e->getMessage()
+            ];
+        }
     }
 
     public function sendDirectMessageToNode($id_empresa, $phone, $message, $isAutomatic = true)
     {
-        if ($isAutomatic && !$this->shouldSend($phone)) {
+        try {
+            if ($isAutomatic && !$this->shouldSend($phone)) {
+                return [
+                    'success' => false,
+                    'status' => 'skipped',
+                    'message' => 'El cliente ha optado por no recibir mensajes automáticos.'
+                ];
+            }
+            $url = $this->apiUrl . 'send-direct-message/' . $id_empresa;
+            $payload = [
+                'phone' => $phone,
+                'message' => $message,
+            ];
+            return $this->makeRequest('POST', $url, $id_empresa, $payload);
+        } catch (\Throwable $e) {
+            error_log('Error en WhatsAppAPIClient::sendDirectMessageToNode: ' . $e->getMessage());
             return [
                 'success' => false,
-                'status' => 'skipped',
-                'message' => 'El cliente ha optado por no recibir mensajes automáticos.'
+                'status' => 'failed',
+                'message' => 'Fallo al enviar mensaje directo en WhatsApp: ' . $e->getMessage()
             ];
         }
-        $url = $this->apiUrl . 'send-direct-message/' . $id_empresa;
-        $payload = [
-            'phone' => $phone,
-            'message' => $message,
-        ];
-        return $this->makeRequest('POST', $url, $id_empresa, $payload);
     }
 
     // El método getInfo y sendMessage_old se mantienen por si son usados en otras partes,
