@@ -953,7 +953,10 @@ class WooMe
         null billing_city, 
         null billing_state, 
         `address` billing_address_1, 
-        email billing_email 
+        email billing_email,
+        id_catalogo_pais,
+        id_catalogo_estado,
+        id_catalogo_ciudad
         FROM customers WHERE _id = ' . $id;
 
     $localConnection = new LocalDB();

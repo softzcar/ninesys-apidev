@@ -713,6 +713,19 @@ return function (App $app) {
 
   // Crear un nuevo cliente
   $app->post('/customers/{first_name}/{last_name}/{cedula}/{phone}/{email}/{address}', function (Request $request, Response $response, array $args) {
+    $data = $request->getParsedBody();
+    if (empty($data)) {
+      $bodyStream = $request->getBody();
+      $bodyStream->rewind();
+      $raw_body = $bodyStream->getContents();
+      parse_str($raw_body, $data);
+    }
+
+    $idCatalogoPais = isset($data['id_catalogo_pais']) && $data['id_catalogo_pais'] !== '' ? intval($data['id_catalogo_pais']) : null;
+    $idCatalogoEstado = isset($data['id_catalogo_estado']) && $data['id_catalogo_estado'] !== '' ? intval($data['id_catalogo_estado']) : null;
+    $idCatalogoCiudad = isset($data['id_catalogo_ciudad']) && $data['id_catalogo_ciudad'] !== '' ? intval($data['id_catalogo_ciudad']) : null;
+    $recibir = isset($data['recibir_notificaciones']) ? $data['recibir_notificaciones'] : null;
+
     $woo = new WooMe();
 
     $response->getBody()->write(
@@ -722,7 +735,11 @@ return function (App $app) {
         $args['cedula'],
         $args['phone'],
         $args['email'],
-        $args['address']
+        $args['address'],
+        $recibir,
+        $idCatalogoPais,
+        $idCatalogoEstado,
+        $idCatalogoCiudad
       )
     );
     return $response
@@ -733,8 +750,43 @@ return function (App $app) {
 
   // Actualizar Cliente
   $app->put('/customers/{id}/{first_name}/{last_name}/{cedula}/{phone}/{email}/{billing_address}', function (Request $request, Response $response, array $args) {
+    $data = $request->getParsedBody();
+    $raw_body_debug = "";
+    if (empty($data)) {
+      $bodyStream = $request->getBody();
+      $bodyStream->rewind();
+      $raw_body_debug = $bodyStream->getContents();
+      parse_str($raw_body_debug, $data);
+    }
+    
+    $idCatalogoPais = isset($data['id_catalogo_pais']) && $data['id_catalogo_pais'] !== '' ? intval($data['id_catalogo_pais']) : null;
+    $idCatalogoEstado = isset($data['id_catalogo_estado']) && $data['id_catalogo_estado'] !== '' ? intval($data['id_catalogo_estado']) : null;
+    $idCatalogoCiudad = isset($data['id_catalogo_ciudad']) && $data['id_catalogo_ciudad'] !== '' ? intval($data['id_catalogo_ciudad']) : null;
+    $recibir = isset($data['recibir_notificaciones']) ? $data['recibir_notificaciones'] : null;
+
+    error_log("DEBUG PUT CUSTOMER - raw_body: " . $raw_body_debug);
+    error_log("DEBUG PUT CUSTOMER - parsed data: " . json_encode($data));
+    error_log("DEBUG PUT CUSTOMER - values: " . json_encode([
+      'id' => $args['id'],
+      'id_catalogo_pais' => $idCatalogoPais,
+      'id_catalogo_estado' => $idCatalogoEstado,
+      'id_catalogo_ciudad' => $idCatalogoCiudad
+    ]));
+
     $woo = new WooMe();
-    $respWC = json_encode($woo->updateCustomer($args['id'], $args['first_name'], $args['last_name'], $args['cedula'], $args['phone'], $args['email'], $args['billing_address']));
+    $respWC = json_encode($woo->updateCustomer(
+      $args['id'], 
+      $args['first_name'], 
+      $args['last_name'], 
+      $args['cedula'], 
+      $args['phone'], 
+      $args['email'], 
+      $args['billing_address'],
+      $recibir,
+      $idCatalogoPais,
+      $idCatalogoEstado,
+      $idCatalogoCiudad
+    ));
     $response->getBody()->write($respWC);
 
     return $response
