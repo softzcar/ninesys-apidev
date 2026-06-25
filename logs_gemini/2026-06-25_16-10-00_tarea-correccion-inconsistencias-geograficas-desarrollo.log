@@ -1,0 +1,11 @@
+Tarea: Corrección de inconsistencias geográficas en clientes de desarrollo (Guárico / Lara - empresa 194).
+Fecha: 2026-06-25 16:10:00
+
+Detalle:
+- Diagnóstico: Tras el reporte de incoherencias en el frontend de gestión (la aparición fantasma de "San José de Guaribe" en Guárico y el descuadre de 14 a 8 registros al filtrar Lara), se inspeccionó la base de datos `api_emp_194` de desarrollo (vps-contabo-dev). Se detectaron 6 clientes (IDs: 467, 498, 560, 721, 730, 747) con la geografía cruzada: tenían asignado id_catalogo_estado = 13 (Lara) pero id_catalogo_ciudad = 129 (San José de Guaribe, correspondiente al estado 12, Guárico).
+- Acción: Dado que las direcciones de dichos clientes indican "GUARICO" o "EL CHAPARRAL GUARICO", se reubicaron en el estado correcto y se retiró el ID de ciudad por carecer de detalle urbano en el texto original. Se corrió el UPDATE:
+  `UPDATE customers SET id_catalogo_estado = 12, id_catalogo_ciudad = NULL WHERE _id IN (467, 498, 560, 721, 730, 747);`
+- Resultados:
+  * Guárico ya no lista a "San José de Guaribe" en su selector de ciudades y muestra correctamente a los clientes bajo "Todas las ciudades".
+  * Lara ahora tiene un total de 8 clientes alineados al 100% con su única ciudad asignada (Barquisimeto), haciendo desaparecer el descuadre de 6 registros.
+- Verificación: Se corroboró mediante una query interna que el total de registros en `customers` con relaciones inconsistentes de estado/ciudad es de exactamente cero.

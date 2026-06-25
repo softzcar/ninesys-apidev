@@ -1,0 +1,16 @@
+Tarea: Corrección de inconsistencias geográficas de clientes en el entorno de producción (Empresa 194).
+Fecha: 2026-06-25 16:15:00
+
+Detalle:
+- Se aplicó la misma corrección de base de datos realizada previamente en desarrollo al entorno de producción (vps-contabo-prod) para solventar las inconsistencias geográficas detectadas por el usuario.
+- Diagnóstico: Seis clientes (IDs: 467, 498, 560, 721, 730, 747) tenían asignado el estado Lara (13) pero la ciudad San José de Guaribe (129), la cual pertenece en realidad a Guárico (12). Esto provocaba que en el frontend apareciera la ciudad "fantasma" en el selector de Guárico y descuadrara las sumas totales de Lara en la interfaz de gestión.
+- Medidas de Seguridad:
+  1. Se generó un respaldo preventivo comprimido de la tabla `customers` de producción en:
+     `/root/backups_migracion/api_emp_194_customers_prod_backup_20260625_correccion.sql.gz`
+- Consulta ejecutada:
+  `UPDATE customers SET id_catalogo_estado = 12, id_catalogo_ciudad = NULL WHERE _id IN (467, 498, 560, 721, 730, 747);`
+- Validación de Consistencia:
+  1. Se ejecutó una consulta de verificación de integridad geográfica en producción:
+     `SELECT COUNT(*) FROM customers c INNER JOIN catalogo_ciudades ciu ON c.id_catalogo_ciudad = ciu._id WHERE c.id_catalogo_estado != ciu.id_estado;`
+     El resultado obtenido fue 0, confirmando que no existen clientes con inconsistencias geográficas de estado y ciudad cruzados.
+  2. Se inspeccionaron manualmente los 6 registros actualizados y se verificó que tienen el estado Guárico (12) y ciudad en NULL asignados correctamente.

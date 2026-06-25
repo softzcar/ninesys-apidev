@@ -1,0 +1,12 @@
+Tarea: Copiar la tabla `customers` de producción a la base de datos del servidor de desarrollo (empresa 194).
+Fecha: 2026-06-25 08:30:00
+
+Detalle:
+- Diagnóstico previo: Se comprobó mediante `SHOW CREATE TABLE` que el esquema de la tabla `customers` en la base de datos `api_emp_194` es 100% idéntico en producción (vps-contabo-prod) y desarrollo (vps-contabo-dev), conteniendo ambas las columnas geográficas (`id_catalogo_pais`, `id_catalogo_estado`, `id_catalogo_ciudad`).
+- Respaldo preventivo: Se creó un dump comprimido de la tabla `customers` de desarrollo actual en: `/home/api.nineteengreen.com/public_html/backups/api_emp_194_customers_backup_20260625.sql.gz`.
+- Migración: Se exportó la tabla en producción y se importó en desarrollo en un único paso mediante un pipe SSH directo:
+  `ssh vps-contabo-prod "mysqldump --single-transaction api_emp_194 customers" | ssh vps-contabo-dev "mysql api_emp_194"`
+  Durante la importación, el set de sentencias deshabilitó temporalmente la revisión de llaves foráneas (`FOREIGN_KEY_CHECKS = 0`) para permitir el reemplazo de la tabla sin colisiones en las restricciones referenciales del CRM.
+- Verificación:
+  * El conteo de clientes arrojó exactamente 1937 registros tanto en producción como en desarrollo.
+  * Se validó que las tablas del CRM (como `crm_oportunidades`) mantuvieran su integridad referencial y registros intactos asociados al cliente correspondiente.

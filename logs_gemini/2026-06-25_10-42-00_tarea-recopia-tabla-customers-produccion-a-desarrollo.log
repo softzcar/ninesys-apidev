@@ -1,0 +1,12 @@
+Tarea: Recopiar la tabla `customers` de producción a la base de datos de desarrollo (segunda sincronización, empresa 194).
+Fecha: 2026-06-25 10:42:00
+
+Detalle:
+- Diagnóstico: A petición explícita del usuario, se procedió a sobreescribir nuevamente la tabla `customers` en el servidor de desarrollo para actualizarla con los datos de producción más recientes (lo que incluyó 2 nuevos clientes creados hoy).
+- Respaldo preventivo: Se creó un dump de seguridad comprimido en desarrollo en: `/home/api.nineteengreen.com/public_html/backups/api_emp_194_customers_backup_20260625_1040.sql.gz`.
+- Sincronización: Se realizó la copia mediante pipe directo SSH:
+  `ssh vps-contabo-prod "mysqldump --single-transaction api_emp_194 customers" | ssh vps-contabo-dev "mysql api_emp_194"`
+  Se deshabilitó temporalmente la verificación de llaves foráneas (`FOREIGN_KEY_CHECKS = 0`) para permitir el reemplazo limpio de la tabla sin colisiones en las dependencias del CRM.
+- Verificación:
+  * El conteo en producción arrojó 1939 registros.
+  * El conteo en desarrollo (post-import) arrojó exactamente 1939 registros, confirmando la importación íntegra de la tabla actual de producción.

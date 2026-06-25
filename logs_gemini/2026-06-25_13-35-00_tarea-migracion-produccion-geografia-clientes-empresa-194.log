@@ -1,0 +1,17 @@
+Tarea: Actualizar los campos geográficos de la tabla `customers` en producción a partir de los datos corregidos en desarrollo (empresa 194).
+Fecha: 2026-06-25 13:35:00
+
+Detalle:
+- Diagnóstico y Alineación: Se validó que ambas bases de datos (producción y desarrollo) estuvieran perfectamente sincronizadas con 1940 registros y un ID máximo de 1975 (incluyendo la copia del cliente 1975 realizada previamente).
+- Respaldo en Producción: Se realizó un backup preventivo comprimido de la tabla `customers` de producción en: `/root/backups_migracion/api_emp_194_customers_prod_backup_20260625.sql.gz`.
+- Migración Segura por Tabla Temporal:
+  1. Se creó una tabla temporal en producción: `CREATE TABLE customers_dev_temp LIKE customers;`.
+  2. Se exportaron los datos actualizados de desarrollo a producción mediante un pipe de SSH directo con exclusión de bloqueos (`--skip-add-locks` en mysqldump) y renombrando dinámicamente los inserts con `sed`:
+     `ssh vps-contabo-dev "mysqldump --single-transaction --no-create-info --skip-add-locks api_emp_194 customers" | sed 's/INSERT INTO \`customers\`/INSERT INTO \`customers_dev_temp\`/g' | ssh vps-contabo-prod "mysql api_emp_194"`
+  3. Se ejecutó un `UPDATE ... JOIN` selectivo en producción para actualizar únicamente las columnas `id_catalogo_pais`, `id_catalogo_estado` e `id_catalogo_ciudad`:
+     `UPDATE customers c INNER JOIN customers_dev_temp t ON c._id = t._id SET c.id_catalogo_pais = t.id_catalogo_pais, c.id_catalogo_estado = t.id_catalogo_estado, c.id_catalogo_ciudad = t.id_catalogo_ciudad;`
+  4. Se eliminó la tabla temporal en producción: `DROP TABLE IF EXISTS customers_dev_temp;`.
+- Verificación:
+  * El 100% de los clientes de producción (1940 registros) tienen ahora geografía asignada (id_catalogo_pais IS NOT NULL).
+  * Únicamente 10 registros (correspondientes a clientes internacionales/EEUU) quedaron con el campo estado en NULL, lo cual es el comportamiento correcto.
+  * No se afectó la integridad de datos personales ni de las tablas relacionales del CRM.

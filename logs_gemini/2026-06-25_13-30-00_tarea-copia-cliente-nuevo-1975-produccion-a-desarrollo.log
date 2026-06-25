@@ -1,0 +1,8 @@
+Tarea: Copiar el cliente individual nuevo con ID `1975` de producción a la base de datos de desarrollo (empresa 194).
+Fecha: 2026-06-25 13:30:00
+
+Detalle:
+- Diagnóstico: Tras comparar los registros de `customers` en la base de datos `api_emp_194` de producción y desarrollo, se descubrió un cliente nuevo registrado en producción (ID 1975, LEANDRINA GUILLEN) que no existía en desarrollo.
+- Acción: Se exportó únicamente este registro desde producción y se importó en desarrollo usando un pipe de SSH filtrado:
+  `ssh vps-contabo-prod "mysqldump --no-create-info --where='_id=1975' api_emp_194 customers" | ssh vps-contabo-dev "mysql api_emp_194"`
+- Verificación: Se consultó en desarrollo la tabla `customers` para el ID 1975, constatando que el registro se insertó de forma correcta con todos sus datos originales.

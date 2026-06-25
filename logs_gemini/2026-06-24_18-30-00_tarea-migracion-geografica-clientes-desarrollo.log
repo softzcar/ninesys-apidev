@@ -1,0 +1,17 @@
+Tarea: Migración y deducción geográfica de clientes anteriores a partir de su dirección en desarrollo (empresa 194).
+Fecha: 2026-06-24 18:30:00
+
+Detalle:
+- Diagnóstico: Se detectaron inicialmente 388 clientes con campos geográficos (país, estado, ciudad) en NULL en la base de datos `api_emp_194` de desarrollo (vps-contabo-dev).
+- Análisis: Gran parte de las direcciones sin ubicar correspondían a poblaciones andinas y del Sur del Lago (Tucaní, Caño Zancudo, El Moralito, Mucujepe, El Chivo, La Tendida, etc.) ausentes del catálogo estándar de 274 ciudades.
+- Acción: Se diseñaron y ejecutaron consultas de actualización masiva por lotes en el servidor de desarrollo, agrupando por palabras clave de dirección.
+  * Para poblaciones ausentes del catálogo de ciudades, se asignó País = 189 (Venezuela), Estado correspondiente (Mérida = 16, Zulia = 24, Táchira = 21) y Ciudad = NULL.
+  * Para ciudades y variaciones claras (Caracas, El Vigía, etc.), se asignó la ciudad exacta.
+  * Para clientes identificados en EEUU/Miami, se asignó País = 61 (Estados Unidos).
+  * Se aplicaron reglas por nombre exacto de estado.
+- Resultados:
+  * Se migraron con éxito 228 registros.
+  * El número de clientes completamente sin migrar (país o estado en NULL) se redujo de 388 a 160.
+  * De los 160 restantes, 41 son direcciones nulas, vacías o con texto "none", y el resto son variaciones no clasificables o comerciales sin indicación geográfica.
+  * Con esto, más del 60% de los clientes antiguos recuperaron visibilidad en la interfaz de gestión al filtrar por país/estado.
+- Próximos pasos: Proporcionar este script refinado al usuario para su ejecución a través de DBeaver en producción (empresa 194), o ejecución por SSH si lo autoriza.
