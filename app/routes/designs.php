@@ -684,20 +684,14 @@ return function (App $app) {
     JOIN ordenes b 
     ON b._id = a.id_orden 
     LEFT JOIN disenos d ON d._id = c.id_diseno
-    WHERE a.id_empleado =    ' . $args['id_empleado'] . ' 
-    AND a.terminado = 0 
-    AND EXISTS (
-        SELECT 1 
-        FROM ordenes_productos op
-        JOIN products p ON op.id_woo = p._id
-        WHERE op.id_orden = b._id AND p.es_diseno = 1
-    )
+    WHERE a.id_empleado =    ' . $args['id_empleado'] . '
+    AND a.terminado = 0
     ORDER BY a.id_orden ASC
     ';
     $object['sql_items'] = $sql;
     $object['items'] = $localConnection->goQuery($sql);
 
-    $sql = 'SELECT a.id_diseno id, a.revision, a.detalles detalles_revision, a.id_orden FROM revisiones a JOIN disenos b ON b._id = a.id_diseno WHERE b.id_empleado = ' . $args['id_empleado'] . ' AND EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON op.id_woo = p._id WHERE op.id_orden = b.id_orden AND p.es_diseno = 1)';
+    $sql = 'SELECT a.id_diseno id, a.revision, a.detalles detalles_revision, a.id_orden FROM revisiones a JOIN disenos b ON b._id = a.id_diseno WHERE b.id_empleado = ' . $args['id_empleado'];
     $object['sql_revisiones'] = $sql;
     $object['revisiones'] = $localConnection->goQuery($sql);
 
