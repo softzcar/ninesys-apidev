@@ -3116,12 +3116,14 @@ return function (App $app) {
                 (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento) orden_proceso_inicial,
                 (SELECT fecha_inicio FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_empleado = {$args['id_empleado']} AND id_departamento = {$args['id_departamento']} AND id_reposicion = a._id LIMIT 1) as fecha_inicio,
                 (SELECT fecha_terminado FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_empleado = {$args['id_empleado']} AND id_departamento = {$args['id_departamento']} AND id_reposicion = a._id LIMIT 1) as fecha_terminado,
-                c.corte    
+                c.corte,
+                l.prioridad
             FROM
                 reposiciones a  
             LEFT JOIN ordenes b ON b._id = a.id_orden 
             JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
             LEFT JOIN departamentos d ON d._id = a.id_departamento
+            LEFT JOIN lotes l ON l.id_orden = a.id_orden
             WHERE a.terminada = 0
                 AND (
                     a.id_empleado = {$args['id_empleado']} 
