@@ -727,25 +727,26 @@ return function (App $app) {
     $recibir = isset($data['recibir_notificaciones']) ? $data['recibir_notificaciones'] : null;
 
     $woo = new WooMe();
-
-    $response->getBody()->write(
-      $woo->createCustomer(
-        $args['first_name'],
-        $args['last_name'],
-        $args['cedula'],
-        $args['phone'],
-        $args['email'],
-        $args['address'],
-        $recibir,
-        $idCatalogoPais,
-        $idCatalogoEstado,
-        $idCatalogoCiudad
-      )
+    $resJson = $woo->createCustomer(
+      $args['first_name'],
+      $args['last_name'],
+      $args['cedula'],
+      $args['phone'],
+      $args['email'],
+      $args['address'],
+      $recibir,
+      $idCatalogoPais,
+      $idCatalogoEstado,
+      $idCatalogoCiudad
     );
+    $resObj = json_decode($resJson, true);
+    $status = (isset($resObj['status']) && $resObj['status'] === 'error') ? 400 : 200;
+    $response->getBody()->write($resJson);
+
     return $response
       ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
       ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
+      ->withStatus($status);
   });
 
   // Actualizar Cliente
@@ -774,7 +775,7 @@ return function (App $app) {
     ]));
 
     $woo = new WooMe();
-    $respWC = json_encode($woo->updateCustomer(
+    $resJson = $woo->updateCustomer(
       $args['id'], 
       $args['first_name'], 
       $args['last_name'], 
@@ -786,13 +787,15 @@ return function (App $app) {
       $idCatalogoPais,
       $idCatalogoEstado,
       $idCatalogoCiudad
-    ));
-    $response->getBody()->write($respWC);
+    );
+    $resObj = json_decode($resJson, true);
+    $status = (isset($resObj['status']) && $resObj['status'] === 'error') ? 400 : 200;
+    $response->getBody()->write($resJson);
 
     return $response
       ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
       ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
+      ->withStatus($status);
   });
 
   // Actualizar Cliente desde Admin
@@ -803,12 +806,16 @@ return function (App $app) {
     $idCatalogoPais = isset($data['id_catalogo_pais']) && $data['id_catalogo_pais'] !== '' ? intval($data['id_catalogo_pais']) : null;
     $idCatalogoEstado = isset($data['id_catalogo_estado']) && $data['id_catalogo_estado'] !== '' ? intval($data['id_catalogo_estado']) : null;
     $idCatalogoCiudad = isset($data['id_catalogo_ciudad']) && $data['id_catalogo_ciudad'] !== '' ? intval($data['id_catalogo_ciudad']) : null;
-    $response->getBody()->write($woo->updateCustomer($data['id'], $data['first_name'], $data['last_name'], $data['cedula'], $data['phone'], $data['email'], $data['address'], $recibir, $idCatalogoPais, $idCatalogoEstado, $idCatalogoCiudad));
+    
+    $resJson = $woo->updateCustomer($data['id'], $data['first_name'], $data['last_name'], $data['cedula'], $data['phone'], $data['email'], $data['address'], $recibir, $idCatalogoPais, $idCatalogoEstado, $idCatalogoCiudad);
+    $resObj = json_decode($resJson, true);
+    $status = (isset($resObj['status']) && $resObj['status'] === 'error') ? 400 : 200;
+    $response->getBody()->write($resJson);
 
     return $response
       ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
       ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
+      ->withStatus($status);
   });
 
   // Nuevo cliente desde Admin
@@ -820,27 +827,26 @@ return function (App $app) {
     $idCatalogoEstado = isset($data['id_catalogo_estado']) && $data['id_catalogo_estado'] !== '' ? intval($data['id_catalogo_estado']) : null;
     $idCatalogoCiudad = isset($data['id_catalogo_ciudad']) && $data['id_catalogo_ciudad'] !== '' ? intval($data['id_catalogo_ciudad']) : null;
 
-    $response->getBody()->write(
-      $woo->createCustomer(
-        $data['first_name'],
-        $data['last_name'],
-        $data['cedula'],
-        $data['phone'],
-        $data['email'],
-        $data['address'],
-        $recibir,
-        $idCatalogoPais,
-        $idCatalogoEstado,
-        $idCatalogoCiudad
-      )
+    $resJson = $woo->createCustomer(
+      $data['first_name'],
+      $data['last_name'],
+      $data['cedula'],
+      $data['phone'],
+      $data['email'],
+      $data['address'],
+      $recibir,
+      $idCatalogoPais,
+      $idCatalogoEstado,
+      $idCatalogoCiudad
     );
-
-    /* $response->getBody()->write($woo->updateCustomer($data["id"], $data["first_name"], $data["last_name"], $data["cedula"], $data["phone"], $data["email"], $data["address"])); */
+    $resObj = json_decode($resJson, true);
+    $status = (isset($resObj['status']) && $resObj['status'] === 'error') ? 400 : 200;
+    $response->getBody()->write($resJson);
 
     return $response
       ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
       ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
+      ->withStatus($status);
   });
 
   /** *  CATEGORIAS */

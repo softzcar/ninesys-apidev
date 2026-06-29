@@ -2813,7 +2813,13 @@ $object['sales_commission_ISSET'][] = false;
       }
 
       if (!empty($cliente_telefono) && $cliente_telefono !== 'none') {
-        $conditions[] = "phone = '$cliente_telefono'";
+        $digits = preg_replace('/\D/', '', $cliente_telefono);
+        if (strlen($digits) >= 7) {
+          $last10 = substr($digits, -10);
+          $conditions[] = "REGEXP_REPLACE(phone, '[^0-9]', '') LIKE '%" . $last10 . "'";
+        } else {
+          $conditions[] = "phone = '$cliente_telefono'";
+        }
       }
 
       if (!empty($conditions)) {

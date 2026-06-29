@@ -1106,7 +1106,13 @@ class WooMe
   {
     $localConnection = new LocalDB();
 
-    $sql = "SELECT _id FROM customers WHERE phone = '" . trim($phone) . "';";
+    $digits = preg_replace('/\D/', '', $phone);
+    if (strlen($digits) >= 7) {
+      $last10 = substr($digits, -10);
+      $sql = "SELECT _id, first_name, last_name, phone FROM customers WHERE REGEXP_REPLACE(phone, '[^0-9]', '') LIKE '%" . $last10 . "';";
+    } else {
+      $sql = "SELECT _id, first_name, last_name, phone FROM customers WHERE phone = '" . trim($phone) . "';";
+    }
     $exist = $localConnection->goQuery($sql);
     $myCount = count($exist);
 
@@ -1159,8 +1165,18 @@ class WooMe
                 )";
       $response['resp_insert'] = $localConnection->goQuery($sql, [$id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad]);
     } else {
-      $obj['msg'] = 'El cliente ya existe';
-      $response = $obj;
+      $conflictCustomer = $exist[0];
+      $response = [
+        'status' => 'error',
+        'error' => 'phone_duplicate',
+        'msg' => 'El teléfono ya está registrado',
+        'customer' => [
+          'id' => (int)$conflictCustomer['_id'],
+          'first_name' => $conflictCustomer['first_name'],
+          'last_name' => $conflictCustomer['last_name'],
+          'phone' => $conflictCustomer['phone']
+        ]
+      ];
     }
 
     $localConnection->disconnect();
@@ -1173,7 +1189,33 @@ class WooMe
     $token = bin2hex($bytes);
     $localConnection = new LocalDB();
 
-    // Verificar si el cliente existe
+    // 1. Verificar si el teléfono ya está registrado a OTRO cliente
+    $digits = preg_replace('/\D/', '', $phone);
+    if (strlen($digits) >= 7) {
+      $last10 = substr($digits, -10);
+      $sqlPhone = "SELECT _id, first_name, last_name, phone FROM customers WHERE _id <> " . intval($id) . " AND REGEXP_REPLACE(phone, '[^0-9]', '') LIKE '%" . $last10 . "';";
+    } else {
+      $sqlPhone = "SELECT _id, first_name, last_name, phone FROM customers WHERE _id <> " . intval($id) . " AND phone = '" . trim($phone) . "';";
+    }
+    $existPhone = $localConnection->goQuery($sqlPhone);
+    if (count($existPhone) > 0) {
+      $conflictCustomer = $existPhone[0];
+      $response = [
+        'status' => 'error',
+        'error' => 'phone_duplicate',
+        'msg' => 'El teléfono ya está registrado',
+        'customer' => [
+          'id' => (int)$conflictCustomer['_id'],
+          'first_name' => $conflictCustomer['first_name'],
+          'last_name' => $conflictCustomer['last_name'],
+          'phone' => $conflictCustomer['phone']
+        ]
+      ];
+      $localConnection->disconnect();
+      return json_encode($response);
+    }
+
+    // 2. Verificar si el cliente existe
     $sql = 'SELECT count(_id) existe FROM customers WHERE _id = ' . $id . ';';
     $result = $localConnection->goQuery($sql);
 

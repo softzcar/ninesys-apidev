@@ -961,7 +961,14 @@ return function (App $app) {
         try {
             $tenantConnection = new LocalDB();
 
-            $conditions = ["phone = '$telefono'"];
+            $conditions = [];
+            $digits = preg_replace('/\D/', '', $telefono);
+            if (strlen($digits) >= 7) {
+                $last10 = substr($digits, -10);
+                $conditions[] = "REGEXP_REPLACE(phone, '[^0-9]', '') LIKE '%" . $last10 . "'";
+            } else {
+                $conditions[] = "phone = '$telefono'";
+            }
             if ($cedula !== '' && $cedula !== 'none') {
                 $conditions[] = "cedula = '$cedula'";
             }
