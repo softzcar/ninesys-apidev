@@ -1,127 +1,186 @@
 <?php
 /**
- * Script de Migración: Base64 → Imágenes Físicas
- * 
- * Este script extrae imágenes base64 de la tabla ordenes_observaciones,
- * las convierte en archivos físicos optimizados, y actualiza los registros
- * con las URLs de las imágenes.
- * 
- * Uso: php scripts/migrate_base64_images.php
+ * Script de Migración: Base64 -> Imágenes Físicas (ordenes_observaciones)
+ *
+ * Extrae las imágenes incrustadas en base64 dentro del HTML de
+ * `ordenes_observaciones.observaciones`, las guarda como archivos físicos
+ * optimizados en el MISMO directorio que usa el editor en producción
+ * (public/images-orders-details/) y reemplaza el base64 por la URL de la
+ * imagen, manteniendo EXACTAMENTE el mismo formato de URL que ya usan los
+ * registros recientes de la empresa.
+ *
+ * Probado originalmente en api_emp_152 (dic 2025): 453.90 MB -> 0.74 MB.
+ * Generalizado (jun 2026) para ejecutarse en cualquier empresa por parámetro.
+ *
+ * --------------------------------------------------------------------------
+ * USO (ejecutar EN EL SERVIDOR donde vive la base y el directorio de imágenes):
+ *
+ *   # 1) Simulación (NO escribe nada, no crea backup, no toca la BD):
+ *   php scripts/migrate_base64_images.php \
+ *       --db=api_emp_194 --db-user=root --db-pass=SECRET \
+ *       --base-url=https://api.nineteencustom.com --dry-run
+ *
+ *   # 2) Ejecución real:
+ *   php scripts/migrate_base64_images.php \
+ *       --db=api_emp_194 --db-user=root --db-pass=SECRET \
+ *       --base-url=https://api.nineteencustom.com
+ *
+ * PARÁMETROS:
+ *   --db          (obligatorio)  Nombre de la base de la empresa (ej: api_emp_194)
+ *   --db-user     (obligatorio)  Usuario MySQL
+ *   --db-pass     (obligatorio)  Clave MySQL  (también vía env DB_PASS)
+ *   --db-host     (opcional)     Host MySQL. Default: localhost
+ *   --base-url    (obligatorio)  Prefijo absoluto de la URL, SIN barra final.
+ *                                Ej: https://api.nineteencustom.com
+ *                                La URL final será:
+ *                                <base-url>/images-orders-details/<archivo>
+ *   --batch       (opcional)     Tamaño de lote. Default: 20
+ *   --dry-run     (opcional)     Simula: cuenta filas/imágenes y estima MB,
+ *                                NO crea archivos, NO crea backup, NO toca la BD.
+ *   --no-backup   (opcional)     Omite la creación de la tabla de respaldo
+ *                                (NO recomendado).
+ *
+ * NOTA: el directorio de salida SIEMPRE es public/images-orders-details/
+ *       relativo a este script (mismo que usa el endpoint /upload-order-detail-image).
+ *       No se inventa ninguna ruta nueva.
+ * --------------------------------------------------------------------------
  */
 
-// Configuración
-define('BATCH_SIZE', 20);
+// ---------------------------------------------------------------------------
+// Parseo de argumentos
+// ---------------------------------------------------------------------------
+$opts = getopt('', [
+    'db:', 'db-user:', 'db-pass::', 'db-host::',
+    'base-url:', 'batch::', 'dry-run', 'no-backup', 'help'
+]);
+
+if (isset($opts['help'])) {
+    // Muestra la cabecera del archivo como ayuda
+    echo file_get_contents(__FILE__, false, null, 0, 2400), "\n";
+    exit(0);
+}
+
+$DRY_RUN   = isset($opts['dry-run']);
+$NO_BACKUP = isset($opts['no-backup']);
+
+$dbConfig = [
+    'host'   => $opts['db-host'] ?? 'localhost',
+    'dbname' => $opts['db'] ?? null,
+    'user'   => $opts['db-user'] ?? null,
+    'pass'   => $opts['db-pass'] ?? (getenv('DB_PASS') ?: null),
+];
+
+$BASE_URL = isset($opts['base-url']) ? rtrim($opts['base-url'], '/') : null;
+
+// Configuración fija (idéntica al endpoint de subida en producción)
+define('BATCH_SIZE', isset($opts['batch']) ? max(1, (int) $opts['batch']) : 20);
 define('MAX_WIDTH', 1280);
 define('JPEG_QUALITY', 80);
 define('OUTPUT_DIR', __DIR__ . '/../public/images-orders-details');
-define('URL_PREFIX', '/images-orders-details/');
+define('URL_DIR_SEGMENT', '/images-orders-details/');
 
-// Configuración de base de datos
-$dbConfig = [
-    'host' => 'localhost',
-    'dbname' => 'api_emp_152',
-    'user' => 'api_user_152',
-    'pass' => 'cf747993a6231d6e0a15f731'
-];
-
-// Configuración de memoria y tiempo
 ini_set('memory_limit', '512M');
 set_time_limit(0);
 
-// Colores para output
+// ---------------------------------------------------------------------------
+// Utilidades de salida
+// ---------------------------------------------------------------------------
 function colorLog($message, $type = 'info')
 {
     $colors = [
-        'info' => "\033[34m",    // Azul
-        'success' => "\033[32m", // Verde
-        'warning' => "\033[33m", // Amarillo
-        'error' => "\033[31m",   // Rojo
-        'reset' => "\033[0m"
+        'info' => "\033[34m", 'success' => "\033[32m", 'warning' => "\033[33m",
+        'error' => "\033[31m", 'reset' => "\033[0m",
     ];
-
-    $prefix = match ($type) {
-        'info' => '[INFO]',
-        'success' => '[OK]',
-        'warning' => '[WARN]',
+    $prefixes = [
+        'info' => '[INFO]', 'success' => '[OK]', 'warning' => '[WARN]',
         'error' => '[ERROR]',
-        default => '[LOG]'
-    };
-
-    echo $colors[$type] . $prefix . " " . $message . $colors['reset'] . "\n";
+    ];
+    $prefix = $prefixes[$type] ?? '[LOG]';
+    echo ($colors[$type] ?? '') . $prefix . " " . $message . $colors['reset'] . "\n";
 }
 
-// Conectar a la base de datos
+function fail($msg)
+{
+    colorLog($msg, 'error');
+    exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// Validación de parámetros
+// ---------------------------------------------------------------------------
+if (empty($dbConfig['dbname']))  fail("Falta --db (nombre de la base, ej: api_emp_194).");
+if (empty($dbConfig['user']))    fail("Falta --db-user.");
+if (empty($dbConfig['pass']))    fail("Falta --db-pass (o variable de entorno DB_PASS).");
+if (empty($BASE_URL))            fail("Falta --base-url (ej: https://api.nineteencustom.com).");
+
+// ---------------------------------------------------------------------------
+// Conexión
+// ---------------------------------------------------------------------------
 function getConnection($config)
 {
     try {
         $dsn = "mysql:host={$config['host']};dbname={$config['dbname']};charset=utf8mb4";
-        $pdo = new PDO($dsn, $config['user'], $config['pass'], [
+        return new PDO($dsn, $config['user'], $config['pass'], [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ]);
-        return $pdo;
     } catch (PDOException $e) {
-        colorLog("Error de conexión: " . $e->getMessage(), 'error');
-        exit(1);
+        fail("Error de conexión: " . $e->getMessage());
     }
 }
 
-// Crear backup de la tabla
+// ---------------------------------------------------------------------------
+// Backup
+// ---------------------------------------------------------------------------
 function createBackup($pdo)
 {
     colorLog("Creando backup de la tabla...", 'info');
-
     try {
-        // Verificar si el backup ya existe
         $stmt = $pdo->query("SHOW TABLES LIKE 'ordenes_observaciones_backup_base64'");
         if ($stmt->rowCount() > 0) {
-            colorLog("El backup ya existe. ¿Desea continuar sin crear nuevo backup? (s/n)", 'warning');
-            $input = trim(fgets(STDIN));
-            if (strtolower($input) !== 's') {
-                colorLog("Abortando...", 'error');
-                exit(0);
+            colorLog("Ya existe 'ordenes_observaciones_backup_base64'. ¿Continuar SIN crear nuevo backup? (s/n)", 'warning');
+            if (strtolower(trim(fgets(STDIN))) !== 's') {
+                fail("Abortado por el usuario.");
             }
             return true;
         }
-
-        // Crear backup
         $pdo->exec("CREATE TABLE ordenes_observaciones_backup_base64 AS SELECT * FROM ordenes_observaciones");
-
-        // Verificar backup
         $count = $pdo->query("SELECT COUNT(*) FROM ordenes_observaciones_backup_base64")->fetchColumn();
-        colorLog("Backup creado exitosamente con {$count} registros", 'success');
-
+        colorLog("Backup creado con {$count} registros.", 'success');
         return true;
     } catch (PDOException $e) {
-        colorLog("Error creando backup: " . $e->getMessage(), 'error');
-        return false;
+        fail("Error creando backup: " . $e->getMessage());
     }
 }
 
-// Obtener total de registros con base64
+// ---------------------------------------------------------------------------
+// Consultas
+// ---------------------------------------------------------------------------
 function getTotalRecords($pdo)
 {
-    $stmt = $pdo->query("SELECT COUNT(*) FROM ordenes_observaciones WHERE observaciones LIKE '%data:image%base64%'");
-    return (int) $stmt->fetchColumn();
+    return (int) $pdo->query(
+        "SELECT COUNT(*) FROM ordenes_observaciones WHERE observaciones LIKE '%data:image%base64%'"
+    )->fetchColumn();
 }
 
-// Obtener registros con base64 (paginado)
-function getRecordsWithBase64($pdo, $offset, $limit)
+function getRecordsWithBase64($pdo, $limit)
 {
+    // offset siempre 0: tras actualizar, las filas migradas dejan de cumplir el WHERE
     $stmt = $pdo->prepare("
-        SELECT _id, id_orden, observaciones 
-        FROM ordenes_observaciones 
-        WHERE observaciones LIKE '%data:image%base64%' 
-        ORDER BY _id ASC 
-        LIMIT :offset, :limit
+        SELECT _id, id_orden, observaciones
+        FROM ordenes_observaciones
+        WHERE observaciones LIKE '%data:image%base64%'
+        ORDER BY _id ASC
+        LIMIT :limit
     ");
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
     $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
     return $stmt->fetchAll();
 }
 
-// Extraer imágenes base64 del HTML
+// ---------------------------------------------------------------------------
+// Extracción / guardado de imágenes
+// ---------------------------------------------------------------------------
 function extractBase64Images($html)
 {
     $pattern = '/data:image\/(jpeg|jpg|png|gif|webp);base64,([A-Za-z0-9+\/=]+)/';
@@ -129,281 +188,249 @@ function extractBase64Images($html)
     return $matches;
 }
 
-// Generar nombre único para archivo
 function generateFilename($extension)
 {
-    $basename = bin2hex(random_bytes(8));
-    return sprintf('%s.%s', $basename, $extension);
+    return sprintf('%s.%s', bin2hex(random_bytes(8)), $extension);
 }
 
-// Guardar imagen desde base64
 function saveImageFromBase64($base64Data, $mimeType)
 {
-    // Normalizar tipo mime
     $mimeType = strtolower($mimeType);
-    if ($mimeType === 'jpg')
-        $mimeType = 'jpeg';
+    if ($mimeType === 'jpg') $mimeType = 'jpeg';
 
-    // Decodificar base64
     $imageData = base64_decode($base64Data);
     if ($imageData === false) {
         throw new Exception("No se pudo decodificar base64");
     }
 
-    // Determinar extensión
-    $extension = match ($mimeType) {
-        'jpeg', 'jpg' => 'jpg',
-        'png' => 'png',
-        'gif' => 'gif',
-        'webp' => 'webp',
-        default => 'jpg'
-    };
+    switch ($mimeType) {
+        case 'jpeg':
+        case 'jpg':  $extension = 'jpg';  break;
+        case 'png':  $extension = 'png';  break;
+        case 'gif':  $extension = 'gif';  break;
+        case 'webp': $extension = 'webp'; break;
+        default:     $extension = 'jpg';  break;
+    }
 
-    // Generar nombre y ruta
     $filename = generateFilename($extension);
     $filepath = OUTPUT_DIR . DIRECTORY_SEPARATOR . $filename;
 
-    // Guardar archivo
     if (file_put_contents($filepath, $imageData) === false) {
         throw new Exception("No se pudo guardar el archivo: {$filepath}");
     }
 
-    // Optimizar imagen
     optimizeImage($filepath, $mimeType);
-
     return $filename;
 }
 
-// Optimizar imagen (redimensionar y comprimir)
 function optimizeImage($filepath, $mimeType = null)
 {
     $info = @getimagesize($filepath);
-    if ($info === false) {
-        return; // No es una imagen válida
-    }
+    if ($info === false) return;
 
     $mime = $mimeType ? "image/{$mimeType}" : $info['mime'];
-    $image = null;
-
     switch ($mime) {
         case 'image/jpeg':
-        case 'image/jpg':
-            $image = @imagecreatefromjpeg($filepath);
-            break;
-        case 'image/png':
-            $image = @imagecreatefrompng($filepath);
-            break;
-        case 'image/gif':
-            $image = @imagecreatefromgif($filepath);
-            break;
-        case 'image/webp':
-            $image = @imagecreatefromwebp($filepath);
-            break;
+        case 'image/jpg':  $image = @imagecreatefromjpeg($filepath); break;
+        case 'image/png':  $image = @imagecreatefrompng($filepath);  break;
+        case 'image/gif':  $image = @imagecreatefromgif($filepath);  break;
+        case 'image/webp': $image = @imagecreatefromwebp($filepath); break;
+        default:           $image = null; break;
     }
+    if (!$image) return;
 
-    if (!$image) {
-        return;
-    }
-
-    $width = imagesx($image);
+    $width  = imagesx($image);
     $height = imagesy($image);
 
-    // Redimensionar si es necesario
     if ($width > MAX_WIDTH) {
-        $newWidth = MAX_WIDTH;
+        $newWidth  = MAX_WIDTH;
         $newHeight = (int) floor($height * (MAX_WIDTH / $width));
-        $newImage = imagecreatetruecolor($newWidth, $newHeight);
-
-        // Preservar transparencia para PNG/WEBP
+        $newImage  = imagecreatetruecolor($newWidth, $newHeight);
         if ($mime == 'image/png' || $mime == 'image/webp') {
             imagealphablending($newImage, false);
             imagesavealpha($newImage, true);
             $transparent = imagecolorallocatealpha($newImage, 255, 255, 255, 127);
             imagefilledrectangle($newImage, 0, 0, $newWidth, $newHeight, $transparent);
         }
-
         imagecopyresampled($newImage, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
         imagedestroy($image);
         $image = $newImage;
     }
 
-    // Guardar imagen optimizada
     switch ($mime) {
         case 'image/jpeg':
-        case 'image/jpg':
-            imagejpeg($image, $filepath, JPEG_QUALITY);
-            break;
-        case 'image/png':
-            imagepng($image, $filepath, 9);
-            break;
-        case 'image/gif':
-            imagegif($image, $filepath);
-            break;
-        case 'image/webp':
-            imagewebp($image, $filepath, JPEG_QUALITY);
-            break;
+        case 'image/jpg':  imagejpeg($image, $filepath, JPEG_QUALITY); break;
+        case 'image/png':  imagepng($image, $filepath, 9); break;
+        case 'image/gif':  imagegif($image, $filepath); break;
+        case 'image/webp': imagewebp($image, $filepath, JPEG_QUALITY); break;
     }
-
     imagedestroy($image);
 }
 
-// Actualizar registro en la base de datos
 function updateRecord($pdo, $id, $newHtml)
 {
     $stmt = $pdo->prepare("UPDATE ordenes_observaciones SET observaciones = :html WHERE _id = :id");
     return $stmt->execute([':html' => $newHtml, ':id' => $id]);
 }
 
-// Procesar un registro
+// ---------------------------------------------------------------------------
+// Procesamiento de un registro
+// ---------------------------------------------------------------------------
 function processRecord($pdo, $record)
 {
-    $html = $record['observaciones'];
-    $images = extractBase64Images($html);
+    global $DRY_RUN, $BASE_URL;
 
+    $html   = $record['observaciones'];
+    $images = extractBase64Images($html);
     if (empty($images)) {
-        return ['processed' => 0, 'errors' => 0];
+        return ['processed' => 0, 'errors' => 0, 'bytes' => 0];
     }
 
     $processed = 0;
-    $errors = 0;
+    $errors    = 0;
+    $bytes     = 0;
 
     foreach ($images as $match) {
-        $fullMatch = $match[0]; // data:image/xxx;base64,XXXX
-        $mimeType = $match[1];  // jpeg, png, etc
-        $base64Data = $match[2]; // datos base64
+        $fullMatch  = $match[0];   // data:image/xxx;base64,XXXX
+        $mimeType   = $match[1];
+        $base64Data = $match[2];
+        $bytes     += strlen($fullMatch);
+
+        if ($DRY_RUN) {
+            $processed++;
+            continue;
+        }
 
         try {
-            // Guardar imagen y obtener nombre de archivo
             $filename = saveImageFromBase64($base64Data, $mimeType);
-
-            // Construir URL completa
-            $url = URL_PREFIX . $filename;
-
-            // Reemplazar en el HTML
+            // URL ABSOLUTA, idéntica al formato de los registros recientes:
+            //   https://api.nineteencustom.com/images-orders-details/<archivo>
+            $url  = $BASE_URL . URL_DIR_SEGMENT . $filename;
             $html = str_replace($fullMatch, $url, $html);
-
             $processed++;
         } catch (Exception $e) {
-            colorLog("  Error procesando imagen en registro {$record['_id']}: " . $e->getMessage(), 'warning');
+            colorLog("  Error en imagen del registro {$record['_id']}: " . $e->getMessage(), 'warning');
             $errors++;
         }
     }
 
-    // Actualizar registro si hubo cambios
-    if ($processed > 0) {
+    if (!$DRY_RUN && $processed > 0) {
         updateRecord($pdo, $record['_id'], $html);
     }
 
-    return ['processed' => $processed, 'errors' => $errors];
+    return ['processed' => $processed, 'errors' => $errors, 'bytes' => $bytes];
 }
 
-// Función principal
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 function main()
 {
-    global $dbConfig;
+    global $dbConfig, $DRY_RUN, $NO_BACKUP, $BASE_URL;
 
     echo "\n";
     colorLog("==============================================", 'info');
-    colorLog("  MIGRACIÓN BASE64 → IMÁGENES FÍSICAS", 'info');
+    colorLog("  MIGRACIÓN BASE64 -> IMÁGENES FÍSICAS" . ($DRY_RUN ? "  [DRY-RUN]" : ""), 'info');
     colorLog("==============================================", 'info');
+    colorLog("Base de datos : {$dbConfig['dbname']} @ {$dbConfig['host']}", 'info');
+    colorLog("URL base      : {$BASE_URL}" . URL_DIR_SEGMENT, 'info');
+    colorLog("Directorio    : " . OUTPUT_DIR, 'info');
     echo "\n";
 
-    // Verificar/crear directorio de salida
-    if (!is_dir(OUTPUT_DIR)) {
-        if (!mkdir(OUTPUT_DIR, 0755, true)) {
-            colorLog("No se pudo crear el directorio: " . OUTPUT_DIR, 'error');
-            exit(1);
-        }
-        colorLog("Directorio creado: " . OUTPUT_DIR, 'success');
-    }
-
-    // Conectar a la base de datos
-    colorLog("Conectando a la base de datos...", 'info');
     $pdo = getConnection($dbConfig);
-    colorLog("Conexión establecida", 'success');
+    colorLog("Conexión establecida.", 'success');
 
-    // Crear backup
-    if (!createBackup($pdo)) {
-        exit(1);
-    }
-
-    // Obtener total de registros
     $total = getTotalRecords($pdo);
     colorLog("Registros con base64: {$total}", 'info');
-
     if ($total === 0) {
-        colorLog("No hay registros para procesar", 'success');
+        colorLog("No hay nada que migrar.", 'success');
         exit(0);
     }
 
-    // Procesar en lotes
-    $offset = 0;
-    $totalProcessed = 0;
-    $totalErrors = 0;
-    $batchNumber = 0;
-    $startTime = time();
+    // -------- DRY-RUN: solo medir vía SQL, sin cargar HTML ni tocar nada --------
+    if ($DRY_RUN) {
+        // Nº de imágenes y bytes base64 calculados en el motor (sin traer datos a PHP)
+        $row = $pdo->query("
+            SELECT
+              COALESCE(SUM( (LENGTH(observaciones)-LENGTH(REPLACE(observaciones,'data:image',''))) / LENGTH('data:image') ),0) AS imgs,
+              COALESCE(SUM( LENGTH(observaciones) - LENGTH(REGEXP_REPLACE(observaciones,'data:image[^\"'')]*','')) ),0) AS bytes
+            FROM ordenes_observaciones
+            WHERE observaciones LIKE '%data:image%base64%'
+        ")->fetch();
+        $imgs  = (int) round($row['imgs']);
+        $bytes = (int) $row['bytes'];
+        echo "\n";
+        colorLog("---- SIMULACIÓN (no se escribió nada) ----", 'warning');
+        colorLog("Filas con base64        : {$total}", 'info');
+        colorLog("Imágenes a extraer      : {$imgs}", 'info');
+        colorLog("Peso base64 a liberar   : " . round($bytes / 1048576, 2) . " MB", 'info');
+        colorLog("Directorio destino      : " . OUTPUT_DIR . (is_dir(OUTPUT_DIR) ? " (existe)" : " (se crearía)"), 'info');
+        colorLog("Formato URL resultante  : {$BASE_URL}" . URL_DIR_SEGMENT . "<archivo>", 'info');
+        echo "\n";
+        colorLog("Para ejecutar de verdad, repite el comando SIN --dry-run.", 'success');
+        exit(0);
+    }
 
-    colorLog("Iniciando procesamiento en lotes de " . BATCH_SIZE . "...", 'info');
+    // -------- Ejecución real --------
+    if (!is_dir(OUTPUT_DIR) && !mkdir(OUTPUT_DIR, 0755, true)) {
+        fail("No se pudo crear el directorio: " . OUTPUT_DIR);
+    }
+
+    if (!$NO_BACKUP) {
+        createBackup($pdo);
+    } else {
+        colorLog("ADVERTENCIA: se omitió el backup (--no-backup).", 'warning');
+    }
+
+    $totalProcessed = 0;
+    $totalErrors    = 0;
+    $batchNumber    = 0;
+    $startTime      = time();
+
+    colorLog("Procesando en lotes de " . BATCH_SIZE . "...", 'info');
     echo "\n";
 
-    while ($offset < $total) {
+    while (true) {
+        $records = getRecordsWithBase64($pdo, BATCH_SIZE);
+        if (empty($records)) break;
+
         $batchNumber++;
-        $records = getRecordsWithBase64($pdo, 0, BATCH_SIZE); // Siempre offset 0 porque actualizamos
-
-        if (empty($records)) {
-            break; // No hay más registros con base64
-        }
-
-        colorLog("Lote {$batchNumber}: Procesando " . count($records) . " registros...", 'info');
+        colorLog("Lote {$batchNumber}: " . count($records) . " registros...", 'info');
 
         foreach ($records as $record) {
             $result = processRecord($pdo, $record);
             $totalProcessed += $result['processed'];
-            $totalErrors += $result['errors'];
-
+            $totalErrors    += $result['errors'];
             if ($result['processed'] > 0) {
-                colorLog("  Registro #{$record['_id']} (orden {$record['id_orden']}): {$result['processed']} imágenes migradas", 'success');
+                colorLog("  #{$record['_id']} (orden {$record['id_orden']}): {$result['processed']} imágenes", 'success');
             }
         }
 
-        // Verificar cuántos quedan
         $remaining = getTotalRecords($pdo);
-        $elapsed = time() - $startTime;
-        $processedRecords = $total - $remaining;
-
-        colorLog("Progreso: {$processedRecords}/{$total} registros | {$totalProcessed} imágenes | Tiempo: {$elapsed}s", 'info');
+        $elapsed   = time() - $startTime;
+        colorLog("Progreso: faltan {$remaining} filas | {$totalProcessed} imágenes | {$elapsed}s", 'info');
         echo "\n";
 
-        if ($remaining === 0) {
-            break;
-        }
-
-        // Liberar memoria
+        if ($remaining === 0) break;
         gc_collect_cycles();
     }
 
-    // Resumen final
-    $endTime = time();
-    $duration = $endTime - $startTime;
-
+    $duration = time() - $startTime;
     echo "\n";
     colorLog("==============================================", 'info');
     colorLog("  MIGRACIÓN COMPLETADA", 'success');
     colorLog("==============================================", 'info');
-    colorLog("Imágenes procesadas: {$totalProcessed}", 'success');
-    colorLog("Errores: {$totalErrors}", $totalErrors > 0 ? 'warning' : 'success');
-    colorLog("Tiempo total: {$duration} segundos", 'info');
+    colorLog("Imágenes procesadas : {$totalProcessed}", 'success');
+    colorLog("Errores             : {$totalErrors}", $totalErrors > 0 ? 'warning' : 'success');
+    colorLog("Tiempo total        : {$duration} s", 'info');
 
-    // Verificar resultado final
     $remainingBase64 = getTotalRecords($pdo);
     if ($remainingBase64 === 0) {
-        colorLog("✓ No quedan imágenes base64 en la tabla", 'success');
+        colorLog("✓ No quedan imágenes base64 en la tabla.", 'success');
     } else {
-        colorLog("⚠ Aún quedan {$remainingBase64} registros con base64", 'warning');
+        colorLog("⚠ Aún quedan {$remainingBase64} registros con base64.", 'warning');
     }
-
     echo "\n";
 }
 
-// Ejecutar
 main();
