@@ -231,9 +231,10 @@ return function (App $app) {
                     
                     UNION ALL
                     
-                    SELECT op.id_woo as id_producto, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
+                    SELECT op.id_woo as id_producto, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / grp.np) AS total_tiempo
                     FROM lotes_detalles_empleados_asignados ldea
                     JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN (SELECT id_orden, id_departamento, COUNT(*) np FROM lotes_detalles GROUP BY id_orden, id_departamento) grp ON grp.id_orden = ldea.id_orden AND grp.id_departamento = ldea.id_departamento
                     JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
                     JOIN ordenes o ON ldea.id_orden = o._id
                     WHERE ldea.id_lotes_detalles IS NULL AND o.status IN ('terminada', 'entregada') $dateCond2
@@ -264,9 +265,10 @@ return function (App $app) {
                     
                     UNION ALL
                     
-                    SELECT op.id_woo as id_producto, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
+                    SELECT op.id_woo as id_producto, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600 / grp.np) AS total_horas
                     FROM lotes_detalles_empleados_asignados ldea
                     JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN (SELECT id_orden, id_departamento, COUNT(*) np FROM lotes_detalles GROUP BY id_orden, id_departamento) grp ON grp.id_orden = ldea.id_orden AND grp.id_departamento = ldea.id_departamento
                     JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
                     JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
                     JOIN ordenes o ON ldea.id_orden = o._id
@@ -559,9 +561,10 @@ return function (App $app) {
                     
                     UNION ALL
                     
-                    SELECT op.id_woo as id_producto, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
+                    SELECT op.id_woo as id_producto, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / grp.np) AS total_tiempo
                     FROM lotes_detalles_empleados_asignados ldea
                     JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN (SELECT id_orden, id_departamento, COUNT(*) np FROM lotes_detalles GROUP BY id_orden, id_departamento) grp ON grp.id_orden = ldea.id_orden AND grp.id_departamento = ldea.id_departamento
                     JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
                     JOIN ordenes o ON ldea.id_orden = o._id
                     WHERE ldea.id_lotes_detalles IS NULL AND o.status IN ('terminada', 'entregada') $dateCond2
@@ -591,9 +594,10 @@ return function (App $app) {
                     
                     UNION ALL
                     
-                    SELECT op.id_woo as id_producto, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
+                    SELECT op.id_woo as id_producto, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600 / grp.np) AS total_horas
                     FROM lotes_detalles_empleados_asignados ldea
                     JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN (SELECT id_orden, id_departamento, COUNT(*) np FROM lotes_detalles GROUP BY id_orden, id_departamento) grp ON grp.id_orden = ldea.id_orden AND grp.id_departamento = ldea.id_departamento
                     JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
                     JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
                     JOIN ordenes o ON ldea.id_orden = o._id
@@ -871,9 +875,10 @@ return function (App $app) {
                     
                     UNION ALL
                     
-                    SELECT op.id_size as id_talla, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW()))) AS total_tiempo
+                    SELECT op.id_size as id_talla, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / grp.np) AS total_tiempo
                     FROM lotes_detalles_empleados_asignados ldea
                     JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN (SELECT id_orden, id_departamento, COUNT(*) np FROM lotes_detalles GROUP BY id_orden, id_departamento) grp ON grp.id_orden = ldea.id_orden AND grp.id_departamento = ldea.id_departamento
                     JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
                     JOIN ordenes o ON ldea.id_orden = o._id
                     WHERE ldea.id_lotes_detalles IS NULL AND o.status IN ('terminada', 'entregada') AND op.id_woo = :id_producto $dateCond2
@@ -922,9 +927,10 @@ return function (App $app) {
                     
                     UNION ALL
                     
-                    SELECT op.id_size as id_talla, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS total_horas
+                    SELECT op.id_size as id_talla, ldea.id_empleado, SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600 / grp.np) AS total_horas
                     FROM lotes_detalles_empleados_asignados ldea
                     JOIN lotes_detalles ld ON (ldea.id_orden = ld.id_orden AND ldea.id_departamento = ld.id_departamento)
+                    JOIN (SELECT id_orden, id_departamento, COUNT(*) np FROM lotes_detalles GROUP BY id_orden, id_departamento) grp ON grp.id_orden = ldea.id_orden AND grp.id_departamento = ldea.id_departamento
                     JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
                     JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
                     JOIN ordenes o ON ldea.id_orden = o._id
