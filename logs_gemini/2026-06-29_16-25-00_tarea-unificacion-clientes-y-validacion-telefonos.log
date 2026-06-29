@@ -1,0 +1,29 @@
+# BITÁCORA DE TAREA: Unificación de Clientes y Blindaje de Validación Telefónica
+
+- **Fecha y Hora:** 2026-06-29 16:25:00
+- **Proyecto:** Backend (ninesys-api)
+- **ID Conversación:** db395b0f-65c5-4bbe-9395-b63050c33c47
+- **Autor:** Antigravity (AI Coding Assistant)
+
+---
+
+## 1. Resumen de la Tarea
+Se ha resuelto un conflicto crítico de duplicación de clientes por número telefónico en la base de datos de la empresa 194. Se unificaron los historiales de los clientes duplicados en la base de datos de Desarrollo y Producción hacia el ID más reciente, y se modificó el backend para impedir futuros registros o ediciones duplicadas normalizando y comprobando los últimos 10 dígitos del teléfono.
+
+## 2. Acciones Realizadas
+1. **Unificación de Base de Datos:**
+   - Se diseñó y ejecutó el script `unificar_clientes_194.sql`.
+   - El script detecta duplicidades por los últimos 10 dígitos del teléfono, mapea los IDs antiguos con el ID más reciente (`max_id`), actualiza las llaves foráneas y referencias en las tablas `ordenes`, `presupuestos`, `crm_soporte`, `crm_campanas_envios`, `crm_notas`, y `crm_oportunidades`, y elimina el registro duplicado antiguo.
+   - **Desarrollo (`vps-contabo-dev`):** Unificado exitosamente.
+   - **Producción (`vps-contabo-prod`):** Unificado exitosamente.
+2. **Blindaje de la API (`ninesys-api`):**
+   - **`woome.php`**: Modificados los métodos `createCustomer` y `updateCustomer` para verificar duplicados buscando coincidencias del sufijo de 10 dígitos normalizados en la base de datos. Si se detecta colisión, retorna un JSON estructurado con el código `phone_duplicate` y los datos del cliente conflictivo.
+   - **`products.php`**: Actualizados los endpoints POST y PUT de gestión de clientes para parsear el resultado de la base de datos y retornar código HTTP 400 (Bad Request) cuando ocurra un error `phone_duplicate`, permitiendo a Axios capturarlo en el bloque `.catch()`.
+   - **`orders.php` y `msg_service.php`**: Normalizada la consulta del número telefónico (últimos 10 dígitos con `REGEXP_REPLACE`) al buscar clientes al registrar órdenes o chats de WhatsApp.
+3. **Despliegue a Desarrollo:**
+   - Se subieron y confirmaron los cambios de backend en la rama `refactor/modular-routes` y se desplegaron en el servidor de Desarrollo (`vps-contabo-dev`), reseteando con éxito la caché OPcache de PHP.
+   - Se validó el correcto funcionamiento y rechazo de la API con código HTTP 400 y mensaje detallado de duplicado mediante un script Python local de pruebas.
+
+## 3. Estado de la Tarea
+- **Unificación DB Dev & Prod:** Completado ✅
+- **Cambios Backend Dev:** Completado y Desplegado ✅
