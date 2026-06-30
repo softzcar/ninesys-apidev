@@ -1,0 +1,25 @@
+- **Solicitud del Usuario:** Auditar a fondo cómo responde una ruta de escritura crítica ante un error (opción 'a'); luego arrancar por la red de seguridad central y seguir los pasos seguros diseñados para implementar FKs. (Se descartó la anomalía $0,04.)
+- **Fecha y Hora:** 2026-06-30 13:30:00
+- **Proyecto(s):** Backend (capa de BD, manejo de errores, esquema)
+- **Archivos Involucrados:**
+    - app/model/LocalDB.php (goQuery: propagar errores de FK)
+    - src/Application/Exceptions/DatabaseConstraintException.php (nueva)
+    - src/Application/Handlers/HttpErrorHandler.php (mapear a HTTP 409)
+    - app/routes/orders.php (auditoría de /ordenes/nueva, sin cambios)
+    - docs/ANALISIS_OPTIMIZACION_FK.md (sección 5.3 + plan de olas)
+    - api_emp_194 en vps-contabo-dev (prueba de la red, SOLO LECTURA efectiva)
+- **Commits Relacionados:** Frontend: N/A | Backend: 48323ad (feat(db): red de seguridad central para violaciones de FK)
+- **Acción Realizada:**
+  1. AUDITORÍA /ordenes/nueva (orders.php:1732-2039): SIN transacción; ID de orden por SELECT MAX(_id) (1819) en vez de lastInsertId; ~10 goQuery sin chequear status; SIEMPRE devuelve HTTP 200 (2036). Patrón repetido en ~6 endpoints de creación (custom/sport/simple/presupuesto/convertir). 4 usos vivos de SELECT MAX(_id). goQuery ya devuelve insert_id (LocalDB:214) y hay transacciones en otros endpoints → infra disponible.
+  2. RED DE SEGURIDAD: la infraestructura ya existía (Slim addErrorMiddleware + HttpErrorHandler en public/index.php). El problema era que goQuery se tragaba la PDOException. Cambio mínimo: en el catch, si errno ∈ {1451,1452,1216,1217} lanzar DatabaseConstraintException; resto conserva retorno array. Handler mapea esa excepción a 409 con mensaje en español (siempre visible). php -l OK en los 3 archivos.
+  3. Commit 48323ad + push + deploy a Contabo Dev (deploy_backend.sh opción 2; HEAD remoto 48323ad, OPcache reseteado). Producción NO tocada.
+  4. VERIFICACIÓN en Dev con script CLI autocontenido (lee .env desplegado → credenciales reales de empresa 194; no expone secretos): Test1 UPDATE customers.id_catalogo_pais=999999 → DatabaseConstraintException (errno 1452) ✓; Test2 columna inexistente (1054) → retorno status=error sin excepción ✓; el UPDATE no persistió (0 filas) ✓.
+- **Inconvenientes y Desafíos:**
+  - PDO como root (socket/localhost) daba Access denied (el CLI usa ~/.my.cnf que PDO no lee). Solución: el test lee el .env desplegado y obtiene las credenciales por-empresa de la tabla central `empresas`, igual que IdEmpresaMiddleware.
+- **Decisión Final y Justificación:** Atacar el punto único (goQuery + handler) en vez de auditar 1.272 llamadas. Selectividad por errno para no alterar el manejo de duplicados (1062) ni otros flujos. Esto habilita activar FKs por olas con los fallos VISIBLES (409) en lugar de 200 silencioso.
+- **Herramienta(s) Utilizada(s):** Bash (ssh/scp/mysql/git/deploy/php -l), Read, Edit, Write
+- **Resultado:** Éxito — red de seguridad implementada, desplegada y verificada en Dev.
+- **Verificación:** ver punto 4 (3 asserts verdes en api_emp_194 contra el código desplegado 48323ad).
+- **Logro Conseguido:** Prerrequisito de seguridad listo: cualquier violación de FK se convierte en un HTTP 409 limpio vía un único cambio central, sin tocar los 1.272 llamadores ni alterar otros errores. Desbloquea la activación de FKs por olas.
+- **Observaciones de Gemini:** PENDIENTE: Ola A (FK seguras CASCADE/SET NULL sin huérfanos) en Dev; luego endurecer los ~6 creadores multi-tabla (transacción + insert_id + chequeo) antes de FKs sobre ordenes_productos/lotes_detalles; Olas B (RESTRICT tintas/colores) y C (limpieza de huérfanos/sentinelas). Producción intacta. displayErrorDetails=true en settings (debería ser false en prod).
+- **Respuesta de Gemini:** Red de seguridad central implementada (commit 48323ad), desplegada y verificada en Dev: violación de FK → 409 limpio; errores no-FK intactos. Lista para activar FKs por olas.

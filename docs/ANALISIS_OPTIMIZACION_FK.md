@@ -119,6 +119,23 @@ Además hay una columna de texto `tela` ("Tela principal seleccionada desde Come
 
 ---
 
+## 5.3 Red de seguridad central para FKs (APLICADO 2026-06-30, commit `48323ad`)
+
+Prerrequisito antes de activar FKs por olas. Problema: `LocalDB::goQuery` atrapaba toda `PDOException` y devolvía `['status'=>'error']`, que ~90% de los 1.272 llamadores NO verifica → fallos como HTTP 200 silencioso (peligroso al activar FKs).
+
+Cambio mínimo y dirigido (no altera otros flujos):
+- **`LocalDB::goQuery`**: si el errno del driver es de integridad referencial (**1451/1452/1216/1217**) lanza `App\Application\Exceptions\DatabaseConstraintException`; el resto de errores (p. ej. duplicado 1062) conserva el retorno `status=error`.
+- **Nueva** `src/Application/Exceptions/DatabaseConstraintException.php`.
+- **`HttpErrorHandler`**: mapea esa excepción a **HTTP 409** con mensaje claro en español, mostrado siempre. Reutiliza el middleware de errores de Slim ya existente.
+
+**Verificado en Dev (`api_emp_194`, código desplegado):** violación de FK (errno 1452) → 409 con mensaje; error no-FK (1054) → retorno array sin excepción; el UPDATE que viola la FK no persiste.
+
+### Plan de activación de FKs por olas (pendiente)
+- **Ola A** — FK CASCADE/SET NULL con 0 huérfanos y sin sentinela ni quiebre del camino feliz (la mayoría del grupo "viable YA" de la sección 3, incl. `presup_prod id_tela → catalogo_telas`). Activar en Dev y observar.
+- **Ola B** — los 8 RESTRICT (tintas/colores): solo tras preparar el mensaje amigable de borrado (hoy ya cubierto en parte por el 409 central).
+- **Ola C** — las que requieren datos: limpiar huérfanos / resolver sentinelas (`id_category=0`, `ordenes.id_wp=0`, `inventario_remanentes`).
+- **Endurecer** los ~6 creadores multi-tabla (`/ordenes/nueva` y hermanos): transacción + `insert_id` (no `MAX(_id)`) + chequeo + HTTP correcto, antes de FKs sobre `ordenes_productos`/`lotes_detalles → ordenes`. (Auditoría detallada: ver log del 2026-06-30 de auditoría de `/ordenes/nueva`.)
+
 ## 6. Análisis `lotes_detalles` → posible reemplazo por `ordenes`
 
 > Contexto del usuario: `lotes_detalles` es una de las primeras tablas. Su tarea inicial era el control del proceso del lote, pero su estructura quedó obsoleta cuando surgió la necesidad de asignar varios empleados a una misma tarea/departamento (ej. 4 costureras en la misma orden), lo que se resolvió con una implementación de distribución por porcentaje de carga (para comisiones). Por ser tan antigua, aparece en muchos JOINS ya obsoletos de la API que entorpecen resultados. Genera confusión por su nombre (se asume que controla producción, cuando ya no es su rol real). Hipótesis del usuario: los PK de `lotes_detalles` deberían estar sincronizados con los PK de `ordenes`, por lo que podría prescindirse de la tabla y usar `ordenes` en su lugar.
