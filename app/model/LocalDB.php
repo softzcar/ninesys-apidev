@@ -217,6 +217,22 @@ class LocalDB
         $mat = $data;
       }
     } catch (PDOException $e) {
+      // Red de seguridad para claves foráneas: las violaciones de integridad
+      // referencial NO deben quedar como un retorno silencioso (los llamadores
+      // suelen no verificar el 'status'). Se propagan al manejador de errores
+      // central de Slim (HttpErrorHandler), que responde un HTTP 409 limpio.
+      // El resto de errores conserva el comportamiento previo (retorno con
+      // status=error) para no alterar flujos existentes (p. ej. el manejo de
+      // duplicados por índice único, errno 1062).
+      $driverErrno = (is_array($e->errorInfo ?? null) && isset($e->errorInfo[1])) ? (int) $e->errorInfo[1] : 0;
+      $foreignKeyErrnos = [1451, 1452, 1216, 1217];
+      if (in_array($driverErrno, $foreignKeyErrnos, true)) {
+        throw new \App\Application\Exceptions\DatabaseConstraintException(
+          'No se puede completar la operación porque viola una relación de datos (clave foránea).',
+          0,
+          $e
+        );
+      }
       $mat['sql'] = $sql;
       $mat['status'] = 'error';
       $mat['message'] = 'Error al ejecutar la consulta: ' . $e->getMessage();

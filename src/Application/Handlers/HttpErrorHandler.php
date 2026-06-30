@@ -5,6 +5,7 @@ namespace App\Application\Handlers;
 
 use App\Application\Actions\ActionError;
 use App\Application\Actions\ActionPayload;
+use App\Application\Exceptions\DatabaseConstraintException;
 use Exception;
 use Psr\Http\Message\ResponseInterface as Response;
 use Slim\Exception\HttpBadRequestException;
@@ -48,6 +49,15 @@ class HttpErrorHandler extends SlimErrorHandler
             } elseif ($exception instanceof HttpNotImplementedException) {
                 $error->setType(ActionError::NOT_IMPLEMENTED);
             }
+        }
+
+        // Red de seguridad para claves foráneas: una violación de integridad
+        // referencial se traduce en un 409 Conflict con mensaje claro, mostrado
+        // siempre (independiente de displayErrorDetails).
+        if ($exception instanceof DatabaseConstraintException) {
+            $statusCode = 409;
+            $error->setType(ActionError::VALIDATION_ERROR);
+            $error->setDescription($exception->getMessage());
         }
 
         if (
