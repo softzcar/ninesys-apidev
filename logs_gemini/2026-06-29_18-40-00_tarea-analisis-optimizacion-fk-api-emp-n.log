@@ -1,0 +1,25 @@
+- **Solicitud del Usuario:** Retomar (tras corte eléctrico que agotó tokens a mitad de tarea) el análisis para optimizar las claves foráneas en la base de datos de empresas `api_emp_N`.
+- **Fecha y Hora:** 2026-06-29 18:40:00
+- **Proyecto(s):** Backend (esquema de base de datos)
+- **Archivos Involucrados:**
+    - ninesys-api/public/model/create_new_company_api_emp_N.sql (esquema maestro, lectura)
+    - ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md (documento de análisis creado, secciones 1-5)
+    - ninesys-api/docs/auditoria_fk/ (auditoria_fk.sql, check_pk.sql, rel_ld.sql — scripts solo lectura)
+    - api_emp_194 en vps-contabo-prod (auditoría de datos, SOLO LECTURA, con autorización explícita del usuario)
+- **Commits Relacionados:** Frontend: N/A | Backend: 9bef7c0 (docs: análisis + scripts, restore point)
+- **Acción Realizada:**
+  1. Reconstrucción del análisis perdido en el apagón a partir del esquema maestro (dump tipo phpMyAdmin). Conteo real: 81 tablas (todas InnoDB), 104 FKs declaradas (el comentario "95 FKs" del archivo está DESACTUALIZADO). ON DELETE: 63 CASCADE / 33 SET NULL / 8 RESTRICT. ON UPDATE: 103 CASCADE.
+  2. Hallazgo 1: la única FK inline (`fk_gastos_registros_plantilla` en gastos_registros) es la única SIN `ON UPDATE CASCADE`.
+  3. Detección y clasificación de 75 columnas `id_*` sin FK en 4 categorías: (A) IDs legado Woo/WP — tras corrección del usuario son LOCALES, no externos; (B) 33 cross-DB de empleados/usuarios (viven en api_empresas, FK InnoDB imposible); (C) 24 FK locales faltantes reales; (D) ambiguas.
+  4. Generación de script de auditoría de huérfanos (LEFT JOIN hija→padre) y ejecución en api_emp_194 con autorización del usuario.
+- **Inconvenientes y Desafíos:**
+  - El scratchpad de la sesión previa (con el análisis a medias) se perdió con el apagón; hubo que regenerar todo desde cero.
+  - Confusión inicial: los campos con nombre `id_woo/id_wp/...` parecían IDs externos; el usuario aclaró que son nombres heredados de la antigua sync WooCommerce (ya desaparecida) y hoy referencian registros locales. Única BD externa: api_empresas.
+- **Decisión Final y Justificación:** Solo análisis, SIN cambios en BD ni en el esquema. Auditar datos antes de cualquier ALTER (buena práctica confirmada por el usuario), porque un ADD FOREIGN KEY falla si hay filas huérfanas.
+- **Herramienta(s) Utilizada(s):** Bash (grep/python/ssh/mysql), Read, Write, Edit
+- **Resultado:** Éxito (análisis completo, sin cambios aplicados)
+- **Verificación:** Auditoría en api_emp_194 — relaciones con huérfanos: inventario_remanentes.id_insumo 46/125 (37%), ordenes_productos.id_category 69/12549, product_insumos_asignados.id_product 38/2627, products_tiempos_de_produccion.id_product 7/883, ordenes.id_wp→customers 2/5913 (casi listo). presupuestos.id_wp_order→ordenes 5/5 huérfanos = inferencia de padre incorrecta. lotes_detalles.id_woo→products 52514/0 huérfanos (confirma id_woo=products local).
+- **Logro Conseguido:** Mapa completo y verificado del estado de FKs de api_emp_N, distinguiendo FKs viables ya, las que requieren limpieza de datos, y las estructuralmente imposibles. Base sólida para una depuración segura del esquema.
+- **Referencias de Sesión (Contexto):** Documento persistente: ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md
+- **Observaciones de Gemini:** `ordenes` NO tiene FK a `customers` (guarda el cliente en id_wp sin FK), mientras `presupuestos.id_wp` SÍ la tiene → brecha a cerrar. Pendiente: corregir Hallazgo 1, limpiar huérfanos, resolver duplicado id_tela vs id_catalogo_telas en presupuestos_productos.
+- **Respuesta de Gemini:** Análisis de FKs reconstruido y auditado contra producción real; documentado y commiteado como restore point.

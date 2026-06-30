@@ -1,0 +1,28 @@
+- **Solicitud del Usuario:** Revisar logs de la API para reconstruir qué se hizo antes sobre la extracción de imágenes base64 de ordenes_observaciones (intento previo con IA, problema de URL hardcodeada), determinar si ya existen scripts probados, y de no ser así escribir los necesarios. Requisito explícito: NO inventar un directorio nuevo; usar el mismo directorio donde se guardan las imágenes en los registros recientes.
+- **Fecha y Hora:** 2026-06-29 11:15:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - ninesys-api/scripts/migrate_base64_images.php (MODIFICADO: generalizado y parametrizado)
+    - ninesys-api/app/routes/upload.php (lectura: fuente de verdad del directorio y convención de imágenes)
+    - ninesys-api/src/Application/Middleware/IdEmpresaMiddleware.php (lectura: origen de credenciales por empresa)
+    - ninesys-api/logs_gemini/2025-12-11_..._tarea-migracion-base64-imagenes.log (lectura: migración previa en empresa 152)
+    - log_fix_bug_cdn_domain_asymmetry.md (lectura: el bug de URL hardcodeada era del frontend, no del script)
+    - Servidor vps-contabo-dev / api_emp_194 (inspección SOLO LECTURA)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: N/A (pendiente de commit si el usuario lo solicita)
+- **Acción Realizada:**
+  1. Reconstrucción del historial: la migración base64->física previa se hizo en api_emp_152 (dic 2025), NO en 194. El script original quedó hardcodeado a 152.
+  2. Verificación del estado real de api_emp_194 (dev, clon de prod): 5.614 filas; 285 con base64 incrustado (188 MB); 1.380 con archivo físico usando URL ABSOLUTA src="https://api.nineteencustom.com/images-orders-details/<archivo>"; 0 con link relativo puro. No existe tabla ordenes_observaciones_backup_base64 -> 194 nunca fue migrada.
+  3. Aclaración del "bug de URL hardcodeada": NO estaba en el script de migración (que escribía URL relativa), sino en el frontend (plugins/nuxt-quill-plugin.js y CDN del catálogo), corregido el 2026-06-17.
+  4. Confirmación de la convención actual de imágenes (app/routes/upload.php): directorio public/images-orders-details/, nombre bin2hex(random_bytes(8)).ext, optimización máx 1280px / JPEG 80 / PNG 9.
+  5. El usuario decidió que la extracción escriba URL ABSOLUTA https://api.nineteencustom.com/images-orders-details/<archivo>, idéntica a los registros recientes.
+  6. Generalización del script scripts/migrate_base64_images.php: argumentos CLI (--db, --db-user, --db-pass, --db-host, --base-url, --batch, --dry-run, --no-backup), URL absoluta configurable, modo dry-run que mide vía agregados SQL (sin cargar HTML en PHP), backup automático conservado, mismo directorio de salida (no se inventa ruta nueva).
+- **Inconvenientes y Desafíos:** Tensión entre dos recuerdos del usuario (igualar registros recientes = URL absoluta, vs evitar dominio hardcodeado). Se resolvió consultando al usuario: eligió URL absoluta para consistencia con la tabla. Riesgo de OOM en dry-run al cargar todo el base64; mitigado calculando con agregados SQL.
+- **Decisión Final y Justificación:** Reutilizar y generalizar el script ya probado en 152 en vez de escribir uno nuevo desde cero (menos invasivo, núcleo validado). Parametrización por empresa para que sirva a 194 y futuras. URL absoluta por decisión explícita del usuario.
+- **Herramienta(s) Utilizada(s):** Bash (ssh solo lectura, mysql information_schema, php -l), Read, Write, Edit, AskUserQuestion
+- **Resultado:** Éxito (script listo y validado con php -l; NO ejecutado sobre datos reales)
+- **Verificación:** php -l sin errores. Validación de argumentos probada (aborta limpio sin --db). Estado de 194 verificado con consultas SQL reales. Pendiente: ejecutar --dry-run y luego la migración real EN EL SERVIDOR correspondiente, bajo petición explícita del usuario.
+- **Logro Conseguido:** Script de extracción base64->imágenes físicas listo, parametrizable y seguro (dry-run + backup), alineado con la convención de almacenamiento vigente y el formato de URL elegido por el usuario. Reconstruido el historial real: 194 nunca migrada; recuperaría ~188 MB.
+- **Observaciones de Gemini:** No se ejecutó nada sobre datos reales. La ejecución sobre producción (api_emp_194 en vps-contabo-prod) requiere petición explícita y literal del usuario, conforme a las reglas de despliegue.
+- **Respuesta de Gemini:** Resumen del historial, estado de 194, script generalizado y plan de ejecución en dos pasos (dry-run y migración real).

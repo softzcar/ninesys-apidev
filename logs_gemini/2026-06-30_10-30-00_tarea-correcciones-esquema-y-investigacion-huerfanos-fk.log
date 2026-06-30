@@ -1,0 +1,31 @@
+- **Solicitud del Usuario:** Continuar con los puntos 1 y 2 del análisis FK: (1) correcciones al esquema maestro (Hallazgo 1 + comentario de conteo de FKs); (2) investigar las filas huérfanas concretas para confirmar causas raíz antes de habilitar FKs.
+- **Fecha y Hora:** 2026-06-30 10:30:00
+- **Proyecto(s):** Backend (esquema/BD) — correcciones de esquema + investigación de datos
+- **Archivos Involucrados:**
+    - ninesys-api/public/model/create_new_company_api_emp_N.sql (esquema maestro; 2 ediciones)
+    - ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md (sección 5 + nueva 5.1 con resultados)
+    - api_emp_194 en vps-contabo-dev (investigación, SOLO LECTURA)
+- **Commits Relacionados:** Frontend: N/A | Backend: N/A (pendiente de commit si el usuario lo pide)
+- **Acción Realizada:**
+  PUNTO 1 — Correcciones al esquema maestro (solo afecta empresas NUEVAS):
+  1. Confirmado que el único maestro real es ninesys-api/public/model/create_new_company_api_emp_N.sql (la ruta a ninesys-apidev en CLAUDE.md está desactualizada).
+  2. Resuelta discrepancia de conteo: grep ingenuo daba 105 "FOREIGN KEY" pero incluía la línea de comentario; conteo exacto de "CONSTRAINT ... FOREIGN KEY" = 104. Y solo 1 FK real carecía de ON UPDATE CASCADE (fk_gastos_registros_plantilla, L594, declarada inline en el CREATE TABLE).
+  3. Edición A: añadido "ON UPDATE CASCADE" a fk_gastos_registros_plantilla (era la única sin él). Edición B: comentario L1673 "95 FKs" -> "104 FKs". Verificación: 104 CONSTRAINT FOREIGN KEY y 104 ON UPDATE CASCADE; ninguna FK sin homogeneizar.
+
+  PUNTO 2 — Investigación de huérfanos en api_emp_194 (Dev, SOLO LECTURA, 2 scripts en scratchpad):
+  4. ordenes_productos.id_category (69 huérfanos): sentinela 0 = 53 filas (col NOT NULL DEFAULT 0) + categoría borrada id=1 = 16 filas. Sentinela confirmado como culpable principal.
+  5. inventario_remanentes.id_insumo (43 distintos / 46 filas): los ids huérfanos (719-836) caen DENTRO del rango real de inventario (355-931); de los distintos, 66 existen y 43 no. No hay tabla catálogo aparte (solo catalogo_insumos_productos y product_insumos_asignados). Conclusión: inventario ES el padre correcto; son insumos BORRADOS que dejaron remanentes colgando por falta de FK CASCADE.
+  6. ordenes.id_wp (2 huérfanos): orden 3269 (id_wp=1705, "CARLOS PARRA", cliente borrado, nombre preservado en snapshot cliente_nombre) y orden 3542 (id_wp=0, "Cliente Desconocido", sentinela). Relación sana por diseño.
+  7. presupuestos.id_wp_order (5/5): las 5 filas valen 0 -> no existe ordenes._id=0 -> COLUMNA MUERTA, nunca fue FK real. Confirma la sección 4 del análisis.
+- **Inconvenientes y Desafíos:**
+  - Falso positivo de conteo de FKs (105 vs 104) por la línea de comentario; se resolvió con un patrón más estricto "CONSTRAINT ... FOREIGN KEY".
+  - Primer intento de comprobar catalogo_insumos falló (tabla inexistente); se ajustó con SHOW TABLES LIKE '%insumo%'.
+- **Decisión Final y Justificación:** Punto 1 aplicado de inmediato por ser bajo riesgo y solo de plantilla (no toca datos ni empresas existentes). Punto 2 dejado en fase de diagnóstico documentado (sin tocar datos): cada relación quedó con causa raíz y acción recomendada para una futura habilitación de FK, pero NO se ejecutó ninguna limpieza ni ALTER (requiere decisión explícita del usuario).
+- **Herramienta(s) Utilizada(s):** Bash (ssh/mysql/grep), Read, Edit, Write
+- **Resultado:** Éxito — Punto 1 aplicado y verificado; Punto 2 investigado y documentado (sección 5.1).
+- **Verificación:**
+    - Esquema: 104 CONSTRAINT FOREIGN KEY = 104 ON UPDATE CASCADE; comentario "104 FKs"; fk_gastos_registros_plantilla con ON UPDATE CASCADE.
+    - Huérfanos: resultados crudos de api_emp_194 tabulados en la sección 5.1 del doc.
+- **Logro Conseguido:** Esquema maestro homogéneo y con conteo correcto para nuevas empresas. Causas raíz de los 4 grupos de huérfanos confirmadas con datos reales, dejando lista la hoja de ruta de limpieza previa a cada FK (sin ejecutar cambios de datos).
+- **Observaciones de Gemini:** PENDIENTE (sección 5): duplicado id_tela vs id_catalogo_telas en presupuestos_productos; preparar ALTER TABLE del grupo "viable YA"; ejecutar limpiezas de huérfanos solo bajo orden explícita. Cambios de esquema aún sin commit (a la espera del usuario). Independiente: anomalía $0,04 Sarahit en reporte por orden.
+- **Respuesta de Gemini:** Punto 1 hecho (esquema maestro homogéneo, 104 FKs). Punto 2 investigado: id_category = sentinela 0 (53) + cat borrada 1 (16); inventario_remanentes = 43 insumos borrados (padre correcto); ordenes.id_wp sano (2 casos explicables); id_wp_order = columna muerta. Todo documentado en 5.1, sin tocar datos.

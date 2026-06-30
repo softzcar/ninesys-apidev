@@ -1,0 +1,28 @@
+- **Solicitud del Usuario:** El sistema debía correr con PHP 8.3 en ambos servidores; que en producción aparezca 7.4 es un error (posible falta de configuración en CyberPanel). Como se usa la misma API en ambos, corregir para que en producción corra la misma versión de PHP que en desarrollo (8.3). Luego commitear el cambio del script y crear los logs detallados.
+- **Fecha y Hora:** 2026-06-29 18:15:00
+- **Proyecto(s):** Backend (infraestructura de servidores)
+- **Archivos Involucrados:**
+    - vps-contabo-prod: /usr/bin/php (symlink), CyberPanel DB (lectura)
+    - vps-contabo-dev: /usr/local/lsws/conf/vhosts/api.nineteengreen.com/vhost.conf (+ backup .bak_*), cyberpanel.websiteFunctions_websites (UPDATE)
+    - ninesys-api/scripts/migrate_base64_images.php (compatibilidad PHP 7.4 ya aplicada en tarea previa)
+- **Commits Relacionados:** Frontend: N/A | Backend: (commit del script en esta misma jornada)
+- **Acción Realizada:**
+  1. Verificación read-only del estado REAL (desmiente la premisa inicial):
+     - PROD: API (LiteSpeed vhost api.nineteencustom.com) ya en lsphp83 = PHP 8.3. CLI /usr/bin/php -> lsphp74 = 7.4. CyberPanel: "PHP 8.3".
+     - DEV: API (vhost api.nineteengreen.com) en lsphp81 = PHP 8.1. CLI /usr/bin/php -> lsphp83 = 8.3. CyberPanel: "PHP 8.1".
+     - Conclusión: la API de prod NUNCA estuvo en 7.4 (estaba en 8.3); el 7.4 era solo el CLI por SSH (origen del parse error del script). El desfase real estaba en la API de DEV (8.1).
+  2. PROD - CLI: repuntado /usr/bin/php de lsphp74 -> lsphp83. Verificado php -v = 8.3. Sin crons que dependieran del CLI. La API de prod NO se tocó (ya estaba en 8.3).
+  3. DEV - API: backup del vhost.conf; cambiado path lsphp81 -> lsphp83; recarga graceful de LiteSpeed (lswsctrl restart, SIGUSR1). Verificado: HTTP 200 y procesos lsapi de apini8422 resuelven a /usr/local/lsws/lsphp83/bin/lsphp.
+  4. DEV - durabilidad: UPDATE cyberpanel.websiteFunctions_websites SET phpSelection="PHP 8.3" para api.nineteengreen.com (panel y vhost coherentes; evita reversión).
+- **Inconvenientes y Desafíos:**
+  - La premisa del usuario (prod en 7.4) era incorrecta: el error venía del CLI, no de la API. Se documentó y confirmó el alcance correcto antes de actuar.
+  - Bajo lsphp83, "php -l" (modo lint) segfaultea por ionCube Loader (incompatibilidad conocida de ionCube con el lint del CLI). La EJECUCIÓN real funciona (php -r y el script con --help salen 0) y la API web no se ve afectada. No requiere acción.
+- **Decisión Final y Justificación:** Estandarizar todo en 8.3. No se tocó la API de prod (ya correcta, riesgo cero para producción). Backup del vhost y recarga graceful en dev. Se actualizó la DB de CyberPanel para que el cambio sea durable y no lo revierta el panel.
+- **Herramienta(s) Utilizada(s):** Bash (ssh/ln/sed/mysql/curl/ps/readlink/lswsctrl), AskUserQuestion
+- **Resultado:** Éxito
+- **Verificación:**
+    - PROD CLI: php -v = 8.3.30; API intacta en 8.3; CyberPanel "PHP 8.3".
+    - DEV API: lsapi de apini8422 -> lsphp83; HTTP 200; vhost y CyberPanel en "PHP 8.3".
+- **Logro Conseguido:** PHP 8.3 unificado y coherente en prod y dev (API + panel + CLI), eliminando la asimetría de versiones que causó el fallo del script y dejando ambos entornos alineados con la misma API.
+- **Observaciones de Gemini:** El symlink /usr/bin/php de prod persiste a reinicios (es de filesystem). El segfault de ionCube en "php -l" es esperado; para lint usar otra versión o el flag adecuado, no afecta runtime. Backup del vhost de dev en vhost.conf.bak_*.
+- **Respuesta de Gemini:** Estado real aclarado y corregido: ambos servidores en PHP 8.3 (API, panel y CLI). Documentado y commiteado el script.

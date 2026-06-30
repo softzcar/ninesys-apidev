@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** Tras confirmar que las imágenes cargan desde URL (no base64) en la app, eliminar los backups y desinflar la tabla ordenes_observaciones de la empresa 194. Aplicarlo en prod y dev en este momento.
+- **Fecha y Hora:** 2026-06-29 17:55:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - Servidor vps-contabo-prod / api_emp_194 (ESCRITURA: drop backup + optimize)
+    - Servidor vps-contabo-dev / api_emp_194 (ESCRITURA: drop backup + optimize)
+    - /root/backups_migracion/api_emp_194_ordenes_observaciones_backup_base64_*.sql.gz (dumps de respaldo en ambos servidores)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: N/A
+- **Acción Realizada:** Secuencia de 3 pasos por entorno, con autorización explícita del usuario:
+  1. mysqldump --single-transaction de la tabla ordenes_observaciones_backup_base64 -> .sql.gz en /root/backups_migracion/ (verificado con gzip -t).
+  2. DROP TABLE ordenes_observaciones_backup_base64.
+  3. OPTIMIZE TABLE ordenes_observaciones (reconstruye InnoDB y reclama el espacio liberado por los UPDATE de la migración base64).
+- **Inconvenientes y Desafíos:** Ninguno. Se explicó previamente que DROP del backup no encoge la tabla viva por sí solo (InnoDB requiere OPTIMIZE), y que OPTIMIZE bloquea la tabla brevemente.
+- **Decisión Final y Justificación:** Conservar un dump comprimido del backup antes de borrarlo como red de seguridad barata (rollback a base64 si fuese necesario), en vez de borrar sin respaldo. OPTIMIZE para devolver la tabla a su tamaño real.
+- **Herramienta(s) Utilizada(s):** Bash (ssh/mysqldump/mysql/gzip)
+- **Resultado:** Éxito
+- **Verificación:**
+    - PROD: ordenes_observaciones 202.52 MB -> 2.52 MB; backup eliminado; base64_restante=0; dump 145 MB íntegro.
+    - DEV:  ordenes_observaciones 199.52 MB -> 2.52 MB; backup eliminado; base64_restante=0; dump 141 MB íntegro.
+- **Logro Conseguido:** Tabla ordenes_observaciones de la empresa 194 desinflada a su tamaño real (~2.5 MB) en prod y dev; ~200 MB liberados por entorno, con dumps de respaldo conservados.
+- **Observaciones de Gemini:** Cierra el ciclo de la migración base64->física de la empresa 194 (extracción + verificación + liberación de espacio). Los dumps de respaldo en /root/backups_migracion/ pueden eliminarse más adelante cuando el usuario esté plenamente conforme. Sigue pendiente (opcional) commitear el cambio match->switch del script migrate_base64_images.php.
+- **Respuesta de Gemini:** Limpieza completada en prod y dev: tabla a 2.52 MB, ~200 MB liberados por entorno, backups respaldados a .sql.gz antes de borrar.

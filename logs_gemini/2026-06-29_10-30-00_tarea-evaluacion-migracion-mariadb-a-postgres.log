@@ -1,0 +1,21 @@
+- **Solicitud del Usuario:** Analizar la posibilidad de migrar la base de datos de MariaDB a PostgreSQL. NO implementar nada, solo evaluar la condición y estructura actual (tablas de empresas central y base individual por empresa). Determinar mejoras necesarias (sospecha de campos sin claves foráneas correctas), compatibilidad de tipos, esfuerzo de adaptar las consultas de la API, verificar funciones/triggers en el servidor de desarrollo, y entregar un reporte claro y realista. Preocupación de fondo: escalabilidad de MariaDB con empresas grandes.
+- **Fecha y Hora:** 2026-06-29 10:30:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - ninesys-api/public/model/create_new_company_api_emp_N.sql (lectura/análisis)
+    - ninesys-api/src/Application/Middleware/IdEmpresaMiddleware.php (análisis conexión PDO)
+    - ninesys-api/app/routes_refactorized.php (análisis DSN)
+    - ninesys-api/docs/EVALUACION_MIGRACION_MARIADB_A_POSTGRES.md (CREADO — reporte)
+    - Servidor vps-contabo-dev: api_emp_194, api_empresas (inspección SOLO LECTURA vía information_schema)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: N/A (solo análisis y documento, sin cambios de código)
+- **Acción Realizada:** Análisis estático del esquema plantilla (96 tablas, 105 FK declaradas, 3 triggers, 0 funciones/vistas, 16 ENUM, 96 AUTO_INCREMENT, 11 ON UPDATE CURRENT_TIMESTAMP, 34 tinyint(1)). Inspección SOLO LECTURA de la BD viva api_emp_194 vía information_schema: 99 tablas, solo 24 FK reales, 0 triggers, 0 rutinas, 0 vistas, 205 índices, 192 columnas id_*, 231 MB / ~167K filas. Detectado que ordenes_observaciones (longtext) pesa 199 MB en 5.443 filas. Comparativa de tamaños entre empresas (194 es la mayor, no 163). Inventario de construcciones MariaDB-específicas en código PHP (app+src, SQL crudo vía PDO sin ORM): backticks 369 líneas, DATE_FORMAT 123, IFNULL 73, CURDATE 49, GROUP_CONCAT 39, TIMESTAMPDIFF 36, JSON_OBJECT 19, FIND_IN_SET 10, JSON_EXTRACT 6, INSERT IGNORE 5, lastInsertId 14, ON DUPLICATE KEY 2, LIMIT x,y 3. Tabla de compatibilidad de tipos y hoja de ruta en 3 fases.
+- **Inconvenientes y Desafíos:** Drift de esquema (plantilla 96 tablas vs real 99). Gran desfase entre FK declaradas en plantilla (105) y reales en 194 (24). Los 3 triggers de la plantilla no existen en la BD real.
+- **Decisión Final y Justificación:** Se concluye que la migración es viable (no hay PL/SQL propietario) pero costosa por el SQL crudo sin ORM. Se recomienda priorizar saneamiento del esquema en MariaDB (FK, índices, longtext inflado) antes de cambiar de motor, porque el cuello de botella actual es de diseño, no del motor. No se implementó nada por instrucción explícita del usuario.
+- **Herramienta(s) Utilizada(s):** Bash (ssh solo lectura, grep, mysql information_schema), Read, Write
+- **Resultado:** Éxito
+- **Verificación:** Todas las cifras provienen de consultas reales a information_schema en vps-contabo-dev y de grep sobre el código fuente y el SQL de plantilla. Reporte generado en ninesys-api/docs/EVALUACION_MIGRACION_MARIADB_A_POSTGRES.md.
+- **Logro Conseguido:** Diagnóstico completo y realista de la migración MariaDB→PostgreSQL, confirmando la sospecha del usuario sobre claves foráneas faltantes (192 columnas id_* vs 24 FK reales) e identificando que la causa probable de lentitud es la falta de índices/FK y una columna longtext de 199 MB, no el motor.
+- **Observaciones de Gemini:** Tarea de solo evaluación. Inspección remota estrictamente de lectura (SELECT/information_schema).
+- **Respuesta de Gemini:** Reporte entregado con resumen ejecutivo, fotografía del estado, análisis de FK, tipos, consultas, arquitectura y hoja de ruta en 3 fases.

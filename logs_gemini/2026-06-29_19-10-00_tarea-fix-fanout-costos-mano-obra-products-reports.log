@@ -1,0 +1,29 @@
+- **Solicitud del Usuario:** Arrancar con el arreglo del fan-out de costos detectado en el análisis; luego commitear y desplegar a Desarrollo para aprobarlo.
+- **Fecha y Hora:** 2026-06-29 19:10:00
+- **Proyecto(s):** Backend (reportes)
+- **Archivos Involucrados:**
+    - ninesys-api/app/routes/products_reports.php (6 subqueries corregidas)
+    - ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md (sección 6.8, registro del fix)
+    - ninesys-api/docs/auditoria_fk/ (validar_fix.sql, fanout.sql, backfill_check.sql — solo lectura)
+    - api_emp_194 (validación, SOLO LECTURA)
+- **Commits Relacionados:** Frontend: N/A | Backend: 8cc5b21 (fix(reportes): corregir fan-out que inflaba costo de mano de obra por producto)
+- **Acción Realizada:**
+  1. Diagnóstico: en products_reports.php, los reportes de costo por producto/talla usan un UNION ALL. La Rama 1 une LDEA→lotes_detalles por la FK (ldea.id_lotes_detalles = ld._id, solo 3,5% de filas). La Rama 2 cubre el 96,5% (FK NULL) uniendo por clave natural (id_orden, id_departamento). Cuando una orden tiene varios productos en el mismo departamento, una sola sesión de trabajo se atribuye COMPLETA a cada producto → fan-out que infla tiempo y salario.
+  2. Cuantificación (fanout.sql): 8.242/27.577 grupos (orden,depto) con >1 producto; 4.903 filas LDEA NULL afectadas.
+  3. Evaluación del backfill de ldea.id_lotes_detalles (backfill_check.sql): solo 5.039/10.599 son deterministas (1 padre); 4.903 AMBIGUAS (>1 padre — el sistema nunca guardó el producto del empleado) y 659 sin padre. DESCARTADO como raíz: no resuelve las filas que causan el fan-out y exige escribir datos inferidos en producción.
+  4. Solución elegida: atribución proporcional. A cada subquery de Rama 2 se le añadió un join derivado que cuenta las filas de lotes_detalles por (orden, departamento) y se dividió la duración entre ese conteo (grp.np). 6 subqueries corregidas (tiempos+salarios, por producto en 2 endpoints y por talla). Rama 1 intacta.
+  5. Commit + push a refactor/modular-routes. Despliegue a Contabo DEV con ninesys-hub/bin/deploy_backend.sh opción 2 (sin clave porque no es prod; producción NO se tocó).
+- **Inconvenientes y Desafíos:**
+  - Algunas subqueries de Rama 2 son verbatim idénticas entre endpoints; se usó replace_all controlado para los pares idénticos y edición puntual para las de "por talla".
+  - Hubo que garantizar NO tocar la Rama 1 (FK exacta) que comparte la misma expresión SUM.
+- **Decisión Final y Justificación:** Corregir vía consulta SQL (cero cambios en datos, reversible) en lugar de backfill (parcial y riesgoso). La división proporcional asume tiempo igual por producto (aproximación), muy superior a contar el tiempo completo N veces.
+- **Herramienta(s) Utilizada(s):** Read, Edit (replace_all), Bash (grep/php -l/ssh/mysql/git/deploy_backend.sh)
+- **Resultado:** Éxito — desplegado en DEV, pendiente de aprobación del usuario.
+- **Verificación:**
+    - php -l: sin errores. 6 divisiones grp.np y 6 joins derivados; 6 ramas-1 intactas.
+    - Validación en api_emp_194 (validar_fix.sql): total Rama 2 ACTUAL = 8.041.895.411 s (inflado 3,24×); CORREGIDO = 2.483.308.893 s = verdad terreno exacta. ✓
+    - Deploy: HEAD remoto vps-contabo-dev = 8cc5b21, OPcache reseteado.
+- **Logro Conseguido:** Eliminado el sobre-conteo de mano de obra por producto (hasta ~3,24×) en el reporte de costos, preservando el total real y repartiéndolo correctamente. Cambio seguro (solo SQL), validado contra datos reales y desplegado en desarrollo.
+- **Referencias de Sesión (Contexto):** ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md sección 6.8.
+- **Observaciones de Gemini:** PENDIENTE: aprobación del usuario en Dev (api.nineteengreen.com, endpoint /reportes/costos-productos). Solo con orden explícita → deploy a prod (194/163). Producción quedó intacta en esta tarea.
+- **Respuesta de Gemini:** Fan-out corregido con atribución proporcional, validado (3,24×→exacto) y desplegado a Dev para aprobación.

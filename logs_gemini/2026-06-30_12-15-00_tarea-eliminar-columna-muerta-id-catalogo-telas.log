@@ -1,0 +1,25 @@
+- **Solicitud del Usuario:** Corregir el campo duplicado id_tela en presupuestos_productos eliminando el campo que ya no se usa (tras la investigación previa que confirmó cuál es la columna muerta). (También se descartó la anomalía $0,04 de Sarahit por contexto incorrecto.)
+- **Fecha y Hora:** 2026-06-30 12:15:00
+- **Proyecto(s):** Backend (esquema/BD)
+- **Archivos Involucrados:**
+    - ninesys-api/public/model/create_new_company_api_emp_N.sql (3 ediciones)
+    - api_emp_194 en vps-contabo-dev (migración + backup)
+    - ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md (sección 5.2 actualizada a APLICADO)
+- **Commits Relacionados:** Frontend: N/A | Backend: N/A (cambios de esquema SIN commit, a la espera del usuario)
+- **Acción Realizada:**
+  1. Confirmado (sección 5.2): id_catalogo_telas = columna muerta (0/15 datos, 0 referencias en back/front); id_tela = viva (15/15 válidas en catalogo_telas).
+  2. Maestro: eliminada la columna id_catalogo_telas de presupuestos_productos; índices a KEY id_orden (id_orden) + KEY id_tela (id_tela); FK presup_prod_ibfk_2 redirigida de id_catalogo_telas a id_tela. Verificado: 0 referencias a la columna (la única coincidencia restante "id_catalogo_telas" es un índice homónimo sobre la col rollo en ordenes_productos, no relacionado).
+  3. Dev (api_emp_194): SHOW CREATE TABLE reveló que la tabla NO tenía NINGUNA FK (drift: las FKs del maestro nunca se aplicaron a esta empresa). Backup mysqldump a /tmp/backup_presupuestos_productos_194dev_<ts>.sql. ALTER: DROP INDEX id_catalogo_telas, DROP INDEX id_orden, DROP COLUMN id_catalogo_telas, ADD INDEX id_orden (id_orden), ADD INDEX id_tela (id_tela). No se añadió FK (adopción de FKs en empresas existentes = tarea aparte del grupo "viable YA").
+- **Inconvenientes y Desafíos:**
+  - El esquema declaraba la FK sobre la columna muerta (id_catalogo_telas), lo que obligó a redirigirla a id_tela en el maestro para que el SQL siguiera siendo válido.
+  - La columna participaba en un índice compuesto KEY id_orden (id_orden, id_catalogo_telas), por lo que el DROP COLUMN exigió reorganizar índices explícitamente.
+  - Falso positivo de grep: índice homónimo id_catalogo_telas sobre la col rollo en ordenes_productos (intacto, fuera de alcance).
+- **Decisión Final y Justificación:** Cambio de bajo riesgo (columna con 0 datos y 0 código). Aplicado a maestro + Dev con backup previo. Producción NO tocada (regla de bloqueo de prod): requiere orden explícita y verificación de datos en la prod real antes.
+- **Herramienta(s) Utilizada(s):** Bash (ssh/mysql/mysqldump/grep/awk), Read, Edit, Write
+- **Resultado:** Éxito — maestro y Dev corregidos; datos intactos.
+- **Verificación:**
+    - Maestro: grep sin la columna id_catalogo_telas; FK presup_prod_ibfk_2 ahora sobre id_tela; índices id_orden(id_orden)+id_tela(id_tela).
+    - Dev: SHOW CREATE TABLE sin id_catalogo_telas, con índices id_orden e id_tela; datos antes/después idénticos (15 filas, SUM(id_tela)=883).
+- **Logro Conseguido:** Eliminada la columna duplicada/muerta id_catalogo_telas que confundía y cargaba una FK sobre la columna equivocada. Esquema de presupuestos_productos consistente con ordenes_productos (campo id_tela). Sin pérdida de datos.
+- **Observaciones de Gemini:** PENDIENTE: (a) commit de los cambios del maestro (y de las correcciones previas de FKs/comentario del día); (b) aplicar el mismo ALTER a producción (194/163) SOLO bajo orden explícita, verificando antes los datos de id_catalogo_telas en la prod real; (c) adopción de FKs del grupo "viable YA" en empresas existentes (incluiría presup_prod id_tela -> catalogo_telas).
+- **Respuesta de Gemini:** Eliminada la columna muerta id_catalogo_telas en el maestro y en Dev (con backup); id_tela queda como única columna de tela, datos intactos (15 filas, suma 883). Producción sin tocar, a la espera de tu orden.

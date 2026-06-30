@@ -1,0 +1,26 @@
+- **Solicitud del Usuario:** Analizar de la manera más concienzuda posible el uso real de la tabla `lotes_detalles` y la viabilidad de reemplazarla de plano por la tabla `ordenes`. El usuario sospecha que los PK de ambas tablas deberían coincidir y que la tabla quedó obsoleta/confusa tras la implementación de asignar varios empleados a una misma tarea (distribución por porcentaje de carga para comisiones). Analizar endpoints, JOINs y relaciones FK. Sin cambios aún.
+- **Fecha y Hora:** 2026-06-29 18:55:00
+- **Proyecto(s):** Backend (esquema + endpoints)
+- **Archivos Involucrados:**
+    - ninesys-api/public/model/create_new_company_api_emp_N.sql (estructura y FKs, lectura)
+    - ninesys-api/app/routes/manufacturing.php, production.php, reports.php, products_reports.php (uso de lotes_detalles, lectura)
+    - ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md (sección 6, escritura)
+    - ninesys-api/docs/auditoria_fk/check_pk.sql, rel_ld.sql
+    - api_emp_194 (datos, SOLO LECTURA)
+- **Commits Relacionados:** Frontend: N/A | Backend: 9bef7c0 (doc) y 8cc5b21 (doc actualizado con secciones 6.7-6.9)
+- **Acción Realizada:**
+  1. Verificación de la hipótesis de PK sincronizados con ordenes (check_pk.sql en 194): lotes_detalles tiene 52.535 filas vs 5.913 órdenes; id_orden distintos = 3.906 (~13 filas por orden); filas con _id == id_orden = 1 (coincidencia); MAX _id 56.129 vs 5.916. => HIPÓTESIS FALSA: es tabla HIJA N:1 con _id autoincrement propio.
+  2. Mapeo de FKs: salientes (id_orden→ordenes, id_departamento→departamentos, id_ordenes_productos→ordenes_productos, id_reposicion→reposiciones); entrantes (3 tablas dependen de lotes_detalles._id): lotes_detalles_empleados_asignados (LDEA), lotes_movimientos, pagos.id_lotes_detalles.
+  3. Análisis de uso en backend (680 ocurrencias). Relación real (rel_ld.sql): LDEA con id_lotes_detalles poblado = 382/10.981 (3,5%) → FK al padre ABANDONADA, LDEA opera por id_orden+id_departamento+id_empleado. lotes_detalles con hijo LDEA = 382/52.535 (0,7%). pagos con id_lotes_detalles = 7.061/13.082 (54%) → función viva crítica. lotes_movimientos = 0 filas (tabla muerta).
+  4. Barrido de JOINs en los 4 archivos: manufacturing.php (lotes_detalles = núcleo de pagos/comisiones, KEEP), production.php (tablero de producción KEEP + doble fuente de verdad id_empleado vs LDEA REVIEW), reports.php (0 JOINs), products_reports.php (15 JOINs no obsoletos, pero con fan-out — ver tarea aparte).
+- **Inconvenientes y Desafíos:**
+  - El grep de "lotes_detalles" mezcla la tabla con "lotes_detalles_empleados_asignados"; hubo que desambiguar con precisión.
+  - La hipótesis del usuario (PK coincidentes) resultó falsa; se demostró con datos y se reencuadró el objetivo.
+- **Decisión Final y Justificación:** Reemplazar lotes_detalles por ordenes es INVIABLE (N:1) y eliminarla de plano tampoco (7.061 pagos dependen de su _id). El objetivo correcto no es sustituirla sino depurar: eliminar lo muerto (lotes_movimientos), corregir el fan-out de reportes, y a futuro migrar la trazabilidad de pagos a clave estable antes de jubilarla.
+- **Herramienta(s) Utilizada(s):** Bash (grep/awk/ssh/mysql), Read, Edit
+- **Resultado:** Éxito (análisis completo, sin cambios de código en este apartado)
+- **Verificación:** Cifras de api_emp_194 citadas arriba; reproducibles con docs/auditoria_fk/check_pk.sql y rel_ld.sql.
+- **Logro Conseguido:** Quedó probado con datos que lotes_detalles es load-bearing (pagos + tablero de producción), descartando su reemplazo por ordenes y aclarando su rol real superviviente. Se identificaron los 2 problemas reales: fan-out de costos y FK ldea.id_lotes_detalles despoblada (96,5%).
+- **Referencias de Sesión (Contexto):** ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md sección 6.
+- **Observaciones de Gemini:** `lotes_movimientos` está vacía → candidata a eliminación directa (verificar antes en 163). Doble fuente de verdad lotes_detalles.id_empleado vs LDEA.id_empleado pendiente de unificar.
+- **Respuesta de Gemini:** Demostrado que no se puede prescindir de lotes_detalles a corto plazo; reencuadrada la depuración hacia limpieza incremental.

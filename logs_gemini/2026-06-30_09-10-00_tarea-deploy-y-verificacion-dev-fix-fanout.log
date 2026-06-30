@@ -1,0 +1,29 @@
+- **Solicitud del Usuario:** Retomar el trabajo de ayer (análisis FK / fix fan-out). Punto 1: desplegar a Contabo Dev con `ninesys-hub/bin/deploy_backend.sh` opción 2 y verificar. Verificación final: confirmarlo "usando el endpoint de la API" (consulta directa en Dev), tras descartar la verificación por UI con la "orden 5836".
+- **Fecha y Hora:** 2026-06-30 09:10:00
+- **Proyecto(s):** Backend (reportes) — despliegue Dev + verificación
+- **Archivos Involucrados:**
+    - ninesys-api/app/routes/products_reports.php (fix fan-out commit 8cc5b21, sin nuevos cambios hoy)
+    - ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md (sección 6.8 actualizada: deploy Dev + verificación confirmados)
+    - ninesys-hub/bin/deploy_backend.sh (opción 2 = Desarrollo)
+    - app_multi: pages/reporte-costos-productos.vue, components/admin/ReporteCostosProductos.vue + ...DetalleModal.vue (rutas/endpoint de la UI verificada)
+    - api_emp_194 en vps-contabo-dev (validación, SOLO LECTURA)
+- **Commits Relacionados:** Frontend: N/A | Backend: N/A (sin nuevos commits; se desplegó 8cc5b21 ya existente)
+- **Acción Realizada:**
+  1. Verificación de estado git (solo lectura): rama refactor/modular-routes, commit 8cc5b21 es HEAD, products_reports.php limpio, rama en sincronía con origin (ya pusheado).
+  2. Workflow de seguridad de despliegue ejecutado. Deploy a DESARROLLO con `ninesys-hub/bin/deploy_backend.sh` opción 2 → HEAD Remoto vps-contabo-dev = 8cc5b21, OPcache reseteado. Producción intacta (opción 2 no la toca; 1/3 exigen clave).
+  3. Verificación por UI en Dev (app.nineteengreen.com, sesión admin Sayerlin): /reporte-costos-productos carga y renderiza columna Costo Mano de Obra + modal de detalle por talla, sin errores. Se aclaró que la "orden 5836" NO aplica a este reporte (es agregado por producto/talla; el modal de 5836 sale de /reportes/mano-obra-por-orden, otro endpoint no tocado por el fix; además 5836 tiene 1 sola fila LDEA → no es caso de fan-out).
+  4. Verificación por endpoint/dato (opción solicitada): (a) integridad del deploy = grep en el archivo remoto → 6 ocurrencias de grp.np (las 6 subqueries corregidas). (b) Reconstruida la lógica exacta de la Rama 2 (products_reports.php L225-241) en /tmp scratchpad y ejecutada contra api_emp_194 en vps-contabo-dev (solo lectura).
+- **Inconvenientes y Desafíos:**
+  - Discrepancia entre el log de ayer (decía "desplegado a Dev") y el doc (decía "pendiente de sincronizar"). Resuelta verificando el estado real en git + deploy hoy.
+  - Los scripts validar_fix.sql/fanout.sql de ayer vivían en el scratchpad de sesión (efímero) → se reconstruyó la consulta de validación a partir de la query real del endpoint.
+  - Aclaración importante al usuario: la "orden 5836" apunta a un reporte/endpoint distinto del corregido y no es un caso de fan-out, por lo que la verificación se hizo sobre el reporte correcto (costos-productos) y por dato agregado.
+- **Decisión Final y Justificación:** Confirmar el fix por dos vías independientes (integridad del archivo desplegado + reproducción del resultado en la BD de Dev) en lugar de forzar una verificación por orden no representativa. Todo en Dev y solo lectura.
+- **Herramienta(s) Utilizada(s):** Bash (git/ssh/mysql/grep), Read, Edit, Write, deploy_backend.sh, navegador (Claude in Chrome).
+- **Resultado:** Éxito — fix desplegado y verificado en Desarrollo.
+- **Verificación:**
+    - Deploy: HEAD Remoto vps-contabo-dev = 8cc5b21; grp.np ×6 en el archivo remoto.
+    - Dato (api_emp_194 Dev, Rama 2): inflado = 8.060.397.074 s, corregido = 2.488.904.600 s, ratio = 3,239× (reproduce la validación local de ayer 8.041M/2.483M/3,24×; deriva mínima por NOW() en sesiones abiertas).
+    - UI: /reporte-costos-productos y su modal de detalle por talla cargan con datos reales, sin errores.
+- **Logro Conseguido:** Confirmado de forma rigurosa que el fix del fan-out (reparto proporcional del costo de mano de obra por producto) está vivo y funcionando en Desarrollo, eliminando el sobre-conteo de ~3,24×. Producción intacta. Pendiente solo la orden explícita del usuario para desplegar a prod.
+- **Observaciones de Gemini:** PENDIENTE: aprobación del usuario para deploy a prod (194/163). Independiente: anomalía preexistente $0,04 de Sarahit en el reporte por orden (otro endpoint), y los pendientes de fondo del análisis FK (sección 5).
+- **Respuesta de Gemini:** Fix desplegado a Dev (8cc5b21) y verificado por endpoint: 6× grp.np en el archivo remoto y ratio de inflado 3,239× corregido en api_emp_194. Listo en Desarrollo; prod queda a la espera de tu orden.

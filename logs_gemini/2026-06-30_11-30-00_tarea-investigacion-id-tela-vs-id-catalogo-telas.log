@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** Antes de corregir el campo duplicado id_tela/id_catalogo_telas en presupuestos_productos, investigar en la APP cómo se usan ambos campos. Hipótesis del usuario: id_catalogo_telas apunta a catalogo_telas y id_tela apunta al rollo de tela (insumos/inventario). No eliminar nada sin entenderlo para no hacer un desastre.
+- **Fecha y Hora:** 2026-06-30 11:30:00
+- **Proyecto(s):** Backend + Frontend (investigación, sin cambios de código/datos)
+- **Archivos Involucrados:**
+    - ninesys-api: app/routes/orders.php (INSERT/UPDATE/SELECT de presupuestos_productos), inventory.php, manufacturing.php, buscar.php, schemas/db-schema-gemini.php
+    - app_multi: components/ordenes/presupuesto.vue, nueva.vue, components/produccion/NewStockOrderModal.vue
+    - ninesys-api/public/model/create_new_company_api_emp_N.sql (lectura de FKs/columnas)
+    - api_emp_194 en vps-contabo-dev (datos, SOLO LECTURA)
+    - ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md (Hallazgo 2 corregido + nueva sección 5.2)
+- **Commits Relacionados:** Frontend: N/A | Backend: N/A (investigación)
+- **Acción Realizada:**
+  1. Esquema: presupuestos_productos tiene id_catalogo_telas (con FK presup_prod_ibfk_2 → catalogo_telas) e id_tela (SIN FK). ordenes_productos usa id_tela con FK → catalogo_telas (ord_prod_ibfk_2). No existe tabla insumos; los rollos viven en inventario.
+  2. Backend: grep de id_catalogo_telas = VACÍO en todo ninesys-api. id_tela es la columna usada: orders.php inserta presupuestos_productos con id_tela (L2221), lee con LEFT JOIN catalogo_telas ct ON pp.id_tela = ct._id (L2301) y actualiza id_tela (L2451).
+  3. Frontend: grep de id_catalogo_telas = VACÍO en app_multi. id_tela es lo que se lee (apiProd.id_tela) y se reenvía como 'tela' (presupuesto.vue, nueva.vue, NewStockOrderModal.vue con comentario explícito).
+  4. Datos (api_emp_194, 15 filas): id_tela poblado 15/15 y 15/15 válidos en catalogo_telas; id_catalogo_telas poblado 0/15 (todo NULL). No hay columna rollo/insumo en la tabla; sí hay columna texto 'tela'.
+- **Inconvenientes y Desafíos:**
+  - Los COMMENT de columna son engañosos (casi idénticos en ambas) y la FK del esquema está sobre la columna muerta, lo que invita al error contrario al real. Solo el cruce código+datos lo aclara.
+- **Decisión Final y Justificación:** NO ejecutar ningún cambio (orden del usuario). Documentar que la columna viva es id_tela y la muerta es id_catalogo_telas (inverso a la hipótesis y al esquema). Proponer camino seguro (mover FK a id_tela, eliminar id_catalogo_telas que tiene 0 datos) solo bajo orden explícita.
+- **Herramienta(s) Utilizada(s):** Bash (grep/ssh/mysql/awk), Read, Edit, Write
+- **Resultado:** Éxito — investigación concluyente, sin cambios.
+- **Verificación:** Backend y frontend: 0 referencias a id_catalogo_telas; id_tela usado en ambos. Datos: id_tela 15/15 válido; id_catalogo_telas 0/15.
+- **Logro Conseguido:** Evitado un posible desastre: el esquema declara la FK sobre id_catalogo_telas, pero esa columna está muerta (0 datos, 0 código). La columna real es id_tela. Documentado en sección 5.2 con el plan de corrección seguro pendiente de aprobación.
+- **Observaciones de Gemini:** PENDIENTE (solo bajo orden): mover FK a id_tela y eliminar id_catalogo_telas; reflejar en el maestro y aplicar ALTER a empresas existentes. La hipótesis del rollo en inventario aplica a otros flujos (órdenes/inventario), no a presupuestos_productos.
+- **Respuesta de Gemini:** Investigado: id_tela es la columna viva (15/15, usada en back y front); id_catalogo_telas está muerta (0 datos, 0 referencias) aunque tiene la FK. Es el inverso de lo esperado. No se tocó nada; dejé el plan seguro documentado en 5.2.

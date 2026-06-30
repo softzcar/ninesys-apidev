@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** Probando en Dev, el usuario abrió el "Detalle de Costos de Mano de Obra - Orden #5836" (app.nineteengreen.com/reporte-costos-produccion) y pidió verificar si los montos son correctos.
+- **Fecha y Hora:** 2026-06-29 19:25:00
+- **Proyecto(s):** Backend (reportes) — verificación
+- **Archivos Involucrados:**
+    - ninesys-api/app/routes/reports.php (endpoint /reportes/mano-obra-por-orden/{id_orden}, líneas 623-803, lectura)
+    - api_emp_194 en vps-contabo-dev (datos de la orden 5836, SOLO LECTURA)
+    - api_empresas.empresas_usuarios (config salarial, lectura)
+- **Commits Relacionados:** Frontend: N/A | Backend: N/A (solo verificación, sin cambios)
+- **Acción Realizada:**
+  1. Localización del endpoint que genera el modal: /reportes/mano-obra-por-orden/{id_orden} (reports.php:623). IMPORTANTE: NO es el endpoint corregido en la tarea del fan-out (ese fue /reportes/costos-productos en products_reports.php).
+  2. Identificación de la BD: la orden 5836 vive en api_emp_194 (de las candidatas en dev: 163/193/194/195).
+  3. Verificación de comisiones contra tabla pagos: Sarahit Mojica (id 22) / Comercialización $0.50; yamir caicedo (id 28) / Impresión (cant 2) $0.22; total $0.72. COINCIDE EXACTO con el reporte.
+  4. Verificación de salarios: LDEA de la orden 5836 = 1 sola fila (empleado 28 yamir, depto 1 Impresión, ~3 min el 25/06). yamir es salario_tipo "Comisión" → excluido del cálculo de salario (correcto). Sarahit (22) es "Salario más Comisión" pero NO tiene ninguna fila LDEA en esta orden. La consulta de salarios trackeados del endpoint devuelve VACÍO para 5836.
+- **Inconvenientes y Desafíos:**
+  - El reporte muestra una línea "Sarahit Mojica: $0.04" en Salarios que NO se reproduce con los datos actuales de Dev (ella no tiene horas trackeadas en 5836). Coincide exactamente con el "$-0.04 de Diferencia de ajuste" (desglose $5.05 vs total API $5.01).
+  - El "$4.29 Salarios Fijos Distribuidos" depende de los params inicio/fin que envía el modal (prorrateo del periodo); no verificable sin el rango exacto.
+- **Decisión Final y Justificación:** Reportar lo verificado con certeza (comisiones correctas) y marcar la línea de salario de Sarahit ($0.04) como sospechosa/preexistente, aclarando que este endpoint es independiente del fix del fan-out. No se aplicó ningún cambio (era una verificación).
+- **Herramienta(s) Utilizada(s):** Bash (grep/ssh/mysql), Read
+- **Resultado:** Parcial — comisiones verificadas correctas; anomalía de salario identificada pero no resuelta (requiere más diagnóstico).
+- **Verificación:** Datos crudos de api_emp_194: pagos de 5836 = $0.50 + $0.22 = $0.72 (coincide). LDEA de 5836 = solo yamir (tipo Comisión, sin salario). Sarahit sin LDEA en la orden.
+- **Logro Conseguido:** Confirmada la exactitud de las comisiones del reporte por orden y detectada una posible inconsistencia preexistente en el desglose de salarios (línea de $0.04 no respaldada por datos), separándola claramente del cambio del fan-out.
+- **Referencias de Sesión (Contexto):** Endpoint reports.php:623.
+- **Observaciones de Gemini:** PENDIENTE de investigar el origen del $0.04 de Sarahit: hace falta (a) el rango de fechas que el frontend pasa al endpoint (pestaña Red del navegador) y (b) revisar cómo el frontend (app_multi) arma la tabla de salarios. Es independiente del fan-out.
+- **Respuesta de Gemini:** Comisiones de la orden 5836 correctas ($0.72 exacto); la línea de salario de Sarahit ($0.04) parece un artefacto preexistente en un endpoint distinto al corregido.

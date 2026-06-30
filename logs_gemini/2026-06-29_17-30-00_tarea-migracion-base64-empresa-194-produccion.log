@@ -1,0 +1,31 @@
+- **Solicitud del Usuario:** Tras verificar que los archivos migrados en dev se crearon correctamente pero el dominio en la tabla está hardcodeado a producción (api.nineteencustom.com), aplicar la misma migración base64->física en PRODUCCIÓN para que las imágenes existan en el servidor al que apuntan las URLs. Verificar que las imágenes carguen en prod.
+- **Fecha y Hora:** 2026-06-29 17:30:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - ninesys-api/scripts/migrate_base64_images.php (MODIFICADO: 3 match() -> switch/array para compatibilidad PHP 7.4; redeployado a prod y dev)
+    - Servidor vps-contabo-prod / api_emp_194 (ESCRITURA: migración real, empresa REAL en producción)
+    - /home/api.nineteencustom.com/public_html/scripts/migrate_base64_images.php (script en prod; versión antigua respaldada como .bak_*)
+    - /home/api.nineteencustom.com/public_html/public/images-orders-details/ (destino de imágenes físicas en prod)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: PENDIENTE de commit (cambio match->switch en el script) si el usuario lo solicita
+- **Acción Realizada:**
+  1. Diagnóstico confirmado con el usuario: la migración en dev quedó correcta (332 archivos válidos, 0 corruptas) pero las URLs apuntan al dominio de prod (decisión previa de URL absoluta). En dev cargaban roto (ERR_BLOCKED_BY_ORB) porque prod respondía 405 JSON al no tener los archivos; el .jpeg cargaba porque ya existía en prod.
+  2. Orden explícita del usuario de aplicar la migración en producción. Validación de seguridad del despliegue OK (orden literal < 10 min).
+  3. Inspección read-only de prod: backend en /home/api.nineteencustom.com/public_html; api_emp_194 con 5881 filas y 291 con base64 (prod vivo, 6 más que dev), 0 backup. root MySQL por /root/.my.cnf (contraseña entre comillas dobles, igual que dev).
+  4. HALLAZGO CRÍTICO: prod corre PHP 7.4.33 (dev: 8.3). El script generalizado usaba match() (PHP 8.0+) -> parse error. No existe PHP 8 en prod.
+  5. Backport mínimo y compatible: reescritos los 3 match() como switch/array (válidos en 7.4 y 8.x). Lint OK en local (8.5), prod (7.4) y redeployado a dev para mantener una sola versión.
+  6. DRY-RUN prod: 291 filas, 345 imágenes, 194.19 MB, dir destino existente, URL https://api.nineteencustom.com/images-orders-details/.
+  7. MIGRACIÓN REAL prod: backup automático (ordenes_observaciones_backup_base64, 5881 filas), 345 imágenes extraídas/optimizadas, 0 errores, 357 s.
+  8. Verificación HTTP de 6 órdenes (5528, 5527, 5522, 5521, 5520, 5498): todas las imágenes responden 200 con image/png|jpeg desde api.nineteencustom.com.
+- **Inconvenientes y Desafíos:** (a) Disparidad de versión PHP entre dev (8.3) y prod (7.4) que rompía el script por match(); resuelto con backport a switch. (b) El script desplegado en prod era la versión antigua hardcodeada a empresa 152 (Mar 1); se respaldó y reemplazó por la generalizada. (c) Contraseña root con comillas dobles en .my.cnf (PDO no las quita como el cliente mysql); se limpian en el lado remoto.
+- **Decisión Final y Justificación:** Ejecutar una migración FRESCA en prod (en vez de copiar archivos de dev) porque prod está vivo y tiene más filas/imágenes que el clon dev (5881 vs 5614; 291 vs 285); copiar la tabla habría sido inseguro. El script solo toca filas con base64 y conserva backup completo, por lo que es reversible. Backport match->switch para una única versión válida en ambos entornos.
+- **Herramienta(s) Utilizada(s):** Bash (ssh/scp/mysql/php), Read, Edit, Write, Monitor
+- **Resultado:** Éxito
+- **Verificación:**
+    - prod base64_restante: 0; backup_filas: 5881
+    - 6 órdenes verificadas por HTTP: 200 image/png|jpeg (ERR_BLOCKED_BY_ORB resuelto)
+    - 345 imágenes, 0 errores, 357 s
+- **Logro Conseguido:** Empresa REAL 194 en producción: 345 imágenes base64 extraídas a archivos físicos en el dominio correcto; las URLs hardcodeadas ahora resuelven y las imágenes cargan. ~194 MB de base64 fuera de las filas operativas (respaldados).
+- **Observaciones de Gemini:** (1) DIVERGENCIA dev<->prod: dev quedó con nombres de archivo distintos (generados en su propia corrida) apuntando al dominio prod; en la app de dev esas órdenes seguirán rotas hasta re-clonar dev desde prod o copiar archivos+tabla. No afecta producción. (2) Espacio en disco aún sin recuperar en ambos entornos: requiere DROP del backup + OPTIMIZE TABLE ordenes_observaciones tras validación, bajo confirmación. (3) El cambio match->switch en el script conviene commitearlo para que la fuente quede compatible con PHP 7.4.
+- **Respuesta de Gemini:** Migración base64->física ejecutada con éxito en producción (345 imágenes, 0 errores). Verificadas 6 órdenes: cargan 200 desde api.nineteencustom.com. Pendiente opcional: liberar espacio (drop backup + OPTIMIZE) y re-sincronizar dev.
