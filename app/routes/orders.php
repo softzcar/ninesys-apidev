@@ -1813,6 +1813,8 @@ return function (App $app) {
     /* Craer orden en nunesys */
     $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql . ", '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
 
+    $localConnection->beginTransaction();
+    try {
     $insertOrdenResult = $localConnection->goQuery($sql);
     $object['nueva_oreden_response'] = json_encode($insertOrdenResult);
 
@@ -2020,6 +2022,12 @@ $object['sales_commission_ISSET'][] = false;
 
     $object['metodos_pago'][$i] = $localConnection->goQuery($sql_metodos_pago);
 
+    $localConnection->commit();
+    } catch (\Throwable $e) {
+      $localConnection->rollback();
+      throw $e;
+    }
+
     // enviar email - obtener formato
     $resultBuscar = obtenerRespuestaBuscar($last_id, 'true');
     $object['resultBuscar'] = $resultBuscar['object'];
@@ -2123,6 +2131,8 @@ $object['sales_commission_ISSET'][] = false;
     /* Craer orden en nunesys */
     $sql = 'INSERT INTO presupuestos (id_wp_order, responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $orderWC . ', ' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql . ", '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
 
+    $localConnection->beginTransaction();
+    try {
     $insertPresupResult = $localConnection->goQuery($sql);
     $object['nuevo_presupuesto_response'] = json_encode($insertPresupResult);
 
@@ -2222,6 +2232,12 @@ $object['sales_commission_ISSET'][] = false;
         $object['sql_presupuestos_productos'] = $sql2;
         $object['producto_detalle'][] = $localConnection->goQuery($sql2);
       }
+    }
+
+    $localConnection->commit();
+    } catch (\Throwable $e) {
+      $localConnection->rollback();
+      throw $e;
     }
 
     // enviar email - obtener formato
