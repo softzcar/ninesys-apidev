@@ -1135,7 +1135,7 @@ CREATE TABLE `pagos_salarios` (
 
 CREATE TABLE `products_prices` (
  `_id` int(11) NOT NULL,
- `id_product` int(11) DEFAULT NULL COMMENT 'ID del producto',
+ `id_product` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto',
  `price` decimal(7, 2) DEFAULT NULL COMMENT 'Precio del producto',
  `descripcion` varchar(128) DEFAULT NULL COMMENT 'Descripción del precio'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Precios de productos';
@@ -1490,7 +1490,8 @@ ADD PRIMARY KEY (`_id`);
 ALTER TABLE `products_comisiones`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `products_prices`
-ADD PRIMARY KEY (`_id`);
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `id_product` (`id_product`);
 ALTER TABLE `products_sizes_eficiencia`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `products_tiempos_de_produccion`
@@ -1785,6 +1786,10 @@ ALTER TABLE `metodos_de_pago`
 ADD CONSTRAINT `met_pago_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `met_pago_ibfk_2` FOREIGN KEY (`id_caja_cierres`) REFERENCES `caja_cierres` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
+-- ordenes_auditoria
+ALTER TABLE `ordenes_auditoria`
+ADD CONSTRAINT `ord_audit_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 -- ordenes_borrador_empleado
 ALTER TABLE `ordenes_borrador_empleado`
 ADD CONSTRAINT `ord_borr_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -1856,6 +1861,10 @@ ADD CONSTRAINT `prod_attr_val_ibfk_2` FOREIGN KEY (`id_product_attribute`) REFER
 -- products_comisiones
 ALTER TABLE `products_comisiones`
 ADD CONSTRAINT `prod_com_ibfk_1` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- products_prices
+ALTER TABLE `products_prices`
+ADD CONSTRAINT `prod_prices_ibfk_1` FOREIGN KEY (`id_product`) REFERENCES `products` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- products_sizes_eficiencia
 ALTER TABLE `products_sizes_eficiencia`
