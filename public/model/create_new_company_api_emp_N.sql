@@ -119,7 +119,7 @@ INSERT INTO `impresoras_colores` (`id_catalogo_impresora`, `id_color_tinta`) VAL
 CREATE TABLE `catalogo_insumos_productos` (
   `_id` int(11) NOT NULL COMMENT 'ID único del catálogo',
   `nombre` varchar(128) NOT NULL COMMENT 'Nombre del tipo de insumo',
-  `id_product` int(11) NOT NULL COMMENT 'ID del producto (FK a products._id)',
+  `id_product` bigint(20) UNSIGNED NOT NULL COMMENT 'ID del producto (FK a products._id)',
   `id_departamento` int(11) NOT NULL COMMENT 'ID del departamento',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo maestro de tipos de insumos para producción. Define categorías de materiales (telas, tintas, botones, etc.) que se asignan a productos.';
@@ -460,7 +460,7 @@ CREATE TABLE `disenos` (
   `_id` int(11) NOT NULL COMMENT 'ID de la tabla',
   `id_orden` int(11) DEFAULT NULL COMMENT 'IDn de la orden',
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del diseÑador tabla empleados',
-  `id_product` int(11) DEFAULT NULL COMMENT 'ID del producto asociado al diseño',
+  `id_product` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto asociado al diseño',
   `origen` varchar(25) NOT NULL DEFAULT 'orden_inicial' COMMENT 'Identifica el Origen del registro, puede ser ''origen_inicial'' si se crea al momento de la facturación o ''agregado_posterior'' si proviene de la creación de una revisión',
   `codigo_diseno` varchar(6) DEFAULT NULL COMMENT 'Codigo de diseño de uso interno de 6 digitos formato XX-XXX',
   `tipo` varchar(128) DEFAULT NULL COMMENT 'Tipo de diseÑo modas ó gráfico',
@@ -526,7 +526,7 @@ INSERT INTO `inventario` (`_id`, `sku`, `id_catalogo`, `tipo_insumo`, `id_color_
 CREATE TABLE `inventario_movimientos` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la  orden - lote',
-  `id_producto` int(11) DEFAULT NULL COMMENT 'ID del catálogo de productos',
+  `id_producto` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del catálogo de productos',
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del empleado',
   `id_insumo` int(11) DEFAULT NULL COMMENT 'Id del insumoa signado',
   `id_catalogo_insumos_prodcutos` int(11) DEFAULT NULL COMMENT 'ID del catálogo seleccionado por el empleado al momento de usar el insumo',
@@ -650,7 +650,7 @@ CREATE TABLE `lotes_corte_ajustes` (
 CREATE TABLE `lotes_detalles` (
   `_id` int(10) NOT NULL COMMENT 'ID único del registro',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden de trabajo',
-  `id_woo` int(11) DEFAULT NULL COMMENT 'ID del producto en Woocommerce',
+  `id_woo` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto en Woocommerce',
   `progreso` varchar(11) NOT NULL DEFAULT 'por iniciar' COMMENT 'Nos indica el estado de desarrollo de la tarea: por niciar, en curso, terminada',
   `id_ordenes_productos` int(11) NOT NULL DEFAULT 0 COMMENT 'ID del producto ordenes_productos',
   `id_empleado` int(11) DEFAULT NULL COMMENT 'id del empleado responsable de la producción',
@@ -887,7 +887,7 @@ CREATE TABLE `ordenes_observaciones` (
 CREATE TABLE `ordenes_productos` (
   `_id` int(11) NOT NULL COMMENT 'ID del registro',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
-  `id_woo` int(11) DEFAULT NULL COMMENT 'ID del producto en woocommerce',
+  `id_woo` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto en woocommerce',
   `id_tela` int(11) DEFAULT NULL COMMENT 'ID de la tela a utilizar del catálogo de telas',
   `id_category` int(11) NOT NULL DEFAULT 0 COMMENT 'ID de la catagoria en WooCommerce ',
   `id_products_attributes` int(11) DEFAULT NULL COMMENT 'ID de la variante del producto',
@@ -979,7 +979,7 @@ CREATE TABLE `presupuestos` (
 CREATE TABLE `presupuestos_productos` (
   `_id` int(11) NOT NULL COMMENT 'ID del registro',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
-  `id_woo` int(11) DEFAULT NULL COMMENT 'ID del producto en woocommerce',
+  `id_woo` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto en woocommerce',
   `id_category` int(11) NOT NULL DEFAULT 0 COMMENT 'ID de la catagoria en WooCommerce ',
   `category_name` varchar(20) DEFAULT NULL COMMENT 'NOMBRE de la categoria en woocommerce',
   `name` varchar(240) DEFAULT NULL COMMENT 'Nombre del producto',
@@ -1069,14 +1069,14 @@ VALUES (1, 'Atributo de pruebas', 5.00);
 CREATE TABLE `products_attributes_values` (
   `_id` int(11) NOT NULL,
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
-  `id_product` int(11) NOT NULL COMMENT 'id del prodcuto',
+  `id_product` bigint(20) UNSIGNED NOT NULL COMMENT 'id del producto',
   `id_product_attribute` int(11) NOT NULL COMMENT 'id del atributo del producto',
   `attribute_value` varchar(128) NOT NULL COMMENT 'Descripción del atributo del producto',
   `attribute_price` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio del atributo'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Atributos asignados a los productos';
 CREATE TABLE `products_comisiones` (
   `_id` int(11) NOT NULL COMMENT 'ID único',
-  `id_product` int(11) DEFAULT NULL COMMENT 'ID del producto',
+  `id_product` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto',
   `id_departamento` int(11) DEFAULT NULL COMMENT 'ID del departamento',
   `comision` decimal(5, 2) NOT NULL DEFAULT 0.00 COMMENT 'Comisión asignada'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Comisiones asignada a los productos por departamento';
@@ -1288,7 +1288,7 @@ CREATE TABLE `revisiones` (
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden a la cual pertenece el diseño y estarevision',
   `id_diseno` int(11) DEFAULT NULL COMMENT 'id en la tabla disenos',
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del diseñador que envió la revisión',
-  `id_product` int(11) DEFAULT NULL COMMENT 'ID del producto asociado a la revisión',
+  `id_product` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto asociado a la revisión',
   `tipo` varchar(128) DEFAULT NULL COMMENT 'Tipo de diseño asociado a la revisión',
   `revision` int(11) NOT NULL DEFAULT 0 COMMENT 'Numero de revisiones máximo dos',
   `estatus` varchar(19) NOT NULL DEFAULT 'Esperando Respuesta' COMMENT 'Los estados son ''Esperando Respuesta'', ''Rechazado'', ''Aprobado''',
@@ -1349,14 +1349,17 @@ ADD PRIMARY KEY (`_id`),
 ALTER TABLE `catalogo_insumos_productos`
 ADD PRIMARY KEY (`_id`),
   ADD UNIQUE KEY `nombre` (`nombre`),
-  ADD UNIQUE KEY `nombre_2` (`nombre`);
+  ADD UNIQUE KEY `nombre_2` (`nombre`),
+  ADD KEY `id_product` (`id_product`),
+  ADD KEY `id_departamento` (`id_departamento`);
 ALTER TABLE `catalogo_telas`
 ADD PRIMARY KEY (`_id`),
   ADD UNIQUE KEY `_id` (`_id`);
 ALTER TABLE `categories`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `check_tareas`
-ADD PRIMARY KEY (`_id`);
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `id_ordenes_productos` (`id_ordenes_productos`);
 ALTER TABLE `config`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `crm_campanas`
@@ -1387,7 +1390,8 @@ ADD PRIMARY KEY (`_id`);
 ALTER TABLE `disenos`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`),
-  ADD KEY `id_empleado` (`id_empleado`);
+  ADD KEY `id_empleado` (`id_empleado`),
+  ADD KEY `id_product` (`id_product`);
 ALTER TABLE `disenos_ajustes_y_personalizaciones`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`, `id_diseno`);
@@ -1401,6 +1405,7 @@ ALTER TABLE `inventario_movimientos`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`),
   ADD KEY `id_insumo` (`id_insumo`),
+  ADD KEY `id_producto` (`id_producto`),
   ADD KEY `idx_composite` (
     `id_orden`,
     `id_producto`,
@@ -1413,7 +1418,8 @@ ADD PRIMARY KEY (`_id`),
 ALTER TABLE `lotes_detalles`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_empleado` (`id_empleado`),
-  ADD KEY `id_orden` (`id_orden`, `id_ordenes_productos`);
+  ADD KEY `id_orden` (`id_orden`, `id_ordenes_productos`),
+  ADD KEY `id_woo` (`id_woo`);
 ALTER TABLE `lotes_detalles_empleados_asignados`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `idx_id_empleado` (`id_empleado`),
@@ -1449,7 +1455,8 @@ ADD PRIMARY KEY (`_id`);
 ALTER TABLE `ordenes_productos`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`, `rollo`),
-  ADD KEY `id_catalogo_telas` (`rollo`);
+  ADD KEY `id_catalogo_telas` (`rollo`),
+  ADD KEY `id_woo` (`id_woo`);
 ALTER TABLE `ordenes_tmp`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `ordenes_vinculadas`
@@ -1486,9 +1493,11 @@ ADD PRIMARY KEY (`_id`);
 ALTER TABLE `products_attributes`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `products_attributes_values`
-ADD PRIMARY KEY (`_id`);
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `id_product` (`id_product`);
 ALTER TABLE `products_comisiones`
-ADD PRIMARY KEY (`_id`);
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `id_product` (`id_product`);
 ALTER TABLE `products_prices`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_product` (`id_product`);
@@ -1500,7 +1509,8 @@ ALTER TABLE `product_insumos_asignados`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `rendimiento`
 ADD PRIMARY KEY (`_id`),
-  ADD KEY `id_orden` (`id_orden`);
+  ADD KEY `id_orden` (`id_orden`),
+  ADD KEY `id_departamento` (`id_departamento`);
 ALTER TABLE `reposiciones`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (
@@ -1515,7 +1525,8 @@ ADD PRIMARY KEY (`_id`),
 ALTER TABLE `revisiones`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`, `id_diseno`),
-  ADD KEY `id_orden_2` (`id_orden`, `id_diseno`);
+  ADD KEY `id_orden_2` (`id_orden`, `id_diseno`),
+  ADD KEY `id_product` (`id_product`);
 ALTER TABLE `sizes`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `catalogo_colores_tintas`
@@ -1670,7 +1681,7 @@ MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `catalogo_tintas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 -- =====================================================
--- FOREIGN KEYS - 104 FKs
+-- FOREIGN KEYS - 118 FKs
 -- =====================================================
 
 -- abonos
@@ -1690,11 +1701,17 @@ ADD CONSTRAINT `caja_ibfk_1` FOREIGN KEY (`id_caja_cierres`) REFERENCES `caja_ci
 ALTER TABLE `caja_fondos`
 ADD CONSTRAINT `caja_fondos_ibfk_1` FOREIGN KEY (`id_caja_cierres`) REFERENCES `caja_cierres` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- catalogo_insumos_productos
+ALTER TABLE `catalogo_insumos_productos`
+ADD CONSTRAINT `cat_ins_prod_ibfk_1` FOREIGN KEY (`id_product`) REFERENCES `products` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT `cat_ins_prod_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 -- check_tareas
 ALTER TABLE `check_tareas`
 ADD CONSTRAINT `check_tar_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `check_tar_ibfk_2` FOREIGN KEY (`id_lotes_detalles_empleados_asigandos`) REFERENCES `lotes_detalles_empleados_asignados` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `check_tar_ibfk_3` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ADD CONSTRAINT `check_tar_ibfk_3` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT `check_tar_ibfk_4` FOREIGN KEY (`id_ordenes_productos`) REFERENCES `ordenes_productos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- crm_campanas_envios
 ALTER TABLE `crm_campanas_envios`
@@ -1721,7 +1738,8 @@ ALTER TABLE `crm_soporte`
 
 -- disenos
 ALTER TABLE `disenos`
-ADD CONSTRAINT `disenos_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ADD CONSTRAINT `disenos_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT `disenos_ibfk_2` FOREIGN KEY (`id_product`) REFERENCES `products` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- disenos_ajustes_y_personalizaciones
 ALTER TABLE `disenos_ajustes_y_personalizaciones`
@@ -1743,7 +1761,12 @@ ALTER TABLE `inventario_movimientos`
 ADD CONSTRAINT `inv_mov_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `inv_mov_ibfk_2` FOREIGN KEY (`id_insumo`) REFERENCES `inventario` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
 ADD CONSTRAINT `inv_mov_ibfk_3` FOREIGN KEY (`id_catalogo_insumos_prodcutos`) REFERENCES `catalogo_insumos_productos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT `inv_mov_ibfk_4` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `inv_mov_ibfk_4` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT `inv_mov_ibfk_5` FOREIGN KEY (`id_producto`) REFERENCES `products` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- inventario_movimientos_historial
+ALTER TABLE `inventario_movimientos_historial`
+ADD CONSTRAINT `inv_mov_hist_ibfk_1` FOREIGN KEY (`id_movimiento`) REFERENCES `inventario_movimientos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- lotes
 ALTER TABLE `lotes`
@@ -1755,7 +1778,8 @@ ALTER TABLE `lotes_detalles`
 ADD CONSTRAINT `lotes_det_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `lotes_det_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
 ADD CONSTRAINT `lotes_det_ibfk_3` FOREIGN KEY (`id_ordenes_productos`) REFERENCES `ordenes_productos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `lotes_det_ibfk_4` FOREIGN KEY (`id_reposicion`) REFERENCES `reposiciones` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `lotes_det_ibfk_4` FOREIGN KEY (`id_reposicion`) REFERENCES `reposiciones` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT `lotes_det_ibfk_5` FOREIGN KEY (`id_woo`) REFERENCES `products` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- lotes_detalles_empleados_asignados
 ALTER TABLE `lotes_detalles_empleados_asignados`
@@ -1811,7 +1835,8 @@ ADD CONSTRAINT `ord_obs_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`
 ALTER TABLE `ordenes_productos`
 ADD CONSTRAINT `ord_prod_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `ord_prod_ibfk_2` FOREIGN KEY (`id_tela`) REFERENCES `catalogo_telas` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT `ord_prod_ibfk_3` FOREIGN KEY (`id_size`) REFERENCES `sizes` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `ord_prod_ibfk_3` FOREIGN KEY (`id_size`) REFERENCES `sizes` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT `ord_prod_ibfk_4` FOREIGN KEY (`id_woo`) REFERENCES `products` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ordenes_vinculadas
 ALTER TABLE `ordenes_vinculadas`
@@ -1856,11 +1881,13 @@ ADD CONSTRAINT `presup_prod_ibfk_2` FOREIGN KEY (`id_tela`) REFERENCES `catalogo
 -- products_attributes_values
 ALTER TABLE `products_attributes_values`
 ADD CONSTRAINT `prod_attr_val_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `prod_attr_val_ibfk_2` FOREIGN KEY (`id_product_attribute`) REFERENCES `products_attributes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ADD CONSTRAINT `prod_attr_val_ibfk_2` FOREIGN KEY (`id_product_attribute`) REFERENCES `products_attributes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT `prod_attr_val_ibfk_3` FOREIGN KEY (`id_product`) REFERENCES `products` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- products_comisiones
 ALTER TABLE `products_comisiones`
-ADD CONSTRAINT `prod_com_ibfk_1` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ADD CONSTRAINT `prod_com_ibfk_1` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT `prod_com_ibfk_2` FOREIGN KEY (`id_product`) REFERENCES `products` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- products_prices
 ALTER TABLE `products_prices`
@@ -1884,7 +1911,8 @@ ADD CONSTRAINT `prod_ins_asig_ibfk_3` FOREIGN KEY (`id_talla`) REFERENCES `sizes
 -- rendimiento
 ALTER TABLE `rendimiento`
 ADD CONSTRAINT `rendim_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `rendim_ibfk_2` FOREIGN KEY (`id_insumo`) REFERENCES `inventario` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `rendim_ibfk_2` FOREIGN KEY (`id_insumo`) REFERENCES `inventario` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT `rendim_ibfk_3` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- reposiciones
 ALTER TABLE `reposiciones`
@@ -1901,7 +1929,8 @@ ADD CONSTRAINT `rde_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departam
 -- revisiones
 ALTER TABLE `revisiones`
 ADD CONSTRAINT `revisiones_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `revisiones_ibfk_2` FOREIGN KEY (`id_diseno`) REFERENCES `disenos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ADD CONSTRAINT `revisiones_ibfk_2` FOREIGN KEY (`id_diseno`) REFERENCES `disenos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT `revisiones_ibfk_3` FOREIGN KEY (`id_product`) REFERENCES `products` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- catalogo_impresoras
 ALTER TABLE `catalogo_impresoras`
