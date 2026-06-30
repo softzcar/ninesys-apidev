@@ -1,9 +1,23 @@
 # Análisis de optimización de claves foráneas — `api_emp_N`
 
 > Documento de trabajo persistente. Creado el 2026-06-29.
-> Estado: **ANÁLISIS — sin cambios aplicados en BD ni en el esquema maestro.**
+> Estado: **IMPLEMENTADO Y DESPLEGADO — Dev y Producción completamente sincronizados al 2026-06-30.**
 > Esquema maestro: `ninesys-api/public/model/create_new_company_api_emp_N.sql`
 > BD auditada: `api_emp_194` en `vps-contabo-prod` (producción real). `api_emp_163` = legacy/solo lectura.
+>
+> ### Resumen ejecutivo del estado actual (2026-06-30)
+> - **53 FKs activas en producción** (21 preexistentes + 32 nuevas en dos jornadas)
+> - **Dev = Producción** en esquema y código. Rama: `refactor/modular-routes` HEAD `4e159cc`
+> - **Ola A** (17 FKs + 10 correcciones bigint): ✅ Dev + Prod — commits `99101bf` `346f891`
+> - **Ola B** (5 FKs RESTRICT tintas/colores): ✅ Dev + Prod — commit `7627d7f`
+> - **Ola C** (6 FKs + limpieza 173 filas): ✅ Dev + Prod — commit `2db7d08`
+> - **reposiciones_departamentos_excluidos** (2 FKs): ✅ Dev + Prod — tabla creada en prod 2026-06-30
+> - **Red de seguridad HTTP 409**: ✅ Dev + Prod — commit `48323ad`
+> - **insert_id reemplaza SELECT MAX**: ✅ Dev + Prod — commit `b9d73ca`
+> - **beginTransaction en /ordenes/nueva y /presupuesto/nuevo**: ✅ Dev + Prod — commit `4e159cc`
+> - **displayErrorDetails: false**: ✅ Dev + Prod — commit `839fd09`
+> - **id_catalogo_telas eliminada** (presupuestos_productos): ✅ Dev + Prod
+> - **rendimiento.id_product**: ❌ DESCARTADO — columna no existe en Dev ni en Prod. No es tarea pendiente.
 
 ---
 
@@ -85,9 +99,48 @@ Script: `scratchpad/auditoria_fk.sql` (generador: `scratchpad/gen_audit.py`). Ca
 ## 5. Próximos pasos pendientes
 
 - [x] **Investigar filas huérfanas concretas (2026-06-30, `api_emp_194` Dev, solo lectura) — ver hallazgos en 5.1.**
-- [x] **Resuelto el duplicado `id_tela` vs `id_catalogo_telas` (2026-06-30) — ver 5.2. Columna muerta `id_catalogo_telas` eliminada del maestro y de Dev; falta solo aplicar a prod bajo orden.**
-- [ ] Preparar `ALTER TABLE` solo para el grupo "viable YA" (no tocar las que requieren limpieza).
-- [x] **Corregir Hallazgo 1 y comentario "95 FKs"→"104 FKs" en el maestro (2026-06-30).** Aplicado en `public/model/create_new_company_api_emp_N.sql`: `fk_gastos_registros_plantilla` ahora con `ON UPDATE CASCADE` → 104/104 FKs homogéneas; comentario corregido a "104 FKs" (conteo real verificado: 104 `CONSTRAINT ... FOREIGN KEY`). Solo afecta a empresas NUEVAS; no toca empresas existentes ni datos.
+- [x] **Resuelto el duplicado `id_tela` vs `id_catalogo_telas` (2026-06-30) — ver 5.2. Columna muerta `id_catalogo_telas` eliminada del maestro, Dev y Producción.**
+- [x] **Preparar y aplicar ALTER TABLE para el grupo "viable YA" — Olas A, B y C completadas en Dev y Producción.**
+- [x] **Corregir Hallazgo 1 y comentario "95 FKs"→"104 FKs" en el maestro (2026-06-30).** Contador actualizado a 123 FKs tras las olas.
+- [x] **reposiciones_departamentos_excluidos creada en producción (2026-06-30).** FKs `fk_rde_reposicion` → `reposiciones` CASCADE y `fk_rde_departamento` → `departamentos` CASCADE activas.
+- [x] **rendimiento.id_product — DESCARTADO.** La columna no existe en Dev ni en Prod. No es tarea pendiente real.
+
+---
+
+### ✅ TAREAS COMPLETADAS (resumen para retomar sesión)
+
+Todo lo siguiente está DESPLEGADO en producción al 2026-06-30:
+1. Red de seguridad FK: `DatabaseConstraintException` + HTTP 409 (`48323ad`)
+2. Ola A: 17 FKs + 10 correcciones de tipo bigint/UNSIGNED (`99101bf` `346f891`)
+3. Ola B: 5 FKs RESTRICT tintas/colores (`7627d7f`)
+4. Ola C: 6 FKs + limpieza 173 filas sucias (`2db7d08`)
+5. Tabla `reposiciones_departamentos_excluidos` + 2 FKs en producción (DDL directo)
+6. `presupuestos_productos.id_catalogo_telas` eliminada en Dev y Prod
+7. `displayErrorDetails: false` + logError activo (`839fd09`)
+8. `insert_id` reemplaza `SELECT MAX(_id)` en 3 puntos de orders.php (`b9d73ca`)
+9. `beginTransaction/commit/rollback` en `/ordenes/nueva` y `/presupuesto/nuevo` (`4e159cc`)
+
+---
+
+### 🔲 TAREAS PENDIENTES REALES (próxima sesión)
+
+**P1 — Evaluar y eliminar tabla `lotes_movimientos`** *(prioridad media)*
+- Tabla confirmada vacía (0 filas en api_emp_194). Un bloque muerto en manufacturing.php la referencia.
+- ⚠️ Antes de eliminar: verificar que también esté vacía en otras empresas (api_emp_163 u otras instancias).
+- Si está vacía en todas: `DROP TABLE lotes_movimientos` + eliminar el bloque muerto en manufacturing.php.
+
+**P2 — Investigar `presupuestos.id_wp_order` como columna muerta** *(prioridad baja)*
+- 5 de 5 filas con valor `0`. No existe `ordenes._id = 0`. Nunca fue FK real.
+- Acción: grep en el código para confirmar que ningún SELECT/UPDATE la usa, luego marcar con COMMENT o eliminar.
+
+**P3 — Auditar endpoints multi-tabla restantes para transacciones** *(prioridad media)*
+- `/ordenes/nueva` y `/presupuesto/nuevo` ya tienen `beginTransaction/commit/rollback`.
+- Verificar si existen endpoints de conversión presupuesto→orden u otros creadores complejos sin transacción.
+- Acción: grep `INSERT INTO ordenes` en routes/ para identificar otros puntos de entrada.
+
+**P4 — Doble fuente de verdad `id_empleado` en production.php** *(prioridad media)*
+- `production.php` L1368-1443 lee `id_empleado` desde `lotes_detalles` cuando el sistema real lo guarda en LDEA.
+- Requiere análisis de impacto antes de tocar. No causa errores actuales, solo inconsistencia de datos.
 
 ### 5.1 Investigación de huérfanos — resultados (`api_emp_194` Dev, 2026-06-30)
 
