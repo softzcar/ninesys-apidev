@@ -1813,11 +1813,11 @@ return function (App $app) {
     /* Craer orden en nunesys */
     $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql . ", '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
 
-    $object['nueva_oreden_response'] = json_encode($localConnection->goQuery($sql));
+    $insertOrdenResult = $localConnection->goQuery($sql);
+    $object['nueva_oreden_response'] = json_encode($insertOrdenResult);
 
-    // Obtenr id de la orden creada
-    $last = $localConnection->goQuery('SELECT MAX(_id) id FROM ordenes');
-    $last_id = intval($last[0]['id']);
+    // ID de la orden recién insertada (evita race condition de SELECT MAX)
+    $last_id = intval($insertOrdenResult['insert_id']);
     $object['last_id'] = $last_id;
 
     // Guardar orden vinculada
@@ -1918,7 +1918,8 @@ $object['sales_commission_ISSET'][] = false;
 
         $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela) VALUES (' . $values . ')';
         $object['sql_ordenes_productos'] = $sql2;
-        $object['producto_detalle'][] = $localConnection->goQuery($sql2);
+        $insertProdResult = $localConnection->goQuery($sql2);
+        $object['producto_detalle'][] = $insertProdResult;
 
         // BUSCAR EMPLEADOS Y GUARDARLOS EN UN VECTOR PARA ASIGANR A CASDA UNO ...
         if ($misProductos[$i] != '') {
@@ -1927,9 +1928,8 @@ $object['sales_commission_ISSET'][] = false;
           $object['myOrder_sql'] = $sql_order;
           $object['myOrder'] = $myOrder;
 
-          // Obtenr ultimo ID del producto creado
-          $last_prod = $localConnection->goQuery('SELECT MAX(_id) id FROM ordenes_productos');
-          $last_id_ordenes_productos = intval($last_prod[0]['id']);
+          // ID del producto recién insertado (evita race condition de SELECT MAX)
+          $last_id_ordenes_productos = intval($insertProdResult['insert_id']);
 
           // PREPARAR FECHAS
           $myDate = new CustomTime();
@@ -2123,11 +2123,11 @@ $object['sales_commission_ISSET'][] = false;
     /* Craer orden en nunesys */
     $sql = 'INSERT INTO presupuestos (id_wp_order, responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $orderWC . ', ' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql . ", '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
 
-    $object['nuevo_presupuesto_response'] = json_encode($localConnection->goQuery($sql));
+    $insertPresupResult = $localConnection->goQuery($sql);
+    $object['nuevo_presupuesto_response'] = json_encode($insertPresupResult);
 
-    // Obtenr id de la orden creada
-    $last = $localConnection->goQuery('SELECT MAX(_id) id FROM presupuestos');
-    $last_id = intval($last[0]['id']);
+    // ID del presupuesto recién insertado (evita race condition de SELECT MAX)
+    $last_id = intval($insertPresupResult['insert_id']);
     $object['last_id'] = $last_id;
 
     // Guardar orden vinculada
