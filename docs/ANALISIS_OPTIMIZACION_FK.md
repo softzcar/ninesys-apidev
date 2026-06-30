@@ -28,7 +28,7 @@ Tras la corrección del usuario, **NO existen IDs externos residuales**: los cam
 
 ### Hallazgo 2 — inconsistencia de nombres entre tablas paralelas
 - `ordenes_productos` usa **`id_tela`** como FK → `catalogo_telas`.
-- `presupuestos_productos` usa **`id_catalogo_telas`** como FK → `catalogo_telas`, y además tiene una columna `id_tela` separada.
+- `presupuestos_productos` tiene `id_catalogo_telas` (con la FK declarada) **y** `id_tela` (sin FK). **⚠️ CORREGIDO tras investigar código+datos (ver 5.2): la FK está en la columna equivocada — la viva es `id_tela`, la muerta es `id_catalogo_telas`.**
 - `ordenes` **no tiene NINGUNA FK a `customers`**; guarda el cliente en `id_wp` (sin FK) + `cliente_nombre`/`cliente_cedula`. En cambio `presupuestos.id_wp` SÍ tiene FK → `customers` (`presup_ibfk_1`).
 
 ---
@@ -84,10 +84,37 @@ Script: `scratchpad/auditoria_fk.sql` (generador: `scratchpad/gen_audit.py`). Ca
 
 ## 5. Próximos pasos pendientes
 
-- [ ] Investigar filas huérfanas concretas (IDs) y confirmar si el sentinela `0` de `id_category` es el culpable.
-- [ ] Resolver duplicado `id_tela` vs `id_catalogo_telas` en `presupuestos_productos`.
+- [x] **Investigar filas huérfanas concretas (2026-06-30, `api_emp_194` Dev, solo lectura) — ver hallazgos en 5.1.**
+- [x] **Resuelto el duplicado `id_tela` vs `id_catalogo_telas` (2026-06-30) — ver 5.2. Columna muerta `id_catalogo_telas` eliminada del maestro y de Dev; falta solo aplicar a prod bajo orden.**
 - [ ] Preparar `ALTER TABLE` solo para el grupo "viable YA" (no tocar las que requieren limpieza).
-- [ ] Corregir Hallazgo 1 (`ON UPDATE` faltante) y el comentario "95 FKs"→"104 FKs" en el maestro.
+- [x] **Corregir Hallazgo 1 y comentario "95 FKs"→"104 FKs" en el maestro (2026-06-30).** Aplicado en `public/model/create_new_company_api_emp_N.sql`: `fk_gastos_registros_plantilla` ahora con `ON UPDATE CASCADE` → 104/104 FKs homogéneas; comentario corregido a "104 FKs" (conteo real verificado: 104 `CONSTRAINT ... FOREIGN KEY`). Solo afecta a empresas NUEVAS; no toca empresas existentes ni datos.
+
+### 5.1 Investigación de huérfanos — resultados (`api_emp_194` Dev, 2026-06-30)
+
+| Relación | Huérfanos | Causa raíz confirmada | Acción para habilitar FK |
+|---|---|---|---|
+| `ordenes_productos.id_category → categories` | 69 | **Sentinela `0` = 53 filas** (col `NOT NULL DEFAULT 0`) + categoría borrada `1` = 16 filas | Crear categoría "Sin categoría" y reasignar, o volver la col nullable + `SET NULL`; reasignar las 16 de cat `1`. |
+| `inventario_remanentes.id_insumo → inventario` | 43 distintos / 46 filas | **Insumos BORRADOS de `inventario`** (los ids huérfanos 719–836 caen dentro del rango real 355–931; 66 de los distintos sí existen). `inventario` ES el padre correcto; sin FK con CASCADE quedan remanentes colgando. | Limpiar/borrar las 43 filas huérfanas y luego FK `ON DELETE CASCADE`. |
+| `ordenes.id_wp → customers` | 2 | Sano por diseño: orden 3269 (`id_wp=1705`, cliente borrado, nombre preservado en snapshot) + orden 3542 (`id_wp=0`, "Cliente Desconocido", sentinela) | Tratar los 2 casos y FK `SET NULL` (o sentinela). El nombre se conserva igual en `cliente_nombre`. |
+| `presupuestos.id_wp_order → ordenes` | 5/5 | **COLUMNA MUERTA:** las 5 filas valen `0` (no existe `ordenes._id = 0`). Nunca fue FK real. | No es FK. Marcar columna como muerta/legacy; no enlazar. |
+
+### 5.2 Duplicado `id_tela` vs `id_catalogo_telas` en `presupuestos_productos` (investigado 2026-06-30)
+
+Investigación de código (backend `ninesys-api` + frontend `app_multi`) y datos (`api_emp_194` Dev, solo lectura). **La FK del esquema está sobre la columna equivocada.**
+
+| Columna | Filas pobladas (de 15) | Válidas en `catalogo_telas` | FK en esquema | Referencias en código |
+|---|---|---|---|---|
+| **`id_tela`** | 15/15 | 15/15 ✓ | **ninguna** | **viva**: INSERT/UPDATE/SELECT en `orders.php` (2221, 2301 `LEFT JOIN catalogo_telas ct ON pp.id_tela = ct._id`, 2451); frontend lee `apiProd.id_tela` y reenvía como `tela` (`presupuesto.vue`, `nueva.vue`, `NewStockOrderModal.vue`) |
+| **`id_catalogo_telas`** | 0/15 (todo NULL) | — | **`presup_prod_ibfk_2` → catalogo_telas** | **cero** referencias en backend ni frontend |
+
+Además hay una columna de texto `tela` ("Tela principal seleccionada desde Comercialización"). **No existe columna `rollo`/`insumo` aquí** → la hipótesis "id_tela = rollo en inventario" queda descartada: `id_tela` guarda `catalogo_telas._id`, igual que en `ordenes_productos`.
+
+**Conclusión:** el verdadero duplicado/muerto es **`id_catalogo_telas`** (0 datos, 0 código, pero tiene la FK). La columna correcta y usada es **`id_tela`** (consistente con `ordenes_productos.id_tela`). NO se tocó nada.
+
+**✅ APLICADO (2026-06-30) — eliminación de la columna muerta:**
+1. **Maestro `create_new_company_api_emp_N.sql`:** eliminada la columna `id_catalogo_telas`; índices → `KEY id_orden (id_orden)` + `KEY id_tela (id_tela)`; FK `presup_prod_ibfk_2` **redirigida a `id_tela`** (espejo de `ord_prod_ibfk_2`). Verificado: cero referencias a la columna `id_catalogo_telas` (la única coincidencia restante es un índice homónimo sobre la col `rollo` en `ordenes_productos`, no relacionado). Cambios SIN commit.
+2. **Contabo Dev (`api_emp_194`):** hallazgo — la tabla **no tenía NINGUNA FK** (drift: las FKs del maestro nunca se aplicaron a esta empresa). Backup previo (`/tmp/backup_presupuestos_productos_194dev_*.sql`). `ALTER`: drop índices `id_catalogo_telas` e `id_orden`, drop columna `id_catalogo_telas`, re-crear `KEY id_orden (id_orden)` y `KEY id_tela (id_tela)`. **No se añadió FK** (la adopción de FKs en empresas existentes pertenece al grupo "viable YA"). Datos intactos: 15 filas, `SUM(id_tela)=883` antes y después.
+3. **Producción: NO tocada.** Pendiente de orden explícita; antes verificar datos de `id_catalogo_telas`/`id_tela` en la prod real.
 - [ ] **EN CURSO:** Análisis de viabilidad de eliminar la tabla `lotes_detalles` y reemplazarla por `ordenes` (ver sección 6).
 
 ---
@@ -195,7 +222,11 @@ JOIN (SELECT id_orden, id_departamento, COUNT(*) np FROM lotes_detalles GROUP BY
 ```
 - 6 subqueries corregidas (tiempos + salarios, por producto ×2 endpoints y por talla). Rama 1 (FK exacta) intacta. `php -l` OK.
 - **Validación en `api_emp_194` (`scratchpad/validar_fix.sql`):** total Rama 2 actual = 8.041.895.411 seg (inflado 3,24×); corregido = 2.483.308.893 seg = verdad terreno exacta. ✓
-- **Pendiente:** sincronizar a Contabo Dev y verificar el endpoint completo; NO desplegar a prod sin orden explícita.
+- **Despliegue a Contabo Dev (2026-06-30): CONFIRMADO.** Commit `8cc5b21` commiteado y pusheado a `refactor/modular-routes`; deploy con `ninesys-hub/bin/deploy_backend.sh` opción 2 → `HEAD Remoto vps-contabo-dev = 8cc5b21`, OPcache reseteado. Producción intacta.
+- **Verificación en Dev (2026-06-30): CONFIRMADA por dos vías.**
+  - *UI:* `/reporte-costos-productos` (Reporte de Desviaciones de Costos) carga y renderiza la columna Costo Mano de Obra + su modal de detalle por talla, sin errores. Es un reporte **agregado por producto/talla** (no por orden); la "orden 5836" no aplica aquí (otro endpoint `/reportes/mano-obra-por-orden`, no tocado por el fix; además 5836 tiene 1 sola fila LDEA → no es caso de fan-out).
+  - *Endpoint/dato:* integridad del deploy = 6 ocurrencias de `grp.np` en el archivo que corre en Dev. Re-ejecutada la lógica exacta de la Rama 2 contra `api_emp_194` (Dev, solo lectura): inflado = 8.060.397.074 s, corregido = 2.488.904.600 s, **ratio 3,239×** (reproduce la validación local de ayer; mínima deriva por `NOW()` en sesiones abiertas).
+- **Pendiente:** aprobación del usuario para deploy a prod; NO desplegar a prod sin orden explícita.
 
 ### 6.9 Síntesis del barrido completo (4 archivos)
 

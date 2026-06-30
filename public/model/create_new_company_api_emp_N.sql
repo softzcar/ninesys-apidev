@@ -591,7 +591,7 @@ CREATE TABLE `gastos_registros` (
   PRIMARY KEY (`_id`),
   KEY `idx_fecha` (`fecha_de_gasto`),
   KEY `idx_periodo` (`periodo`),
-  CONSTRAINT `fk_gastos_registros_plantilla` FOREIGN KEY (`id_gasto_plantilla`) REFERENCES `gastos` (`_id`) ON DELETE SET NULL
+  CONSTRAINT `fk_gastos_registros_plantilla` FOREIGN KEY (`id_gasto_plantilla`) REFERENCES `gastos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Registro de pagos realizados de todos los tipos de gastos';
 
 CREATE TABLE `gastos_auditoria` (
@@ -986,7 +986,6 @@ CREATE TABLE `presupuestos_productos` (
   `cantidad` int(11) NOT NULL DEFAULT 0 COMMENT 'Cantidad del producto',
   `talla` varchar(32) DEFAULT NULL COMMENT 'Talla del producto',
   `corte` varchar(32) DEFAULT NULL COMMENT 'Dama, caballero, niño',
-  `id_catalogo_telas` int(11) DEFAULT NULL COMMENT 'IDde el catálogo de telas',
   `tela` varchar(128) DEFAULT NULL COMMENT 'Tela principal seleccionada desde Comercialización',
   `precio_unitario` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio del producto',
   `precio_woo` decimal(10, 0) DEFAULT NULL COMMENT 'Precio de Woocommerce',
@@ -1480,8 +1479,8 @@ ALTER TABLE `presupuestos`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `presupuestos_productos`
 ADD PRIMARY KEY (`_id`),
-  ADD KEY `id_orden` (`id_orden`, `id_catalogo_telas`),
-  ADD KEY `id_catalogo_telas` (`id_catalogo_telas`);
+  ADD KEY `id_orden` (`id_orden`),
+  ADD KEY `id_tela` (`id_tela`);
 ALTER TABLE `products`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `products_attributes`
@@ -1670,7 +1669,7 @@ MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `catalogo_tintas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 -- =====================================================
--- FOREIGN KEYS - 95 FKs
+-- FOREIGN KEYS - 104 FKs
 -- =====================================================
 
 -- abonos
@@ -1847,7 +1846,7 @@ ADD CONSTRAINT `presup_ibfk_1` FOREIGN KEY (`id_wp`) REFERENCES `customers` (`_i
 -- presupuestos_productos
 ALTER TABLE `presupuestos_productos`
 ADD CONSTRAINT `presup_prod_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `presupuestos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `presup_prod_ibfk_2` FOREIGN KEY (`id_catalogo_telas`) REFERENCES `catalogo_telas` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `presup_prod_ibfk_2` FOREIGN KEY (`id_tela`) REFERENCES `catalogo_telas` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- products_attributes_values
 ALTER TABLE `products_attributes_values`
