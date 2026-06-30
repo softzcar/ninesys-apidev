@@ -1400,7 +1400,9 @@ ADD PRIMARY KEY (`_id`);
 ALTER TABLE `empleados_lotes_fabricacion_items`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `inventario`
-ADD PRIMARY KEY (`_id`);
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `id_color_tinta` (`id_color_tinta`),
+  ADD KEY `id_catalogo_tintas` (`id_catalogo_tintas`);
 ALTER TABLE `inventario_movimientos`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`),
@@ -1533,14 +1535,17 @@ ALTER TABLE `catalogo_colores_tintas`
 ADD PRIMARY KEY (`_id`),
   ADD UNIQUE KEY `uk_codigo_color` (`codigo`);
 ALTER TABLE `impresoras_colores`
-ADD PRIMARY KEY (`id_catalogo_impresora`, `id_color_tinta`);
+ADD PRIMARY KEY (`id_catalogo_impresora`, `id_color_tinta`),
+  ADD KEY `id_color_tinta` (`id_color_tinta`);
 ALTER TABLE `tintas`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `idx_tintas_color` (`id_color_tinta`),
   ADD KEY `idx_tintas_impresora` (`id_catalogo_impresoras`);
 ALTER TABLE `tintas_recargas`
 ADD PRIMARY KEY (`_id`),
-  ADD KEY `idx_recargas_color` (`id_color_tinta`);
+  ADD KEY `idx_recargas_color` (`id_color_tinta`),
+  ADD KEY `id_insumo` (`id_insumo`),
+  ADD KEY `id_catalogo_impresora` (`id_catalogo_impresora`);
 ALTER TABLE `catalogo_tintas`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `abonos`
