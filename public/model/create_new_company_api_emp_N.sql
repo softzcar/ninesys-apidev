@@ -725,7 +725,7 @@ CREATE TABLE `metodos_de_pago` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de transacciones de pago asociadas a órdenes. Almacena método, moneda, monto, tasa de conversión y referencia al cierre de caja.';
 CREATE TABLE `ordenes` (
   `_id` int(11) NOT NULL AUTO_INCREMENT,
-  `id_wp` int(11) DEFAULT NULL,
+  `id_wp` int(10) UNSIGNED DEFAULT NULL,
   `id_wp_order` int(11) DEFAULT NULL,
   `status` varchar(45) DEFAULT NULL,
   `tipo` varchar(6) NOT NULL DEFAULT 'custom',
@@ -889,7 +889,7 @@ CREATE TABLE `ordenes_productos` (
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
   `id_woo` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto en woocommerce',
   `id_tela` int(11) DEFAULT NULL COMMENT 'ID de la tela a utilizar del catálogo de telas',
-  `id_category` int(11) NOT NULL DEFAULT 0 COMMENT 'ID de la catagoria en WooCommerce ',
+  `id_category` int(11) DEFAULT NULL COMMENT 'ID de la categoria en WooCommerce',
   `id_products_attributes` int(11) DEFAULT NULL COMMENT 'ID de la variante del producto',
   `category_name` varchar(20) DEFAULT NULL COMMENT 'NOMBRE de la categoria en woocommerce',
   `name` varchar(240) DEFAULT NULL COMMENT 'Nombre del producto',
@@ -980,7 +980,7 @@ CREATE TABLE `presupuestos_productos` (
   `_id` int(11) NOT NULL COMMENT 'ID del registro',
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
   `id_woo` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto en woocommerce',
-  `id_category` int(11) NOT NULL DEFAULT 0 COMMENT 'ID de la catagoria en WooCommerce ',
+  `id_category` int(11) DEFAULT NULL COMMENT 'ID de la categoria en WooCommerce',
   `category_name` varchar(20) DEFAULT NULL COMMENT 'NOMBRE de la categoria en woocommerce',
   `name` varchar(240) DEFAULT NULL COMMENT 'Nombre del producto',
   `cantidad` int(11) NOT NULL DEFAULT 0 COMMENT 'Cantidad del producto',
@@ -1179,7 +1179,7 @@ CREATE TABLE `products_sizes_eficiencia` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Eficiencia de insumos por talla. Define la cantidad de material requerido para cada talla de producto.';
 CREATE TABLE `products_tiempos_de_produccion` (
   `_id` int(11) NOT NULL COMMENT 'ID único',
-  `id_product` int(11) DEFAULT NULL COMMENT 'ID del producto',
+  `id_product` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto',
   `id_departamento` int(11) DEFAULT NULL COMMENT 'ID del departamento',
   `tiempo` int(11) NOT NULL DEFAULT 1 COMMENT 'Tiempo de producción en segundos',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro',
@@ -1197,7 +1197,7 @@ INSERT INTO `products_tiempos_de_produccion` (`_id`, `id_product`, `id_departame
 (8, 3, 4, 60, CURRENT_TIMESTAMP);
 CREATE TABLE `product_insumos_asignados` (
   `_id` int(11) NOT NULL,
-  `id_product` int(11) DEFAULT NULL COMMENT 'ID del prodducto',
+  `id_product` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto',
   `id_catalogo_insumos_productos` int(11) DEFAULT NULL COMMENT 'ID delc atalogo de insumos de productos',
   `id_departamento` int(11) NOT NULL COMMENT 'ID del departamento',
   `id_talla` int(11) DEFAULT NULL COMMENT 'ID de la talla',
@@ -1508,7 +1508,8 @@ ADD PRIMARY KEY (`_id`);
 ALTER TABLE `products_tiempos_de_produccion`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `product_insumos_asignados`
-ADD PRIMARY KEY (`_id`);
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `id_product` (`id_product`);
 ALTER TABLE `rendimiento`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`),
@@ -1686,7 +1687,7 @@ MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `catalogo_tintas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 -- =====================================================
--- FOREIGN KEYS - 118 FKs
+-- FOREIGN KEYS - 123 FKs
 -- =====================================================
 
 -- abonos
@@ -1769,6 +1770,10 @@ ADD CONSTRAINT `inv_mov_ibfk_3` FOREIGN KEY (`id_catalogo_insumos_prodcutos`) RE
 ADD CONSTRAINT `inv_mov_ibfk_4` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
 ADD CONSTRAINT `inv_mov_ibfk_5` FOREIGN KEY (`id_producto`) REFERENCES `products` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
+-- inventario_remanentes
+ALTER TABLE `inventario_remanentes`
+ADD CONSTRAINT `inv_rem_ibfk_1` FOREIGN KEY (`id_insumo`) REFERENCES `inventario` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 -- inventario_movimientos_historial
 ALTER TABLE `inventario_movimientos_historial`
 ADD CONSTRAINT `inv_mov_hist_ibfk_1` FOREIGN KEY (`id_movimiento`) REFERENCES `inventario_movimientos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1815,6 +1820,10 @@ ALTER TABLE `metodos_de_pago`
 ADD CONSTRAINT `met_pago_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `met_pago_ibfk_2` FOREIGN KEY (`id_caja_cierres`) REFERENCES `caja_cierres` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
+-- ordenes
+ALTER TABLE `ordenes`
+ADD CONSTRAINT `ordenes_ibfk_1` FOREIGN KEY (`id_wp`) REFERENCES `customers` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
 -- ordenes_auditoria
 ALTER TABLE `ordenes_auditoria`
 ADD CONSTRAINT `ord_audit_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1841,7 +1850,8 @@ ALTER TABLE `ordenes_productos`
 ADD CONSTRAINT `ord_prod_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `ord_prod_ibfk_2` FOREIGN KEY (`id_tela`) REFERENCES `catalogo_telas` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
 ADD CONSTRAINT `ord_prod_ibfk_3` FOREIGN KEY (`id_size`) REFERENCES `sizes` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT `ord_prod_ibfk_4` FOREIGN KEY (`id_woo`) REFERENCES `products` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `ord_prod_ibfk_4` FOREIGN KEY (`id_woo`) REFERENCES `products` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT `ord_prod_ibfk_5` FOREIGN KEY (`id_category`) REFERENCES `categories` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ordenes_vinculadas
 ALTER TABLE `ordenes_vinculadas`
@@ -1905,13 +1915,15 @@ ADD CONSTRAINT `prod_size_ef_ibfk_2` FOREIGN KEY (`id_catalogo_insumos_prodcutos
 
 -- products_tiempos_de_produccion
 ALTER TABLE `products_tiempos_de_produccion`
-ADD CONSTRAINT `prod_tiempo_ibfk_1` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ADD CONSTRAINT `prod_tiempo_ibfk_1` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT `prod_tiempo_ibfk_2` FOREIGN KEY (`id_product`) REFERENCES `products` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- product_insumos_asignados
 ALTER TABLE `product_insumos_asignados`
 ADD CONSTRAINT `prod_ins_asig_ibfk_1` FOREIGN KEY (`id_catalogo_insumos_productos`) REFERENCES `catalogo_insumos_productos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `prod_ins_asig_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `prod_ins_asig_ibfk_3` FOREIGN KEY (`id_talla`) REFERENCES `sizes` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `prod_ins_asig_ibfk_3` FOREIGN KEY (`id_talla`) REFERENCES `sizes` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT `prod_ins_asig_ibfk_4` FOREIGN KEY (`id_product`) REFERENCES `products` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- rendimiento
 ALTER TABLE `rendimiento`
@@ -1970,13 +1982,15 @@ ALTER TABLE `lotes_detalles_empleados_asignados`
   ADD INDEX `idx_orden_depto` (`id_orden`, `id_departamento`);
 
 ALTER TABLE `ordenes`
-  ADD INDEX `idx_status` (`status`);
+  ADD INDEX `idx_status` (`status`),
+  ADD KEY `id_wp` (`id_wp`);
 
 ALTER TABLE `ordenes_fila_orden`
   ADD INDEX `idx_id_orden` (`id_orden`);
 
 ALTER TABLE `ordenes_productos`
-  ADD INDEX `idx_orden_woo` (`id_orden`, `id_woo`);
+  ADD INDEX `idx_orden_woo` (`id_orden`, `id_woo`),
+  ADD KEY `id_category` (`id_category`);
 
 ALTER TABLE `products_tiempos_de_produccion`
   ADD INDEX `idx_prod_depto` (`id_product`, `id_departamento`);
