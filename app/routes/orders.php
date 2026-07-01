@@ -898,7 +898,7 @@ return function (App $app) {
                 a.progreso,
                 (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = a.id_orden) total_productos,
                 d.comision_tipo,
-                d.monto_pago,
+                SUM(d.monto_pago) AS monto_pago,
                 eu.salario_tipo,
                 eu.salario_monto,
                 eu.salario_periodo,
