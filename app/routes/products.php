@@ -844,6 +844,10 @@ return function (App $app) {
     $idCatalogoPais = isset($data['id_catalogo_pais']) && $data['id_catalogo_pais'] !== '' ? intval($data['id_catalogo_pais']) : null;
     $idCatalogoEstado = isset($data['id_catalogo_estado']) && $data['id_catalogo_estado'] !== '' ? intval($data['id_catalogo_estado']) : null;
     $idCatalogoCiudad = isset($data['id_catalogo_ciudad']) && $data['id_catalogo_ciudad'] !== '' ? intval($data['id_catalogo_ciudad']) : null;
+    // El flujo de orden/presupuesto envía reactivar=1 para revivir automáticamente
+    // un cliente eliminado (soft delete) con el mismo teléfono, en vez de recibir
+    // 'phone_deleted' y preguntar. La creación suelta de cliente NO lo envía.
+    $reactivar = isset($data['reactivar']) && ($data['reactivar'] === '1' || $data['reactivar'] === 1 || $data['reactivar'] === true || $data['reactivar'] === 'true');
 
     $resJson = $woo->createCustomer(
       $data['first_name'],
@@ -855,7 +859,8 @@ return function (App $app) {
       $recibir,
       $idCatalogoPais,
       $idCatalogoEstado,
-      $idCatalogoCiudad
+      $idCatalogoCiudad,
+      $reactivar
     );
     $resObj = json_decode($resJson, true);
     $status = (isset($resObj['status']) && $resObj['status'] === 'error') ? 400 : 200;
@@ -865,6 +870,42 @@ return function (App $app) {
       ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
       ->withHeader('Content-Type', 'application/json')
       ->withStatus($status);
+  });
+
+  // Reactivar un cliente marcado como eliminado (soft delete). El frontend lo llama
+  // tras confirmar en la creación suelta de cliente (respuesta 'phone_deleted').
+  $app->post('/customers/reactivar', function (Request $request, Response $response, array $args) {
+    $data = $request->getParsedBody();
+    $woo = new WooMe();
+
+    if (empty($data['id'])) {
+      $response->getBody()->write(json_encode(['status' => 'error', 'msg' => 'Falta el id del cliente a reactivar.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $recibir = isset($data['recibir_notificaciones']) ? $data['recibir_notificaciones'] : null;
+    $idCatalogoPais = isset($data['id_catalogo_pais']) && $data['id_catalogo_pais'] !== '' ? intval($data['id_catalogo_pais']) : null;
+    $idCatalogoEstado = isset($data['id_catalogo_estado']) && $data['id_catalogo_estado'] !== '' ? intval($data['id_catalogo_estado']) : null;
+    $idCatalogoCiudad = isset($data['id_catalogo_ciudad']) && $data['id_catalogo_ciudad'] !== '' ? intval($data['id_catalogo_ciudad']) : null;
+
+    $resJson = $woo->reactivateCustomer(
+      $data['id'],
+      $data['first_name'] ?? '',
+      $data['last_name'] ?? '',
+      $data['cedula'] ?? '',
+      $data['phone'] ?? '',
+      $data['email'] ?? '',
+      $data['address'] ?? '',
+      $recibir,
+      $idCatalogoPais,
+      $idCatalogoEstado,
+      $idCatalogoCiudad
+    );
+    $response->getBody()->write($resJson);
+    return $response
+      ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
   });
 
   /** *  CATEGORIAS */

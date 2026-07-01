@@ -320,6 +320,7 @@ CREATE TABLE `customers` (
   `phone` varchar(20) DEFAULT NULL,
   `email` varchar(120) DEFAULT NULL,
   `recibir_notificaciones` tinyint(1) NOT NULL DEFAULT 1,
+  `eliminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Borrado lógico (soft delete): 1 = cliente eliminado/oculto de listados, conserva historial',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de clientes. Almacena datos de contacto (nombre, cédula, teléfono, email, dirección) para facturación y comunicación.';
 INSERT INTO `customers` (

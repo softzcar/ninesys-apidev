@@ -1109,16 +1109,16 @@ class WooMe
     }
   }
 
-  public function createCustomer($first_name, $last_name, $cedula, $phone, $email, $address, $recibir_notificaciones = null, $id_catalogo_pais = null, $id_catalogo_estado = null, $id_catalogo_ciudad = null)
+  public function createCustomer($first_name, $last_name, $cedula, $phone, $email, $address, $recibir_notificaciones = null, $id_catalogo_pais = null, $id_catalogo_estado = null, $id_catalogo_ciudad = null, $reactivar = false)
   {
     $localConnection = new LocalDB();
 
     $digits = preg_replace('/\D/', '', $phone);
     if (strlen($digits) >= 7) {
       $last10 = substr($digits, -10);
-      $sql = "SELECT _id, first_name, last_name, phone FROM customers WHERE REGEXP_REPLACE(phone, '[^0-9]', '') LIKE '%" . $last10 . "';";
+      $sql = "SELECT _id, first_name, last_name, phone, eliminado FROM customers WHERE REGEXP_REPLACE(phone, '[^0-9]', '') LIKE '%" . $last10 . "';";
     } else {
-      $sql = "SELECT _id, first_name, last_name, phone FROM customers WHERE phone = '" . trim($phone) . "';";
+      $sql = "SELECT _id, first_name, last_name, phone, eliminado FROM customers WHERE phone = '" . trim($phone) . "';";
     }
     $exist = $localConnection->goQuery($sql);
     $myCount = count($exist);
@@ -1173,17 +1173,55 @@ class WooMe
       $response['resp_insert'] = $localConnection->goQuery($sql, [$id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad]);
     } else {
       $conflictCustomer = $exist[0];
-      $response = [
-        'status' => 'error',
-        'error' => 'phone_duplicate',
-        'msg' => 'El teléfono ya está registrado',
-        'customer' => [
-          'id' => (int)$conflictCustomer['_id'],
-          'first_name' => $conflictCustomer['first_name'],
-          'last_name' => $conflictCustomer['last_name'],
-          'phone' => $conflictCustomer['phone']
-        ]
-      ];
+      $conflictId = (int)$conflictCustomer['_id'];
+      $estaEliminado = ((int)($conflictCustomer['eliminado'] ?? 0) === 1);
+
+      if (!$estaEliminado) {
+        // Cliente ACTIVO con ese teléfono → duplicado real (comportamiento de siempre)
+        $response = [
+          'status' => 'error',
+          'error' => 'phone_duplicate',
+          'msg' => 'El teléfono ya está registrado',
+          'customer' => [
+            'id' => $conflictId,
+            'first_name' => $conflictCustomer['first_name'],
+            'last_name' => $conflictCustomer['last_name'],
+            'phone' => $conflictCustomer['phone']
+          ]
+        ];
+      } else if ($reactivar) {
+        // Cliente ELIMINADO + se pidió reactivar (flujo orden/presupuesto):
+        // se revive el registro existente y se actualizan sus datos. Su historial
+        // (órdenes/presupuestos) queda intacto porque nunca se borró físicamente.
+        $recibirVal = ($recibir_notificaciones !== null) ? (int)$recibir_notificaciones : 1;
+        $updSql = "UPDATE customers SET eliminado = 0, first_name = ?, last_name = ?, cedula = ?, phone = ?, email = ?, address = ?, recibir_notificaciones = ?, id_catalogo_pais = ?, id_catalogo_estado = ?, id_catalogo_ciudad = ? WHERE _id = ?";
+        $localConnection->goQuery($updSql, [$first_name, $last_name, $cedula, $phone, $email, $address, $recibirVal, $id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad, $conflictId]);
+        $response = [
+          'status' => 'success',
+          'reactivado' => true,
+          'msg' => 'Cliente reactivado y datos actualizados',
+          'customer' => [
+            'id' => $conflictId,
+            'first_name' => $first_name,
+            'last_name' => $last_name,
+            'phone' => $phone
+          ]
+        ];
+      } else {
+        // Cliente ELIMINADO sin pedir reactivar (creación suelta): el frontend
+        // debe preguntar y, si se confirma, llamar a /customers/reactivar.
+        $response = [
+          'status' => 'error',
+          'error' => 'phone_deleted',
+          'msg' => 'Existe un cliente eliminado con este teléfono. ¿Desea reactivarlo?',
+          'customer' => [
+            'id' => $conflictId,
+            'first_name' => $conflictCustomer['first_name'],
+            'last_name' => $conflictCustomer['last_name'],
+            'phone' => $conflictCustomer['phone']
+          ]
+        ];
+      }
     }
 
     $localConnection->disconnect();
@@ -1277,13 +1315,38 @@ class WooMe
 
   public function deleteCustomer($id)
   {
-    $sql = 'DELETE FROM customers WHERE _id = ' . $id;
+    // Borrado LÓGICO (soft delete): se conserva el registro y todo su historial
+    // (órdenes, presupuestos). Solo se oculta de los listados. Así ninguna orden
+    // queda huérfana ni se rompe ningún JOIN a customers. Parametrizado (evita inyección).
+    $sql = 'UPDATE customers SET eliminado = 1 WHERE _id = ?';
 
     $localConnection = new LocalDB();
-    $response = $localConnection->goQuery($sql);
+    $response = $localConnection->goQuery($sql, [intval($id)]);
     $localConnection->disconnect();
 
     return json_encode($response);
+  }
+
+  // Reactiva un cliente que estaba con soft delete (eliminado=1) y actualiza sus datos.
+  // Se usa tras confirmar en la creación suelta de cliente. El historial (órdenes/
+  // presupuestos) sigue intacto porque el registro nunca se borró físicamente.
+  public function reactivateCustomer($id, $first_name, $last_name, $cedula, $phone, $email, $address, $recibir_notificaciones = null, $id_catalogo_pais = null, $id_catalogo_estado = null, $id_catalogo_ciudad = null)
+  {
+    $recibirVal = ($recibir_notificaciones !== null) ? (int)$recibir_notificaciones : 1;
+    $localConnection = new LocalDB();
+
+    $sql = "UPDATE customers SET eliminado = 0, first_name = ?, last_name = ?, cedula = ?, phone = ?, email = ?, address = ?, recibir_notificaciones = ?, id_catalogo_pais = ?, id_catalogo_estado = ?, id_catalogo_ciudad = ? WHERE _id = ?";
+    $localConnection->goQuery($sql, [$first_name, $last_name, $cedula, $phone, $email, $address, $recibirVal, $id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad, intval($id)]);
+
+    $sel = $localConnection->goQuery('SELECT _id, first_name, last_name, cedula, phone, email, address FROM customers WHERE _id = ?', [intval($id)]);
+    $localConnection->disconnect();
+
+    return json_encode([
+      'status' => 'success',
+      'reactivado' => true,
+      'msg' => 'Cliente reactivado y datos actualizados',
+      'customer' => $sel[0] ?? null
+    ]);
   }
 
   /** FIN CLIENTES */
