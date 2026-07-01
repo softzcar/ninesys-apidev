@@ -205,6 +205,9 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
+    // Atomicidad: alta/edición de precios (products_prices) en una transacción
+    $localConnection->beginTransaction();
+
     // ACTUALIZAR O INSERTAR PRECIOS
     $prices = json_decode($data['prices'], true);
     $debug_prices = [];
@@ -233,6 +236,7 @@ return function (App $app) {
     $sql_get_prices = 'SELECT _id as id, price, descripcion as description FROM products_prices WHERE id_product = ?';
     $updated_prices = $localConnection->goQuery($sql_get_prices, [$data['product_id']]);
 
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $object['prices'] = $updated_prices;
@@ -300,6 +304,9 @@ return function (App $app) {
   $app->delete('/products/{id}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
+    // Atomicidad: borrado del producto y sus dependientes en una transacción
+    $localConnection->beginTransaction();
+
     // VERIFICAR ASIGNACIÓN DEL PRODUCTO
     $sql = 'SELECT COUNT(_id) cantidad_prod FROM ordenes_productos WHERE id_woo = ' . $args['id'];
     // $product_exist = json_encode($localConnection->goQuery($sql));
@@ -318,6 +325,7 @@ return function (App $app) {
       $object['response'] = json_encode($localConnection->goQuery($sql));
     }
 
+    $localConnection->commit();
     $localConnection->disconnect();
     $response->getBody()->write(json_encode($object), JSON_NUMERIC_CHECK);
 
@@ -334,6 +342,9 @@ return function (App $app) {
   $app->post('/product-set-comision-producto', function (Request $request, Response $response, array $args) {
     $data = $request->getParsedBody();
     $tmpConnection = new LocalDB();
+
+    // Atomicidad FK: comisión del producto + recálculo retroactivo de pagos en una transacción
+    $tmpConnection->beginTransaction();
 
     $sql = "SELECT _id FROM products_comisiones WHERE id_product = {$data['id_product']} AND id_departamento = {$data['id_departamento']}";
     $object['response_verify'] = $tmpConnection->goQuery($sql);
@@ -410,6 +421,7 @@ return function (App $app) {
 
     $tmpConnection->goQuery($sqlUpdatePagos);
 
+    $tmpConnection->commit();
     $tmpConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
@@ -457,6 +469,8 @@ return function (App $app) {
       ];
 
       try {
+        // Atomicidad FK por iteración (preserva el éxito parcial del batch)
+        $tmpConnection->beginTransaction();
         // Verificar si ya existe una comisión para este producto y departamento
         $sqlCheck = "SELECT _id FROM products_comisiones WHERE id_product = {$id_product} AND id_departamento = {$id_departamento}";
         $existingRecord = $tmpConnection->goQuery($sqlCheck);
@@ -536,7 +550,11 @@ return function (App $app) {
 
         $tmpConnection->goQuery($sqlUpdatePagos);
 
+        $tmpConnection->commit();
       } catch (Exception $e) {
+        if ($tmpConnection->inTransaction()) {
+          $tmpConnection->rollback();
+        }
         $operationResult['status'] = 'error';
         $operationResult['message'] = $e->getMessage();
       }

@@ -1183,6 +1183,9 @@ return function (App $app) {
     $object['parsed_body'] = $miEmpleado;
     $localConnection = new LocalDB();
 
+    // Atomicidad: borrado de asignación + recálculo de porcentaje en una transacción
+    $localConnection->beginTransaction();
+
     $sql = 'SELECT _id FROM lotes_detalles WHERE ';
 
     // ELIMINAR REGISTRO DE EMPLEADO ASIGNADO
@@ -1204,6 +1207,7 @@ return function (App $app) {
     $sql = "UPDATE lotes_detalles_empleados_asignados SET procentaje_comision = $nuevoPorcentaje WHERE id_orden = {$miEmpleado['id_orden']} AND id_departamento = {$miEmpleado['id_departamento']}";
     $resultados = $localConnection->goQuery($sql);
 
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($sql));
