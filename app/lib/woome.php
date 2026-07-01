@@ -1277,7 +1277,7 @@ class WooMe
 
   public function deleteCustomer($id)
   {
-    $sql = 'DELETE FROM customers WHERE -id = ' . $id;
+    $sql = 'DELETE FROM customers WHERE _id = ' . $id;
 
     $localConnection = new LocalDB();
     $response = $localConnection->goQuery($sql);
