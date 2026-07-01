@@ -24,6 +24,9 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
+    // Atomicidad FK: la edición puede tocar ordenes_productos y ordenes en pasos separados
+    $localConnection->beginTransaction();
+
     switch ($data['accion']) {
       case 'editar-cantidad':
         $sql = 'UPDATE ordenes_productos SET cantidad = ' . $data['cantidad'] . ' WHERE _id = ' . $data['id'];
@@ -97,6 +100,7 @@ return function (App $app) {
 
     $resp = $localConnection->goQuery($sql);
 
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $object['response'] = $resp;
@@ -164,6 +168,10 @@ return function (App $app) {
       $localConnection->disconnect();
       return ApiResponse::validationError($response, 'Orden no encontrada');
     }
+
+    // Atomicidad FK: borrado de asignaciones + UPDATE ordenes + auditoría en una transacción.
+    // Las validaciones que retornan temprano hacen disconnect() => la transacción abierta se revierte sola.
+    $localConnection->beginTransaction();
 
     // 2. VALIDACIÓN "ENTREGADA" (Solo si el estatus actual es "terminada")
     if ($order['estado'] === 'entregada' && $estadoActual !== 'terminada') {
@@ -306,6 +314,9 @@ return function (App $app) {
                            '$motivoEscaped')";
       $localConnection->goQuery($sqlAudit);
     }
+
+    // Confirmar los cambios en BD antes de la sincronización externa con WooCommerce
+    $localConnection->commit();
 
     // Generar el regstro en Woocomemrce si la orden está terminada
     if ($order['estado'] === 'terminada' || $order['estado'] === 'entregada') {
@@ -2390,6 +2401,10 @@ $object['sales_commission_ISSET'][] = false;
       return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
     }
 
+    // Atomicidad FK: toda la edición (productos, lotes_detalles, abonos, pagos, métodos de pago, caja, observaciones)
+    // se aplica en una transacción; una violación de integridad propaga la excepción y disconnect() la revierte.
+    $localConnection->beginTransaction();
+
     // 2. PROCESAR DATOS DEL PAYLOAD (similar al endpoint original)
     $arr = [];
     $arr['id_wp'] = $newJson['id'] ?? null;
@@ -2684,6 +2699,7 @@ $object['sales_commission_ISSET'][] = false;
     $object['response']['message'] = 'La orden número ' . $id_orden_a_editar . ' ha sido actualizada correctamente.';
 
     $response->getBody()->write(json_encode($object));
+    $localConnection->commit();
     $localConnection->disconnect();
 
     return $response
@@ -3637,6 +3653,9 @@ $object['sales_commission_ISSET'][] = false;
   $app->post('/comercializacion/revisiones-estatus/{estatus}/{id_revision}/{id_orden}', function (Request $request, Response $response, array $args) {
     $localConnection = new localDB();
 
+    // Atomicidad FK: revisiones + disenos + ordenes + pago del diseñador en una transacción
+    $localConnection->beginTransaction();
+
     $sql = "UPDATE revisiones SET estatus = '" . $args['estatus'] . "' WHERE _id = " . $args['id_revision'];
     $localConnection->goQuery($sql);
 
@@ -3762,6 +3781,7 @@ $object['sales_commission_ISSET'][] = false;
       }
     }
 
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));

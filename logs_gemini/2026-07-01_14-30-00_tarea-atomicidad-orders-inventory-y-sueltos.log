@@ -1,0 +1,27 @@
+- **Solicitud del Usuario:** Opción A: continuar sin parar con orders.php, inventory.php y los 6 endpoints sueltos hasta terminar el backlog B-REAL de atomicidad FK.
+- **Fecha y Hora:** 2026-07-01 14:30:00
+- **Proyecto(s):** Backend (atomicidad FK — cierre del backlog B-REAL)
+- **Archivos Involucrados:** orders.php, inventory.php, products.php, assignments.php, crm.php, finance.php, printers.php, production.php
+- **Commits Relacionados:** Frontend: N/A | Backend: (commit fix de este lote)
+- **Acción Realizada:** Se envolvieron en transacción (begin/commit + rollback donde hay try/catch; auto-rollback vía disconnect() en el resto) 12 endpoints:
+  - orders.php (4): `/orden/editar` (ordenes_productos + ordenes), `/orden/actualizar-estado` (borrado de asignaciones + UPDATE ordenes + auditoría; commit ANTES del bloque WooCommerce externo para no revertir por fallos de sync), `/ordenes/nueva/custom/edit` (7 tablas: productos, lotes_detalles, abonos, pagos, metodos_de_pago, caja, observaciones), `/comercializacion/revisiones-estatus/...` (revisiones + disenos + ordenes + pago).
+  - inventory.php (2): `/inventario-movimientos/empleados/update-insumo` (begin DESPUÉS del bypass solo_rendimiento, que es camino de éxito con escritura propia; commit en las 2 salidas de éxito: tipo='fin' y final), `/inventario-movimientos/update-insumo` (multi-sentencia inventario+movimientos).
+  - products.php (1): `/lotes/empleados/reasignar` (lotes_detalles + LDEA + lotes).
+  - assignments.php (1): `/asignacion/{orden}/{departamento}/{empleado}` (UPDATE ordenes + pagos).
+  - crm.php (1): `/crm/oportunidades/nueva` (oportunidad + vendedores; try/catch → rollback).
+  - finance.php (1): `/cierre-de-caja-vendedor` (caja_cierres + caja_fondos + UPDATE caja).
+  - printers.php (1): `/inventario-tintas` (tintas_recargas + UPDATE inventario; try/catch con throw si falta insumo → rollback).
+  - production.php (1): `/produccion/reposicion` (reposiciones + ordenes_fila_reposiciones; validaciones tempranas ya hacen disconnect()).
+- **Inconvenientes y Desafíos:**
+  - Falso positivo detectado y saltado: `orders.php /ordenes/contexto-ia` es SOLO LECTURA (SELECTs de contexto para IA); las tablas que marcó la auditoría venían del solapamiento del script con las funciones auxiliares siguientes.
+  - `/orden/actualizar-estado`: muchas validaciones con return temprano (todas hacen disconnect() = auto-rollback) y llamadas externas a WooCommerce; se colocó el commit antes de esas llamadas para no atar la persistencia de BD al éxito de la sync externa.
+  - `/inventario-movimientos/empleados/update-insumo`: tiene un bypass de éxito (solo_rendimiento) y una salida de éxito intermedia (tipo='fin') que escriben y DEBEN commitear; se ubicó el begin tras el bypass y commit en ambas salidas para no revertir esos caminos.
+  - Anclas de edición: en orders.php se usaron declaraciones de endpoints vecinos y mensajes únicos para desambiguar bloques de cierre repetidos.
+- **Decisión Final y Justificación:** Patrón mínimo begin/commit/rollback, sin alterar lógica de negocio. En endpoints sin try/catch se confía en el auto-rollback por propagación (disconnect() => pdo=null => rollback del PDO). Se respetaron las transacciones preexistentes de cada archivo.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, grep, git, deploy_backend.sh)
+- **Resultado:** Éxito en local (pendiente verificación funcional en Dev).
+- **Verificación:** `php -l` sin errores en los 8 archivos. Balance begin/commit/rollback por archivo: orders 11/11/7, inventory 3/4/2, products 2/2/1, assignments 1/1/0, crm 1/1/1, finance 3/3/2, printers 1/1/1, production 4/4/3 (incluye las transacciones preexistentes). Desplegado a Contabo Dev (opción 2; producción intacta).
+- **Logro Conseguido:** Cerrado el backlog B-REAL de atomicidad FK: en total esta jornada 24 endpoints multi-escritura quedaron atómicos (manufacturing 6, designs 6, orders 4, inventory 2, sueltos 6) más los 3 finalizar-* previos; documentados los falsos positivos (3 en manufacturing por escrituras comentadas/DDL, 1 en orders por endpoint de solo lectura).
+- **Referencias de Sesión (Contexto):** Backlog B-REAL de ANALISIS_OPTIMIZACION_FK.md §7.6. Lotes previos: manufacturing (12-30), designs (13-10).
+- **Observaciones de Gemini:** Queda como trabajo futuro (menor prioridad): B-single (24 endpoints de 1 tabla multi-sentencia) y el ítem transversal de coherencia 409 vs 500 en los catch. Ninguno es urgente.
+- **Respuesta de Gemini:** Backlog B-REAL completado: orders (4), inventory (2) y los 6 sueltos envueltos en transacción; php -l OK en los 8 archivos; desplegado en Dev. Falso positivo /ordenes/contexto-ia (solo lectura) documentado.

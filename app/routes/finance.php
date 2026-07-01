@@ -280,6 +280,9 @@ return function (App $app) {
     $datosCierre = $request->getParsedBody();
     $localConnection = new LocalDB();
 
+    // Atomicidad FK: cierre (caja_cierres + caja_fondos + UPDATE caja) en una transacción
+    $localConnection->beginTransaction();
+
     // $object['response_DB'] = $localConnection;
 
     // Guardamos el cierre
@@ -297,6 +300,7 @@ return function (App $app) {
     $sql = "UPDATE caja SET id_caja_cierres = $insertID WHERE id_empleado = {$datosCierre['id_empleado']} AND id_caja_cierres IS NULL";
     $object['response_update_caja'] = $localConnection->goQuery($sql);
 
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));

@@ -1230,6 +1230,9 @@ return function (App $app) {
     // Limpiamos los quotes simples agregados por SELECT quote(?) para evitar sintaxis inválida de inserción SQL
     $values = str_replace(["'\"'", "\"'\""], ["'", "'"], $values);
 
+    // Atomicidad FK: reposiciones + ordenes_fila_reposiciones en una transacción
+    $localConnection->beginTransaction();
+
     $sql = 'INSERT INTO reposiciones ' . $campos . ' VALUES ' . $values;
     $object['sql_insert_reposiciones'] = $sql;
     $object['response'] = $localConnection->goQuery($sql);
@@ -1250,6 +1253,7 @@ return function (App $app) {
       $object['response_orden_fila_reposicion'] = $localConnection->goQuery($sql_fila_repo);
     }
 
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));

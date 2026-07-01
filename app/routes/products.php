@@ -1322,6 +1322,9 @@ return function (App $app) {
     $miEmpleado = $request->getParsedBody();
     $localConnection = new LocalDB();
 
+    // Atomicidad FK: reasignación (lotes_detalles + LDEA + lotes) en una transacción
+    $localConnection->beginTransaction();
+
     // BUSCAR NOMBRE DEL DEPARTAMENTO
     $sql = "SELECT departamento FROM departamentos WHERE _id = {$miEmpleado['id_departamento']}";
     $respDep = $localConnection->goQuery($sql);
@@ -1382,6 +1385,7 @@ return function (App $app) {
       }
     }
 
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));

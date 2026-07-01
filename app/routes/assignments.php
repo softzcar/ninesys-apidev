@@ -67,6 +67,9 @@ return function (App $app) {
     $localConnection = new LocalDB();
     $departamento = 'dep_' . $args['departamento'];
 
+    // Atomicidad FK: UPDATE ordenes + cambios en pagos en una transacción
+    $localConnection->beginTransaction();
+
     if ($args['empleado'] === 'none') {
       $sql_ordenes = 'UPDATE ordenes SET ' . $departamento . ' = NULL WHERE _id = ' . $args['orden'];
       $sql_pagos = 'DELETE FROM pagos WHERE id_orden = ' . $args['orden'] . " AND departamento = '" . $args['departamento'] . "';";
@@ -98,6 +101,7 @@ return function (App $app) {
     $dataEmpleado = $localConnection->goQuery($sql_ordenes);
     $dataEmpleado = $localConnection->goQuery($sql_pagos);
 
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));

@@ -435,6 +435,9 @@ return function (App $app) {
       $myDate = new CustomTime();
       $now = $myDate->today();
 
+      // Atomicidad FK: recarga (tintas_recargas + UPDATE inventario) en una transacción
+      $localConnection->beginTransaction();
+
       $sql = 'INSERT INTO tintas_recargas (id_catalogo_impresora, id_insumo, id_color_tinta, cantidad, nivel_tanque_previo, fecha_recarga) VALUES (?, ?, ?, ?, ?, ?)';
 
       $params = [
@@ -466,9 +469,13 @@ return function (App $app) {
         throw new Exception('Insumo no encontrado o cantidad no disponible en inventario.');
       }
 
+      $localConnection->commit();
       $response->getBody()->write(json_encode(['message' => 'Recarga de tinta registrada exitosamente y cantidad de insumo actualizada.', 'id' => $new_id]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
     } catch (Exception $e) {
+      if ($localConnection && $localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       error_log('Error al registrar recarga de tinta: ' . $e->getMessage());
       $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al registrar la recarga.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);

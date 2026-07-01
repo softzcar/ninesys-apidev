@@ -1246,6 +1246,9 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         }
 
+        // Atomicidad FK: el resto del flujo (inventario, remanentes, rendimiento, movimientos) en una transacción
+        $localConnection->beginTransaction();
+
         // Verifcar si es reposicion y actualizar el campor `terminada`
         if ($miInsumo['es_reposicion'] == 1) {
             // $sql = "UPDATE reposiciones SET terminada = 1 WHERE id_orden = {$miInsumo['id_orden']} AND id_empleado = {$miInsumo['id_empleado']};";
@@ -1464,6 +1467,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         // stock en 0 y registrar el remanente (ya ejecutado arriba).
         if (isset($miInsumo['tipo']) && $miInsumo['tipo'] === 'fin') {
             $object['tipo_fin_skip_movimiento'] = true;
+            $localConnection->commit();
             $localConnection->disconnect();
             $response->getBody()->write(json_encode($object));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
@@ -1558,6 +1562,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
         // --- FIN: Verificación de duplicados ---
 
+        $localConnection->commit();
         $localConnection->disconnect();
 
         $response->getBody()->write(json_encode($object));
@@ -1617,7 +1622,10 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         }
 
         $object['sql'] = $sql;
+        // Atomicidad FK: UPDATE inventario + movimientos (multi-sentencia) en una transacción
+        $localConnection->beginTransaction();
         $object['response'] = json_encode($localConnection->goQuery($sql));
+        $localConnection->commit();
 
         $localConnection->disconnect();
 

@@ -69,6 +69,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
+      $localConnection->beginTransaction();
       $id_customer = isset($data['id_customer']) ? intval($data['id_customer']) : null;
       $titulo = $data['titulo'] ?? 'Oportunidad sin título';
       $descripcion = $data['descripcion'] ?? null;
@@ -89,10 +90,14 @@ return function (App $app) {
         }
       }
 
+      $localConnection->commit();
       $response->getBody()->write(json_encode(['success' => true, 'id_oportunidad' => $id_oportunidad]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
 
     } catch (Exception $e) {
+      if ($localConnection && $localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
