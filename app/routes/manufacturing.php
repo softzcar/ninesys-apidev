@@ -1696,6 +1696,9 @@ return function (App $app) {
         }
       }
 
+      // Atomicidad FK: todas las escrituras de la finalización van en una transacción
+      $localConnection->beginTransaction();
+
       if (!empty($consumos_lote)) {
         foreach ($consumos_lote as $consumo) {
           if (empty($consumo['id_insumo']) || !isset($consumo['cantidad_total']))
@@ -1876,10 +1879,15 @@ return function (App $app) {
 
       $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
 
+      $localConnection->commit();
+
       $response_data = ['status' => 'success', 'message' => "Lote {$id_lote} finalizado en este departamento y transicionado correctamente."];
       $response->getBody()->write(json_encode($response_data, JSON_NUMERIC_CHECK));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     } catch (Exception $e) {
+      if ($localConnection && $localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       if ($localConnection) {
         $localConnection->disconnect();
       }
@@ -2004,6 +2012,9 @@ return function (App $app) {
       $logData .= "Consumo Papel Raw: " . print_r($consumo_papel, true) . "\n";
       file_put_contents($logFile, $logData, FILE_APPEND);
 
+      // Atomicidad FK: todas las escrituras de la finalización van en una transacción
+      $localConnection->beginTransaction();
+
       foreach ($consumo_papel as $papel) {
         $id_insumo_papel = intval($papel['id_insumo']);
         $cantidad_total_papel = floatval($papel['cantidad_total']);
@@ -2106,6 +2117,8 @@ return function (App $app) {
 
       $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
 
+      $localConnection->commit();
+
       $response_data = ['status' => 'success', 'message' => "Lote de Impresión {$id_lote} finalizado y consumos registrados correctamente."];
       $response->getBody()->write(json_encode($response_data, JSON_NUMERIC_CHECK));
       return $response
@@ -2115,6 +2128,9 @@ return function (App $app) {
         ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
         ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     } catch (Exception $e) {
+      if ($localConnection && $localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       if ($localConnection) {
         $localConnection->disconnect();
       }
@@ -2170,6 +2186,9 @@ return function (App $app) {
 
       $now = date('Y-m-d H:i:s');
       $nombre_departamento = 'Corte';
+
+      // Atomicidad FK: todas las escrituras de la finalización van en una transacción
+      $localConnection->beginTransaction();
 
       // 3. Bucle externo: Procesar cada insumo consumido y su desperdicio
       foreach ($consumos_lote as $consumo) {
@@ -2357,6 +2376,8 @@ return function (App $app) {
       // 5. Finalizar el lote principal
       $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
 
+      $localConnection->commit();
+
       $response_data = ['status' => 'success', 'message' => "Lote de Corte {$id_lote} finalizado y consumos registrados correctamente."];
       $response->getBody()->write(json_encode($response_data, JSON_NUMERIC_CHECK));
       return $response
@@ -2366,6 +2387,9 @@ return function (App $app) {
         ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
         ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     } catch (Exception $e) {
+      if ($localConnection && $localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       if ($localConnection) {
         $localConnection->disconnect();
       }
