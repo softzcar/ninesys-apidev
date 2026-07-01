@@ -295,7 +295,7 @@ class WooMe
         $data = $res->fetchAll(PDO::FETCH_ASSOC);
         $mat = $data;
       }
-    } catch (PDOException $e) {
+    } catch (\Throwable $e) {
       $mat['status'] = 'error';
       $mat['message'] = $e->getMessage();
     }
@@ -305,6 +305,11 @@ class WooMe
 
   private function connectToWordpressDB()
   {
+    if (!defined('LOCAL_DSN_NINETEEN') || !defined('LOCAL_USER') || !defined('LOCAL_PASS')) {
+      $this->pdo = null;
+      return;
+    }
+
     try {
       $this->pdo = new PDO(
         LOCAL_DSN_NINETEEN,
@@ -315,7 +320,7 @@ class WooMe
         )
       );
       $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    } catch (PDOException $e) {
+    } catch (\Throwable $e) {
       $this->pdo = null;
       throw new PDOException('Database connection failed: ' . $e->getMessage(), (int)$e->getCode());
     }

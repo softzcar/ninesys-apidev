@@ -709,7 +709,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
     $sql = "SELECT COUNT(a._id) total_ordenes FROM ordenes a WHERE (a.status = 'En espera' OR a.status = 'Pausada' OR a.status = 'activa') AND a.id_wp =  " . $args['customer_id'];
     $tmpRes = $localConnection->goQuery($sql);
-    $object['ordenes_ns'] = intval($tmpRes[0]['total_ordenes']);
+    $object['ordenes_ns'] = (is_array($tmpRes) && isset($tmpRes[0]['total_ordenes'])) ? intval($tmpRes[0]['total_ordenes']) : 0;
 
     $response->getBody()->write(json_encode($object));
     return $response
