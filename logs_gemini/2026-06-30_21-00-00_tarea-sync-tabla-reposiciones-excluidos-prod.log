@@ -1,0 +1,21 @@
+- **Solicitud del Usuario:** ¿Podemos sincronizar estas dos diferencias en este momento? (reposiciones_departamentos_excluidos y rendimiento.id_product)
+- **Fecha y Hora:** 2026-06-30 21:00:00
+- **Proyecto(s):** Backend (BD producción)
+- **Archivos Involucrados:**
+    - vps-contabo-prod:api_emp_194.reposiciones_departamentos_excluidos (tabla creada)
+- **Commits Relacionados:** Frontend: N/A | Backend: N/A (solo DDL en BD)
+- **Acción Realizada:**
+  Investigación previa: de las dos diferencias reportadas entre Dev y Prod, solo una era real.
+  1. rendimiento.id_product: la columna NO existe en Dev tampoco. Era una FK planificada para una feature futura que nunca se implementó. No hay diferencia real entre entornos.
+  2. reposiciones_departamentos_excluidos: tabla existe en Dev (AUTO_INCREMENT=6, 1 fila de datos) pero no en producción. production.php la referencia activamente en 3 puntos (LEFT JOIN L827, INSERT IGNORE L893, DELETE L895) — los endpoints afectados estaban fallando en producción.
+  Acción: CREATE TABLE reposiciones_departamentos_excluidos en producción con estructura idéntica a Dev (PK, UNIQUE KEY uk_repo_depto, FKs fk_rde_reposicion→reposiciones CASCADE y fk_rde_departamento→departamentos CASCADE). Los nombres de FK se corrigieron en un segundo ALTER (el CREATE inicial los generó invertidos).
+- **Inconvenientes y Desafíos:**
+  Los nombres de las FK quedaron intercambiados en el CREATE inicial (fk_rde_departamento apuntaba a reposiciones y viceversa). Resuelto con ALTER TABLE DROP FOREIGN KEY + ADD CONSTRAINT en dos pasos separados (un solo ALTER con DROP+ADD simultáneo generaba errno 121 por conflicto de nombre en InnoDB).
+- **Decisión Final y Justificación:**
+  Se priorizó crear la tabla inmediatamente al confirmar que el código en producción la referenciaba. La creación de una tabla vacía en producción no afecta datos existentes.
+- **Herramienta(s) Utilizada(s):** Bash (ssh, mysql)
+- **Resultado:** Éxito
+- **Verificación:** SHOW CREATE TABLE confirma estructura y FKs idénticas a Dev. fk_rde_departamento → departamentos CASCADE, fk_rde_reposicion → reposiciones CASCADE.
+- **Logro Conseguido:** Dev y producción ahora están completamente sincronizados en esquema. La única diferencia persistente (rendimiento.id_product) era inexistente — la columna no existe en ningún entorno. Endpoints de reposiciones en production.php dejan de fallar en producción.
+- **Observaciones de Gemini:** La diferencia rendimiento.id_product queda descartada del backlog — no es una tarea pendiente real.
+- **Respuesta de Gemini:** Ver respuesta en conversación.

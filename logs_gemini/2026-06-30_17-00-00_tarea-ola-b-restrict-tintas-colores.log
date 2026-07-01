@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** Proceder con la Ola B (FKs RESTRICT tintas/colores).
+- **Fecha y Hora:** 2026-06-30 17:00:00
+- **Proyecto(s):** Backend (esquema, BD)
+- **Archivos Involucrados:**
+    - public/model/create_new_company_api_emp_N.sql (indices añadidos)
+    - api_emp_194 en vps-contabo-dev (3 ALTER TABLE)
+- **Commits Relacionados:** Frontend: N/A | Backend: 7627d7f (feat(schema): Ola B — FKs RESTRICT tintas/colores + indices faltantes)
+- **Acción Realizada:**
+  1. Identificación de 6 FKs RESTRICT de tintas/colores en el maestro (líneas 1937-1959); las geográficas (fk_estado_pais, fk_ciudad_estado) ya desplegadas el 2026-06-24.
+  2. Verificación en Dev: ya aplicadas catalogo_impresoras.fk_impresoras_cat_tintas, todas las de tintas (con nombres distintos: fk_tintas_ordenes_n, fk_tintas_impresoras_n, fk_tintas_colores_n), tintas_recargas.fk_recargas_color.
+  3. Orphan check de las 6 FKs pendientes: BLOQUEO en tintas_recargas.id_insumo (8 huérfanos, SET NULL). Las demás: 0 huérfanos.
+  4. Aplicadas en Dev (índice + FK por tabla): impresoras_colores (fk_imp_col_impresora CASCADE + fk_imp_col_color RESTRICT), inventario (fk_inventario_color + fk_inventario_catalogo_tintas, ambas RESTRICT, 0 datos), tintas_recargas (tintas_rec_ibfk_2 SET NULL).
+  5. Maestro: índices añadidos en impresoras_colores (id_color_tinta), inventario (id_color_tinta, id_catalogo_tintas), tintas_recargas (id_insumo, id_catalogo_impresora). FKs ya declaradas en maestro.
+  6. Commit 7627d7f + push.
+- **Inconvenientes y Desafíos:**
+  - tintas_recargas.id_insumo tiene 8 huérfanos → tintas_rec_ibfk_1 bloqueada. Pasa a Ola C.
+  - Tintas en Dev usa nombres de FK diferentes a los del maestro (sufijo _n). No es un problema funcional.
+- **Decisión Final y Justificación:** Aplicar FKs viables ahora y excluir tintas_rec_ibfk_1 hasta que Ola C limpie los 8 huérfanos.
+- **Herramienta(s) Utilizada(s):** Bash (ssh, scp, mysql, git), Read, Edit, Write
+- **Resultado:** Éxito
+- **Verificación:** INFORMATION_SCHEMA confirma 10 FKs activas en las 5 tablas de tintas/colores + catalogo_impresoras.
+- **Logro Conseguido:** Ola B completada (con 1 excepción documentada para Ola C). 5 nuevas FKs RESTRICT/CASCADE/SET NULL activas en Dev para el módulo de impresión. Maestro con índices sincronizados.
+- **Observaciones de Gemini:** Pendiente Ola C: (1) tintas_recargas.id_insumo — limpiar 8 huérfanos; (2) inventario_remanentes.id_insumo — 43 huérfanos; (3) ordenes_productos.id_category — sentinela 0 + cat borrada; (4) ordenes.id_wp — 2 casos; (5) product_insumos_asignados.id_product — 38 huérfanos; (6) products_tiempos_de_produccion.id_product — 7 huérfanos.
+- **Respuesta de Gemini:** Ola B aplicada. 5 FKs nuevas activas en Dev (tintas/colores). Commit 7627d7f. tintas_rec_ibfk_1 excluida (8 huérfanos) → Ola C.

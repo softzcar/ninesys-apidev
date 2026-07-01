@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** El usuario reportó que el historial de conversaciones del IDE Antigravity no guardaba registros tras la última actualización del paquete desde el AUR, y solicitó corregir esta configuración.
+- **Fecha y Hora:** 2026-06-30 12:45:00
+- **Proyecto(s):** Antigravity IDE (Configuración del Entorno)
+- **Archivos Involucrados:** 
+    - [Backup de Conversaciones IDE](file:///home/developer/.gemini/antigravity-ide/conversations.bak)
+    - [Conversaciones Unificadas](file:///home/developer/.gemini/antigravity/conversations)
+    - [Enlace Simbólico del IDE](file:///home/developer/.gemini/antigravity-ide/conversations)
+- **Commits Relacionados:** N/A
+- **Acción Realizada:** 
+    1. Se unificaron las bases de datos de chat de la nueva ruta del IDE (`~/.gemini/antigravity-ide/conversations/`) y de la ruta heredada (`~/.gemini/antigravity/conversations/`) mediante una copia de seguridad y fusión no destructiva.
+    2. Se renombró el directorio actual de conversaciones de la ruta del IDE a `conversations.bak` como resguardo.
+    3. Se creó un enlace simbólico de `~/.gemini/antigravity-ide/conversations` apuntando a `~/.gemini/antigravity/conversations`. Esto garantiza que tanto el frontend (panel lateral de historial) como el backend (language server) lean y escriban sobre la misma ubicación física, sin importar si usan el path de la versión con o sin prefijo `-ide`.
+    4. Se ejecutó `touch` sobre todas las bases de datos unificadas `.db` para actualizar su timestamp (`mtime`), forzando al indexador del IDE a cargarlas inmediatamente en la barra lateral del historial de chats.
+- **Inconvenientes y Desafíos:** Ninguno. La unificación consolidó las bases de datos de 33 chats antiguos y 11 chats nuevos, alcanzando un total de 44 conversaciones recuperadas.
+- **Decisión Final y Justificación:** La vinculación por enlace simbólico es la solución más robusta frente a futuras actualizaciones de AUR, ya que si los paquetes vuelven a cambiar las rutas por defecto de datos de usuario de Electron o del agente, el enlace mantendrá la concordancia del almacenamiento físico de los chats.
+- **Herramienta(s) Utilizada(s):** `run_command`, `write_to_file`
+- **Resultado:** Éxito absoluto.
+- **Verificación:** Se confirmó que el enlace simbólico apunta a la carpeta general y que el directorio unificado cuenta con 44 archivos de base de datos `.db` activos.

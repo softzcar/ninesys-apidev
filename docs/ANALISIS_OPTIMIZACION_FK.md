@@ -295,3 +295,102 @@ JOIN (SELECT id_orden, id_departamento, COUNT(*) np FROM lotes_detalles GROUP BY
 - `reports.php`: sin JOINs (limpio).
 - `products_reports.php`: sin JOINs obsoletos, pero con **fan-out que infla costos** (CRÍTICO, corregible).
 - **Conclusión global:** NO hay una masa de "JOINs obsoletos" que borrar; `lotes_detalles` está viva y es load-bearing. Los dos problemas reales son: (a) el fan-out de costos en reportes y (b) la FK `ldea.id_lotes_detalles` despoblada (96,5%), que es la raíz común. Jubilar la tabla no es viable a corto plazo (7.061 pagos dependen de su `_id`).
+
+---
+
+## 7. Auditoría FK de TODOS los endpoints de escritura (2026-07-01, solo lectura)
+
+> Objetivo del usuario: tras activar las 53 FK en producción, verificar que **TODOS** los endpoints (no solo `/ordenes/*`) siguen funcionando correctamente con la integridad referencial ahora **exigida**. Auditoría de solo lectura sobre `app/routes/*.php` (30 archivos) + `app/model/LocalDB.php` + `src/Application/Handlers/HttpErrorHandler.php`. **Ningún cambio aplicado.**
+
+### 7.1 Mecanismo real confirmado (importante — matiza la "red de seguridad" del §5.3)
+
+1. `LocalDB::goQuery` (líneas 219-235) lanza `DatabaseConstraintException` **solo** para errno FK `1451/1452/1216/1217`; cualquier otro error (p. ej. 1062 duplicado) conserva el retorno `['status'=>'error']`.
+2. `DatabaseConstraintException extends RuntimeException` → **es subclase de `Exception`**. Por tanto **cualquier `catch (Exception|\Throwable $e)` local de un endpoint la intercepta ANTES** de que llegue al `HttpErrorHandler` central (que la mapearía a 409). Hay ~130 `catch` en las rutas.
+3. **Sin `catch` circundante → 409 limpio** con mensaje español (comportamiento ideal del §5.3).
+
+⇒ La red 409 central **NO es universal**: solo cubre los endpoints sin `try/catch`. En los que sí lo tienen, manda el `catch` local.
+
+### 7.2 Los FK NO rompen el camino feliz (conclusión tranquilizadora)
+
+Ningún endpoint de operación normal se rompe al activar las FK: en el flujo feliz los padres (`ordenes`, `products`, `customers`, catálogos) **existen** cuando se insertan sus hijos. Los cambios de comportamiento ocurren **solo en caminos de error/borde** (id inválido, padre borrado, borrado con dependientes).
+
+- **Verificado:** NO existe `DELETE FROM customers` ni `DELETE FROM ordenes` en ninguna ruta → los CASCADE de 27 hijos de `ordenes` y 4 de `customers` **nunca los dispara un endpoint** (las órdenes se anulan por estado, no se borran). El riesgo de "borrado en cascada catastrófico" queda descartado.
+- **Verificado:** `geografia.php` **no tiene endpoints de borrado** de `catalogo_paises/estados/ciudades` (son datos semilla) → las 2 FK RESTRICT geográficas nunca se disparan desde la API.
+- **Verificado:** no hay ningún `catch` que "trague y siga escribiendo" (swallow-and-continue). El peor patrón no existe.
+
+### 7.3 Endpoints de BORRADO en tabla padre (cambio de comportamiento por FK)
+
+| Endpoint | Tabla / acción FK | Comportamiento nuevo | Veredicto |
+|---|---|---|---|
+| `catalogs.php:245` `/catalogo-tintas/eliminar` | `catalogo_tintas` **RESTRICT** ×2 (impresoras, inventario) | Si la tinta está en uso → **409** (antes: borraba y dejaba huérfanos). Sin `try/catch` → 409 limpio. 1 sola sentencia (sin dato parcial). | 🟢 Correcto por diseño. Falta mensaje amable en frontend. |
+| `catalogs.php:300` `/catalogo-colores-tintas/eliminar` | `catalogo_colores_tintas` **RESTRICT** ×4 | Igual que arriba → 409 si está referenciado. | 🟢 Correcto. Frontend debe manejar 409. |
+| `catalogs.php:417` `/catalogo-telas/eliminar` | `catalogo_telas` **SET NULL** ×2 | Borra y pone NULL en hijos (silencioso). 1 sentencia. | 🟢 OK. |
+| `printers.php:493` `DELETE /impresoras/{id}` | `catalogo_impresoras` **SET NULL** | Borra, hijos a NULL. Ya envuelto en `try/catch`→500. | 🟢 OK (no es RESTRICT, no falla). |
+| `products.php:311` `DELETE /products/{id}` | `products` **CASCADE** ×6 + SET NULL ×5 | Protegido por chequeo `COUNT(ordenes_productos)=0` antes de borrar. Los `DELETE products_prices`/`products_attributes_values` posteriores **ahora son redundantes** (el CASCADE ya los borró) — inofensivo. | 🟡 OK; limpieza opcional del código redundante. |
+| `products.php:1058` `DELETE sizes` | `sizes` SET NULL/CASCADE | 1 sentencia. | 🟢 OK. |
+| `designs.php:329` `/disenador-asignado` | borra `revisiones`+`disenos`(CASCADE)+`pagos`, **multi-sentencia SIN transacción** | Si una falla, las previas ya se ejecutaron → borrado parcial. Los DELETE rara vez violan FK, pero no es atómico. | 🟠 Revisar: envolver en transacción. |
+| `inventory.php:1050` `/insumos/eliminar` | `inventario` (padre de remanentes/movimientos) | Según la acción aplicada a `inventario_remanentes.id_insumo` (§5.1 propuso CASCADE): si CASCADE→borra remanentes; si aún sin FK o RESTRICT→**409**. 1 sentencia, retorna 200 en código pero 409 ganaría. | 🟠 Verificar qué acción quedó activa y confirmar UX. |
+
+### 7.4 Clasificación de los `catch` que interceptan el 409 (bypass de la red central)
+
+| Bucket | Descripción | Riesgo | Archivos representativos |
+|---|---|---|---|
+| **A — Seguro/atómico** | `catch` **con `rollBack()`** (o sin `catch` → 409 limpio). La violación se revierte; sin datos parciales. | Ninguno | `orders.php` (7 tx/7 rb), `payments.php` (5 rb), `production.php` (3), `finance.php` (2 tx/rb), 2 flujos de `inventory.php` y `manufacturing.php` |
+| **B — Brecha de atomicidad** | Flujo **multi-escritura**, `catch` **sin `rollBack`** y **sin transacción**. Ante violación FK (raro, camino de borde) las escrituras previas **persisten** → dato parcial. El `catch` sí devuelve el mensaje, pero como 500. | Medio (solo en fallo FK) | **`manufacturing.php`**: los INSERT de `pagos`/`lotes_detalles` (936, 1018, 1099, 1138, 1253, 1605, 2513, 2610, 2679…) están **fuera** de sus 2 únicas transacciones (743-813). `designs.php` `/disenador-asignado`. `crm.php` (crear oportunidad + vendedores). |
+| **C — Cosmético** | Endpoint de **1 sola escritura**, `catch` devuelve **500 en vez de 409** (el mensaje FK amable sí se muestra, pero el status es incorrecto; un frontend que discrimine por 409 no lo reconocerá). Sin riesgo de datos. | Bajo | `config.php` (14 catch), `crm.php`, `employees.php`, `catalogs.php`, `printers.php`, `communications.php`, `ai.php` |
+
+### 7.5 Backlog priorizado (SIN cambios aplicados — pendiente de tu aprobación)
+
+1. **[Atomicidad — Bucket B] `manufacturing.php`:** envolver los flujos de generación de comisiones/`pagos`+`lotes_detalles` en transacción con `rollBack` en el `catch` (patrón ya usado en `orders.php`). Es el mayor foco: es el corazón de pagos y hoy escribe fuera de transacción. *Impacto real bajo en camino feliz, pero es la brecha de datos más seria.*
+2. **[Atomicidad — Bucket B] `designs.php:329` `/disenador-asignado`** y **`crm.php`** (oportunidad+vendedores): envolver el borrado/inserción multi-sentencia en transacción.
+3. **[UX 409 — Bucket A/C] Homogeneizar el `catch` de FK:** en los `catch` que hoy devuelven 500, re-lanzar (o detectar) `DatabaseConstraintException` para responder **409 con el mensaje**, en lugar de 500. Cambio mínimo y transversal (un helper). Prioridad media: hoy el mensaje ya se ve, solo el status es incorrecto.
+4. **[Frontend] Manejar 409** en los borrados de catálogos (tintas/colores) para mostrar "No se puede eliminar: está en uso" en vez de un error genérico.
+5. **[Limpieza] `products.php:311`:** los `DELETE products_prices`/`products_attributes_values` son redundantes tras el CASCADE; opcional eliminarlos.
+6. **[Verificar] `inventory.php:1050`:** confirmar la acción FK activa en `inventario_remanentes.id_insumo` y el UX del borrado de insumos con historial.
+
+**Conclusión de la auditoría de endpoints:** activar las FK **no rompe ningún endpoint en operación normal**. Los ajustes pendientes son de robustez en caminos de error: (a) **atomicidad** en 2-3 flujos multi-escritura sin transacción (el más importante: `manufacturing.php`/pagos), y (b) **coherencia de status** (409 vs 500) en los `catch` que interceptan la excepción FK. Ninguno es urgente ni bloquea el uso; son endurecimiento incremental.
+
+### 7.6 Inventario EXHAUSTIVO endpoint-por-endpoint (2026-07-01)
+
+A petición del usuario se auditó **cada endpoint** (no por patrón). Script reproducible: `docs/auditoria_fk/audit_endpoints.py`; salida completa: `docs/auditoria_fk/endpoints_fk_audit.txt`. Método: se delimita cada endpoint por su declaración `$app->method(...)`, se detectan sus `INSERT/UPDATE/DELETE`, se cruza la tabla objetivo contra el conjunto FK (60 tablas hijas con FK saliente → riesgo 1452; 31 tablas padre → riesgo 1451/CASCADE), y se comprueba `beginTransaction`+`rollBack` en el bloque.
+
+**Universo:** 112 endpoints POST/PUT/DELETE escriben sobre tablas que participan en FK. Estado:
+
+| Estado | Nº | Significado |
+|---|---|---|
+| 🟢 **A — Atómico** (tx+rollback) | **17** | Ya endurecido. Ante violación FK revierte. Sin riesgo. |
+| 🔴 **B-REAL** (≥2 tablas FK distintas, sin transacción) | **31** | **Prioridad.** Fallo FK a mitad → dato parcial. |
+| 🟠 **B-single** (1 tabla, multi-sentencia, sin tx) | 24 | Menor: replace/upsert no atómico. |
+| 🟡 **C — Cosmético** (1 sola escritura) | 43 | Sin riesgo de datos; solo status 500 en vez de 409. |
+| ⚪ GET/OPTIONS con aparente escritura | 7 | Revisar (bad-REST o falso positivo de límite). |
+
+**🟢 Los 17 ya atómicos:** `orders.php` (`/orden/abono`, `/ordenes/nueva`, `/presupuesto/nuevo`, `/ordenes/nueva/custom`, `/ordenes/nueva/sport`, `/ordenes/nueva/simple`, `/presupuesto/{id}/convertir-a-orden`), `payments.php` (`/pagos/terminar-planilla`, `/pagos/pagar-a-empleados`, `/pagos/procesar-lote-pagos`), `production.php` (`/ordenes/actualizar-filas-batch`, `/reposiciones/actualizar-filas-batch`, `/produccion/terminar/{id}`), `finance.php` (`/otro-abono`), `inventory.php` (`/inventario/consumo/{id_movimiento}`), `manufacturing.php` (`/registrar-paso-empleado`), `products.php` (`/lotes/empleados/reasignar-masiva`).
+
+**🔴 Los 31 B-REAL (multi-tabla FK sin transacción) — backlog priorizado por nº de tablas:**
+
+| Tablas | Endpoint | Archivo:línea |
+|---|---|---|
+| **10** | `POST /lotes/{id}/finalizar-departamento` | manufacturing.php:1641 |
+| **8** | `POST /lotes/{id}/finalizar-impresion` | manufacturing.php:1958 |
+| **8** | `POST /lotes/{id}/finalizar-corte` | manufacturing.php:2133 |
+| **7** | `POST /ordenes/nueva/custom/edit` | orders.php:2352 |
+| **5** | `POST /inventario-movimientos/empleados/update-insumo` | inventory.php:1178 |
+| 4 | `POST /comercializacion/revisiones-estatus/...` | orders.php:3637 |
+| 3 | `POST /empleados/registrar-paso/...` | manufacturing.php:2384 |
+| 3 | `POST /empleados/registrar-paso-por-lotes/{departamento}` | manufacturing.php:2535 |
+| 3 | `POST /orden/actualizar-estado` | orders.php:154 |
+| 3 | `POST /ordenes/contexto-ia` | orders.php:4723 |
+| 3 | `POST /lotes/empleados/reasignar` | products.php:1321 |
+| 2 | `/asignacion/{orden}/{departamento}/{empleado}` | assignments.php:65 |
+| 2 | `/crm/oportunidades/nueva` | crm.php:63 |
+| 2 | `/diseno/update-tipo`, `/disenos/parobacion-de-cliente`, `/diseno/ajustes-y-personalizaciones`, `/disenador-asignado`, `/disenos/nuevo-con-revision`, `PUT /disenos/asign/...` | designs.php:106/177/194/323/449/738 |
+| 2 | `/cierre-de-caja-vendedor` | finance.php:279 |
+| 2 | `/inventario-movimientos/update-insumo` | inventory.php:1571 |
+| 2 | `/lotes`, `/lotes/{id}/iniciar`, `/lotes/{id}/terminar`, `/lotes/empleados/reasignar_old`, `/lotes/update/cantidad`, `/truncate`, `/pausas` | manufacturing.php:20/72/143/1197/1294/1552/2791 |
+| 2 | `/orden/editar` | orders.php:14 |
+| 2 | `/inventario-tintas` | printers.php:415 |
+| 2 | `/produccion/reposicion` | production.php:1104 |
+
+**Hallazgo relevante:** `orders.php` está mayormente endurecido (sus 7 creadores son atómicos) pero **quedaron sin transacción 4 endpoints de escritura multi-tabla del mismo archivo**: `/ordenes/nueva/custom/edit` (¡7 tablas!), `/orden/actualizar-estado`, `/orden/editar`, `/ordenes/contexto-ia`. El grueso del backlog de atomicidad vive en **`manufacturing.php`** (las 3 finalizaciones de departamento/impresión/corte, de 8-10 tablas cada una) y en las 6 escrituras de **`designs.php`**.
+
+⚠️ **Recordatorio de severidad:** todos estos gaps solo se manifiestan en el **camino de error** (una violación FK real). En operación normal los padres existen y el flujo no falla. Son mejoras de robustez, NO fallos funcionales actuales.

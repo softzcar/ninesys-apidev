@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** Terminémoslo en este momento, busquemos dejar las cosas listas
+- **Fecha y Hora:** 2026-06-30 20:00:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - app/routes/orders.php (beginTransaction/commit/rollback en /ordenes/nueva y /presupuesto/nuevo)
+- **Commits Relacionados:** Frontend: N/A | Backend: 4e159cc
+- **Acción Realizada:**
+  Envueltos los dos endpoints creadores de orden en transacciones MySQL:
+  - /ordenes/nueva: beginTransaction antes del INSERT ordenes; commit después de INSERT metodos_de_pago; rollback en catch. El envío de WhatsApp queda fuera de la transacción (no es crítico para la integridad de BD).
+  - /presupuesto/nuevo: mismo patrón, beginTransaction antes del INSERT presupuestos; commit después del loop de presupuestos_productos.
+  LocalDB::connectToDatabase() reutiliza la misma conexión PDO (verificado en L23-28: "Si ya existe una conexión, no crear una nueva — preserva transacciones"), lo que garantiza que todas las goQuery() dentro del try usan la misma transacción.
+- **Inconvenientes y Desafíos:** Ninguno. El código ya tenía beginTransaction/commit/rollback en LocalDB desde antes.
+- **Decisión Final y Justificación:** WhatsApp sendMessage queda fuera del try/catch de la transacción porque es una llamada externa no crítica: si falla, la orden ya está confirmada en BD. Revertir la orden por un fallo de WhatsApp sería peor que dejar la orden sin notificación.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, git, ssh)
+- **Resultado:** Éxito
+- **Verificación:** php -l sin errores. HEAD 4e159cc en vps-contabo-prod.
+- **Logro Conseguido:** Creación de órdenes y presupuestos ahora es atómica. Un error en cualquier INSERT intermedio (FK violation, timeout, etc.) hace rollback completo — no quedan órdenes huérfanas sin productos ni abonos.
+- **Observaciones de Gemini:** Pendiente valorar a futuro: envolver también los endpoints de conversión de presupuesto a orden (si existen) con el mismo patrón.
+- **Respuesta de Gemini:** Tres mejoras desplegadas esta noche. Ver resumen en conversación.

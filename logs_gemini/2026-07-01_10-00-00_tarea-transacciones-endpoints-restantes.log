@@ -1,0 +1,23 @@
+- **Solicitud del Usuario:** Continúa con P3 (auditar endpoints multi-tabla sin transacción)
+- **Fecha y Hora:** 2026-07-01 10:00:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - app/routes/orders.php (beginTransaction/commit/rollback en 2 endpoints)
+- **Commits Relacionados:** Frontend: N/A | Backend: 30a51dd
+- **Acción Realizada:**
+  Auditoría: grep de INSERT INTO ordenes + beginTransaction en orders.php. Identificados 3 INSERT sin transacción:
+  - L4140: /ordenes/nueva/simple — 7 tablas (ordenes, ordenes_productos, lotes_detalles, lotes, abonos, ordenes_observaciones, ordenes_fila_orden)
+  - L5253: función auxiliar confirmarOrden() — no es un endpoint, es helper. No aplica.
+  - L5401: /presupuesto/{id}/convertir-a-orden — 7 tablas (ordenes, ordenes_productos, abonos, ordenes_observaciones, metodos_de_pago x6, lotes) + UPDATE presupuestos
+  /ordenes/contexto-ia (L4720) descartada: solo hace SELECTs.
+  Aplicado:
+  - /ordenes/nueva/simple: beginTransaction antes del primer INSERT (L4140), commit antes de la respuesta, rollback en el catch existente.
+  - /presupuesto/{id}/convertir-a-orden: beginTransaction antes de INSERT ordenes, envuelto todo en try/catch nuevo (no existía), commit antes de respuesta, rollback + disconnect en catch.
+- **Inconvenientes y Desafíos:** /presupuesto/{id}/convertir-a-orden no tenía try/catch — hubo que añadirlo completo. El endpoint usa getLastID() que sí existe en LocalDB (L292, retorna pdo->lastInsertId()).
+- **Decisión Final y Justificación:** Los early returns de validación (404, 400) ocurren antes del beginTransaction, así que no interfieren con el rollback. Solo las escrituras quedan dentro de la transacción.
+- **Herramienta(s) Utilizada(s):** Bash (grep, awk, php -l, git, ssh), Read, Edit
+- **Resultado:** Éxito
+- **Verificación:** php -l sin errores. 8 pares beginTransaction/commit/rollback en orders.php. HEAD 30a51dd en vps-contabo-prod.
+- **Logro Conseguido:** Todos los endpoints creadores de orden/presupuesto en orders.php ahora son atómicos. 8 bloques de transacción en total (5 preexistentes + 3 nuevos en dos sesiones). Un fallo en cualquier INSERT revierte la operación completa.
+- **Observaciones de Gemini:** Solo queda P4 (doble fuente id_empleado en production.php). El resto del plan está completado.
+- **Respuesta de Gemini:** P3 completado. Ver respuesta en conversación.

@@ -1,0 +1,132 @@
+TOTAL endpoints de ESCRITURA que tocan tablas FK: 119
+Resumen: {'B-BRECHA(multi sin tx/rb)': 58, 'C-cosmetico(1 escritura)': 43, 'A-atomico': 18}
+Por archivo: {'assignments.php': 1, 'catalogs.php': 10, 'config.php': 4, 'crm.php': 6, 'designs.php': 11, 'employees.php': 1, 'finance.php': 2, 'geografia.php': 1, 'inventory.php': 14, 'manufacturing.php': 24, 'orders.php': 16, 'payments.php': 3, 'printers.php': 4, 'production.php': 9, 'products.php': 11, 'tables.php': 2}
+
+=== BUCKET B — BRECHA DE ATOMICIDAD (multi-escritura sin transacción) ===
+assignments.php:65    POST   /asignacion/{orden}/{departamento}/{empleado}    w=5 [ordenes,pagos,pagos]
+catalogs.php:24    GET    /catalogo-tintas                                 w=6 [catalogo_impresoras,catalogo_tintas]
+catalogs.php:597   POST   /tiempos-de-produccion                           w=2 [products_tiempos_de_produccion]
+catalogs.php:630   POST   /tiempos-de-produccion/usa-desperdicio           w=2 [products_tiempos_de_produccion]
+config.php:388   POST   /configuracion/gastos                            w=4 [gastos]
+config.php:700   PUT    /gastos/registros/{id}                           w=2 [gastos_registros]
+crm.php:63    POST   /crm/oportunidades/nueva                         w=2 [crm_oportunidades,crm_oportunidades_vendedores]
+crm.php:354   POST   /crm/campanas/enviar                             w=2 [crm_campanas_envios]
+designs.php:106   POST   /diseno/update-tipo                              w=2 [disenos,revisiones]
+designs.php:177   POST   /disenos/parobacion-de-cliente                   w=2 [aprobacion_clientes,revisiones]
+designs.php:194   POST   /diseno/ajustes-y-personalizaciones              w=8 [disenos_ajustes_y_personalizaciones,pagos]
+designs.php:323   POST   /disenador-asignado                              w=3 [disenos,pagos]
+designs.php:449   POST   /disenos/nuevo-con-revision                      w=2 [disenos,revisiones]
+designs.php:738   PUT    /disenos/asign/{id_orden}/{empleado}             w=2 [disenos,revisiones]
+employees.php:365   POST   /empleados/eliminar                              w=2 [lotes_detalles_empleados_asignados]
+finance.php:279   POST   /cierre-de-caja-vendedor                         w=3 [caja,caja_fondos]
+geografia.php:10    GET    /catalogo-paises                                 w=3 [catalogo_ciudades,catalogo_estados]
+inventory.php:277   POST   /api/products/bulk-load                          w=4 [products_prices]
+inventory.php:919   POST   /insumos/nuevo                                   w=2 [inventario]
+inventory.php:1097  POST   /inventario-movimientos/nuevo                    w=5 [inventario_movimientos]
+inventory.php:1178  POST   /inventario-movimientos/empleados/update-insumo  w=18 [inventario,inventario_movimientos,inventario_remanentes,rendimiento,reposiciones]
+inventory.php:1571  POST   /inventario-movimientos/update-insumo            w=3 [inventario,inventario_movimientos]
+manufacturing.php:20    POST   /lotes                                           w=2 [empleados_lotes_fabricacion,empleados_lotes_fabricacion_items]
+manufacturing.php:72    POST   /lotes/{id}/iniciar                              w=2 [empleados_lotes_fabricacion,lotes_detalles_empleados_asignados]
+manufacturing.php:143   POST   /lotes/{id}/terminar                             w=2 [empleados_lotes_fabricacion,lotes_detalles_empleados_asignados]
+manufacturing.php:305   POST   /revision/nuevo                                  w=2 [revisiones]
+manufacturing.php:469   POST   /empleados/tareas                                w=2 [check_tareas]
+manufacturing.php:556   POST   /insumos/rendimiento                             w=3 [rendimiento]
+manufacturing.php:1163  POST   /lotes/empleados/eliminar                        w=2 [lotes_detalles_empleados_asignados,lotes_detalles_empleados_asignados]
+manufacturing.php:1197  POST   /lotes/empleados/reasignar_old                   w=4 [lotes_detalles,pagos]
+manufacturing.php:1294  POST   /lotes/update/cantidad                           w=3 [lotes_fisicos,lotes_historico_solicitadas]
+manufacturing.php:1552  POST   /truncate                                        w=3 [lotes_detalles_empleados_asignados,pagos]
+manufacturing.php:1641  POST   /lotes/{id}/finalizar-departamento               w=13 [empleados_lotes_fabricacion,inventario,inventario_movimientos,inventario_remanentes,lotes,lotes_detalles,lotes_detalles_empleados_asignados,pagos,rendimiento,tintas]
+manufacturing.php:1958  POST   /lotes/{id}/finalizar-impresion                  w=9 [empleados_lotes_fabricacion,inventario,inventario_movimientos,lotes,lotes_detalles,lotes_detalles_empleados_asignados,pagos,tintas]
+manufacturing.php:2133  POST   /lotes/{id}/finalizar-corte                      w=11 [empleados_lotes_fabricacion,inventario,inventario_movimientos,lotes,lotes_detalles,lotes_detalles_empleados_asignados,pagos,rendimiento]
+manufacturing.php:2384  POST   /empleados/registrar-paso/{tipo}/{departamento}/{id_lotes_detalles}/{unidades} w=3 [lotes,lotes_detalles,pagos]
+manufacturing.php:2535  POST   /empleados/registrar-paso-por-lotes/{departamento} w=7 [lotes,lotes_detalles,pagos]
+manufacturing.php:2791  POST   /pausas                                          w=3 [lotes_detalles_empleados_asignados_pausas,ordenes]
+orders.php:14    POST   /orden/editar                                    w=8 [ordenes,ordenes_productos,ordenes_productos]
+orders.php:154   POST   /orden/actualizar-estado                         w=4 [ordenes,ordenes_auditoria,lotes_detalles_empleados_asignados]
+orders.php:697   POST   /orden/edit/obs                                  w=2 [ordenes]
+orders.php:2352  POST   /ordenes/nueva/custom/edit                       w=19 [abonos,caja,metodos_de_pago,ordenes_observaciones,pagos,presupuestos,lotes_detalles]
+orders.php:3637  POST   /comercializacion/revisiones-estatus/{estatus}/{id_revision}/{id_orden} w=7 [disenos,ordenes,pagos,revisiones]
+orders.php:4723  POST   /ordenes/contexto-ia                             w=3 [lotes,ordenes,ordenes_productos]
+printers.php:341   PUT    /impresoras/{id}                                 w=2 [catalogo_impresoras]
+printers.php:415   POST   /inventario-tintas                               w=2 [inventario,tintas_recargas]
+production.php:1104  POST   /produccion/reposicion                           w=2 [ordenes_fila_reposiciones,reposiciones]
+production.php:1262  POST   /produccion/reposicion/final                     w=2 [reposiciones]
+production.php:1375  POST   /produccion/asignar-varias-ordenes-a-corte       w=3 [lotes_detalles]
+production.php:1913  POST   /production/corte/finalizar-tarea                w=2 [lotes_detalles_empleados_asignados]
+products.php:204   POST   /editar-producto-precios                         w=2 [products_prices]
+products.php:300   DELETE /products/{id}                                   w=3 [products]
+products.php:334   POST   /product-set-comision-producto                   w=2 [products_comisiones]
+products.php:422   POST   /product-set-comisiones-batch                    w=2 [products_comisiones]
+products.php:555   GET    /product-set-comision/{id}/{comision}            w=2 [pagos]
+products.php:1321  POST   /lotes/empleados/reasignar                       w=5 [lotes,lotes_detalles,lotes_detalles_empleados_asignados]
+tables.php:314   POST   /ordenes/borrador                                w=2 [ordenes_borrador_empleado]
+tables.php:340   POST   /ordenes/guardadas/eliminar                      w=3 [presupuestos]
+
+
+########## REFINADO ##########
+Escritores POST/PUT/DELETE sobre FK: 112
+  A (transaccion+rollback): 17
+  B-REAL (>=2 tablas FK distintas, sin tx): 31
+  B-single (1 tabla, multi-sentencia, sin tx): 24
+  GET/OPTIONS con aparente escritura (revisar boundary/REST): 7
+
+=== B-REAL: multi-tabla FK sin transaccion (PRIORIDAD, ordenado por nº tablas) ===
+10t manufacturing.php:1641  POST  /lotes/{id}/finalizar-departamento             -> empleados_lotes_fabricacion,inventario,inventario_movimientos,inventario_remanentes,lotes,lotes_detalles,lotes_detalles_empleados_asignados,pagos,rendimiento,tintas
+8t manufacturing.php:1958  POST  /lotes/{id}/finalizar-impresion                -> empleados_lotes_fabricacion,inventario,inventario_movimientos,lotes,lotes_detalles,lotes_detalles_empleados_asignados,pagos,tintas
+8t manufacturing.php:2133  POST  /lotes/{id}/finalizar-corte                    -> empleados_lotes_fabricacion,inventario,inventario_movimientos,lotes,lotes_detalles,lotes_detalles_empleados_asignados,pagos,rendimiento
+7t orders.php:2352  POST  /ordenes/nueva/custom/edit                     -> abonos,caja,lotes_detalles,metodos_de_pago,ordenes_observaciones,pagos,presupuestos
+5t inventory.php:1178  POST  /inventario-movimientos/empleados/update-insumo -> inventario,inventario_movimientos,inventario_remanentes,rendimiento,reposiciones
+4t orders.php:3637  POST  /comercializacion/revisiones-estatus/{estatus}/{id_revision}/{id_orden} -> disenos,ordenes,pagos,revisiones
+3t manufacturing.php:2384  POST  /empleados/registrar-paso/{tipo}/{departamento}/{id_lotes_detalles}/{unidades} -> lotes,lotes_detalles,pagos
+3t manufacturing.php:2535  POST  /empleados/registrar-paso-por-lotes/{departamento} -> lotes,lotes_detalles,pagos
+3t orders.php:154   POST  /orden/actualizar-estado                       -> lotes_detalles_empleados_asignados,ordenes,ordenes_auditoria
+3t orders.php:4723  POST  /ordenes/contexto-ia                           -> lotes,ordenes,ordenes_productos
+3t products.php:1321  POST  /lotes/empleados/reasignar                     -> lotes,lotes_detalles,lotes_detalles_empleados_asignados
+2t assignments.php:65    POST  /asignacion/{orden}/{departamento}/{empleado}  -> ordenes,pagos
+2t crm.php:63    POST  /crm/oportunidades/nueva                       -> crm_oportunidades,crm_oportunidades_vendedores
+2t designs.php:106   POST  /diseno/update-tipo                            -> disenos,revisiones
+2t designs.php:177   POST  /disenos/parobacion-de-cliente                 -> aprobacion_clientes,revisiones
+2t designs.php:194   POST  /diseno/ajustes-y-personalizaciones            -> disenos_ajustes_y_personalizaciones,pagos
+2t designs.php:323   POST  /disenador-asignado                            -> disenos,pagos
+2t designs.php:449   POST  /disenos/nuevo-con-revision                    -> disenos,revisiones
+2t designs.php:738   PUT   /disenos/asign/{id_orden}/{empleado}           -> disenos,revisiones
+2t finance.php:279   POST  /cierre-de-caja-vendedor                       -> caja,caja_fondos
+2t inventory.php:1571  POST  /inventario-movimientos/update-insumo          -> inventario,inventario_movimientos
+2t manufacturing.php:20    POST  /lotes                                         -> empleados_lotes_fabricacion,empleados_lotes_fabricacion_items
+2t manufacturing.php:72    POST  /lotes/{id}/iniciar                            -> empleados_lotes_fabricacion,lotes_detalles_empleados_asignados
+2t manufacturing.php:143   POST  /lotes/{id}/terminar                           -> empleados_lotes_fabricacion,lotes_detalles_empleados_asignados
+2t manufacturing.php:1197  POST  /lotes/empleados/reasignar_old                 -> lotes_detalles,pagos
+2t manufacturing.php:1294  POST  /lotes/update/cantidad                         -> lotes_fisicos,lotes_historico_solicitadas
+2t manufacturing.php:1552  POST  /truncate                                      -> lotes_detalles_empleados_asignados,pagos
+2t manufacturing.php:2791  POST  /pausas                                        -> lotes_detalles_empleados_asignados_pausas,ordenes
+2t orders.php:14    POST  /orden/editar                                  -> ordenes,ordenes_productos
+2t printers.php:415   POST  /inventario-tintas                             -> inventario,tintas_recargas
+2t production.php:1104  POST  /produccion/reposicion                         -> ordenes_fila_reposiciones,reposiciones
+
+=== A: ya atomicos (transaccion+rollback) ===
+   finance.php:492   /otro-abono
+   inventory.php:2177  /inventario/consumo/{id_movimiento}
+   manufacturing.php:616   /registrar-paso-empleado
+   orders.php:487   /orden/abono
+   orders.php:1732  /ordenes/nueva
+   orders.php:2050  /presupuesto/nuevo
+   orders.php:2695  /ordenes/nueva/custom
+   orders.php:3350  /ordenes/nueva/sport
+   orders.php:3926  /ordenes/nueva/simple
+   orders.php:5350  /presupuesto/{id}/convertir-a-orden
+   payments.php:12    /pagos/terminar-planilla
+   payments.php:52    /pagos/pagar-a-empleados
+   payments.php:222   /pagos/procesar-lote-pagos
+   production.php:15    /ordenes/actualizar-filas-batch
+   production.php:69    /reposiciones/actualizar-filas-batch
+   production.php:1319  /produccion/terminar/{id}
+   products.php:1393  /lotes/empleados/reasignar-masiva
+
+=== GET/OPTIONS con aparente escritura (probable falso positivo) ===
+   catalogs.php:24    GET /catalogo-tintas
+   designs.php:149   GET /disenos/aprobacion-de-cliente/{id_orden}
+   designs.php:852   GET /migracion/nineteencustom
+   geografia.php:10    GET /catalogo-paises
+   manufacturing.php:450   GET /revision/actualizar-estatus-de-pago/{estatus}/{id_pago}
+   manufacturing.php:2695  GET /empleados/registrar-pago/{id_lotes_detalles}
+   products.php:555   GET /product-set-comision/{id}/{comision}

@@ -1,0 +1,28 @@
+- **Solicitud del Usuario:** Continuar con el resto de la Ola A tras validar el piloto de 3 FKs.
+- **Fecha y Hora:** 2026-06-30 16:30:00
+- **Proyecto(s):** Backend (esquema, BD)
+- **Archivos Involucrados:**
+    - public/model/create_new_company_api_emp_N.sql (tipos + índices + 12 nuevas FKs)
+    - api_emp_194 en vps-contabo-dev (11 ALTER TABLE ejecutados en una pasada)
+- **Commits Relacionados:** Frontend: N/A | Backend: 346f891 (feat(schema): Ola A completa — 12 FKs + correcciones tipo bigint UNSIGNED)
+- **Acción Realizada:**
+  1. Barrido de tipos e índices para las 12 FK candidatas restantes. Resultado:
+     - 4 columnas con tipo OK (int(11) = int(11)): cat_ins_prod.id_departamento, check_tareas.id_ordenes_productos, inv_mov_hist.id_movimiento (con índice), rendimiento.id_departamento.
+     - 8 columnas MISMATCH (int(11) vs bigint(20) UNSIGNED): todas las columnas id_product/id_woo que referencian products._id.
+  2. SQL unificado por tabla (MODIFY + ADD KEY + ADD CONSTRAINT en un solo ALTER para minimizar reconstrucciones). Copiado via scp y ejecutado en api_emp_194 Dev. Todas exitosas.
+  3. Maestro actualizado:
+     - 8 columnas: int(11) -> bigint(20) UNSIGNED en CREATE TABLE.
+     - 10 tablas: ADD KEY en sección ALTER TABLE.
+     - 12 nuevas secciones/entradas FK (cat_ins_prod, check_tar_ibfk_4, disenos_ibfk_2, inv_mov_hist_ibfk_1, inv_mov_ibfk_5, lotes_det_ibfk_5, ord_prod_ibfk_4, prod_attr_val_ibfk_3, prod_com_ibfk_2, rendim_ibfk_3, revisiones_ibfk_3; también rendim_ibfk_3 y rendimiento usan nombres de maestro, no los creados en Dev).
+     - Contador de FKs actualizado: 104+14=118.
+  4. Commit 346f891 + push.
+- **Inconvenientes y Desafíos:**
+  - Nombres de FK divergen entre maestro y Dev en dos casos (lotes_detalles usaba lotes_det_ibfk_*, rendimiento usaba rendim_ibfk_*). Se usaron los nombres del maestro para el maestro y los nombres en Dev se dejaron tal como están (funcionales, solo el nombre difiere).
+  - Sin incidentes de datos: 0 huérfanos confirmados antes de cada ALTER.
+- **Decisión Final y Justificación:** SQL unificado (MODIFY+KEY+FK en un ALTER) reduce de 3 DDL a 1 por tabla → menos bloqueos, más atómico.
+- **Herramienta(s) Utilizada(s):** Bash (ssh, scp, mysql, git), Read, Edit, Write
+- **Resultado:** Éxito
+- **Verificación:** 15 FKs de Ola A activas en api_emp_194 Dev confirmadas por INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS. grep -cE "CONSTRAINT .* FOREIGN KEY" = 118 en el maestro (coincide con el comentario actualizado).
+- **Logro Conseguido:** Ola A completa: 15 FKs CASCADE/SET NULL activas en api_emp_194 Dev, 0 incidentes. Maestro sincronizado con tipos corregidos (bigint UNSIGNED), índices y 14 nuevas FK declarations (118 total). Patrón establecido: MISMATCH int/bigint es sistemático en columnas id_product/id_woo → ya corregido en todas las Ola A.
+- **Observaciones de Gemini:** Pendiente: Ola B (8 RESTRICT tintas/colores) y Ola C (limpieza de huérfanos/sentinelas). Endurecer ~6 creadores multi-tabla antes de FKs sobre ordenes_productos/lotes_detalles->ordenes (Ola C scope). producción intacta. Probar Dev antes de continuar.
+- **Respuesta de Gemini:** Ola A completada. 15 FKs activas en Dev. Maestro con 118 FKs. Commit 346f891 pusheado. Producción intacta.

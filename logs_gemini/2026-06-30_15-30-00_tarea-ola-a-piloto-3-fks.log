@@ -1,0 +1,32 @@
+- **Solicitud del Usuario:** Arrancar con 2-3 FK piloto de la Ola A (FK CASCADE/SET NULL con 0 huérfanos) antes de aplicar el lote completo.
+- **Fecha y Hora:** 2026-06-30 15:30:00
+- **Proyecto(s):** Backend (esquema, BD)
+- **Archivos Involucrados:**
+    - public/model/create_new_company_api_emp_N.sql (tipo id_product + índice + 2 nuevas FK + 1 FK ya existente en maestro)
+    - api_emp_194 en vps-contabo-dev (3 ALTER TABLE ejecutados)
+- **Commits Relacionados:** Frontend: N/A | Backend: 99101bf (feat(schema): Ola A piloto — 3 FKs nuevas + corrección tipo id_product)
+- **Acción Realizada:**
+  1. Re-verificación de 0 huérfanos en Dev para las 3 candidatas: ordenes_auditoria.id_orden (1.676 filas, 0 huérfanos), products_prices.id_product (387, 0), presupuestos_productos.id_tela (15, 0). ✓
+  2. Intento inicial con SQL en archivo remoto → backticks + comillas en COMMENT causaron error de parse. Solución: escribir SQL localmente y transferir con scp.
+  3. HALLAZGO durante aplicación: products_prices.id_product era int(11) pero products._id es bigint(20) UNSIGNED → MariaDB rechaza la FK (errno 150). Corrección: ALTER MODIFY COLUMN id_product bigint(20) UNSIGNED + ADD KEY id_product antes de la FK.
+  4. FKs aplicadas en api_emp_194 Dev:
+     - ord_audit_ibfk_1: ordenes_auditoria.id_orden → ordenes._id (CASCADE/CASCADE)
+     - prod_prices_ibfk_1: products_prices.id_product → products._id (CASCADE/CASCADE)
+     - presup_prod_ibfk_2: presupuestos_productos.id_tela → catalogo_telas._id (CASCADE/SET NULL)
+  5. Maestro actualizado:
+     - products_prices.id_product: int(11) → bigint(20) UNSIGNED
+     - ADD KEY id_product en la sección de índices de products_prices
+     - Nueva sección FK "ordenes_auditoria" (ord_audit_ibfk_1) antes de ordenes_borrador_empleado
+     - Nueva sección FK "products_prices" (prod_prices_ibfk_1) entre products_comisiones y products_sizes_eficiencia
+     - presup_prod_ibfk_2 ya estaba en el maestro desde corrección 5.2 (solo faltaba aplicar en Dev)
+  6. Commit 99101bf + push.
+- **Inconvenientes y Desafíos:**
+  - Backticks en SQL dentro de heredoc SSH → parse error. Resuelto con scp.
+  - Incompatibilidad de tipos int(11) vs bigint(20) UNSIGNED en products_prices → errno 150. Detectado y corregido en el momento (corrección también aplicada al maestro).
+- **Decisión Final y Justificación:** Proceder con las 3 piloto en lugar del lote completo para validar el procedimiento y detectar sorpresas (como la incompatibilidad de tipos) con el menor radio de blast posible.
+- **Herramienta(s) Utilizada(s):** Bash (ssh, scp, mysql, git), Read, Edit, Write
+- **Resultado:** Éxito
+- **Verificación:** INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS confirma 3 FKs activas con las reglas correctas (UPDATE_RULE/DELETE_RULE). Orphan check previo: 0 huérfanos en los 3 casos.
+- **Logro Conseguido:** Ola A piloto completada: 3 FKs activadas en api_emp_194 Dev con 0 incidentes de datos. Detectada y corregida la inconsistencia de tipo int/bigint en products_prices (tanto en Dev como en el maestro). Procedimiento validado para continuar con el resto de la Ola A.
+- **Observaciones de Gemini:** La incompatibilidad int(11) vs bigint(20) UNSIGNED puede repetirse en otras tablas con columnas id_product (p. ej. products_comisiones, products_tiempos_de_produccion, product_insumos_asignados, disenos, revisiones, check_tareas). Antes de aplicar cada FK del resto de la Ola A conviene hacer un barrido del tipo de la columna referenciante vs. el padre.
+- **Respuesta de Gemini:** Ola A piloto exitosa: 3 FKs activas en Dev (ord_audit_ibfk_1, prod_prices_ibfk_1, presup_prod_ibfk_2). Maestro sincronizado. Commit 99101bf pusheado. Producción intacta. Pendiente: resto de Ola A (9 FKs) — verificar tipos antes de cada ALTER para evitar el errno 150.

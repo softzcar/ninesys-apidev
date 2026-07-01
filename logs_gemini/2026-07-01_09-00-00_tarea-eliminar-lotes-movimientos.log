@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** Comenzar con P1: evaluar y eliminar lotes_movimientos
+- **Fecha y Hora:** 2026-07-01 09:00:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - app/routes/manufacturing.php (bloque L1337-1350 eliminado + línea TRUNCATE en /truncate)
+    - public/model/create_new_company_api_emp_N.sql (CREATE TABLE + índices + AUTO_INCREMENT + 2 FKs eliminados)
+    - vps-contabo-prod:api_emp_194.lotes_movimientos (tabla eliminada — 0 filas)
+- **Commits Relacionados:** Frontend: N/A | Backend: a2090e2
+- **Acción Realizada:**
+  1. Investigación: lotes_movimientos no existía en Dev (ya eliminada previamente). En producción existía con 0 filas.
+  2. Eliminado bloque muerto en manufacturing.php (L1337-1350): SELECT + INSERT/UPDATE que nunca ejecutaba sobre datos reales. También eliminada la línea TRUNCATE del endpoint /truncate.
+  3. DROP TABLE lotes_movimientos en producción (0 filas, confirmado antes del drop).
+  4. Eliminados 4 bloques del esquema maestro: CREATE TABLE, ADD PRIMARY KEY+KEY, MODIFY AUTO_INCREMENT, y sección de 2 FKs (lotes_mov_ibfk_1 → lotes_detalles, lotes_mov_ibfk_2 → ordenes).
+  5. Commit a2090e2 + deploy a producción. HEAD confirmado en vps-contabo-prod.
+- **Inconvenientes y Desafíos:** Ninguno. La tabla ya no existía en Dev, solo en producción.
+- **Decisión Final y Justificación:** Eliminación directa sin migración de datos — tabla vacía (0 filas) en ambos entornos. El código que la usaba era un camino muerto confirmado por datos: el control de producción migró a LDEA hace tiempo.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, git, ssh, mysql)
+- **Resultado:** Éxito
+- **Verificación:** SHOW TABLES en producción no retorna lotes_movimientos. grep en el maestro sin resultados. HEAD a2090e2 en vps-contabo-prod, opcache reseteado.
+- **Logro Conseguido:** Tabla legacy vacía eliminada. Código muerto removido. Esquema maestro sincronizado. Nuevas empresas ya no heredarán una tabla sin uso.
+- **Observaciones de Gemini:** Pendiente P2 (presupuestos.id_wp_order columna muerta), P3 (auditar endpoints sin transacción), P4 (doble fuente id_empleado).
+- **Respuesta de Gemini:** P1 completado. lotes_movimientos eliminada de Dev, Prod y esquema maestro.

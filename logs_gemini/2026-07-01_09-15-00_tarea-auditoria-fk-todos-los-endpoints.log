@@ -1,0 +1,38 @@
+- **Solicitud del Usuario:** Tras otro corte eléctrico (habíamos terminado hasta P4), retomar el trabajo. El usuario pide investigar las modificaciones necesarias en TODOS los endpoints de la API para adecuarlos a los nuevos cambios y trabajar correctamente con las FK, dado que hasta ahora solo se había auditado el flujo de `ordenes`. Auditar TODOS los endpoints para asegurar que queden listos.
+- **Fecha y Hora:** 2026-07-01 09:15:00
+- **Proyecto(s):** Backend (auditoría transversal de rutas)
+- **Archivos Involucrados:**
+    - ninesys-api/app/routes/*.php (30 archivos de rutas — barrido de escrituras)
+    - ninesys-api/app/model/LocalDB.php (confirmación del punto de lanzamiento de la excepción FK, líneas 204-242)
+    - ninesys-api/src/Application/Handlers/HttpErrorHandler.php (mapeo a 409, líneas 45-82)
+    - ninesys-api/src/Application/Exceptions/DatabaseConstraintException.php (jerarquía: extends RuntimeException)
+    - ninesys-api/public/model/create_new_company_api_emp_N.sql (mapa de FK padre→acción)
+    - ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md (nueva sección 7, escritura)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: N/A (solo auditoría/documentación; sin cambios de código aún — pendiente de commit del doc)
+- **Acción Realizada:**
+  1. Mapa de FK desde el esquema maestro: 121 CONSTRAINT; ON DELETE = 72 CASCADE / 41 SET NULL / 8 RESTRICT. Padres RESTRICT (borrar ahí bloquea → 409): `catalogo_colores_tintas` (×4), `catalogo_tintas` (×2), `catalogo_paises` (×1), `catalogo_estados` (×1). Padres CASCADE críticos: `ordenes` (27 hijos), `products` (6), `customers` (4).
+  2. Barrido de TODAS las sentencias `DELETE FROM` en rutas y clasificación por tabla padre. Hallazgo clave: **NO existe `DELETE FROM customers` ni `DELETE FROM ordenes`** en ninguna ruta → los CASCADE masivos nunca los dispara un endpoint (las órdenes se anulan por estado, no se borran). `geografia.php` sin borrados de países/estados → las FK RESTRICT geográficas tampoco se disparan.
+  3. Lectura en contexto de los 10 sitios `DELETE` sobre tablas padre (catalogs, printers, products, designs, inventory) para verificar guardas y multi-sentencia.
+  4. Confirmación del mecanismo de la red 409: `goQuery` lanza `DatabaseConstraintException` solo en errno 1451/1452/1216/1217. Esa excepción **extends RuntimeException** (subclase de Exception), por lo que cualquier `catch (Exception|\Throwable)` local (≈130 en las rutas) la **intercepta antes** del `HttpErrorHandler` central. La red 409 solo es universal para endpoints sin `try/catch`.
+  5. Medición de cobertura transaccional: `beginTransaction` por archivo (orders 7, production/payments 3, manufacturing/finance/inventory 2, products/designs 1; el resto 0) y `rollBack` por archivo. Verificación de que en `manufacturing.php` los INSERT de `pagos`/`lotes_detalles` (14 sitios) están **fuera** de sus 2 únicas transacciones (743-813).
+  6. Búsqueda de `catch` "swallow-and-continue" (tragar y seguir escribiendo): **no existe** ese patrón.
+  7. Clasificación de los `catch` en 3 buckets (A seguro/atómico con rollback o sin catch→409; B brecha de atomicidad multi-escritura sin transacción; C cosmético 500-en-vez-de-409) y redacción de la sección 7 del documento con backlog priorizado.
+- **Inconvenientes y Desafíos:**
+  - El tamaño de los archivos (orders.php 256KB, manufacturing.php 208KB, inventory.php 192KB) impide una lectura línea a línea completa en una sola pasada; se usó grep dirigido + lecturas puntuales de los sitios de mayor riesgo (DELETE, límites de transacción, catch).
+  - Desmentir el supuesto implícito de que "la red 409 central protege a todos": la herencia `RuntimeException` demuestra que los catch locales la interceptan; ese fue el hallazgo estructural más importante.
+- **Decisión Final y Justificación:** Documentar la auditoría como sección 7 del análisis vivo (persistencia ante cortes eléctricos) y NO aplicar cambios todavía, presentando un backlog priorizado para aprobación. Conclusión central: activar las FK **no rompe ningún endpoint en operación normal** (los padres existen en el camino feliz); los ajustes pendientes son de robustez en caminos de error (atomicidad + coherencia de status 409/500).
+- **Herramienta(s) Utilizada(s):** Bash (grep/sed/find), Read, Edit, Write
+- **Resultado:** Éxito (auditoría completa y documentada; sin cambios de código)
+- **Verificación:**
+    - Mecanismo FK confirmado leyendo LocalDB.php (219-235), HttpErrorHandler.php (57-61) y la clase de excepción.
+    - Ausencia de DELETE de customers/ordenes/geografía verificada por grep exhaustivo sobre las 30 rutas.
+    - Posición de los INSERT de pagos respecto a las transacciones de manufacturing.php confirmada por número de línea.
+- **Logro Conseguido:** Auditoría transversal de los endpoints de escritura frente a las FK activas: se prueba que la operación normal no se rompe, se identifica el matiz de que los catch locales evaden la red 409 central, y se entrega un backlog priorizado de endurecimiento (atomicidad en manufacturing/pagos como foco principal, coherencia 409 vs 500, y manejo de 409 en frontend de catálogos).
+- **Referencias de Sesión (Contexto):** ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md sección 7. Continúa el trabajo P1–P4 de FK.
+- **Observaciones de Gemini:** El backlog NO es urgente ni bloquea el uso; es endurecimiento incremental. Foco principal recomendado: transacción + rollback en los flujos de comisiones/`pagos` de manufacturing.php (patrón ya presente en orders.php). Pendiente de decidir con el usuario si se ataca ahora o se agenda.
+- **Respuesta de Gemini:** Auditados todos los endpoints de escritura frente a las FK: ninguno se rompe en operación normal; los únicos ajustes son de robustez en caminos de error (atomicidad en 2-3 flujos multi-escritura sin transacción —el principal, pagos en manufacturing— y coherencia de status 409 vs 500 en los catch). Documentado en la sección 7 y con backlog priorizado; sin cambios aplicados.
+
+---
+- **ADDENDUM (2026-07-01, mismo día):** El usuario pidió una auditoría EXHAUSTIVA endpoint-por-endpoint (todos los CRUD: empleados, productos, clientes, etc.), no por patrón. Se construyó un script (`docs/auditoria_fk/audit_endpoints.py`) que delimita cada endpoint por su declaración `$app->method(...)`, detecta sus INSERT/UPDATE/DELETE, cruza la tabla objetivo contra el conjunto FK (60 hijas / 31 padre) y verifica beginTransaction+rollBack. Salida completa persistida en `docs/auditoria_fk/endpoints_fk_audit.txt`. **Resultado: 112 endpoints POST/PUT/DELETE escriben sobre tablas FK → 17 ya atómicos (A), 31 B-REAL (≥2 tablas FK sin transacción, PRIORIDAD), 24 B-single, 43 C-cosmético, 7 GET con aparente escritura a revisar.** Foco del backlog: manufacturing.php `/lotes/{id}/finalizar-departamento|impresion|corte` (8-10 tablas c/u sin tx), orders.php `/ordenes/nueva/custom/edit` (7 tablas, no endurecido pese a que sus hermanos creadores sí), inventory `/inventario-movimientos/empleados/update-insumo` (5 tablas) y las 6 escrituras de designs.php. Documentado como sección 7.6 del doc. Sin cambios de código. Herramientas: Bash (python3/awk/grep), Read, Edit.

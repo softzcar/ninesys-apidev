@@ -1,0 +1,31 @@
+- **Solicitud del Usuario:** Arrancar con el foco #1 del backlog de la auditoría FK: implementar los cambios de atomicidad transaccional en los 3 endpoints de finalización de lote de manufacturing.php. Desplegar primero en el servidor de DESARROLLO para verificar que nada se rompa, antes de cualquier despliegue a producción.
+- **Fecha y Hora:** 2026-07-01 11:00:00
+- **Proyecto(s):** Backend (manufacturing / atomicidad FK)
+- **Archivos Involucrados:**
+    - ninesys-api/app/routes/manufacturing.php (3 endpoints envueltos en transacción)
+    - ninesys-api/app/model/LocalDB.php (referencia: beginTransaction/commit/rollback/inTransaction, conexión idempotente — solo lectura)
+    - ninesys-api/docs/ANALISIS_OPTIMIZACION_FK.md (sección 7.6, contexto del backlog)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: (ver commit fix(manufacturing) de esta jornada)
+- **Acción Realizada:**
+  1. Verificación previa del mecanismo: `LocalDB::connectToDatabase()` es idempotente (reutiliza el PDO si ya existe → la transacción se preserva entre llamadas a `goQuery`); existen `beginTransaction()` (325), `commit()` (337), `rollback()` (348) e `inTransaction()` (358).
+  2. Los 3 endpoints (`/lotes/{id}/finalizar-departamento` 1641, `/finalizar-impresion` 1958, `/finalizar-corte` 2133) comparten estructura: validación de payload → 400 (antes de abrir conexión), luego `try` con una cadena larga de escrituras (UPDATE inventario, INSERT inventario_movimientos, rendimiento, tintas, inventario_remanentes, INSERT/UPDATE pagos y lotes_detalles(_empleados_asignados), UPDATE lotes y empleados_lotes_fabricacion), y un `catch (Exception)` que hacía `disconnect` + HTTP 500. NINGUNO tenía transacción → ante una violación FK a mitad (errno 1451/1452, que `goQuery` convierte en `DatabaseConstraintException`), las escrituras previas quedaban commiteadas = dato parcial.
+  3. Cambio mínimo (9 ediciones, 3 por endpoint):
+     - `beginTransaction()` colocado tras la validación y las lecturas, justo antes de la primera escritura (en finalizar-departamento, después del bucle que valida "Faltan consumos para órdenes requeridas" para no dejar transacción abierta en esos returns 400).
+     - `commit()` justo antes de construir la respuesta de éxito (después del `UPDATE empleados_lotes_fabricacion ... 'terminado'`).
+     - `rollback()` en el `catch`, guardado por `if ($localConnection && $localConnection->inTransaction())`, antes del `disconnect()` existente. Se conserva la respuesta 500 con el mensaje (para `DatabaseConstraintException`, el mensaje amable en español se sigue mostrando).
+- **Inconvenientes y Desafíos:**
+  - Los 3 endpoints comparten líneas idénticas (p. ej. `UPDATE empleados_lotes_fabricacion ...` y el bloque `catch`+`disconnect`). Se garantizó unicidad de cada edición anclando en las cadenas de mensaje distintas por endpoint ("Lote {id} finalizado en este departamento", "Lote de Impresión", "Lote de Corte"; y "Error al finalizar el lote:" vs "...de impresión:" vs "...de corte:").
+  - En finalizar-departamento hay `return` 400 tempranos DENTRO del `try` (validación de consumos requeridos): se colocó el `beginTransaction()` DESPUÉS de esa validación para no abrir la transacción antes de esos returns.
+- **Decisión Final y Justificación:** Enfoque de atomicidad puro y mínimamente invasivo (solo begin/commit/rollback, sin reescribir la lógica), replicando el patrón ya presente en orders.php. No se añadió el re-lanzamiento a 409 (coherencia de status) porque eso es el ítem #3 del backlog y se hará transversalmente; aquí el objetivo era que un fallo FK no deje datos parciales, lo cual se cumple con el rollback.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, grep, git, deploy_backend.sh opción 2)
+- **Resultado:** Éxito en local (pendiente de verificación en Dev por el usuario).
+- **Verificación:**
+    - `php -l app/routes/manufacturing.php` → "No syntax errors detected".
+    - Balance de transacciones confirmado por grep: finalizar-departamento (begin 1700 / commit 1882 / rollback 1889), finalizar-impresion (begin 2016 / commit 2120 / rollback 2132), finalizar-corte (begin 2191 / commit 2379 / rollback 2391). Los 2 begin/commit/rollback preexistentes (743/803) intactos.
+    - Despliegue a Contabo DEV con `ninesys-hub/bin/deploy_backend.sh` opción 2 (workflow de seguridad `validar-seguridad-despliegue.md` ejecutado; producción NO tocada).
+- **Logro Conseguido:** Los 3 flujos de finalización de lote más pesados de la API (8-10 tablas FK cada uno, corazón de la generación de pagos/comisiones) pasan a ser atómicos: ante cualquier violación de integridad referencial se revierte todo el lote en lugar de dejar movimientos de inventario, tintas o pagos a medias.
+- **Referencias de Sesión (Contexto):** ANALISIS_OPTIMIZACION_FK.md §7.6 (backlog B-REAL, foco #1). Bitácora previa 2026-07-01_09-15-00 (auditoría exhaustiva de endpoints).
+- **Observaciones de Gemini:** Restan en el backlog B-REAL: orders.php `/ordenes/nueva/custom/edit` (7 tablas), inventory `/inventario-movimientos/empleados/update-insumo` (5), y las 6 escrituras de designs.php, más los "2t" de manufacturing/crm/finance. Pendiente además el ítem #3 (coherencia 409 vs 500) transversal.
+- **Respuesta de Gemini:** Implementadas transacciones atómicas (begin/commit/rollback) en los 3 endpoints finalizar-departamento/impresion/corte de manufacturing.php; sintaxis OK, balance verificado, desplegado en Desarrollo para tu verificación. Producción intacta.

@@ -1,0 +1,14 @@
+- Solicitud del Usuario: Auditar la base de datos de producción para la empresa 194, específicamente el SKU `TIN-SUBLIMACION-1000` en la tabla `inventario`, debido a que se muestra una cantidad de `-9000 ML` en el modal "Resumen de Inventario Agrupado por SKU". Corregir el problema directamente en la base de datos de producción de la forma más robusta posible.
+- Archivos Involucrados: ninesys-api/app/routes/printers.php, app_multi/pages/inventario/gestion/index.vue, app_multi/components/inventario/ResumenSkuModal.vue
+- Acción Realizada:
+  1. Se consultó la base de datos de producción (`vps-contabo-prod`) para la empresa 194 (`api_emp_194`).
+  2. Se identificó el registro con `_id = 561` de la tabla `inventario` con una cantidad de `-9000.00` (y cantidad inicial de `1000.00`).
+  3. Se descubrió una recarga en la tabla `tintas_recargas` con `_id = 51` de `10000.00` ML el día `2026-02-12 18:18:24` usando como insumo origen el `561`.
+  4. Se analizó el código del backend (`POST /inventario-tintas` en `printers.php`) y se constató que resta la cantidad recargada directamente de la cantidad actual del insumo en inventario, sin validar que no quede en valores negativos.
+  5. Se analizó el frontend y se determinó que la tabla principal filtra por defecto solo los ítems con stock (`cantidad > 0`), ocultando el ítem negativo, mientras que el modal de resumen agrupado por SKU suma todos los ítems (incluyendo el negativo), mostrando el consolidado de `-9000 ML`.
+  6. Se ejecutó una consulta de actualización en la base de datos de producción para la empresa 194 (`api_emp_194`), estableciendo la cantidad de la fila `561` a `0.00`.
+  7. Se verificó que el cambio se aplicara correctamente y que la suma total acumulada para el SKU `TIN-SUBLIMACION-1000` ahora es de `0.00` ML.
+- Herramienta(s) Utilizada(s): default_api.run_command, default_api.view_file, default_api.write_to_file
+- Resultado: Solución aplicada en caliente directamente en la base de datos de producción de la empresa 194. Auditoría y corrección finalizadas con éxito.
+- Verificación: Las consultas de verificación de base de datos confirmaron que el registro `_id = 561` ahora tiene `cantidad = 0.00` y la suma para el SKU es de `0.00`.
+- Observaciones de Gemini: El modal "Resumen SKU" ahora mostrará correctamente 0 ML para el producto.

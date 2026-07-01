@@ -1,0 +1,34 @@
+- **Solicitud del Usuario:** Arrancar la Ola C y luego probar las olas una a una.
+- **Fecha y Hora:** 2026-06-30 17:45:00
+- **Proyecto(s):** Backend (esquema, BD, DML)
+- **Archivos Involucrados:**
+    - public/model/create_new_company_api_emp_N.sql (tipos + nullable + índices + 5 nuevas FKs)
+    - api_emp_194 en vps-contabo-dev (DML de limpieza + 6 ALTER TABLE FK)
+- **Commits Relacionados:** Frontend: N/A | Backend: 2db7d08 (feat(schema): Ola C — limpieza huerfanos/sentinelas + 6 FKs desbloqueadas)
+- **Acción Realizada:**
+  1. Re-verificación de huérfanos: tintas_recargas 8, inventario_remanentes 46, ordenes_productos 69 (53 sentinel + 16 cat borrada), ordenes.id_wp 1 (+1 sentinel 0), product_insumos_asignados 38, products_tiempos_de_produccion 7.
+  2. Inspección de cada caso para entender el impacto antes de limpiar.
+  3. Barrido de tipos: MISMATCH en ordenes.id_wp (int(11) vs int(10) unsigned), product_insumos_asignados.id_product (int(11) vs bigint(20) unsigned), products_tiempos_de_produccion.id_product (int(11) vs bigint(20) unsigned).
+  4. DML de limpieza ejecutado en Dev:
+     - tintas_recargas: 8 rows SET id_insumo=NULL (insumos borrados)
+     - inventario_remanentes: DELETE 46 filas huérfanas
+     - ordenes: SET id_wp=NULL para id_wp=1705 (cliente borrado) y id_wp=0 (sentinel "Cliente Desconocido") — nombre preservado en cliente_nombre
+     - product_insumos_asignados: DELETE 38 filas con id_product=0
+     - products_tiempos_de_produccion: DELETE 7 filas con id_product=0
+     - ordenes_productos: MODIFY id_category nullable + SET NULL para 53 sentinela y 16 cat-borrada
+  5. INCIDENTE: ola_c.sql falló en ordenes (sentinel id_wp=0 no filtrado). Corregido con UPDATE separado.
+  6. 6 FKs aplicadas en Dev: inv_rem_ibfk_1 (CASCADE), ordenes_ibfk_1 (SET NULL), ord_prod_ibfk_5 (SET NULL), tintas_rec_ibfk_1 (SET NULL), prod_ins_asig_ibfk_4 (CASCADE), prod_tiempo_ibfk_2 (CASCADE).
+  7. Maestro sincronizado: tipos corregidos, id_category nullable, indices añadidos, 5 nuevas FKs. Total 123 FKs.
+  8. Commit 2db7d08 + push.
+- **Inconvenientes y Desafíos:**
+  - id_wp=0 no incluido en el UPDATE de limpieza inicial (solo filtré id_wp != 0 para el orphan check). Requirió un paso extra. Lección: al limpiar sentinelas numéricos (0) para FKs, hay que incluirlos explícitamente.
+- **Decisión Final y Justificación:**
+  - ordenes_productos.id_category: cambiar a nullable (en vez de crear categoría id=0) — más limpio, el backend ya maneja NULLs en otras columnas similares.
+  - product_insumos_asignados/products_tiempos_de_produccion id_product=0: DELETE (registros sin producto son semánticamente inútiles).
+  - ordenes.id_wp=0 y =1705: SET NULL (nombre del cliente preservado en snapshot).
+- **Herramienta(s) Utilizada(s):** Bash (ssh, scp, mysql, git), Read, Edit, Write
+- **Resultado:** Éxito
+- **Verificación:** 49 FKs totales activas en api_emp_194 Dev (INFORMATION_SCHEMA). Las 6 de Ola C verificadas por nombre y acción referencial.
+- **Logro Conseguido:** Ola C completada. 6 FKs antes bloqueadas ahora activas. Limpieza de 107 filas huérfanas/sentinel sin pérdida de datos significativa (nombre cliente preservado). Maestro con 123 FKs declaradas.
+- **Observaciones de Gemini:** Pendiente: (1) probar las 3 olas en Dev con casos reales; (2) endurecer ~6 creadores multi-tabla (/ordenes/nueva et al.) antes de FKs sobre ordenes_productos/lotes_detalles->ordenes; (3) deploy a producción bajo orden explícita del usuario.
+- **Respuesta de Gemini:** Ola C completada. 49 FKs activas en Dev. Maestro 123 FKs. Commit 2db7d08. Producción intacta. Listo para pruebas de las 3 olas.

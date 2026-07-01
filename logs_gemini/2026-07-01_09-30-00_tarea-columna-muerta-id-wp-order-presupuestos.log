@@ -1,0 +1,23 @@
+- **Solicitud del Usuario:** Continúa con P2 (presupuestos.id_wp_order columna muerta)
+- **Fecha y Hora:** 2026-07-01 09:30:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - app/routes/orders.php (INSERT de /presupuesto/nuevo corregido)
+    - public/model/create_new_company_api_emp_N.sql (columna eliminada de CREATE TABLE presupuestos)
+- **Commits Relacionados:** Frontend: N/A | Backend: b6bb5b6
+- **Acción Realizada:**
+  Investigación previa:
+  - presupuestos.id_wp_order: columna ya no existía en Dev ni en Prod. La llamada WooCommerce (createOrder) lleva comentada desde el origen, $orderWC = 0 siempre. El INSERT en orders.php:2132 aún incluía la columna → error silencioso en cada creación de presupuesto.
+  - ordenes.id_wp_order: columna ACTIVA. Usada en L312-336 para sincronizar estado con WooCommerce cuando orden pasa a "entregada". 2 filas con valor real en producción. Intocable.
+  Acciones:
+  1. orders.php: eliminada variable $orderWC = 0 (sin uso tras quitar la columna) y removida id_wp_order del INSERT INTO presupuestos.
+  2. create_new_company_api_emp_N.sql: eliminada línea id_wp_order de CREATE TABLE presupuestos (la de ordenes se conserva).
+  3. Commit b6bb5b6 + deploy a producción. HEAD confirmado.
+- **Inconvenientes y Desafíos:** La columna ya no existía en ninguna BD — alguien la eliminó previamente sin actualizar el código. El INSERT incluía una columna inexistente, lo que provocaba error en /presupuesto/nuevo.
+- **Decisión Final y Justificación:** No se eliminó ordenes.id_wp_order porque tiene uso real (WooCommerce sync en 2 órdenes confirmadas). Solo se limpió la referencia muerta en presupuestos.
+- **Herramienta(s) Utilizada(s):** Bash (grep, ssh, mysql, git), Read, Edit
+- **Resultado:** Éxito
+- **Verificación:** php -l sin errores. HEAD b6bb5b6 en vps-contabo-prod, opcache reseteado.
+- **Logro Conseguido:** Corregido bug silencioso en /presupuesto/nuevo que causaba error en cada creación por referenciar columna inexistente. Esquema maestro sincronizado.
+- **Observaciones de Gemini:** Pendiente P3 (auditar endpoints multi-tabla sin transacción) y P4 (doble fuente id_empleado en production.php).
+- **Respuesta de Gemini:** P2 completado. Ver respuesta en conversación.

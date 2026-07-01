@@ -1,0 +1,41 @@
+- **Solicitud del Usuario:** deploy a producción y haz un resumen de las mejoras que hemos obtenido con esta implementación que ha llevado al menos dos jornadas de trabajo
+- **Fecha y Hora:** 2026-06-30 19:00:00
+- **Proyecto(s):** Backend (código + BD producción)
+- **Archivos Involucrados:**
+    - vps-contabo-prod:/home/api.nineteencustom.com/public_html (código PHP)
+    - vps-contabo-prod:api_emp_194 (esquema BD — DML + 30 nuevas FKs)
+    - src/Application/Exceptions/DatabaseConstraintException.php
+    - src/Application/Handlers/HttpErrorHandler.php
+    - app/model/LocalDB.php
+    - public/model/create_new_company_api_emp_N.sql
+- **Commits Desplegados:**
+  - 8cc5b21 … a1479b1 (análisis, docs)
+  - 99101bf (Ola A piloto)
+  - 346f891 (Ola A completa)
+  - 7627d7f (Ola B)
+  - 2db7d08 (Ola C) ← HEAD en producción
+- **Acción Realizada:**
+  1. Código desplegado con git reset --hard origin/refactor/modular-routes → HEAD 2db7d08.
+  2. Audit de tipos y huérfanos en producción: mismos conteos que Dev excepto:
+     - reposiciones_departamentos_excluidos: tabla no existe en prod → FKs omitidas.
+     - rendimiento.id_product: columna no existe en prod → rendim_ibfk_3 omitida.
+     - product_insumos_asignados._id=30: huérfano adicional en catalogo_insumos_productos → SET NULL.
+     - products_tiempos_de_produccion._id=26,5: departamentos borrados → DELETE.
+  3. DML limpieza (Ola C): mismos pasos que Dev (8+46+1/sentinel+38+7+53/16 filas).
+  4. Ola A: 17 FKs aplicadas (13 tablas, type corrections bigint/unsigned).
+  5. Ola B: 5 FKs RESTRICT tintas/colores.
+  6. Ola C: 5 FKs restantes (inv_rem, ordenes, ord_prod_ibfk_5, tintas_rec_ibfk_1, prod_ins_asig_ibfk_4).
+  7. Total final: 21 (pre-existentes) + 30 nuevas = 51 FKs activas en producción.
+- **Inconvenientes y Desafíos:**
+  - Fallo 1: product_insumos_asignados.id_catalogo_insumos_produtos → 1 huérfano en prod no presente en Dev. SET NULL en _id=30. Causa: dato creado después del sync Dev←Prod.
+  - Fallo 2: products_tiempos_de_produccion.id_departamento → 2 filas con departamentos borrados (_id=12,15). DELETE. Causa: ídem, datos post-sync.
+  - reposiciones_departamentos_excluidos y rendimiento.id_product: solo existen en Dev. Omitidos limpiamente.
+- **Decisión Final y Justificación:**
+  - Orphans prod-only: SET NULL o DELETE según semántica (sin producto/catálogo → dato inútil).
+  - FKs omitidas por tabla/columna inexistente: no son regresiones, son features que no llegaron a prod todavía. Se aplicarán cuando la tabla llegue.
+- **Herramienta(s) Utilizada(s):** Bash (ssh, scp, mysql, git)
+- **Resultado:** Éxito
+- **Verificación:** 51 FKs activas en INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS de api_emp_194 en vps-contabo-prod. Código HEAD 2db7d08 verificado.
+- **Logro Conseguido:** Integridad referencial real desplegada en producción. El sistema ahora rechaza automáticamente datos inconsistentes con HTTP 409. Dos jornadas de trabajo consolidadas y en producción.
+- **Observaciones de Gemini:** Producción tiene 2 tablas/columnas menos que Dev (reposiciones_departamentos_excluidos, rendimiento.id_product). Cuando lleguen, sus FKs pendientes son: fk_rde_departamento, fk_rde_reposicion, rendim_ibfk_3.
+- **Respuesta de Gemini:** Ver resumen ejecutivo en el mensaje de respuesta al usuario.

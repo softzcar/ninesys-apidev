@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** ¿Qué podemos ir adelantando en producción en este momento?
+- **Fecha y Hora:** 2026-06-30 19:30:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - app/settings.php
+    - app/routes/orders.php
+- **Commits Relacionados:** Frontend: N/A | Backend: 839fd09 (displayErrorDetails), b9d73ca (SELECT MAX fix)
+- **Acción Realizada:**
+  1. displayErrorDetails: true → false + logError/logErrorDetails: true. Producción ya no expone stack traces PHP en respuestas de error.
+  2. Identificados 3 SELECT MAX(_id) activos usados para obtener el ID de una fila recién insertada (race condition): orders.php:1819 (ordenes), orders.php:1931 (ordenes_productos), orders.php:2129 (presupuestos). goQuery() ya devuelve insert_id via PDO::lastInsertId() — se captura el resultado del INSERT y se usa directamente.
+  3. Descartados: communications.php:971 (comentado), communications.php:997 (read-only, muestra próximo número), manufacturing.php:1324 (INSERT también comentado).
+  4. Ambos commits desplegados a producción. HEAD: b9d73ca.
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** No se agregaron transacciones en este commit. La race condition del INSERT se elimina con insert_id. Las transacciones son el siguiente paso (mayor alcance, requiere análisis de todos los flujos afectados).
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (git, ssh)
+- **Resultado:** Éxito
+- **Verificación:** HEAD b9d73ca en vps-contabo-prod, opcache reseteado.
+- **Logro Conseguido:** Producción ya no expone internos PHP en errores. Race condition de creación de órdenes eliminada — ordenes_productos y lotes_detalles ahora siempre se vinculan a la orden correcta.
+- **Observaciones de Gemini:** Pendiente: envolver /ordenes/nueva en beginTransaction/commit/rollback para que un fallo a mitad de la creación (ej. INSERT ordenes_productos falla por FK) haga rollback completo en lugar de dejar la orden parcialmente creada.
+- **Respuesta de Gemini:** Dos mejoras desplegadas en producción esta noche.
