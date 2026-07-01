@@ -897,8 +897,8 @@ return function (App $app) {
                 a.fecha_terminado,
                 a.progreso,
                 (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = a.id_orden) total_productos,
-                d.comision_tipo,
-                SUM(d.monto_pago) AS monto_pago,
+                (SELECT comision_tipo FROM pagos WHERE id_lotes_detalles = a._id AND fecha_pago IS NULL LIMIT 1) AS comision_tipo,
+                (SELECT SUM(monto_pago) FROM pagos WHERE id_lotes_detalles = a._id AND fecha_pago IS NULL) AS monto_pago,
                 eu.salario_tipo,
                 eu.salario_monto,
                 eu.salario_periodo,
@@ -915,12 +915,13 @@ return function (App $app) {
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
-            JOIN pagos d ON d.id_lotes_detalles = a._id
             LEFT JOIN api_empresas.empresas_usuarios eu ON a.id_empleado = eu.id_usuario
-            WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND a.fecha_terminado IS NOT NULL AND d.fecha_pago IS NULL 
+            WHERE a.id_empleado = {$args['id_empleado']} 
+              AND a.id_departamento = {$args['id_departamento']} 
+              AND a.fecha_terminado IS NOT NULL 
+              AND EXISTS (SELECT 1 FROM pagos WHERE id_lotes_detalles = a._id AND fecha_pago IS NULL)
             GROUP BY a.id_orden
             ORDER BY a.id_orden ASC
-            -- Fix: Agrupación por orden
         ";
     $object['sql_terminadas'] = $sql;
 
