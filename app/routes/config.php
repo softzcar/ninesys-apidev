@@ -415,6 +415,7 @@ return function (App $app) {
             $id_empresa = $conn[0]['id_empresa'];
 
             // 1. ELIMINAR Y REINSERTAR EN TABLA GLOBAL (empresas_gastos)
+            $localConnection->beginTransaction();
             $localConnection->goQuery('DELETE FROM empresas_gastos WHERE id_empresa = ?', [$id_empresa]);
 
             foreach ($gastos as $gasto) {
@@ -435,11 +436,17 @@ return function (App $app) {
                 );
             }
 
+            // Confirmar los gastos globales antes de cambiar de base de datos
+            $localConnection->commit();
+
             // 2. ACTUALIZAR TAMBIÉN EN LA BASE DE DATOS LOCAL DE LA EMPRESA (tabla gastos)
             $connectionDetails = $localConnection->getConnectionDetails($id_empresa);
             if ($connectionDetails) {
                 $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
                 $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
+
+                // Atomicidad: reemplazo de gastos fijos locales en una transacción
+                $localConnection->beginTransaction();
 
                 // Eliminar gastos fijos previos en la tabla local
                 $localConnection->goQuery("DELETE FROM gastos WHERE tipo = 'fijo'");
@@ -461,6 +468,8 @@ return function (App $app) {
                         ]
                     );
                 }
+
+                $localConnection->commit();
             }
 
             $localConnection->disconnect();
@@ -468,6 +477,9 @@ return function (App $app) {
             $response->getBody()->write(json_encode(['success' => true, 'message' => "Gastos fijos guardados correctamente en global y local."]));
             return $response->withHeader('Content-Type', 'application/json');
         } catch (Exception $e) {
+            if (isset($localConnection) && $localConnection->inTransaction()) {
+                $localConnection->rollback();
+            }
             $response->getBody()->write(json_encode(['success' => false, 'message' => 'Error interno del servidor: ' . $e->getMessage()]));
             return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
         }
@@ -710,6 +722,7 @@ return function (App $app) {
         try {
             $db = new LocalDB();
             
+            $db->beginTransaction();
             $current = $db->goQuery('SELECT monto FROM gastos_registros WHERE _id = ?', [$id_registro]);
             if (empty($current)) throw new Exception('Registro de gasto no encontrado.');
             $monto_anterior = $current[0]['monto'];
@@ -745,10 +758,14 @@ return function (App $app) {
                 $data['detalle'] ?? 'Actualización de registro de gasto'
             ]);
 
+            $db->commit();
             $db->disconnect();
             $response->getBody()->write(json_encode(['message' => 'Registro actualizado y auditado correctamente.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } catch (Exception $e) {
+            if (isset($db) && $db->inTransaction()) {
+                $db->rollback();
+            }
             $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
             return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
         }
