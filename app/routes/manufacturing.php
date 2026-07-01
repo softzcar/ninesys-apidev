@@ -34,6 +34,9 @@ return function (App $app) {
     $myDate = new CustomTime();
     $now = $myDate->today();
 
+    // Atomicidad FK: el lote y sus items se crean en una sola transacción
+    $localConnection->beginTransaction();
+
     // MODIFICADO: Se usa id_departamento_creador y id_departamento_actual
     $sql_create_lote = "INSERT INTO empleados_lotes_fabricacion (id_empleado, id_departamento_creador, id_departamento_actual, estado, fecha_inicio) VALUES (?, ?, ?, 'pendiente', ?)";
     $params_create = [$id_empleado, $id_departamento, $id_departamento, $now];
@@ -44,6 +47,9 @@ return function (App $app) {
     if (empty($id_lote)) {
       $object['error'] = 'No se pudo crear el lote o no se pudo obtener su ID.';
       $response->getBody()->write(json_encode($object));
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       $localConnection->disconnect();
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     }
@@ -58,6 +64,7 @@ return function (App $app) {
 
     $object['message'] = 'Lote creado exitosamente.';
     $object['id_lote'] = $id_lote;
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
@@ -76,6 +83,7 @@ return function (App $app) {
     $debug_info = [];  // Array para la depuración
 
     try {
+      $localConnection->beginTransaction();
       // --- INICIO DE LA CORRECCIÓN ---
 
       // 1. OBTENER EL DEPARTAMENTO ACTUAL DEL LOTE
@@ -112,6 +120,7 @@ return function (App $app) {
         }
       }
 
+      $localConnection->commit();
       $localConnection->disconnect();
 
       // 5. Construir la respuesta final
@@ -124,6 +133,9 @@ return function (App $app) {
       $response->getBody()->write(json_encode($final_response));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     } catch (Exception $e) {
+      if ($localConnection && $localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       if ($localConnection) {
         $localConnection->disconnect();
       }
@@ -145,6 +157,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
+      $localConnection->beginTransaction();
       // 1. Actualizar el estado del lote a 'terminado'
       $sql_update_lote = "UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_terminado = NOW() WHERE _id = ? AND estado = 'pendiente'";
       $localConnection->goQuery($sql_update_lote, [$id_lote]);
@@ -164,12 +177,17 @@ return function (App $app) {
         $localConnection->goQuery($sql_terminar_orden, [$orden['id_orden']]);
       }
 
+      $localConnection->commit();
+
       $response->getBody()->write(json_encode([
         'status' => 'success',
         'message' => "Lote {$id_lote} y sus " . count($ordenes_del_lote) . ' órdenes han sido terminados.'
       ]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     } catch (Exception $e) {
+      if ($localConnection && $localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       error_log("Error al terminar lote {$id_lote}: " . $e->getMessage());
       $response->getBody()->write(json_encode(['error' => 'Error interno del servidor al terminar el lote.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
@@ -2424,6 +2442,9 @@ return function (App $app) {
     $id_orden = $localConnection->goQuery($sql)[0]['id_orden'];
     $object['id_orden'] = $id_orden;
 
+    // Atomicidad FK: registrar el paso (lotes + pago + lotes_detalles) en una transacción
+    $localConnection->beginTransaction();
+
     if ($args['tipo'] === 'inicio') {
       $campo = 'fecha_inicio';
       $progreso = 'en curso';
@@ -2548,6 +2569,7 @@ return function (App $app) {
     $object['sql_update_pagos'] = $sql;
     $object['items'] = $localConnection->goQuery($sql);
 
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
@@ -2640,7 +2662,10 @@ return function (App $app) {
     }
 
     $object['sql'] = $sql;
+    // Atomicidad FK: todas las escrituras del lote (lotes + pagos + lotes_detalles) en una transacción
+    $localConnection->beginTransaction();
     $result_sql = $localConnection->goQuery($sql);
+    $localConnection->commit();
     $object['result_sql'] = $result_sql;
 
     $localConnection->disconnect();
@@ -2848,7 +2873,10 @@ return function (App $app) {
     // Actualizar Status de la orden
     $sql .= "UPDATE ordenes SET `status` = '$status_order' WHERE _id = {$data['id_orden']}";
 
+    // Atomicidad FK: pausa + actualización de estado de la orden en una transacción
+    $localConnection->beginTransaction();
     $object['response'] = $localConnection->goQuery($sql);
+    $localConnection->commit();
 
     $localConnection->disconnect();
 

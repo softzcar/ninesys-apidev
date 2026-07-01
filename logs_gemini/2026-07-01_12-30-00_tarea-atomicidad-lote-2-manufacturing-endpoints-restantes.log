@@ -1,0 +1,25 @@
+- **Solicitud del Usuario:** Arrancar con manufacturing.php y luego los demás archivos, para adecuar (dar atomicidad transaccional) a los endpoints B-REAL restantes de la auditoría FK.
+- **Fecha y Hora:** 2026-07-01 12:30:00
+- **Proyecto(s):** Backend (manufacturing / atomicidad FK)
+- **Archivos Involucrados:** ninesys-api/app/routes/manufacturing.php
+- **Commits Relacionados:** Frontend: N/A | Backend: (commit fix de este lote)
+- **Acción Realizada:** De los 9 endpoints B-REAL restantes de manufacturing.php se envolvieron en transacción (beginTransaction/commit + rollback) los 6 con escritura multi-tabla real:
+  1. `/lotes` (sin try/catch): begin tras preparar fechas; commit antes de la respuesta 201; rollback explícito en la ruta de error "no se pudo crear el lote".
+  2. `/lotes/{id}/iniciar` (con try/catch): begin como primera sentencia del try; commit antes del disconnect de éxito; rollback (guardado por inTransaction) en el catch.
+  3. `/lotes/{id}/terminar` (try/catch + finally): begin en el try; commit antes de la respuesta; rollback en el catch (antes del finally que hace disconnect).
+  4. `/empleados/registrar-paso/{tipo}/...` (sin try/catch): begin tras leer id_orden; commit antes del disconnect. Cubre UPDATE lotes + INSERT pagos + UPDATE lotes_detalles.
+  5. `/empleados/registrar-paso-por-lotes/{departamento}` (sin try/catch): begin/commit alrededor del goQuery multi-sentencia que ejecuta todas las escrituras del lote.
+  6. `/pausas` (sin try/catch): begin/commit alrededor del goQuery que hace INSERT/UPDATE pausas + UPDATE ordenes.
+  En los 3 sin try/catch, ante una violación FK (DatabaseConstraintException) la excepción se propaga y la transacción abierta se revierte automáticamente al destruirse el PDO (disconnect() hace pdo=null), por lo que no quedan datos parciales.
+- **Inconvenientes y Desafíos:** Se detectaron 3 FALSOS POSITIVOS de la auditoría (el regex contó escrituras que en el código están COMENTADAS o son legacy):
+  - `/lotes/empleados/reasignar_old`: el bloque INSERT pagos está comentado (solo 1 write real a lotes_detalles) y es la versión `_old`. NO se envolvió (single-write, atómico por naturaleza).
+  - `/lotes/update/cantidad`: los goQuery de INSERT/UPDATE lotes_fisicos están comentados; solo ejecuta 1 INSERT a lotes_historico_solicitadas. NO se envolvió.
+  - `/truncate`: es una herramienta de reseteo que hace TRUNCATE de ~35 tablas. TRUNCATE es DDL con COMMIT implícito (no transaccionable) y ya ejecuta SET FOREIGN_KEY_CHECKS=0. Una transacción no aportaría nada. NO se envolvió.
+- **Decisión Final y Justificación:** Envolver solo los flujos multi-escritura reales; saltar con justificación técnica los falsos positivos. Patrón mínimo (begin/commit/rollback), replicando lo ya validado, sin alterar la lógica.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, grep, git, deploy_backend.sh)
+- **Resultado:** Éxito en local (pendiente verificación en Dev por el usuario).
+- **Verificación:** `php -l` sin errores. Balance en el archivo: 11 beginTransaction / 11 commit / 8 rollback (5 endpoints previos + 6 nuevos; 3 nuevos usan auto-rollback por propagación de excepción). Desplegado a Contabo Dev (opción 2; producción intacta).
+- **Logro Conseguido:** 6 endpoints adicionales de manufacturing.php quedan atómicos ante violaciones de integridad referencial, completando el archivo de mayor densidad de escritura del backlog. Documentados los 3 casos que no requieren transacción.
+- **Referencias de Sesión (Contexto):** Backlog B-REAL de ANALISIS_OPTIMIZACION_FK.md §7.6. Bitácora previa 2026-07-01_11-00-00 (los 3 finalizar-*).
+- **Observaciones de Gemini:** Restan del backlog B-REAL: designs.php (6), orders.php (4, incl. /ordenes/nueva/custom/edit de 7 tablas), inventory.php (2) y 6 sueltos (products, assignments, crm, finance, printers, production).
+- **Respuesta de Gemini:** manufacturing.php completado: 6 endpoints envueltos en transacción y 3 saltados con justificación (falsos positivos: escrituras comentadas / TRUNCATE no transaccionable). php -l OK, desplegado en Dev.
