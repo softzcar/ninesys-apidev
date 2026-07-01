@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** Continuar el endurecimiento de atomicidad FK con los archivos restantes tras manufacturing.php ("luego los demás"). Este lote: designs.php.
+- **Fecha y Hora:** 2026-07-01 13:10:00
+- **Proyecto(s):** Backend (designs / atomicidad FK)
+- **Archivos Involucrados:** ninesys-api/app/routes/designs.php
+- **Commits Relacionados:** Frontend: N/A | Backend: (commit fix de este lote)
+- **Acción Realizada:** Se envolvieron en transacción los 6 endpoints B-REAL de designs.php:
+  1. `/diseno/update-tipo` (try/catch+finally): begin en el try; commit antes del éxito; rollback en el catch. 2 UPDATE (disenos, revisiones).
+  2. `/disenos/parobacion-de-cliente` (sin try/catch): begin/commit alrededor del goQuery multi-sentencia (UPDATE revisiones + INSERT aprobacion_clientes).
+  3. `/diseno/ajustes-y-personalizaciones` (sin try/catch): begin antes del goQuery de disenos_ajustes_y_personalizaciones; commit tras el goQuery de pagos. Envuelve las dos ejecuciones de escritura.
+  4. `/disenador-asignado` (sin try/catch): begin/commit alrededor de los dos goQuery de borrado (DELETE revisiones+disenos, DELETE pagos).
+  5. `/disenos/nuevo-con-revision` (sin try/catch): begin antes del INSERT disenos; rollback en las 2 rutas de error tempranas (error de inserción / id inválido); commit antes del disconnect. INSERT disenos + INSERT revisiones.
+  6. `PUT /disenos/asign/{id_orden}/{empleado}` (sin try/catch): begin antes del INSERT disenos; rollback en las 3 rutas de error (error diseño / id inválido / error revisión); commit antes del disconnect.
+  En los endpoints sin try/catch, la violación FK propaga la excepción y revierte la transacción al destruirse el PDO; en las rutas de error explícitas (que retornan 500) se añadió rollback guardado por inTransaction().
+- **Inconvenientes y Desafíos:** `/disenos/nuevo-con-revision` y `PUT /disenos/asign` comparten bloques de manejo de error idénticos (mismos mensajes y condiciones). Se desambiguó cada edición anclando en los comentarios numerados distintos (`// 4.`/`// 6.` vs `// 2.`/`// 4.`) y en el comentario único de cada verificación. Una edición inicial falló por 2 coincidencias; se re-ancló con contexto único.
+- **Decisión Final y Justificación:** Mismo patrón mínimo begin/commit/rollback, sin alterar lógica. Se respetó el endpoint preexistente `/migracion/nineteencustom` (usa su propia conexión `$pdo_nueva` con su transacción; intacto).
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, grep, git, deploy_backend.sh)
+- **Resultado:** Éxito en local (pendiente verificación en Dev).
+- **Verificación:** `php -l` sin errores. Balance de mis 6 endpoints: 6 begin / 6 commit / 6 rollback (update-tipo 1 rb; nuevo-con-revision 2 rb; asign 3 rb; los 3 sin try/catch usan auto-rollback). El endpoint de migración preexistente conserva su 1 begin + 2 commit con `$pdo_nueva`. Desplegado a Contabo Dev (opción 2; producción intacta).
+- **Logro Conseguido:** designs.php queda con sus 6 flujos multi-escritura atómicos ante violaciones de integridad referencial (diseños, revisiones, aprobaciones, ajustes/personalizaciones y sus pagos).
+- **Referencias de Sesión (Contexto):** Backlog B-REAL §7.6. Lote previo: manufacturing (2026-07-01_12-30-00).
+- **Observaciones de Gemini:** Restan del backlog B-REAL: orders.php (4, incl. /ordenes/nueva/custom/edit de 7 tablas), inventory.php (2) y 6 sueltos (products, assignments, crm, finance, printers, production).
+- **Respuesta de Gemini:** designs.php completado (6 endpoints atómicos), php -l OK, desplegado en Dev.

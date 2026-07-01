@@ -119,6 +119,7 @@ return function (App $app) {
     $url_image = $data['url_imagen'];
 
     try {
+      $localConnection->beginTransaction();
       // 2. Obtener el nombre del producto de forma segura
       $sql_product = 'SELECT product FROM products WHERE _id = ?';
       $product_result = $localConnection->goQuery($sql_product, [$id_product]);
@@ -135,9 +136,13 @@ return function (App $app) {
       $sql_update_revisiones = 'UPDATE revisiones SET tipo = ?, id_product = ?, url_image = ? WHERE _id = ?';
       $localConnection->goQuery($sql_update_revisiones, [$product_name, $id_product, $url_image, $id_revision]);
 
+      $localConnection->commit();
       $response->getBody()->write(json_encode(['success' => true, 'message' => 'Tipo de diseño actualizado.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     } catch (Exception $e) {
+      if ($localConnection && $localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       $response->getBody()->write(json_encode(['error' => 'Error al actualizar el tipo de diseño: ' . $e->getMessage()]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     } finally {
@@ -180,7 +185,10 @@ return function (App $app) {
 
     $sql = "UPDATE revisiones SET estatus = 'Aprobado' WHERE id_orden = " . $data['id_orden'] . ';';
     $sql .= 'INSERT INTO aprobacion_clientes(id_orden, id_diseno) VALUES (' . $data['id_orden'] . ', ' . $data['id_diseno'] . ');';
+    // Atomicidad FK: aprobación (revisiones + aprobacion_clientes) en una transacción
+    $localConnection->beginTransaction();
     $object = $localConnection->goQuery($sql);
+    $localConnection->commit();
 
     $localConnection->disconnect();
 
@@ -235,6 +243,8 @@ return function (App $app) {
     } else {
       $sqlpa .= 'INSERT INTO disenos_ajustes_y_personalizaciones (id_diseno, id_orden, tipo, cantidad) VALUES (' . $data['id_diseno'] . ', ' . $resultDiseno[0]['id_orden'] . ", 'personalizacion', " . $monto_personalizacion . ');';
     }
+    // Atomicidad FK: ajustes/personalizaciones + sus pagos en una transacción
+    $localConnection->beginTransaction();
     $data = $localConnection->goQuery($sqlpa);
 
     // Preparar datos para los pagos
@@ -250,6 +260,7 @@ return function (App $app) {
       $sql .= 'UPDATE pagos SET ' . $values . ' WHERE id_empleado = ' . $resultDiseno[0]['id_empleado'] . ' AND id_orden = ' . $resultDiseno[0]['id_orden'] . " AND detalle = 'personalización';";
     }
     $data = $localConnection->goQuery($sql);
+    $localConnection->commit();
 
     $localConnection->disconnect();
 
@@ -324,6 +335,9 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
+    // Atomicidad FK: borrar diseño, revisiones y pagos en una sola transacción
+    $localConnection->beginTransaction();
+
     // ELIMINAR DISEÑO Y REVISIONES
     $sql = 'DELETE FROM revisiones WHERE id_orden =  ' . $data['id_orden'] . ' AND id_empleado = ' . $data['id_empleado'] . ';';
     $sql .= 'DELETE FROM disenos WHERE _id =  ' . $data['id_diseno'] . ';';
@@ -335,6 +349,7 @@ return function (App $app) {
     $object['response_delete_pagos_sql'] = $sql;
     $object['response_delete_pagos'] = $localConnection->goQuery($sql);
 
+    $localConnection->commit();
     $localConnection->disconnect();
     $response->getBody()->write(json_encode($object));
 
@@ -463,12 +478,18 @@ return function (App $app) {
     $id_product = isset($data['id_product']) ? intval($data['id_product']) : 'NULL';
     $tipo_diseno = isset($data['tipo_diseno']) ? addslashes($data['tipo_diseno']) : 'Diseño por definir';
 
+    // Atomicidad FK: crear el diseño y su primera revisión en una transacción
+    $localConnection->beginTransaction();
+
     // 3. Crear el nuevo "Proyecto de Diseño" en la tabla `disenos`
     $sqlDiseno = "INSERT INTO disenos (id_orden, id_empleado, id_product, tipo, origen) VALUES ({$id_orden}, {$id_empleado}, {$id_product}, '{$tipo_diseno}', 'agregado_posterior')";
     $resultDiseno = $localConnection->goQuery($sqlDiseno);
 
     // Verificar si hubo un error en la primera inserción
     if (isset($resultDiseno['status']) && $resultDiseno['status'] === 'error') {
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       $localConnection->disconnect();
       $response->getBody()->write(json_encode(['error' => 'Error al crear el proyecto de diseño.', 'details' => $resultDiseno['message']]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
@@ -479,6 +500,9 @@ return function (App $app) {
 
     // Verificar que obtuvimos un ID válido
     if (empty($id_diseno_nuevo) || $id_diseno_nuevo == 0) {
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       $localConnection->disconnect();
       $response->getBody()->write(json_encode(['error' => 'No se pudo obtener el ID del nuevo diseño.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
@@ -489,6 +513,7 @@ return function (App $app) {
     $resultRevision = $localConnection->goQuery($sqlRevision);
 
     // 6. Cerrar la conexión y enviar respuesta exitosa
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $payload = json_encode([
@@ -742,6 +767,9 @@ return function (App $app) {
     $id_orden = intval($args['id_orden']);
     $id_empleado = intval($args['empleado']);
 
+    // Atomicidad FK: crear el diseño y su primera revisión en una transacción
+    $localConnection->beginTransaction();
+
     // 1. Crear el nuevo "Proyecto de Diseño" en la tabla `disenos`
     // Se usa un tipo por defecto que indica que fue asignado pero no definido.
     $sqlDiseno = "INSERT INTO disenos (id_orden, id_empleado, tipo, origen) VALUES ({$id_orden}, {$id_empleado}, 'Diseño Asignado', 'asignado')";
@@ -749,6 +777,9 @@ return function (App $app) {
 
     // Verificar si hubo un error en la inserción del diseño
     if (isset($resultDiseno['status']) && $resultDiseno['status'] === 'error') {
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       $localConnection->disconnect();
       $response->getBody()->write(json_encode(['error' => 'Error al crear el proyecto de diseño.', 'details' => $resultDiseno['message']]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
@@ -759,6 +790,9 @@ return function (App $app) {
 
     // Verificar que obtuvimos un ID válido
     if (empty($id_diseno_nuevo) || $id_diseno_nuevo == 0) {
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       $localConnection->disconnect();
       $response->getBody()->write(json_encode(['error' => 'No se pudo obtener el ID del nuevo diseño.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
@@ -770,12 +804,16 @@ return function (App $app) {
 
     // Verificar si hubo un error en la inserción de la revisión
     if (isset($resultRevision['status']) && $resultRevision['status'] === 'error') {
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       $localConnection->disconnect();
       $response->getBody()->write(json_encode(['error' => 'Error al crear la revisión inicial.', 'details' => $resultRevision['message']]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     }
 
     // 4. Cerrar la conexión y enviar respuesta exitosa
+    $localConnection->commit();
     $localConnection->disconnect();
 
     $payload = json_encode(['success' => true, 'message' => 'Diseño asignado y primera revisión creada correctamente.', 'id_diseno_nuevo' => $id_diseno_nuevo]);
