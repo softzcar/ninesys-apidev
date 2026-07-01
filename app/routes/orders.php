@@ -834,29 +834,26 @@ return function (App $app) {
                 'terminada' progreso
             FROM
                 revisiones a
-            JOIN pagos b ON b.id_orden = a.id_orden
+            JOIN pagos b ON b.id_orden = a.id_orden AND b.detalle = '{$object['departamento']}'
             JOIN ordenes c ON c._id = a.id_orden AND c.status NOT LIKE 'entregada' AND c.status NOT LIKE 'cancelada' AND c.status NOT LIKE 'terminada' 
-            WHERE b.id_empleado = {$args['id_empleado']} AND b.fecha_pago IS NOT NULL
+            WHERE b.id_empleado = {$args['id_empleado']} AND b.fecha_pago IS NULL
         ";
     $object['ordenes_terminadas'] = $localConnection->goQuery($sql);
 
     $sql = "SELECT
             a._id AS id_revision,
             a.id_orden,
-            p.product AS producto, -- Columna traída directamente del JOIN
-            'Diseño' AS departamento
+            p.product AS producto,
+            'Diseño' AS departamento,
+            0 AS monto_pago,
+            'pendiente' AS progreso
         FROM
             revisiones a
-        -- Unir con productos para obtener el nombre de forma eficiente
         LEFT JOIN products p ON p._id = a.id_product
-        -- Unir con pagos para poder filtrar por empleado
-        JOIN pagos b ON b.id_orden = a.id_orden
-        -- Unir con órdenes para filtrar por su estado
         JOIN ordenes c ON c._id = a.id_orden
         WHERE 
-            -- Condición principal sobre el empleado
-            b.id_empleado = {$args['id_empleado']}
-            -- Condición sobre el estado de la orden, simplificada con NOT IN
+            a.id_empleado = {$args['id_empleado']}
+            AND a.estatus != 'Aprobado'
             AND c.status NOT IN ('entregada', 'cancelada', 'terminada');
         ";
     $object['ordenes_pendientes'] = $localConnection->goQuery($sql);
