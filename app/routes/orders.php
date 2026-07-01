@@ -824,6 +824,13 @@ return function (App $app) {
     $departamento = $localConnection->goQuery($sql);
     $object['departamento'] = $departamento[0]['departamento'];
 
+    // Obtener datos salariales del empleado
+    $sqlEmpleado = "SELECT salario_tipo, salario_monto, salario_periodo, comision, comision_tipo 
+                    FROM api_empresas.empresas_usuarios 
+                    WHERE id_usuario = {$args['id_empleado']}";
+    $datosEmpleado = $localConnection->goQuery($sqlEmpleado);
+    $object['datos_empleado'] = !empty($datosEmpleado) ? $datosEmpleado[0] : null;
+
     $sql = "SELECT
                 a._id id_revision,
                 a.id_orden,
