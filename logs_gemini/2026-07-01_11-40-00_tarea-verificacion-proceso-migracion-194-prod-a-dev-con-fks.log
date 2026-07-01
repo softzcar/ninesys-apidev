@@ -1,0 +1,27 @@
+- **Solicitud del Usuario:** Antes de probar el código nuevo, el usuario necesita migrar los datos de la empresa 194 de producción a desarrollo. Existe un documento con los pasos, pero como se hicieron cambios importantes con las claves foráneas, pide verificar que el proceso de migración actual siga siendo correcto para la estructura de datos actual (no sabe si los pasos se actualizaron con los cambios de FK).
+- **Fecha y Hora:** 2026-07-01 11:40:00
+- **Proyecto(s):** Backend / Infraestructura (migración de datos)
+- **Archivos Involucrados:**
+    - ninesys-hub/bin/sync_194_prod_to_dev.sh (proceso real prod 194 → dev 194 — revisado)
+    - MANUAL_MIGRACION_DATABASE.md (escenario legacy 163→Hostinger/194 — identificado como NO aplicable a este sync)
+    - api_emp_194 en vps-contabo-prod y vps-contabo-dev (verificación SOLO LECTURA)
+- **Commits Relacionados:** Frontend: N/A | Backend: N/A (solo verificación)
+- **Acción Realizada:**
+  1. Localización de los dos documentos. Se aclara que MANUAL_MIGRACION_DATABASE.md es el escenario legacy 163→Hostinger/194 (rebuild de tinta_filtro, rendimiento, alineación de IDs de departamentos) — transformaciones de una sola vez ya aplicadas en prod 194; NO deben re-ejecutarse en un sync 194→194. El proceso vigente es el script sync_194_prod_to_dev.sh.
+  2. Análisis del script: hace mysqldump completo (estructura+datos) de prod 194 excluyendo 12 tablas wa_* (--ignore-table), por pipe SSH gzip a dev, con respaldo previo obligatorio de dev. Flags: --single-transaction --quick --lock-tables=false --skip-triggers (sin --compact/--skip-opt/--no-create-info → dump completo estándar).
+  3. Verificación empírica SOLO LECTURA:
+     - Conteo de FKs por information_schema dio 0 en prod (FALSO NEGATIVO: el usuario api_adminemp tiene privilegios que ocultan filas de information_schema.referential_constraints/table_constraints) vs 49 en dev. Se descartó como artefacto.
+     - Fuente autoritativa SHOW CREATE TABLE lotes_detalles: prod SÍ tiene la FK lotes_ibfk_3 (id_woo→products), idéntica a dev.
+     - Conteo real vía mysqldump --no-data: PROD = 53 CONSTRAINT FOREIGN KEY; DEV = 49. (Prod está por delante; dev heredará las 53 al sincronizar.)
+     - Cabecera del dump: incluye `/*!40014 SET ... FOREIGN_KEY_CHECKS=0 */` (línea 15) y su restauración (línea 2193) → la carga desactiva la verificación de FK; el orden de tablas/filas es irrelevante.
+     - 99 DROP TABLE IF EXISTS + CREATE en el dump → reconstruye estructura completa (87 tablas de negocio + 12 wa_ que el script excluye aparte).
+     - 0 FKs referencian tablas wa_* → excluir WhatsApp no rompe ninguna FK.
+- **Inconvenientes y Desafíos:** El conteo inicial por information_schema en prod (0 FKs) casi provoca una falsa alarma ("el sync borraría las FK de dev"). Se resolvió cruzando con SHOW CREATE TABLE y con mysqldump --no-data (métodos no afectados por el filtrado de privilegios de information_schema), que confirmaron 53 FKs reales en prod.
+- **Decisión Final y Justificación:** El proceso NO requiere actualización por los cambios de FK. Es FK-safe por diseño: al ser un clon completo (DROP+CREATE desde prod) con FOREIGN_KEY_CHECKS=0 durante la carga, dev queda con la estructura exacta de prod (53 FKs) sin problemas de orden de dependencias. Un sync de solo-datos sí se rompería, pero este no lo es.
+- **Herramienta(s) Utilizada(s):** Read, Bash (ssh mysql/mysqldump SOLO LECTURA, grep)
+- **Resultado:** Éxito (verificación concluida; proceso validado como correcto).
+- **Verificación:** Cifras citadas arriba, reproducibles con `mysqldump --no-data api_emp_194 | grep -c 'CONSTRAINT.*FOREIGN KEY'` en cada host y con la cabecera del dump.
+- **Logro Conseguido:** Confirmado que sync_194_prod_to_dev.sh es correcto y seguro con la nueva estructura de FK; no necesita cambios. Además el sync corrige la deriva de dev (49→53 FK) dejándolo alineado con prod para probar el código FK-aware recién desplegado. Aclarada la diferencia entre el manual legacy 163→194 (no aplicable) y el script 194→194 (vigente).
+- **Referencias de Sesión (Contexto):** Bitácora previa 2026-07-01_11-00-00 (transacciones atómicas manufacturing, ya en dev). ANALISIS_OPTIMIZACION_FK.md.
+- **Observaciones de Gemini:** El sync NO toca el código (solo datos/estructura de BD), por lo que el fix de transacciones desplegado en dev (commit e5b0281) permanece. Pendiente: ejecutar el sync bajo confirmación explícita del usuario (destino dev, con respaldo previo automático; origen prod solo lectura).
+- **Respuesta de Gemini:** Verificado: el proceso vigente (sync_194_prod_to_dev.sh) es correcto y FK-safe sin cambios; prod tiene 53 FKs, dev 49, el dump desactiva FOREIGN_KEY_CHECKS y reconstruye la estructura, y ninguna FK toca las tablas wa_ excluidas. El manual legacy 163→194 no aplica a este sync. Listo para ejecutar cuando lo confirmes.

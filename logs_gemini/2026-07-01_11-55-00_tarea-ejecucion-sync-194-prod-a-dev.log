@@ -1,0 +1,23 @@
+- **Solicitud del Usuario:** "ejecuta el sync ahora" — correr la migración de datos de la empresa 194 de producción a desarrollo, tras verificar que el proceso era correcto con la nueva estructura de FK.
+- **Fecha y Hora:** 2026-07-01 11:55:00
+- **Proyecto(s):** Infraestructura (migración de datos prod→dev)
+- **Archivos Involucrados:**
+    - ninesys-hub/bin/sync_194_prod_to_dev.sh (ejecutado)
+    - api_emp_194 en vps-contabo-prod (origen, SOLO LECTURA vía mysqldump) y vps-contabo-dev (destino)
+- **Commits Relacionados:** Frontend: N/A | Backend: N/A (operación de datos, sin cambios de código)
+- **Acción Realizada:**
+  1. Ejecución del workflow de seguridad: origen prod = solo lectura (mysqldump SELECT), destino = Desarrollo (con respaldo previo automático); orden explícita y literal del usuario ("ejecuta el sync ahora"); producción NO modificada.
+  2. Ejecución de `bash ninesys-hub/bin/sync_194_prod_to_dev.sh`. Pasos del script: [1] detalles de la empresa en dev; [2] respaldo previo obligatorio de dev (api_emp_194_pre_migracion_20260701_102937.sql.gz); [3] mysqldump completo prod→dev por pipe SSH gzip excluyendo 12 tablas wa_*; [4] preservación de WhatsApp de dev; [5] verificación de conteo de órdenes. Duración ~35 s (10:29:37→10:30:12).
+- **Inconvenientes y Desafíos:** Ninguno. Advertencia informativa de SSH (post-quantum key exchange) sin impacto.
+- **Decisión Final y Justificación:** Se ejecutó el proceso ya validado como FK-safe (clon completo con FOREIGN_KEY_CHECKS=0). No se requirió ninguna adaptación por los FK.
+- **Herramienta(s) Utilizada(s):** Bash (sync_194_prod_to_dev.sh, ssh mysql/mysqldump de verificación)
+- **Resultado:** Éxito.
+- **Verificación (post-sync, dev api_emp_194):**
+    - FKs reales por mysqldump --no-data: 53 (antes 49 → ahora idéntico a prod). Estructura reconstruida correctamente.
+    - Conteos: ordenes 5937 (= prod), lotes_detalles 52.911, pagos 13.142, LDEA 11.055.
+    - WhatsApp de dev preservado (estado de sesión: READY).
+    - Código intacto: manufacturing.php en el server dev conserva 5 `beginTransaction` (2 previos + 3 del fix del commit e5b0281) → el sync no tocó el código.
+- **Logro Conseguido:** Banco de pruebas de desarrollo alineado con producción: datos reales de la 194 + las 53 FK + el código nuevo de transacciones atómicas. Listo para que el usuario pruebe las finalizaciones de lote (departamento/impresión/corte) y el comportamiento de rollback ante violaciones de integridad referencial. Además, el sync corrigió la deriva de dev (49→53 FK).
+- **Referencias de Sesión (Contexto):** Bitácoras 2026-07-01_11-00-00 (fix transacciones manufacturing) y 2026-07-01_11-40-00 (verificación del proceso de migración).
+- **Observaciones de Gemini:** Respaldo previo de dev disponible en vps-contabo-dev:/root/backups_migracion/api_emp_194_pre_migracion_20260701_102937.sql.gz por si se necesita revertir. Producción quedó intacta (solo lectura).
+- **Respuesta de Gemini:** Sync ejecutado con éxito: dev 194 ahora tiene los datos reales de prod (5937 órdenes) y las 53 FK, con el código del fix intacto. Todo listo para probar en desarrollo.
