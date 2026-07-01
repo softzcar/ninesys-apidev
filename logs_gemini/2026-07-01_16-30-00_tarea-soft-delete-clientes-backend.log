@@ -1,0 +1,35 @@
+- **Solicitud del Usuario:** Resolver el escenario de borrado de clientes: al eliminar (físicamente) un cliente con órdenes, la orden quedaba "inconsultable" (INNER JOINs a customers) y se borraba su CRM en cascada. Se decidió implementar borrado LÓGICO (soft delete) con dedup por teléfono y manejo del caso "recrear un cliente ya eliminado" (no duplicar teléfono). Implementar backend completo en Dev; frontend después.
+- **Fecha y Hora:** 2026-07-01 16:30:00
+- **Proyecto(s):** Backend (clientes / soft delete)
+- **Archivos Involucrados:**
+    - public/model/create_new_company_api_emp_N.sql (columna customers.eliminado)
+    - app/lib/woome.php (deleteCustomer, createCustomer, reactivateCustomer, getAllCustomesrs)
+    - app/routes/products.php (/customers/nuevo con reactivar, nuevo /customers/reactivar)
+    - app/routes/orders.php (bloque inline de cliente en /ordenes/nueva/custom + 4 buscadores por nombre)
+    - app/routes/crm.php (2 consultas de campañas)
+    - api_emp_194 Dev (ALTER + pruebas)
+- **Commits Relacionados:** Frontend: N/A (pendiente) | Backend: b541b2d (parte 1/2), dde66bf (parte 2/2)
+- **Acción Realizada:**
+  1. Esquema: `customers.eliminado tinyint(1) NOT NULL DEFAULT 0` en el maestro y en Dev 194 (ALTER idempotente; 1899 activos, 0 eliminados).
+  2. `deleteCustomer`: de `DELETE FROM customers` a `UPDATE customers SET eliminado = 1 WHERE _id = ?` (parametrizado; cierra la inyección SQL). Las órdenes ya no quedan huérfanas ni se rompen los JOINs.
+  3. `createCustomer`: la búsqueda por teléfono normalizado ahora incluye `eliminado`; parámetro nuevo `$reactivar`. Ramas: activo→`phone_duplicate` (como antes); eliminado+reactivar→revive (eliminado=0) y actualiza datos, devuelve `reactivado:true`; eliminado sin reactivar→`phone_deleted` (el frontend pregunta).
+  4. `/customers/nuevo` acepta y reenvía `reactivar` (el flujo de orden/presupuesto lo enviará en 1).
+  5. Nuevo `POST /customers/reactivar` + `WooMe::reactivateCustomer` (reactiva + actualiza; para el flujo de confirmación de la creación suelta).
+  6. `/ordenes/nueva/custom`: el reuse inline de cliente ahora setea `eliminado=0` (auto-reactivar en el flujo de orden). /ordenes/nueva y /presupuesto/nuevo reciben id_wp ya resuelto por el frontend vía /customers/nuevo, así que quedan cubiertos por createCustomer.
+  7. Filtro `eliminado = 0` en listados/búsquedas: `getAllCustomesrs`, 4 buscadores por nombre en orders.php y 2 consultas de campañas CRM. Las búsquedas por `_id` (cliente histórico de una orden) NO se filtran, para que el detalle histórico siga mostrando al cliente.
+- **Inconvenientes y Desafíos:**
+  - Las pruebas por curl daban 500 "getaddrinfo for none": el `IdEmpresaMiddleware` resuelve la empresa desde el header `Authorization: <id_empresa>`; sin él, LocalDB conecta a host "none". No era bug del código. Se re-probó con `-H Authorization:194`.
+  - Corrección de mi diagnóstico previo: `WooMe->deleteCustomer` NO llamaba a una tienda WooCommerce externa muerta; hacía un `DELETE FROM customers` local real (el nombre "Woo" es legado). Por eso el cliente eliminado desaparecía de verdad.
+- **Decisión Final y Justificación:** Soft delete + reactivación consciente del duplicado por teléfono. En la creación suelta se pregunta antes de reactivar (phone_deleted); en el flujo de orden/presupuesto se reactiva automáticamente (reactivar=1). Dedup solo por teléfono (como ya existía). No se añadió UNIQUE de BD sobre phone (formatos variables + duplicados históricos); la dedup normalizada + la reactivación cubren "no repetir teléfono".
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (ssh mysql ALTER/pruebas, curl, php -l, git, deploy_backend.sh)
+- **Resultado:** Éxito. Backend completo, desplegado en Dev (HEAD dde66bf) y verificado end-to-end.
+- **Verificación (Dev 194, endpoints reales con Authorization:194):**
+    - Soft delete de cliente 1980 (ALVARO, con orden 5950): `eliminado=1`; la orden 5950 SIGUE resolviendo el cliente en el JOIN (no se rompe) — resuelve el problema planteado.
+    - GET /customers: 1899 activos → 1898 al eliminar 1980 (filtro OK; el cliente desaparece del listado).
+    - Crear con mismo teléfono SIN reactivar → `phone_deleted` con el cliente existente.
+    - Crear con `reactivar=1` → `status:success, reactivado:true` (auto-reactivar del flujo de orden).
+    - `/customers/reactivar` → reactivado, `eliminado=0`. Cliente 1980 quedó en su estado original (activo).
+- **Logro Conseguido:** Eliminar un cliente ya no rompe sus órdenes ni destruye su CRM: es borrado lógico reversible que lo oculta de listados pero preserva todo su historial. Se evita duplicar teléfonos: recrear un cliente eliminado lo reactiva (con confirmación en creación suelta, automático en el flujo de orden/presupuesto). De paso se cerró una inyección SQL en el borrado.
+- **Referencias de Sesión (Contexto):** Continúa el trabajo de FK/integridad. Endpoint compartido de gestión de clientes: /customers/nuevo → WooMe::createCustomer (usado por órdenes y presupuestos).
+- **Observaciones de Gemini:** PENDIENTE FRONTEND (app_multi): (1) en el flujo de crear orden/presupuesto, enviar `reactivar=1` al llamar /customers/nuevo; (2) en la pantalla de crear cliente suelto, manejar la respuesta `phone_deleted` mostrando un diálogo de confirmación y, si se acepta, llamar a POST /customers/reactivar con el id + los datos del formulario. El listado de clientes no requiere cambio (el filtro es de backend). Producción del backend: pendiente de orden explícita.
+- **Respuesta de Gemini:** Backend de soft delete de clientes completo y verificado en Dev: borrado lógico (órdenes preservadas), dedup con reactivación (phone_deleted / reactivar=1), nuevo endpoint /customers/reactivar y filtros de listado. Falta el frontend (2 puntos anotados) y el despliegue a producción bajo tu orden.
