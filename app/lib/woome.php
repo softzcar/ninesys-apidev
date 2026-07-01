@@ -1020,7 +1020,8 @@ class WooMe
   {
     $sql = 'SELECT _id id, first_name, last_name, username, cedula, phone, address, email, recibir_notificaciones,
                    id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad
-            FROM customers';
+            FROM customers
+            WHERE eliminado = 0';
 
     $localConnection = new LocalDB();
     $data = $localConnection->goQuery($sql);

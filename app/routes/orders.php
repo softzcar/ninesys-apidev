@@ -2863,15 +2863,18 @@ $object['sales_commission_ISSET'][] = false;
         $existingCustomer = $localConnection->goQuery($sqlCheckCustomer);
 
         if (!empty($existingCustomer)) {
-          // Cliente ya existe, ACTUALIZAR sus datos
+          // Cliente ya existe (activo o eliminado), ACTUALIZAR sus datos.
+          // eliminado = 0 → auto-reactivar: si estaba con soft delete y hace una
+          // nueva orden, se reutiliza su registro (no se duplica el teléfono).
           $customer_id = $existingCustomer[0]['_id'];
-          $sqlUpdateCustomer = "UPDATE customers SET 
-                                  first_name = '$cliente_nombre', 
-                                  last_name = '$cliente_apellido', 
-                                  cedula = '$cliente_cedula', 
-                                  phone = '$cliente_telefono', 
-                                  email = '$cliente_email', 
-                                  address = '$cliente_direccion' 
+          $sqlUpdateCustomer = "UPDATE customers SET
+                                  eliminado = 0,
+                                  first_name = '$cliente_nombre',
+                                  last_name = '$cliente_apellido',
+                                  cedula = '$cliente_cedula',
+                                  phone = '$cliente_telefono',
+                                  email = '$cliente_email',
+                                  address = '$cliente_direccion'
                                 WHERE _id = $customer_id";
           $localConnection->goQuery($sqlUpdateCustomer);
           $id_wp_sql = "'" . $customer_id . "'";
@@ -4007,9 +4010,9 @@ $object['sales_commission_ISSET'][] = false;
       // BUSCAR CLIENTE
       // ==========================================================
       $cliente_nombre = trim($data['cliente_nombre']);
-      $sql_cliente = "SELECT _id, first_name, last_name, phone, cedula, email 
-                      FROM customers 
-                      WHERE CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+      $sql_cliente = "SELECT _id, first_name, last_name, phone, cedula, email
+                      FROM customers
+                      WHERE eliminado = 0 AND CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
                       LIMIT 5";
       $clientes = $localConnection->goQuery($sql_cliente, ["%{$cliente_nombre}%"]);
 
@@ -4441,8 +4444,8 @@ $object['sales_commission_ISSET'][] = false;
       // ==========================================================
       $cliente_nombre = trim($data['cliente_nombre']);
       $sql_cliente = "SELECT _id, first_name, last_name, phone, cedula, email, address
-                      FROM customers 
-                      WHERE CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+                      FROM customers
+                      WHERE eliminado = 0 AND CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
                       LIMIT 5";
       $clientes = $localConnection->goQuery($sql_cliente, ["%{$cliente_nombre}%"]);
 
@@ -4770,10 +4773,10 @@ $object['sales_commission_ISSET'][] = false;
         $sql = "SELECT _id as id, 
                        CONCAT(first_name, ' ', IFNULL(last_name, '')) as nombre_completo,
                        phone as telefono
-                FROM customers 
-                WHERE first_name LIKE ? 
-                   OR last_name LIKE ? 
-                   OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+                FROM customers
+                WHERE eliminado = 0 AND (first_name LIKE ?
+                   OR last_name LIKE ?
+                   OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?)
                 ORDER BY first_name ASC
                 LIMIT 10";
         $clientes = $localConnection->goQuery($sql, ["%{$nombre}%", "%{$nombre}%", "%{$nombre}%"]);
@@ -4892,11 +4895,11 @@ $object['sales_commission_ISSET'][] = false;
 
     // Buscar cliente por nombre - buscar en first_name y last_name por separado
     // ya que el nombre puede estar en cualquiera de los dos campos
-    $sql = "SELECT _id, first_name, last_name, phone, cedula, email, address 
-            FROM customers 
-            WHERE first_name LIKE ? 
-               OR last_name LIKE ? 
-               OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+    $sql = "SELECT _id, first_name, last_name, phone, cedula, email, address
+            FROM customers
+            WHERE eliminado = 0 AND (first_name LIKE ?
+               OR last_name LIKE ?
+               OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?)
             ORDER BY first_name ASC
             LIMIT 10";
     $clientes = $db->goQuery($sql, ["%{$nombre}%", "%{$nombre}%", "%{$nombre}%"]);

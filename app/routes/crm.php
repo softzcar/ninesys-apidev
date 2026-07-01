@@ -387,11 +387,11 @@ return function (App $app) {
                   FROM customers c
                   JOIN ordenes o ON o.id_wp = c._id
                   JOIN ordenes_productos op ON op.id_orden = o._id
-                  WHERE op.id_woo IN ($inQuery) AND c.phone IS NOT NULL AND c.phone != ''";
+                  WHERE op.id_woo IN ($inQuery) AND c.phone IS NOT NULL AND c.phone != '' AND c.eliminado = 0";
         $clientes = $localConnection->goQuery($sqlCl);
       } else {
         // Si no hay filtro, enviar a todos los clientes registrados
-        $sqlCl = "SELECT _id, first_name, last_name, phone FROM customers WHERE phone IS NOT NULL AND phone != ''";
+        $sqlCl = "SELECT _id, first_name, last_name, phone FROM customers WHERE phone IS NOT NULL AND phone != '' AND eliminado = 0";
         $clientes = $localConnection->goQuery($sqlCl);
       }
 
