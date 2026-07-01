@@ -1334,21 +1334,6 @@ return function (App $app) {
       $object['dataResp'] = $object['response_lotes_fisicos'][0]['piezas_actuales'];
     }
 
-    // VERIFICAR SI EXISTEN REGISTROS EN LA TABLA LOTES MOVIMIENTOS
-    // GUARDAR EN lotes_movimientos SIEMPRE!!!
-    $sql = 'SELECT _id FROM lotes_movimientos WHERE id_orden = ' . $data['id_orden'] . ' AND id_lotes_detalles = ' . $data['id'];
-    $verificar_lm = $localConnection->goQuery($sql);
-
-    if (empty($verificar_lm)) {
-      // INSERT
-      $sql = 'INSERT INTO lotes_movimientos (id_lotes_detalles, id_orden, unidades_existentes, unidades_solicitadas_corte) VALUES (' . $data['id'] . ', ' . $data['id_orden'] . ', ' . $cantidad_unidades . ', ' . $cantidad_a_cortar . ')';
-    } else {
-      $sql = 'UPDATE lotes_movimientos SET unidades_existentes = ' . $cantidad_unidades . ', unidades_solicitadas_corte = ' . $cantidad_a_cortar . ' WHERE id_orden = ' . $data['id_orden'] . ' AND id_lotes_detalles = ' . $data['id'];
-      // UPDATE
-    }
-    $object['sql_revisar'] = $sql;
-    $object['response_insert_lotes_movimientos'] = $localConnection->goQuery($sql);
-
     // CONSULTA DE RETORNO DE DATOS.
     if ($last_id_lotes_fisicos > 0) {
       // $last_id_lotes_fisicos = intval($cantidad_lotes_fisicos[0]["_id"]);
@@ -1595,7 +1580,6 @@ return function (App $app) {
             TRUNCATE `lotes_detalles_empleados_asignados_pausas`;
             TRUNCATE `lotes_fisicos`;
             TRUNCATE `lotes_historico_solicitadas`;
-            TRUNCATE `lotes_movimientos`;
             TRUNCATE `metodos_de_pago`;
             TRUNCATE `ordenes`;
             TRUNCATE `ordenes_borrador_empleado`;

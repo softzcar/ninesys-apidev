@@ -703,14 +703,6 @@ CREATE TABLE `lotes_historico_solicitadas` (
   `unidades_produccion` int(11) DEFAULT NULL COMMENT 'Unidades que se solicitan en produccion',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Histórico de unidades solicitadas';
-CREATE TABLE `lotes_movimientos` (
-  `_id` int(11) NOT NULL,
-  `id_lotes_detalles` int(11) DEFAULT NULL COMMENT 'ID del detalle del lote',
-  `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden',
-  `unidades_existentes` int(11) DEFAULT NULL COMMENT 'unidades existentes en elote al momento de el registro',
-  `unidades_solicitadas_corte` int(11) DEFAULT NULL COMMENT 'Unidades solicitadas para cortar',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registra los movimientos que se efectúan sobre los lotes';
 CREATE TABLE `metodos_de_pago` (
   `_id` int(11) NOT NULL COMMENT 'ID unico de la tabla',
   `id_orden` int(11) NOT NULL DEFAULT 0 COMMENT 'ID de la orden',
@@ -1437,9 +1429,6 @@ ADD PRIMARY KEY (`_id`),
 ALTER TABLE `lotes_historico_solicitadas`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`, `id_lotes_fisicos`);
-ALTER TABLE `lotes_movimientos`
-ADD PRIMARY KEY (`_id`),
-  ADD KEY `id_lotes_detalles` (`id_lotes_detalles`, `id_orden`);
 ALTER TABLE `metodos_de_pago`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (`id_orden`);
@@ -1617,8 +1606,6 @@ MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `lotes_fisicos`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `lotes_historico_solicitadas`
-MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
-ALTER TABLE `lotes_movimientos`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `metodos_de_pago`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID unico de la tabla';
@@ -1809,11 +1796,6 @@ ADD CONSTRAINT `lotes_fis_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` 
 ALTER TABLE `lotes_historico_solicitadas`
 ADD CONSTRAINT `lotes_hist_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `lotes_hist_ibfk_2` FOREIGN KEY (`id_lotes_fisicos`) REFERENCES `lotes_fisicos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
--- lotes_movimientos
-ALTER TABLE `lotes_movimientos`
-ADD CONSTRAINT `lotes_mov_ibfk_1` FOREIGN KEY (`id_lotes_detalles`) REFERENCES `lotes_detalles` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `lotes_mov_ibfk_2` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- metodos_de_pago
 ALTER TABLE `metodos_de_pago`
