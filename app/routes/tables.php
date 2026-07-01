@@ -343,6 +343,9 @@ return function (App $app) {
     $id = $data['id'];
     $tipo = $data['tipo'] ?? 'Borrador'; // 'Presupuesto Finalizado' o cualquier otra cosa (Borrador)
 
+    // Atomicidad: borrado de presupuesto + sus productos en una transacción
+    $localConnection->beginTransaction();
+
     if ($tipo === 'Presupuesto Finalizado') {
       // Eliminar presupuesto finalizado y sus productos
       $sql1 = 'DELETE FROM presupuestos_productos WHERE id_orden = ' . $id;
@@ -358,6 +361,8 @@ return function (App $app) {
     }
 
     $object['response_delete'] = "OK";
+
+    $localConnection->commit();
 
     // Recargar la lista
     $sqlLoad = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (

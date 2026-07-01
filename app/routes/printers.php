@@ -348,6 +348,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     try {
+      $localConnection->beginTransaction();
       // Verificar si la impresora existe
       $check_sql = 'SELECT _id FROM catalogo_impresoras WHERE _id = ?';
       $existing = $localConnection->goQuery($check_sql, [$id_impresora]);
@@ -396,9 +397,13 @@ return function (App $app) {
         }
       }
 
+      $localConnection->commit();
       $response->getBody()->write(json_encode(['message' => 'Impresora actualizada exitosamente.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     } catch (Exception $e) {
+      if ($localConnection && $localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
       if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
         $response->getBody()->write(json_encode(['error' => 'Error: El codigo_interno ya existe.']));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(409);  // Conflict

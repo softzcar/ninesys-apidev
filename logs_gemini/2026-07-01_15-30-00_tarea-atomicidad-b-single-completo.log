@@ -1,0 +1,29 @@
+- **Solicitud del Usuario:** Terminar el backlog B-single de atomicidad FK (24 endpoints de 1 tabla, multi-sentencia). Preocupación explícita por cortes eléctricos y pérdida de contexto → se pidió commitear/documentar con frecuencia.
+- **Fecha y Hora:** 2026-07-01 15:30:00
+- **Proyecto(s):** Backend (atomicidad FK — cierre del backlog B-single)
+- **Archivos Involucrados:** products.php, manufacturing.php, inventory.php, production.php, config.php, printers.php, tables.php (crm.php, employees.php, catalogs.php, orders.php revisados y saltados)
+- **Commits Relacionados:** Frontend: N/A | Backend: 48ffbfc (products+manuf), b5ea7c3 (inventory+production), 3c5e8eb (config), + commit final (printers+tables). Se commiteó por lotes como red ante cortes eléctricos.
+- **Acción Realizada:** De los 24 endpoints B-single: **13 envueltos** en transacción y **11 saltados con justificación**.
+  ENVUELTOS (13):
+  - products.php: /editar-producto-precios, DELETE /products/{id}, /product-set-comision-producto, /product-set-comisiones-batch (transacción POR ITERACIÓN para preservar el éxito parcial del batch).
+  - manufacturing.php: /lotes/empleados/eliminar (DELETE + recálculo de porcentaje).
+  - inventory.php: /api/products/bulk-load (todo-o-nada), /insumos/nuevo (loop de INSERT inventario).
+  - production.php: /produccion/asignar-varias-ordenes-a-corte (multi-sentencia), /production/corte/finalizar-tarea (inventario_corte + LDEA).
+  - config.php: /configuracion/gastos (UNA TRANSACCIÓN POR BASE: empresas_gastos central y gastos local, separadas por switchDatabase que desconecta), PUT /gastos/registros/{id} (gastos_registros + gastos_auditoria).
+  - printers.php: PUT /impresoras/{id} (catalogo_impresoras + impresoras_colores).
+  - tables.php: /ordenes/guardadas/eliminar (presupuestos_productos + presupuestos).
+  SALTADOS (11):
+  - Falsos positivos (upsert INSERT-o-UPDATE exclusivo / escritura efectiva única / código comentado): manufacturing /revision/nuevo (bloque dentro de /* */), /empleados/tareas (INSERT o DELETE), /insumos/rendimiento (INSERT o UPDATE); inventory /inventario-movimientos/nuevo (foreach reasigna $sql + 2º goQuery vacío); production /produccion/reposicion/final (UPDATE en ramas exclusivas); catalogs /tiempos-de-produccion y /tiempos-de-produccion/usa-desperdicio (upsert); orders /orden/edit/obs (UPDATE único, línea previa comentada); tables /ordenes/borrador (upsert). = 9.
+  - Skips intencionales (transacción INAPROPIADA): crm /crm/campanas/enviar (envíos externos de WhatsApp por iteración; un rollback borraría el registro de mensajes ya enviados); employees /empleados/eliminar (1 escritura en DB de empresa + 1 en central api_empresas, dos conexiones distintas → atomicidad cross-DB no alcanzable con transacciones). = 2.
+- **Inconvenientes y Desafíos:**
+  - Muchos falsos positivos del script de auditoría: contaba ramas exclusivas de un upsert (INSERT o UPDATE) o escrituras comentadas como si fueran multi-escritura. Se verificó endpoint por endpoint leyendo el código real.
+  - Casos cross-DB: /configuracion/gastos usa switchDatabase() (desconecta), imposible una sola transacción; se resolvió con una transacción por base. /empleados/eliminar usa dos conexiones → se documentó como no aplicable.
+  - Caso con efectos externos: /crm/campanas/enviar intercala envíos de WhatsApp con inserts → se documentó por qué NO debe envolverse.
+- **Decisión Final y Justificación:** Envolver solo multi-escrituras reales de una base; saltar con justificación técnica los falsos positivos, los cross-DB y los de efectos externos. Commits por lotes (checkpoints pusheados) para resistir cortes eléctricos.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, grep, git, deploy_backend.sh)
+- **Resultado:** Éxito en local (php -l OK en los 7 archivos modificados). Pendiente verificación funcional en Dev.
+- **Verificación:** `php -l` sin errores en products, manufacturing, inventory, production, config, printers, tables. Commits por lotes pusheados a refactor/modular-routes. Desplegado a Contabo Dev (opción 2; producción intacta).
+- **Logro Conseguido:** Backlog B-single cerrado: 13 endpoints multi-escritura de una tabla ahora atómicos; 11 correctamente descartados con justificación (9 falsos positivos + 2 no aplicables por diseño). Con esto, TODO el backlog de atomicidad FK (B-REAL + B-single) queda completo.
+- **Referencias de Sesión (Contexto):** Backlog §7.6. Lotes B-REAL previos: manufacturing/designs/orders/inventory/sueltos. Bitácoras 2026-07-01_11-00 a _14-30.
+- **Observaciones de Gemini:** Único pendiente transversal (menor): coherencia 409 vs 500 en los catch que interceptan la excepción FK (un helper común). Los 7 GET-con-escritura (bad-REST) quedan como deuda técnica aparte.
+- **Respuesta de Gemini:** B-single completado: 13 endpoints envueltos, 11 saltados con justificación (falsos positivos, cross-DB y efectos externos). Commits por lotes como red ante cortes. Desplegado en Dev.
