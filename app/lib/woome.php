@@ -285,21 +285,22 @@ class WooMe
         a.post_type = 'shop_order' AND b.meta_value = '$customer_email'    
         ";
 
-    $this->connectToWordpressDB();
-
     $mat = array();
     try {
-      $res = $this->pdo->prepare($sql);
-      $res->execute();
+      $this->connectToWordpressDB();
+      if ($this->pdo) {
+        $res = $this->pdo->prepare($sql);
+        $res->execute();
 
-      $data = $res->fetchAll(PDO::FETCH_ASSOC);
-      $mat = $data;
+        $data = $res->fetchAll(PDO::FETCH_ASSOC);
+        $mat = $data;
+      }
     } catch (PDOException $e) {
       $mat['status'] = 'error';
       $mat['message'] = $e->getMessage();
     }
 
-    return intval($mat[0]['total_ordenes']);
+    return (is_array($mat) && isset($mat[0]['total_ordenes'])) ? intval($mat[0]['total_ordenes']) : 0;
   }
 
   private function connectToWordpressDB()
@@ -315,7 +316,8 @@ class WooMe
       );
       $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     } catch (PDOException $e) {
-      die('Database connection failed: ' . $e->getMessage());
+      $this->pdo = null;
+      throw new PDOException('Database connection failed: ' . $e->getMessage(), (int)$e->getCode());
     }
   }
 
