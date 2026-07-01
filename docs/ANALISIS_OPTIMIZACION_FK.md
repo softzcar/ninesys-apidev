@@ -109,7 +109,8 @@ Script: `scratchpad/auditoria_fk.sql` (generador: `scratchpad/gen_audit.py`). Ca
 
 ### ✅ TAREAS COMPLETADAS (resumen para retomar sesión)
 
-Todo lo siguiente está DESPLEGADO en producción al 2026-06-30:
+Todo lo siguiente está DESPLEGADO en producción. Última actualización: **2026-07-01**
+
 1. Red de seguridad FK: `DatabaseConstraintException` + HTTP 409 (`48323ad`)
 2. Ola A: 17 FKs + 10 correcciones de tipo bigint/UNSIGNED (`99101bf` `346f891`)
 3. Ola B: 5 FKs RESTRICT tintas/colores (`7627d7f`)
@@ -119,28 +120,17 @@ Todo lo siguiente está DESPLEGADO en producción al 2026-06-30:
 7. `displayErrorDetails: false` + logError activo (`839fd09`)
 8. `insert_id` reemplaza `SELECT MAX(_id)` en 3 puntos de orders.php (`b9d73ca`)
 9. `beginTransaction/commit/rollback` en `/ordenes/nueva` y `/presupuesto/nuevo` (`4e159cc`)
+10. **P1** — `lotes_movimientos` eliminada (tabla vacía + código muerto en manufacturing.php) (`a2090e2`)
+11. **P2** — `presupuestos.id_wp_order` eliminada de INSERT + esquema maestro; bug silencioso corregido (`b6bb5b6`)
+12. **P3** — `beginTransaction/commit/rollback` en `/ordenes/nueva/simple` y `/presupuesto/{id}/convertir-a-orden` (`30a51dd`). Total: 8 pares en orders.php.
+13. **P4** — Endpoint BAK `/produccion/reposicion/final/BAK` eliminado de production.php. Era código muerto con doble fuente de id_empleado y referencias a lotes_detalles. Frontend ya usaba solo `/produccion/reposicion/final`. (`b3da648`)
 
 ---
 
-### 🔲 TAREAS PENDIENTES REALES (próxima sesión)
+### ✅ PLAN COMPLETADO — Sin tareas pendientes de la jornada P1–P4
 
-**P1 — Evaluar y eliminar tabla `lotes_movimientos`** *(prioridad media)*
-- Tabla confirmada vacía (0 filas en api_emp_194). Un bloque muerto en manufacturing.php la referencia.
-- ⚠️ Antes de eliminar: verificar que también esté vacía en otras empresas (api_emp_163 u otras instancias).
-- Si está vacía en todas: `DROP TABLE lotes_movimientos` + eliminar el bloque muerto en manufacturing.php.
-
-**P2 — Investigar `presupuestos.id_wp_order` como columna muerta** *(prioridad baja)*
-- 5 de 5 filas con valor `0`. No existe `ordenes._id = 0`. Nunca fue FK real.
-- Acción: grep en el código para confirmar que ningún SELECT/UPDATE la usa, luego marcar con COMMENT o eliminar.
-
-**P3 — Auditar endpoints multi-tabla restantes para transacciones** *(prioridad media)*
-- `/ordenes/nueva` y `/presupuesto/nuevo` ya tienen `beginTransaction/commit/rollback`.
-- Verificar si existen endpoints de conversión presupuesto→orden u otros creadores complejos sin transacción.
-- Acción: grep `INSERT INTO ordenes` en routes/ para identificar otros puntos de entrada.
-
-**P4 — Doble fuente de verdad `id_empleado` en production.php** *(prioridad media)*
-- `production.php` L1368-1443 lee `id_empleado` desde `lotes_detalles` cuando el sistema real lo guarda en LDEA.
-- Requiere análisis de impacto antes de tocar. No causa errores actuales, solo inconsistencia de datos.
+Todas las tareas del plan han sido implementadas y desplegadas en producción (HEAD `b3da648` en vps-contabo-prod).
+Dev y Producción están completamente sincronizados.
 
 ### 5.1 Investigación de huérfanos — resultados (`api_emp_194` Dev, 2026-06-30)
 

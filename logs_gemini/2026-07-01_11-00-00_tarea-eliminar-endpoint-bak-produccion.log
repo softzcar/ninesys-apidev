@@ -1,0 +1,50 @@
+- **Solicitud del Usuario:** Continúa con P4 (doble fuente de verdad id_empleado en production.php)
+- **Fecha y Hora:** 2026-07-01 11:00:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - app/routes/production.php (endpoint BAK eliminado — 157 líneas)
+    - docs/ANALISIS_OPTIMIZACION_FK.md (P4 marcado como completado)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: b3da648
+- **Acción Realizada:**
+  Investigación previa (sesión anterior): el "doble fuente de verdad" de id_empleado estaba contenida en el endpoint BAK
+  `/produccion/reposicion/final/BAK` (L1318–L1473 en la sesión anterior). El endpoint activo `/produccion/reposicion/final`
+  (limpio, solo UPDATEs reposiciones) era el que usa el frontend:
+    - reposicionesPendientes.vue L351 → POST /produccion/reposicion/final
+    - controlDeProduccionPro.vue L893 → POST /produccion/reposicion/final
+  El BAK nunca era invocado desde ningún cliente real.
+
+  El BAK contenía:
+    - Lectura de id_empleado desde lotes_detalles (fuente inconsistente con LDEA)
+    - switch/case por departamento con INSERTs a lotes_detalles (código de la era pre-LDEA)
+    - Una cadena de SELECT antes de cada INSERT que leía ids de empleados de lotes_detalles (nunca había datos válidos)
+
+  Proceso de eliminación:
+    - La sesión anterior intentó el Edit pero reemplazó solo el encabezado del $app->post(). El cuerpo (150+ líneas)
+      quedó como código huérfano con sintaxis rota.
+    - En esta sesión: se leyó el estado actual, se identificó el bloque completo residual y se eliminó con Edit
+      (de `$aprobacion = null; // BAK_PLACEHOLDER_START` hasta el `});` de cierre, incluyendo el comentario
+      "// TERMINAR CICLO DE PRODUCCION" que quedó al final).
+    - php -l confirmó sintaxis válida antes del commit.
+
+- **Inconvenientes y Desafíos:**
+  La edición anterior había quedado incompleta — el encabezado del endpoint fue reemplazado por comentarios pero
+  el cuerpo completo (switch/case con 6 cases y múltiples INSERTs por case) permaneció en el archivo como código
+  PHP huérfano fuera de cualquier función, generando errores de sintaxis. Requirió leer el estado exacto del archivo
+  y construir el old_string completo para el Edit final.
+
+- **Decisión Final y Justificación:**
+  Eliminación total del BAK en lugar de simplificar el código. El endpoint nunca fue invocado por ningún cliente,
+  la lógica del switch/case ya no es aplicable (LDEA reemplazó lotes_detalles como fuente de trabajo) y el endpoint
+  activo `/produccion/reposicion/final` ya cubre la funcionalidad real. Mantener código BAK solo genera confusión
+  y riesgo de invocación accidental.
+
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, git, ssh)
+- **Resultado:** Éxito
+- **Verificación:** php -l sin errores. 157 líneas eliminadas (git diff). HEAD b3da648 en vps-contabo-prod, opcache reseteado.
+- **Logro Conseguido:** Eliminado endpoint BAK obsoleto con doble fuente de id_empleado. production.php queda limpio:
+  solo el endpoint activo `/produccion/reposicion/final` existe para ese flujo. Plan P1–P4 completamente ejecutado.
+- **Observaciones:** Este era el último ítem del plan de la jornada. El documento ANALISIS_OPTIMIZACION_FK.md
+  fue actualizado marcando P1–P4 como completados y confirmando que Dev y Producción están sincronizados al HEAD b3da648.
+- **Respuesta:** P4 completado. Endpoint BAK eliminado, sintaxis verificada, desplegado en producción. Plan P1–P4 finalizado.
