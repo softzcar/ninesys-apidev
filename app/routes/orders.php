@@ -2106,7 +2106,6 @@ $object['sales_commission_ISSET'][] = false;
     $now = $myDate->today();
 
     // Crear nueva orden en Woocommerce
-    $orderWC = 0;
     /* $woo = new WooMe();
         $orderWC = $woo->createOrder($arr, $newJson); */
     // $object["create_product_WC"] = $orderWC;
@@ -2129,7 +2128,7 @@ $object['sales_commission_ISSET'][] = false;
     }
 
     /* Craer orden en nunesys */
-    $sql = 'INSERT INTO presupuestos (id_wp_order, responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $orderWC . ', ' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql . ", '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
+    $sql = 'INSERT INTO presupuestos (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql . ", '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
 
     $localConnection->beginTransaction();
     try {

@@ -950,7 +950,6 @@ CREATE TABLE `piezas_cortadas` (
 CREATE TABLE `presupuestos` (
   `_id` int(11) NOT NULL,
   `id_wp` int(10) unsigned DEFAULT NULL COMMENT 'ID del cliente (FK a customers._id)',
-  `id_wp_order` int(11) DEFAULT NULL COMMENT 'ID de la orden generada en Wocommerce',
   `status` varchar(45) DEFAULT NULL COMMENT 'Status de la orden: activa, pausada, cancelada, terminada, entregada',
   `tipo` varchar(6) NOT NULL DEFAULT 'custom' COMMENT 'Identificar si la orden pertence a custom o a sport',
   `responsable` int(11) DEFAULT NULL COMMENT 'ID del Vendedor',
