@@ -292,6 +292,7 @@ return function (App $app) {
         $db = new LocalDB();
 
         try {
+            $db->beginTransaction();
             // 1. Obtener mapeos para convertir nombres de categorías a IDs
             $categories_db = $db->goQuery('SELECT _id, nombre FROM categories');
             $category_map = array_column($categories_db, '_id', 'nombre');
@@ -362,9 +363,13 @@ return function (App $app) {
                 $message .= ' Errores: ' . implode(', ', $error_list);
             }
 
+            $db->commit();
             $response->getBody()->write(json_encode(['message' => $message]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } catch (Exception $e) {
+            if ($db && $db->inTransaction()) {
+                $db->rollback();
+            }
             $response->getBody()->write(json_encode(['error' => 'Error al procesar la carga masiva: ' . $e->getMessage()]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         } finally {
@@ -924,6 +929,7 @@ return function (App $app) {
         $createdInsumos = [];
 
         try {
+            $localConnection->beginTransaction();
             $id_catalogo_tintas = (isset($miInsumo['id_catalogo_tintas']) && $miInsumo['id_catalogo_tintas'] !== 'null' && $miInsumo['id_catalogo_tintas'] !== '')
                 ? intval($miInsumo['id_catalogo_tintas'])
                 : "NULL";
@@ -974,6 +980,7 @@ return function (App $app) {
                 $createdInsumos[] = $newInsumo;
             }
 
+            $localConnection->commit();
             $localConnection->disconnect();
 
             $responseData = [
@@ -985,6 +992,9 @@ return function (App $app) {
             $response->getBody()->write(json_encode($responseData, JSON_NUMERIC_CHECK));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } catch (Exception $e) {
+            if ($localConnection && $localConnection->inTransaction()) {
+                $localConnection->rollback();
+            }
             $localConnection->disconnect();
             $responseData = [
                 'error' => true,

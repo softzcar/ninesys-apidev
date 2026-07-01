@@ -1388,7 +1388,10 @@ return function (App $app) {
       $sql .= 'UPDATE lotes_detalles SET id_empleado = ' . $data['id_empleado'] . ', unidades_solicitadas = ' . $object['request_data'][$key]->cantidad . '  WHERE _id = ' . $object['request_data'][$key]->id_lotes_detalles . ';';
     }
 
+    // Atomicidad: reasignación múltiple a corte (lotes_detalles) en una transacción
+    $localConnection->beginTransaction();
     $object['response_update'] = $localConnection->goQuery($sql);
+    $localConnection->commit();
 
     $localConnection->disconnect();
 
@@ -1919,6 +1922,9 @@ return function (App $app) {
     $localConnection = new LocalDB();
     $now = date('Y-m-d H:i:s');
 
+    // Atomicidad FK: inventario_corte + marcado de tarea (LDEA) en una transacción
+    $localConnection->beginTransaction();
+
     // Data esperada: id_orden, id_lotes_detalles, id_ordenes_productos, id_empleado, cantidad_cortada, ...
 
     // 1. Insertar en inventario_corte
@@ -1963,6 +1969,7 @@ return function (App $app) {
     // El frontend podría llamar luego a verificar el estado global o usamos la misma logica de "registrar-paso-empleado" si se requiere.
     // Para simplificar, asumimos que este endpoint es solo para el registro físico y tarea individual.
 
+    $localConnection->commit();
     $localConnection->disconnect();
     $response->getBody()->write(json_encode(['status' => 'success', 'message' => 'Corte registrado e inventario actualizado.']));
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
