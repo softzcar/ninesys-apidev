@@ -745,6 +745,10 @@ return function (App $app) {
     $recibir = isset($data['recibir_notificaciones']) ? $data['recibir_notificaciones'] : null;
 
     $woo = new WooMe();
+    // Este endpoint lo usa el flujo de creación de orden/presupuesto (nueva.vue /
+    // presupuesto.vue). reactivar=true: si el teléfono coincide con un cliente
+    // eliminado (soft delete), se reactiva automáticamente y se reutiliza (evita
+    // duplicar el teléfono y no interrumpe la creación de la orden con una pregunta).
     $resJson = $woo->createCustomer(
       $args['first_name'],
       $args['last_name'],
@@ -755,7 +759,8 @@ return function (App $app) {
       $recibir,
       $idCatalogoPais,
       $idCatalogoEstado,
-      $idCatalogoCiudad
+      $idCatalogoCiudad,
+      true
     );
     $resObj = json_decode($resJson, true);
     $status = (isset($resObj['status']) && $resObj['status'] === 'error') ? 400 : 200;
