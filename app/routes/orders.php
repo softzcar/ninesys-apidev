@@ -4137,6 +4137,7 @@ $object['sales_commission_ISSET'][] = false;
       $observaciones = addslashes($data['observaciones'] ?? '');
       $cliente_nombre_completo = addslashes($cliente['nombre']);
 
+      $localConnection->beginTransaction();
       $sql_orden = "INSERT INTO ordenes 
                     (responsable, moment, pago_descuento, pago_abono, pago_total, 
                      id_wp, cliente_nombre, cliente_cedula, fecha_inicio, fecha_entrega, 
@@ -4276,10 +4277,12 @@ $object['sales_commission_ISSET'][] = false;
         $object['nota'] = "Se encontraron múltiples clientes. Se usó: " . $cliente['nombre'];
       }
 
+      $localConnection->commit();
       $response->getBody()->write(json_encode($object));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
 
     } catch (\Throwable $e) {
+      $localConnection->rollback();
       error_log('Error en /ordenes/nueva/simple: ' . $e->getMessage());
       return ApiResponse::error($response, 'Error al crear la orden: ' . $e->getMessage(), 500);
     } finally {
@@ -5398,6 +5401,8 @@ $app->post('/presupuesto/{id}/convertir-a-orden', function (Request $request, Re
   $abono += isset($data['montoBolivaresPago']) ? floatval($data['montoBolivaresPago']) : 0;
 
   // CREAR ORDEN EN TABLA ORDENES
+  $localConnection->beginTransaction();
+  try {
   $sql_orden = "INSERT INTO ordenes (
 id_wp,
 status,
@@ -5557,10 +5562,19 @@ id_products_attributes, id_size, id_tela, moment
   $object['success'] = true;
   $object['message'] = 'Presupuesto convertido exitosamente a orden';
 
+  $localConnection->commit();
   $response->getBody()->write(json_encode($object));
   $localConnection->disconnect();
 
   return $response
     ->withHeader('Content-Type', 'application/json')
     ->withStatus(200);
+
+  } catch (\Throwable $e) {
+    $localConnection->rollback();
+    $localConnection->disconnect();
+    $object['error'] = 'Error al convertir presupuesto: ' . $e->getMessage();
+    $response->getBody()->write(json_encode($object));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+  }
 });
