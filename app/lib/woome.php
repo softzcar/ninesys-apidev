@@ -1302,6 +1302,7 @@ class WooMe
       }
 
       $sql = "UPDATE customers SET
+                        eliminado = 0,
                         first_name = '" . $first_name . "',
                         last_name = '" . $last_name . "',
                         cedula = '" . $cedula . "',
