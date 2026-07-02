@@ -1,0 +1,27 @@
+- **Solicitud del Usuario:** Desplegar a producción todo lo validado en Dev (feature de soft delete de clientes + autofill por teléfono + atomicidad transaccional FK), con máximo cuidado por incluir cambios en la BD de producción. Actualizar el esquema maestro y el archivo de migración si hace falta, y aplicar la mejora de PWA.
+- **Fecha y Hora:** 2026-07-02 11:30:00
+- **Proyecto(s):** Backend (ninesys-api) + Frontend (app_multi) — DESPLIEGUE A PRODUCCIÓN
+- **Archivos Involucrados:**
+    - public/model/create_new_company_api_emp_N.sql (columna customers.eliminado — ya estaba, commit b541b2d)
+    - BD producción: api_emp_194, api_emp_177, api_emp_163 (ALTER customers ADD eliminado)
+    - Deploy: ninesys-hub/bin/deploy_backend.sh (opción 1), deploy.sh (opción 1)
+- **Commits Relacionados:** Backend prod pasó de b3da648 → f7531f8 (toda la rama refactor/modular-routes). Frontend prod: build con API_URL de producción.
+- **Acción Realizada:**
+  1. Workflow de seguridad ejecutado (orden explícita y literal del usuario para producción).
+  2. Investigación de BD prod: 3 empresas con tabla customers (194, 177, 163) sin la columna eliminado; 176 sin tabla customers; api_empresas central. RIESGO detectado: el código nuevo hace WHERE eliminado=0 en getAllCustomesrs → habría roto el listado de clientes de cualquier empresa sin la columna. Por eso se añade la columna ANTES de desplegar el código (retrocompatible).
+  3. Fase 2 (BD): respaldo de la tabla customers de las 3 empresas en /root/backups_soft_delete/ (verificados: '-- Dump completed'). El usuario api_adminemp NO tiene ALTER; se usó `mysql -u root` vía socket en el VPS (precedente del script de reset). ALTER TABLE customers ADD COLUMN IF NOT EXISTS eliminado tinyint(1) NOT NULL DEFAULT 0 en 194/177/163. Verificado: columna presente en las 3, 0 eliminados.
+  4. Fase 3 (código): deploy backend a prod (deploy_backend.sh opción 1 + clave BORRAR_CONTABO_ES_PECADO) → git reset --hard a f7531f8 + OPcache reset. Deploy frontend a prod (deploy.sh opción 1 + clave) → set_env_prod exporta API_URL=api.nineteencustom.com, npm run generate + rsync con backup remoto+local.
+  5. Verificaciones: GET /customers prod (194) = 1899 clientes activos (sin error de columna). por-telefono responde. /lotes = 400 (endpoint con transacción carga bien). Build de prod: 114 nineteencustom (correcto), 9 nineteengreen que resultaron ser chequeos de hostname para detectar entorno (inocuos), no endpoints.
+- **Inconvenientes y Desafíos:**
+  - api_adminemp sin privilegios de ALTER en prod (por diseño de solo-datos). Solución: `mysql -u root` por socket en el VPS (ssh entra como root), método usado por el script de reset del proyecto.
+  - /customers/nuevo con body VACÍO devuelve 500 tanto en Dev como en Prod (edge case preexistente: el endpoint no maneja POST sin datos; el frontend siempre envía datos). El error de log LOCAL_DSN_NINETEEN es de connectToWordpressDB (método legado no relacionado). NO es una rotura del feature.
+  - PWA: la mejora recomendada (skipWaiting/clientsClaim) YA estaba en nuxt.config.js. El problema previo fue un Service Worker viejo cacheado; se auto-actualiza de aquí en adelante. No requirió cambio.
+  - Migración sync_194_prod_to_dev.sh: NO requiere cambios (clon completo estructura+datos → incluye la columna automáticamente).
+- **Decisión Final y Justificación:** Añadir la columna eliminado a TODAS las empresas con customers ANTES del deploy de código (retrocompatible, sin ventana de rotura). Backups previos. Deploy atómico de toda la rama (incluye la atomicidad FK, validada en Dev). Frontend compilado con la API de producción vía set_env_prod.
+- **Herramienta(s) Utilizada(s):** Bash (ssh mysql/mysqldump, deploy scripts, curl, git), Read
+- **Resultado:** Éxito. Backend y frontend en producción (HEAD f7531f8). Columna eliminado en 194/177/163 con backups. Verificado por lectura.
+- **Verificación:** Columna presente (194/177/163). GET /customers prod=1899. por-telefono prod OK. /lotes prod=400. Build prod apunta a api.nineteencustom.com. Backups en /root/backups_soft_delete/ del 2026-07-02.
+- **Logro Conseguido:** Todo el trabajo de la jornada (soft delete de clientes, autofill por teléfono con reactivación, y las 37 transacciones de atomicidad FK) desplegado en producción de forma segura, con la columna de BD añadida a las 3 empresas con respaldo previo y sin ventana de rotura.
+- **Referencias de Sesión (Contexto):** Bitácoras 2026-07-01_16-30 (soft delete), 2026-07-02_10-30 (autofill). Backups prod: /root/backups_soft_delete/*_20260702_111033.sql.gz.
+- **Observaciones de Gemini:** Rollback de la columna (si hiciera falta): `ALTER TABLE <db>.customers DROP COLUMN eliminado;` en 194/177/163 (o restaurar los backups). Deuda técnica preexistente aparte: URLs hardcodeadas de detección de entorno en MenuLoader.vue/socket.client.js (inocuas) y el error LOCAL_DSN_NINETEEN en connectToWordpressDB.
+- **Respuesta de Gemini:** Despliegue a producción completado con máximo cuidado: columna eliminado añadida a las 3 empresas con backups previos (antes del código, retrocompatible), backend y frontend desplegados (HEAD f7531f8), verificado por lectura. PWA ya tenía la mejora; la migración no requería cambios.
