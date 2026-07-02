@@ -222,6 +222,21 @@ return function (App $app) {
 
   /** PROXY PARA TASAS DE CAMBIO (CORS FIX) */
   $app->get('/bcv-rates', function (Request $request, Response $response) {
+    // Caché transitoria: la tasa del BCV cambia ~1 vez al día. Evita golpear
+    // bcv.org.ve en cada carga de menú de cada usuario (riesgo de bloqueo/lentitud).
+    $bcvCacheFile = sys_get_temp_dir() . '/ninesys_bcv_rate.json';
+    $bcvCacheTtl = 600; // 10 minutos
+    if (is_readable($bcvCacheFile) && (time() - filemtime($bcvCacheFile)) < $bcvCacheTtl) {
+      $cached = file_get_contents($bcvCacheFile);
+      if ($cached) {
+        $response->getBody()->write($cached);
+        return $response
+          ->withHeader('Content-Type', 'application/json')
+          ->withHeader('Access-Control-Allow-Origin', '*')
+          ->withStatus(200);
+      }
+    }
+
     // Fuente PRIMARIA: tasa oficial USD/VES scrapeada directamente de bcv.org.ve.
     // (Reemplaza a la API de terceros bcv.justcarlux.dev). El certificado del BCV suele
     // estar vencido/mal encadenado y su firewall bloquea clientes sin cabeceras de
@@ -279,11 +294,13 @@ return function (App $app) {
     $tasaBcv = $obtenerTasaBcvOficial();
 
     if ($tasaBcv !== null) {
-      $response->getBody()->write(json_encode([
+      $payloadBcv = json_encode([
         'rates' => ['usd' => $tasaBcv],
         'fuente' => 'bcv_oficial',
         'fecha_extraccion' => date('c'),
-      ]));
+      ]);
+      @file_put_contents($bcvCacheFile, $payloadBcv);
+      $response->getBody()->write($payloadBcv);
       return $response
         ->withHeader('Content-Type', 'application/json')
         ->withHeader('Access-Control-Allow-Origin', '*')
