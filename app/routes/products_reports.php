@@ -200,15 +200,24 @@ return function (App $app) {
                 }
             }
 
-            // 9. Comisiones reales pagadas (pagos)
+            // 9. Comisiones reales pagadas (pagos) — se reparten entre los productos REALES de la
+            //    orden (ordenes_productos), ponderando por comisión estimada x cantidad. NO se usa
+            //    lotes_detalles: su enlace pago->producto está roto (id_lotes_detalles apunta a lotes
+            //    de otras órdenes en ~99% de los casos, inflando la mano de obra de productos sueltos).
             $pagosRealRaw = $db->goQuery("
-                SELECT op.id_woo as id_producto, SUM(p.monto_pago) AS total_pagos
-                FROM pagos p
-                JOIN lotes_detalles ld ON p.id_lotes_detalles = ld._id
-                JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
-                JOIN ordenes o ON p.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') $dateCond
-                GROUP BY op.id_woo
+                SELECT id_woo AS id_producto, SUM(share) AS total_pagos
+                FROM (
+                    SELECT op.id_woo,
+                           p.monto_pago * (COALESCE(peso.w, 0) * op.cantidad + 0.0001)
+                             / SUM(COALESCE(peso.w, 0) * op.cantidad + 0.0001) OVER (PARTITION BY p._id) AS share
+                    FROM pagos p
+                    JOIN ordenes o ON p.id_orden = o._id
+                    JOIN ordenes_productos op ON op.id_orden = p.id_orden
+                    LEFT JOIN (SELECT id_product, SUM(comision) w FROM products_comisiones GROUP BY id_product) peso
+                        ON peso.id_product = op.id_woo
+                    WHERE o.status IN ('terminada', 'entregada') $dateCond
+                ) t
+                GROUP BY id_woo
             ", $params);
             $realPagosMap = [];
             if (is_array($pagosRealRaw)) {
@@ -532,14 +541,22 @@ return function (App $app) {
                 }
             }
 
+            // Comisiones reales (pagos) por producto para el rollup de categorías — mismo reparto
+            // por orden->ordenes_productos (comisión x cantidad), sin lotes_detalles.
             $pagosRealRaw = $db->goQuery("
-                SELECT op.id_woo as id_producto, SUM(p.monto_pago) AS total_pagos
-                FROM pagos p
-                JOIN lotes_detalles ld ON p.id_lotes_detalles = ld._id
-                JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
-                JOIN ordenes o ON p.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') $dateCond
-                GROUP BY op.id_woo
+                SELECT id_woo AS id_producto, SUM(share) AS total_pagos
+                FROM (
+                    SELECT op.id_woo,
+                           p.monto_pago * (COALESCE(peso.w, 0) * op.cantidad + 0.0001)
+                             / SUM(COALESCE(peso.w, 0) * op.cantidad + 0.0001) OVER (PARTITION BY p._id) AS share
+                    FROM pagos p
+                    JOIN ordenes o ON p.id_orden = o._id
+                    JOIN ordenes_productos op ON op.id_orden = p.id_orden
+                    LEFT JOIN (SELECT id_product, SUM(comision) w FROM products_comisiones GROUP BY id_product) peso
+                        ON peso.id_product = op.id_woo
+                    WHERE o.status IN ('terminada', 'entregada') $dateCond
+                ) t
+                GROUP BY id_woo
             ", $params);
             $realPagosMap = [];
             if (is_array($pagosRealRaw)) {
@@ -894,15 +911,24 @@ return function (App $app) {
                 }
             }
 
-            // 9. Comisiones reales pagadas (pagos) por talla
+            // 9. Comisiones reales pagadas (pagos) por talla — mismo reparto por orden->ordenes_productos
+            //    (comisión x cantidad, sin lotes_detalles); se distribuye cada pago sobre TODAS las líneas
+            //    de su orden y luego se filtra al producto y se agrupa por talla (id_size).
             $pagosRealRaw = $db->goQuery("
-                SELECT op.id_size as id_talla, SUM(p.monto_pago) AS total_pagos
-                FROM pagos p
-                JOIN lotes_detalles ld ON p.id_lotes_detalles = ld._id
-                JOIN ordenes_productos op ON ld.id_ordenes_productos = op._id
-                JOIN ordenes o ON p.id_orden = o._id
-                WHERE o.status IN ('terminada', 'entregada') AND op.id_woo = :id_producto $dateCond
-                GROUP BY op.id_size
+                SELECT id_talla, SUM(share) AS total_pagos
+                FROM (
+                    SELECT op.id_woo, op.id_size AS id_talla,
+                           p.monto_pago * (COALESCE(peso.w, 0) * op.cantidad + 0.0001)
+                             / SUM(COALESCE(peso.w, 0) * op.cantidad + 0.0001) OVER (PARTITION BY p._id) AS share
+                    FROM pagos p
+                    JOIN ordenes o ON p.id_orden = o._id
+                    JOIN ordenes_productos op ON op.id_orden = p.id_orden
+                    LEFT JOIN (SELECT id_product, SUM(comision) w FROM products_comisiones GROUP BY id_product) peso
+                        ON peso.id_product = op.id_woo
+                    WHERE o.status IN ('terminada', 'entregada') $dateCond
+                ) t
+                WHERE id_woo = :id_producto
+                GROUP BY id_talla
             ", $params);
             $realPagosMap = [];
             if (is_array($pagosRealRaw)) {
