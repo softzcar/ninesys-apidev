@@ -248,8 +248,13 @@ return function (App $app) {
       }
 
       // Extraer el valor de "#dolar strong" (widget del dólar del BCV).
+      // libxml_use_internal_errors evita que los warnings de HTML malformado del BCV
+      // queden en error_get_last() y disparen el ShutdownHandler (falso 500).
       $dom = new DOMDocument();
-      @$dom->loadHTML($html);
+      libxml_use_internal_errors(true);
+      $dom->loadHTML($html);
+      libxml_clear_errors();
+      libxml_use_internal_errors(false);
       $xpath = new DOMXPath($dom);
       $nodes = $xpath->query('//*[@id="dolar"]//strong');
       if (!$nodes || $nodes->length === 0) {
