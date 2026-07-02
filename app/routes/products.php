@@ -730,6 +730,18 @@ return function (App $app) {
   });
 
   // Crear un nuevo cliente
+  // Buscar un cliente ACTIVO por teléfono (para autocompletar formularios de
+  // orden/presupuesto/CRUD). Busca por los últimos 10 dígitos. Devuelve {data: {...}|null}.
+  $app->get('/customers/por-telefono/{phone}', function (Request $request, Response $response, array $args) {
+    $woo = new WooMe();
+    $customer = $woo->getCustomerByPhone($args['phone']);
+    $response->getBody()->write(json_encode(['data' => $customer]));
+    return $response
+      ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   $app->post('/customers/{first_name}/{last_name}/{cedula}/{phone}/{email}/{address}', function (Request $request, Response $response, array $args) {
     $data = $request->getParsedBody();
     if (empty($data)) {
@@ -906,17 +918,6 @@ return function (App $app) {
       $idCatalogoEstado,
       $idCatalogoCiudad
     );
-    $response->getBody()->write($resJson);
-    return $response
-      ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
-  // Buscar cliente por teléfono (últimos 10 dígitos) para autocompletar formularios.
-  $app->get('/customers/por-telefono/{phone}', function (Request $request, Response $response, array $args) {
-    $woo = new WooMe();
-    $resJson = $woo->getCustomerByPhone($args['phone']);
     $response->getBody()->write($resJson);
     return $response
       ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
