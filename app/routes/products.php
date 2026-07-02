@@ -913,6 +913,17 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  // Buscar cliente por teléfono (últimos 10 dígitos) para autocompletar formularios.
+  $app->get('/customers/por-telefono/{phone}', function (Request $request, Response $response, array $args) {
+    $woo = new WooMe();
+    $resJson = $woo->getCustomerByPhone($args['phone']);
+    $response->getBody()->write($resJson);
+    return $response
+      ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   /** *  CATEGORIAS */
   $app->get('/categories', function (Request $request, Response $response) {
     $woo = new WooMe();

@@ -1110,6 +1110,32 @@ class WooMe
     }
   }
 
+  // Busca un cliente ACTIVO por teléfono usando los últimos 10 dígitos (tolerante a
+  // formatos: 0414..., 414..., 58414...). Devuelve sus datos completos + geografía
+  // para autocompletar los formularios. $last10 es solo dígitos → seguro en la query.
+  public function getCustomerByPhone($phone)
+  {
+    $digits = preg_replace('/\D/', '', $phone);
+    if (strlen($digits) < 7) {
+      return json_encode(['status' => 'not_found', 'customer' => null]);
+    }
+    $last10 = substr($digits, -10);
+
+    $localConnection = new LocalDB();
+    $sql = "SELECT _id, first_name, last_name, cedula, phone, email, address, recibir_notificaciones,
+                   id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad
+            FROM customers
+            WHERE eliminado = 0 AND REGEXP_REPLACE(phone, '[^0-9]', '') LIKE '%" . $last10 . "'
+            LIMIT 1";
+    $res = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    if (!empty($res) && isset($res[0]['_id'])) {
+      return json_encode(['status' => 'found', 'customer' => $res[0]]);
+    }
+    return json_encode(['status' => 'not_found', 'customer' => null]);
+  }
+
   public function createCustomer($first_name, $last_name, $cedula, $phone, $email, $address, $recibir_notificaciones = null, $id_catalogo_pais = null, $id_catalogo_estado = null, $id_catalogo_ciudad = null, $reactivar = false)
   {
     $localConnection = new LocalDB();
