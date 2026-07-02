@@ -1,0 +1,29 @@
+- **Solicitud del Usuario:** Mover el autocompletado de datos del cliente (que se disparaba con el email) al input de TELÉFONO, en los formularios de orden, presupuesto y CRUD (nuevo/editar). Formatear el número (quitar el 0 inicial de 0414... → ya lo hace libphonenumber) y buscar por los últimos 10 dígitos. Poner el teléfono como primer campo (antes del nombre) para que, al existir el cliente, cargue los datos automáticamente, incluida la información geográfica. Además: reactivar el cliente eliminado (soft delete) al avanzar en el wizard de orden/presupuesto.
+- **Fecha y Hora:** 2026-07-02 10:30:00
+- **Proyecto(s):** Backend (ninesys-api) + Frontend (app_multi)
+- **Archivos Involucrados:**
+    - ninesys-api: app/lib/woome.php (getCustomerByPhone nuevo; updateCustomer reactiva), app/routes/products.php (ruta GET /customers/por-telefono/{phone})
+    - app_multi: components/customers/CustomerNuevo.vue, CustomerEditar.vue, components/ordenes/nueva.vue, presupuesto.vue
+- **Commits Relacionados:**
+    - Backend: 7ca9963 (endpoint por-telefono), 8826382 (incluye eliminados en la búsqueda), 39de5b0 (updateCustomer reactiva)
+    - Frontend: 31f1d96 (CRUD nuevo/editar), f4df6b8 (orden/presupuesto)
+- **Acción Realizada:**
+  1. Aclaración del formateo del teléfono: el mixin validateAndFormatPhone (libphonenumber-js, país VE) ya convierte 0414... → 58414... (E.164 sin +), quitando el 0 y agregando el 58. La búsqueda se hace por los ÚLTIMOS 10 DÍGITOS (tolerante a cualquier formato), igual que la dedup de createCustomer.
+  2. Backend: nuevo WooMe::getCustomerByPhone($phone) que busca por REGEXP_REPLACE(phone,...) LIKE '%last10' e INCLUYE clientes con soft delete (ORDER BY eliminado ASC, prefiere activo), devolviendo datos completos + geografía + flag eliminado. Ruta GET /customers/por-telefono/{phone} → {data: {...}|null}.
+  3. Frontend (4 formularios): se movió el input de Teléfono al PRIMER lugar (antes del nombre). En orden/presupuesto/CRUD-nuevo el @blur (onPhoneBlur) ahora, además de formatear, llama a /customers/por-telefono y autocompleta nombre/apellido/cédula/email/dirección + geografía (form.geografia = {idPais, idEstado, idCiudad}); en orden/presupuesto también setea form.id y query2 para REUTILIZAR ese cliente. presupuesto.vue no tenía onPhoneBlur: se creó. CustomerEditar solo se reordenó (sin autofill, es edición).
+  4. Reactivación del cliente eliminado al avanzar en el wizard: el flujo de orden/presupuesto, cuando form.id está seteado, hace PUT /customers/{id}/... → WooMe::updateCustomer. Se le añadió eliminado = 0 al UPDATE, de modo que al validar el paso del cliente (nueva.vue línea 2413, al avanzar a Productos) el cliente se reactiva.
+- **Inconvenientes y Desafíos:**
+  - Diagnóstico inicial confuso: el usuario probaba en app.nineteengreen.com (Dev) pero el navegador servía un build VIEJO cacheado por el Service Worker (@nuxtjs/pwa/workbox) que apuntaba a api.nineteencustom.com (producción). El servidor Dev estaba correcto (0 URLs de prod). Solución: limpiar SW/caché (Unregister + Clear site data + Ctrl+Shift+R).
+  - El endpoint por-telefono devolvía null para el cliente 947 porque estaba soft-deleted y la primera versión filtraba eliminado=0. Se corrigió para incluir eliminados (commit 8826382).
+  - El cliente autocompletado no se reactivaba al avanzar: el PUT (updateCustomer) no tocaba eliminado. Se corrigió (commit 39de5b0).
+  - Guard preexistente en gestion.vue bloqueaba borrar clientes con órdenes; se cambió por una confirmación (coherente con soft delete) — commit f785e22.
+- **Decisión Final y Justificación:** Búsqueda por últimos 10 dígitos (robusta). Autofill incluye clientes eliminados (para reutilizar/reactivar; al guardar se reactiva). En orden/presupuesto la reactivación es automática (updateCustomer eliminado=0); en creación suelta se pregunta (phone_deleted). Reorden teléfono-primero en los 4 formularios. CustomerEditar sin autofill.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, node --check, ssh mysql, curl, git, deploy scripts)
+- **Resultado:** Éxito. Verificado end-to-end en Dev por el usuario: autofill carga datos + geografía y muestra aviso de "cliente eliminado recuperado"; al avanzar en el wizard de ORDEN y de PRESUPUESTO el cliente se reactiva (eliminado=0). Confirmado por el usuario en ambos flujos.
+- **Verificación:**
+    - Backend (Dev, Authorization:194): /customers/por-telefono/{584147307169|04147307169|4147307169} → encuentra al cliente 947 con geografía (pais 189, estado 16, ciudad 175) y eliminado=1. PUT /customers/947/... → eliminado pasa de 1 a 0.
+    - node --check OK en los 4 .vue. Frontend desplegado a Dev (npm run generate + rsync).
+- **Logro Conseguido:** Autocompletado de cliente por teléfono (tolerante a formato, últimos 10 dígitos) con teléfono como primer campo, incluyendo carga de geografía, y reactivación automática del cliente eliminado al usarlo en una orden/presupuesto. Se evita re-escribir datos y se cierra el ciclo del soft delete.
+- **Referencias de Sesión (Contexto):** Continúa el feature de soft delete de clientes (bitácora 2026-07-01_16-30-00). Endpoints: GET /customers/por-telefono/{phone}, POST /customers/{first_name}/.../{address} (crea/auto-reactiva), PUT /customers/{id}/.../{billing_address} (actualiza/reactiva).
+- **Observaciones de Gemini:** PENDIENTE: despliegue a PRODUCCIÓN (backend + frontend) bajo orden explícita del usuario, una vez validado todo en Dev. Mejora sugerida aparte: ajustar la PWA (skipWaiting/clientsClaim) para que el Service Worker se actualice solo tras cada deploy y no haya que limpiar caché a mano.
+- **Respuesta de Gemini:** Autofill por teléfono implementado en los 4 formularios (teléfono primero), con carga de geografía y reactivación automática del cliente eliminado en orden/presupuesto. Validado por el usuario en ambos flujos. Falta el pase a producción bajo orden explícita.
