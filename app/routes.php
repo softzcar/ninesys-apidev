@@ -222,59 +222,95 @@ return function (App $app) {
 
   /** PROXY PARA TASAS DE CAMBIO (CORS FIX) */
   $app->get('/bcv-rates', function (Request $request, Response $response) {
-    $url = 'https://bcv.justcarlux.dev/api/v1/rates';
-
-    function fetchUrl($url) {
+    // Fuente PRIMARIA: tasa oficial USD/VES scrapeada directamente de bcv.org.ve.
+    // (Reemplaza a la API de terceros bcv.justcarlux.dev). El certificado del BCV suele
+    // estar vencido/mal encadenado y su firewall bloquea clientes sin cabeceras de
+    // navegador; por eso se desactiva la verificación SSL y se envían cabeceras de navegador.
+    $obtenerTasaBcvOficial = function () {
       $ch = curl_init();
-      curl_setopt($ch, CURLOPT_URL, $url);
+      curl_setopt($ch, CURLOPT_URL, 'https://www.bcv.org.ve/');
       curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
       curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-      curl_setopt($ch, CURLOPT_TIMEOUT, 5); // Timeout más agresivo
-      $result = curl_exec($ch);
-      $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+      curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+      curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+      curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language: es-VE,es;q=0.9,en;q=0.8',
+        'Referer: https://www.bcv.org.ve/',
+      ]);
+      $html = curl_exec($ch);
+      $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
       curl_close($ch);
-      return ['result' => $result, 'code' => $httpCode];
+      if ($code >= 400 || !$html) {
+        return null;
+      }
+
+      // Extraer el valor de "#dolar strong" (widget del dólar del BCV).
+      $dom = new DOMDocument();
+      @$dom->loadHTML($html);
+      $xpath = new DOMXPath($dom);
+      $nodes = $xpath->query('//*[@id="dolar"]//strong');
+      if (!$nodes || $nodes->length === 0) {
+        return null;
+      }
+      $raw = trim($nodes->item(0)->textContent);
+      if ($raw === '') {
+        return null;
+      }
+
+      // Limpieza: solo dígitos/coma/punto, quitar puntos de miles, coma decimal -> punto.
+      $cleaned = preg_replace('/[^\d,.-]/', '', $raw);
+      $cleaned = str_replace('.', '', $cleaned);
+      $cleaned = str_replace(',', '.', $cleaned);
+      if (!is_numeric($cleaned)) {
+        return null;
+      }
+      $tasa = floatval($cleaned);
+      return ($tasa > 0) ? $tasa : null;
+    };
+
+    $tasaBcv = $obtenerTasaBcvOficial();
+
+    if ($tasaBcv !== null) {
+      $response->getBody()->write(json_encode([
+        'rates' => ['usd' => $tasaBcv],
+        'fuente' => 'bcv_oficial',
+        'fecha_extraccion' => date('c'),
+      ]));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withHeader('Access-Control-Allow-Origin', '*')
+        ->withStatus(200);
     }
 
-    $response_data = fetchUrl($url);
+    // FALLBACK (se mantiene el método existente): DolarAPI oficial.
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, 'https://ve.dolarapi.com/v1/dolares/oficial');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    $fbResult = curl_exec($ch);
+    $fbCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 
-    // Si falla el origen primario (o da error de Cloudflare), intentamos el fallback
-    if ($response_data['code'] >= 400 || !$response_data['result']) {
-      $fallback_url = 'https://ve.dolarapi.com/v1/dolares/oficial';
-      $fallback_data = fetchUrl($fallback_url);
-
-      if ($fallback_data['code'] === 200 && $fallback_data['result']) {
-        $data = json_decode($fallback_data['result'], true);
-        if (isset($data['promedio'])) {
-          // Adaptar formato de DolarAPI al formato esperado por el frontend
-          $result = json_encode([
-            'rates' => [
-              'usd' => $data['promedio']
-            ],
-            'fuente' => 'dolarapi_fallback'
-          ]);
-          $response->getBody()->write($result);
-          return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withHeader('Access-Control-Allow-Origin', '*')
-            ->withStatus(200);
-        }
+    if ($fbCode === 200 && $fbResult) {
+      $data = json_decode($fbResult, true);
+      if (isset($data['promedio'])) {
+        $response->getBody()->write(json_encode([
+          'rates' => ['usd' => $data['promedio']],
+          'fuente' => 'dolarapi_fallback',
+        ]));
+        return $response
+          ->withHeader('Content-Type', 'application/json')
+          ->withHeader('Access-Control-Allow-Origin', '*')
+          ->withStatus(200);
       }
     }
 
-    // Si falló el fallback o el original funcionó (pero con error no manejado), 
-    // devolvemos lo que tengamos o un error amigable
-    if (!$response_data['result'] || $response_data['code'] >= 400) {
-      $response->getBody()->write(json_encode(['error' => 'No se pudieron obtener tasas de ninguna fuente']));
-      return $response->withStatus(503)->withHeader('Content-Type', 'application/json');
-    }
-
-    $response->getBody()->write($response_data['result']);
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withHeader('Access-Control-Allow-Origin', '*')
-      ->withStatus($response_data['code']);
+    $response->getBody()->write(json_encode(['error' => 'No se pudieron obtener tasas de ninguna fuente']));
+    return $response->withStatus(503)->withHeader('Content-Type', 'application/json');
   });
   /** ENVIAR EMAILS */
   $app->get('/send-email', function (Request $request, Response $response) {
