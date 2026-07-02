@@ -1110,21 +1110,23 @@ class WooMe
     }
   }
 
-  // Busca un cliente ACTIVO por teléfono (por los últimos 10 dígitos, tolerante a
-  // formato: con/sin 0 inicial, con/sin código 58). Devuelve los datos completos
-  // (incluida la geografía) para autocompletar formularios, o null si no existe.
+  // Busca un cliente por teléfono (por los últimos 10 dígitos, tolerante a formato:
+  // con/sin 0 inicial, con/sin código 58). Incluye clientes con soft delete (eliminado=1),
+  // prefiriendo el activo si hubiera ambos, para poder autocompletar y reutilizar/reactivar
+  // ese cliente al guardar. Devuelve los datos completos (incl. geografía y el flag
+  // 'eliminado') o null si no existe.
   public function getCustomerByPhone($phone)
   {
     $digits = preg_replace('/\D/', '', $phone);
     $localConnection = new LocalDB();
 
-    $cols = "_id, first_name, last_name, cedula, phone, email, address, recibir_notificaciones, id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad";
+    $cols = "_id, first_name, last_name, cedula, phone, email, address, recibir_notificaciones, id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad, eliminado";
     if (strlen($digits) >= 7) {
       $last10 = substr($digits, -10);
-      $sql = "SELECT {$cols} FROM customers WHERE REGEXP_REPLACE(phone, '[^0-9]', '') LIKE ? AND eliminado = 0 LIMIT 1";
+      $sql = "SELECT {$cols} FROM customers WHERE REGEXP_REPLACE(phone, '[^0-9]', '') LIKE ? ORDER BY eliminado ASC LIMIT 1";
       $res = $localConnection->goQuery($sql, ['%' . $last10]);
     } else {
-      $sql = "SELECT {$cols} FROM customers WHERE phone = ? AND eliminado = 0 LIMIT 1";
+      $sql = "SELECT {$cols} FROM customers WHERE phone = ? ORDER BY eliminado ASC LIMIT 1";
       $res = $localConnection->goQuery($sql, [trim($phone)]);
     }
     $localConnection->disconnect();
