@@ -136,15 +136,26 @@ return function (App $app) {
   // 4. GET /customers/orders-local/{id_customer} - Historial de órdenes locales de producción
   $app->get('/customers/orders-local/{id_customer}', function (Request $request, Response $response, array $args) {
     $id_customer = intval($args['id_customer']);
+    $queryParams = $request->getQueryParams();
+    $id_vendedor = isset($queryParams['id_vendedor']) ? intval($queryParams['id_vendedor']) : null;
     $localConnection = new LocalDB();
 
     try {
-      $sql = "SELECT o._id, o.status, o.pago_total, o.pago_abono, o.fecha_creacion, o.moment,
-                     (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = o._id) AS total_productos
-              FROM ordenes o
-              WHERE o.id_wp = ?
-              ORDER BY o._id DESC";
-      $ordenes = $localConnection->goQuery($sql, [$id_customer]);
+      if ($id_vendedor !== null) {
+        $sql = "SELECT o._id, o.status, o.pago_total, o.pago_abono, o.fecha_creacion, o.moment,
+                       (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = o._id) AS total_productos
+                FROM ordenes o
+                WHERE o.id_wp = ? AND o.responsable = ?
+                ORDER BY o._id DESC";
+        $ordenes = $localConnection->goQuery($sql, [$id_customer, $id_vendedor]);
+      } else {
+        $sql = "SELECT o._id, o.status, o.pago_total, o.pago_abono, o.fecha_creacion, o.moment,
+                       (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = o._id) AS total_productos
+                FROM ordenes o
+                WHERE o.id_wp = ?
+                ORDER BY o._id DESC";
+        $ordenes = $localConnection->goQuery($sql, [$id_customer]);
+      }
 
       $result = [];
       if (!empty($ordenes) && !isset($ordenes['status'])) {
@@ -174,14 +185,24 @@ return function (App $app) {
   // 5. GET /customers/presupuestos-local/{id_customer} - Historial de presupuestos locales
   $app->get('/customers/presupuestos-local/{id_customer}', function (Request $request, Response $response, array $args) {
     $id_customer = intval($args['id_customer']);
+    $queryParams = $request->getQueryParams();
+    $id_vendedor = isset($queryParams['id_vendedor']) ? intval($queryParams['id_vendedor']) : null;
     $localConnection = new LocalDB();
 
     try {
-      $sql = "SELECT _id, status, tipo, cliente_nombre, fecha_creacion, pago_total, moment
-              FROM presupuestos
-              WHERE id_wp = ?
-              ORDER BY _id DESC";
-      $presupuestos = $localConnection->goQuery($sql, [$id_customer]);
+      if ($id_vendedor !== null) {
+        $sql = "SELECT _id, status, tipo, cliente_nombre, fecha_creacion, pago_total, moment
+                FROM presupuestos
+                WHERE id_wp = ? AND responsable = ?
+                ORDER BY _id DESC";
+        $presupuestos = $localConnection->goQuery($sql, [$id_customer, $id_vendedor]);
+      } else {
+        $sql = "SELECT _id, status, tipo, cliente_nombre, fecha_creacion, pago_total, moment
+                FROM presupuestos
+                WHERE id_wp = ?
+                ORDER BY _id DESC";
+        $presupuestos = $localConnection->goQuery($sql, [$id_customer]);
+      }
 
       $result = [];
       if (!empty($presupuestos) && !isset($presupuestos['status'])) {

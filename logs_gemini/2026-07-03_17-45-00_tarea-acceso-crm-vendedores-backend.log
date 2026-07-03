@@ -1,0 +1,14 @@
+Tarea: Acceso y filtros de CRM para vendedores (Departamento de Comercialización) - Backend
+Fecha: 2026-07-03 17:45:00
+
+Descripción de cambios realizados en ninesys-api:
+1. app/routes/products.php:
+   - Modificación de la ruta GET `/customers` para aceptar opcionalmente el parámetro de consulta `id_vendedor` desde el frontend.
+2. app/lib/woome.php:
+   - Modificación de la función `getAllCustomesrs($id_vendedor = null)` para que, en caso de recibir el ID de vendedor, aplique un filtro a la consulta SQL mediante `INNER JOIN ordenes o ON o.id_wp = c._id WHERE o.responsable = ?`.
+3. app/routes/crm.php:
+   - Modificación de la ruta GET `/customers/orders-local/{id_customer}` para aceptar el query param `id_vendedor` y filtrar las órdenes con `o.responsable = ?`.
+   - Modificación de la ruta GET `/customers/presupuestos-local/{id_customer}` para aceptar el query param `id_vendedor` y filtrar los presupuestos con `responsable = ?`.
+
+Resultados:
+- El backend permite ahora restringir la visualización de clientes y su historial de órdenes/presupuestos al vendedor que los atendió de forma segura.

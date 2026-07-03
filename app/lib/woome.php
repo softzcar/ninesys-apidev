@@ -1016,15 +1016,23 @@ class WooMe
     return $response; */
   }
 
-  public function getAllCustomesrs()
+  public function getAllCustomesrs($id_vendedor = null)
   {
-    $sql = 'SELECT _id id, first_name, last_name, username, cedula, phone, address, email, recibir_notificaciones,
-                   id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad
-            FROM customers
-            WHERE eliminado = 0';
-
     $localConnection = new LocalDB();
-    $data = $localConnection->goQuery($sql);
+    if ($id_vendedor !== null) {
+      $sql = 'SELECT DISTINCT c._id id, c.first_name, c.last_name, c.username, c.cedula, c.phone, c.address, c.email, c.recibir_notificaciones,
+                              c.id_catalogo_pais, c.id_catalogo_estado, c.id_catalogo_ciudad
+              FROM customers c
+              INNER JOIN ordenes o ON o.id_wp = c._id
+              WHERE c.eliminado = 0 AND o.responsable = ?';
+      $data = $localConnection->goQuery($sql, [$id_vendedor]);
+    } else {
+      $sql = 'SELECT _id id, first_name, last_name, username, cedula, phone, address, email, recibir_notificaciones,
+                     id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad
+              FROM customers
+              WHERE eliminado = 0';
+      $data = $localConnection->goQuery($sql);
+    }
     $localConnection->disconnect();
 
     return json_encode($data);

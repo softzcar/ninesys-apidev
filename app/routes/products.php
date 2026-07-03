@@ -658,8 +658,11 @@ return function (App $app) {
 
   // OBTENER TODOS LOS CLIENTES
   $app->get('/customers', function (Request $request, Response $response) {
+    $queryParams = $request->getQueryParams();
+    $id_vendedor = isset($queryParams['id_vendedor']) ? intval($queryParams['id_vendedor']) : null;
+
     $woo = new WooMe();
-    $object['data'] = json_decode($woo->getAllCustomesrs());
+    $object['data'] = json_decode($woo->getAllCustomesrs($id_vendedor));
     $response->getBody()->write(json_encode($object));
 
     return $response
