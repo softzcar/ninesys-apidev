@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../app/config.php';
 // Cargar la base de datos y otras clases necesarias
-require __DIR__ . '/../app/lib/db.php';
+require __DIR__ . '/../app/model/LocalDB.php';
 require __DIR__ . '/../app/lib/woome.php';
 
 try {
