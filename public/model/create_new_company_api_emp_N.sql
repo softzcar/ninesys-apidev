@@ -169,7 +169,8 @@ INSERT INTO `catalogo_tintas` (`_id`, `nombre`, `moment`) VALUES
 (20, 'Tintas Reflectivas', CURRENT_TIMESTAMP);
 CREATE TABLE `categories` (
   `_id` int(11) NOT NULL COMMENT 'ID único de la categoría',
-  `nombre` varchar(100) DEFAULT NULL COMMENT 'Nombre de la categoría'
+  `nombre` varchar(100) DEFAULT NULL COMMENT 'Nombre de la categoría',
+  `eliminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Borrado lógico: 0 = activo, 1 = eliminado/oculto'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Categorías de productos del catálogo. Organiza productos en grupos para clasificación, filtrado y reportes de ventas.';
 INSERT INTO `categories` (`_id`, `nombre`)
 VALUES (1, 'Categoría de Pruebas');
@@ -997,6 +998,7 @@ CREATE TABLE `products` (
   `stock_quantity` int(11) DEFAULT 0 COMMENT 'Existencia en inventario\r\n',
   `product_description` text DEFAULT NULL COMMENT 'Descripción para mostrar e el sistema y la teienda',
   `category_ids` varchar(255) DEFAULT NULL,
+  `eliminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Borrado lógico: 0 = activo, 1 = eliminado/oculto',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo maestro de productos. Almacena productos con SKU, precio base, comisión, stock y si es producto físico o digital.';
 INSERT INTO `products` (

@@ -153,6 +153,7 @@ class WooMe
             GROUP BY
                 p_inner._id
         ) cat_agg ON p._id = cat_agg.product_id
+        WHERE p.eliminado = 0
         GROUP BY
             p._id,
             p.sku,
@@ -1390,7 +1391,7 @@ class WooMe
    */
   public function getAllCategories()
   {
-    $sql = 'SELECT _id id, nombre `name` FROM categories';
+    $sql = 'SELECT _id id, nombre `name` FROM categories WHERE eliminado = 0';
 
     $localConnection = new LocalDB();
     $data = $localConnection->goQuery($sql);

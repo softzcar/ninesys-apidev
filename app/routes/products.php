@@ -304,28 +304,9 @@ return function (App $app) {
   $app->delete('/products/{id}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    // Atomicidad: borrado del producto y sus dependientes en una transacción
-    $localConnection->beginTransaction();
+    $sql = 'UPDATE products SET eliminado = 1 WHERE _id = ' . $args['id'];
+    $object['response'] = json_encode($localConnection->goQuery($sql));
 
-    // VERIFICAR ASIGNACIÓN DEL PRODUCTO
-    $sql = 'SELECT COUNT(_id) cantidad_prod FROM ordenes_productos WHERE id_woo = ' . $args['id'];
-    // $product_exist = json_encode($localConnection->goQuery($sql));
-    $product_exist = $localConnection->goQuery($sql);
-
-    $object['cantidad_prod'] = $product_exist[0]['cantidad_prod'];
-
-    if (intval($object['cantidad_prod']) === 0) {
-      $sql = 'DELETE FROM products WHERE _id =  ' . $args['id'];
-      $object['response'] = json_encode($localConnection->goQuery($sql));
-
-      $sql = 'DELETE FROM products_prices WHERE id_product =  ' . $args['id'];
-      $object['response'] = json_encode($localConnection->goQuery($sql));
-
-      $sql = 'DELETE FROM products_attributes_values WHERE id_product =  ' . $args['id'];
-      $object['response'] = json_encode($localConnection->goQuery($sql));
-    }
-
-    $localConnection->commit();
     $localConnection->disconnect();
     $response->getBody()->write(json_encode($object), JSON_NUMERIC_CHECK);
 

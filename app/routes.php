@@ -485,7 +485,7 @@ return function (App $app) {
   $app->delete('/categories/{id}', function (Request $request, Response $response, $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'DELETE FROM categories WHERE _id =  ' . $args['id'];
+    $sql = 'UPDATE categories SET eliminado = 1 WHERE _id =  ' . $args['id'];
     $object = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
