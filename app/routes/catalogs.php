@@ -10,7 +10,7 @@ return function (App $app) {
   /** * TELAS */
   $app->get('/telas', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
-    $sql = 'SELECT * FROM catalogo_telas ORDER BY tela';
+    $sql = 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
     $object['data'] = $localConnection->goQuery($sql);
     $localConnection->disconnect();
 
@@ -381,7 +381,7 @@ return function (App $app) {
     $values .= "'" . $miTela['tela'] . "')";
 
     $sql = 'INSERT INTO catalogo_telas (`tela`) VALUES ' . $values . ';';
-    $sql .= 'SELECT * FROM catalogo_telas ORDER BY tela';
+    $sql .= 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
 
     $localConnection = new LocalDB();
     $object['response'] = json_encode($localConnection->goQuery($sql));
@@ -399,7 +399,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
     $values = "tela='" . $args['tela'] . "'";
     $sql = 'UPDATE catalogo_telas SET ' . $values . ' WHERE _id = ' . $args['_id'] . ';';
-    $sql .= 'SELECT * FROM catalogo_telas ORDER BY tela';
+    $sql .= 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
     $object['sql'] = $sql;
     $object['response'] = json_encode($localConnection->goQuery($sql));
     $localConnection->disconnect();
@@ -414,7 +414,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
     $miEmpleado = $request->getParsedBody();
     $object['miEmpleado'] = $miEmpleado;
-    $sql = 'DELETE FROM catalogo_telas WHERE _id =  ' . $miEmpleado['id'];
+    $sql = 'UPDATE catalogo_telas SET eliminado = 1 WHERE _id =  ' . $miEmpleado['id'];
     $object['sql'] = $sql;
 
     $object['response'] = json_encode($localConnection->goQuery($sql));

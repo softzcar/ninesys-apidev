@@ -1412,7 +1412,7 @@ return function (App $app) {
 
     $object['items'] = $localConnection->goQuery($sql);
 
-    $sql = 'SELECT * FROM catalogo_telas ORDER BY tela';
+    $sql = 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
     $object['telas'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
@@ -1462,7 +1462,7 @@ return function (App $app) {
 
     $object['items'] = $localConnection->goQuery($sql);
 
-    $sql = 'SELECT * FROM catalogo_telas ORDER BY tela';
+    $sql = 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
     $object['telas'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();

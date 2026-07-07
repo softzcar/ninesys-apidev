@@ -4473,7 +4473,7 @@ $object['sales_commission_ISSET'][] = false;
       // ==========================================================
       // OBTENER TELAS DISPONIBLES
       // ==========================================================
-      $sql_telas = "SELECT _id, tela FROM catalogo_telas ORDER BY tela ASC";
+      $sql_telas = "SELECT _id, tela FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela ASC";
       $telas_result = $localConnection->goQuery($sql_telas);
       $telas_disponibles = [];
       if (!empty($telas_result) && !isset($telas_result['status'])) {
@@ -4819,7 +4819,7 @@ $object['sales_commission_ISSET'][] = false;
 
       // Obtener telas del catálogo
       if ($incluirTelas) {
-        $sql = "SELECT _id as id, tela as nombre FROM catalogo_telas ORDER BY tela ASC LIMIT 20";
+        $sql = "SELECT _id as id, tela as nombre FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela ASC LIMIT 20";
         $telas = $localConnection->goQuery($sql, []);
 
         if (!empty($telas) && !isset($telas['status'])) {
@@ -5158,7 +5158,7 @@ $object['sales_commission_ISSET'][] = false;
     $productos = $contexto['productos'] ?? [];
 
     // Obtener telas disponibles
-    $sql_telas = "SELECT _id, tela FROM catalogo_telas ORDER BY tela ASC";
+    $sql_telas = "SELECT _id, tela FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela ASC";
     $telas_result = $db->goQuery($sql_telas);
     $telas_disponibles = [];
     if (!empty($telas_result) && !isset($telas_result['status'])) {
