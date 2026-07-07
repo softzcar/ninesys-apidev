@@ -1,0 +1,20 @@
+Tarea: Implementación de Soft Delete para las tablas products y categories
+Fecha: 2026-07-07 15:25:00
+
+Descripción:
+- Se implementó la lógica de borrado lógico (soft delete) en el catálogo de productos y categorías. Esto previene la pérdida de integridad y trazabilidad en los registros históricos del sistema (por ejemplo, en el CRM de clientes y el historial de órdenes de venta anteriores).
+
+Cambios realizados:
+1. Base de Datos (Plantilla y Desarrollo):
+   - Modificamos la plantilla de creación de bases de datos para nuevas empresas (public/model/create_new_company_api_emp_N.sql) agregando la columna `eliminado` tinyint(1) DEFAULT 0 a las tablas `products` y `categories`.
+   - Ejecutamos la migración correspondiente vía ALTER TABLE en la base de datos de desarrollo `api_emp_194` en el VPS Contabo Dev para sincronizar el esquema.
+
+2. Cambios en Backend (Slim API):
+   - Modificamos `app/lib/woome.php` en `getAllCategories()` para filtrar por `eliminado = 0`.
+   - Modificamos `app/lib/woome.php` en `getAllProducts()` para filtrar por `p.eliminado = 0`.
+   - Modificamos la ruta de eliminación `DELETE /products/{id}` en `app/routes/products.php` para cambiar el DELETE físico a un borrado lógico (`UPDATE products SET eliminado = 1`).
+   - Modificamos la ruta de eliminación `DELETE /categories/{id}` en `app/routes.php` para cambiar el DELETE físico a un borrado lógico (`UPDATE categories SET eliminado = 1`).
+
+Despliegue y Pruebas:
+- Los cambios de backend fueron validados con lint de PHP y desplegados exitosamente al servidor de desarrollo (Contabo Dev) a través del script centralizado `deploy_backend.sh`.
+- Se verificó con peticiones curl y consultas a la base de datos de desarrollo la creación, consulta y borrado lógico exitoso de productos y categorías.
