@@ -1466,7 +1466,10 @@ ADD PRIMARY KEY (`_id`),
   ),
   ADD KEY `id_metodos_de_pago` (`id_metodos_de_pago`),
   ADD KEY `id_lotes_detalles` (`id_lotes_detalles`),
-  ADD KEY `id_empleado` (`id_empleado`);
+  ADD KEY `id_empleado` (`id_empleado`),
+  ADD KEY `idx_empleado_moment` (`id_empleado`, `moment`),
+  ADD KEY `idx_fecha_pago` (`fecha_pago`),
+  ADD KEY `idx_comision_tipo_fecha` (`comision_tipo`, `fecha_pago`);
 ALTER TABLE `piezas_cortadas`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `id_orden` (
@@ -1860,7 +1863,8 @@ ADD CONSTRAINT `pagos_desc_ibfk_1` FOREIGN KEY (`id_pago`) REFERENCES `pagos` (`
 
 -- pagos_salarios
 ALTER TABLE `pagos_salarios`
-ADD CONSTRAINT `pagos_sal_ibfk_1` FOREIGN KEY (`id_pago`) REFERENCES `pagos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+  ADD KEY `id_pago` (`id_pago`),
+  ADD CONSTRAINT `pagos_sal_ibfk_1` FOREIGN KEY (`id_pago`) REFERENCES `pagos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- piezas_cortadas
 ALTER TABLE `piezas_cortadas`
