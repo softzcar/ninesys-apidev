@@ -1,0 +1,14 @@
+- **Solicitud del Usuario:** Ocultar del reporte `/reporte-costos-productos` los productos con cero unidades fabricadas, mostrando únicamente los que hayan tenido movimiento en el rango de fechas establecido.
+- **Fecha y Hora:** 2026-07-08 11:45:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+    - ninesys-api/app/routes/products_reports.php
+- **Acción Realizada:**
+  1. Modificación en `GET /reportes/costos-productos` de `ninesys-api/app/routes/products_reports.php` para saltar productos con `unidades_fabricadas <= 0` en el bucle de consolidación.
+  2. Modificación en `GET /reportes/costos-productos/categorias` para ignorar del acumulado de categorías aquellos productos cuya cantidad de fabricación en el rango sea `<=` 0, evitando distorsionar los costos promedio y teóricos del grupo de categorías.
+  3. Ejecución de `php -l` local para garantizar la validez sintáctica del archivo modificado.
+  4. Realización de commit y sincronización local en la rama `refactor/modular-routes`.
+  5. Despliegue seguro al entorno de desarrollo (`vps-contabo-dev`) mediante el script centralizado `ninesys-hub/bin/deploy_backend.sh`.
+- **Resultado:** Éxito. Los endpoints en desarrollo responden correctamente con la lista filtrada de productos activos.
+- **Verificación:** Pruebas vía `curl` a los endpoints del servidor de desarrollo con tokens reales, verificando que el JSON de respuesta contenga únicamente productos con fabricación mayor a 0 y que el rollup de categorías sea consistente.
+- **Logro Conseguido:** Se limpia el reporte eliminando cientos de filas ruidosas con "0 und" de fabricación, optimizando la lectura por parte del administrador y proveyendo un cálculo de costo promedio real y teórico por categorías mucho más preciso.

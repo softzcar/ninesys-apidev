@@ -1,0 +1,25 @@
+- **Solicitud del Usuario:** Evaluar la viabilidad, requisitos en el VPS, adaptación del script plantilla SQL y la sintaxis de la API para migrar el motor de base de datos de MariaDB a PostgreSQL.
+- **Fecha y Hora:** 2026-07-08 15:18:00
+- **Proyecto(s):** ninesys-api
+- **Archivos Involucrados:**
+  - `ninesys-api/public/model/create_new_company_api_emp_N.sql`
+  - `ninesys-api/app/model/LocalDB.php`
+  - `ninesys-api/src/Application/Middleware/IdEmpresaMiddleware.php`
+  - `/home/developer/.gemini/antigravity-ide/brain/e55f95b0-7011-4528-ad07-0f16faeb857e/reporte_evaluacion_postgres.md`
+- **Commits Relacionados:** Ninguno (tarea únicamente de evaluación y diagnóstico).
+- **Acción Realizada:**
+  1. Se verificó el entorno del VPS de desarrollo vía SSH: el sistema operativo es **AlmaLinux 10.2 (Lavender Lion)** y no tiene PostgreSQL instalado. Se validó con `dnf` que están disponibles los paquetes de **PostgreSQL 18** (`postgresql18-server`) y las extensiones PHP correspondientes (`lsphp83-pgsql` y `php-pgsql`).
+  2. Se analizó el script SQL plantilla (`create_new_company_api_emp_N.sql`) y se identificaron los cambios sintácticos requeridos para PostgreSQL (tipos de datos, IDENTITY columns, índices y llaves foráneas, deshabilitación de `ENGINE`, charset y comentarios MySQL).
+  3. Se inspeccionaron la clase de conexión central `LocalDB.php` y el middleware `IdEmpresaMiddleware.php` para documentar la adaptación del DSN, la configuración de sesión de PDO (`SET TIME ZONE`, `client_encoding`, `lc_time`), la remoción de comandos no soportados (`SHOW CREATE TABLE`, `FOREIGN_KEY_CHECKS`) y el cambio en la captura de códigos de error de violación de restricciones (de códigos MySQL a `23503` SQLSTATE).
+  4. Se recopilaron y enumeraron los cambios necesarios en el código SQL crudo de los endpoints de la API (eliminación de backticks, funciones de fecha/tiempo y strings como `DATE_FORMAT`, `TIMESTAMPDIFF`, `IFNULL`, `GROUP_CONCAT`, `FIND_IN_SET`, `ON DUPLICATE KEY UPDATE` e `INSERT IGNORE`, además de consideraciones sobre agrupamientos estrictos y case-sensitivity).
+  5. Se elaboró un reporte técnico estructurado y detallado para el usuario en los artefactos de la conversación.
+- **Inconvenientes y Desafíos:** El uso de SQL crudo sin un ORM unificado es el principal cuello de botella de la migración de la API, pues requiere revisar y adaptar manualmente cientos de consultas.
+- **Decisión Final y Justificación:** La migración es perfectamente viable a nivel de sistema operativo y paquetes, pero laboriosa en la API. Se sugiere esperar y medir el rendimiento tras el saneamiento reciente de FKs y soft-deletes en MariaDB antes de proceder con una migración completa de motor.
+- **Herramienta(s) Utilizada(s):** `list_dir`, `view_file`, `run_command`, `grep_search`, `write_to_file`
+- **Resultado:** Éxito (Evaluación finalizada y documentada)
+- **Verificación:** Validación de disponibilidad de paquetes realizada exitosamente en el VPS de desarrollo.
+- **Logro Conseguido:** Un análisis integral y una hoja de ruta clara de lo que implica para el negocio y el código la migración a PostgreSQL.
+- **Referencias de Sesión (Contexto):**
+  - Conversación ID: e55f95b0-7011-4528-ad07-0f16faeb857e
+- **Observaciones de Gemini:** La simplificación del método de recreación de la tabla `empleados` (usando TRUNCATE en vez de DROP/CREATE dinámico) aliviará gran parte de la complejidad en la adaptación de la conexión.
+- **Respuesta de Gemini:** Se presentó el informe de evaluación y se explicaron las conclusiones al usuario.
