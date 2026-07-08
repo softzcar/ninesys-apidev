@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** Desplegar e implementar de forma segura el borrado lógico (soft-delete) e integridad referencial (claves foráneas RESTRICT) en el servidor de Producción para los módulos de insumos, departamentos y tintas.
+- **Fecha y Hora:** 2026-07-08 17:21:00
+- **Proyecto(s):** Backend (`ninesys-api`)
+- **Archivos Involucrados:**
+  - `public/model/create_new_company_api_emp_N.sql` (Esquema maestro SQL)
+  - `app/routes/inventory.php` (Filtros de insumos e inventario)
+  - `app/routes/products.php` (Filtros y borrado lógico de departamentos)
+  - `app/routes/catalogs.php` (Filtros y borrado de tintas y colores)
+  - `app/routes/employees.php` (Filtro en asignaciones de listado general de empleados)
+  - `app/routes/auth.php` (Filtros en el login y perfiles)
+- **Commits Relacionados:**
+  - `f895faf` (y previos en la rama `refactor/modular-routes`)
+- **Acción Realizada:**
+  1. **Respaldo de Seguridad:** Se realizó un respaldo de base de datos (`mysqldump`) completo de la empresa `api_emp_194` en el VPS de producción (`vps-contabo-prod`), guardándose en `/root/backups_produccion/`.
+  2. **Migración DDL en Producción:** Se ejecutaron las alteraciones DDL en la base de datos de producción `api_emp_194` utilizando las credenciales administrativas de la empresa `api_user_194`. Se crearon las columnas `eliminado` y se actualizaron las claves foráneas a `ON DELETE RESTRICT ON UPDATE CASCADE` para proteger la base de datos contra borrados físicos directos.
+  3. **Despliegue de Código:** Se ejecutó el script centralizado `ninesys-hub/bin/deploy_backend.sh` (opción 1) ingresando la frase de confirmación de seguridad `BORRAR_CONTABO_ES_PECADO` para subir y sincronizar el código del backend local con producción. Se reinició exitosamente OPcache en producción.
+  4. **Verificación:** Se validó la respuesta correcta (statusCode 200) y consistencia de datos de los endpoints `/departamentos` y `/inventario/todos` en producción.
+- **Resultado:** Éxito.
+- **Logro Conseguido:** El entorno de producción se encuentra ahora blindado al 100% contra borrados accidentales destructivos a nivel físico de base de datos, y opera con borrado lógico (soft-delete) para todos los catálogos principales del sistema de forma segura.
