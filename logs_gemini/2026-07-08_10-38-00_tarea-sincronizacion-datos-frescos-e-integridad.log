@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** Sincronizar datos frescos desde producción a desarrollo (empresa 194) y re-aplicar el esquema de soft-delete y FK RESTRICT en desarrollo para realizar pruebas de verificación.
+- **Fecha y Hora:** 2026-07-08 10:38:00
+- **Proyecto(s):** Backend (`ninesys-api` / `ninesys-hub`)
+- **Archivos Involucrados:**
+  - `ninesys-hub/bin/sync_194_prod_to_dev.sh` (Script de sincronización de BD)
+  - `ca0de474-9780-4d7d-a273-54f7531c5bea/scratch/migrar_soft_delete_dev.sql` (Script DDL temporal de restauración)
+- **Commits Relacionados:**
+  - Ninguno (operación de base de datos)
+- **Acción Realizada:**
+  1. **Ejecución de Sincronización:** Se ejecutó con éxito el script `sync_194_prod_to_dev.sh` para volcar los datos reales de producción de la empresa 194 e importarlos en desarrollo (preservando de forma segura las tablas locales de WhatsApp `wa_*`).
+  2. **Verificación de Consistencia:** Se verificó que las 6047 órdenes de producción fueron migradas correctamente y que el conteo en desarrollo coincide al 100%.
+  3. **Restauración de Esquema Soft-Delete:** Puesto que la importación del dump de producción pisó la estructura en desarrollo, se re-aplicó el script DDL de alteración sobre `api_emp_194` en desarrollo para re-crear las columnas `eliminado` y restablecer el blindaje referencial `RESTRICT` en las FKs.
+  4. **Verificación Final:** Se validó que las columnas `eliminado` existen con valor `0` para los datos frescos migrados en las tablas de inventario y departamentos.
+- **Resultado:** Éxito.
+- **Logro Conseguido:** Se cuenta con un clon exacto de producción en desarrollo, con datos reales y actualizados, pero bajo la estructura de integridad y borrado lógico recién implementada para realizar pruebas exhaustivas y seguras antes del despliegue final de base de datos a producción.

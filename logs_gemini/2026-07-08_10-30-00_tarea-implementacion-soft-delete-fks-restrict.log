@@ -1,0 +1,31 @@
+- **Solicitud del Usuario:** Retomar el plan de implementación de soft-delete (borrado lógico) e integridad referencial de claves foráneas para evitar registros huérfanos al eliminar registros.
+- **Fecha y Hora:** 2026-07-08 10:30:00
+- **Proyecto(s):** Backend (`ninesys-api`)
+- **Archivos Involucrados:**
+  - `public/model/create_new_company_api_emp_N.sql` (Esquema maestro SQL)
+  - `app/routes/inventory.php` (Endpoints y filtros de inventario/insumos)
+  - `app/routes/products.php` (Endpoints y filtros de departamentos)
+  - `app/routes/catalogs.php` (Endpoints y filtros de tintas y colores)
+  - `app/routes/auth.php` (Listados y asignación de departamentos en el login)
+- **Commits Relacionados:**
+  - `6785907` ("feat(soft-delete): implementar borrado lógico y FK RESTRICT en insumos, departamentos y tintas")
+- **Acción Realizada:**
+  1. **Esquema SQL Maestro:** Se modificó `create_new_company_api_emp_N.sql` para agregar la columna `eliminado` (`TINYINT(1) NOT NULL DEFAULT 0`) en las tablas maestros `inventario`, `departamentos`, `catalogo_tintas` y `catalogo_colores_tintas`.
+  2. **Endurecimiento de Integrity Constraints (FKs):** Se actualizaron las declaraciones FKs en el maestro SQL a `ON DELETE RESTRICT ON UPDATE CASCADE` para las dependencias hacia `inventario` y `departamentos`, blindándolas ante borrados accidentales destructivos directos en la BD.
+  3. **Endpoints de Borrado Lógico:** Se modificaron los endpoints de eliminación para que ejecuten actualizaciones lógicas (`UPDATE ... SET eliminado = 1 WHERE _id = ?`) en lugar de eliminaciones físicas (`DELETE`):
+     - `POST /insumos/eliminar` (en `inventory.php`)
+     - `DELETE /departamentos/{id}` (en `products.php`)
+     - `POST /catalogo-tintas/eliminar` (en `catalogs.php`)
+     - `POST /catalogo-colores-tintas/eliminar` (en `catalogs.php`)
+  4. **Filtros de Listados Activos:** Se agregaron condiciones `eliminado = 0` en las consultas que alimentan las vistas y selectores activos:
+     - Catálogos generales de insumos, departamentos y tintas/colores.
+     - Reportes generales activos y generación de gráficos de stock.
+     - Generación y validación/importación de plantillas Excel de inventario.
+     - Listado general y asignaciones a perfiles de empleados durante el login en `auth.php` (evitando cargar módulos de departamentos eliminados).
+  5. **Migración en Desarrollo:** Se aplicó el script DDL de alteración de tablas y recreación de FKs con `RESTRICT` en la base de datos de desarrollo `api_emp_194` (VPS `vps-contabo-dev`).
+  6. **Sincronización:** Se confirmaron y subieron los cambios de backend locales a GitHub y se sincronizó el servidor de desarrollo utilizando `ninesys-hub/bin/deploy_backend.sh` (opción 2) y reseteando OPcache.
+  7. **Verificación de Integridad:** Se constató mediante pruebas SQL directas en el VPS que:
+     - MariaDB bloquea con el error de integridad 1451 (RESTRICT) cualquier intento de eliminación física de insumos o departamentos que posean registros dependientes.
+     - El flujo de borrado lógico actualiza correctamente el estado a `eliminado = 1` preservando los históricos de movimientos y consumos intactos en la base de datos.
+- **Resultado:** Éxito.
+- **Logro Conseguido:** Se blinda la base de datos contra inconsistencias y pérdida de datos históricos, asegurando el correcto funcionamiento de las vistas de reportes históricos mientras se filtran del flujo diario comercial/producción de forma limpia.

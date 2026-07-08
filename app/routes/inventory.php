@@ -1850,6 +1850,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 inventario i
             LEFT JOIN
                 catalogo_colores_tintas cct ON i.id_color_tinta = cct._id
+            WHERE
+                i.eliminado = 0
             ORDER BY
                 i.insumo ASC;';
         } else {
@@ -1878,6 +1880,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 catalogo_colores_tintas cct ON i.id_color_tinta = cct._id
             WHERE
                 i.departamento = '" . $args['departamento'] . "'
+                AND i.eliminado = 0
             ORDER BY
                 i.insumo ASC;";
         }
