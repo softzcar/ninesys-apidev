@@ -1,0 +1,29 @@
+# Tarea Completada: Despliegue de Optimización a Producción (Empresa 194) y Adecuación de Sincronización
+
+- **Fecha**: 2026-07-07
+- **Hora**: 16:58:00 (Local)
+- **ID Conversación**: `fec015dc-1d45-4838-b8ee-e8b3d57ea749`
+
+## Descripción del Trabajo
+Se realizó el despliegue del backend y las modificaciones estructurales y de rendimiento a la base de datos de la empresa activa en Producción (Empresa **ID 194**). Adicionalmente, se adecuó el script de sincronización de datos de producción a desarrollo.
+
+## Acciones Realizadas
+
+### 1. Base de Datos de Producción (Empresa 194)
+- **Respaldo**: Se generó un backup preventivo de la base de datos `api_emp_194` en el servidor de producción (`vps-contabo-prod`).
+- **Cambios Estructurales**: Se aplicó la creación de las columnas de eliminación lógica (`eliminado`) en las tablas `catalogo_telas`, `categories` y `products`, garantizando que el backend actualizado no falle con errores de sintaxis en producción.
+- **Claves Foráneas**: Se corrigió el constraint `fk_gastos_registros_plantilla_194` de la tabla `gastos_registros` en producción para agregar `ON UPDATE CASCADE`, dejándola idéntica a la plantilla de nuevas empresas.
+- **Índices de Rendimiento**: Se crearon los índices `idx_empleado_moment`, `idx_fecha_pago`, `idx_comision_tipo_fecha` en la tabla `pagos` y el índice `idx_id_pago` en la tabla `pagos_salarios` en producción.
+
+### 2. Despliegue del Backend
+- Se subieron los cambios de la rama `refactor/modular-routes` (incluyendo la plantilla `create_new_company_api_emp_N.sql` con los nuevos índices).
+- Se ejecutó el script centralizado `/home/developer/Escritorio/niesys/ninesys-hub/bin/deploy_backend.sh` para actualizar producción.
+
+### 3. Modificación del Script de Sincronización
+- Se editó el script `/home/developer/Escritorio/niesys/ninesys-hub/bin/sync_194_prod_to_dev.sh`.
+- Se eliminó el parámetro `--skip-triggers` del dump de producción para permitir la copia de triggers en la sincronización.
+- Se incorporó un filtro `sed` a la restauración en desarrollo para limpiar y reemplazar dinámicamente las cláusulas `DEFINER` de producción por `DEFINER=CURRENT_USER`. Esto previene fallos de permisos al restaurar y garantiza que no se pierdan los triggers de auditoría en desarrollo.
+
+## Verificación
+- Se comprobó mediante `EXPLAIN` en producción que las consultas pesadas de pagos utilizan los índices agregados, reduciendo el tiempo de ejecución en MySQL a **37 ms** (una mejora del 99.8%).
+- Se corrió el script de sincronización `sync_194_prod_to_dev.sh`, confirmando la correcta importación de los datos reales de producción (6,041 órdenes) y la integridad de las configuraciones locales de desarrollo.

@@ -1,0 +1,24 @@
+# Bitácora de Tarea - Agregación de monto_pago en el Reporte de Empleados
+
+**Fecha:** 2026-07-01
+**Hora:** 16:47:00
+**Autor:** Antigravity AI
+
+## Descripción de la Tarea
+
+Resolver la discrepancia de comisiones acumuladas del empleado (por ejemplo, la diferencia de $0.22 en el reporte de Yamir Caicedo) en comparación con la planilla general del administrador.
+
+### Solución:
+- En la ruta de la API `/reportes/resumen/empleados/{id_empleado}/{id_departamento}` (en `app/routes/orders.php`), la sentencia SQL agrupaba los lotes por `id_orden` pero seleccionaba `d.monto_pago` directamente. Esto causaba que si un empleado tenía múltiples registros de comisiones desglosadas para la misma orden en el mismo departamento, se tomara sólo un registro y se truncara el total en la vista del empleado.
+- Se cambió el select a `SUM(d.monto_pago) AS monto_pago` para acumular correctamente la suma de todas las comisiones liquidadas de la orden dentro del agrupado.
+- Esto alinea la relación de pagos del empleado de producción con la planilla de administración, resolviendo inconsistencias de decimales.
+
+## Archivos Modificados
+
+### [orders.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/orders.php)
+- Se reemplazó `d.monto_pago` por `SUM(d.monto_pago) AS monto_pago` en la query de `/reportes/resumen/empleados/...`.
+
+## Despliegue y Verificación
+- Se realizó commit del cambio en el backend (commit `d23151e`).
+- Se sincronizaron los cambios con el servidor de desarrollo Contabo Dev mediante `deploy_backend.sh` (Opción 2).
+- El usuario podrá validar que la relación de pagos de Yamir Caicedo en el departamento de Impresión muestre "Comisiones Terminadas: $26.42", coincidiendo exactamente con la planilla de la administración.

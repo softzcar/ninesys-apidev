@@ -1,0 +1,29 @@
+# Bitácora de Tarea - Corrección Relación de Pagos de Diseñadores en el Backend
+
+**Fecha:** 2026-07-01
+**Hora:** 16:35:00
+**Autor:** Antigravity AI
+
+## Descripción de la Tarea
+
+Corregir la discrepancia de datos mostrada en la página `/relacion-de-pagos` para los diseñadores en comparación con la planilla general de pagos de la administración.
+
+### Análisis y Solución:
+1. **Comisiones Terminadas**:
+   - En la ruta de la API `/reportes/resumen/disenadores/{id_empleado}/{id_departamento}` (en `app/routes/orders.php`), la query de `ordenes_terminadas` filtraba incorrectamente por `b.fecha_pago IS NOT NULL`, trayendo todas las comisiones pagadas en el pasado.
+   - Se modificó la condición a `b.fecha_pago IS NULL` para traer las comisiones de diseño completadas y pendientes de cobrar en el periodo actual.
+   - Adicionalmente, se filtró por el departamento activo (`b.detalle = '{$object['departamento']}'`) para evitar cruces erróneos con otras tareas del mismo empleado.
+
+2. **Comisiones Pendientes**:
+   - La query de `ordenes_pendientes` no traía la columna `monto_pago` de la base de datos (ocasionando un valor `undefined` en el frontend sumado como `$0.00`) y realizaba un `JOIN` no restrictivo con la tabla `pagos` que dependía de la existencia de comisiones previas.
+   - Se reestructuró la query para traer las revisiones asignadas al diseñador (`a.id_empleado = {$args['id_empleado']}`) que aún no han sido aprobadas (`a.estatus != 'Aprobado'`), estableciendo de manera controlada `0 AS monto_pago` y `'pendiente' AS progreso`.
+
+## Archivos Modificados
+
+### [orders.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/orders.php)
+- Se actualizaron las sentencias SQL para `ordenes_terminadas` y `ordenes_pendientes` en la ruta `/reportes/resumen/disenadores/{id_empleado}/{id_departamento}`.
+
+## Despliegue y Verificación
+- Se realizó commit del cambio en el repositorio de backend en la rama `refactor/modular-routes`.
+- Se ejecutó el script centralizado de despliegue `ninesys-hub/bin/deploy_backend.sh` (Opción 2) para subir y sincronizar los cambios al servidor de desarrollo Contabo Dev.
+- El usuario podrá verificar que al ingresar como Maru (Diseño), "Comisiones Terminadas" muestre la suma real de las dos comisiones de diseño pendientes de cobro ($11.00) y que el total coincida con la Planilla de Pagos ($41.00).

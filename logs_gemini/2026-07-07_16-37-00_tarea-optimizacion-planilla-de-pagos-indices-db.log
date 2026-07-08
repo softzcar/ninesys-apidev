@@ -1,0 +1,36 @@
+# Tarea Completada: Optimización de Endpoints de Planilla de Pagos e Índices de Base de Datos
+
+- **Fecha**: 2026-07-07
+- **Hora**: 16:37:00 (Local)
+- **ID Conversación**: `fec015dc-1d45-4838-b8ee-e8b3d57ea749`
+
+## Descripción del Problema
+La página `/empleados/planilla-de-pagos` presentaba un retraso crítico de más de 20 segundos al cargar los endpoints `https://api.nineteencustom.com/pagos/semana/empleados` y `https://api.nineteencustom.com/empleados`.
+
+## Diagnóstico y Análisis
+Al analizar las consultas con `EXPLAIN` en el VPS de Desarrollo (`vps-contabo-dev`) se detectó que:
+1. Las subconsultas para calcular la última semana pagada (`ultima_semana_pagada`) y última fecha de pago (`ultima_fecha_pago`) realizaban un escaneo completo de la tabla `pagos` (table scan) al no contar con un índice compuesto en `(id_empleado, moment)`.
+2. Al no existir un índice en `pagos_salarios.id_pago`, las uniones (`JOIN`) con la tabla `pagos` se ejecutaban como un *Block Nested Loop (BNL) Join* muy ineficiente.
+3. El filtro principal por pagos pendientes (`fecha_pago IS NULL` y `comision_tipo`) se ejecutaba sin índices en la tabla `pagos`, obligando a realizar búsquedas completas secuenciales.
+
+## Acciones Realizadas
+1. **Creación de Índices en Desarrollo**:
+   Se crearon manualmente los siguientes índices de rendimiento en la base de datos de pruebas (`api_emp_194`) en el VPS de Desarrollo:
+   - `idx_empleado_moment` en `pagos (id_empleado, moment)`
+   - `idx_fecha_pago` en `pagos (fecha_pago)`
+   - `idx_comision_tipo_fecha` en `pagos (comision_tipo, fecha_pago)`
+   - `idx_id_pago` en `pagos_salarios (id_pago)`
+
+   *El tiempo de ejecución de las consultas bajó de **21.62 segundos** a **39 milisegundos**, resolviendo por completo el cuello de botella.*
+
+2. **Actualización de la Plantilla de Base de Datos**:
+   Se actualizaron las definiciones `ALTER TABLE` de las tablas `pagos` y `pagos_salarios` en la plantilla de creación de nuevas empresas:
+   - Modificado [create_new_company_api_emp_N.sql](file:///home/developer/Escritorio/niesys/ninesys-api/public/model/create_new_company_api_emp_N.sql) para incluir los índices de manera permanente para nuevas implementaciones.
+
+3. **Despliegue y Sincronización**:
+   - Se commitearon los cambios en la rama de desarrollo activa `refactor/modular-routes`.
+   - Se ejecutó el despliegue al servidor de desarrollo usando el script de despliegue centralizado: `/home/developer/Escritorio/niesys/ninesys-hub/bin/deploy_backend.sh`.
+
+## Verificación
+- Las consultas SQL de los endpoints se ejecutaron y perfilaron mediante SSH en la base de datos del servidor de desarrollo, confirmando que el optimizador de base de datos utiliza los índices correspondientes (`Using index for group-by`, `ref` en lugar de `ALL`).
+- Los tiempos de ejecución ahora son inferiores a **50 ms**.

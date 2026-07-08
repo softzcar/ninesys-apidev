@@ -1,0 +1,23 @@
+- **Solicitud del Usuario:** revisa si tenemos documentada la calve del VPS de desarrollo para conectarse via ssh
+- **Fecha y Hora:** 2026-07-08 09:25:00
+- **Proyecto(s):** ninesys-api
+- **Archivos Involucrados:**
+  - `/home/developer/.ssh/config` (Configuración de SSH del usuario en el PC)
+  - `/home/developer/Escritorio/niesys/ninesys-hub/bin/deploy_backend.sh`
+  - `/home/developer/Escritorio/niesys/MANUAL_MIGRACION_DATABASE.md`
+- **Commits Relacionados:**
+  - Ninguno
+- **Acción Realizada:**
+  1. Se revisó la configuración del archivo de SSH del sistema local (`~/.ssh/config`), confirmando que el host `vps-contabo-dev` está configurado para iniciar sesión como usuario `root` usando autenticación basada en llave SSH (ubicada en `~/.ssh/id_ed25519_vps`).
+  2. Se buscaron referencias de claves, contraseñas o passphrases de SSH en los archivos del workspace (`niesys` y `ninesys-api`). Se constató que no hay contraseñas de SSH en texto plano guardadas en el repositorio (lo cual es correcto por seguridad).
+  3. Se listaron las credenciales de base de datos asociadas al servidor de desarrollo documentadas en el repositorio (`ppbT5QsP5FgWIR` para MariaDB root, `"rkyaFy!dAs8L5Lq8"` para la base central `api_empresas`).
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** No es necesario guardar ni documentar frases de paso (passphrases) de llaves SSH privadas en repositorios públicos o locales del proyecto. El sistema del usuario ya gestiona la llave `~/.ssh/id_ed25519_vps`.
+- **Herramienta(s) Utilizada(s):** `grep_search`, `run_command`, `view_file`, `write_to_file`
+- **Resultado:** Éxito
+- **Verificación:** Se revisó la salida correcta de la configuración del host SSH y se validó que no existan fugas de claves privadas o passphrases en los archivos públicos.
+- **Logro Conseguido:** Claridad absoluta sobre el mecanismo de autenticación del VPS de desarrollo (llave SSH `id_ed25519_vps`) y documentación de contraseñas de MariaDB de desarrollo.
+- **Referencias de Sesión (Contexto):**
+  - Conversación ID: bb33a764-9260-453e-9798-4190cf72ace9
+- **Observaciones de Gemini:** La configuración de alias ssh en `~/.ssh/config` facilita enormemente el despliegue al no requerir el paso de credenciales o IPs explícitas por línea de comandos.
+- **Respuesta de Gemini:** Se informó al usuario que la conexión es por llave SSH en la ruta configurada del sistema y que no hay clave en texto plano documentada para SSH, pero sí para la base de datos MariaDB.

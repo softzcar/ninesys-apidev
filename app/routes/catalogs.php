@@ -187,7 +187,7 @@ return function (App $app) {
       error_log("Error en migración auto-ejecutable y adaptativa del catálogo de tintas y colores: " . $e->getMessage());
     }
 
-    $sql = 'SELECT * FROM catalogo_tintas ORDER BY nombre';
+    $sql = 'SELECT * FROM catalogo_tintas WHERE eliminado = 0 ORDER BY nombre';
     $object['data'] = $localConnection->goQuery($sql);
     $localConnection->disconnect();
 
@@ -227,7 +227,7 @@ return function (App $app) {
     $sql = 'UPDATE catalogo_tintas SET ' . $values . ' WHERE _id = ' . $args['_id'] . ';';
     $localConnection->goQuery($sql);
 
-    $sqlAll = 'SELECT * FROM catalogo_tintas ORDER BY nombre';
+    $sqlAll = 'SELECT * FROM catalogo_tintas WHERE eliminado = 0 ORDER BY nombre';
     $object['data'] = $localConnection->goQuery($sqlAll);
     $localConnection->disconnect();
 
@@ -242,7 +242,7 @@ return function (App $app) {
     $body = $request->getParsedBody();
     $id = isset($body['id']) ? intval($body['id']) : 0;
 
-    $sql = "DELETE FROM catalogo_tintas WHERE _id = $id";
+    $sql = "UPDATE catalogo_tintas SET eliminado = 1 WHERE _id = $id";
     $object['response'] = $localConnection->goQuery($sql);
     
     $localConnection->disconnect();
@@ -256,7 +256,7 @@ return function (App $app) {
   /** * CATALOGO COLORES TINTAS */
   $app->get('/catalogo-colores-tintas', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
-    $sql = 'SELECT * FROM catalogo_colores_tintas ORDER BY nombre';
+    $sql = 'SELECT * FROM catalogo_colores_tintas WHERE eliminado = 0 ORDER BY nombre';
     $object['data'] = $localConnection->goQuery($sql);
     $localConnection->disconnect();
 
@@ -297,7 +297,7 @@ return function (App $app) {
     $body = $request->getParsedBody();
     $id = isset($body['id']) ? intval($body['id']) : 0;
 
-    $sql = "DELETE FROM catalogo_colores_tintas WHERE _id = ?";
+    $sql = "UPDATE catalogo_colores_tintas SET eliminado = 1 WHERE _id = ?";
     $object['response'] = $localConnection->goQuery($sql, [$id]);
     
     $localConnection->disconnect();
@@ -319,7 +319,7 @@ return function (App $app) {
     $sql = 'UPDATE catalogo_colores_tintas SET codigo = ?, nombre = ?, color_hex = ? WHERE _id = ?';
     $localConnection->goQuery($sql, [$codigo, $nombre, $color_hex, $args['_id']]);
 
-    $sqlAll = 'SELECT * FROM catalogo_colores_tintas ORDER BY nombre';
+    $sqlAll = 'SELECT * FROM catalogo_colores_tintas WHERE eliminado = 0 ORDER BY nombre';
     $object['data'] = $localConnection->goQuery($sqlAll);
     $localConnection->disconnect();
 

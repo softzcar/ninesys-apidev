@@ -1,0 +1,25 @@
+# Bitácora de Tarea - Corrección Multiplicación de Comisiones usando Subconsultas
+
+**Fecha:** 2026-07-01
+**Hora:** 16:52:00
+**Autor:** Antigravity AI
+
+## Descripción de la Tarea
+
+Resolver la multiplicación de comisiones terminadas del empleado (por ejemplo, los $86.02 calculados para Yamir Caicedo cuando debían ser $26.92) causada por duplicaciones del JOIN uno-a-muchos con la tabla de productos de la orden.
+
+### Solución:
+- En la query del endpoint `/reportes/resumen/empleados/{id_empleado}/{id_departamento}` (en `app/routes/orders.php`), se eliminó la unión directa de `JOIN pagos d ON d.id_lotes_detalles = a._id`.
+- Se reemplazó la obtención de `monto_pago` y `comision_tipo` por subconsultas escalares basadas en el ID de lote asignado y con el filtro `fecha_pago IS NULL` (por ejemplo: `(SELECT SUM(monto_pago) FROM pagos WHERE id_lotes_detalles = a._id AND fecha_pago IS NULL) AS monto_pago`).
+- Se actualizó el filtro de pagos pendientes en el `WHERE` mediante una condición `EXISTS` sobre la tabla `pagos`.
+- Esto aísla por completo el monto de pago del lote de las uniones de `ordenes_productos` y `products_tiempos_de_produccion`, evitando cualquier inflación de comisiones por productos múltiples.
+
+## Archivos Modificados
+
+### [orders.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/orders.php)
+- Se actualizó la query de `/reportes/resumen/empleados/...` para usar subconsultas escalares de pagos y condición EXISTS.
+
+## Despliegue y Verificación
+- Se realizó commit del cambio en el backend (commit `d8cf508`).
+- Se sincronizaron los cambios con el servidor de desarrollo Contabo Dev mediante `deploy_backend.sh` (Opción 2).
+- El usuario podrá validar que la relación de pagos de Yamir Caicedo en Impresión muestre exactamente "Comisiones Terminadas: $26.92", coincidiendo plenamente con la planilla del administrador.

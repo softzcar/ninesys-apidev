@@ -923,7 +923,7 @@ return function (App $app) {
   $app->get('/departamentos', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT _id, departamento, id_modulo, enviar_mensaje, orden_proceso, asignar_numero_de_paso, tipo FROM departamentos ORDER BY orden_proceso ASC';
+    $sql = 'SELECT _id, departamento, id_modulo, enviar_mensaje, orden_proceso, asignar_numero_de_paso, tipo FROM departamentos WHERE eliminado = 0 ORDER BY orden_proceso ASC';
     $data = $localConnection->goQuery($sql);
     $localConnection->disconnect();
 
@@ -937,7 +937,7 @@ return function (App $app) {
   $app->get('/departamentos-empleado/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "SELECT a.id_departamento, b.departamento, b.orden_proceso, b.tipo from api_empresas.empresas_usuarios_departamentos a JOIN departamentos b On b._id = a.id_departamento WHERE a.id_empleado = {$args['id_empleado']}";
+    $sql = "SELECT a.id_departamento, b.departamento, b.orden_proceso, b.tipo from api_empresas.empresas_usuarios_departamentos a JOIN departamentos b On b._id = a.id_departamento AND b.eliminado = 0 WHERE a.id_empleado = {$args['id_empleado']}";
     $data = $localConnection->goQuery($sql);
     $localConnection->disconnect();
 
@@ -1008,7 +1008,7 @@ return function (App $app) {
   $app->delete('/departamentos/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "DELETE FROM departamentos WHERE _id = {$args['id_departamento']}";
+    $sql = "UPDATE departamentos SET eliminado = 1 WHERE _id = {$args['id_departamento']}";
     $object['response'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();

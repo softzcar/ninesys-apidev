@@ -1,0 +1,32 @@
+- **Solicitud del Usuario:** Reemplazar el método de obtención de la tasa (que usa APIs externas) por el scraper del directorio tasa-bcv que trae la tasa directamente del sitio oficial del BCV (bcv.org.ve). Asegurar que al entrar a la pestaña 'Pago y asignación' del wizard de nueva orden la tasa se actualice, manteniendo los métodos actuales de actualización. Asegurar que tanto administradores como vendedores (POS /comercializacion/ordenes) refresquen la tasa al ingresar (sospecha: a los vendedores no). VERIFICAR primero que el script retorna la tasa correctamente.
+- **Fecha y Hora:** 2026-07-02 12:00:00
+- **Proyecto(s):** Backend (ninesys-api) + Frontend (app_multi)
+- **Archivos Involucrados:**
+    - tasa-bcv/bcv_scraper.js (script de referencia, Node)
+    - ninesys-api: app/routes.php (endpoint /bcv-rates)
+    - app_multi: components/menus/MenuLoader.vue, components/ordenes/nueva.vue
+- **Commits Relacionados:** Backend: 7c95a37 (scraper), 30f11b7 (libxml fix), 580a652 (caché). Frontend: 48b7b53.
+- **Acción Realizada:**
+  1. VERIFICACIÓN del script (lo primero pedido): `node bcv_scraper.js` → tasa 639.7029, consistente en 3 corridas, coincide con lo que muestra el dashboard. Y se replicó en PHP (curl + DOMXPath) → mismo 639.7029.
+  2. Backend: /bcv-rates (app/routes.php:224) usaba la API de terceros bcv.justcarlux.dev + fallback dolarapi. Se reimplementó el scraper OFICIAL en PHP dentro del endpoint (curl a https://www.bcv.org.ve/ con SSL verify off + cabeceras de navegador; DOMXPath //*[@id="dolar"]//strong; limpieza puntos-miles y coma decimal). Se mantiene el fallback a DolarAPI. Se eliminó la función fetchUrl con nombre (riesgo de redeclare) usando closures.
+  3. Bug encontrado y corregido: el ShutdownHandler devolvía 500 ante CUALQUIER error de error_get_last() (no filtra a fatales). @$dom->loadHTML sobre el HTML malformado del BCV dejaba warnings de libxml en error_get_last() → falso 500 pese a que el scraping funcionaba. Solución: libxml_use_internal_errors(true) alrededor de loadHTML.
+  4. Caché de 10 min en /bcv-rates (archivo en sys_get_temp_dir) para no golpear bcv.org.ve en cada carga de menú de cada usuario (ahora que el refresco es para todos).
+  5. Frontend — refresco admin-vs-vendedor (POS): MenuLoader.vue disparaba cargarTasasAutomaticas SOLO si departamento === 'Administración' (o faltaban tasas). Se quitó ese gate (bloque siempre se ejecuta) → ahora TODOS (admins y vendedores) refrescan la tasa BCV de referencia al ingresar.
+  6. Frontend — pestaña 'Pago y asignación': en nueva.vue el watcher de tabIndex, al llegar al índice 3 (esa pestaña), ahora dispara login/cargarTasasAutomaticas({forceUpdate:true}) para usar la tasa BCV actual en el cobro.
+- **Inconvenientes y Desafíos:**
+  - El endpoint daba 500 sin log claro; se rastreó hasta el ShutdownHandler + los warnings de libxml (el HTML del BCV es malformado). El scraping funcionaba en CLI pero fallaba bajo la web SAPI por ese motivo.
+  - Se confirmó que apiBaseUrl en currency-rates.js NO es un bug: el plugin (export default) lo setea a $config.API por entorno.
+  - El deploy de frontend se cortó una vez por timeout de 2 min (npm run generate tarda más); se re-ejecutó con más tiempo.
+- **Decisión Final y Justificación:** Reimplementar el scraper en PHP dentro de /bcv-rates (sin depender de Node, que en el server está bajo /root/.nvm no accesible al usuario web). El frontend ya prioriza /bcv-rates → recibe la tasa oficial sin más cambios de fuente; se mantienen los métodos existentes (botón manual en formMonedas, fallback dolarapi). Caché para proteger a bcv.org.ve.
+- **Herramienta(s) Utilizada(s):** Node, Bash (php -l, node --check, ssh, curl, git, deploy scripts), Read, Edit
+- **Resultado:** Éxito en Dev. /bcv-rates devuelve {"rates":{"usd":639.7029},"fuente":"bcv_oficial"}; caché 2.6s→0.6s. Frontend desplegado.
+- **Verificación:** node bcv_scraper.js=639.7029 (x3). PHP local=639.7029. /bcv-rates Dev=bcv_oficial 639.7029, 2ª llamada desde caché. node --check OK en MenuLoader.vue y nueva.vue. Deploy backend+frontend a Dev confirmados.
+- **Logro Conseguido:** La tasa BCV se obtiene ahora del sitio OFICIAL (bcv.org.ve) en vez de una API de terceros; se refresca para vendedores (no solo admins) al ingresar al POS y al entrar a 'Pago y asignación'; con caché para no saturar el BCV. Se corrigió de paso un falso 500 por el ShutdownHandler + libxml.
+- **Referencias de Sesión (Contexto):** Script de referencia: tasa-bcv/bcv_scraper.js. Endpoint: GET /bcv-rates. Acción store: login/cargarTasasAutomaticas. Puntos de despacho: MenuLoader.vue (todos ahora), formMonedas.vue (botón manual), nueva.vue (tab 3).
+- **DESPLIEGUE A PRODUCCIÓN (2026-07-02, orden explícita del usuario "Despliega a Producción"):**
+    - Backend: deploy_backend.sh opción 1 → prod f7531f8 → 580a652 + OPcache reset. Verificado: https://api.nineteencustom.com/bcv-rates devuelve {"rates":{"usd":639.7029},"fuente":"bcv_oficial"}, caché 2.2s→0.5s.
+    - Frontend: deploy.sh opción 1 (build env producción nineteencustom + rsync). Verificado: dist con 114 refs a api.nineteencustom y las 9 a nineteengreen son solo el default `$config.API || fallback` (nunca se usa en prod). Commits del frontend pusheados a origin (aff64f3 → 48b7b53).
+    - PRECAUCIÓN aplicada: se hizo `git stash` de un cambio sin commitear AJENO a esta tarea (components/inventario/ResumenSkuModal.vue, filtro cantidad<=0) para NO enviarlo a producción; restaurado tras el despliegue (sigue como WIP local sin commitear).
+    - Sin cambios de BD en esta tarea (la tasa BCV no toca la base de datos).
+- **Observaciones de Gemini:** El usuario debe hacer hard refresh / limpiar Service Worker en producción para tomar el build nuevo (la PWA con skipWaiting debería auto-actualizar). Deuda técnica detectada aparte: el ShutdownHandler debería filtrar a solo tipos fatales (E_ERROR, etc.) en vez de disparar 500 ante cualquier warning en error_get_last().
+- **Respuesta de Gemini:** Verificado el script (639.7029) y reimplementado en PHP dentro de /bcv-rates (tasa oficial del BCV, reemplaza bcv.justcarlux.dev, mantiene fallback, con caché 10 min). Frontend: la tasa se refresca para vendedores (no solo admins) y al entrar a 'Pago y asignación'. Todo en Dev; falta probar en UI y desplegar a producción bajo tu orden.

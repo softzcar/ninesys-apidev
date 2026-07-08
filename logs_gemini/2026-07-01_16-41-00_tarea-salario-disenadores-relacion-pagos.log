@@ -1,0 +1,24 @@
+# Bitácora de Tarea - Corrección Visualización del Salario de Diseñadores en Relación de Pagos
+
+**Fecha:** 2026-07-01
+**Hora:** 16:41:00
+**Autor:** Antigravity AI
+
+## Descripción de la Tarea
+
+Corregir la omisión en el endpoint de diseñadores donde no se retornaban los datos salariales del empleado, lo que impedía mostrar el salario pendiente en la página `/relacion-de-pagos` cuando el empleado tenía asignado el rol de "Diseño".
+
+### Análisis y Solución:
+- En la ruta de la API `/reportes/resumen/disenadores/{id_empleado}/{id_departamento}` (en `app/routes/orders.php`), a diferencia de la ruta de empleados normales, no se realizaba la consulta a la tabla `api_empresas.empresas_usuarios` para traer los datos salariales (`salario_tipo`, `salario_monto`, `salario_periodo`).
+- Se agregó la consulta correspondiente para poblar `$object['datos_empleado']` en la respuesta JSON.
+- Esto habilita al frontend ([TablaDePagos.vue](file:///home/developer/Escritorio/niesys/app_multi/components/empleados/TablaDePagos.vue)) a renderizar correctamente el badge de compensación "Salario más Comisión" y la fila del salario pendiente (Semanal, $30.00).
+
+## Archivos Modificados
+
+### [orders.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/orders.php)
+- Se añadió la query `$sqlEmpleado` en la ruta `/reportes/resumen/disenadores/...`.
+
+## Despliegue y Verificación
+- Se realizó commit del cambio en el repositorio de backend (commit `20dddef`).
+- Se ejecutó el script `ninesys-hub/bin/deploy_backend.sh` (Opción 2) para sincronizar los cambios con el servidor de desarrollo Contabo Dev.
+- El usuario podrá verificar que al ingresar como Maru en el departamento de Diseño en `/relacion-de-pagos`, ahora se muestra el badge de compensación y la fila con su Salario Pendiente ($30.00).

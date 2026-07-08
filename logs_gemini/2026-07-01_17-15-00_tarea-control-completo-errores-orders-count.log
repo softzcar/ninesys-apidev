@@ -1,0 +1,28 @@
+# Bitácora de Tarea - Manejo Seguro y Validación del Endpoint orders-count
+
+**Fecha:** 2026-07-01
+**Hora:** 17:15:00
+**Autor:** Antigravity AI
+
+## Descripción de la Tarea
+
+Corregir la caída persistente con Error 500 al consultar el endpoint `/customers/orders-count/{email}/{id}` cuando la petición se ejecuta sin cabecera de autorización (como en pruebas directas en el navegador) o cuando ocurren fallos de conexión genéricos.
+
+### Solución:
+- En [products.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/products.php), se protegió la lectura del resultado de la base de datos local `goQuery` para `ordenes_ns`. En lugar de acceder ciegamente a `$tmpRes[0]['total_ordenes']`, se añadió una validación segura con `is_array` e `isset` para retornar `0` si la base de datos no está conectada o no hay filas disponibles.
+- En [woome.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/lib/woome.php), se cambió la captura de excepciones de `PDOException` a `\Throwable` en el método `getOrdersCount` y `connectToWordpressDB`. Esto garantiza que cualquier tipo de error (sea de PDO, fallas de variables, o de constantes no definidas) sea capturado sin provocar la detención fatal del motor PHP.
+
+## Archivos Modificados
+
+### [products.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/products.php)
+- Se añadió verificación de array en la respuesta local de la query.
+
+### [woome.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/lib/woome.php)
+- Se cambiaron los catch a `\Throwable` para interceptar errores genéricos de PHP 8.x.
+
+## Despliegue y Verificación
+- Se realizó el commit de los cambios (commit `da3b9d8`).
+- Se desplegaron con éxito en el servidor de desarrollo Contabo Dev.
+- Al consultar directamente la URL de prueba en el navegador (que no envía `Authorization` y por ende antes causaba el error 500):
+  `https://api.nineteengreen.com/customers/orders-count/email@error500.com/1737`
+  Ahora responde con un HTTP 200 y `{"ordenes_wc":0,"ordenes_ns":0}` de forma 100% controlada.

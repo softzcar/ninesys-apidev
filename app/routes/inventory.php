@@ -15,7 +15,7 @@ return function (App $app) {
             $localConnection = new LocalDB();
 
             // Obtener departamentos para la lista de validación
-            $departamentos = $localConnection->goQuery('SELECT _id, departamento FROM departamentos');
+            $departamentos = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE eliminado = 0');
             if (!is_array($departamentos)) {
                 $departamentos = [];
             }
@@ -401,7 +401,7 @@ return function (App $app) {
             // Obtener mapeos para convertir nombres de departamentos a IDs
             // NOTA: La columna 'departamento' en 'inventario' guarda el NOMBRE del departamento,
             // este mapeo se usa principalmente para validar que el nombre proporcionado exista.
-            $departamentos_db = $db->goQuery('SELECT _id, departamento FROM departamentos');
+            $departamentos_db = $db->goQuery('SELECT _id, departamento FROM departamentos WHERE eliminado = 0');
             $departamento_map = array_column($departamentos_db, '_id', 'departamento');  // ['NombreDepartamento' => ID_Departamento]
 
             // === INICIO DE CAMBIOS: Mapeo para el catálogo de insumos ===
@@ -892,7 +892,7 @@ return function (App $app) {
     $app->get('/insumos', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
 
-        $sql = 'SELECT * FROM inventario WHERE cantidad > 0 ORDER BY insumo ASC';
+        $sql = 'SELECT * FROM inventario WHERE cantidad > 0 AND eliminado = 0 ORDER BY insumo ASC';
         $object = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();
@@ -1057,7 +1057,7 @@ return function (App $app) {
         $miEmpleado = $request->getParsedBody();
         $localConnection = new LocalDB();
 
-        $sql = 'DELETE FROM inventario WHERE _id =  ' . $miEmpleado['id'];
+        $sql = 'UPDATE inventario SET eliminado = 1 WHERE _id =  ' . $miEmpleado['id'];
         $object['sql'] = $sql;
         $object['response'] = json_encode($localConnection->goQuery($sql));
 
@@ -2814,7 +2814,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
             $localConnection = new LocalDB();
             
-            $conditions = [];
+            $conditions = ["eliminado = 0"];
             $queryParams = [];
             
             // Filtro por departamento
@@ -3848,7 +3848,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 }
 
                 // Cargar mapeos de departamentos
-                $departamentos_db = $db->goQuery('SELECT _id, departamento FROM departamentos');
+                $departamentos_db = $db->goQuery('SELECT _id, departamento FROM departamentos WHERE eliminado = 0');
                 $departamento_map = [];
                 if (is_array($departamentos_db)) {
                     $departamento_map = array_column($departamentos_db, '_id', 'departamento');

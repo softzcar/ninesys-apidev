@@ -1,0 +1,24 @@
+# Bitácora de Tarea - Robustecimiento Consulta WooCommerce ante Fallos de Conexión
+
+**Fecha:** 2026-07-01
+**Hora:** 17:05:00
+**Autor:** Antigravity AI
+
+## Descripción de la Tarea
+
+Corregir el bug que provocaba un Error 500 al eliminar un cliente de forma que el endpoint `/customers/orders-count/{email}/{id}` devuelva una respuesta exitosa controlada, incluso si el servidor no se puede conectar a la base de datos de WordPress (común en el entorno de desarrollo).
+
+### Solución:
+- En [woome.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/lib/woome.php), se reemplazó la llamada a `die()` en el catch de `connectToWordpressDB()` por lanzar una excepción estándar `PDOException`, evitando abortar Slim abruptamente.
+- En `getOrdersCount($customer_email)`, se reubicó la llamada a `connectToWordpressDB()` al interior del bloque `try-catch` y se añadió una validación para asegurar la existencia de `$this->pdo` antes de realizar la consulta.
+- Se robusteció el retorno del total de órdenes (`return (is_array($mat) && isset($mat[0]['total_ordenes'])) ? intval($mat[0]['total_ordenes']) : 0;`) para retornar `0` en caso de fallas de conexión o consultas vacías en lugar de arrojar errores fatales por índice indefinido.
+
+## Archivos Modificados
+
+### [woome.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/lib/woome.php)
+- Se actualizaron los métodos `connectToWordpressDB()` y `getOrdersCount($customer_email)`.
+
+## Despliegue y Verificación
+- Se realizó commit del cambio en el backend (commit `8db1121`).
+- Se sincronizaron los cambios con el servidor de desarrollo Contabo Dev mediante `deploy_backend.sh` (Opción 2).
+- El usuario podrá verificar que la consulta GET a `https://api.nineteengreen.com/customers/orders-count/elvisricardo1@gmail.com/372` responde exitosamente con HTTP 200 y el JSON conteniendo el fallback (`{"ordenes_wc":0,"ordenes_ns":0}`), lo que permite que proceda la eliminación del cliente.

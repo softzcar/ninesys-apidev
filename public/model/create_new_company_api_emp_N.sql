@@ -84,6 +84,7 @@ CREATE TABLE `catalogo_colores_tintas` (
   `codigo` varchar(16) NOT NULL COMMENT 'Código corto del color (ej. C, M, Y, K, W, V)',
   `nombre` varchar(64) NOT NULL COMMENT 'Nombre completo del color/insumo',
   `color_hex` varchar(7) DEFAULT '#808080' COMMENT 'Color hexadecimal para representación visual',
+  `eliminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Borrado lógico: 0 = activo, 1 = eliminado/oculto',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo maestro de colores y canales de tintas.';
 
@@ -143,6 +144,7 @@ VALUES (1, 'Tela de Prueba', CURRENT_TIMESTAMP);
 CREATE TABLE `catalogo_tintas` (
   `_id` int(11) NOT NULL COMMENT 'ID único del catálogo de tintas',
   `nombre` varchar(128) NOT NULL COMMENT 'Nombre del tipo de tinta',
+  `eliminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Borrado lógico: 0 = activo, 1 = eliminado/oculto',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo maestro de tipos de tintas.';
 
@@ -357,6 +359,7 @@ CREATE TABLE `departamentos` (
   `enviar_mensaje` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Enviar mensaje al cliente al iniciar el paso',
   `mensaje` text DEFAULT NULL COMMENT 'Mensaje para el cliente máximo 255 caracters',
   `tipo` varchar(50) NOT NULL DEFAULT 'general' COMMENT 'Tipo de comportamiento del departamento (general, corte, impresion, estampado, costura)',
+  `eliminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Borrado lógico: 0 = activo, 1 = eliminado/oculto',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de creación'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Departamentos de la empresa con su orden en el flujo de producción. Define la secuencia de pasos de manufactura y configuración de mensajes al cliente.';
 INSERT INTO `departamentos` (
@@ -511,6 +514,7 @@ CREATE TABLE `inventario` (
   `elongacion` varchar(32) DEFAULT NULL COMMENT 'Elongación del material',
   `detalles` text DEFAULT NULL COMMENT 'Detalles del insumo',
   `departamento` varchar(14) DEFAULT NULL COMMENT 'Departamento al que pertence el insumo',
+  `eliminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Borrado lógico: 0 = activo, 1 = eliminado/oculto',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de insumos disponibles en inventario. Almacena materiales de producción con SKU, cantidad actual e inicial, costo, unidad de medida y departamento asignado.';
 
@@ -1702,13 +1706,13 @@ ADD CONSTRAINT `caja_fondos_ibfk_1` FOREIGN KEY (`id_caja_cierres`) REFERENCES `
 -- catalogo_insumos_productos
 ALTER TABLE `catalogo_insumos_productos`
 ADD CONSTRAINT `cat_ins_prod_ibfk_1` FOREIGN KEY (`id_product`) REFERENCES `products` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `cat_ins_prod_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ADD CONSTRAINT `cat_ins_prod_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- check_tareas
 ALTER TABLE `check_tareas`
 ADD CONSTRAINT `check_tar_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `check_tar_ibfk_2` FOREIGN KEY (`id_lotes_detalles_empleados_asigandos`) REFERENCES `lotes_detalles_empleados_asignados` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `check_tar_ibfk_3` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT `check_tar_ibfk_3` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
 ADD CONSTRAINT `check_tar_ibfk_4` FOREIGN KEY (`id_ordenes_productos`) REFERENCES `ordenes_productos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- crm_campanas_envios
@@ -1746,8 +1750,8 @@ ADD CONSTRAINT `dis_ajust_ibfk_2` FOREIGN KEY (`id_diseno`) REFERENCES `disenos`
 
 -- empleados_lotes_fabricacion
 ALTER TABLE `empleados_lotes_fabricacion`
-ADD CONSTRAINT `emp_lotes_fab_ibfk_1` FOREIGN KEY (`id_departamento_creador`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT `emp_lotes_fab_ibfk_2` FOREIGN KEY (`id_departamento_actual`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `emp_lotes_fab_ibfk_1` FOREIGN KEY (`id_departamento_creador`) REFERENCES `departamentos` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT `emp_lotes_fab_ibfk_2` FOREIGN KEY (`id_departamento_actual`) REFERENCES `departamentos` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- empleados_lotes_fabricacion_items
 ALTER TABLE `empleados_lotes_fabricacion_items`
@@ -1757,14 +1761,14 @@ ADD CONSTRAINT `emp_lotes_items_ibfk_2` FOREIGN KEY (`id_orden`) REFERENCES `ord
 -- inventario_movimientos
 ALTER TABLE `inventario_movimientos`
 ADD CONSTRAINT `inv_mov_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `inv_mov_ibfk_2` FOREIGN KEY (`id_insumo`) REFERENCES `inventario` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT `inv_mov_ibfk_2` FOREIGN KEY (`id_insumo`) REFERENCES `inventario` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
 ADD CONSTRAINT `inv_mov_ibfk_3` FOREIGN KEY (`id_catalogo_insumos_prodcutos`) REFERENCES `catalogo_insumos_productos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT `inv_mov_ibfk_4` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT `inv_mov_ibfk_4` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
 ADD CONSTRAINT `inv_mov_ibfk_5` FOREIGN KEY (`id_producto`) REFERENCES `products` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- inventario_remanentes
 ALTER TABLE `inventario_remanentes`
-ADD CONSTRAINT `inv_rem_ibfk_1` FOREIGN KEY (`id_insumo`) REFERENCES `inventario` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ADD CONSTRAINT `inv_rem_ibfk_1` FOREIGN KEY (`id_insumo`) REFERENCES `inventario` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- inventario_movimientos_historial
 ALTER TABLE `inventario_movimientos_historial`
@@ -1773,12 +1777,12 @@ ADD CONSTRAINT `inv_mov_hist_ibfk_1` FOREIGN KEY (`id_movimiento`) REFERENCES `i
 -- lotes
 ALTER TABLE `lotes`
 ADD CONSTRAINT `lotes_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `lotes_ibfk_2` FOREIGN KEY (`id_departamento_actual`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `lotes_ibfk_2` FOREIGN KEY (`id_departamento_actual`) REFERENCES `departamentos` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- lotes_detalles
 ALTER TABLE `lotes_detalles`
 ADD CONSTRAINT `lotes_det_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `lotes_det_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT `lotes_det_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
 ADD CONSTRAINT `lotes_det_ibfk_3` FOREIGN KEY (`id_ordenes_productos`) REFERENCES `ordenes_productos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `lotes_det_ibfk_4` FOREIGN KEY (`id_reposicion`) REFERENCES `reposiciones` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
 ADD CONSTRAINT `lotes_det_ibfk_5` FOREIGN KEY (`id_woo`) REFERENCES `products` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
@@ -1787,7 +1791,7 @@ ADD CONSTRAINT `lotes_det_ibfk_5` FOREIGN KEY (`id_woo`) REFERENCES `products` (
 ALTER TABLE `lotes_detalles_empleados_asignados`
 ADD CONSTRAINT `ldea_ibfk_1` FOREIGN KEY (`id_lotes_detalles`) REFERENCES `lotes_detalles` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT `ldea_ibfk_2` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `ldea_ibfk_3` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `ldea_ibfk_3` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- lotes_detalles_empleados_asignados_pausas
 ALTER TABLE `lotes_detalles_empleados_asignados_pausas`
@@ -1818,7 +1822,7 @@ ADD CONSTRAINT `ord_audit_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` 
 -- ordenes_borrador_empleado
 ALTER TABLE `ordenes_borrador_empleado`
 ADD CONSTRAINT `ord_borr_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `ord_borr_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ADD CONSTRAINT `ord_borr_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- ordenes_fila_orden
 ALTER TABLE `ordenes_fila_orden`

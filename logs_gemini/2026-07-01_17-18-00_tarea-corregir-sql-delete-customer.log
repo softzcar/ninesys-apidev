@@ -1,0 +1,23 @@
+# Bitácora de Tarea - Corrección de Error Tipográfico en DELETE de Clientes
+
+**Fecha:** 2026-07-01
+**Hora:** 17:18:00
+**Autor:** Antigravity AI
+
+## Descripción de la Tarea
+
+Corregir el error de sintaxis SQL al eliminar un cliente donde la query utilizaba la columna `-id` en vez de la columna real `_id`.
+
+### Solución:
+- En [woome.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/lib/woome.php), en la función `deleteCustomer($id)`, se cambió `$sql = 'DELETE FROM customers WHERE -id = ' . $id;` por `$sql = 'DELETE FROM customers WHERE _id = ' . $id;`.
+- Esto resuelve el error `Column not found: 1054 Unknown column 'id' in 'WHERE'`.
+
+## Archivos Modificados
+
+### [woome.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/lib/woome.php)
+- Se reemplazó `-id` por `_id` en la sentencia DELETE.
+
+## Despliegue y Verificación
+- Se realizó el commit de los cambios (commit `ad0b241`).
+- Se desplegaron con éxito en el servidor de desarrollo Contabo Dev.
+- El usuario podrá realizar el borrado de clientes desde el frontend y validar que ahora se ejecuta exitosamente.
