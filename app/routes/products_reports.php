@@ -309,6 +309,9 @@ return function (App $app) {
                 }
                 
                 $unidadesReales = $realCantidadMap[$id] ?? 0.0;
+                if ($unidadesReales <= 0) {
+                    continue;
+                }
 
                 // Teóricos
                 $estInsumos = $teoricoInsumosMap[$id] ?? 0.0;
@@ -623,6 +626,9 @@ return function (App $app) {
                 $cIds = array_map('intval', explode(',', $p['category_ids']));
                 
                 $unidadesReales = $realCantidadMap[$id] ?? 0.0;
+                if ($unidadesReales <= 0) {
+                    continue;
+                }
                 $estInsumos = $teoricoInsumosMap[$id] ?? 0.0;
                 $estLabor = $teoricoLaborMap[$id] ?? 0.0;
                 $estTotal = $estInsumos + $estLabor;
