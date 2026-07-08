@@ -18,7 +18,7 @@
      - `POST /catalogo-tintas/eliminar` (en `catalogs.php`)
      - `POST /catalogo-colores-tintas/eliminar` (en `catalogs.php`)
   4. **Filtros de Listados Activos:** Se agregaron condiciones `eliminado = 0` en las consultas que alimentan las vistas y selectores activos:
-     - Catálogos generales de insumos, departamentos y tintas/colores.
+     - Catálogos generales de insumos, departamentos y tintas/colores, así como el listado de gestión por departamento (`GET /inventario/{departamento}`).
      - Reportes generales activos y generación de gráficos de stock.
      - Generación y validación/importación de plantillas Excel de inventario.
      - Listado general y asignaciones a perfiles de empleados durante el login en `auth.php` (evitando cargar módulos de departamentos eliminados).
