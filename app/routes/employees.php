@@ -68,7 +68,7 @@ return function (App $app) {
                     SEPARATOR ","), "]"), "[]") AS departamentos
             FROM
                 api_empresas.empresas_usuarios_departamentos b
-            LEFT JOIN ' . LOCAL_DB . '.departamentos c ON c._id = b.id_departamento
+            INNER JOIN ' . LOCAL_DB . '.departamentos c ON c._id = b.id_departamento AND c.eliminado = 0
             GROUP BY
                 b.id_empleado
         ) deps ON deps.id_empleado = a.id_usuario
