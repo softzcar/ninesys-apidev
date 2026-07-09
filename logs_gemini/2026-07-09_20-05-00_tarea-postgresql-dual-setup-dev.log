@@ -1,0 +1,26 @@
+BITÁCORA DE TRABAJO - SOPORTE DUAL DE BASES DE DATOS (MARIADB/POSTGRESQL)
+Fecha: 2026-07-09
+Tarea: Soporte de PostgreSQL y migración de datos centrales en el entorno de desarrollo
+
+DESCRIPCIÓN DE LA TAREA Y LOGROS:
+1. Configuración de PostgreSQL en el VPS de Desarrollo (vps-contabo-dev):
+   - Se ajustó el archivo de configuración `pg_hba.conf` para permitir la autenticación de conexiones locales mediante método `md5` (contraseña) para soportar las llamadas de PDO desde PHP/LiteSpeed, reemplazando el método restrictivo por defecto `ident`.
+   - Se recargó la configuración del clúster de base de datos exitosamente.
+   - Se actualizó el archivo `.env` del backend en el VPS para activar el driver `DB_DRIVER=pgsql`, apuntando al usuario `dev_user` y contraseña `dev_pass`.
+
+2. Migración Integral de la Base de Datos Central (api_empresas):
+   - Se descargó la estructura y datos de la base de datos central `api_empresas` de MariaDB.
+   - Se procesó mediante el convertidor SQL `convert_sql_final.py` en local, agregando la desactivación temporal de restricciones de clave foránea utilizando `SET session_replication_role = 'replica';` y omitiendo bloqueos específicos de MariaDB (`LOCK TABLES`).
+   - Se recreó e importó de forma limpia y exitosa la base de datos `api_empresas` en PostgreSQL del VPS de desarrollo.
+   - Se actualizaron las credenciales de conexión dinámica (`db_user`, `db_password`) de todas las empresas en la base de datos central para apuntar al usuario de desarrollo maestro `dev_user` / `dev_pass`.
+
+3. Soporte Dual para Consultas Cruzadas y Foreign Data Wrappers:
+   - Se configuró la extensión `postgres_fdw` en la base de datos de la empresa `api_emp_194`.
+   - Se mapeó la base de datos central `api_empresas` como un esquema foráneo (`api_empresas`) dentro de `api_emp_194` y se otorgaron los privilegios necesarios de lectura al usuario `dev_user`.
+   - Se definió una constante global `DB_DRIVER` en `app/lib/config.php` derivada de las variables de entorno para discernir el motor activo.
+   - Se adaptó con soporte dual el endpoint `/empleados` (en `app/routes/employees.php`), proporcionando una versión PostgreSQL optimizada de la consulta mediante `COALESCE`, `string_agg`, `EXTRACT` y `TO_CHAR`, al tiempo que se preservó intacta la consulta original de MySQL/MariaDB.
+   - Se validaron de extremo a extremo las llamadas a los endpoints `/catalogo-paises` y `/empleados` con éxito rotundo (HTTP 200, datos decodificados correctamente).
+
+ESTADO:
+- Completado con éxito en el servidor de desarrollo.
+- Los cambios se encuentran confirmados en la rama `feature/postgresql-support`.
