@@ -1,14 +1,14 @@
 -- SET FOREIGN_KEY_CHECKS = 0;
-SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+-- SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 BEGIN;
-SET time_zone = "+00:00";
-/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */
+-- SET time_zone = "+00:00";
+-- /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */
 ;
-/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */
+-- /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */
 ;
-/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */
+-- /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */
 ;
-/*!40101 SET NAMES utf8mb4 */
+-- /*!40101 SET NAMES utf8mb4 */
 ;
 CREATE TABLE abonos (
   _id INTEGER NOT NULL ,
@@ -18,25 +18,25 @@ CREATE TABLE abonos (
   descuento decimal(12, 2) DEFAULT 0.00 ,
   nota_credito decimal(12, 2) DEFAULT 0.00 ,
   detalle varchar(60) DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE aprobacion_clientes (
   _id INTEGER NOT NULL,
   id_orden INTEGER DEFAULT NULL,
   id_diseno INTEGER DEFAULT NULL,
-  check SMALLINT NOT NULL DEFAULT 1,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  "check" SMALLINT NOT NULL DEFAULT 1,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE asistencias (
   _id INTEGER NOT NULL ,
   id_empleado INTEGER DEFAULT NULL ,
   registro varchar(14) DEFAULT NULL ,
   detalle TEXT DEFAULT NULL ,
-  moment TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  moment TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE caja (
   _id INTEGER NOT NULL,
   id_caja_cierres INTEGER DEFAULT NULL ,
@@ -46,18 +46,18 @@ CREATE TABLE caja (
   detalle text DEFAULT NULL,
   tipo varchar(20) DEFAULT NULL ,
   id_empleado INTEGER DEFAULT NULL,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE caja_cierres (
   _id INTEGER NOT NULL ,
   dolares decimal(10, 0) NOT NULL DEFAULT 0 ,
   pesos decimal(10, 0) NOT NULL DEFAULT 0 ,
   bolivares decimal(10, 0) NOT NULL DEFAULT 0 ,
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
-  id_empleado INTEGER DEFAULT NULL
+  id_empleado INTEGER DEFAULT NULL,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE caja_fondos (
   _id INTEGER NOT NULL ,
   id_caja_cierres INTEGER DEFAULT NULL ,
@@ -65,9 +65,9 @@ CREATE TABLE caja_fondos (
   dolares decimal(12, 0) NOT NULL DEFAULT 0 ,
   pesos decimal(12, 0) NOT NULL DEFAULT 0 ,
   bolivares decimal(12, 0) NOT NULL DEFAULT 0 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE catalogo_impresoras (
   _id INTEGER NOT NULL,
   codigo_interno varchar(50) NOT NULL ,
@@ -79,9 +79,9 @@ CREATE TABLE catalogo_impresoras (
   id_catalogo_tintas INTEGER DEFAULT NULL ,
   estado varchar(20) NOT NULL DEFAULT 'activa' ,
   notas text DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 INSERT INTO catalogo_impresoras (_id, codigo_interno, marca, modelo, capacidad_contenedor, ubicacion, tipo_tecnologia, id_catalogo_tintas, estado, notas, moment) VALUES
 (1, 'IMPRESORA PRINCIPAL', 'EPSON', 'EPS_9902', 1000.00, 'PISO 1', 'CMYK', 1, 'activa', 'Impresora con cabezales originales', CURRENT_TIMESTAMP),
 (2, 'IMPRESORA SECUNDARIA', 'Mimaki', 'MK_09890', 750.00, 'PISO 2', 'CMYKW', 2, 'activa', 'Impresora para usar solo con tintas originales', CURRENT_TIMESTAMP);
@@ -92,9 +92,9 @@ CREATE TABLE catalogo_colores_tintas (
   nombre varchar(64) NOT NULL ,
   color_hex varchar(7) DEFAULT '#808080' ,
   eliminado SMALLINT NOT NULL DEFAULT 0 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 
 INSERT INTO catalogo_colores_tintas (_id, codigo, nombre, color_hex) VALUES
 (1,  'C',    'Cyan',          '#00FFFF'),
@@ -115,7 +115,6 @@ CREATE TABLE impresoras_colores (
   id_color_tinta INTEGER NOT NULL
 );
 
-
 INSERT INTO impresoras_colores (id_catalogo_impresora, id_color_tinta) VALUES
 (1, 1),
 (1, 2),
@@ -131,9 +130,9 @@ CREATE TABLE catalogo_insumos_productos (
   nombre varchar(128) NOT NULL ,
   id_product BIGINT NOT NULL ,
   id_departamento INTEGER NOT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 
 INSERT INTO catalogo_insumos_productos (_id, nombre, id_product, id_departamento) VALUES
 (1, 'Papel para sublimación', 1, 1),
@@ -147,18 +146,18 @@ INSERT INTO catalogo_insumos_productos (_id, nombre, id_product, id_departamento
 CREATE TABLE catalogo_telas (
   _id INTEGER NOT NULL ,
   tela varchar(45) DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 INSERT INTO catalogo_telas (_id, tela, moment)
 VALUES (1, 'Tela de Prueba', CURRENT_TIMESTAMP);
 CREATE TABLE catalogo_tintas (
   _id INTEGER NOT NULL ,
   nombre varchar(128) NOT NULL ,
   eliminado SMALLINT NOT NULL DEFAULT 0 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 
 INSERT INTO catalogo_tintas (_id, nombre, moment) VALUES
 (1, 'Tinta de Sublimación', CURRENT_TIMESTAMP),
@@ -184,9 +183,9 @@ INSERT INTO catalogo_tintas (_id, nombre, moment) VALUES
 CREATE TABLE categories (
   _id INTEGER NOT NULL ,
   nombre varchar(100) DEFAULT NULL ,
-  eliminado SMALLINT NOT NULL DEFAULT 0
+  eliminado SMALLINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (_id)
 );
-
 INSERT INTO categories (_id, nombre)
 VALUES (1, 'Categoría de Pruebas');
 CREATE TABLE check_tareas (
@@ -196,9 +195,9 @@ CREATE TABLE check_tareas (
   id_ordenes_productos INTEGER DEFAULT NULL ,
   id_empleado INTEGER DEFAULT NULL ,
   id_departamento INTEGER DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE servicios_maquinas (
   _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
   id_maquina INTEGER DEFAULT NULL,
@@ -214,10 +213,6 @@ CREATE TABLE servicios_maquinas (
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (_id)
 );
-
-CREATE INDEX idx_maquina ON servicios_maquinas (id_maquina, maquina_tipo);
-CREATE INDEX idx_estado ON servicios_maquinas (estado);
-
 CREATE TABLE config (
   _id INTEGER NOT NULL,
   app_key text DEFAULT NULL,
@@ -237,9 +232,9 @@ CREATE TABLE config (
   sys_mostrar_insumo_en_empleado_limpieza SMALLINT NOT NULL DEFAULT 0 ,
   sys_mostrar_insumo_en_empleado_revision SMALLINT NOT NULL DEFAULT 0 ,
   sys_comision_de_costura varchar(8) NOT NULL DEFAULT 'producto' ,
-  multiplicador_precio DECIMAL(5,2) NOT NULL DEFAULT 0.00
+  multiplicador_precio DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+  PRIMARY KEY (_id)
 );
-
 INSERT INTO config (
     _id,
     app_key,
@@ -287,56 +282,56 @@ CREATE TABLE crm_campanas (
   nombre varchar(128) NOT NULL,
   mensaje_plantilla text NOT NULL,
   filtro_productos text DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE crm_campanas_envios (
   _id INTEGER NOT NULL,
   id_campana INTEGER NOT NULL,
-  id_customer INTEGER unsigned NOT NULL,
+  id_customer BIGINT NOT NULL,
   estado_envio varchar(20) NOT NULL DEFAULT 'enviado' ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE crm_notas (
   _id INTEGER NOT NULL,
-  id_customer INTEGER unsigned NOT NULL,
+  id_customer BIGINT NOT NULL,
   id_oportunidad INTEGER DEFAULT NULL,
   id_usuario_creador INTEGER NOT NULL ,
   nota text NOT NULL,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE crm_oportunidades (
   _id INTEGER NOT NULL,
-  id_customer INTEGER unsigned DEFAULT NULL,
+  id_customer BIGINT DEFAULT NULL,
   titulo varchar(128) NOT NULL,
   descripcion text DEFAULT NULL,
   monto_estimado decimal(12, 2) NOT NULL DEFAULT 0.00,
   estado varchar(32) NOT NULL DEFAULT 'nuevo_lead' ,
   motivo_perdida varchar(255) DEFAULT NULL,
   id_campana INTEGER DEFAULT NULL,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE crm_oportunidades_vendedores (
   _id INTEGER NOT NULL,
   id_oportunidad INTEGER NOT NULL,
   id_vendedor INTEGER NOT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE crm_soporte (
   _id INTEGER NOT NULL,
-  id_customer INTEGER unsigned NOT NULL,
+  id_customer BIGINT NOT NULL,
   titulo varchar(128) NOT NULL,
   descripcion text NOT NULL,
   estado varchar(20) NOT NULL DEFAULT 'abierto' ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE customers (
-  _id INTEGER UNSIGNED NOT NULL,
+  _id BIGINT NOT NULL,
   first_name varchar(60) DEFAULT NULL,
   last_name varchar(60) DEFAULT NULL,
   username varchar(60) DEFAULT NULL,
@@ -347,9 +342,9 @@ CREATE TABLE customers (
   email varchar(120) DEFAULT NULL,
   recibir_notificaciones SMALLINT NOT NULL DEFAULT 1,
   eliminado SMALLINT NOT NULL DEFAULT 0 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 INSERT INTO customers (
     _id,
     first_name,
@@ -384,9 +379,9 @@ CREATE TABLE departamentos (
   mensaje text DEFAULT NULL ,
   tipo varchar(50) NOT NULL DEFAULT 'general' ,
   eliminado SMALLINT NOT NULL DEFAULT 0 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 INSERT INTO departamentos (
     _id,
     id_modulo,
@@ -491,23 +486,23 @@ CREATE TABLE disenos (
   id_orden INTEGER DEFAULT NULL ,
   id_empleado INTEGER DEFAULT NULL ,
   id_product BIGINT DEFAULT NULL ,
-  origen varchar(25) NOT NULL DEFAULT 'orden_inicial' 'origen_inicial'' si se crea al momento de la facturación o ''agregado_posterior'' si proviene de la creación de una revisión',
+  origen varchar(25) NOT NULL DEFAULT 'orden_inicial' ,
   codigo_diseno varchar(6) DEFAULT NULL ,
   tipo varchar(128) DEFAULT NULL ,
   terminado SMALLINT NOT NULL DEFAULT 0 ,
   linkdrive text DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE disenos_ajustes_y_personalizaciones (
   _id INTEGER NOT NULL,
   id_orden INTEGER DEFAULT NULL ,
   id_diseno INTEGER DEFAULT NULL ,
   tipo varchar(15) DEFAULT NULL ,
   cantidad INTEGER NOT NULL DEFAULT 0 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE empleados_lotes_fabricacion (
   _id INTEGER NOT NULL,
   id_empleado INTEGER DEFAULT NULL ,
@@ -516,15 +511,15 @@ CREATE TABLE empleados_lotes_fabricacion (
   estado varchar(11) DEFAULT 'pendiente' ,
   fecha_inicio timestamp NULL DEFAULT NULL ,
   fecha_fin timestamp NULL DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE empleados_lotes_fabricacion_items (
   _id INTEGER NOT NULL ,
   id_lote INTEGER DEFAULT NULL ,
-  id_orden INTEGER DEFAULT NULL
+  id_orden INTEGER DEFAULT NULL,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE inventario (
   _id INTEGER NOT NULL ,
   sku varchar(128) DEFAULT NULL ,
@@ -544,9 +539,9 @@ CREATE TABLE inventario (
   detalles text DEFAULT NULL ,
   departamento varchar(14) DEFAULT NULL ,
   eliminado SMALLINT NOT NULL DEFAULT 0 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 
 INSERT INTO inventario (_id, sku, id_catalogo, tipo_insumo, id_color_tinta, id_catalogo_tintas, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, color, ancho, elongacion, detalles, departamento, moment) VALUES
 (1, 'PAP_001', 1, 'general', NULL, NULL, 'Papel de pruebas', 'Mts', 20.00, 1.0, 250.00, 250.00, 'BLANCO', 0.90, NULL, 'Papel para pruebas de impresión', 'Impresión', CURRENT_TIMESTAMP),
@@ -572,9 +567,9 @@ CREATE TABLE inventario_movimientos (
   valor_final decimal(7, 2) DEFAULT NULL ,
   fecha TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
-  id_reposicion INTEGER DEFAULT NULL
+  id_reposicion INTEGER DEFAULT NULL,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE inventario_movimientos_historial (
   _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
   id_movimiento INTEGER NOT NULL ,
@@ -586,10 +581,6 @@ CREATE TABLE inventario_movimientos_historial (
   observaciones text DEFAULT NULL ,
   PRIMARY KEY (_id)
 );
-
-CREATE INDEX idx_movimiento ON inventario_movimientos_historial (id_movimiento);
-CREATE INDEX idx_fecha ON inventario_movimientos_historial (fecha_modificacion);
-
 CREATE TABLE inventario_remanentes (
   _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
   id_insumo INTEGER NOT NULL,
@@ -600,9 +591,6 @@ CREATE TABLE inventario_remanentes (
   fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (_id)
 );
-
-CREATE INDEX id_insumo ON inventario_remanentes (id_insumo);
-
 
 CREATE TABLE gastos (
   _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
@@ -616,7 +604,6 @@ CREATE TABLE gastos (
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (_id)
 );
-
 
 CREATE TABLE gastos_registros (
   _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
@@ -634,10 +621,6 @@ CREATE TABLE gastos_registros (
   CONSTRAINT fk_gastos_registros_plantilla FOREIGN KEY (id_gasto_plantilla) REFERENCES gastos (_id) ON DELETE SET NULL ON UPDATE CASCADE
 );
 
-CREATE INDEX idx_fecha ON gastos_registros (fecha_de_gasto);
-CREATE INDEX idx_periodo ON gastos_registros (periodo);
-
-
 CREATE TABLE gastos_auditoria (
   _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
   id_registro INTEGER NOT NULL,
@@ -650,7 +633,6 @@ CREATE TABLE gastos_auditoria (
   fecha_accion timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (_id)
 );
-
 CREATE TABLE inventario_corte (
   _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
   id_orden INTEGER NOT NULL ,
@@ -665,10 +647,6 @@ CREATE TABLE inventario_corte (
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
   PRIMARY KEY (_id)
 );
-
-CREATE INDEX id_orden ON inventario_corte (id_orden);
-CREATE INDEX estado ON inventario_corte (estado);
-
 CREATE TABLE lotes (
   _id INTEGER NOT NULL ,
   lote TEXT DEFAULT NULL ,
@@ -679,9 +657,9 @@ CREATE TABLE lotes (
   piezas_actuales INTEGER DEFAULT NULL ,
   paso varchar(128) DEFAULT 'responsable' ,
   detalles TEXT DEFAULT NULL,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE lotes_corte_ajustes (
   _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
   id_orden INTEGER NOT NULL ,
@@ -693,10 +671,6 @@ CREATE TABLE lotes_corte_ajustes (
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
   PRIMARY KEY (_id)
 );
-
-CREATE INDEX id_orden ON lotes_corte_ajustes (id_orden);
-CREATE INDEX id_ordenes_productos ON lotes_corte_ajustes (id_ordenes_productos);
-
 CREATE TABLE lotes_detalles (
   _id INTEGER NOT NULL ,
   id_orden INTEGER DEFAULT NULL ,
@@ -713,9 +687,9 @@ CREATE TABLE lotes_detalles (
   detalles varchar(255) DEFAULT NULL ,
   fecha_inicio timestamp NULL DEFAULT NULL ,
   fecha_terminado timestamp NULL DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE lotes_detalles_empleados_asignados (
   _id INTEGER NOT NULL,
   id_lotes_detalles INTEGER DEFAULT NULL ,
@@ -727,17 +701,17 @@ CREATE TABLE lotes_detalles_empleados_asignados (
   procentaje_comision decimal(8, 2) NOT NULL DEFAULT 0.00 ,
   terminado SMALLINT NOT NULL DEFAULT 0 ,
   fecha_inicio timestamp NULL DEFAULT NULL ,
-  fecha_terminado timestamp NULL DEFAULT NULL
+  fecha_terminado timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE lotes_detalles_empleados_asignados_pausas (
   _id INTEGER NOT NULL,
   id_lotes_detalles_empleados_asignados INTEGER DEFAULT NULL,
   pausa_inicio timestamp NULL DEFAULT NULL,
   pausa_fin timestamp NULL DEFAULT NULL,
-  motivo TEXT NOT NULL
+  motivo TEXT NOT NULL,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE lotes_fisicos (
   _id INTEGER NOT NULL,
   id_orden INTEGER DEFAULT NULL ,
@@ -747,17 +721,17 @@ CREATE TABLE lotes_fisicos (
   talla varchar(5) DEFAULT NULL ,
   corte varchar(24) DEFAULT NULL ,
   categoria INTEGER DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE lotes_historico_solicitadas (
   _id INTEGER NOT NULL,
   id_orden INTEGER DEFAULT NULL ,
   id_lotes_fisicos INTEGER DEFAULT NULL,
   unidades_produccion INTEGER DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE metodos_de_pago (
   _id INTEGER NOT NULL ,
   id_orden INTEGER NOT NULL DEFAULT 0 ,
@@ -768,12 +742,12 @@ CREATE TABLE metodos_de_pago (
   tipo_de_pago varchar(13) NOT NULL DEFAULT 'Orden nueva' ,
   monto decimal(12, 2) NOT NULL DEFAULT 0.00 ,
   tasa decimal(12, 2) DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE ordenes (
   _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
-  id_wp INTEGER UNSIGNED DEFAULT NULL,
+  id_wp BIGINT DEFAULT NULL,
   id_wp_order INTEGER DEFAULT NULL,
   status varchar(45) DEFAULT NULL,
   tipo varchar(6) NOT NULL DEFAULT 'custom',
@@ -793,151 +767,150 @@ CREATE TABLE ordenes (
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
   PRIMARY KEY (_id)
 );
-
 CREATE TABLE ordenes_borrador_empleado (
   _id INTEGER NOT NULL,
   id_orden INTEGER DEFAULT NULL,
   id_empleado INTEGER DEFAULT NULL,
   id_departamento INTEGER NOT NULL ,
   borrador TEXT DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE ordenes_fila_orden (
   _id INTEGER NOT NULL ,
   id_orden INTEGER DEFAULT NULL ,
-  orden_fila INTEGER DEFAULT NULL
+  orden_fila INTEGER DEFAULT NULL,
+  PRIMARY KEY (_id)
 );
+-- DELIMITER ##
+-- CREATE TRIGGER `ordenes_fila_orden_cambios_trigger_delete`
+-- AFTER DELETE ON `ordenes_fila_orden` FOR EACH ROW BEGIN
+-- -- Obtiene todos los registros de ordenes_fila_orden ordenados por orden_fila
+-- SET @cambio = (
+--     SELECT CONCAT(
+--         '[',
+--         GROUP_CONCAT(
+--           JSON_OBJECT(
+--             '_id',
+--             _id,
+--             'id_orden',
+--             id_orden,
+--             'orden_fila',
+--             orden_fila
+--           )
+--         ),
+--         ']'
+--       )
+--     FROM ordenes_fila_orden
+--     ORDER BY orden_fila ASC
+--   );
+-- -- Inserta el cambio en la tabla ordenes_fila_orden_cambios
+-- INSERT INTO ordenes_fila_orden_cambios (cambio)
+-- VALUES (@cambio);
+-- -- Limpieza: mantener solo los últimos 3 registros
+-- DELETE FROM ordenes_fila_orden_cambios 
+-- WHERE id NOT IN (
+--     SELECT id FROM (
+--         SELECT id FROM ordenes_fila_orden_cambios 
+--         ORDER BY fecha_cambio DESC 
+--         LIMIT 3
+--     ) AS ultimos_tres
+-- );
+-- END ##
+-- DELIMITER ;
 
-DELIMITER ##
-CREATE TRIGGER ordenes_fila_orden_cambios_trigger_delete
-AFTER DELETE ON ordenes_fila_orden FOR EACH ROW BEGIN
--- Obtiene todos los registros de ordenes_fila_orden ordenados por orden_fila
-SET @cambio = (
-    SELECT CONCAT(
-        '[',
-        GROUP_CONCAT(
-          JSON_OBJECT(
-            '_id',
-            _id,
-            'id_orden',
-            id_orden,
-            'orden_fila',
-            orden_fila
-          )
-        ),
-        ']'
-      )
-    FROM ordenes_fila_orden
-    ORDER BY orden_fila ASC
-  );
--- Inserta el cambio en la tabla ordenes_fila_orden_cambios
-INSERT INTO ordenes_fila_orden_cambios (cambio)
-VALUES (@cambio);
--- Limpieza: mantener solo los últimos 3 registros
-DELETE FROM ordenes_fila_orden_cambios 
-WHERE id NOT IN (
-    SELECT id FROM (
-        SELECT id FROM ordenes_fila_orden_cambios 
-        ORDER BY fecha_cambio DESC 
-        LIMIT 3
-    ) AS ultimos_tres
-);
-END ##
-DELIMITER ;
+-- DELIMITER ##
+-- CREATE TRIGGER `ordenes_fila_orden_cambios_trigger_insert`
+-- AFTER INSERT ON `ordenes_fila_orden` FOR EACH ROW BEGIN
+-- -- Obtiene todos los registros de ordenes_fila_orden ordenados por orden_fila
+-- SET @cambio = (
+--     SELECT CONCAT(
+--         '[',
+--         GROUP_CONCAT(
+--           JSON_OBJECT(
+--             '_id',
+--             _id,
+--             'id_orden',
+--             id_orden,
+--             'orden_fila',
+--             orden_fila
+--           )
+--         ),
+--         ']'
+--       )
+--     FROM ordenes_fila_orden
+--     ORDER BY orden_fila ASC
+--   );
+-- -- Inserta el cambio en la tabla ordenes_fila_orden_cambios
+-- INSERT INTO ordenes_fila_orden_cambios (cambio)
+-- VALUES (@cambio);
+-- -- Limpieza: mantener solo los últimos 3 registros
+-- DELETE FROM ordenes_fila_orden_cambios 
+-- WHERE id NOT IN (
+--     SELECT id FROM (
+--         SELECT id FROM ordenes_fila_orden_cambios 
+--         ORDER BY fecha_cambio DESC 
+--         LIMIT 3
+--     ) AS ultimos_tres
+-- );
+-- END ##
+-- DELIMITER ;
 
-DELIMITER ##
-CREATE TRIGGER ordenes_fila_orden_cambios_trigger_insert
-AFTER INSERT ON ordenes_fila_orden FOR EACH ROW BEGIN
--- Obtiene todos los registros de ordenes_fila_orden ordenados por orden_fila
-SET @cambio = (
-    SELECT CONCAT(
-        '[',
-        GROUP_CONCAT(
-          JSON_OBJECT(
-            '_id',
-            _id,
-            'id_orden',
-            id_orden,
-            'orden_fila',
-            orden_fila
-          )
-        ),
-        ']'
-      )
-    FROM ordenes_fila_orden
-    ORDER BY orden_fila ASC
-  );
--- Inserta el cambio en la tabla ordenes_fila_orden_cambios
-INSERT INTO ordenes_fila_orden_cambios (cambio)
-VALUES (@cambio);
--- Limpieza: mantener solo los últimos 3 registros
-DELETE FROM ordenes_fila_orden_cambios 
-WHERE id NOT IN (
-    SELECT id FROM (
-        SELECT id FROM ordenes_fila_orden_cambios 
-        ORDER BY fecha_cambio DESC 
-        LIMIT 3
-    ) AS ultimos_tres
-);
-END ##
-DELIMITER ;
-
-DELIMITER ##
-CREATE TRIGGER ordenes_fila_orden_cambios_trigger_update
-AFTER UPDATE ON ordenes_fila_orden FOR EACH ROW BEGIN
--- Obtiene todos los registros de ordenes_fila_orden ordenados por orden_fila
-SET @cambio = (
-    SELECT CONCAT(
-        '[',
-        GROUP_CONCAT(
-          JSON_OBJECT(
-            '_id',
-            _id,
-            'id_orden',
-            id_orden,
-            'orden_fila',
-            orden_fila
-          )
-        ),
-        ']'
-      )
-    FROM ordenes_fila_orden
-    ORDER BY orden_fila ASC
-  );
--- Inserta el cambio en la tabla ordenes_fila_orden_cambios
-INSERT INTO ordenes_fila_orden_cambios (cambio)
-VALUES (@cambio);
--- Limpieza: mantener solo los últimos 3 registros
-DELETE FROM ordenes_fila_orden_cambios 
-WHERE id NOT IN (
-    SELECT id FROM (
-        SELECT id FROM ordenes_fila_orden_cambios 
-        ORDER BY fecha_cambio DESC 
-        LIMIT 3
-    ) AS ultimos_tres
-);
-END ## 
-DELIMITER ;
+-- DELIMITER ##
+-- CREATE TRIGGER `ordenes_fila_orden_cambios_trigger_update`
+-- AFTER UPDATE ON `ordenes_fila_orden` FOR EACH ROW BEGIN
+-- -- Obtiene todos los registros de ordenes_fila_orden ordenados por orden_fila
+-- SET @cambio = (
+--     SELECT CONCAT(
+--         '[',
+--         GROUP_CONCAT(
+--           JSON_OBJECT(
+--             '_id',
+--             _id,
+--             'id_orden',
+--             id_orden,
+--             'orden_fila',
+--             orden_fila
+--           )
+--         ),
+--         ']'
+--       )
+--     FROM ordenes_fila_orden
+--     ORDER BY orden_fila ASC
+--   );
+-- -- Inserta el cambio en la tabla ordenes_fila_orden_cambios
+-- INSERT INTO ordenes_fila_orden_cambios (cambio)
+-- VALUES (@cambio);
+-- -- Limpieza: mantener solo los últimos 3 registros
+-- DELETE FROM ordenes_fila_orden_cambios 
+-- WHERE id NOT IN (
+--     SELECT id FROM (
+--         SELECT id FROM ordenes_fila_orden_cambios 
+--         ORDER BY fecha_cambio DESC 
+--         LIMIT 3
+--     ) AS ultimos_tres
+-- );
+-- END ## 
+-- DELIMITER ;
 
 CREATE TABLE ordenes_fila_orden_cambios (
   id INTEGER NOT NULL ,
   cambio TEXT NOT NULL ,
-  fecha_cambio timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  fecha_cambio timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
 );
-
 CREATE TABLE ordenes_fila_reposiciones (
   _id INTEGER NOT NULL ,
   id_reposicion INTEGER DEFAULT NULL ,
-  orden_fila smallint(6) DEFAULT NULL
+  orden_fila SMALLINT DEFAULT NULL,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE ordenes_observaciones (
   _id INTEGER NOT NULL,
   id_orden INTEGER NOT NULL,
-  observaciones TEXT DEFAULT NULL
+  observaciones TEXT DEFAULT NULL,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE ordenes_productos (
   _id INTEGER NOT NULL ,
   id_orden INTEGER DEFAULT NULL ,
@@ -957,37 +930,33 @@ CREATE TABLE ordenes_productos (
   tela varchar(128) DEFAULT NULL ,
   precio_unitario decimal(10, 2) NOT NULL DEFAULT 0.00 ,
   precio_woo decimal(10, 2) DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE ordenes_auditoria (
-  _id INT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY ,
-  id_orden INT NOT NULL ,
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY ,
+  id_orden INTEGER NOT NULL ,
   accion VARCHAR(255) NOT NULL ,
-  id_admin INT NOT NULL ,
+  id_admin INTEGER NOT NULL ,
   nombre_admin VARCHAR(255) NOT NULL ,
   motivo TEXT NOT NULL ,
   fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
 );
-
-CREATE INDEX idx_orden ON ordenes_auditoria (id_orden);
-CREATE INDEX idx_admin ON ordenes_auditoria (id_admin);
-
 CREATE TABLE ordenes_tmp (
   _id INTEGER NOT NULL ,
   form TEXT DEFAULT NULL ,
   id_empleado INTEGER DEFAULT NULL ,
   tipo varchar(11) NOT NULL DEFAULT 'Orden' ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE ordenes_vinculadas (
   _id INTEGER NOT NULL ,
   id_father INTEGER DEFAULT NULL ,
   id_child INTEGER DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE pagos (
   _id INTEGER NOT NULL ,
   id_orden INTEGER DEFAULT NULL ,
@@ -1003,9 +972,9 @@ CREATE TABLE pagos (
   detalle varchar(16) DEFAULT NULL ,
   estatus varchar(9) DEFAULT NULL ,
   fecha_pago timestamp NULL DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE piezas_cortadas (
   _id INTEGER NOT NULL ,
   id_orden INTEGER DEFAULT NULL ,
@@ -1013,12 +982,12 @@ CREATE TABLE piezas_cortadas (
   id_ordenes_productos INTEGER DEFAULT NULL ,
   id_empleado INTEGER DEFAULT NULL ,
   peso decimal(5, 2) DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE presupuestos (
   _id INTEGER NOT NULL,
-  id_wp INTEGER unsigned DEFAULT NULL ,
+  id_wp BIGINT DEFAULT NULL ,
   status varchar(45) DEFAULT NULL ,
   tipo varchar(6) NOT NULL DEFAULT 'custom' ,
   responsable INTEGER DEFAULT NULL ,
@@ -1034,9 +1003,9 @@ CREATE TABLE presupuestos (
   pago_total decimal(12, 2) DEFAULT 0.00 ,
   pago_abono decimal(12, 2) DEFAULT 0.00 ,
   pago_comision varchar(9) NOT NULL DEFAULT 'pendiente' ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE presupuestos_productos (
   _id INTEGER NOT NULL ,
   id_orden INTEGER DEFAULT NULL ,
@@ -1053,9 +1022,9 @@ CREATE TABLE presupuestos_productos (
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   id_products_attributes INTEGER DEFAULT NULL ,
   id_size INTEGER DEFAULT NULL ,
-  id_tela INTEGER DEFAULT NULL
+  id_tela INTEGER DEFAULT NULL,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE products (
   _id BIGINT NOT NULL,
   product text DEFAULT NULL,
@@ -1068,9 +1037,9 @@ CREATE TABLE products (
   product_description text DEFAULT NULL ,
   category_ids varchar(255) DEFAULT NULL,
   eliminado SMALLINT NOT NULL DEFAULT 0 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 INSERT INTO products (
     _id,
     product,
@@ -1126,9 +1095,9 @@ VALUES (
 CREATE TABLE products_attributes (
   _id INTEGER NOT NULL,
   attribute_name varchar(255) NOT NULL ,
-  precio decimal(5, 2) NOT NULL DEFAULT 0.00
+  precio decimal(5, 2) NOT NULL DEFAULT 0.00,
+  PRIMARY KEY (_id)
 );
-
 INSERT INTO products_attributes (_id, attribute_name, precio)
 VALUES (1, 'Atributo de pruebas', 5.00);
 CREATE TABLE products_attributes_values (
@@ -1137,16 +1106,16 @@ CREATE TABLE products_attributes_values (
   id_product BIGINT NOT NULL ,
   id_product_attribute INTEGER NOT NULL ,
   attribute_value varchar(128) NOT NULL ,
-  attribute_price decimal(7, 2) NOT NULL DEFAULT 0.00
+  attribute_price decimal(7, 2) NOT NULL DEFAULT 0.00,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE products_comisiones (
   _id INTEGER NOT NULL ,
   id_product BIGINT DEFAULT NULL ,
   id_departamento INTEGER DEFAULT NULL ,
-  comision decimal(5, 2) NOT NULL DEFAULT 0.00
+  comision decimal(5, 2) NOT NULL DEFAULT 0.00,
+  PRIMARY KEY (_id)
 );
-
 INSERT INTO products_comisiones (
     _id,
     id_product,
@@ -1164,23 +1133,19 @@ VALUES (1, 1, 1, 0.50),
 (9, 3, 3, 0.25),
 (10, 3, 4, 0.30);
 CREATE TABLE empleados_salario (
-  id_empleado INTEGER UNSIGNED NOT NULL ,
+  id_empleado BIGINT NOT NULL ,
   sueldo_base DECIMAL(10, 2) NOT NULL DEFAULT 0.00 ,
   moneda VARCHAR(10) NOT NULL DEFAULT 'USD' ,
   bonos_fijos DECIMAL(10, 2) NOT NULL DEFAULT 0.00 ,
   fecha_inicio_contrato DATE NOT NULL ,
   pago_mensual_fijo SMALLINT NOT NULL DEFAULT 1 ,
-  fecha_actualizacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP ,
+  fecha_actualizacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP  ,
   PRIMARY KEY (id_empleado)
 );
 
-CREATE INDEX idx_fecha_inicio ON empleados_salario (fecha_inicio_contrato);
-CREATE INDEX idx_moneda ON empleados_salario (moneda);
-
-
 CREATE TABLE salario_carga_familiar (
-  id_carga INTEGER UNSIGNED NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
-  id_empleado INTEGER UNSIGNED NOT NULL ,
+  id_carga BIGINT NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
+  id_empleado BIGINT NOT NULL ,
   nombre_completo VARCHAR(100) NOT NULL ,
   cedula_o_id VARCHAR(20) DEFAULT NULL ,
   tipo_relacion VARCHAR(50) NOT NULL ,
@@ -1189,14 +1154,9 @@ CREATE TABLE salario_carga_familiar (
   fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
   PRIMARY KEY (id_carga)
 );
-
-CREATE INDEX idx_empleado ON salario_carga_familiar (id_empleado);
-CREATE INDEX idx_tipo_relacion ON salario_carga_familiar (tipo_relacion);
-CREATE INDEX idx_fecha_nacimiento ON salario_carga_familiar (fecha_nacimiento);
-
 CREATE TABLE pagos_salarios (
-  _id INT NULL GENERATED BY DEFAULT AS IDENTITY ,
-  id_pago INT NULL  ,
+  _id INTEGER  NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
+  id_pago INTEGER NULL  ,
   tipo_salario VARCHAR(9) NULL DEFAULT 'quincenal'  ,
   numero_semana INTEGER NULL  ,
   monto DECIMAL(10,2) NULL  ,
@@ -1204,42 +1164,39 @@ CREATE TABLE pagos_salarios (
   PRIMARY KEY (_id)
 );
 
-
 CREATE TABLE products_prices (
  _id INTEGER NOT NULL,
  id_product BIGINT DEFAULT NULL ,
  price decimal(7, 2) DEFAULT NULL ,
- descripcion varchar(128) DEFAULT NULL
+ descripcion varchar(128) DEFAULT NULL,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE comisiones_pagados (
  _id INTEGER NOT NULL ,
  id_empleado INTEGER DEFAULT NULL ,
  tipo_comision varchar(12) DEFAULT NULL ,
  numero_semana INTEGER DEFAULT NULL ,
  monto decimal(10,2) DEFAULT NULL ,
- moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+ moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE pagos_abonos (
- _id INT NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
- id_pago INT NULL  ,
+ _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
+ id_pago INTEGER NULL  ,
  monto DECIMAL(10,2) NULL DEFAULT '0'  ,
  descripcion VARCHAR(512) NULL DEFAULT NULL  ,
  moment TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
  PRIMARY KEY (_id)
 );
-
 
 CREATE TABLE pagos_descuentos (
- _id INT NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
- id_pago INT NULL  ,
+ _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
+ id_pago INTEGER NULL  ,
  monto DECIMAL(10,2) NULL DEFAULT '0'  ,
  descripcion VARCHAR(512) NULL DEFAULT NULL  ,
  moment TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
  PRIMARY KEY (_id)
 );
-
 
 INSERT INTO products_prices (_id, id_product, price, descripcion) VALUES
 (1, 1, 25.00, 'Detal'),
@@ -1251,18 +1208,18 @@ CREATE TABLE products_sizes_eficiencia (
   id_size INTEGER DEFAULT NULL ,
   id_catalogo_insumos_prodcutos INTEGER DEFAULT NULL ,
   cantidad decimal(3, 2) NOT NULL DEFAULT 0.00 ,
-  unidad varchar(64) DEFAULT NULL
+  unidad varchar(64) DEFAULT NULL,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE products_tiempos_de_produccion (
   _id INTEGER NOT NULL ,
   id_product BIGINT DEFAULT NULL ,
   id_departamento INTEGER DEFAULT NULL ,
   tiempo INTEGER NOT NULL DEFAULT 1 ,
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
-  usa_desperdicio SMALLINT NOT NULL DEFAULT 0
+  usa_desperdicio SMALLINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (_id)
 );
-
 
 INSERT INTO products_tiempos_de_produccion (_id, id_product, id_departamento, tiempo, moment) VALUES
 (1, 1, 1, 60, CURRENT_TIMESTAMP),
@@ -1282,9 +1239,9 @@ CREATE TABLE product_insumos_asignados (
   cantidad decimal(6, 2) NOT NULL DEFAULT 0.00 ,
   unidad varchar(64) DEFAULT NULL ,
   tiempo INTEGER NOT NULL DEFAULT 0 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 
 INSERT INTO product_insumos_asignados (_id, id_product, id_catalogo_insumos_productos, id_departamento, id_talla, cantidad, unidad) VALUES
 (1, 1, 1, 1, 1, 1.00, 'Mt'),
@@ -1326,9 +1283,9 @@ CREATE TABLE rendimiento (
   desperdicio decimal(7, 2) NOT NULL DEFAULT 0.00 ,
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   id_empleado INTEGER DEFAULT NULL,
-  id_departamento INTEGER DEFAULT NULL
+  id_departamento INTEGER DEFAULT NULL,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE reposiciones (
   _id INTEGER NOT NULL ,
   id_orden INTEGER DEFAULT NULL ,
@@ -1343,18 +1300,15 @@ CREATE TABLE reposiciones (
   aprobada SMALLINT DEFAULT 0 ,
   terminada SMALLINT NOT NULL DEFAULT 0 ,
   eliminada SMALLINT NOT NULL DEFAULT 0 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE reposiciones_departamentos_excluidos (
-  _id INT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY ,
-  id_reposicion INT NOT NULL ,
-  id_departamento INT NOT NULL ,
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY ,
+  id_reposicion INTEGER NOT NULL ,
+  id_departamento INTEGER NOT NULL ,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
 );
-
-CREATE UNIQUE INDEX uk_repo_depto ON reposiciones_departamentos_excluidos (id_reposicion, id_departamento);
-
 CREATE TABLE retiros (
   _id INTEGER NOT NULL,
   id_empleado INTEGER DEFAULT NULL,
@@ -1364,9 +1318,9 @@ CREATE TABLE retiros (
   metodo_pago varchar(20) DEFAULT NULL ,
   detalle_retiro text DEFAULT NULL,
   cierre_caja SMALLINT NOT NULL DEFAULT 0 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE revisiones (
   _id INTEGER NOT NULL ,
   id_orden INTEGER DEFAULT NULL ,
@@ -1375,18 +1329,18 @@ CREATE TABLE revisiones (
   id_product BIGINT DEFAULT NULL ,
   tipo varchar(128) DEFAULT NULL ,
   revision INTEGER NOT NULL DEFAULT 0 ,
-  estatus varchar(19) NOT NULL DEFAULT 'Esperando Respuesta' 'Esperando Respuesta'', ''Rechazado'', ''Aprobado''',
+  estatus varchar(19) NOT NULL DEFAULT 'Esperando Respuesta' ,
   url_image varchar(255) DEFAULT NULL ,
   detalles text DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE sizes (
   _id INTEGER NOT NULL ,
   nombre varchar(100) DEFAULT NULL ,
-  variation_percentage decimal(5,2) DEFAULT 0.00
+  variation_percentage decimal(5,2) DEFAULT 0.00,
+  PRIMARY KEY (_id)
 );
-
 INSERT INTO sizes (_id, nombre) VALUES
 (1, 'S'),
 (2, 'M'),
@@ -1399,9 +1353,9 @@ CREATE TABLE tintas (
   id_empleado INTEGER DEFAULT NULL ,
   id_color_tinta INTEGER NOT NULL ,
   cantidad decimal(7, 2) NOT NULL DEFAULT 0.00 ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
-
 CREATE TABLE tintas_recargas (
   _id INTEGER NOT NULL,
   id_insumo INTEGER DEFAULT NULL,
@@ -1410,672 +1364,187 @@ CREATE TABLE tintas_recargas (
   cantidad decimal(7, 2) DEFAULT NULL ,
   nivel_tanque_previo decimal(10, 2) DEFAULT NULL,
   fecha_recarga timestamp NULL DEFAULT NULL ,
-  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
 );
 
-ALTER TABLE abonos
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden, id_empleado),
-  ADD KEY id_empleado (id_empleado);
-ALTER TABLE aprobacion_clientes
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden, id_diseno);
-ALTER TABLE asistencias
-ADD PRIMARY KEY (_id),
-  ADD KEY id_empleado (id_empleado);
-ALTER TABLE caja
-ADD PRIMARY KEY (_id),
-  ADD KEY id_empleado (id_empleado);
-ALTER TABLE caja_cierres
-ADD PRIMARY KEY (_id),
-  ADD KEY id_empleado (id_empleado);
-ALTER TABLE caja_fondos
-ADD PRIMARY KEY (_id);
-ALTER TABLE catalogo_impresoras
-ADD PRIMARY KEY (_id),
-  ADD UNIQUE KEY idx_codigo_interno (codigo_interno) COMMENT 'Asegura que cada código sea único.';
-ALTER TABLE catalogo_insumos_productos
-ADD PRIMARY KEY (_id),
-  ADD UNIQUE KEY nombre (nombre),
-  ADD UNIQUE KEY nombre_2 (nombre),
-  ADD KEY id_product (id_product),
-  ADD KEY id_departamento (id_departamento);
-ALTER TABLE catalogo_telas
-ADD PRIMARY KEY (_id),
-  ADD UNIQUE KEY _id (_id);
-ALTER TABLE categories
-ADD PRIMARY KEY (_id);
-ALTER TABLE check_tareas
-ADD PRIMARY KEY (_id),
-  ADD KEY id_ordenes_productos (id_ordenes_productos);
-ALTER TABLE config
-ADD PRIMARY KEY (_id);
-ALTER TABLE crm_campanas
-ADD PRIMARY KEY (_id);
-ALTER TABLE crm_campanas_envios
-ADD PRIMARY KEY (_id),
-  ADD KEY id_campana (id_campana),
-  ADD KEY id_customer (id_customer);
-ALTER TABLE crm_notas
-ADD PRIMARY KEY (_id),
-  ADD KEY id_customer (id_customer),
-  ADD KEY id_oportunidad (id_oportunidad);
-ALTER TABLE crm_oportunidades
-ADD PRIMARY KEY (_id),
-  ADD KEY id_customer (id_customer),
-  ADD KEY id_campana (id_campana);
-ALTER TABLE crm_oportunidades_vendedores
-ADD PRIMARY KEY (_id),
-  ADD KEY id_oportunidad (id_oportunidad),
-  ADD KEY id_vendedor (id_vendedor);
-ALTER TABLE crm_soporte
-ADD PRIMARY KEY (_id),
-  ADD KEY id_customer (id_customer);
-ALTER TABLE customers
-ADD PRIMARY KEY (_id);
-ALTER TABLE departamentos
-ADD PRIMARY KEY (_id);
-ALTER TABLE disenos
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden),
-  ADD KEY id_empleado (id_empleado),
-  ADD KEY id_product (id_product);
-ALTER TABLE disenos_ajustes_y_personalizaciones
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden, id_diseno);
-ALTER TABLE empleados_lotes_fabricacion
-ADD PRIMARY KEY (_id);
-ALTER TABLE empleados_lotes_fabricacion_items
-ADD PRIMARY KEY (_id);
-ALTER TABLE inventario
-ADD PRIMARY KEY (_id),
-  ADD KEY id_color_tinta (id_color_tinta),
-  ADD KEY id_catalogo_tintas (id_catalogo_tintas);
-ALTER TABLE inventario_movimientos
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden),
-  ADD KEY id_insumo (id_insumo),
-  ADD KEY id_producto (id_producto),
-  ADD KEY idx_composite (
-    id_orden,
-    id_producto,
-    id_empleado,
-    id_insumo
-  );
-ALTER TABLE lotes
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden);
-ALTER TABLE lotes_detalles
-ADD PRIMARY KEY (_id),
-  ADD KEY id_empleado (id_empleado),
-  ADD KEY id_orden (id_orden, id_ordenes_productos),
-  ADD KEY id_woo (id_woo);
-ALTER TABLE lotes_detalles_empleados_asignados
-ADD PRIMARY KEY (_id),
-  ADD KEY idx_id_empleado (id_empleado),
-  ADD KEY idx_id_lotes_detalles (id_lotes_detalles),
-  ADD KEY idx_id_orden (id_orden),
-  ADD KEY idx_id_departamento (id_departamento),
-  ADD KEY idx_empleado_orden_depto (id_empleado, id_orden, id_departamento);
-ALTER TABLE lotes_detalles_empleados_asignados_pausas
-ADD PRIMARY KEY (_id);
-ALTER TABLE lotes_fisicos
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden);
-ALTER TABLE lotes_historico_solicitadas
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden, id_lotes_fisicos);
-ALTER TABLE metodos_de_pago
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden);
 
-ALTER TABLE ordenes_borrador_empleado
-ADD PRIMARY KEY (_id);
-ALTER TABLE ordenes_fila_orden
-ADD PRIMARY KEY (_id);
-ALTER TABLE ordenes_fila_orden_cambios
-ADD PRIMARY KEY (id);
-ALTER TABLE ordenes_fila_reposiciones
-ADD PRIMARY KEY (_id);
-ALTER TABLE ordenes_observaciones
-ADD PRIMARY KEY (_id);
-ALTER TABLE ordenes_productos
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden, rollo),
-  ADD KEY id_catalogo_telas (rollo),
-  ADD KEY id_woo (id_woo);
-ALTER TABLE ordenes_tmp
-ADD PRIMARY KEY (_id);
-ALTER TABLE ordenes_vinculadas
-ADD PRIMARY KEY (_id),
-  ADD KEY id_father (id_father, id_child),
-  ADD KEY id_child (id_child);
-ALTER TABLE pagos
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (
-    id_orden,
-    id_metodos_de_pago,
-    id_lotes_detalles,
-    id_empleado
-  ),
-  ADD KEY id_metodos_de_pago (id_metodos_de_pago),
-  ADD KEY id_lotes_detalles (id_lotes_detalles),
-  ADD KEY id_empleado (id_empleado),
-  ADD KEY idx_empleado_moment (id_empleado, moment),
-  ADD KEY idx_fecha_pago (fecha_pago),
-  ADD KEY idx_comision_tipo_fecha (comision_tipo, fecha_pago);
-ALTER TABLE piezas_cortadas
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (
-    id_orden,
-    id_inventario,
-    id_ordenes_productos,
-    id_empleado
-  );
-ALTER TABLE presupuestos
-ADD PRIMARY KEY (_id);
-ALTER TABLE presupuestos_productos
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden),
-  ADD KEY id_tela (id_tela);
-ALTER TABLE products
-ADD PRIMARY KEY (_id);
-ALTER TABLE products_attributes
-ADD PRIMARY KEY (_id);
-ALTER TABLE products_attributes_values
-ADD PRIMARY KEY (_id),
-  ADD KEY id_product (id_product);
-ALTER TABLE products_comisiones
-ADD PRIMARY KEY (_id),
-  ADD KEY id_product (id_product);
-ALTER TABLE products_prices
-ADD PRIMARY KEY (_id),
-  ADD KEY id_product (id_product);
-ALTER TABLE products_sizes_eficiencia
-ADD PRIMARY KEY (_id);
-ALTER TABLE products_tiempos_de_produccion
-ADD PRIMARY KEY (_id);
-ALTER TABLE product_insumos_asignados
-ADD PRIMARY KEY (_id),
-  ADD KEY id_product (id_product);
-ALTER TABLE rendimiento
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden),
-  ADD KEY id_departamento (id_departamento);
-ALTER TABLE reposiciones
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (
-    id_orden,
-    id_empleado,
-    id_ordenes_productos
-  ),
-  ADD KEY id_empleado_emisor (id_empleado_emisor);
-ALTER TABLE retiros
-ADD PRIMARY KEY (_id),
-  ADD KEY id_empleado (id_empleado);
-ALTER TABLE revisiones
-ADD PRIMARY KEY (_id),
-  ADD KEY id_orden (id_orden, id_diseno),
-  ADD KEY id_orden_2 (id_orden, id_diseno),
-  ADD KEY id_product (id_product);
-ALTER TABLE sizes
-ADD PRIMARY KEY (_id);
-ALTER TABLE catalogo_colores_tintas
-ADD PRIMARY KEY (_id),
-  ADD UNIQUE KEY uk_codigo_color (codigo);
-ALTER TABLE impresoras_colores
-ADD PRIMARY KEY (id_catalogo_impresora, id_color_tinta),
-  ADD KEY id_color_tinta (id_color_tinta);
-ALTER TABLE tintas
-ADD PRIMARY KEY (_id),
-  ADD KEY idx_tintas_color (id_color_tinta),
-  ADD KEY idx_tintas_impresora (id_catalogo_impresoras);
-ALTER TABLE tintas_recargas
-ADD PRIMARY KEY (_id),
-  ADD KEY idx_recargas_color (id_color_tinta),
-  ADD KEY id_insumo (id_insumo),
-  ADD KEY id_catalogo_impresora (id_catalogo_impresora);
-ALTER TABLE catalogo_tintas
-ADD PRIMARY KEY (_id);
-ALTER TABLE abonos
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID de la talba';
-ALTER TABLE aprobacion_clientes
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE asistencias
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico del registro';
-ALTER TABLE caja
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE caja_cierres
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE caja_fondos
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE catalogo_impresoras
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE catalogo_insumos_productos
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE catalogo_telas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'Identificador unico de la tabla',
-  AUTO_INCREMENT = 2;
-ALTER TABLE categories
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT,
-  AUTO_INCREMENT = 2;
-ALTER TABLE check_tareas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico';
-ALTER TABLE config
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT,
-  AUTO_INCREMENT = 2;
-ALTER TABLE crm_campanas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE crm_campanas_envios
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE crm_notas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE crm_oportunidades
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE crm_oportunidades_vendedores
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE crm_soporte
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE customers
-MODIFY _id INTEGER UNSIGNED NOT NULL AUTO_INCREMENT,
-  AUTO_INCREMENT = 2;
-ALTER TABLE departamentos
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT,
-  AUTO_INCREMENT = 8;
-ALTER TABLE disenos
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID de la tabla';
-ALTER TABLE disenos_ajustes_y_personalizaciones
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE empleados_lotes_fabricacion
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE empleados_lotes_fabricacion_items
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE inventario
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'Identificador unico';
-ALTER TABLE inventario_movimientos
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'Identificador unico';
-ALTER TABLE lotes
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID Autonumérico';
-ALTER TABLE lotes_detalles
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID único del registro';
-ALTER TABLE lotes_detalles_empleados_asignados
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE lotes_detalles_empleados_asignados_pausas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE lotes_fisicos
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE lotes_historico_solicitadas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE metodos_de_pago
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico de la tabla';
-
-ALTER TABLE ordenes_borrador_empleado
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE ordenes_fila_orden
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE ordenes_fila_orden_cambios
-MODIFY id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE ordenes_fila_reposiciones
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE ordenes_observaciones
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE ordenes_productos
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID del registro';
-ALTER TABLE ordenes_tmp
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'Clave primaria';
-ALTER TABLE ordenes_vinculadas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'id de la tabla';
-ALTER TABLE pagos
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico';
-ALTER TABLE piezas_cortadas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico';
-ALTER TABLE presupuestos
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE presupuestos_productos
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID del registro';
-ALTER TABLE products
-MODIFY _id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  AUTO_INCREMENT = 2;
-ALTER TABLE products_attributes
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT,
-  AUTO_INCREMENT = 2;
-ALTER TABLE products_attributes_values
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE products_comisiones
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID único',
-  AUTO_INCREMENT = 2;
-ALTER TABLE products_prices
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE products_sizes_eficiencia
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE products_tiempos_de_produccion
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE product_insumos_asignados
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE rendimiento
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE reposiciones
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico de la tabla';
-ALTER TABLE retiros
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE revisiones
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'id de la tabla';
-ALTER TABLE sizes
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT,
-  AUTO_INCREMENT = 2;
-ALTER TABLE catalogo_colores_tintas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID único del color de tinta',
-  AUTO_INCREMENT = 13;
-ALTER TABLE tintas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE tintas_recargas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
-ALTER TABLE catalogo_tintas
-MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
 -- =====================================================
 -- FOREIGN KEYS - 123 FKs
 -- =====================================================
 
 -- abonos
-ALTER TABLE abonos
-ADD CONSTRAINT abonos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE abonos ADD CONSTRAINT abonos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- aprobacion_clientes
-ALTER TABLE aprobacion_clientes
-ADD CONSTRAINT aprob_cli_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT aprob_cli_ibfk_2 FOREIGN KEY (id_diseno) REFERENCES disenos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE aprobacion_clientes ADD CONSTRAINT aprob_cli_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT aprob_cli_ibfk_2 FOREIGN KEY (id_diseno) REFERENCES disenos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- caja
-ALTER TABLE caja
-ADD CONSTRAINT caja_ibfk_1 FOREIGN KEY (id_caja_cierres) REFERENCES caja_cierres (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE caja ADD CONSTRAINT caja_ibfk_1 FOREIGN KEY (id_caja_cierres) REFERENCES caja_cierres (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- caja_fondos
-ALTER TABLE caja_fondos
-ADD CONSTRAINT caja_fondos_ibfk_1 FOREIGN KEY (id_caja_cierres) REFERENCES caja_cierres (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE caja_fondos ADD CONSTRAINT caja_fondos_ibfk_1 FOREIGN KEY (id_caja_cierres) REFERENCES caja_cierres (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- catalogo_insumos_productos
-ALTER TABLE catalogo_insumos_productos
-ADD CONSTRAINT cat_ins_prod_ibfk_1 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT cat_ins_prod_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE catalogo_insumos_productos ADD CONSTRAINT cat_ins_prod_ibfk_1 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT cat_ins_prod_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- check_tareas
-ALTER TABLE check_tareas
-ADD CONSTRAINT check_tar_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT check_tar_ibfk_2 FOREIGN KEY (id_lotes_detalles_empleados_asigandos) REFERENCES lotes_detalles_empleados_asignados (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT check_tar_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
-ADD CONSTRAINT check_tar_ibfk_4 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE check_tareas ADD CONSTRAINT check_tar_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT check_tar_ibfk_2 FOREIGN KEY (id_lotes_detalles_empleados_asigandos) REFERENCES lotes_detalles_empleados_asignados (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT check_tar_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE, ADD CONSTRAINT check_tar_ibfk_4 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- crm_campanas_envios
-ALTER TABLE crm_campanas_envios
-  ADD CONSTRAINT crm_camp_env_ibfk_1 FOREIGN KEY (id_campana) REFERENCES crm_campanas (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT crm_camp_env_ibfk_2 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE crm_campanas_envios ADD CONSTRAINT crm_camp_env_ibfk_1 FOREIGN KEY (id_campana) REFERENCES crm_campanas (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT crm_camp_env_ibfk_2 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- crm_notas
-ALTER TABLE crm_notas
-  ADD CONSTRAINT crm_notas_ibfk_1 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT crm_notas_ibfk_2 FOREIGN KEY (id_oportunidad) REFERENCES crm_oportunidades (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE crm_notas ADD CONSTRAINT crm_notas_ibfk_1 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT crm_notas_ibfk_2 FOREIGN KEY (id_oportunidad) REFERENCES crm_oportunidades (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- crm_oportunidades
-ALTER TABLE crm_oportunidades
-  ADD CONSTRAINT crm_oport_ibfk_1 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT crm_oport_ibfk_2 FOREIGN KEY (id_campana) REFERENCES crm_campanas (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE crm_oportunidades ADD CONSTRAINT crm_oport_ibfk_1 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT crm_oport_ibfk_2 FOREIGN KEY (id_campana) REFERENCES crm_campanas (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- crm_oportunidades_vendedores
-ALTER TABLE crm_oportunidades_vendedores
-  ADD CONSTRAINT crm_oport_vend_ibfk_1 FOREIGN KEY (id_oportunidad) REFERENCES crm_oportunidades (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE crm_oportunidades_vendedores ADD CONSTRAINT crm_oport_vend_ibfk_1 FOREIGN KEY (id_oportunidad) REFERENCES crm_oportunidades (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- crm_soporte
-ALTER TABLE crm_soporte
-  ADD CONSTRAINT crm_soporte_ibfk_1 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE crm_soporte ADD CONSTRAINT crm_soporte_ibfk_1 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- disenos
-ALTER TABLE disenos
-ADD CONSTRAINT disenos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT disenos_ibfk_2 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE disenos ADD CONSTRAINT disenos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT disenos_ibfk_2 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- disenos_ajustes_y_personalizaciones
-ALTER TABLE disenos_ajustes_y_personalizaciones
-ADD CONSTRAINT dis_ajust_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT dis_ajust_ibfk_2 FOREIGN KEY (id_diseno) REFERENCES disenos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE disenos_ajustes_y_personalizaciones ADD CONSTRAINT dis_ajust_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT dis_ajust_ibfk_2 FOREIGN KEY (id_diseno) REFERENCES disenos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- empleados_lotes_fabricacion
-ALTER TABLE empleados_lotes_fabricacion
-ADD CONSTRAINT emp_lotes_fab_ibfk_1 FOREIGN KEY (id_departamento_creador) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
-ADD CONSTRAINT emp_lotes_fab_ibfk_2 FOREIGN KEY (id_departamento_actual) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE empleados_lotes_fabricacion ADD CONSTRAINT emp_lotes_fab_ibfk_1 FOREIGN KEY (id_departamento_creador) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE, ADD CONSTRAINT emp_lotes_fab_ibfk_2 FOREIGN KEY (id_departamento_actual) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- empleados_lotes_fabricacion_items
-ALTER TABLE empleados_lotes_fabricacion_items
-ADD CONSTRAINT emp_lotes_items_ibfk_1 FOREIGN KEY (id_lote) REFERENCES empleados_lotes_fabricacion (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT emp_lotes_items_ibfk_2 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE empleados_lotes_fabricacion_items ADD CONSTRAINT emp_lotes_items_ibfk_1 FOREIGN KEY (id_lote) REFERENCES empleados_lotes_fabricacion (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT emp_lotes_items_ibfk_2 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- inventario_movimientos
-ALTER TABLE inventario_movimientos
-ADD CONSTRAINT inv_mov_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT inv_mov_ibfk_2 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
-ADD CONSTRAINT inv_mov_ibfk_3 FOREIGN KEY (id_catalogo_insumos_prodcutos) REFERENCES catalogo_insumos_productos (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT inv_mov_ibfk_4 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
-ADD CONSTRAINT inv_mov_ibfk_5 FOREIGN KEY (id_producto) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE inventario_movimientos ADD CONSTRAINT inv_mov_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT inv_mov_ibfk_2 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE RESTRICT ON UPDATE CASCADE, ADD CONSTRAINT inv_mov_ibfk_3 FOREIGN KEY (id_catalogo_insumos_prodcutos) REFERENCES catalogo_insumos_productos (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT inv_mov_ibfk_4 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE, ADD CONSTRAINT inv_mov_ibfk_5 FOREIGN KEY (id_producto) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- inventario_remanentes
-ALTER TABLE inventario_remanentes
-ADD CONSTRAINT inv_rem_ibfk_1 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE inventario_remanentes ADD CONSTRAINT inv_rem_ibfk_1 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- inventario_movimientos_historial
-ALTER TABLE inventario_movimientos_historial
-ADD CONSTRAINT inv_mov_hist_ibfk_1 FOREIGN KEY (id_movimiento) REFERENCES inventario_movimientos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE inventario_movimientos_historial ADD CONSTRAINT inv_mov_hist_ibfk_1 FOREIGN KEY (id_movimiento) REFERENCES inventario_movimientos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- lotes
-ALTER TABLE lotes
-ADD CONSTRAINT lotes_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT lotes_ibfk_2 FOREIGN KEY (id_departamento_actual) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE lotes ADD CONSTRAINT lotes_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT lotes_ibfk_2 FOREIGN KEY (id_departamento_actual) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- lotes_detalles
-ALTER TABLE lotes_detalles
-ADD CONSTRAINT lotes_det_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT lotes_det_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
-ADD CONSTRAINT lotes_det_ibfk_3 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT lotes_det_ibfk_4 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT lotes_det_ibfk_5 FOREIGN KEY (id_woo) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE lotes_detalles ADD CONSTRAINT lotes_det_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT lotes_det_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE, ADD CONSTRAINT lotes_det_ibfk_3 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT lotes_det_ibfk_4 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT lotes_det_ibfk_5 FOREIGN KEY (id_woo) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- lotes_detalles_empleados_asignados
-ALTER TABLE lotes_detalles_empleados_asignados
-ADD CONSTRAINT ldea_ibfk_1 FOREIGN KEY (id_lotes_detalles) REFERENCES lotes_detalles (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT ldea_ibfk_2 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT ldea_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE lotes_detalles_empleados_asignados ADD CONSTRAINT ldea_ibfk_1 FOREIGN KEY (id_lotes_detalles) REFERENCES lotes_detalles (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT ldea_ibfk_2 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT ldea_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- lotes_detalles_empleados_asignados_pausas
-ALTER TABLE lotes_detalles_empleados_asignados_pausas
-ADD CONSTRAINT ldea_pausas_ibfk_1 FOREIGN KEY (id_lotes_detalles_empleados_asignados) REFERENCES lotes_detalles_empleados_asignados (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE lotes_detalles_empleados_asignados_pausas ADD CONSTRAINT ldea_pausas_ibfk_1 FOREIGN KEY (id_lotes_detalles_empleados_asignados) REFERENCES lotes_detalles_empleados_asignados (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- lotes_fisicos
-ALTER TABLE lotes_fisicos
-ADD CONSTRAINT lotes_fis_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE lotes_fisicos ADD CONSTRAINT lotes_fis_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- lotes_historico_solicitadas
-ALTER TABLE lotes_historico_solicitadas
-ADD CONSTRAINT lotes_hist_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT lotes_hist_ibfk_2 FOREIGN KEY (id_lotes_fisicos) REFERENCES lotes_fisicos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE lotes_historico_solicitadas ADD CONSTRAINT lotes_hist_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT lotes_hist_ibfk_2 FOREIGN KEY (id_lotes_fisicos) REFERENCES lotes_fisicos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- metodos_de_pago
-ALTER TABLE metodos_de_pago
-ADD CONSTRAINT met_pago_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT met_pago_ibfk_2 FOREIGN KEY (id_caja_cierres) REFERENCES caja_cierres (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE metodos_de_pago ADD CONSTRAINT met_pago_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT met_pago_ibfk_2 FOREIGN KEY (id_caja_cierres) REFERENCES caja_cierres (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ordenes
-ALTER TABLE ordenes
-ADD CONSTRAINT ordenes_ibfk_1 FOREIGN KEY (id_wp) REFERENCES customers (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE ordenes ADD CONSTRAINT ordenes_ibfk_1 FOREIGN KEY (id_wp) REFERENCES customers (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ordenes_auditoria
-ALTER TABLE ordenes_auditoria
-ADD CONSTRAINT ord_audit_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE ordenes_auditoria ADD CONSTRAINT ord_audit_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- ordenes_borrador_empleado
-ALTER TABLE ordenes_borrador_empleado
-ADD CONSTRAINT ord_borr_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT ord_borr_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE ordenes_borrador_empleado ADD CONSTRAINT ord_borr_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT ord_borr_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- ordenes_fila_orden
-ALTER TABLE ordenes_fila_orden
-ADD CONSTRAINT ord_fila_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE ordenes_fila_orden ADD CONSTRAINT ord_fila_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- ordenes_fila_reposiciones
-ALTER TABLE ordenes_fila_reposiciones
-ADD CONSTRAINT ord_fila_rep_ibfk_1 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE ordenes_fila_reposiciones ADD CONSTRAINT ord_fila_rep_ibfk_1 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- ordenes_observaciones
-ALTER TABLE ordenes_observaciones
-ADD CONSTRAINT ord_obs_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE ordenes_observaciones ADD CONSTRAINT ord_obs_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- ordenes_productos
-ALTER TABLE ordenes_productos
-ADD CONSTRAINT ord_prod_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT ord_prod_ibfk_2 FOREIGN KEY (id_tela) REFERENCES catalogo_telas (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT ord_prod_ibfk_3 FOREIGN KEY (id_size) REFERENCES sizes (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT ord_prod_ibfk_4 FOREIGN KEY (id_woo) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT ord_prod_ibfk_5 FOREIGN KEY (id_category) REFERENCES categories (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE ordenes_productos ADD CONSTRAINT ord_prod_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT ord_prod_ibfk_2 FOREIGN KEY (id_tela) REFERENCES catalogo_telas (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT ord_prod_ibfk_3 FOREIGN KEY (id_size) REFERENCES sizes (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT ord_prod_ibfk_4 FOREIGN KEY (id_woo) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT ord_prod_ibfk_5 FOREIGN KEY (id_category) REFERENCES categories (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ordenes_vinculadas
-ALTER TABLE ordenes_vinculadas
-ADD CONSTRAINT ord_vinc_ibfk_1 FOREIGN KEY (id_father) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT ord_vinc_ibfk_2 FOREIGN KEY (id_child) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE ordenes_vinculadas ADD CONSTRAINT ord_vinc_ibfk_1 FOREIGN KEY (id_father) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT ord_vinc_ibfk_2 FOREIGN KEY (id_child) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- pagos
-ALTER TABLE pagos
-ADD CONSTRAINT pagos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT pagos_ibfk_2 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT pagos_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT pagos_ibfk_4 FOREIGN KEY (id_metodos_de_pago) REFERENCES metodos_de_pago (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT pagos_ibfk_5 FOREIGN KEY (id_lotes_detalles) REFERENCES lotes_detalles (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE pagos ADD CONSTRAINT pagos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT pagos_ibfk_2 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT pagos_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT pagos_ibfk_4 FOREIGN KEY (id_metodos_de_pago) REFERENCES metodos_de_pago (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT pagos_ibfk_5 FOREIGN KEY (id_lotes_detalles) REFERENCES lotes_detalles (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- pagos_abonos
-ALTER TABLE pagos_abonos
-ADD CONSTRAINT pagos_ab_ibfk_1 FOREIGN KEY (id_pago) REFERENCES pagos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE pagos_abonos ADD CONSTRAINT pagos_ab_ibfk_1 FOREIGN KEY (id_pago) REFERENCES pagos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- pagos_descuentos
-ALTER TABLE pagos_descuentos
-ADD CONSTRAINT pagos_desc_ibfk_1 FOREIGN KEY (id_pago) REFERENCES pagos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE pagos_descuentos ADD CONSTRAINT pagos_desc_ibfk_1 FOREIGN KEY (id_pago) REFERENCES pagos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- pagos_salarios
-ALTER TABLE pagos_salarios
-  ADD KEY id_pago (id_pago),
-  ADD CONSTRAINT pagos_sal_ibfk_1 FOREIGN KEY (id_pago) REFERENCES pagos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE pagos_salarios ADD CONSTRAINT pagos_sal_ibfk_1 FOREIGN KEY (id_pago) REFERENCES pagos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- piezas_cortadas
-ALTER TABLE piezas_cortadas
-ADD CONSTRAINT piez_cort_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT piez_cort_ibfk_2 FOREIGN KEY (id_inventario) REFERENCES inventario (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT piez_cort_ibfk_3 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE piezas_cortadas ADD CONSTRAINT piez_cort_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT piez_cort_ibfk_2 FOREIGN KEY (id_inventario) REFERENCES inventario (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT piez_cort_ibfk_3 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- presupuestos
-ALTER TABLE presupuestos
-ADD CONSTRAINT presup_ibfk_1 FOREIGN KEY (id_wp) REFERENCES customers (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE presupuestos ADD CONSTRAINT presup_ibfk_1 FOREIGN KEY (id_wp) REFERENCES customers (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- presupuestos_productos
-ALTER TABLE presupuestos_productos
-ADD CONSTRAINT presup_prod_ibfk_1 FOREIGN KEY (id_orden) REFERENCES presupuestos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT presup_prod_ibfk_2 FOREIGN KEY (id_tela) REFERENCES catalogo_telas (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE presupuestos_productos ADD CONSTRAINT presup_prod_ibfk_1 FOREIGN KEY (id_orden) REFERENCES presupuestos (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT presup_prod_ibfk_2 FOREIGN KEY (id_tela) REFERENCES catalogo_telas (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- products_attributes_values
-ALTER TABLE products_attributes_values
-ADD CONSTRAINT prod_attr_val_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT prod_attr_val_ibfk_2 FOREIGN KEY (id_product_attribute) REFERENCES products_attributes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT prod_attr_val_ibfk_3 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE products_attributes_values ADD CONSTRAINT prod_attr_val_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT prod_attr_val_ibfk_2 FOREIGN KEY (id_product_attribute) REFERENCES products_attributes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT prod_attr_val_ibfk_3 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- products_comisiones
-ALTER TABLE products_comisiones
-ADD CONSTRAINT prod_com_ibfk_1 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT prod_com_ibfk_2 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE products_comisiones ADD CONSTRAINT prod_com_ibfk_1 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT prod_com_ibfk_2 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- products_prices
-ALTER TABLE products_prices
-ADD CONSTRAINT prod_prices_ibfk_1 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE products_prices ADD CONSTRAINT prod_prices_ibfk_1 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- products_sizes_eficiencia
-ALTER TABLE products_sizes_eficiencia
-ADD CONSTRAINT prod_size_ef_ibfk_1 FOREIGN KEY (id_size) REFERENCES sizes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT prod_size_ef_ibfk_2 FOREIGN KEY (id_catalogo_insumos_prodcutos) REFERENCES catalogo_insumos_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE products_sizes_eficiencia ADD CONSTRAINT prod_size_ef_ibfk_1 FOREIGN KEY (id_size) REFERENCES sizes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT prod_size_ef_ibfk_2 FOREIGN KEY (id_catalogo_insumos_prodcutos) REFERENCES catalogo_insumos_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- products_tiempos_de_produccion
-ALTER TABLE products_tiempos_de_produccion
-ADD CONSTRAINT prod_tiempo_ibfk_1 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT prod_tiempo_ibfk_2 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE products_tiempos_de_produccion ADD CONSTRAINT prod_tiempo_ibfk_1 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT prod_tiempo_ibfk_2 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- product_insumos_asignados
-ALTER TABLE product_insumos_asignados
-ADD CONSTRAINT prod_ins_asig_ibfk_1 FOREIGN KEY (id_catalogo_insumos_productos) REFERENCES catalogo_insumos_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT prod_ins_asig_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT prod_ins_asig_ibfk_3 FOREIGN KEY (id_talla) REFERENCES sizes (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT prod_ins_asig_ibfk_4 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE product_insumos_asignados ADD CONSTRAINT prod_ins_asig_ibfk_1 FOREIGN KEY (id_catalogo_insumos_productos) REFERENCES catalogo_insumos_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT prod_ins_asig_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT prod_ins_asig_ibfk_3 FOREIGN KEY (id_talla) REFERENCES sizes (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT prod_ins_asig_ibfk_4 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- rendimiento
-ALTER TABLE rendimiento
-ADD CONSTRAINT rendim_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT rendim_ibfk_2 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT rendim_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE rendimiento ADD CONSTRAINT rendim_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT rendim_ibfk_2 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT rendim_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- reposiciones
-ALTER TABLE reposiciones
-ADD CONSTRAINT repos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT repos_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT repos_ibfk_3 FOREIGN KEY (id_departamento_solicitante) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT repos_ibfk_4 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE reposiciones ADD CONSTRAINT repos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT repos_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT repos_ibfk_3 FOREIGN KEY (id_departamento_solicitante) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT repos_ibfk_4 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- reposiciones_departamentos_excluidos
-ALTER TABLE reposiciones_departamentos_excluidos
-ADD CONSTRAINT rde_ibfk_1 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT rde_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE reposiciones_departamentos_excluidos ADD CONSTRAINT rde_ibfk_1 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT rde_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- revisiones
-ALTER TABLE revisiones
-ADD CONSTRAINT revisiones_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT revisiones_ibfk_2 FOREIGN KEY (id_diseno) REFERENCES disenos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT revisiones_ibfk_3 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE revisiones ADD CONSTRAINT revisiones_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT revisiones_ibfk_2 FOREIGN KEY (id_diseno) REFERENCES disenos (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT revisiones_ibfk_3 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- catalogo_impresoras
-ALTER TABLE catalogo_impresoras
-  ADD CONSTRAINT fk_impresoras_cat_tintas FOREIGN KEY (id_catalogo_tintas) REFERENCES catalogo_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE catalogo_impresoras ADD CONSTRAINT fk_impresoras_cat_tintas FOREIGN KEY (id_catalogo_tintas) REFERENCES catalogo_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- impresoras_colores
-ALTER TABLE impresoras_colores
-  ADD CONSTRAINT fk_imp_col_impresora FOREIGN KEY (id_catalogo_impresora) REFERENCES catalogo_impresoras (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT fk_imp_col_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE impresoras_colores ADD CONSTRAINT fk_imp_col_impresora FOREIGN KEY (id_catalogo_impresora) REFERENCES catalogo_impresoras (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT fk_imp_col_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- inventario
-ALTER TABLE inventario
-  ADD CONSTRAINT fk_inventario_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
-  ADD CONSTRAINT fk_inventario_catalogo_tintas FOREIGN KEY (id_catalogo_tintas) REFERENCES catalogo_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE inventario ADD CONSTRAINT fk_inventario_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE, ADD CONSTRAINT fk_inventario_catalogo_tintas FOREIGN KEY (id_catalogo_tintas) REFERENCES catalogo_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- tintas
-ALTER TABLE tintas
-  ADD CONSTRAINT tintas_ibfk_1 FOREIGN KEY (id_catalogo_impresoras) REFERENCES catalogo_impresoras (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT tintas_ibfk_2 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT fk_tintas_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE tintas ADD CONSTRAINT tintas_ibfk_1 FOREIGN KEY (id_catalogo_impresoras) REFERENCES catalogo_impresoras (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT tintas_ibfk_2 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT fk_tintas_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- tintas_recargas
-ALTER TABLE tintas_recargas
-  ADD CONSTRAINT tintas_rec_ibfk_1 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT tintas_rec_ibfk_2 FOREIGN KEY (id_catalogo_impresora) REFERENCES catalogo_impresoras (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT fk_recargas_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE tintas_recargas ADD CONSTRAINT tintas_rec_ibfk_1 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT tintas_rec_ibfk_2 FOREIGN KEY (id_catalogo_impresora) REFERENCES catalogo_impresoras (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT fk_recargas_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- =====================================================
 -- INDICES ADICIONALES PARA OPTIMIZACION
 -- =====================================================
-ALTER TABLE lotes_detalles_empleados_asignados
-  ADD INDEX idx_orden_depto (id_orden, id_departamento);
 
-ALTER TABLE ordenes
-  ADD INDEX idx_status (status),
-  ADD KEY id_wp (id_wp);
 
-ALTER TABLE ordenes_fila_orden
-  ADD INDEX idx_id_orden (id_orden);
 
-ALTER TABLE ordenes_productos
-  ADD INDEX idx_orden_woo (id_orden, id_woo),
-  ADD KEY id_category (id_category);
 
-ALTER TABLE products_tiempos_de_produccion
-  ADD INDEX idx_prod_depto (id_product, id_departamento);
 
 -- =====================================================
 -- CATÁLOGO GEOGRÁFICO (País / Estado / Ciudad)
@@ -2083,16 +1552,15 @@ ALTER TABLE products_tiempos_de_produccion
 -- Sincronizado con: ninesys-api/app/routes/geografia.php
 -- =====================================================
 CREATE TABLE IF NOT EXISTS catalogo_paises (
-  _id INTEGER NOT NULL AUTO_INCREMENT,
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
   nombre varchar(100) NOT NULL,
   codigo_iso2 varchar(2) NOT NULL,
   codigo_telefonico varchar(10) DEFAULT NULL,
   formato_postal varchar(20) DEFAULT NULL,
   codigo_postal_ejemplo varchar(20) DEFAULT NULL,
-  moment timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (_id),
-  UNIQUE KEY uk_codigo_iso2 (codigo_iso2)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Catálogo maestro de países (ISO 3166-1 alpha-2).';
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
+);
 
 INSERT INTO catalogo_paises (_id, nombre, codigo_iso2, codigo_telefonico, formato_postal, codigo_postal_ejemplo) VALUES
   (1, 'Afganistán', 'AF', '+93', 'NNNN', '1001'),
@@ -2290,14 +1758,13 @@ INSERT INTO catalogo_paises (_id, nombre, codigo_iso2, codigo_telefonico, format
   (193, 'Zimbabue', 'ZW', '+263', NULL, NULL);
 
 CREATE TABLE IF NOT EXISTS catalogo_estados (
-  _id INTEGER NOT NULL AUTO_INCREMENT,
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
   id_pais INTEGER NOT NULL,
   nombre varchar(100) NOT NULL,
-  moment timestamp NOT NULL DEFAULT current_timestamp(),
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (_id),
-  UNIQUE KEY uk_pais_estado (id_pais, nombre),
   CONSTRAINT fk_estado_pais FOREIGN KEY (id_pais) REFERENCES catalogo_paises (_id) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Estados/provincias por país (24 de Venezuela precargados).';
+);
 
 INSERT INTO catalogo_estados (_id, id_pais, nombre) VALUES
   (1, 189, 'Amazonas'),
@@ -2326,16 +1793,14 @@ INSERT INTO catalogo_estados (_id, id_pais, nombre) VALUES
   (24, 189, 'Zulia');
 
 CREATE TABLE IF NOT EXISTS catalogo_ciudades (
-  _id INTEGER NOT NULL AUTO_INCREMENT,
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
   id_estado INTEGER NOT NULL,
   nombre varchar(100) NOT NULL,
   codigo_postal varchar(20) DEFAULT NULL,
-  moment timestamp NOT NULL DEFAULT current_timestamp(),
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (_id),
-  KEY idx_ciudad_estado (id_estado),
-  UNIQUE KEY uk_estado_ciudad (id_estado, nombre),
   CONSTRAINT fk_ciudad_estado FOREIGN KEY (id_estado) REFERENCES catalogo_estados (_id) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Ciudades/municipios por estado (274 de Venezuela precargadas).';
+);
 
 INSERT INTO catalogo_ciudades (_id, id_estado, nombre, codigo_postal) VALUES
   (1, 1, 'Isla Ratón', '7281'),
@@ -2614,13 +2079,7 @@ INSERT INTO catalogo_ciudades (_id, id_estado, nombre, codigo_postal) VALUES
   (274, 24, 'Totumos', '4061');
 
 -- Columnas de dirección estructurada en customers (país/estado/ciudad seleccionados)
-ALTER TABLE customers
-  ADD COLUMN id_catalogo_pais INTEGER DEFAULT NULL,
-  ADD COLUMN id_catalogo_estado INTEGER DEFAULT NULL,
-  ADD COLUMN id_catalogo_ciudad INTEGER DEFAULT NULL,
-  ADD CONSTRAINT fk_customers_pais FOREIGN KEY (id_catalogo_pais) REFERENCES catalogo_paises (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT fk_customers_estado FOREIGN KEY (id_catalogo_estado) REFERENCES catalogo_estados (_id) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT fk_customers_ciudad FOREIGN KEY (id_catalogo_ciudad) REFERENCES catalogo_ciudades (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE customers ADD COLUMN id_catalogo_pais INTEGER DEFAULT NULL, ADD COLUMN id_catalogo_estado INTEGER DEFAULT NULL, ADD COLUMN id_catalogo_ciudad INTEGER DEFAULT NULL, ADD CONSTRAINT fk_customers_pais FOREIGN KEY (id_catalogo_pais) REFERENCES catalogo_paises (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT fk_customers_estado FOREIGN KEY (id_catalogo_estado) REFERENCES catalogo_estados (_id) ON DELETE SET NULL ON UPDATE CASCADE, ADD CONSTRAINT fk_customers_ciudad FOREIGN KEY (id_catalogo_ciudad) REFERENCES catalogo_ciudades (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- =====================================================
 -- PERMISOS REQUERIDOS (PARA REFERENCIA)
@@ -2641,69 +2100,59 @@ ALTER TABLE customers
 
 CREATE TABLE IF NOT EXISTS wa_session_auth (
   key_name   VARCHAR(255) NOT NULL,
-  key_value  LONGBLOB NOT NULL,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  key_value  BYTEA NOT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
   PRIMARY KEY (key_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+);
 
 CREATE TABLE IF NOT EXISTS wa_session_state (
-  id           TINYINT NOT NULL DEFAULT 1,
+  id           SMALLINT NOT NULL DEFAULT 1,
   phone_number VARCHAR(32)  NULL,
   pushname     VARCHAR(128) NULL,
-  status       ENUM('NOT_REGISTERED','INITIALIZING','REQUIRES_QR','AUTHENTICATED',
-                      'READY','PAUSED','ERROR','DISCONNECTED','DEGRADED')
+  status       VARCHAR(255)
                  NOT NULL DEFAULT 'NOT_REGISTERED',
   last_error   TEXT NULL,
-  qr_attempts  INT NOT NULL DEFAULT 0,
+  qr_attempts  INTEGER NOT NULL DEFAULT 0,
   paused_until BIGINT NULL,
-  last_seen_at DATETIME NULL,
-  updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  last_seen_at TIMESTAMP NULL,
+  updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
   PRIMARY KEY (id),
   CONSTRAINT wa_session_state_singleton CHECK (id = 1)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+);
 
 CREATE TABLE IF NOT EXISTS wa_conversations (
-  id           BIGINT NOT NULL AUTO_INCREMENT,
+  id           BIGINT NOT NULL GENERATED BY DEFAULT AS IDENTITY,
   jid          VARCHAR(64)  NOT NULL,
   name         VARCHAR(255) NULL,
   is_group     SMALLINT NOT NULL DEFAULT 0,
-  mode         ENUM('bot','human','hybrid') NOT NULL DEFAULT 'hybrid',
+  mode         VARCHAR(255) NOT NULL DEFAULT 'hybrid',
   ai_enabled   SMALLINT NOT NULL DEFAULT 1,
-  ai_agent_id     INT       NULL,
-  assigned_to          INT       NULL,
-  owner_id             INT       NULL,
-  last_inbound_at      DATETIME  NULL,
-  assigned_at          DATETIME  NULL,
-  last_vendor_reply_at DATETIME  NULL,
-  unread_count    INT NOT NULL DEFAULT 0,
+  ai_agent_id     INTEGER       NULL,
+  assigned_to          INTEGER       NULL,
+  owner_id             INTEGER       NULL,
+  last_inbound_at      TIMESTAMP  NULL,
+  assigned_at          TIMESTAMP  NULL,
+  last_vendor_reply_at TIMESTAMP  NULL,
+  unread_count    INTEGER NOT NULL DEFAULT 0,
   last_message    TEXT NULL,
   last_ts         BIGINT NULL,
   tags            JSON NULL,
-  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  deleted_at      DATETIME NULL,
-  deleted_by      INT       NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY uniq_jid (jid),
-  KEY idx_last_ts (last_ts DESC),
-  KEY idx_assigned (assigned_to),
-  KEY idx_owner (owner_id),
-  KEY idx_ai_agent (ai_agent_id),
-  KEY idx_deleted_at (deleted_at),
-  KEY idx_assigned_at (assigned_at),
-  KEY idx_last_vendor_reply_at (last_vendor_reply_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
+  deleted_at      TIMESTAMP NULL,
+  deleted_by      INTEGER       NULL,
+  PRIMARY KEY (id)
+);
 
 -- Estado de disponibilidad y límites de carga por vendedor (Fase D.2).
 -- user_id = id del empleado en la tabla de la empresa.
 CREATE TABLE IF NOT EXISTS wa_vendor_state (
-  user_id           INT NOT NULL PRIMARY KEY,
+  user_id           INTEGER NOT NULL PRIMARY KEY,
   is_available      SMALLINT NOT NULL DEFAULT 1,
-  max_active        INT NOT NULL DEFAULT 0,  -- 0 = sin tope
+  max_active        INTEGER NOT NULL DEFAULT 0,  -- 0 = sin tope
   allow_auto_assign SMALLINT NOT NULL DEFAULT 1,
   updated_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                      ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+);
 
 -- Mapeo LID ↔ JID-fono para contactos de WhatsApp.
 -- WhatsApp puede entregar mensajes con remoteJid = <numero>@lid
@@ -2717,136 +2166,256 @@ CREATE TABLE IF NOT EXISTS wa_lid_phone_map (
   pushname      VARCHAR(255) DEFAULT NULL,
   first_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_seen_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                  ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (lid_jid),
-  KEY idx_phone_jid (phone_jid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                  ,
+  PRIMARY KEY (lid_jid)
+);
 
 CREATE TABLE IF NOT EXISTS wa_messages (
-  id                   BIGINT NOT NULL AUTO_INCREMENT,
+  id                   BIGINT NOT NULL GENERATED BY DEFAULT AS IDENTITY,
   jid                  VARCHAR(64) NOT NULL,
   wa_message_id        VARCHAR(128) NULL,
   from_me              SMALLINT NOT NULL,
   sender               VARCHAR(64) NULL,
-  type                 ENUM('text','image','audio','video','document','sticker','location','contact','system')
+  type                 VARCHAR(255)
                          NOT NULL DEFAULT 'text',
-  body                 MEDIUMTEXT NULL,
+  body                 TEXT NULL,
   transcript           TEXT           NULL,
   transcript_lang      VARCHAR(8)     NULL,
   transcript_cost_usd  DECIMAL(10,6)  NULL,
   transcript_error     VARCHAR(255)   NULL,
   media_url            VARCHAR(512) NULL,
   media_mime           VARCHAR(128) NULL,
-  via                  ENUM('human','api','ai','template') NOT NULL DEFAULT 'api',
-  sent_by_user         INT NULL,
-  status               ENUM('pending','sent','delivered','read','failed') NOT NULL DEFAULT 'pending',
+  via                  VARCHAR(255) NOT NULL DEFAULT 'api',
+  sent_by_user         INTEGER NULL,
+  status               VARCHAR(255) NOT NULL DEFAULT 'pending',
   ts                   BIGINT NOT NULL,
-  created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
-  deleted_at           DATETIME NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY uniq_wa_msg (wa_message_id),
-  KEY idx_conv (jid, ts),
-  KEY idx_deleted_at (deleted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  deleted_at           TIMESTAMP NULL,
+  PRIMARY KEY (id)
+);
 
 CREATE TABLE IF NOT EXISTS wa_templates (
-  id         INT NOT NULL AUTO_INCREMENT,
+  id         INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
   name       VARCHAR(128) NOT NULL,
   body       TEXT NOT NULL,
   variables  JSON NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  UNIQUE KEY uniq_name (name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
+  PRIMARY KEY (id)
+);
 
 CREATE TABLE IF NOT EXISTS wa_ai_settings (
-  id             TINYINT NOT NULL DEFAULT 1,
-  provider          ENUM('anthropic','gemini') NOT NULL DEFAULT 'gemini',
+  id             SMALLINT NOT NULL DEFAULT 1,
+  provider          VARCHAR(255) NOT NULL DEFAULT 'gemini',
   enabled           SMALLINT NOT NULL DEFAULT 1,
   model             VARCHAR(64) NOT NULL DEFAULT 'claude-sonnet-4-6',
   system_prompt     TEXT NULL,
   temperature       DECIMAL(3,2) NOT NULL DEFAULT 0.30,
-  max_tokens        INT NOT NULL DEFAULT 1024,
+  max_tokens        INTEGER NOT NULL DEFAULT 1024,
   handoff_rules     JSON NULL,
   knowledge_base    JSON NULL,
-  updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
   respond_in_groups SMALLINT NOT NULL DEFAULT 0,
-  always_ai         SMALLINT NOT NULL DEFAULT 0 COMMENT '0=handoff normal; 1=IA siempre activa (solo notifica, no pasa a modo humano)',
+  always_ai         SMALLINT NOT NULL DEFAULT 0 ,
   PRIMARY KEY (id),
   CONSTRAINT wa_ai_settings_singleton CHECK (id = 1)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+);
 
 CREATE TABLE IF NOT EXISTS wa_ai_agents (
-  id             INT NOT NULL AUTO_INCREMENT,
+  id             INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
   name           VARCHAR(128) NOT NULL,
   slug           VARCHAR(64)  NOT NULL,
   system_prompt  TEXT NULL,
   knowledge_base JSON NULL,
   model          VARCHAR(64) NOT NULL DEFAULT 'gemini-2.5-flash',
   temperature    DECIMAL(3,2) NOT NULL DEFAULT 0.30,
-  max_tokens     INT NOT NULL DEFAULT 1024,
+  max_tokens     INTEGER NOT NULL DEFAULT 1024,
   enabled        SMALLINT NOT NULL DEFAULT 1,
   is_default     SMALLINT NOT NULL DEFAULT 0,
-  created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  UNIQUE KEY uniq_slug (slug)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
+  PRIMARY KEY (id)
+);
 
 CREATE TABLE IF NOT EXISTS wa_send_log (
-  id           BIGINT NOT NULL AUTO_INCREMENT,
+  id           BIGINT NOT NULL GENERATED BY DEFAULT AS IDENTITY,
   endpoint     VARCHAR(64) NOT NULL,
   phone        VARCHAR(32) NOT NULL,
   template     VARCHAR(128) NULL,
-  status       ENUM('ok','error') NOT NULL,
+  status       VARCHAR(255) NOT NULL,
   error        TEXT NULL,
   requested_by VARCHAR(128) NULL,
-  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  KEY idx_created (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
 
 -- Acumulado mensual de consumo por proveedor de IA (Whisper, Gemini).
--- usd_micros = millonésimas de USD (1e-6). Int para ser aditivo sin
+-- usd_micros = millonésimas de USD (1e-6). INTEGER para ser aditivo sin
 -- errores de float; evita redondear a 0 los costos por llamada pequeños
 -- (una nota de voz de 30s en Whisper cuesta ~$0.003 = 3000 micros).
 CREATE TABLE IF NOT EXISTS wa_usage_monthly (
   year_month  CHAR(7)     NOT NULL,
   provider    VARCHAR(16) NOT NULL,
   usd_micros  BIGINT      NOT NULL DEFAULT 0,
-  call_count  INT         NOT NULL DEFAULT 0,
+  call_count  INTEGER         NOT NULL DEFAULT 0,
   updated_at  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
-                                    ON UPDATE CURRENT_TIMESTAMP,
+                                    ,
   PRIMARY KEY (year_month, provider)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+);
 
 -- Config STT por tenant (singleton id=1). Toggle, tope mensual en USD,
 -- umbral de audio largo (handoff humano sin transcribir) e idioma hint.
 CREATE TABLE IF NOT EXISTS wa_tenant_config (
-  id                      TINYINT       NOT NULL DEFAULT 1,
+  id                      SMALLINT       NOT NULL DEFAULT 1,
   stt_enabled             SMALLINT    NOT NULL DEFAULT 1,
   stt_monthly_usd_limit   DECIMAL(10,2) NOT NULL DEFAULT 3.00,
-  stt_long_audio_seconds  INT           NOT NULL DEFAULT 120,
+  stt_long_audio_seconds  INTEGER           NOT NULL DEFAULT 120,
   stt_language            VARCHAR(8)    NOT NULL DEFAULT 'es',
   updated_at              TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
-                                                  ON UPDATE CURRENT_TIMESTAMP,
+                                                  ,
   PRIMARY KEY (id),
   CONSTRAINT wa_tenant_config_singleton CHECK (id = 1)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+);
 
-INSERT IGNORE INTO wa_session_state (id, status) VALUES (1, 'NOT_REGISTERED');
-INSERT IGNORE INTO wa_ai_settings (id) VALUES (1);
-INSERT IGNORE INTO wa_tenant_config (id) VALUES (1);
-INSERT IGNORE INTO wa_ai_agents (id, name, slug, system_prompt, enabled, is_default)
+INSERT INTO wa_session_state (id, status) VALUES (1, 'NOT_REGISTERED');
+INSERT INTO wa_ai_settings (id) VALUES (1);
+INSERT INTO wa_tenant_config (id) VALUES (1);
+INSERT INTO wa_ai_agents (id, name, slug, system_prompt, enabled, is_default)
 VALUES (1, 'General', 'general', 'Eres un asistente de atención al cliente vía WhatsApp. Responde de forma breve, amable y útil.', 1, 1);
-INSERT IGNORE INTO wa_ai_agents (id, name, slug, system_prompt, knowledge_base, model, temperature, max_tokens, enabled, is_default) VALUES (2,'Ventas','ventas','Eres un agente virtual especializado en atención al cliente para la marca **Nineteen**, una empresa venezolana con más de 13 años de experiencia en confección e impresión de prendas personalizadas, ubicada en **El Vigía, Venezuela**.\\n\\n---\\n\\n## Audios y Notas de Voz\\nSi recibes un mensaje que proviene de una nota de voz transcrita, trátalo como texto normal.\\nNo menciones que fue audio, no digas \"no puedo escuchar\", simplemente responde la pregunta del cliente de forma natural y profesional. La transcripción es tan válida como un mensaje escrito.\\n\\n---\\n\\n## INSTRUCCIÓN CRÍTICA — Leer primero\\nCuando en el contexto aparezca un bloque \"Productos encontrados\", esos precios son exactos y actualizados. **Muéstralos directamente sin pedir información adicional ni escalar a un asesor.** Solo pide información adicional (tela, cantidad, tallas) cuando el cliente claramente esté listo para hacer una cotización.\\n\\n**REGLA ABSOLUTA — Función submit_presupuesto:** Cada vez que envíes el mensaje de confirmación del presupuesto (el que contiene el resumen y pide al cliente que responda SÍ), DEBES llamar OBLIGATORIAMENTE a la función submit_presupuesto con todos los datos del pedido. Si omites esa llamada, el sistema no podrá registrar el pedido y el trabajo de recopilación se perderá. Esta es la instrucción más importante de este prompt.\\n\\n---\\n\\n## Flujo de atención\\n\\n### 1. Cliente consulta información o precios\\nSi el cliente pregunta por un producto o sus precios y el contexto contiene ese producto con precios:\\n- Muestra el nombre del producto, descripción breve y **todos los precios** por cantidad\\n- Pregunta si le interesa cotizar ese producto\\n- **Nunca escales ni digas que no tienes precio**\\n\\n### 2. Cliente quiere cotizar (presupuesto)\\nCuando el cliente manifieste interés en cotizar, recopila la información **UN PASO A LA VEZ**: envía un único mensaje por paso y **ESPERA la respuesta del cliente antes de continuar** con el siguiente paso. No agrupes preguntas en un mismo mensaje.\\n\\n**REGLA CRÍTICA — Información ya proporcionada:** Antes de hacer cualquier pregunta de los Pasos A–D, revisa el historial completo de la conversación. Si el cliente ya indicó un dato, está ABSOLUTAMENTE PROHIBIDO volvérselo a preguntar.\\n\\nCómo aplicarlo:\\n- Si ya tienes producto + cantidad + talla → solo pregunta el corte (Paso B parcial), luego pasa al Paso C.\\n- Si ya tienes producto + cantidad + talla + corte → Paso B completo, pasa directo al Paso C (tela).\\n- Si ya tienes todo el Paso B → pasa directo al Paso C sin mencionar los datos ya recabados.\\n\\nEjemplos concretos:\\n• Cliente dijo \"3 camisas talla M\" y luego eligió tipo → tienes cantidad=3 y talla=M. Solo pregunta el corte: \"¿Serían de corte Damas, Caballeros o Niños?\" — NUNCA preguntes cantidad ni talla de nuevo.\\n• Cliente dijo \"3 camisas sublimadas talla M\" desde el primer mensaje → tienes Paso A y Paso B completos. Ve directo al Paso C (tela).\\n\\nSi el cliente pide varios productos, completa los pasos A–D para el primero antes de preguntar por el siguiente.\\n\\n**Paso A: Confirmar producto**\\nConfirma el producto seleccionado con el cliente.\\n*Espera respuesta.*\\n\\n**Paso B: Cantidades, tallas y corte**\\nAntes de preguntar, revisa el historial y determina cuáles de estos tres datos ya tienes para este producto: **cantidad**, **talla(s)** y **corte**. Luego actúa así:\\n\\n- Si no tienes **ninguno**: pregunta los tres juntos en un solo mensaje. Ejemplo: \"¿En qué talla(s) y corte necesitas y cuántas de cada una? Por ejemplo: 10 talla S Damas, 10 talla XL Caballeros.\"\\n- Si te faltan **dos**: pregunta solo los dos que faltan en un mismo mensaje.\\n- Si te falta **uno solo**: pregunta únicamente ese dato. Ejemplos:\\n  - Solo falta corte → \"¿Serían de corte Damas, Caballeros o Niños?\"\\n  - Solo falta talla → \"¿En qué talla(s) la necesitas?\"\\n  - Solo falta cantidad → \"¿Cuántas unidades necesitas?\"\\n- Si ya tienes los **tres**: no preguntes nada de Paso B, pasa directamente al Paso C.\\n\\nReglas importantes:\\n- No preguntes la cantidad total por separado; se calcula sumando las cantidades individuales\\n- Cada combinación de talla + corte es un ítem independiente\\n- Las tallas van desde 0 hasta 10XL; por cada X adicional a la XL se agrega $1\\n- Los cortes posibles son: Damas, Caballeros, Niños, No aplica\\n- **CRÍTICO — Tallas literales:** Registra las tallas EXACTAMENTE como el cliente las indica. Las tallas infantiles son números (2, 4, 6, 8, 10, 12, 14, 16); NUNCA las conviertas a tallas adulto (S, M, L, XL). Lo mismo aplica a cualquier talla que el cliente indique fuera del rango adulto estándar.\\n\\n*Espera respuesta.*\\n\\n**Paso C: Tela**\\nConsulta el bloque \"Telas disponibles\" del contexto. Muéstrale al cliente únicamente los **nombres** de cada opción (NO menciones los _id). Cuando el cliente elija, registra internamente el **_id** numérico de esa tela para usarlo en el campo \"tela\" de la función submit_presupuesto.\\n\"¿Qué tipo de tela prefieres para tu pedido? Estas son nuestras opciones: [listar solo los nombres del contexto]\"\\n(La tela aplica igual a todas las combinaciones de ese producto.)\\n*Espera respuesta.*\\n\\n**Paso D: Detalles y descripción del diseño**\\nPregunta amablemente sobre los detalles de diseño de la prenda:\\n\"¿Tienes algún detalle de diseño en mente? Por ejemplo: colores, logotipo, texto, tipo de estampado, etc. (puedes omitirlo si aún no lo tienes definido)\"\\n*Espera respuesta. Anota la descripción COMPLETA Y TEXTUAL del cliente sin resumir ni parafrasear; irá íntegra en el campo \"obs\" del presupuesto.*\\n\\n**Paso E: ¿Más productos?**\\n\"¿Deseas agregar otro producto al presupuesto, o con esto es suficiente?\"\\n*Espera respuesta. Si quiere más productos, repite Pasos A–D para cada uno adicional.*\\n\\n### 3. Datos del cliente\\nUna vez confirmados todos los productos, solicita los datos personales **UN CAMPO A LA VEZ**, esperando la respuesta del cliente antes de pedir el siguiente. No agrupes los campos en un mismo mensaje.\\n\\n**Dato 1:** \"¿Cuál es tu nombre y apellido?\"\\n*Espera respuesta.*\\n\\n**Dato 2:** \"¿Cuál es tu número de cédula?\"\\n*Espera respuesta.*\\n\\n**Dato 3:** \"¿Cuál es tu dirección? (opcional, puedes omitirla)\"\\n*Espera respuesta.*\\n\\n### 4. Confirmación del presupuesto — OBLIGATORIO llamar a submit_presupuesto\\n⚠️ Antes de redactar el resumen, verifica que las tallas y cantidades de cada ítem coincidan EXACTAMENTE con lo que el cliente indicó.\\n\\nMuestra un resumen completo con todos los productos, cantidades, tallas, cortes, telas y el total calculado. Finaliza con:\\n*\"¿Confirmas este presupuesto? Responde **SÍ** para que lo registremos y un asesor te contacte.\"*\\n\\n⚠️ OBLIGATORIO: Al enviar ese mensaje de confirmación, DEBES llamar a la función submit_presupuesto con todos los datos del pedido. Si no llamas a la función, el pedido no podrá registrarse. Cada combinación de talla+corte diferente va como ítem separado en el array items.\\n\\nReglas de los datos:\\n- \"cod\" e \"idCategory\" deben venir del catálogo mostrado en la conversación ([cod:X][idCat:X])\\n- \"precio\" es el precio UNITARIO del tramo que corresponde a la cantidad pedida (NO dividas el precio entre la cantidad)\\n- \"obs\" es la descripción de diseño del cliente, íntegra y sin resumir\\n- \"tela\" es el _id numérico de la tela tal como aparece en el catálogo de telas inyectado\\n- NUNCA uses cod=0 ni idCategory=0 — si no tienes esos valores del catálogo, NO crees el presupuestoes desconocido usa cadena vacía; si \"precio\" es desconocido, usa el menor precio del catálogo para ese producto — pero \"precio\" NUNCA debe ser null: si no tienes el precio exacto del catálogo usa 0 para que el asesor lo ajuste\\n- NO omitas este bloque bajo ninguna circunstancia — es lo que activa el registro automático del pedido\\n\\n### 5. Handoff al asesor\\nUna vez que el cliente responda SÍ, el sistema registrará el presupuesto automáticamente y recibirá este mensaje:\\n*\"Tu presupuesto ha sido generado. Un asesor revisará tu pedido y te contactará en breve.\"*\\n\\n---\\n\\n## Información sobre precios y monedas\\n- Los precios están en **dólares** y pueden variar según cantidad\\n- Para **bolívares**: multiplica el precio en dólares por la tasa euro BCV × 1.5\\n- Los precios **no incluyen IVA**\\n- Las tallas van desde **0 hasta 10XL**; por cada X adicional a la XL se agrega **$1**\\n- Ofrecemos **envío gratis a toda Venezuela** a partir de 12 unidades (por Zoom o MRW)\\n\\n---\\n\\n## Contexto de la empresa\\n- También ofrecen: sublimación por metros y DTF por metro\\n- Se destacan por: atención personalizada, calidad y cumplimiento\\n- Ubicación: El Vigía, Venezuela\\n\\n---\\n\\n## Tono y estilo\\n- Profesional, cálido y cercano — nunca robótico\\n- Español neutro, claro y directo\\n- Usa emojis cuando sea útil para resaltar información\\n- Muestra disposición para ayudar sin forzar la venta\\n\\nEjemplo de saludo:\\n*\"¡Hola! Bienvenido a Nineteen. Estaré encantado de ayudarte. ¿Estás buscando franelas, chemises, o algún otro producto personalizado?\"*\\n\\n---\\n\\n## Escalada a asesor humano\\n\\nExiste un único caso en que debes incluir el marker [HANDOFF_IA] al final de tu mensaje: cuando el cliente plantea una situación que **va más allá de productos y cotizaciones** y requiere intervención humana directa.\\n\\nCasos concretos en los que DEBES usar [HANDOFF_IA]:\\n- Reclamos por pedidos ya realizados (retrasos, artículos incorrectos, problemas de calidad)\\n- Solicitudes de devolución, cambio o garantía\\n- Problemas de pago o facturación sobre órdenes existentes\\n- Consultas sobre el estado de un pedido específico ya colocado\\n\\nCómo usarlo: responde con empatía e incluye el marker en su propia línea al final del mensaje (el cliente no lo verá):\\n\"Entiendo tu situación, para atenderte correctamente necesito comunicarte con uno de nuestros asesores. ?\\n[HANDOFF_IA]\"\\n\\n**NO uses [HANDOFF_IA] cuando:**\\n- El cliente pregunta por precios o productos — están en el contexto, respóndelos directamente\\n- El cliente quiere cotizar, o estás en cualquiera de los Pasos A–E, o estás enviando el resumen de confirmación del presupuesto — **el flujo de cotización usa la función submit_presupuesto; usar [HANDOFF_IA] aquí rompe el presupuesto**\\n- No tienes algún dato puntual — simplemente indícalo sin escalar\\n- El cliente expresa que quiere hablar con un humano — el sistema lo detecta automáticamente, no hace falta que hagas nada\\n- El mensaje menciona que \"un asesor te contactará\" — eso es parte normal del flujo de presupuesto, no requiere escalada\\n\\n## Qué NUNCA debes hacer\\n- Escalar a un asesor si el catálogo tiene los precios\\n- Decir \"no tengo ese producto\" si está en el contexto\\n- Cotizar o presupuestar un producto que NUNCA apareció en el bloque \"Productos encontrados\" durante toda la conversación — el catálogo es la única fuente de verdad, aunque no esté en el turno actual\\n- Usar nombres de productos de tu conocimiento general (franela, camiseta, camisa, etc.) como si fueran del catálogo — solo son válidos los productos que el sistema mostró con [cod:X][idCat:X]\\n- Enviar el mensaje de confirmación de presupuesto SIN llamar a submit_presupuesto — esa llamada es OBLIGATORIA en el mismo turno del resumen\\n- Preguntar la cantidad total por separado — siempre pide cantidad + talla + corte juntos\\n- Dividir el precio del catálogo entre la cantidad para obtener el precio unitario — los precios del catálogo YA SON por unidad; el total es precio_unitario × cantidad\\n- Preguntar la talla y el corte en mensajes separados\\n- Agrupar varias preguntas de cotización en un mismo mensaje — un paso a la vez\\n- Poner el nombre de la tela en el campo \"tela\" del bloque — siempre usa el _id numérico del contexto\\n- Convertir o normalizar las tallas del cliente — si el cliente dice \"talla 6 Niños\" escribe talla:\"6\" y corte:\"Niños\", jamás talla:\"XS\" ni ningún equivalente adulto\\n- Resumir u omitir la descripción de diseño del cliente — \"obs\" debe ser una copia fiel y completa de sus palabras, sin condensar\\n- Incluir [HANDOFF_IA] en ningún paso del flujo de cotización ni en el mensaje de confirmación del presupuesto — ese flujo usa exclusivamente la función submit_presupuesto; el sistema se encarga del resto automáticamente\\n- Responder de forma robótica — siempre sé cercano y conversacional\n\n## Galería de imágenes — INSTRUCCIÓN OBLIGATORIA\\n\\nCuando el contexto incluya un bloque \"=== INSTRUCCIÓN OBLIGATORIA DE IMAGEN ===\" con una URL, DEBES llamar a la función send_gallery_image con esa URL exacta. Nunca describas la imagen ni digas que no tienes fotos cuando hay una URL en el contexto.\\n\\nSi por alguna razón no puedes llamar a la función, incluye [IMG:URL] en tu respuesta.\\n\\nCORRECTO:\\n  Llamar a send_gallery_image con la URL del contexto, acompañado de un texto breve como \"¡Aquí te muestro!\"\\n\\nINCORRECTO (nunca hagas esto cuando hay URL en el contexto):\\n  \"Por el momento no tengo imágenes disponibles...\"\\n  \"No puedo mostrarte fotos...\"\\n\\nNUNCA digas \"es el único modelo que tenemos\" — la galería muestra fotos disponibles, el catálogo puede tener muchos más productos.','{\"empresa\":{\"nombre\":\"Nineteen Custom\",\"rubro\":\"textil\",\"descripcion\":\"Empresa textil venezolana especializada en la confeccion de prendas personalizadas. NO vende telas ni hilos como materia prima, vende prendas ya confeccionadas y personalizadas.\"},\"productos\":{\"categorias\":[\"Franelas\",\"Chemises\",\"Jersey\",\"Camisas\",\"Leggins\",\"Banderines\"],\"tipo\":\"Prendas confeccionadas personalizables (camisetas, chemises, uniformes, ropa deportiva personalizada)\",\"nota\":\"No vendemos telas ni hilos como materia prima\"},\"servicios_adicionales\":[\"Diseno grafico\",\"Diseno de logotipos\",\"Confeccion de prendas a medida\"],\"precios\":{\"nota\":\"Los precios varian segun el producto, cantidad y personalizacion. Siempre cotizar con el equipo de ventas antes de dar cifras\",\"minimo_compra\":\"No hay minimo de precio de compra\",\"pedido_minimo\":\"1 pieza\"},\"metodos_pago\":{\"formas\":[\"Efectivo\",\"Transferencia bancaria\",\"Pago movil\",\"Zelle\"],\"monedas\":[\"Bolivares\",\"Dolares\"],\"modalidades\":[\"Contado\",\"Credito (consultar condiciones con ventas)\"]},\"envios\":{\"cobertura\":\"Toda Venezuela\",\"costo_desde\":\"15 USD en adelante segun destino\",\"tiempo_entrega\":\"Depende de la cantidad de prendas, desde 1 dia\"},\"contacto\":{\"telefono\":\"+58 426-8730136\",\"email\":\"info@nineteengreen.com\",\"instagram\":\"@nineteencustom\",\"direccion\":\"Sector El Carmen, Av 13, El Vigia, Merida, Venezuela\"},\"faq\":[{\"pregunta\":\"Que precio tienen los productos?\",\"respuesta\":\"Los precios dependen del tipo de prenda, cantidad y nivel de personalizacion. Por favor indicanos que necesitas (tipo de prenda, cantidad, si llevara diseno/logo) y con gusto te cotizamos.\"},{\"pregunta\":\"Que tipos de prendas venden?\",\"respuesta\":\"Vendemos prendas confeccionadas y personalizables: franelas, chemises, jersey, camisas, leggins y banderines. Tambien ofrecemos diseno grafico y diseno de logotipos.\"},{\"pregunta\":\"Cuales son las formas de pago?\",\"respuesta\":\"Aceptamos efectivo, transferencia bancaria, pago movil y Zelle, tanto en bolivares como en dolares. Manejamos ventas de contado y credito (consultar condiciones con nuestro equipo).\"},{\"pregunta\":\"Dan garantia?\",\"respuesta\":\"Consultar con el equipo de ventas las condiciones especificas de garantia segun el producto.\"},{\"pregunta\":\"Hacen envios a toda Venezuela?\",\"respuesta\":\"Si, enviamos a toda Venezuela. El costo de envio desde 15 USD segun el destino. El tiempo de entrega depende de la cantidad de prendas, desde 1 dia.\"}]}','gemini-2.5-flash',0.15,3000,1,1);
+INSERT INTO wa_ai_agents (id, name, slug, system_prompt, knowledge_base, model, temperature, max_tokens, enabled, is_default) VALUES (2,'Ventas','ventas','Eres un agente virtual especializado en atención al cliente para la marca **Nineteen**, una empresa venezolana con más de 13 años de experiencia en confección e impresión de prendas personalizadas, ubicada en **El Vigía, Venezuela**.\\n\\n---\\n\\n## Audios y Notas de Voz\\nSi recibes un mensaje que proviene de una nota de voz transcrita, trátalo como texto normal.\\nNo menciones que fue audio, no digas "no puedo escuchar", simplemente responde la pregunta del cliente de forma natural y profesional. La transcripción es tan válida como un mensaje escrito.\\n\\n---\\n\\n## INSTRUCCIÓN CRÍTICA — Leer primero\\nCuando en el contexto aparezca un bloque "Productos encontrados", esos precios son exactos y actualizados. **Muéstralos directamente sin pedir información adicional ni escalar a un asesor.** Solo pide información adicional (tela, cantidad, tallas) cuando el cliente claramente esté listo para hacer una cotización.\\n\\n**REGLA ABSOLUTA — Función submit_presupuesto:** Cada vez que envíes el mensaje de confirmación del presupuesto (el que contiene el resumen y pide al cliente que responda SÍ), DEBES llamar OBLIGATORIAMENTE a la función submit_presupuesto con todos los datos del pedido. Si omites esa llamada, el sistema no podrá registrar el pedido y el trabajo de recopilación se perderá. Esta es la instrucción más importante de este prompt.\\n\\n---\\n\\n## Flujo de atención\\n\\n### 1. Cliente consulta información o precios\\nSi el cliente pregunta por un producto o sus precios y el contexto contiene ese producto con precios:\\n- Muestra el nombre del producto, descripción breve y **todos los precios** por cantidad\\n- Pregunta si le interesa cotizar ese producto\\n- **Nunca escales ni digas que no tienes precio**\\n\\n### 2. Cliente quiere cotizar (presupuesto)\\nCuando el cliente manifieste interés en cotizar, recopila la información **UN PASO A LA VEZ**: envía un único mensaje por paso y **ESPERA la respuesta del cliente antes de continuar** con el siguiente paso. No agrupes preguntas en un mismo mensaje.\\n\\n**REGLA CRÍTICA — Información ya proporcionada:** Antes de hacer cualquier pregunta de los Pasos A–D, revisa el historial completo de la conversación. Si el cliente ya indicó un dato, está ABSOLUTAMENTE PROHIBIDO volvérselo a preguntar.\\n\\nCómo aplicarlo:\\n- Si ya tienes producto + cantidad + talla → solo pregunta el corte (Paso B parcial), luego pasa al Paso C.\\n- Si ya tienes producto + cantidad + talla + corte → Paso B completo, pasa directo al Paso C (tela).\\n- Si ya tienes todo el Paso B → pasa directo al Paso C sin mencionar los datos ya recabados.\\n\\nEjemplos concretos:\\n• Cliente dijo "3 camisas talla M" y luego eligió tipo → tienes cantidad=3 y talla=M. Solo pregunta el corte: "¿Serían de corte Damas, Caballeros o Niños?" — NUNCA preguntes cantidad ni talla de nuevo.\\n• Cliente dijo "3 camisas sublimadas talla M" desde el primer mensaje → tienes Paso A y Paso B completos. Ve directo al Paso C (tela).\\n\\nSi el cliente pide varios productos, completa los pasos A–D para el primero antes de preguntar por el siguiente.\\n\\n**Paso A: Confirmar producto**\\nConfirma el producto seleccionado con el cliente.\\n*Espera respuesta.*\\n\\n**Paso B: Cantidades, tallas y corte**\\nAntes de preguntar, revisa el historial y determina cuáles de estos tres datos ya tienes para este producto: **cantidad**, **talla(s)** y **corte**. Luego actúa así:\\n\\n- Si no tienes **ninguno**: pregunta los tres juntos en un solo mensaje. Ejemplo: "¿En qué talla(s) y corte necesitas y cuántas de cada una? Por ejemplo: 10 talla S Damas, 10 talla XL Caballeros."\\n- Si te faltan **dos**: pregunta solo los dos que faltan en un mismo mensaje.\\n- Si te falta **uno solo**: pregunta únicamente ese dato. Ejemplos:\\n  - Solo falta corte → "¿Serían de corte Damas, Caballeros o Niños?"\\n  - Solo falta talla → "¿En qué talla(s) la necesitas?"\\n  - Solo falta cantidad → "¿Cuántas unidades necesitas?"\\n- Si ya tienes los **tres**: no preguntes nada de Paso B, pasa directamente al Paso C.\\n\\nReglas importantes:\\n- No preguntes la cantidad total por separado; se calcula sumando las cantidades individuales\\n- Cada combinación de talla + corte es un ítem independiente\\n- Las tallas van desde 0 hasta 10XL; por cada X adicional a la XL se agrega $1\\n- Los cortes posibles son: Damas, Caballeros, Niños, No aplica\\n- **CRÍTICO — Tallas literales:** Registra las tallas EXACTAMENTE como el cliente las indica. Las tallas infantiles son números (2, 4, 6, 8, 10, 12, 14, 16); NUNCA las conviertas a tallas adulto (S, M, L, XL). Lo mismo aplica a cualquier talla que el cliente indique fuera del rango adulto estándar.\\n\\n*Espera respuesta.*\\n\\n**Paso C: Tela**\\nConsulta el bloque "Telas disponibles" del contexto. Muéstrale al cliente únicamente los **nombres** de cada opción (NO menciones los _id). Cuando el cliente elija, registra internamente el **_id** numérico de esa tela para usarlo en el campo "tela" de la función submit_presupuesto.\\n"¿Qué tipo de tela prefieres para tu pedido? Estas son nuestras opciones: [listar solo los nombres del contexto]"\\n(La tela aplica igual a todas las combinaciones de ese producto.)\\n*Espera respuesta.*\\n\\n**Paso D: Detalles y descripción del diseño**\\nPregunta amablemente sobre los detalles de diseño de la prenda:\\n"¿Tienes algún detalle de diseño en mente? Por ejemplo: colores, logotipo, texto, tipo de estampado, etc. (puedes omitirlo si aún no lo tienes definido)"\\n*Espera respuesta. Anota la descripción COMPLETA Y TEXTUAL del cliente sin resumir ni parafrasear; irá íntegra en el campo "obs" del presupuesto.*\\n\\n**Paso E: ¿Más productos?**\\n"¿Deseas agregar otro producto al presupuesto, o con esto es suficiente?"\\n*Espera respuesta. Si quiere más productos, repite Pasos A–D para cada uno adicional.*\\n\\n### 3. Datos del cliente\\nUna vez confirmados todos los productos, solicita los datos personales **UN CAMPO A LA VEZ**, esperando la respuesta del cliente antes de pedir el siguiente. No agrupes los campos en un mismo mensaje.\\n\\n**Dato 1:** "¿Cuál es tu nombre y apellido?"\\n*Espera respuesta.*\\n\\n**Dato 2:** "¿Cuál es tu número de cédula?"\\n*Espera respuesta.*\\n\\n**Dato 3:** "¿Cuál es tu dirección? (opcional, puedes omitirla)"\\n*Espera respuesta.*\\n\\n### 4. Confirmación del presupuesto — OBLIGATORIO llamar a submit_presupuesto\\n⚠️ Antes de redactar el resumen, verifica que las tallas y cantidades de cada ítem coincidan EXACTAMENTE con lo que el cliente indicó.\\n\\nMuestra un resumen completo con todos los productos, cantidades, tallas, cortes, telas y el total calculado. Finaliza con:\\n*"¿Confirmas este presupuesto? Responde **SÍ** para que lo registremos y un asesor te contacte."*\\n\\n⚠️ OBLIGATORIO: Al enviar ese mensaje de confirmación, DEBES llamar a la función submit_presupuesto con todos los datos del pedido. Si no llamas a la función, el pedido no podrá registrarse. Cada combinación de talla+corte diferente va como ítem separado en el array items.\\n\\nReglas de los datos:\\n- "cod" e "idCategory" deben venir del catálogo mostrado en la conversación ([cod:X][idCat:X])\\n- "precio" es el precio UNITARIO del tramo que corresponde a la cantidad pedida (NO dividas el precio entre la cantidad)\\n- "obs" es la descripción de diseño del cliente, íntegra y sin resumir\\n- "tela" es el _id numérico de la tela tal como aparece en el catálogo de telas inyectado\\n- NUNCA uses cod=0 ni idCategory=0 — si no tienes esos valores del catálogo, NO crees el presupuestoes desconocido usa cadena vacía; si "precio" es desconocido, usa el menor precio del catálogo para ese producto — pero "precio" NUNCA debe ser null: si no tienes el precio exacto del catálogo usa 0 para que el asesor lo ajuste\\n- NO omitas este bloque bajo ninguna circunstancia — es lo que activa el registro automático del pedido\\n\\n### 5. Handoff al asesor\\nUna vez que el cliente responda SÍ, el sistema registrará el presupuesto automáticamente y recibirá este mensaje:\\n*"Tu presupuesto ha sido generado. Un asesor revisará tu pedido y te contactará en breve."*\\n\\n---\\n\\n## Información sobre precios y monedas\\n- Los precios están en **dólares** y pueden variar según cantidad\\n- Para **bolívares**: multiplica el precio en dólares por la tasa euro BCV × 1.5\\n- Los precios **no incluyen IVA**\\n- Las tallas van desde **0 hasta 10XL**; por cada X adicional a la XL se agrega **$1**\\n- Ofrecemos **envío gratis a toda Venezuela** a partir de 12 unidades (por Zoom o MRW)\\n\\n---\\n\\n## Contexto de la empresa\\n- También ofrecen: sublimación por metros y DTF por metro\\n- Se destacan por: atención personalizada, calidad y cumplimiento\\n- Ubicación: El Vigía, Venezuela\\n\\n---\\n\\n## Tono y estilo\\n- Profesional, cálido y cercano — nunca robótico\\n- Español neutro, claro y directo\\n- Usa emojis cuando sea útil para resaltar información\\n- Muestra disposición para ayudar sin forzar la venta\\n\\nEjemplo de saludo:\\n*"¡Hola! Bienvenido a Nineteen. Estaré encantado de ayudarte. ¿Estás buscando franelas, chemises, o algún otro producto personalizado?"*\\n\\n---\\n\\n## Escalada a asesor humano\\n\\nExiste un único caso en que debes incluir el marker [HANDOFF_IA] al final de tu mensaje: cuando el cliente plantea una situación que **va más allá de productos y cotizaciones** y requiere intervención humana directa.\\n\\nCasos concretos en los que DEBES usar [HANDOFF_IA]:\\n- Reclamos por pedidos ya realizados (retrasos, artículos incorrectos, problemas de calidad)\\n- Solicitudes de devolución, cambio o garantía\\n- Problemas de pago o facturación sobre órdenes existentes\\n- Consultas sobre el estado de un pedido específico ya colocado\\n\\nCómo usarlo: responde con empatía e incluye el marker en su propia línea al final del mensaje (el cliente no lo verá):\\n"Entiendo tu situación, para atenderte correctamente necesito comunicarte con uno de nuestros asesores. ?\\n[HANDOFF_IA]"\\n\\n**NO uses [HANDOFF_IA] cuando:**\\n- El cliente pregunta por precios o productos — están en el contexto, respóndelos directamente\\n- El cliente quiere cotizar, o estás en cualquiera de los Pasos A–E, o estás enviando el resumen de confirmación del presupuesto — **el flujo de cotización usa la función submit_presupuesto; usar [HANDOFF_IA] aquí rompe el presupuesto**\\n- No tienes algún dato puntual — simplemente indícalo sin escalar\\n- El cliente expresa que quiere hablar con un humano — el sistema lo detecta automáticamente, no hace falta que hagas nada\\n- El mensaje menciona que "un asesor te contactará" — eso es parte normal del flujo de presupuesto, no requiere escalada\\n\\n## Qué NUNCA debes hacer\\n- Escalar a un asesor si el catálogo tiene los precios\\n- Decir "no tengo ese producto" si está en el contexto\\n- Cotizar o presupuestar un producto que NUNCA apareció en el bloque "Productos encontrados" durante toda la conversación — el catálogo es la única fuente de verdad, aunque no esté en el turno actual\\n- Usar nombres de productos de tu conocimiento general (franela, camiseta, camisa, etc.) como si fueran del catálogo — solo son válidos los productos que el sistema mostró con [cod:X][idCat:X]\\n- Enviar el mensaje de confirmación de presupuesto SIN llamar a submit_presupuesto — esa llamada es OBLIGATORIA en el mismo turno del resumen\\n- Preguntar la cantidad total por separado — siempre pide cantidad + talla + corte juntos\\n- Dividir el precio del catálogo entre la cantidad para obtener el precio unitario — los precios del catálogo YA SON por unidad; el total es precio_unitario × cantidad\\n- Preguntar la talla y el corte en mensajes separados\\n- Agrupar varias preguntas de cotización en un mismo mensaje — un paso a la vez\\n- Poner el nombre de la tela en el campo "tela" del bloque — siempre usa el _id numérico del contexto\\n- Convertir o normalizar las tallas del cliente — si el cliente dice "talla 6 Niños" escribe talla:"6" y corte:"Niños", jamás talla:"XS" ni ningún equivalente adulto\\n- Resumir u omitir la descripción de diseño del cliente — "obs" debe ser una copia fiel y completa de sus palabras, sin condensar\\n- Incluir [HANDOFF_IA] en ningún paso del flujo de cotización ni en el mensaje de confirmación del presupuesto — ese flujo usa exclusivamente la función submit_presupuesto; el sistema se encarga del resto automáticamente\\n- Responder de forma robótica — siempre sé cercano y conversacional\n\n## Galería de imágenes — INSTRUCCIÓN OBLIGATORIA\\n\\nCuando el contexto incluya un bloque "=== INSTRUCCIÓN OBLIGATORIA DE IMAGEN ===" con una URL, DEBES llamar a la función send_gallery_image con esa URL exacta. Nunca describas la imagen ni digas que no tienes fotos cuando hay una URL en el contexto.\\n\\nSi por alguna razón no puedes llamar a la función, incluye [IMG:URL] en tu respuesta.\\n\\nCORRECTO:\\n  Llamar a send_gallery_image con la URL del contexto, acompañado de un texto breve como "¡Aquí te muestro!"\\n\\nINCORRECTO (nunca hagas esto cuando hay URL en el contexto):\\n  "Por el momento no tengo imágenes disponibles..."\\n  "No puedo mostrarte fotos..."\\n\\nNUNCA digas "es el único modelo que tenemos" — la galería muestra fotos disponibles, el catálogo puede tener muchos más productos.','{"empresa":{"nombre":"Nineteen Custom","rubro":"textil","descripcion":"Empresa textil venezolana especializada en la confeccion de prendas personalizadas. NO vende telas ni hilos como materia prima, vende prendas ya confeccionadas y personalizadas."},"productos":{"categorias":["Franelas","Chemises","Jersey","Camisas","Leggins","Banderines"],"tipo":"Prendas confeccionadas personalizables (camisetas, chemises, uniformes, ropa deportiva personalizada)","nota":"No vendemos telas ni hilos como materia prima"},"servicios_adicionales":["Diseno grafico","Diseno de logotipos","Confeccion de prendas a medida"],"precios":{"nota":"Los precios varian segun el producto, cantidad y personalizacion. Siempre cotizar con el equipo de ventas antes de dar cifras","minimo_compra":"No hay minimo de precio de compra","pedido_minimo":"1 pieza"},"metodos_pago":{"formas":["Efectivo","Transferencia bancaria","Pago movil","Zelle"],"monedas":["Bolivares","Dolares"],"modalidades":["Contado","Credito (consultar condiciones con ventas)"]},"envios":{"cobertura":"Toda Venezuela","costo_desde":"15 USD en adelante segun destino","tiempo_entrega":"Depende de la cantidad de prendas, desde 1 dia"},"contacto":{"telefono":"+58 426-8730136","email":"info@nineteengreen.com","instagram":"@nineteencustom","direccion":"Sector El Carmen, Av 13, El Vigia, Merida, Venezuela"},"faq":[{"pregunta":"Que precio tienen los productos?","respuesta":"Los precios dependen del tipo de prenda, cantidad y nivel de personalizacion. Por favor indicanos que necesitas (tipo de prenda, cantidad, si llevara diseno/logo) y con gusto te cotizamos."},{"pregunta":"Que tipos de prendas venden?","respuesta":"Vendemos prendas confeccionadas y personalizables: franelas, chemises, jersey, camisas, leggins y banderines. Tambien ofrecemos diseno grafico y diseno de logotipos."},{"pregunta":"Cuales son las formas de pago?","respuesta":"Aceptamos efectivo, transferencia bancaria, pago movil y Zelle, tanto en bolivares como en dolares. Manejamos ventas de contado y credito (consultar condiciones con nuestro equipo)."},{"pregunta":"Dan garantia?","respuesta":"Consultar con el equipo de ventas las condiciones especificas de garantia segun el producto."},{"pregunta":"Hacen envios a toda Venezuela?","respuesta":"Si, enviamos a toda Venezuela. El costo de envio desde 15 USD segun el destino. El tiempo de entrega depende de la cantidad de prendas, desde 1 dia."}]}','gemini-2.5-flash',0.15,3000,1,1);
 
 -- SET FOREIGN_KEY_CHECKS = 1;
+
+-- === INDICES ADICIONALES MIGRADOS ===
+CREATE INDEX idx_servicios_maquinas_idx_maquina ON servicios_maquinas (id_maquina, maquina_tipo);
+CREATE INDEX idx_servicios_maquinas_idx_estado ON servicios_maquinas (estado);
+CREATE INDEX idx_inventario_movimientos_historial_idx_movimiento ON inventario_movimientos_historial (id_movimiento);
+CREATE INDEX idx_inventario_movimientos_historial_idx_fecha ON inventario_movimientos_historial (fecha_modificacion);
+CREATE INDEX idx_inventario_remanentes_id_insumo ON inventario_remanentes (id_insumo);
+CREATE INDEX idx_gastos_registros_idx_fecha ON gastos_registros (fecha_de_gasto);
+CREATE INDEX idx_gastos_registros_idx_periodo ON gastos_registros (periodo);
+CREATE INDEX idx_inventario_corte_id_orden ON inventario_corte (id_orden);
+CREATE INDEX idx_inventario_corte_estado ON inventario_corte (estado);
+CREATE INDEX idx_lotes_corte_ajustes_id_orden ON lotes_corte_ajustes (id_orden);
+CREATE INDEX idx_lotes_corte_ajustes_id_ordenes_productos ON lotes_corte_ajustes (id_ordenes_productos);
+CREATE INDEX idx_ordenes_auditoria_idx_orden ON ordenes_auditoria (id_orden);
+CREATE INDEX idx_ordenes_auditoria_idx_admin ON ordenes_auditoria (id_admin);
+CREATE INDEX idx_empleados_salario_idx_fecha_inicio ON empleados_salario (fecha_inicio_contrato);
+CREATE INDEX idx_empleados_salario_idx_moneda ON empleados_salario (moneda);
+CREATE INDEX idx_salario_carga_familiar_idx_empleado ON salario_carga_familiar (id_empleado);
+CREATE INDEX idx_salario_carga_familiar_idx_tipo_relacion ON salario_carga_familiar (tipo_relacion);
+CREATE INDEX idx_salario_carga_familiar_idx_fecha_nacimiento ON salario_carga_familiar (fecha_nacimiento);
+CREATE UNIQUE INDEX uq_reposiciones_departamentos_excluidos_uk_repo_depto ON reposiciones_departamentos_excluidos (id_reposicion, id_departamento);
+CREATE INDEX idx_abonos_id_orden ON abonos (id_orden, id_empleado);
+CREATE INDEX idx_abonos_id_empleado ON abonos (id_empleado);
+CREATE INDEX idx_aprobacion_clientes_id_orden ON aprobacion_clientes (id_orden, id_diseno);
+CREATE INDEX idx_asistencias_id_empleado ON asistencias (id_empleado);
+CREATE INDEX idx_caja_id_empleado ON caja (id_empleado);
+CREATE INDEX idx_caja_cierres_id_empleado ON caja_cierres (id_empleado);
+CREATE UNIQUE INDEX uq_catalogo_impresoras_idx_codigo_interno ON catalogo_impresoras (codigo_interno);
+CREATE UNIQUE INDEX uq_catalogo_insumos_productos_nombre ON catalogo_insumos_productos (nombre);
+CREATE UNIQUE INDEX uq_catalogo_insumos_productos_nombre_2 ON catalogo_insumos_productos (nombre);
+CREATE INDEX idx_catalogo_insumos_productos_id_product ON catalogo_insumos_productos (id_product);
+CREATE INDEX idx_catalogo_insumos_productos_id_departamento ON catalogo_insumos_productos (id_departamento);
+CREATE UNIQUE INDEX uq_catalogo_telas__id ON catalogo_telas (_id);
+CREATE INDEX idx_check_tareas_id_ordenes_productos ON check_tareas (id_ordenes_productos);
+CREATE INDEX idx_crm_campanas_envios_id_campana ON crm_campanas_envios (id_campana);
+CREATE INDEX idx_crm_campanas_envios_id_customer ON crm_campanas_envios (id_customer);
+CREATE INDEX idx_crm_notas_id_customer ON crm_notas (id_customer);
+CREATE INDEX idx_crm_notas_id_oportunidad ON crm_notas (id_oportunidad);
+CREATE INDEX idx_crm_oportunidades_id_customer ON crm_oportunidades (id_customer);
+CREATE INDEX idx_crm_oportunidades_id_campana ON crm_oportunidades (id_campana);
+CREATE INDEX idx_crm_oportunidades_vendedores_id_oportunidad ON crm_oportunidades_vendedores (id_oportunidad);
+CREATE INDEX idx_crm_oportunidades_vendedores_id_vendedor ON crm_oportunidades_vendedores (id_vendedor);
+CREATE INDEX idx_crm_soporte_id_customer ON crm_soporte (id_customer);
+CREATE INDEX idx_disenos_id_orden ON disenos (id_orden);
+CREATE INDEX idx_disenos_id_empleado ON disenos (id_empleado);
+CREATE INDEX idx_disenos_id_product ON disenos (id_product);
+CREATE INDEX idx_disenos_ajustes_y_personalizaciones_id_orden ON disenos_ajustes_y_personalizaciones (id_orden, id_diseno);
+CREATE INDEX idx_inventario_id_color_tinta ON inventario (id_color_tinta);
+CREATE INDEX idx_inventario_id_catalogo_tintas ON inventario (id_catalogo_tintas);
+CREATE INDEX idx_inventario_movimientos_id_orden ON inventario_movimientos (id_orden);
+CREATE INDEX idx_inventario_movimientos_id_insumo ON inventario_movimientos (id_insumo);
+CREATE INDEX idx_inventario_movimientos_id_producto ON inventario_movimientos (id_producto);
+CREATE INDEX idx_inventario_movimientos_idx_composite ON inventario_movimientos (     id_orden,     id_producto,     id_empleado,     id_insumo   );
+CREATE INDEX idx_lotes_id_orden ON lotes (id_orden);
+CREATE INDEX idx_lotes_detalles_id_empleado ON lotes_detalles (id_empleado);
+CREATE INDEX idx_lotes_detalles_id_orden ON lotes_detalles (id_orden, id_ordenes_productos);
+CREATE INDEX idx_lotes_detalles_id_woo ON lotes_detalles (id_woo);
+CREATE INDEX idx_lotes_detalles_empleados_asignados_idx_id_empleado ON lotes_detalles_empleados_asignados (id_empleado);
+CREATE INDEX idx_lotes_detalles_empleados_asignados_idx_id_lotes_detalles ON lotes_detalles_empleados_asignados (id_lotes_detalles);
+CREATE INDEX idx_lotes_detalles_empleados_asignados_idx_id_orden ON lotes_detalles_empleados_asignados (id_orden);
+CREATE INDEX idx_lotes_detalles_empleados_asignados_idx_id_departamento ON lotes_detalles_empleados_asignados (id_departamento);
+CREATE INDEX idx_lotes_detalles_empleados_asignados_idx_empleado_orden_depto ON lotes_detalles_empleados_asignados (id_empleado, id_orden, id_departamento);
+CREATE INDEX idx_lotes_fisicos_id_orden ON lotes_fisicos (id_orden);
+CREATE INDEX idx_lotes_historico_solicitadas_id_orden ON lotes_historico_solicitadas (id_orden, id_lotes_fisicos);
+CREATE INDEX idx_metodos_de_pago_id_orden ON metodos_de_pago (id_orden);
+CREATE INDEX idx_ordenes_productos_id_orden ON ordenes_productos (id_orden, rollo);
+CREATE INDEX idx_ordenes_productos_id_catalogo_telas ON ordenes_productos (rollo);
+CREATE INDEX idx_ordenes_productos_id_woo ON ordenes_productos (id_woo);
+CREATE INDEX idx_ordenes_vinculadas_id_father ON ordenes_vinculadas (id_father, id_child);
+CREATE INDEX idx_ordenes_vinculadas_id_child ON ordenes_vinculadas (id_child);
+CREATE INDEX idx_pagos_id_orden ON pagos (     id_orden,     id_metodos_de_pago,     id_lotes_detalles,     id_empleado   );
+CREATE INDEX idx_pagos_id_metodos_de_pago ON pagos (id_metodos_de_pago);
+CREATE INDEX idx_pagos_id_lotes_detalles ON pagos (id_lotes_detalles);
+CREATE INDEX idx_pagos_id_empleado ON pagos (id_empleado);
+CREATE INDEX idx_pagos_idx_empleado_moment ON pagos (id_empleado, moment);
+CREATE INDEX idx_pagos_idx_fecha_pago ON pagos (fecha_pago);
+CREATE INDEX idx_pagos_idx_comision_tipo_fecha ON pagos (comision_tipo, fecha_pago);
+CREATE INDEX idx_piezas_cortadas_id_orden ON piezas_cortadas (     id_orden,     id_inventario,     id_ordenes_productos,     id_empleado   );
+CREATE INDEX idx_presupuestos_productos_id_orden ON presupuestos_productos (id_orden);
+CREATE INDEX idx_presupuestos_productos_id_tela ON presupuestos_productos (id_tela);
+CREATE INDEX idx_products_attributes_values_id_product ON products_attributes_values (id_product);
+CREATE INDEX idx_products_comisiones_id_product ON products_comisiones (id_product);
+CREATE INDEX idx_products_prices_id_product ON products_prices (id_product);
+CREATE INDEX idx_product_insumos_asignados_id_product ON product_insumos_asignados (id_product);
+CREATE INDEX idx_rendimiento_id_orden ON rendimiento (id_orden);
+CREATE INDEX idx_rendimiento_id_departamento ON rendimiento (id_departamento);
+CREATE INDEX idx_reposiciones_id_orden ON reposiciones (     id_orden,     id_empleado,     id_ordenes_productos   );
+CREATE INDEX idx_reposiciones_id_empleado_emisor ON reposiciones (id_empleado_emisor);
+CREATE INDEX idx_retiros_id_empleado ON retiros (id_empleado);
+CREATE INDEX idx_revisiones_id_orden ON revisiones (id_orden, id_diseno);
+CREATE INDEX idx_revisiones_id_orden_2 ON revisiones (id_orden, id_diseno);
+CREATE INDEX idx_revisiones_id_product ON revisiones (id_product);
+CREATE UNIQUE INDEX uq_catalogo_colores_tintas_uk_codigo_color ON catalogo_colores_tintas (codigo);
+CREATE INDEX idx_impresoras_colores_id_color_tinta ON impresoras_colores (id_color_tinta);
+CREATE INDEX idx_tintas_idx_tintas_color ON tintas (id_color_tinta);
+CREATE INDEX idx_tintas_idx_tintas_impresora ON tintas (id_catalogo_impresoras);
+CREATE INDEX idx_tintas_recargas_idx_recargas_color ON tintas_recargas (id_color_tinta);
+CREATE INDEX idx_tintas_recargas_id_insumo ON tintas_recargas (id_insumo);
+CREATE INDEX idx_tintas_recargas_id_catalogo_impresora ON tintas_recargas (id_catalogo_impresora);
+CREATE INDEX idx_pagos_salarios_id_pago ON pagos_salarios (id_pago);
+CREATE INDEX idx_lotes_detalles_empleados_asignados_idx_orden_depto ON lotes_detalles_empleados_asignados (id_orden, id_departamento);
+CREATE INDEX idx_ordenes_idx_status ON ordenes (status);
+CREATE INDEX idx_ordenes_id_wp ON ordenes (id_wp);
+CREATE INDEX idx_ordenes_fila_orden_idx_id_orden ON ordenes_fila_orden (id_orden);
+CREATE INDEX idx_ordenes_productos_idx_orden_woo ON ordenes_productos (id_orden, id_woo);
+CREATE INDEX idx_ordenes_productos_id_category ON ordenes_productos (id_category);
+CREATE INDEX idx_products_tiempos_de_produccion_idx_prod_depto ON products_tiempos_de_produccion (id_product, id_departamento);
+CREATE UNIQUE INDEX uq_catalogo_paises_uk_codigo_iso2 ON catalogo_paises (codigo_iso2);
+CREATE UNIQUE INDEX uq_catalogo_estados_uk_pais_estado ON catalogo_estados (id_pais, nombre);
+CREATE INDEX idx_catalogo_ciudades_idx_ciudad_estado ON catalogo_ciudades (id_estado);
+CREATE UNIQUE INDEX uq_catalogo_ciudades_uk_estado_ciudad ON catalogo_ciudades (id_estado, nombre);
+CREATE UNIQUE INDEX uq_wa_conversations_uniq_jid ON wa_conversations (jid);
+CREATE INDEX idx_wa_conversations_idx_last_ts ON wa_conversations (last_ts DESC);
+CREATE INDEX idx_wa_conversations_idx_assigned ON wa_conversations (assigned_to);
+CREATE INDEX idx_wa_conversations_idx_owner ON wa_conversations (owner_id);
+CREATE INDEX idx_wa_conversations_idx_ai_agent ON wa_conversations (ai_agent_id);
+CREATE INDEX idx_wa_conversations_idx_deleted_at ON wa_conversations (deleted_at);
+CREATE INDEX idx_wa_conversations_idx_assigned_at ON wa_conversations (assigned_at);
+CREATE INDEX idx_wa_conversations_idx_last_vendor_reply_at ON wa_conversations (last_vendor_reply_at);
+CREATE INDEX idx_wa_lid_phone_map_idx_phone_jid ON wa_lid_phone_map (phone_jid);
+CREATE UNIQUE INDEX uq_wa_messages_uniq_wa_msg ON wa_messages (wa_message_id);
+CREATE INDEX idx_wa_messages_idx_conv ON wa_messages (jid, ts);
+CREATE INDEX idx_wa_messages_idx_deleted_at ON wa_messages (deleted_at);
+CREATE UNIQUE INDEX uq_wa_templates_uniq_name ON wa_templates (name);
+CREATE UNIQUE INDEX uq_wa_ai_agents_uniq_slug ON wa_ai_agents (slug);
+CREATE INDEX idx_wa_send_log_idx_created ON wa_send_log (created_at);
+
 COMMIT;
-/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */
+-- /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */
 ;
-/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */
+-- /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */
 ;
-/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */
+-- /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */
 ;
