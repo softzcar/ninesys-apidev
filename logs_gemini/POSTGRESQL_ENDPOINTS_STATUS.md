@@ -1,7 +1,7 @@
 # 📊 Evaluación de Endpoints — Soporte Dual MariaDB / PostgreSQL
 ## Proyecto: `ninesys-api` | Rama: `feature/postgresql-support`
 **Fecha de evaluación:** 2026-07-09  
-**Estado general:** En progreso — Infraestructura ✅ | Endpoints: ~19% adaptados
+**Estado general:** En progreso — Infraestructura ✅ | Endpoints: ~25% adaptados
 
 ---
 
@@ -60,6 +60,14 @@
 | `/table/ordenes-todas` | GET | ✅ **Adaptado** | `json_agg` replacement para categorías, `FIND_IN_SET` replacement | ✅ HTTP 200 |
 | `/table/ordenes-con-deuda` | GET | ✅ **Adaptado** | `TO_CHAR(moment)` | ✅ HTTP 200 |
 
+### 📁 `manufacturing.php`
+
+| Endpoint | Método | Estado | Funciones adaptadas | Verificado |
+|---|---|---|---|---|
+| `/empleados/ordenes-asignadas/v2/...` | GET | ✅ **Adaptado** | `DATE_FORMAT(fecha_entrega)` condicional, `IF` ➔ `CASE WHEN`, `IFNULL` ➔ `COALESCE` | ✅ HTTP 200 |
+| `/sse/empleados/ordenes-asignadas/{id_empleado}` | GET | ✅ **Adaptado** | `DATE_FORMAT` condicional | — (SSE stream) |
+| `/empleados-todos` | GET | ✅ **Adaptado** | `GROUP_CONCAT` ➔ subconsulta string_agg, `IFNULL` | ✅ HTTP 200 |
+
 ---
 
 ## 🔴 ENDPOINTS PENDIENTES DE ADAPTACIÓN
@@ -108,14 +116,12 @@
 
 ---
 
-### 📁 `manufacturing.php` — Pendientes (32 ocurrencias)
+### 📁 `manufacturing.php` — Pendientes (29 ocurrencias)
 
 | Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
 |---|---|---|---|---|
 | ~1944 | (ruta de manufactura) | GET | 🟡 | `GROUP_CONCAT` |
 | ~2820 | Tiempo por orden | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` ×2 |
-| ~3216 | Fecha entrega órdenes | GET | 🔴 | `DATE_FORMAT('%d-%m-%Y')` ×3 |
-| ~3512 | Órdenes con departamentos | GET | 🔴 | `IFNULL(CONCAT('[', GROUP_CONCAT...` ×2 |
 | ~3836 | Eficiencia producción | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` ×6 |
 | ~4132 | Reporte eficiencia extendido | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` ×2 |
 
@@ -185,39 +191,38 @@
 |---|---|---|---|
 | `employees.php` | 38 | 37 (5 endpoints) | **97%** ✅ |
 | `tables.php` | 23 | 23 (6 endpoints) | **100%** ✅ |
+| `manufacturing.php` | 32 | 3 (3 endpoints) | **9%** |
 | `orders.php` | 46 | 0 | **0%** |
 | `payments.php` | 34 | 0 | **0%** |
-| `manufacturing.php` | 32 | 0 | **0%** |
 | `finance.php` | 22 | 0 | **0%** |
 | `production.php` | 15 | 0 | **0%** |
 | `reports.php` | 8 | 0 | **0%** |
 | `products_reports.php` | 6 | 0 | **0%** |
 | **Otros menores** | ~23 | 0 | **0%** |
-| **TOTAL** | **~247** | **~60** | **~24%** |
+| **TOTAL** | **~247** | **~63** | **~25%** |
 
 ---
 
 ## 🗺️ Orden de Trabajo Recomendado
 
 ### Fase 1 — Alta prioridad (interfaz activa) 
-1. `employees.php` → `/asistencias/tabla/{fecha}` (faltan: FIELD, UNIX_TIMESTAMP, DAYNAME)
-2. `manufacturing.php` → endpoints de `fecha_entrega` y `departamentos`
-3. `production.php` → inicio de producción, registro de momento
+1. `manufacturing.php` → endpoints de `fecha_entrega` y `departamentos` (avanzar los de eficiencia ~3836)
+2. `production.php` → inicio de producción, registro de momento
 
 ### Fase 2 — Pagos y finanzas
-4. `payments.php` → listado de pagos (usan `%a`, `%v` de DATE_FORMAT)
-5. `orders.php` → abono, asignación, dashboard comercialización
-6. `finance.php` → detalle de movimientos
+3. `payments.php` → listado de pagos (usan `%a`, `%v` de DATE_FORMAT)
+4. `orders.php` → abono, asignación, dashboard comercialización
+5. `finance.php` → detalle de movimientos
 
 ### Fase 3 — Reportes
-7. `production.php` → consumo de tinta, reposiciones
-8. `orders.php` → reportes de órdenes y comercialización
-9. `reports.php` → reportes globales de eficiencia
-10. `products_reports.php` → costos de productos
-11. `manufacturing.php` → eficiencia de producción
+6. `production.php` → consumo de tinta, reposiciones
+7. `orders.php` → reportes de órdenes y comercialización
+8. `reports.php` → reportes globales de eficiencia
+9. `products_reports.php` → costos de productos
+10. `manufacturing.php` → eficiencia de producción
 
 ### Fase 4 — Baja prioridad
-12. `auth.php`, `buscar.php`, `catalogs.php`, `communications.php`, `msg_service.php`, `printers.php`, `administration.php`, `inventory.php`
+11. `auth.php`, `buscar.php`, `catalogs.php`, `communications.php`, `msg_service.php`, `printers.php`, `administration.php`, `inventory.php`
 
 ---
 
@@ -246,11 +251,10 @@ git -C /home/developer/Escritorio/niesys/ninesys-api branch
 ssh vps-contabo-dev "su - postgres -c \"psql -l | grep api_\""
 
 # 3. Probar el último endpoint adaptado
-curl -s -H "Authorization: 194" "https://api.nineteengreen.com/table/ordenes-todas"
+curl -s -H "Authorization: 194" "https://api.nineteengreen.com/empleados-todos"
 
-# 4. Ver funciones MySQL pendientes en el siguiente archivo (por ejemplo, app/routes/manufacturing.php)
-grep -n "DATE_FORMAT\|GROUP_CONCAT\|YEARWEEK" \
-  /home/developer/Escritorio/niesys/ninesys-api/app/routes/manufacturing.php
+# 4. Continuar adaptando manufacturing.php (por ejemplo, buscar TIMESTAMPDIFF en línea ~3836)
+grep -n "TIMESTAMPDIFF" /home/developer/Escritorio/niesys/ninesys-api/app/routes/manufacturing.php
 
 # 5. Tras modificar un archivo, commit y deploy:
 git -C /home/developer/Escritorio/niesys/ninesys-api add app/routes/<archivo>.php
