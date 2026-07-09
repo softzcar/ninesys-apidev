@@ -9,7 +9,11 @@ return function (App $app) {
 
     // Obtener los empleados activos
     $app->get('/empleados', function (Request $request, Response $response) {
-        $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+        if (defined('DB_DRIVER') && (DB_DRIVER === 'pgsql' || DB_DRIVER === 'postgres')) {
+            $localConnection = new LocalDB('', LOCAL_DNS, LOCAL_USER, LOCAL_PASS);
+        } else {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+        }
         $idEmp = ID_EMPRESA;
         if (defined('DB_DRIVER') && (DB_DRIVER === 'pgsql' || DB_DRIVER === 'postgres')) {
             $sql = 'SELECT
