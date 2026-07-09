@@ -606,55 +606,83 @@ return function (App $app) {
         $sql = 'SELECT * FROM empleados WHERE activo = 1 ORDER BY nombre ASC';
         $object['empleados'] = $localConnection->goQuery($sql);
 
-        // TODO las dos variables siguinetes estan mal arreglar esto
         $today = null;
         $date = null;
-        // $myDate = new CustomTime();
-        // $now = $myDate->today();
-        // $fecha = explode(' ', $now); // La fecha la recibimos por args
         $fecha = $args['fecha'];
 
         // OBTENER ASISTENCIAS DIARIAS
-        // $sql = "SELECT a._id id_empleado, b._id id_asistencia, a.nombre, DATE_FORMAT(b.moment, '%h:%i %p') AS hora, DATE_FORMAT(b.moment, '%Y-%m-%d') AS fecha, b.registro, b.detalle FROM empleados a LEFT JOIN asistencias b ON b.id_empleado = a._id WHERE b.moment LIKE '" . $fecha . "%' OR a._id > 0;";
-        $sql = "SELECT
-        a._id id_empleado,
-        b._id id_asistencia,
-        a.nombre,
-        DATE_FORMAT(b.moment, '%h:%i %p') AS hora,
-        DATE_FORMAT(b.moment, '%Y-%m-%d') AS fecha,
-        b.registro,
-        b.detalle
-        FROM
-        empleados a
-        LEFT JOIN asistencias b ON
-        b.id_empleado = a._id
-        WHERE
-        a.activo = 1 AND ((b.moment LIKE '" . $fecha . "%') OR (b.moment IS NULL))
-         ORDER BY a.nombre ASC;";
+        if (DB_DRIVER === 'pgsql') {
+            $sql = "SELECT
+            a._id AS id_empleado,
+            b._id AS id_asistencia,
+            a.nombre,
+            TO_CHAR(b.moment, 'HH12:MI AM') AS hora,
+            TO_CHAR(b.moment, 'YYYY-MM-DD') AS fecha,
+            b.registro,
+            b.detalle
+            FROM empleados a
+            LEFT JOIN asistencias b ON b.id_empleado = a._id
+            WHERE a.activo = 1 AND ((b.moment::text LIKE '" . $fecha . "%') OR (b.moment IS NULL))
+            ORDER BY a.nombre ASC;";
+        } else {
+            $sql = "SELECT
+            a._id id_empleado,
+            b._id id_asistencia,
+            a.nombre,
+            DATE_FORMAT(b.moment, '%h:%i %p') AS hora,
+            DATE_FORMAT(b.moment, '%Y-%m-%d') AS fecha,
+            b.registro,
+            b.detalle
+            FROM empleados a
+            LEFT JOIN asistencias b ON b.id_empleado = a._id
+            WHERE a.activo = 1 AND ((b.moment LIKE '" . $fecha . "%') OR (b.moment IS NULL))
+            ORDER BY a.nombre ASC;";
+        }
         $object['sql_diarias'] = $sql;
         $mod_date = strtotime($date . '+ 0 days');
         $object['diarias'] = $localConnection->goQuery($sql);
 
         // NUEVO REPORTE
-        $sql = 'SELECT a.id_empleado, b.username, a.moment, DATE(a.moment) fecha, UNIX_TIMESTAMP(a.moment) - 3600 timestamp, DAYNAME(a.moment) dia, a.registro FROM asistencias a JOIN empleados b ON a.id_empleado = b._id WHERE WEEK(a.moment) = WEEK(NOW());';
+        if (DB_DRIVER === 'pgsql') {
+            $sql = "SELECT
+            a.id_empleado, b.username, a.moment,
+            a.moment::date AS fecha,
+            EXTRACT(EPOCH FROM a.moment::timestamp)::bigint - 3600 AS timestamp,
+            TO_CHAR(a.moment, 'Day') AS dia,
+            a.registro
+            FROM asistencias a
+            JOIN empleados b ON a.id_empleado = b._id
+            WHERE EXTRACT(WEEK FROM a.moment) = EXTRACT(WEEK FROM NOW())
+              AND EXTRACT(YEAR FROM a.moment) = EXTRACT(YEAR FROM NOW());";
+        } else {
+            $sql = 'SELECT a.id_empleado, b.username, a.moment, DATE(a.moment) fecha, UNIX_TIMESTAMP(a.moment) - 3600 timestamp, DAYNAME(a.moment) dia, a.registro FROM asistencias a JOIN empleados b ON a.id_empleado = b._id WHERE WEEK(a.moment) = WEEK(NOW());';
+        }
 
-        $today . "%'";
         $object['reporte'] = $localConnection->goQuery($sql);
 
         // ASISTENCIAS SEMANA
         $today = date('Y-m-d', $mod_date);
 
-        $sql = "SELECT
-         b._id,
-         b.username empleado
-         FROM asistencias a
-         JOIN empleados b ON b._id = a.id_empleado
-         WHERE WEEK(a.moment) = WEEK('" . $today . "')
-                                     GROUP BY b.username
-                                     ORDER BY
-                                     b.username ASC,
-                                     a.moment ASC";
-        $today . "%'";
+        if (DB_DRIVER === 'pgsql') {
+            $sql = "SELECT
+             b._id,
+             b.username AS empleado
+             FROM asistencias a
+             JOIN empleados b ON b._id = a.id_empleado
+             WHERE EXTRACT(WEEK FROM a.moment) = EXTRACT(WEEK FROM '" . $today . "'::date)
+               AND EXTRACT(YEAR FROM a.moment) = EXTRACT(YEAR FROM '" . $today . "'::date)
+             GROUP BY b._id, b.username
+             ORDER BY b.username ASC";
+        } else {
+            $sql = "SELECT
+             b._id,
+             b.username empleado
+             FROM asistencias a
+             JOIN empleados b ON b._id = a.id_empleado
+             WHERE WEEK(a.moment) = WEEK('" . $today . "')
+             GROUP BY b.username
+             ORDER BY b.username ASC, a.moment ASC";
+        }
 
         $object['semana'] = $localConnection->goQuery($sql);
 
