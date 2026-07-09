@@ -1,0 +1,50 @@
+# Bitácora de Tarea — 2026-07-09
+# Tarea: Adaptación progresiva de endpoints para soporte dual MariaDB/PostgreSQL
+# Resultado: COMPLETADO
+
+## Resumen
+Continuación de la implementación de soporte dual MariaDB/PostgreSQL en ninesys-api.
+Se aprovisionaron todas las BDs de empresa en PostgreSQL y se adaptaron múltiples endpoints.
+
+## Trabajo Realizado
+
+### 1. Aprovisionamiento de BDs de empresa en PostgreSQL
+- Creado script `scripts/provision_company_db_postgres.sh`
+- Aprovisionadas con éxito: api_emp_163, api_emp_193, api_emp_194, api_emp_195
+- Cada BD incluye: schema completo, postgres_fdw hacia api_empresas, permisos dev_user
+
+### 2. Endpoints adaptados para PostgreSQL
+
+#### employees.php — GET /asistencias/semanal
+- Reemplazado: YEARWEEK(campo) → EXTRACT(WEEK/YEAR FROM campo)
+- Reemplazado: DATE_FORMAT(campo, '%H:%i') → TO_CHAR(campo, 'HH24:MI')
+- Reemplazado: DATE_FORMAT(campo, '%d/%m/%Y') → TO_CHAR(campo, 'DD/MM/YYYY')
+- Reemplazado: DAYOFWEEK(campo) = N (MySQL 1=Dom) → EXTRACT(DOW FROM campo) = N (PG 0=Dom)
+- Verificado: HTTP 200, 3 registros retornados ✅
+
+#### employees.php — GET /empleados/dashboard-stats/{id}/{dep}
+- Reemplazado (×2 branches): TIMESTAMPDIFF(SECOND, a, b) → EXTRACT(EPOCH FROM (b::timestamp - a::timestamp))
+- Reemplazado (×2 branches): DATE_FORMAT(campo, '%W') → TO_CHAR(campo, 'Day')
+- Reemplazado (×2 branches): YEARWEEK(campo, 1) = YEARWEEK(NOW(), 1) → EXTRACT(WEEK/YEAR FROM campo)
+
+### 3. Commits realizados
+- docs: agregar bitácora de tareas completadas para soporte de postgresql
+- feat: agregar script de aprovisionamiento automático de BDs PostgreSQL para empresas
+- feat(pgsql): adaptar endpoint /asistencias/semanal para PostgreSQL
+- feat(pgsql): adaptar endpoint /empleados/dashboard-stats para PostgreSQL
+
+## Archivos Modificados
+- ninesys-api/app/routes/employees.php (líneas 515-580, 820-1040)
+- ninesys-api/scripts/provision_company_db_postgres.sh (NUEVO)
+- ninesys-api/logs_gemini/*.log
+
+## Estado del Servidor de Desarrollo
+- VPS vps-contabo-dev: PostgreSQL 16 activo
+- BDs aprovisionadas: api_empresas, api_emp_163, api_emp_193, api_emp_194, api_emp_195
+- Driver activo: DB_DRIVER=pgsql
+
+## Próximos Pasos
+- Adaptar endpoints en orders.php con DATE_FORMAT, YEARWEEK, TIMESTAMPDIFF
+- Adaptar endpoint /asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin}
+- Adaptar endpoint /asistencias/tabla/{fecha}
+- Investigar error 500 de /metodos-de-pago (clase WooMe, no SQL directo)
