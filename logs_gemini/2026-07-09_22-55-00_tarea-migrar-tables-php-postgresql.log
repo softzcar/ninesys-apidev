@@ -1,0 +1,41 @@
+# Bitácora de Tarea — 2026-07-09
+# Tarea: Adaptación de endpoints en tables.php para soporte PostgreSQL/MariaDB
+# Resultado: COMPLETADO Y VERIFICADO EN DESARROLLO
+
+## Resumen
+Se ha completado la adaptación para soporte dual de PostgreSQL y MariaDB de todos los endpoints clave definidos en `tables.php` (Fase 1 de alta prioridad).
+
+## Trabajo Realizado
+
+### 1. Modificación de app/routes/tables.php
+Se adaptaron condicionalmente a `DB_DRIVER === 'pgsql'` los siguientes endpoints:
+
+- **GET `/ordenes-reporte-semanal-produccion/{fecha}`**
+  - Se sustituyó `DATE_FORMAT(a.fecha_inicio, '%d/%m/%Y')` y `fecha_entrega` por `TO_CHAR(NULLIF(a.fecha_inicio, '')::timestamp, 'DD/MM/YYYY')` para evitar fallos de casteo al ser campos de tipo VARCHAR.
+  - Se sustituyó `WEEK(a.moment)` por `EXTRACT(WEEK FROM a.moment)`.
+
+- **GET `/ordenes-reporte-semanal/{fecha}`**
+  - Se adaptó la condicional de semana con `EXTRACT(WEEK FROM a.moment)`.
+  - Se removió la cláusula redundante `ORDER BY _id ASC` en las consultas agregadas `SUM(...)`, la cual provocaba un error de sintaxis estricto en PostgreSQL al no estar la columna `_id` en una función de agregación o en `GROUP BY`.
+
+- **GET `/ordenes/borrador/reporte-semanal/{id_empleado}/{id_departamento}`**
+  - Se sustituyó `YEARWEEK(a.moment, 1) = YEARWEEK(CURDATE(), 1)` por la expresión equivalente en PostgreSQL: `EXTRACT(WEEK FROM a.moment) = EXTRACT(WEEK FROM CURRENT_DATE) AND EXTRACT(YEAR FROM a.moment) = EXTRACT(YEAR FROM CURRENT_DATE)`.
+
+- **GET `/table/ordenes-activas/{id_empleado}` y `/table/ordenes-todas`**
+  - Se reescribió la subconsulta de categorías de productos. MySQL utiliza `GROUP_CONCAT` con `FIND_IN_SET` y `JSON_OBJECT` para generar un string JSON. Para PostgreSQL, se reescribió usando:
+    `json_agg(json_build_object('category_name', c.nombre, 'category_total', (op.cantidad * op.precio_unitario)))`
+    y resolviendo el `FIND_IN_SET(c._id, p.category_ids)` usando `c._id::text = ANY(string_to_array(p.category_ids, ','))`.
+  - Se reemplazó el uso de `IFNULL` en saldos por `COALESCE` para PostgreSQL.
+
+- **GET `/table/ordenes-con-deuda`**
+  - Se adaptó el formato de fecha usando `TO_CHAR(a.moment, 'DD/MM/YYYY')`.
+
+## Pruebas de Validación
+Se ejecutaron pruebas `curl` contra la empresa `194` en el VPS de desarrollo (`vps-contabo-dev`) con PostgreSQL activo:
+- `GET /ordenes-reporte-semanal-produccion/2026-07-09` ➔ Retornó exitosamente con estructura de llaves. ✅
+- `GET /ordenes-reporte-semanal/2026-07-09` ➔ Retornó exitosamente con sumas calculadas. ✅
+- `GET /table/ordenes-todas` ➔ Retornó exitosamente array vacío sin excepciones. ✅
+- `GET /table/ordenes-con-deuda` ➔ Retornó exitosamente los registros correspondientes. ✅
+
+## Archivos Modificados
+- [tables.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/tables.php)
