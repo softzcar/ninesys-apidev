@@ -515,37 +515,67 @@ return function (App $app) {
     $app->get('/asistencias/semanal', function (Request $request, Response $response) {
         $localConnection = new LocalDB();
 
-        $sql = "SELECT 
-        a._id id_asistencias,
-        e._id id_empleado,
-        e.nombre AS empleado,
-        DATE_FORMAT(a.moment, '%H:%i') AS hora,
-        DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
-        CASE 
-        WHEN DAYOFWEEK(a.moment) = 2 THEN 'L'
-        WHEN DAYOFWEEK(a.moment) = 3 THEN 'M'
-        WHEN DAYOFWEEK(a.moment) = 4 THEN 'X'
-        WHEN DAYOFWEEK(a.moment) = 5 THEN 'J'
-        WHEN DAYOFWEEK(a.moment) = 6 THEN 'V'
-        WHEN DAYOFWEEK(a.moment) = 7 THEN 'S'
-        WHEN DAYOFWEEK(a.moment) = 1 THEN 'D'
-        END AS dia,
-        CASE 
-        WHEN a.registro = 'entrada_manana' THEN 'Entrada mañana'
-        WHEN a.registro = 'salida_manana' THEN 'Salida mañana'
-        WHEN a.registro = 'entrada_tarde' THEN 'Entrada tarde'
-        WHEN a.registro = 'salida_tarde' THEN 'Salida tarde'
-        END AS registro
-        FROM 
-        asistencias a
-        JOIN 
-        empleados e ON a.id_empleado = e._id
-        WHERE 
-        YEARWEEK(a.moment) = YEARWEEK(NOW())
-        ORDER BY 
-        e.nombre ASC,
-        a.moment ASC;
-        ";
+        if (DB_DRIVER === 'pgsql') {
+            $sql = "SELECT
+                a._id AS id_asistencias,
+                e._id AS id_empleado,
+                e.nombre AS empleado,
+                TO_CHAR(a.moment, 'HH24:MI') AS hora,
+                TO_CHAR(a.moment, 'DD/MM/YYYY') AS fecha,
+                CASE
+                    WHEN EXTRACT(DOW FROM a.moment) = 1 THEN 'L'
+                    WHEN EXTRACT(DOW FROM a.moment) = 2 THEN 'M'
+                    WHEN EXTRACT(DOW FROM a.moment) = 3 THEN 'X'
+                    WHEN EXTRACT(DOW FROM a.moment) = 4 THEN 'J'
+                    WHEN EXTRACT(DOW FROM a.moment) = 5 THEN 'V'
+                    WHEN EXTRACT(DOW FROM a.moment) = 6 THEN 'S'
+                    WHEN EXTRACT(DOW FROM a.moment) = 0 THEN 'D'
+                END AS dia,
+                CASE
+                    WHEN a.registro = 'entrada_manana' THEN 'Entrada mañana'
+                    WHEN a.registro = 'salida_manana' THEN 'Salida mañana'
+                    WHEN a.registro = 'entrada_tarde' THEN 'Entrada tarde'
+                    WHEN a.registro = 'salida_tarde' THEN 'Salida tarde'
+                END AS registro
+            FROM asistencias a
+            JOIN empleados e ON a.id_empleado = e._id
+            WHERE
+                EXTRACT(WEEK FROM a.moment) = EXTRACT(WEEK FROM NOW())
+                AND EXTRACT(YEAR FROM a.moment) = EXTRACT(YEAR FROM NOW())
+            ORDER BY e.nombre ASC, a.moment ASC";
+        } else {
+            $sql = "SELECT 
+            a._id id_asistencias,
+            e._id id_empleado,
+            e.nombre AS empleado,
+            DATE_FORMAT(a.moment, '%H:%i') AS hora,
+            DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
+            CASE 
+            WHEN DAYOFWEEK(a.moment) = 2 THEN 'L'
+            WHEN DAYOFWEEK(a.moment) = 3 THEN 'M'
+            WHEN DAYOFWEEK(a.moment) = 4 THEN 'X'
+            WHEN DAYOFWEEK(a.moment) = 5 THEN 'J'
+            WHEN DAYOFWEEK(a.moment) = 6 THEN 'V'
+            WHEN DAYOFWEEK(a.moment) = 7 THEN 'S'
+            WHEN DAYOFWEEK(a.moment) = 1 THEN 'D'
+            END AS dia,
+            CASE 
+            WHEN a.registro = 'entrada_manana' THEN 'Entrada mañana'
+            WHEN a.registro = 'salida_manana' THEN 'Salida mañana'
+            WHEN a.registro = 'entrada_tarde' THEN 'Entrada tarde'
+            WHEN a.registro = 'salida_tarde' THEN 'Salida tarde'
+            END AS registro
+            FROM 
+            asistencias a
+            JOIN 
+            empleados e ON a.id_empleado = e._id
+            WHERE 
+            YEARWEEK(a.moment) = YEARWEEK(NOW())
+            ORDER BY 
+            e.nombre ASC,
+            a.moment ASC;
+            ";
+        }
         $object['data_semana'] = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();
