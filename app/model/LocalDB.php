@@ -37,8 +37,12 @@ class LocalDB
         $this->pdo = new PDO($this->dsn, $this->user, $this->pass);
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->pdo->exec("SET client_encoding TO 'UTF8';");
-        $this->pdo->exec("SET TIME ZONE '{$timezoneOffset}';");
-        $this->pdo->exec("SET lc_time TO 'es_ES.UTF-8';");
+        try {
+          $this->pdo->exec("SET TIME ZONE '{$timezoneOffset}';");
+        } catch (\Exception $e) {}
+        try {
+          $this->pdo->exec("SET lc_time TO 'es_ES.UTF-8';");
+        } catch (\Exception $e) {}
       } else {
         $this->pdo = new PDO(
           $sanitizedDSN,
