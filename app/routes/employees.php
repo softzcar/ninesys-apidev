@@ -46,11 +46,11 @@ return function (App $app) {
                     p1.id_empleado,
                     ps1.numero_semana AS ultima_semana_pagada,
                     EXTRACT(YEAR FROM p1.moment) AS ultimo_anio_pagado
-                FROM ' . LOCAL_DB . '.pagos p1
-                JOIN ' . LOCAL_DB . '.pagos_salarios ps1 ON ps1.id_pago = p1._id
+                FROM pagos p1
+                JOIN pagos_salarios ps1 ON ps1.id_pago = p1._id
                 INNER JOIN (
                     SELECT id_empleado, MAX(moment) as max_m
-                    FROM ' . LOCAL_DB . '.pagos
+                    FROM pagos
                     GROUP BY id_empleado
                 ) m ON m.id_empleado = p1.id_empleado AND m.max_m = p1.moment
             ) up ON up.id_empleado = a.id_usuario
@@ -58,8 +58,8 @@ return function (App $app) {
                 SELECT
                     pa.id_empleado,
                     MAX(pa.fecha_pago) AS ultima_fecha_pago
-                FROM ' . LOCAL_DB . '.pagos pa
-                LEFT JOIN ' . LOCAL_DB . '.pagos_salarios ps ON ps.id_pago = pa._id
+                FROM pagos pa
+                LEFT JOIN pagos_salarios ps ON ps.id_pago = pa._id
                 WHERE pa.fecha_pago IS NOT NULL
                   AND (EXTRACT(WEEK FROM pa.fecha_pago) = EXTRACT(WEEK FROM NOW()) OR ps.numero_semana = EXTRACT(WEEK FROM NOW()))
                   AND EXTRACT(YEAR FROM pa.fecha_pago) = EXTRACT(YEAR FROM NOW())
@@ -74,7 +74,7 @@ return function (App $app) {
                     ) || \']\', \'[]\') AS departamentos
                 FROM
                     api_empresas.empresas_usuarios_departamentos b
-                INNER JOIN ' . LOCAL_DB . '.departamentos c ON c._id = b.id_departamento AND c.eliminado = 0
+                INNER JOIN departamentos c ON c._id = b.id_departamento AND c.eliminado = 0
                 GROUP BY
                     b.id_empleado
             ) deps ON deps.id_empleado = a.id_usuario
@@ -86,7 +86,7 @@ return function (App $app) {
                         \',\'
                     ) || \']\', \'[]\') AS carga_familiar
                 FROM
-                    ' . LOCAL_DB . '.salario_carga_familiar d
+                    salario_carga_familiar d
                 GROUP BY
                     d.id_empleado
             ) carga ON carga.id_empleado = a.id_usuario
