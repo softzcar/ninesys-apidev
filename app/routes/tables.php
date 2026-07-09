@@ -108,7 +108,7 @@ return function (App $app) {
         WHERE $weekCond";
     $object['items'] = $localConnection->goQuery($sql);
 
-    $sql = "SELECT SUM(pago_abono) total_semana FROM ordenes WHERE $weekCondSimple ORDER BY _id ASC";
+    $sql = "SELECT SUM(pago_abono) total_semana FROM ordenes WHERE $weekCondSimple";
     $object['total_week'] = $localConnection->goQuery($sql);
 
     if (is_null($object['total_week'][0]['total_semana'])) {
@@ -116,14 +116,14 @@ return function (App $app) {
     }
 
     $sql = "SELECT (SUM(pago_total) - SUM(pago_descuento)) - SUM(pago_abono) + SUM(pago_nota_credito) total_credito
-        FROM ordenes WHERE $weekCondSimple ORDER BY _id ASC";
+        FROM ordenes WHERE $weekCondSimple";
     $object['total_credito'] = $localConnection->goQuery($sql);
 
     if (is_null($object['total_credito'][0]['total_credito'])) {
       $object['total_credito'][0]['total_credito'] = '0';
     }
 
-    $sql = "SELECT SUM(pago_descuento) total_descuentos FROM ordenes WHERE $weekCondSimple ORDER BY _id ASC";
+    $sql = "SELECT SUM(pago_descuento) total_descuentos FROM ordenes WHERE $weekCondSimple";
     $object['total_descuentos'] = $localConnection->goQuery($sql);
 
     if (is_null($object['total_descuentos'][0]['total_descuentos'])) {
