@@ -820,53 +820,103 @@ return function (App $app) {
                 ];
 
                 // 2. EFICIENCIA DE TIEMPO (Impresión usa la misma lógica que Producción)
-                $sqlEficienciaImp = "
-                    WITH TiemposReales AS (
+                if (DB_DRIVER === 'pgsql') {
+                    $sqlEficienciaImp = "
+                        WITH TiemposReales AS (
+                            SELECT
+                                sub_ldea.id_orden,
+                                SUM(
+                                    CASE
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN
+                                            EXTRACT(EPOCH FROM (sub_ldea.fecha_terminado::timestamp - sub_ldea.fecha_inicio::timestamp))
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN
+                                            EXTRACT(EPOCH FROM (NOW() - sub_ldea.fecha_inicio::timestamp))
+                                        ELSE 0
+                                    END
+                                ) AS tiempo_real_orden
+                            FROM lotes_detalles_empleados_asignados sub_ldea
+                            WHERE sub_ldea.id_empleado = $id_empleado
+                              AND sub_ldea.id_departamento = $id_departamento
+                              AND sub_ldea.fecha_inicio IS NOT NULL
+                            GROUP BY sub_ldea.id_orden
+                        ),
+                        TiemposEstimados AS (
+                            SELECT
+                                op.id_orden,
+                                SUM(ptp.tiempo * op.cantidad) AS tiempo_estimado_orden
+                            FROM ordenes_productos op
+                            INNER JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_orden = op.id_orden
+                            INNER JOIN products p ON p._id = op.id_woo AND p.fisico = 1
+                            INNER JOIN products_tiempos_de_produccion ptp
+                                ON ptp.id_product = op.id_woo
+                                AND ptp.id_departamento = $id_departamento
+                            WHERE ldea.id_empleado = $id_empleado
+                              AND ldea.id_departamento = $id_departamento
+                              AND ldea.fecha_inicio IS NOT NULL
+                            GROUP BY op.id_orden
+                        )
                         SELECT
-                            sub_ldea.id_orden,
-                            SUM(
-                                CASE
-                                    WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN
-                                        TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
-                                    WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN
-                                        TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
-                                    ELSE 0
-                                END
-                            ) AS tiempo_real_orden
-                        FROM lotes_detalles_empleados_asignados sub_ldea
-                        WHERE sub_ldea.id_empleado = $id_empleado
-                          AND sub_ldea.id_departamento = $id_departamento
-                          AND sub_ldea.fecha_inicio IS NOT NULL
-                        GROUP BY sub_ldea.id_orden
-                    ),
-                    TiemposEstimados AS (
+                            COALESCE(SUM(tr.tiempo_real_orden), 0) AS total_tiempo_real,
+                            COALESCE(SUM(te.tiempo_estimado_orden), 0) AS total_tiempo_estimado
+                        FROM (
+                            SELECT DISTINCT id_orden
+                            FROM lotes_detalles_empleados_asignados
+                            WHERE id_empleado = $id_empleado
+                              AND id_departamento = $id_departamento
+                              AND fecha_inicio IS NOT NULL
+                        ) ordenes
+                        LEFT JOIN TiemposReales tr ON tr.id_orden = ordenes.id_orden
+                        LEFT JOIN TiemposEstimados te ON te.id_orden = ordenes.id_orden
+                    ";
+                } else {
+                    $sqlEficienciaImp = "
+                        WITH TiemposReales AS (
+                            SELECT
+                                sub_ldea.id_orden,
+                                SUM(
+                                    CASE
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN
+                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN
+                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
+                                        ELSE 0
+                                    END
+                                ) AS tiempo_real_orden
+                            FROM lotes_detalles_empleados_asignados sub_ldea
+                            WHERE sub_ldea.id_empleado = $id_empleado
+                              AND sub_ldea.id_departamento = $id_departamento
+                              AND sub_ldea.fecha_inicio IS NOT NULL
+                            GROUP BY sub_ldea.id_orden
+                        ),
+                        TiemposEstimados AS (
+                            SELECT
+                                op.id_orden,
+                                SUM(ptp.tiempo * op.cantidad) AS tiempo_estimado_orden
+                            FROM ordenes_productos op
+                            INNER JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_orden = op.id_orden
+                            INNER JOIN products p ON p._id = op.id_woo AND p.fisico = 1
+                            INNER JOIN products_tiempos_de_produccion ptp
+                                ON ptp.id_product = op.id_woo
+                                AND ptp.id_departamento = $id_departamento
+                            WHERE ldea.id_empleado = $id_empleado
+                              AND ldea.id_departamento = $id_departamento
+                              AND ldea.fecha_inicio IS NOT NULL
+                            GROUP BY op.id_orden
+                        )
                         SELECT
-                            op.id_orden,
-                            SUM(ptp.tiempo * op.cantidad) AS tiempo_estimado_orden
-                        FROM ordenes_productos op
-                        INNER JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_orden = op.id_orden
-                        INNER JOIN products p ON p._id = op.id_woo AND p.fisico = 1
-                        INNER JOIN products_tiempos_de_produccion ptp
-                            ON ptp.id_product = op.id_woo
-                            AND ptp.id_departamento = $id_departamento
-                        WHERE ldea.id_empleado = $id_empleado
-                          AND ldea.id_departamento = $id_departamento
-                          AND ldea.fecha_inicio IS NOT NULL
-                        GROUP BY op.id_orden
-                    )
-                    SELECT
-                        COALESCE(SUM(tr.tiempo_real_orden), 0) AS total_tiempo_real,
-                        COALESCE(SUM(te.tiempo_estimado_orden), 0) AS total_tiempo_estimado
-                    FROM (
-                        SELECT DISTINCT id_orden
-                        FROM lotes_detalles_empleados_asignados
-                        WHERE id_empleado = $id_empleado
-                          AND id_departamento = $id_departamento
-                          AND fecha_inicio IS NOT NULL
-                    ) ordenes
-                    LEFT JOIN TiemposReales tr ON tr.id_orden = ordenes.id_orden
-                    LEFT JOIN TiemposEstimados te ON te.id_orden = ordenes.id_orden
-                ";
+                            COALESCE(SUM(tr.tiempo_real_orden), 0) AS total_tiempo_real,
+                            COALESCE(SUM(te.tiempo_estimado_orden), 0) AS total_tiempo_estimado
+                        FROM (
+                            SELECT DISTINCT id_orden
+                            FROM lotes_detalles_empleados_asignados
+                            WHERE id_empleado = $id_empleado
+                              AND id_departamento = $id_departamento
+                              AND fecha_inicio IS NOT NULL
+                        ) ordenes
+                        LEFT JOIN TiemposReales tr ON tr.id_orden = ordenes.id_orden
+                        LEFT JOIN TiemposEstimados te ON te.id_orden = ordenes.id_orden
+                    ";
+                }
                 $eficienciaImpResult = $localConnection->goQuery($sqlEficienciaImp);
                 $finalResponse['eficiencia'] = [
                     'tiempo_real' => !empty($eficienciaImpResult) ? (float) $eficienciaImpResult[0]['total_tiempo_real'] : 0,
@@ -874,15 +924,28 @@ return function (App $app) {
                 ];
 
                 // 3. PAGOS SEMANALES (Sin JOIN a lotes, usando 'moment' de pagos)
-                $sqlPagos = "SELECT 
-                        SUM(p.monto_pago) as total_pagado,
-                        DATE_FORMAT(p.moment, '%W') as dia,
-                        DATE(p.moment) as fecha
-                    FROM pagos p
-                    WHERE p.id_empleado = $id_empleado
-                    AND p.estatus = 'aprobado'
-                    AND YEARWEEK(p.moment, 1) = YEARWEEK(NOW(), 1)
-                    GROUP BY DATE(p.moment)";
+                if (DB_DRIVER === 'pgsql') {
+                    $sqlPagos = "SELECT
+                            SUM(p.monto_pago) as total_pagado,
+                            TO_CHAR(p.moment, 'Day') as dia,
+                            DATE(p.moment) as fecha
+                        FROM pagos p
+                        WHERE p.id_empleado = $id_empleado
+                        AND p.estatus = 'aprobado'
+                        AND EXTRACT(WEEK FROM p.moment) = EXTRACT(WEEK FROM NOW())
+                        AND EXTRACT(YEAR FROM p.moment) = EXTRACT(YEAR FROM NOW())
+                        GROUP BY DATE(p.moment)";
+                } else {
+                    $sqlPagos = "SELECT 
+                            SUM(p.monto_pago) as total_pagado,
+                            DATE_FORMAT(p.moment, '%W') as dia,
+                            DATE(p.moment) as fecha
+                        FROM pagos p
+                        WHERE p.id_empleado = $id_empleado
+                        AND p.estatus = 'aprobado'
+                        AND YEARWEEK(p.moment, 1) = YEARWEEK(NOW(), 1)
+                        GROUP BY DATE(p.moment)";
+                }
 
                 $pagosResult = $localConnection->goQuery($sqlPagos);
                 $finalResponse['pagos_semana'] = $pagosResult;
@@ -956,53 +1019,103 @@ return function (App $app) {
                 ];
 
                 // 2. EFICIENCIA DE TIEMPO
-                $sqlEficiencia = "
-                    WITH TiemposReales AS (
+                if (DB_DRIVER === 'pgsql') {
+                    $sqlEficiencia = "
+                        WITH TiemposReales AS (
+                            SELECT
+                                sub_ldea.id_orden,
+                                SUM(
+                                    CASE
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN
+                                            EXTRACT(EPOCH FROM (sub_ldea.fecha_terminado::timestamp - sub_ldea.fecha_inicio::timestamp))
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN
+                                            EXTRACT(EPOCH FROM (NOW() - sub_ldea.fecha_inicio::timestamp))
+                                        ELSE 0
+                                    END
+                                ) AS tiempo_real_orden
+                            FROM lotes_detalles_empleados_asignados sub_ldea
+                            WHERE sub_ldea.id_empleado = $id_empleado
+                              AND sub_ldea.id_departamento = $id_departamento
+                              AND sub_ldea.fecha_inicio IS NOT NULL
+                            GROUP BY sub_ldea.id_orden
+                        ),
+                        TiemposEstimados AS (
+                            SELECT
+                                op.id_orden,
+                                SUM(ptp.tiempo * op.cantidad) AS tiempo_estimado_orden
+                            FROM ordenes_productos op
+                            INNER JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_orden = op.id_orden
+                            INNER JOIN products p ON p._id = op.id_woo AND p.fisico = 1
+                            INNER JOIN products_tiempos_de_produccion ptp
+                                ON ptp.id_product = op.id_woo
+                                AND ptp.id_departamento = $id_departamento
+                            WHERE ldea.id_empleado = $id_empleado
+                              AND ldea.id_departamento = $id_departamento
+                              AND ldea.fecha_inicio IS NOT NULL
+                            GROUP BY op.id_orden
+                        )
+                        SELECT
+                            COALESCE(SUM(tr.tiempo_real_orden), 0) AS total_tiempo_real,
+                            COALESCE(SUM(te.tiempo_estimado_orden), 0) AS total_tiempo_estimado
+                        FROM (
+                            SELECT DISTINCT id_orden
+                            FROM lotes_detalles_empleados_asignados
+                            WHERE id_empleado = $id_empleado
+                              AND id_departamento = $id_departamento
+                              AND fecha_inicio IS NOT NULL
+                        ) ordenes
+                        LEFT JOIN TiemposReales tr ON tr.id_orden = ordenes.id_orden
+                        LEFT JOIN TiemposEstimados te ON te.id_orden = ordenes.id_orden
+                    ";
+                } else {
+                    $sqlEficiencia = "
+                        WITH TiemposReales AS (
+                            SELECT 
+                                sub_ldea.id_orden,
+                                SUM(
+                                    CASE 
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
+                                        ELSE 0 
+                                    END
+                                ) AS tiempo_real_orden
+                            FROM lotes_detalles_empleados_asignados sub_ldea
+                            WHERE sub_ldea.id_empleado = $id_empleado 
+                              AND sub_ldea.id_departamento = $id_departamento
+                              AND sub_ldea.fecha_inicio IS NOT NULL
+                            GROUP BY sub_ldea.id_orden
+                        ),
+                        TiemposEstimados AS (
+                            SELECT 
+                                op.id_orden,
+                                SUM(ptp.tiempo * op.cantidad) AS tiempo_estimado_orden
+                            FROM ordenes_productos op
+                            INNER JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_orden = op.id_orden
+                            INNER JOIN products p ON p._id = op.id_woo AND p.fisico = 1
+                            INNER JOIN products_tiempos_de_produccion ptp 
+                                ON ptp.id_product = op.id_woo 
+                                AND ptp.id_departamento = $id_departamento
+                            WHERE ldea.id_empleado = $id_empleado
+                              AND ldea.id_departamento = $id_departamento
+                              AND ldea.fecha_inicio IS NOT NULL
+                            GROUP BY op.id_orden
+                        )
                         SELECT 
-                            sub_ldea.id_orden,
-                            SUM(
-                                CASE 
-                                    WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
-                                        TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
-                                    WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
-                                        TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
-                                    ELSE 0 
-                                END
-                            ) AS tiempo_real_orden
-                        FROM lotes_detalles_empleados_asignados sub_ldea
-                        WHERE sub_ldea.id_empleado = $id_empleado 
-                          AND sub_ldea.id_departamento = $id_departamento
-                          AND sub_ldea.fecha_inicio IS NOT NULL
-                        GROUP BY sub_ldea.id_orden
-                    ),
-                    TiemposEstimados AS (
-                        SELECT 
-                            op.id_orden,
-                            SUM(ptp.tiempo * op.cantidad) AS tiempo_estimado_orden
-                        FROM ordenes_productos op
-                        INNER JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_orden = op.id_orden
-                        INNER JOIN products p ON p._id = op.id_woo AND p.fisico = 1
-                        INNER JOIN products_tiempos_de_produccion ptp 
-                            ON ptp.id_product = op.id_woo 
-                            AND ptp.id_departamento = $id_departamento
-                        WHERE ldea.id_empleado = $id_empleado
-                          AND ldea.id_departamento = $id_departamento
-                          AND ldea.fecha_inicio IS NOT NULL
-                        GROUP BY op.id_orden
-                    )
-                    SELECT 
-                        COALESCE(SUM(tr.tiempo_real_orden), 0) AS total_tiempo_real,
-                        COALESCE(SUM(te.tiempo_estimado_orden), 0) AS total_tiempo_estimado
-                    FROM (
-                        SELECT DISTINCT id_orden 
-                        FROM lotes_detalles_empleados_asignados
-                        WHERE id_empleado = $id_empleado
-                          AND id_departamento = $id_departamento
-                          AND fecha_inicio IS NOT NULL
-                    ) ordenes
-                    LEFT JOIN TiemposReales tr ON tr.id_orden = ordenes.id_orden
-                    LEFT JOIN TiemposEstimados te ON te.id_orden = ordenes.id_orden
-                ";
+                            COALESCE(SUM(tr.tiempo_real_orden), 0) AS total_tiempo_real,
+                            COALESCE(SUM(te.tiempo_estimado_orden), 0) AS total_tiempo_estimado
+                        FROM (
+                            SELECT DISTINCT id_orden 
+                            FROM lotes_detalles_empleados_asignados
+                            WHERE id_empleado = $id_empleado
+                              AND id_departamento = $id_departamento
+                              AND fecha_inicio IS NOT NULL
+                        ) ordenes
+                        LEFT JOIN TiemposReales tr ON tr.id_orden = ordenes.id_orden
+                        LEFT JOIN TiemposEstimados te ON te.id_orden = ordenes.id_orden
+                    ";
+                }
 
                 $eficienciaResult = $localConnection->goQuery($sqlEficiencia);
                 $finalResponse['eficiencia'] = [
@@ -1011,16 +1124,30 @@ return function (App $app) {
                 ];
 
                 // 3. PAGOS DE LA SEMANA
-                $sqlPagos = "SELECT 
-                        SUM(p.monto_pago) as total_pagado,
-                        DATE_FORMAT(ldea.fecha_terminado, '%W') as dia,
-                        DATE(ldea.fecha_terminado) as fecha
-                    FROM pagos p
-                    JOIN lotes_detalles_empleados_asignados ldea ON p.id_lotes_detalles = ldea._id
-                    WHERE p.id_empleado = $id_empleado
-                    AND p.estatus = 'aprobado'
-                    AND YEARWEEK(ldea.fecha_terminado, 1) = YEARWEEK(NOW(), 1)
-                    GROUP BY DATE(ldea.fecha_terminado)";
+                if (DB_DRIVER === 'pgsql') {
+                    $sqlPagos = "SELECT
+                            SUM(p.monto_pago) as total_pagado,
+                            TO_CHAR(ldea.fecha_terminado, 'Day') as dia,
+                            DATE(ldea.fecha_terminado) as fecha
+                        FROM pagos p
+                        JOIN lotes_detalles_empleados_asignados ldea ON p.id_lotes_detalles = ldea._id
+                        WHERE p.id_empleado = $id_empleado
+                        AND p.estatus = 'aprobado'
+                        AND EXTRACT(WEEK FROM ldea.fecha_terminado) = EXTRACT(WEEK FROM NOW())
+                        AND EXTRACT(YEAR FROM ldea.fecha_terminado) = EXTRACT(YEAR FROM NOW())
+                        GROUP BY DATE(ldea.fecha_terminado)";
+                } else {
+                    $sqlPagos = "SELECT 
+                            SUM(p.monto_pago) as total_pagado,
+                            DATE_FORMAT(ldea.fecha_terminado, '%W') as dia,
+                            DATE(ldea.fecha_terminado) as fecha
+                        FROM pagos p
+                        JOIN lotes_detalles_empleados_asignados ldea ON p.id_lotes_detalles = ldea._id
+                        WHERE p.id_empleado = $id_empleado
+                        AND p.estatus = 'aprobado'
+                        AND YEARWEEK(ldea.fecha_terminado, 1) = YEARWEEK(NOW(), 1)
+                        GROUP BY DATE(ldea.fecha_terminado)";
+                }
 
                 $pagosResult = $localConnection->goQuery($sqlPagos);
                 $finalResponse['pagos_semana'] = $pagosResult;
