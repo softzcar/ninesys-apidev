@@ -1145,7 +1145,8 @@ return function (App $app) {
     }
 
     // 3. CONSULTAR ORDEN PROCESO DE LOS DEPARTAMENTOS DE LA REPOSICIÓN
-    $id_depto_inicio = intval($data['id_departamento']);
+    // El flujo ordinario (empleado) no envía 'id_departamento' (solo lo usa el flujo de supervisor)
+    $id_depto_inicio = intval($data['id_departamento'] ?? 0);
     
     // Consultar orden_proceso del departamento de inicio
     $sqlDeptoInicioInfo = "SELECT orden_proceso, departamento FROM departamentos WHERE _id = {$id_depto_inicio}";
