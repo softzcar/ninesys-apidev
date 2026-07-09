@@ -700,7 +700,7 @@ return function (App $app) {
         $object['fields_resumen'][0]['key'] = 'nombre';
         $object['fields_resumen'][0]['label'] = 'Nombre';
         $object['fields_resumen'][1]['key'] = 'horas_trabajadas';
-        $object['fields_resumen'][1]['label'] = 'Horas Trabajadas';
+        $object['fields_resumen'][1]['label'] = 'Horas Trabadas';
         $object['fields_resumen'][2]['key'] = 'acciones';
         $object['fields_resumen'][2]['label'] = 'Acciones';
 
@@ -714,54 +714,104 @@ return function (App $app) {
         $object['fields_detallado'][3]['label'] = 'Fecha';
 
         // REPORTE RESUMEN
-        $sql = "SELECT
-            a.id_empleado,
-            a.id_empleado acciones,
-            b.nombre, 
-            ROUND(
-                  IFNULL(
-                         TIMESTAMPDIFF(MINUTE,
-                                       MIN(CASE WHEN registro = 'entrada_manana' THEN a.moment END),
-                                       MAX(CASE WHEN registro = 'salida_manana' THEN a.moment END)
-                                       ) / 60.0,
-                         0
-                         )
-                  +
-                  IFNULL(
-                         TIMESTAMPDIFF(MINUTE,
-                                       MIN(CASE WHEN registro = 'entrada_tarde' THEN a.moment END),
-                                       MAX(CASE WHEN registro = 'salida_tarde' THEN a.moment END)
-                                       ) / 60.0,
-                         0
-                         ),
-                  2
-                  ) AS horas_trabajadas
-            FROM asistencias a 
-            JOIN empleados b ON b._id = a.id_empleado 
-            WHERE DATE(a.moment) BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
-            GROUP BY a.id_empleado;
-            ";
+        if (DB_DRIVER === 'pgsql') {
+            $sql = "SELECT
+                a.id_empleado,
+                a.id_empleado AS acciones,
+                b.nombre, 
+                ROUND(
+                      (COALESCE(
+                             EXTRACT(EPOCH FROM (MAX(CASE WHEN registro = 'salida_manana' THEN a.moment END)::timestamp - MIN(CASE WHEN registro = 'entrada_manana' THEN a.moment END)::timestamp)) / 60.0 / 60.0,
+                             0
+                             )
+                      +
+                      COALESCE(
+                             EXTRACT(EPOCH FROM (MAX(CASE WHEN registro = 'salida_tarde' THEN a.moment END)::timestamp - MIN(CASE WHEN registro = 'entrada_tarde' THEN a.moment END)::timestamp)) / 60.0 / 60.0,
+                             0
+                             ))::numeric,
+                      2
+                      ) AS horas_trabajadas
+                FROM asistencias a 
+                JOIN empleados b ON b._id = a.id_empleado 
+                WHERE a.moment::date BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
+                GROUP BY a.id_empleado, b.nombre;
+                ";
+        } else {
+            $sql = "SELECT
+                a.id_empleado,
+                a.id_empleado acciones,
+                b.nombre, 
+                ROUND(
+                      IFNULL(
+                             TIMESTAMPDIFF(MINUTE,
+                                           MIN(CASE WHEN registro = 'entrada_manana' THEN a.moment END),
+                                           MAX(CASE WHEN registro = 'salida_manana' THEN a.moment END)
+                                           ) / 60.0,
+                             0
+                             )
+                      +
+                      IFNULL(
+                             TIMESTAMPDIFF(MINUTE,
+                                           MIN(CASE WHEN registro = 'entrada_tarde' THEN a.moment END),
+                                           MAX(CASE WHEN registro = 'salida_tarde' THEN a.moment END)
+                                           ) / 60.0,
+                             0
+                             ),
+                      2
+                      ) AS horas_trabajadas
+                FROM asistencias a 
+                JOIN empleados b ON b._id = a.id_empleado 
+                WHERE DATE(a.moment) BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
+                GROUP BY a.id_empleado;
+                ";
+        }
         $object['resumen'] = $localConnection->goQuery($sql);
 
         // REPORTE DETALLADO
-        $sql = "SELECT
-            b._id id_empleado,
-            b.nombre,
-            DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
-            DATE_FORMAT(a.moment, '%h:%i %p') AS hora,
-            CASE 
-            WHEN a.registro = 'entrada_manana' THEN 'Entrada mañana'
-            WHEN a.registro = 'salida_manana' THEN 'Salida mañana'
-            WHEN a.registro = 'entrada_tarde' THEN 'Entrada Tarde'
-            WHEN a.registro = 'salida_tarde' THEN 'Salida tarde'
-            ELSE a.registro 
-            END AS registro 
-            FROM asistencias a 
-            JOIN empleados b ON b._id = a.id_empleado 
-            WHERE DATE(a.moment) BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
-            ORDER BY b.nombre ASC, a.moment ASC,
-            FIELD(a.registro, 'entrada_manana', 'salida_manana', 'entrada_tarde', 'salida_tarde');
-            ";
+        if (DB_DRIVER === 'pgsql') {
+            $sql = "SELECT
+                b._id AS id_empleado,
+                b.nombre,
+                TO_CHAR(a.moment, 'DD/MM/YYYY') AS fecha,
+                TO_CHAR(a.moment, 'HH12:MI AM') AS hora,
+                CASE 
+                WHEN a.registro = 'entrada_manana' THEN 'Entrada mañana'
+                WHEN a.registro = 'salida_manana' THEN 'Salida mañana'
+                WHEN a.registro = 'entrada_tarde' THEN 'Entrada Tarde'
+                WHEN a.registro = 'salida_tarde' THEN 'Salida tarde'
+                ELSE a.registro 
+                END AS registro 
+                FROM asistencias a 
+                JOIN empleados b ON b._id = a.id_empleado 
+                WHERE a.moment::date BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
+                ORDER BY b.nombre ASC, a.moment ASC,
+                CASE 
+                WHEN a.registro = 'entrada_manana' THEN 1 
+                WHEN a.registro = 'salida_manana' THEN 2 
+                WHEN a.registro = 'entrada_tarde' THEN 3 
+                WHEN a.registro = 'salida_tarde' THEN 4 
+                ELSE 5 END;
+                ";
+        } else {
+            $sql = "SELECT
+                b._id id_empleado,
+                b.nombre,
+                DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
+                DATE_FORMAT(a.moment, '%h:%i %p') AS hora,
+                CASE 
+                WHEN a.registro = 'entrada_manana' THEN 'Entrada mañana'
+                WHEN a.registro = 'salida_manana' THEN 'Salida mañana'
+                WHEN a.registro = 'entrada_tarde' THEN 'Entrada Tarde'
+                WHEN a.registro = 'salida_tarde' THEN 'Salida tarde'
+                ELSE a.registro 
+                END AS registro 
+                FROM asistencias a 
+                JOIN empleados b ON b._id = a.id_empleado 
+                WHERE DATE(a.moment) BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
+                ORDER BY b.nombre ASC, a.moment ASC,
+                FIELD(a.registro, 'entrada_manana', 'salida_manana', 'entrada_tarde', 'salida_tarde');
+                ";
+        }
         $object['detallado'] = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();
