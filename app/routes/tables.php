@@ -20,8 +20,8 @@ return function (App $app) {
       $sql = "SELECT
           a._id AS id_orden,
           a.cliente_nombre AS cliente,
-          TO_CHAR(a.fecha_inicio, 'DD/MM/YYYY') AS fecha_inicio,
-          TO_CHAR(a.fecha_entrega, 'DD/MM/YYYY') AS fecha_entrega,
+          TO_CHAR(NULLIF(a.fecha_inicio, '')::timestamp, 'DD/MM/YYYY') AS fecha_inicio,
+          TO_CHAR(NULLIF(a.fecha_entrega, '')::timestamp, 'DD/MM/YYYY') AS fecha_entrega,
           a.status AS estatus
           FROM ordenes a
           WHERE EXTRACT(WEEK FROM a.moment) = " . $week;
