@@ -46,6 +46,8 @@
 | `/empleados` | GET | ✅ **Adaptado** | `DATE_FORMAT`, `WEEK`, `YEAR`, `GROUP_CONCAT` (deps+carga), `IFNULL` | ✅ HTTP 200 |
 | `/asistencias/semanal` | GET | ✅ **Adaptado** | `DATE_FORMAT` hora/fecha, `DAYOFWEEK`, `YEARWEEK` | ✅ HTTP 200, 3 registros |
 | `/empleados/dashboard-stats/{id}/{dep}` | GET | ✅ **Adaptado** | `TIMESTAMPDIFF(SECOND)` ×4, `DATE_FORMAT('%W')` ×2, `YEARWEEK` ×2 | ✅ HTTP 200, todos los campos |
+| `/asistencias/tabla/{fecha}` | GET | ✅ **Adaptado** | `DATE_FORMAT` ×2, `WEEK` ×2, `UNIX_TIMESTAMP`, `DAYNAME`, GROUP BY fix | ✅ HTTP 200 |
+| `/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin}` | GET | ✅ **Adaptado** | `TIMESTAMPDIFF(MINUTE)` ×2, `DATE_FORMAT` ×2, `FIELD` replacement, GROUP BY fix | ✅ HTTP 200 |
 
 ### 📁 `tables.php`
 
@@ -75,8 +77,6 @@
 
 | Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
 |---|---|---|---|---|
-| 639 | `/asistencias/tabla/{fecha}` | GET | 🔴 | `WEEK(NOW())`, `DATE_FORMAT('%h:%i %p')`, `DATE_FORMAT('%Y-%m-%d')`, `UNIX_TIMESTAMP`, `DAYNAME`, `FIELD()` |
-| 670 | `/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin}` | GET | 🟡 | `TIMESTAMPDIFF(MINUTE)` ×2, `DATE_FORMAT('%d/%m/%Y')`, `DATE_FORMAT('%h:%i %p')`, `FIELD()` |
 | 116 | Subquery en `/empleados` | GET | 🔴 | `GROUP_CONCAT` (carga_familiar), `IFNULL(CONCAT('[', GROUP_CONCAT...` (**parte que falta**) |
 
 ---
@@ -183,7 +183,7 @@
 
 | Archivo | Total ocurrencias MySQL | Adaptadas | % |
 |---|---|---|---|
-| `employees.php` | 38 | ~24 (3 endpoints) | **63%** |
+| `employees.php` | 38 | 37 (5 endpoints) | **97%** ✅ |
 | `tables.php` | 23 | 23 (6 endpoints) | **100%** ✅ |
 | `orders.php` | 46 | 0 | **0%** |
 | `payments.php` | 34 | 0 | **0%** |
@@ -193,7 +193,7 @@
 | `reports.php` | 8 | 0 | **0%** |
 | `products_reports.php` | 6 | 0 | **0%** |
 | **Otros menores** | ~23 | 0 | **0%** |
-| **TOTAL** | **~247** | **~47** | **~19%** |
+| **TOTAL** | **~247** | **~60** | **~24%** |
 
 ---
 
