@@ -13,6 +13,7 @@ define('PING_URL', getenv('PING_DOMAIN') ?: 'nineteencustom.com');
 define('MSG_URL', getenv('MSG_API_URL') ?: 'http://194.195.86.253:3000/send-message');
 
 $driver = strtolower(getenv('DB_DRIVER') ?: 'mysql');
+define('DB_DRIVER', $driver);
 $port = getenv('DB_PORT') ?: (($driver === 'pgsql' || $driver === 'postgres') ? '5432' : '3306');
 if ($driver === 'pgsql' || $driver === 'postgres') {
   define('EMPRESAS_DNS', 'pgsql:host=' . (getenv('DB_HOST') ?: 'localhost') . ';port=' . $port . ';dbname=' . (getenv('DB_NAME') ?: 'api_empresas'));
