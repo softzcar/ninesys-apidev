@@ -1,7 +1,7 @@
 # 📊 Evaluación de Endpoints — Soporte Dual MariaDB / PostgreSQL
 ## Proyecto: `ninesys-api` | Rama: `feature/postgresql-support`
 **Fecha de evaluación:** 2026-07-09  
-**Estado general:** En progreso — Infraestructura ✅ | Endpoints: ~10% adaptados
+**Estado general:** En progreso — Infraestructura ✅ | Endpoints: ~19% adaptados
 
 ---
 
@@ -41,178 +41,183 @@
 
 ### 📁 `employees.php`
 
-| Endpoint | Método | Funciones adaptadas | Verificado |
-|---|---|---|---|
-| `/empleados` | GET | `DATE_FORMAT`, `WEEK`, `YEAR`, `GROUP_CONCAT` (deps), `IFNULL` | ✅ HTTP 200 |
-| `/asistencias/semanal` | GET | `DATE_FORMAT` hora/fecha, `DAYOFWEEK`, `YEARWEEK` | ✅ HTTP 200 — 3 registros |
-| `/empleados/dashboard-stats/{id}/{dep}` | GET | `TIMESTAMPDIFF(SECOND)` ×4, `DATE_FORMAT('%W')` ×2, `YEARWEEK` ×2 | ✅ HTTP 200 — todos los campos |
+| Endpoint | Método | Estado | Funciones adaptadas | Verificado |
+|---|---|---|---|---|
+| `/empleados` | GET | ✅ **Adaptado** | `DATE_FORMAT`, `WEEK`, `YEAR`, `GROUP_CONCAT` (deps+carga), `IFNULL` | ✅ HTTP 200 |
+| `/asistencias/semanal` | GET | ✅ **Adaptado** | `DATE_FORMAT` hora/fecha, `DAYOFWEEK`, `YEARWEEK` | ✅ HTTP 200, 3 registros |
+| `/empleados/dashboard-stats/{id}/{dep}` | GET | ✅ **Adaptado** | `TIMESTAMPDIFF(SECOND)` ×4, `DATE_FORMAT('%W')` ×2, `YEARWEEK` ×2 | ✅ HTTP 200, todos los campos |
+
+### 📁 `tables.php`
+
+| Endpoint | Método | Estado | Funciones adaptadas | Verificado |
+|---|---|---|---|---|
+| `/ordenes-reporte-semanal-produccion/{fecha}` | GET | ✅ **Adaptado** | `DATE_FORMAT` (con NULLIF/casteo VARCHAR), `WEEK` | ✅ HTTP 200 |
+| `/ordenes-reporte-semanal/{fecha}` | GET | ✅ **Adaptado** | `WEEK`, `SUM` ORDER BY fix | ✅ HTTP 200 |
+| `/ordenes/borrador/reporte-semanal/{id}/{dep}` | GET | ✅ **Adaptado** | `YEARWEEK` | ✅ HTTP 200 |
+| `/table/ordenes-activas/{id}` | GET | ✅ **Adaptado** | `json_agg`/`json_build_object` (sustituto `GROUP_CONCAT` + `JSON_OBJECT`), `FIND_IN_SET` replacement, `COALESCE` | ✅ HTTP 200 |
+| `/table/ordenes-todas` | GET | ✅ **Adaptado** | `json_agg` replacement para categorías, `FIND_IN_SET` replacement | ✅ HTTP 200 |
+| `/table/ordenes-con-deuda` | GET | ✅ **Adaptado** | `TO_CHAR(moment)` | ✅ HTTP 200 |
 
 ---
 
 ## 🔴 ENDPOINTS PENDIENTES DE ADAPTACIÓN
 
+### Prioridad por Uso en la App
+
+> **Criterio de prioridad:**  
+> 🔴 Alta — Usados frecuentemente en la interfaz (dashboard, listas principales)  
+> 🟡 Media — Reportes específicos y consultas bajo demanda  
+> 🟢 Baja — Endpoints legacy, rara vez invocados
+
+---
+
 ### 📁 `employees.php` — Pendientes
 
-| Línea | Endpoint | Prio | Funciones MySQL a reemplazar |
-|---|---|---|---|
-| 639 | `/asistencias/tabla/{fecha}` | 🔴 Alta | `WEEK(NOW())`, `DATE_FORMAT` ×3, `UNIX_TIMESTAMP`, `DAYNAME`, `FIELD()` |
-| 670 | `/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin}` | 🟡 Media | `TIMESTAMPDIFF(MINUTE)` ×2, `DATE_FORMAT` ×2, `FIELD()` |
-
----
-
-### 📁 `tables.php` — Pendientes (23 ocurrencias)
-
-| Línea | Endpoint | Prio | Funciones MySQL a reemplazar |
-|---|---|---|---|
-| 12 | `/ordenes-reporte-semanal-produccion/{fecha}` | 🔴 Alta | `DATE_FORMAT` ×2 |
-| 80 | `/ordenes-reporte-semanal/{fecha}` | 🔴 Alta | `DATE_FORMAT` |
-| 289 | `/ordenes/borrador/reporte-semanal/{id}/{dep}` | 🔴 Alta | `YEARWEEK`, `DATE_FORMAT` |
-| 302 | Filtro semana actual (ruta anidada) | 🔴 Alta | `YEARWEEK(a.moment, 1) = YEARWEEK(CURDATE(), 1)` |
-| 509 | `/table/ordenes-activas/{id}` | 🔴 Alta | `GROUP_CONCAT` ×3 |
-| 683 | `/table/ordenes-todas` | 🔴 Alta | `GROUP_CONCAT`, `DATE_FORMAT` |
-| 786 | `/ordenes/guardadas` | 🟡 Media | `DATE_FORMAT` ×3 |
-| 843 | `/table/ordenes-con-deuda` | 🟡 Media | `DATE_FORMAT` ×2 |
-
----
-
-### 📁 `manufacturing.php` — Pendientes (32 ocurrencias)
-
-| Línea | Endpoint | Prio | Funciones MySQL a reemplazar |
-|---|---|---|---|
-| ~3216 | Fecha entrega (múltiples endpoints) | 🔴 Alta | `DATE_FORMAT('%d-%m-%Y')` ×3 |
-| ~3513 | Órdenes con departamentos | 🔴 Alta | `IFNULL(CONCAT('[', GROUP_CONCAT...` ×2 |
-| ~1944 | Ruta manufactura principal | 🟡 Media | `GROUP_CONCAT` |
-| ~2820 | Tiempo por orden | 🟡 Media | `TIMESTAMPDIFF(SECOND)` ×2 |
-| ~3836 | Eficiencia producción | 🟡 Media | `TIMESTAMPDIFF(SECOND)` ×6 |
-| ~4132 | Reporte eficiencia extendido | 🟡 Media | `TIMESTAMPDIFF(SECOND)` ×2 |
+| Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
+|---|---|---|---|---|
+| 639 | `/asistencias/tabla/{fecha}` | GET | 🔴 | `WEEK(NOW())`, `DATE_FORMAT('%h:%i %p')`, `DATE_FORMAT('%Y-%m-%d')`, `UNIX_TIMESTAMP`, `DAYNAME`, `FIELD()` |
+| 670 | `/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin}` | GET | 🟡 | `TIMESTAMPDIFF(MINUTE)` ×2, `DATE_FORMAT('%d/%m/%Y')`, `DATE_FORMAT('%h:%i %p')`, `FIELD()` |
+| 116 | Subquery en `/empleados` | GET | 🔴 | `GROUP_CONCAT` (carga_familiar), `IFNULL(CONCAT('[', GROUP_CONCAT...` (**parte que falta**) |
 
 ---
 
 ### 📁 `orders.php` — Pendientes (46 ocurrencias)
 
-| Línea | Endpoint | Prio | Funciones MySQL a reemplazar |
-|---|---|---|---|
-| ~758 | `/ordenes/abono/{id}` | 🔴 Alta | `DATE_FORMAT('%d/%m/%Y')`, `DATE_FORMAT('%h:%i %p')` ×6 |
-| ~984 | `/orden/asignacion/{id}` | 🔴 Alta | `DATE_FORMAT('%d-%m-%Y')`, `GROUP_CONCAT(DISTINCT)` ×2 |
-| ~1285 | `/comercializacion/dashboard/{id}/{dep}` | 🔴 Alta | `DATE_FORMAT`, `TIMESTAMPDIFF` |
-| ~1470 | `/ordenes/reporte/{id}` | 🔴 Alta | `GROUP_CONCAT`, `DATE_FORMAT` |
-| ~890 | `/reportes/resumen/disenadores/{id}/{dep}` | 🟡 Media | `TIMESTAMPDIFF(SECOND)` ×2, `GROUP_CONCAT(DISTINCT)` ×2 |
-| ~935 | `/reportes/resumen/empleados/{id}/{dep}` | 🟡 Media | `TIMESTAMPDIFF(SECOND)` ×2, `GROUP_CONCAT(DISTINCT)` ×2 |
-| ~1628 | `/comercializacion/ordenes/reporte` | 🟡 Media | `DATE_FORMAT`, `GROUP_CONCAT` |
-| ~1660 | `/comercializacion/ordenes/reporte/terminadas/{rango}` | 🟡 Media | `DATE_FORMAT`, `YEARWEEK` |
+| Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
+|---|---|---|---|---|
+| ~758 | `/ordenes/abono/{id}` | GET | 🔴 | `DATE_FORMAT('%d/%m/%Y')`, `DATE_FORMAT('%h:%i %p')` ×6 |
+| ~890 | `/reportes/resumen/disenadores/{id}/{dep}` | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` ×2, `GROUP_CONCAT(DISTINCT)` ×2 |
+| ~935 | `/reportes/resumen/empleados/{id}/{dep}` | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` ×2, `GROUP_CONCAT(DISTINCT)` ×2 |
+| ~984 | `/orden/asignacion/{id}` | GET | 🔴 | `DATE_FORMAT('%d-%m-%Y')`, `GROUP_CONCAT(DISTINCT)` ×2 |
+| ~1470 | `/ordenes/reporte/{id}` | GET | 🔴 | `GROUP_CONCAT`, `DATE_FORMAT` |
+| ~1628 | `/comercializacion/ordenes/reporte` | GET | 🟡 | Múltiples `DATE_FORMAT`, `GROUP_CONCAT` |
+| ~1660 | `/comercializacion/ordenes/reporte/terminadas/{rango}` | GET | 🟡 | `DATE_FORMAT`, `YEARWEEK` |
+| ~1285 | `/comercializacion/dashboard/{id}/{dep}` | GET | 🔴 | `DATE_FORMAT`, `TIMESTAMPDIFF` |
 
 ---
 
 ### 📁 `payments.php` — Pendientes (34 ocurrencias)
 
-| Línea | Endpoint | Prio | Funciones MySQL a reemplazar |
-|---|---|---|---|
-| ~603 | Pagos general (listado) | 🔴 Alta | `DATE_FORMAT('%a')`, `DATE_FORMAT('%v')`, `DATE_FORMAT('%d/%m/%y')` ×6 |
-| ~742 | Subquery última fecha pago | 🔴 Alta | `DATE_FORMAT`, `WEEK(pa.fecha_pago, 1)`, `YEAR()` |
-| ~814 | Pago directo por fecha | 🟡 Media | `DATE_FORMAT('%d/%m/%Y')` ×2 |
-| ~1088 | Pagos detalle | 🟡 Media | `DATE_FORMAT('%d/%m/%Y')` |
-| ~1164 | Pagos con fecha terminado | 🟡 Media | `DATE_FORMAT('%a')`, `DATE_FORMAT('%v')` |
+| Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
+|---|---|---|---|---|
+| ~603 | (endpoint de pagos general) | GET | 🔴 | `DATE_FORMAT('%a')`, `DATE_FORMAT('%v')`, `DATE_FORMAT('%d/%m/%y')` ×6 |
+| ~742 | Subquery en listado de empleados | GET | 🔴 | `DATE_FORMAT`, `WEEK(pa.fecha_pago, 1)`, `YEAR()` |
+| ~814 | Pago directo por fecha | GET | 🟡 | `DATE_FORMAT('%d/%m/%Y')` ×2 |
+| ~1088 | Pagos detalle | GET | 🟡 | `DATE_FORMAT('%d/%m/%Y')` |
+| ~1164 | Pagos con fecha terminado | GET | 🟡 | `DATE_FORMAT('%a')`, `DATE_FORMAT('%v')` |
+
+---
+
+### 📁 `manufacturing.php` — Pendientes (32 ocurrencias)
+
+| Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
+|---|---|---|---|---|
+| ~1944 | (ruta de manufactura) | GET | 🟡 | `GROUP_CONCAT` |
+| ~2820 | Tiempo por orden | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` ×2 |
+| ~3216 | Fecha entrega órdenes | GET | 🔴 | `DATE_FORMAT('%d-%m-%Y')` ×3 |
+| ~3512 | Órdenes con departamentos | GET | 🔴 | `IFNULL(CONCAT('[', GROUP_CONCAT...` ×2 |
+| ~3836 | Eficiencia producción | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` ×6 |
+| ~4132 | Reporte eficiencia extendido | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` ×2 |
 
 ---
 
 ### 📁 `production.php` — Pendientes (15 ocurrencias)
 
-| Línea | Endpoint | Prio | Funciones MySQL a reemplazar |
-|---|---|---|---|
-| ~133 | Inicio de producción | 🔴 Alta | `DATE_FORMAT('%h:%i:%s %p')`, `DATE_FORMAT('%d-%m-%Y')` |
-| ~396 | Registro de momento | 🔴 Alta | `DATE_FORMAT('%d/%m/%Y')`, `DATE_FORMAT('%I:%i %p')` ×2 |
-| ~478 | Órdenes con insumos | 🟡 Media | `IFNULL(CONCAT('[', GROUP_CONCAT...` |
-| ~982 | Reposiciones creadas | 🟡 Media | `DATE_FORMAT` ×2 |
-| ~1032 | Consumo de tinta | 🟡 Media | `DATE_FORMAT('%d/%m/%Y %h:%i %p')` ×5 |
+| Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
+|---|---|---|---|---|
+| ~133 | Inicio de producción | GET | 🔴 | `DATE_FORMAT('%h:%i:%s %p')`, `DATE_FORMAT('%d-%m-%Y')` |
+| ~396 | Registro de momento | GET | 🔴 | `DATE_FORMAT('%d/%m/%Y')`, `DATE_FORMAT('%I:%i %p')` ×2 |
+| ~478 | Órdenes con insumos | GET | 🟡 | `IFNULL(CONCAT('[', GROUP_CONCAT...` |
+| ~982 | Reposiciones creadas | GET | 🟡 | `DATE_FORMAT('%d/%m/%Y')`, `DATE_FORMAT('%h:%i %p')` ×2 |
+| ~1032 | Consumo de tinta | GET | 🟡 | `DATE_FORMAT('%d/%m/%Y %h:%i %p')` ×5 |
 
 ---
 
 ### 📁 `reports.php` — Pendientes (8 ocurrencias)
 
-| Línea | Endpoint | Prio | Funciones MySQL a reemplazar |
-|---|---|---|---|
-| ~212 | `/reportes/costos-produccion/{inicio}/{fin}` | 🟡 Media | `GROUP_CONCAT(DISTINCT)` |
-| ~671 | `/reportes/mano-obra-por-orden/{id}` | 🟡 Media | `TIMESTAMPDIFF(SECOND)` → horas |
-| ~893 | Subquery categorías | 🟡 Media | `GROUP_CONCAT(DISTINCT cat2._id ORDER BY cat2._id SEPARATOR ',')` |
-| ~990 | `/reportes/semanal-detallado` | 🟡 Media | `DATE_FORMAT` ×4 |
-| ~1037 | `/reportes/employee-efficiency-global` | 🟡 Media | `TIMESTAMPDIFF(SECOND)` |
+| Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
+|---|---|---|---|---|
+| ~212 | `/reportes/costos-produccion/{inicio}/{fin}` | GET | 🟡 | `GROUP_CONCAT(DISTINCT)` |
+| ~671 | `/reportes/mano-obra-por-orden/{id}` | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` → horas |
+| ~893 | Subquery de categorías | GET | 🟡 | `GROUP_CONCAT(DISTINCT cat2._id ORDER BY cat2._id SEPARATOR ',')` |
+| ~990 | `/reportes/semanal-detallado` | GET | 🟡 | `DATE_FORMAT` ×4 |
+| ~1037 | `/reportes/employee-efficiency-global` | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` |
 
 ---
 
 ### 📁 `finance.php` — Pendientes (8 ocurrencias)
 
-| Línea | Endpoint | Prio | Funciones MySQL a reemplazar |
-|---|---|---|---|
-| ~66 | Listado financiero | 🟡 Media | `IFNULL(GROUP_CONCAT...)` ×2 |
-| ~88 | Detalle de movimiento | 🟡 Media | `DATE_FORMAT('%d/%m/%Y')`, `DATE_FORMAT('%h:%i %p')` ×3 |
+| Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
+|---|---|---|---|---|
+| ~66 | Listado financiero | GET | 🟡 | `IFNULL(GROUP_CONCAT...)` ×2 |
+| ~88 | Detalle de movimiento | GET | 🟡 | `DATE_FORMAT('%d/%m/%Y')`, `DATE_FORMAT('%h:%i %p')` ×3 |
 
 ---
 
 ### 📁 `products_reports.php` — Pendientes (6 ocurrencias)
 
-| Línea | Endpoint | Prio | Funciones MySQL a reemplazar |
-|---|---|---|---|
-| ~238 | `/reportes/costos-productos` | 🟡 Media | `GREATEST(0, TIMESTAMPDIFF(SECOND,...))` ×2 |
-| ~566 | `/reportes/costos-productos/categorias` | 🟡 Media | `GREATEST(0, TIMESTAMPDIFF(SECOND,...))` ×2 |
-| ~870 | `/reportes/costos-productos/{id}/detalle` | 🟡 Media | `GREATEST(0, TIMESTAMPDIFF(SECOND,...))` ×2 |
+| Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
+|---|---|---|---|---|
+| ~238 | `/reportes/costos-productos` | GET | 🟡 | `GREATEST(0, TIMESTAMPDIFF(SECOND,...))` ×6 |
+| ~566 | `/reportes/costos-productos/categorias` | GET | 🟡 | `GREATEST(0, TIMESTAMPDIFF(SECOND,...))` ×2 |
+| ~870 | `/reportes/costos-productos/{id}/detalle` | GET | 🟡 | `GREATEST(0, TIMESTAMPDIFF(SECOND,...))` ×2 |
 
 ---
 
-### 📁 Archivos de baja prioridad
+### 📁 Archivos con impacto menor
 
-| Archivo | Ocurrencias | Funciones | Prioridad |
+| Archivo | Ocurrencias | Funciones | Acción requerida |
 |---|---|---|---|
-| `administration.php` | 4 | `DATE_FORMAT`, `IFNULL` | 🟢 Baja |
-| `auth.php` | 1 | `DATE_FORMAT` | 🟢 Baja |
-| `buscar.php` | 2 | `DATE_FORMAT` ×2 | 🟢 Baja |
-| `catalogs.php` | 1 | `DATE_FORMAT` | 🟢 Baja |
-| `communications.php` | 2 | `DATE_FORMAT` ×2 | 🟢 Baja |
-| `inventory.php` | 7 | `DATE_FORMAT`, `GROUP_CONCAT` | 🟢 Baja |
-| `msg_service.php` | 4 | `GROUP_CONCAT` | 🟢 Baja |
+| `auth.php` | 1 | `DATE_FORMAT` | 🟢 Baja prioridad |
+| `buscar.php` | 2 | `DATE_FORMAT` ×2 | 🟢 Baja prioridad |
+| `catalogs.php` | 1 | `DATE_FORMAT` | 🟢 Baja prioridad |
+| `communications.php` | 2 | `DATE_FORMAT` ×2 | 🟢 Baja prioridad |
+| `msg_service.php` | 4 | `GROUP_CONCAT` | 🟢 Baja prioridad |
 | `printers.php` | 2 | `GROUP_CONCAT`, `JSON_OBJECT` | 🟡 Media |
+| `administration.php` | 4 | `DATE_FORMAT`, `IFNULL` | 🟡 Media |
+| `inventory.php` | 7 | `DATE_FORMAT`, `GROUP_CONCAT` | 🟡 Media |
 
 ---
 
-## 📈 Progreso General
+## 📈 Resumen de Progreso
 
-| Archivo | Total ocurrencias | Adaptadas | % |
+| Archivo | Total ocurrencias MySQL | Adaptadas | % |
 |---|---|---|---|
 | `employees.php` | 38 | ~24 (3 endpoints) | **63%** |
-| `orders.php` | 46 | 0 | 0% |
-| `payments.php` | 34 | 0 | 0% |
-| `manufacturing.php` | 32 | 0 | 0% |
-| `tables.php` | 23 | 0 | 0% |
-| `finance.php` | 22 | 0 | 0% |
-| `production.php` | 15 | 0 | 0% |
-| `reports.php` | 8 | 0 | 0% |
-| `products_reports.php` | 6 | 0 | 0% |
-| Otros menores | ~23 | 0 | 0% |
-| **TOTAL** | **~247** | **~24** | **~10%** |
+| `tables.php` | 23 | 23 (6 endpoints) | **100%** ✅ |
+| `orders.php` | 46 | 0 | **0%** |
+| `payments.php` | 34 | 0 | **0%** |
+| `manufacturing.php` | 32 | 0 | **0%** |
+| `finance.php` | 22 | 0 | **0%** |
+| `production.php` | 15 | 0 | **0%** |
+| `reports.php` | 8 | 0 | **0%** |
+| `products_reports.php` | 6 | 0 | **0%** |
+| **Otros menores** | ~23 | 0 | **0%** |
+| **TOTAL** | **~247** | **~47** | **~19%** |
 
 ---
 
 ## 🗺️ Orden de Trabajo Recomendado
 
 ### Fase 1 — Alta prioridad (interfaz activa) 
-1. `tables.php` → `/table/ordenes-activas`, `/table/ordenes-todas`, `/ordenes-reporte-semanal*`
-2. `employees.php` → `/asistencias/tabla/{fecha}` (faltan: FIELD, UNIX_TIMESTAMP, DAYNAME)
-3. `manufacturing.php` → endpoints de `fecha_entrega` y `departamentos`
-4. `production.php` → inicio de producción, registro de momento
+1. `employees.php` → `/asistencias/tabla/{fecha}` (faltan: FIELD, UNIX_TIMESTAMP, DAYNAME)
+2. `manufacturing.php` → endpoints de `fecha_entrega` y `departamentos`
+3. `production.php` → inicio de producción, registro de momento
 
 ### Fase 2 — Pagos y finanzas
-5. `payments.php` → listado de pagos (usan `%a`, `%v` de DATE_FORMAT)
-6. `orders.php` → abono, asignación, dashboard comercialización
-7. `finance.php` → detalle de movimientos
+4. `payments.php` → listado de pagos (usan `%a`, `%v` de DATE_FORMAT)
+5. `orders.php` → abono, asignación, dashboard comercialización
+6. `finance.php` → detalle de movimientos
 
 ### Fase 3 — Reportes
-8. `production.php` → consumo de tinta, reposiciones
-9. `orders.php` → reportes de órdenes y comercialización
-10. `reports.php` → reportes globales de eficiencia
-11. `products_reports.php` → costos de productos
-12. `manufacturing.php` → eficiencia de producción
+7. `production.php` → consumo de tinta, reposiciones
+8. `orders.php` → reportes de órdenes y comercialización
+9. `reports.php` → reportes globales de eficiencia
+10. `products_reports.php` → costos de productos
+11. `manufacturing.php` → eficiencia de producción
 
 ### Fase 4 — Baja prioridad
-13. `auth.php`, `buscar.php`, `catalogs.php`, `communications.php`, `msg_service.php`, `printers.php`, `administration.php`, `inventory.php`
+12. `auth.php`, `buscar.php`, `catalogs.php`, `communications.php`, `msg_service.php`, `printers.php`, `administration.php`, `inventory.php`
 
 ---
 
@@ -241,11 +246,11 @@ git -C /home/developer/Escritorio/niesys/ninesys-api branch
 ssh vps-contabo-dev "su - postgres -c \"psql -l | grep api_\""
 
 # 3. Probar el último endpoint adaptado
-curl -s -H "Authorization: 194" "https://api.nineteengreen.com/empleados/dashboard-stats/1/7"
+curl -s -H "Authorization: 194" "https://api.nineteengreen.com/table/ordenes-todas"
 
-# 4. Ver funciones MySQL pendientes en el siguiente archivo (tables.php)
+# 4. Ver funciones MySQL pendientes en el siguiente archivo (por ejemplo, app/routes/manufacturing.php)
 grep -n "DATE_FORMAT\|GROUP_CONCAT\|YEARWEEK" \
-  /home/developer/Escritorio/niesys/ninesys-api/app/routes/tables.php
+  /home/developer/Escritorio/niesys/ninesys-api/app/routes/manufacturing.php
 
 # 5. Tras modificar un archivo, commit y deploy:
 git -C /home/developer/Escritorio/niesys/ninesys-api add app/routes/<archivo>.php
