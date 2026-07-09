@@ -15,44 +15,50 @@ return function (App $app) {
     $object['week'] = $week;
     $localConnection = new LocalDB();
 
-    // ORDENES DE PRODUCIDAS EN LA SEMANA
-    $sql = "SELECT
-        a._id id_orden,
-        a.cliente_nombre cliente,    
-        DATE_FORMAT(a.fecha_inicio, '%d/%m/%Y') AS fecha_inicio,
-        DATE_FORMAT(a.fecha_entrega, '%d/%m/%Y') AS fecha_entrega,
-        a.status estatus
-        FROM
-        ordenes a
-        WHERE
-        WEEK(a.moment) = " . $week;
+    // ORDENES PRODUCIDAS EN LA SEMANA
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT
+          a._id AS id_orden,
+          a.cliente_nombre AS cliente,
+          TO_CHAR(a.fecha_inicio, 'DD/MM/YYYY') AS fecha_inicio,
+          TO_CHAR(a.fecha_entrega, 'DD/MM/YYYY') AS fecha_entrega,
+          a.status AS estatus
+          FROM ordenes a
+          WHERE EXTRACT(WEEK FROM a.moment) = " . $week;
+    } else {
+      $sql = "SELECT
+          a._id id_orden,
+          a.cliente_nombre cliente,    
+          DATE_FORMAT(a.fecha_inicio, '%d/%m/%Y') AS fecha_inicio,
+          DATE_FORMAT(a.fecha_entrega, '%d/%m/%Y') AS fecha_entrega,
+          a.status estatus
+          FROM ordenes a
+          WHERE WEEK(a.moment) = " . $week;
+    }
     $object['items'] = $localConnection->goQuery($sql);
 
-    // PROPDUCTOS ASOICIADOS A LAS ORDENES DE LA SEMANA
-    $sql = 'SELECT
-        a._id id_ordenes_productos,
-        a.id_orden,
-        a.id_woo,
-        a.name,
-        a.cantidad,
-        a.talla,
-        a.corte,
-        a.tela
-        FROM
-        ordenes_productos a
-        WHERE
-        a.id_woo != 11 AND 
-        a.id_woo != 12 AND 
-        a.id_woo != 13 AND 
-        a.id_woo != 14 AND 
-        a.id_woo != 15 AND 
-        a.id_woo != 16 AND 
-        a.id_woo != 112 AND 
-        a.id_woo != 113 AND 
-        a.id_woo != 168 AND 
-        a.id_woo != 169 AND 
-        WEEK(a.moment) = ' . $week . ' 
-        ORDER BY a.name ASC, a.corte ASC, a.talla ASC, a.tela ASC, a.id_orden ASC;';
+    // PRODUCTOS ASOCIADOS A LAS ORDENES DE LA SEMANA
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT
+          a._id AS id_ordenes_productos,
+          a.id_orden, a.id_woo, a.name, a.cantidad, a.talla, a.corte, a.tela
+          FROM ordenes_productos a
+          WHERE a.id_woo NOT IN (11,12,13,14,15,16,112,113,168,169)
+          AND EXTRACT(WEEK FROM a.moment) = " . $week . "
+          ORDER BY a.name ASC, a.corte ASC, a.talla ASC, a.tela ASC, a.id_orden ASC";
+    } else {
+      $sql = 'SELECT
+          a._id id_ordenes_productos,
+          a.id_orden, a.id_woo, a.name, a.cantidad, a.talla, a.corte, a.tela
+          FROM ordenes_productos a
+          WHERE
+          a.id_woo != 11 AND a.id_woo != 12 AND a.id_woo != 13 AND
+          a.id_woo != 14 AND a.id_woo != 15 AND a.id_woo != 16 AND
+          a.id_woo != 112 AND a.id_woo != 113 AND a.id_woo != 168 AND
+          a.id_woo != 169 AND
+          WEEK(a.moment) = ' . $week . '
+          ORDER BY a.name ASC, a.corte ASC, a.talla ASC, a.tela ASC, a.id_orden ASC;';
+    }
     $object['items_productos'] = $localConnection->goQuery($sql);
 
     // INSERTAR PRODUCTOS EN items
@@ -82,8 +88,14 @@ return function (App $app) {
     $week = date('W', $fechaSegundos);
     $object['week'] = $week;
     $localConnection = new LocalDB();
+    $weekCond = DB_DRIVER === 'pgsql'
+        ? "EXTRACT(WEEK FROM a.moment) = $week"
+        : "WEEK(a.moment) = $week";
+    $weekCondSimple = DB_DRIVER === 'pgsql'
+        ? "EXTRACT(WEEK FROM moment) = $week"
+        : "WEEK(moment) = $week";
 
-    $sql = 'SELECT
+    $sql = "SELECT
         a._id orden,
         a.cliente_nombre cliente,
         a.pago_total total,
@@ -91,40 +103,27 @@ return function (App $app) {
         a.pago_descuento descuento,
         b.nombre empleado,
         (a.pago_total - a.pago_descuento) - a.pago_abono + a.pago_nota_credito AS total_pendiente
-        FROM
-        ordenes a
+        FROM ordenes a
         JOIN empleados b ON a.responsable = b._id
-        WHERE
-        WEEK(a.moment) = ' . $week;
+        WHERE $weekCond";
     $object['items'] = $localConnection->goQuery($sql);
 
-    $sql = 'SELECT
-        SUM(pago_abono) total_semana
-        FROM ordenes 
-        WHERE
-        WEEK(moment) = ' . $week . ' ORDER BY _id ASC';
+    $sql = "SELECT SUM(pago_abono) total_semana FROM ordenes WHERE $weekCondSimple ORDER BY _id ASC";
     $object['total_week'] = $localConnection->goQuery($sql);
 
     if (is_null($object['total_week'][0]['total_semana'])) {
       $object['total_week'][0]['total_semana'] = '0';
     }
 
-    $sql = 'SELECT
-        (SUM(pago_total) - SUM(pago_descuento)) - SUM(pago_abono) + SUM(pago_nota_credito) total_credito
-        FROM ordenes 
-        WHERE
-        WEEK(moment) = ' . $week . ' ORDER BY _id ASC';
+    $sql = "SELECT (SUM(pago_total) - SUM(pago_descuento)) - SUM(pago_abono) + SUM(pago_nota_credito) total_credito
+        FROM ordenes WHERE $weekCondSimple ORDER BY _id ASC";
     $object['total_credito'] = $localConnection->goQuery($sql);
 
     if (is_null($object['total_credito'][0]['total_credito'])) {
       $object['total_credito'][0]['total_credito'] = '0';
     }
 
-    $sql = 'SELECT
-        SUM(pago_descuento) total_descuentos
-        FROM ordenes 
-        WHERE
-        WEEK(moment) = ' . $week . ' ORDER BY _id ASC';
+    $sql = "SELECT SUM(pago_descuento) total_descuentos FROM ordenes WHERE $weekCondSimple ORDER BY _id ASC";
     $object['total_descuentos'] = $localConnection->goQuery($sql);
 
     if (is_null($object['total_descuentos'][0]['total_descuentos'])) {
@@ -288,6 +287,9 @@ return function (App $app) {
 
   $app->get('/ordenes/borrador/reporte-semanal/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
+    $yearweekCond = DB_DRIVER === 'pgsql'
+        ? "EXTRACT(WEEK FROM a.moment) = EXTRACT(WEEK FROM CURRENT_DATE) AND EXTRACT(YEAR FROM a.moment) = EXTRACT(YEAR FROM CURRENT_DATE)"
+        : "YEARWEEK(a.moment, 1) = YEARWEEK(CURDATE(), 1)";
 
     $sql = "SELECT
                 b._id id_orden,
@@ -299,7 +301,7 @@ return function (App $app) {
                 ordenes_borrador_empleado a
             LEFT JOIN ordenes b ON b._id = a.id_orden
             WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']}
-              AND YEARWEEK(a.moment, 1) = YEARWEEK(CURDATE(), 1)
+              AND $yearweekCond
         ";
 
     $object = $localConnection->goQuery($sql);
@@ -514,123 +516,50 @@ return function (App $app) {
 
     $localConnection = new LocalDB();
 
-    if (strpos($departamento, 'Admin') !== false) {
-      $sql = "SELECT
-                ord.responsable,
-                ord._id orden,
-                ord._id id_father,
-                ord._id acc,
-                ord.responsable id_vendedor,
-                emp.nombre vendedor,
-                ord.cliente_nombre,
-                cus.phone,
-                cus.email,
-                ord.pago_total total,
-                ord.fecha_inicio,
-                ord.fecha_entrega,
-                (
-                    SELECT
-                        CONCAT(
-                            '[',
-                            GROUP_CONCAT(
-                                DISTINCT JSON_OBJECT(
-                                    'category_name',
-                                    c.nombre,
-                                    'category_total',
-                                    (op.cantidad * op.precio_unitario)
-                                )
-                            ),
-                            ']'
-                        )
-                    FROM
-                        ordenes_productos op
-                    JOIN products p ON op.id_woo = p._id
-                    JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
-                    WHERE
-                        op.id_orden = ord._id
-                ) AS product_categories,
-                (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
-                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) AS saldo_pendiente,
-                ord.status estatus
-            FROM
-                ordenes ord
-            JOIN customers cus ON ord.id_wp = cus._id
-            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
-            WHERE
-                ord.status != 'cancelada'
-                AND (
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) > 0
-                    OR 
-                    (
-                        (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) = 0
-                        AND ord.status != 'entregada'
-                    )
-                    OR
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) < 0
-                )
-
-            ORDER BY
-                ord._id
-            DESC;";
+    // Sub-select de categorías compatible con ambos motores
+    if (DB_DRIVER === 'pgsql') {
+      $catSubSelect = "(
+          SELECT json_agg(json_build_object('category_name', c.nombre, 'category_total', (op.cantidad * op.precio_unitario)))
+          FROM ordenes_productos op
+          JOIN products p ON op.id_woo = p._id
+          JOIN categories c ON c._id::text = ANY(string_to_array(p.category_ids, ','))
+          WHERE op.id_orden = ord._id
+      ) AS product_categories";
+      $saldo = "(ord.pago_total - COALESCE((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0))";
     } else {
-      $sql = "SELECT
-                ord.responsable,
-                ord._id orden,
-                ord._id id_father,
-                ord._id acc,
-                ord.responsable id_vendedor,
-                emp.nombre vendedor,
-                ord.cliente_nombre,
-                cus.phone,
-                cus.email,
-                ord.pago_total total,
-                ord.fecha_inicio,
-                ord.fecha_entrega,
-                (
-                    SELECT
-                        CONCAT(
-                            '[',
-                            GROUP_CONCAT(
-                                DISTINCT JSON_OBJECT(
-                                    'category_name',
-                                    c.nombre,
-                                    'category_total',
-                                    (op.cantidad * op.precio_unitario)
-                                )
-                            ),
-                            ']'
-                        )
-                    FROM
-                        ordenes_productos op
-                    JOIN products p ON op.id_woo = p._id
-                    JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
-                    WHERE
-                        op.id_orden = ord._id
-                ) AS product_categories,
-                (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
-                (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) AS saldo_pendiente,
-                ord.status estatus
-            FROM
-                ordenes ord
-            JOIN customers cus ON ord.id_wp = cus._id
-            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
-            WHERE
-                ord.responsable = '{$args['id_empleado']}'
-                AND ord.status != 'cancelada'
-                AND (
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) > 0
-                    OR 
-                    (
-                        (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) = 0
-                        AND ord.status != 'entregada'
-                    )
-                    OR
-                    (ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0)) < 0
-                )
+      $catSubSelect = "(
+          SELECT CONCAT('[', GROUP_CONCAT(DISTINCT JSON_OBJECT('category_name', c.nombre, 'category_total', (op.cantidad * op.precio_unitario))), ']')
+          FROM ordenes_productos op
+          JOIN products p ON op.id_woo = p._id
+          JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
+          WHERE op.id_orden = ord._id
+      ) AS product_categories";
+      $saldo = "(ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0))";
+    }
 
-            ORDER BY
-                ord._id
-            DESC;";
+    $baseFields = "ord.responsable, ord._id orden, ord._id id_father, ord._id acc,
+                ord.responsable id_vendedor, emp.nombre vendedor,
+                ord.cliente_nombre, cus.phone, cus.email,
+                ord.pago_total total, ord.fecha_inicio, ord.fecha_entrega,
+                $catSubSelect,
+                (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
+                $saldo AS saldo_pendiente,
+                ord.status estatus";
+    $baseJoins = "FROM ordenes ord
+            JOIN customers cus ON ord.id_wp = cus._id
+            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable";
+    $saldoFilter = "$saldo > 0 OR ($saldo = 0 AND ord.status != 'entregada') OR $saldo < 0";
+
+    if (strpos($departamento, 'Admin') !== false) {
+      $sql = "SELECT $baseFields $baseJoins
+            WHERE ord.status != 'cancelada' AND ($saldoFilter)
+            ORDER BY ord._id DESC";
+    } else {
+      $sql = "SELECT $baseFields $baseJoins
+            WHERE ord.responsable = '{$args['id_empleado']}'
+                AND ord.status != 'cancelada'
+                AND ($saldoFilter)
+            ORDER BY ord._id DESC";
     }
 
     $object['sql'] = $sql;
@@ -687,6 +616,24 @@ return function (App $app) {
 
     $localConnection = new LocalDB();
 
+    if (DB_DRIVER === 'pgsql') {
+      $catSubSelect = "(
+          SELECT json_agg(json_build_object('category_name', c.nombre, 'category_total', (op.cantidad * op.precio_unitario)))
+          FROM ordenes_productos op
+          JOIN products p ON op.id_woo = p._id
+          JOIN categories c ON c._id::text = ANY(string_to_array(p.category_ids, ','))
+          WHERE op.id_orden = ord._id
+      ) AS product_categories";
+    } else {
+      $catSubSelect = "(
+          SELECT CONCAT('[', GROUP_CONCAT(DISTINCT JSON_OBJECT('category_name', c.nombre, 'category_total', (op.cantidad * op.precio_unitario))), ']')
+          FROM ordenes_productos op
+          JOIN products p ON op.id_woo = p._id
+          JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
+          WHERE op.id_orden = ord._id
+      ) AS product_categories";
+    }
+
     $sql = "SELECT
     ord.responsable,
     ord._id orden,
@@ -700,27 +647,7 @@ return function (App $app) {
     ord.fecha_inicio,
     ord.fecha_entrega,
     ord.pago_total AS total,
-    (
-        SELECT
-            CONCAT(
-                '[',
-                GROUP_CONCAT(
-                    DISTINCT JSON_OBJECT(
-                        'category_name',
-                        c.nombre,
-                        'category_total',
-                        (op.cantidad * op.precio_unitario)
-                    )
-                ),
-                ']'
-            )
-        FROM
-            ordenes_productos op
-        JOIN products p ON op.id_woo = p._id
-        JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
-        WHERE
-            op.id_orden = ord._id
-    ) AS product_categories,
+    $catSubSelect,
     (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
     ord.status estatus
 FROM
@@ -731,9 +658,7 @@ WHERE
     (ord.fecha_inicio >= '$fecha_inicio' AND ord.fecha_inicio <= '$fecha_fin') OR
     (ord.fecha_entrega >= '$fecha_inicio' AND ord.fecha_entrega <= '$fecha_fin') OR
     (ord.fecha_inicio <= '$fecha_inicio' AND ord.fecha_entrega >= '$fecha_fin')
-ORDER BY
-    ord._id
-DESC;";
+ORDER BY ord._id DESC";
 
     $items = $localConnection->goQuery($sql);
     foreach ($items as &$item) {
@@ -841,55 +766,38 @@ DESC;";
 
   // ORDENES CON DEUDAA
   $app->get('/table/ordenes-con-deuda', function (Request $request, Response $response, array $args) {
-    $sql = "SELECT
-        _id AS orden,
-        DATE_FORMAT(moment, '%d/%m/%Y') AS fecha,
-        cliente_nombre AS cliente,
-        pago_total AS monto
-        FROM
-        ordenes       
-        ORDER BY _id DESC;";
+    $fechaFormat = DB_DRIVER === 'pgsql'
+        ? "TO_CHAR(a.moment, 'DD/MM/YYYY')"
+        : "DATE_FORMAT(a.moment, '%d/%m/%Y')";
 
     $sql = "SELECT
         a._id orden,
         a.responsable,
-        a._id orden,
         a._id id_father,
         a._id acc,
         a.cliente_nombre cliente,
         a.fecha_inicio,
         a.fecha_entrega,
-        'TRAER DESDE EL `ENDPOINT` DEDICADO' obs,
+        'TRAER DESDE EL ENDPOINT DEDICADO' obs,
         a.status estatus,
         a.pago_total AS monto,
-        DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
+        $fechaFormat AS fecha,
         (
          SELECT
          d.pago_total - SUM(c.abono) - SUM(c.descuento) + SUM(c.nota_credito) AS total_deuda
-         FROM
-         abonos c
-         JOIN ordenes d ON
-         c.id_orden = d._id
-         WHERE
-         c.id_orden = a._id
-         ) AS total_deuda 
-        FROM
-        ordenes AS a
-        WHERE
-        a.status!= 'cancelada' AND 
-        (
+         FROM abonos c
+         JOIN ordenes d ON c.id_orden = d._id
+         WHERE c.id_orden = a._id
+         ) AS total_deuda
+        FROM ordenes AS a
+        WHERE a.status != 'cancelada'
+        AND (
          SELECT
          d.pago_total - SUM(c.abono) - SUM(c.descuento) + SUM(c.nota_credito) AS total_deuda
-         FROM
-         abonos c
-         JOIN ordenes d ON
-         c.id_orden = d._id
-         WHERE
-         c.id_orden = a._id) > 0
-        ORDER BY
-        _id
-        DESC
-        ";
+         FROM abonos c
+         JOIN ordenes d ON c.id_orden = d._id
+         WHERE c.id_orden = a._id) > 0
+        ORDER BY _id DESC";
     $localConnection = new LocalDB();
     $items = $localConnection->goQuery($sql);
 
