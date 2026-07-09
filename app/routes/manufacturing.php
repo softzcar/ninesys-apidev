@@ -3185,6 +3185,12 @@ return function (App $app) {
     $object['sql_reposiciones'] = $sql;
     $object['reposiciones'] = $localConnection->goQuery($sql);
 
+    if (DB_DRIVER === 'pgsql') {
+      $fechaEntregaSelect = "TO_CHAR(NULLIF(d.fecha_entrega, '')::timestamp, 'DD-MM-YYYY') AS fecha_entrega";
+    } else {
+      $fechaEntregaSelect = "DATE_FORMAT(d.fecha_entrega, '%d-%m-%Y') AS fecha_entrega";
+    }
+
     $sql = "SELECT DISTINCT 
             a.id_orden,
             ofo.orden_fila,
@@ -3195,25 +3201,27 @@ return function (App $app) {
             (SELECT valor_inicial FROM inventario_movimientos WHERE id_orden = a.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_inicial,
             (SELECT valor_final FROM inventario_movimientos WHERE id_orden = a.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_final,
             c.prioridad,
-            (z.unidades_produccion + IFNULL((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0)) AS unidades_solicitadas,
+            (z.unidades_produccion + COALESCE((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0)) AS unidades_solicitadas,
             -- Unidades: para Corte usar piezas mandadas a cortar (inventario_corte), con fallback a ajustes y cantidad original.
-            IF({$args['id_departamento']} = 3,
+            CASE WHEN {$args['id_departamento']} = 3 THEN
                 COALESCE(
                     (SELECT SUM(ic2.cantidad) FROM inventario_corte ic2 WHERE ic2.id_ordenes_productos = a._id AND ic2.id_orden = a.id_orden),
-                    (a.cantidad + IFNULL((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0))
-                ),
+                    (a.cantidad + COALESCE((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0))
+                )
+            ELSE
                 a.cantidad
-            ) AS unidades,
-            IF({$args['id_departamento']} = 3,
+            END AS unidades,
+            CASE WHEN {$args['id_departamento']} = 3 THEN
                 COALESCE(
                     (SELECT SUM(ic2.cantidad) FROM inventario_corte ic2 WHERE ic2.id_ordenes_productos = a._id AND ic2.id_orden = a.id_orden),
-                    (a.cantidad + IFNULL((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0))
-                ),
+                    (a.cantidad + COALESCE((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0))
+                )
+            ELSE
                 a.cantidad
-            ) AS piezas_actuales,
+            END AS piezas_actuales,
             y.fecha_inicio,
             y.fecha_terminado,
-            DATE_FORMAT(d.fecha_entrega, '%d-%m-%Y') AS fecha_entrega,
+            $fechaEntregaSelect,
             -- Se eliminan las referencias a lotes_detalles (alias 'b')
             -- y.id_lotes_detalles AS id_lotes_detalles, -- Puedes descomentar esto para depurar si lo necesitas
             y._id AS lotes_detalles_empleados_asignados,
@@ -3382,6 +3390,12 @@ return function (App $app) {
 
   // SSE Obtener ordenes asociadas a los empleados via SSE
   $app->get('/sse/empleados/ordenes-asignadas/{id_empleado}', function (Request $request, Response $response, array $args) {
+    if (DB_DRIVER === 'pgsql') {
+      $fechaEntregaSelect = "TO_CHAR(NULLIF(d.fecha_entrega, '')::timestamp, 'DD-MM-YYYY') AS fecha_entrega";
+    } else {
+      $fechaEntregaSelect = "DATE_FORMAT(d.fecha_entrega, '%d-%m-%Y') AS fecha_entrega";
+    }
+
     $sql = "SELECT 
             c.prioridad, 
             a.cantidad unidades_solicitadas, 
@@ -3389,7 +3403,7 @@ return function (App $app) {
             a.cantidad piezas_actuales, 
             b.fecha_inicio, 
             b.fecha_terminado, 
-            DATE_FORMAT(d.fecha_entrega, '%d-%m-%Y') AS fecha_entrega,
+            $fechaEntregaSelect,
             b._id id_lotes_detalles, 
             b.departamento, 
             a.id_orden, 
@@ -3427,7 +3441,7 @@ return function (App $app) {
             a.cantidad piezas_actuales, 
             b.fecha_inicio, 
             b.fecha_terminado, 
-            DATE_FORMAT(d.fecha_entrega, '%d-%m-%Y') AS fecha_entrega,
+            $fechaEntregaSelect,
             b._id id_lotes_detalles, 
             b.departamento, 
             (SELECT orden_proceso FROM departamentos WHERE _id = {$args['id_departamento']}) orden_proceso,
@@ -3487,47 +3501,99 @@ return function (App $app) {
 
   // Obtener todos los empleados
   $app->get('/empleados-todos', function (Request $request, Response $response) {
-    // $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
     $localConnection = new LocalDB();
     $idEmp = ID_EMPRESA;
-    $sql = 'SELECT
-            a.id_usuario AS _id,
-            a.email AS username,
-            a.activo,
-            a.password,
-            a.nombre,
-            a.email,
-            a.telefono,
-            a.departamento,
-            a.comision,
-            a.comision_porcentaje,
-            a.salario_tipo,
-            a.salario_monto,
-            a.salario_periodo,
-            a.comision_tipo,
-            a.acceso,
-            a.dni,
-            a.fecha_ingreso,
-            a.id_seguridad_social,
-            -- FNULL(GROUP_CONCAT(b.id_departamento), null) AS departamentos
-            IFNULL(CONCAT("[", GROUP_CONCAT(
-                DISTINCT CONCAT("{\"id\":", b.id_departamento, ",\"nombre\":\"", c.departamento, "\"}")
-                SEPARATOR ","), "]"), "[]") AS departamentos,
-            IFNULL(CONCAT("[", GROUP_CONCAT(
-                DISTINCT CONCAT("{\"id_carga\":", d.id_carga, ",\"nombre_completo\":\"", d.nombre_completo, "\",\"cedula_o_id\":\"", d.cedula_o_id, "\",\"parentesco\":\"", d.tipo_relacion, "\",\"fecha_nacimiento\":\"", d.fecha_nacimiento, "\",\"es_deducible\":", d.es_deducible_impuesto, "}")
-                SEPARATOR ","), "]"), "[]") AS carga_familiar
-        FROM
-            api_empresas.empresas_usuarios a
-        LEFT JOIN api_empresas.empresas_usuarios_departamentos b ON b.id_empleado = a.id_usuario
-        LEFT JOIN ' . LOCAL_DB . '.departamentos c ON c._id = b.id_departamento
-        LEFT JOIN ' . LOCAL_DB . '.salario_carga_familiar d ON d.id_empleado = a.id_usuario
-        WHERE
-            a.id_empresa = ' . ID_EMPRESA . ' GROUP BY
-            a.id_usuario, a.email, a.password, a.nombre, a.departamento,
-            a.telefono, a.comision, a.comision_porcentaje,
-            a.salario_tipo, a.salario_monto, a.salario_periodo,
-            a.comision_tipo, a.acceso, a.dni, a.fecha_ingreso, a.id_seguridad_social;';
-    // $object['sql'] = $sql;
+
+    if (DB_DRIVER === 'pgsql') {
+        $sql = "SELECT
+                a.id_usuario AS _id,
+                a.email AS username,
+                a.activo,
+                a.password,
+                a.nombre,
+                a.email,
+                a.telefono,
+                a.departamento,
+                a.comision,
+                a.comision_porcentaje,
+                a.salario_tipo,
+                a.salario_monto,
+                a.salario_periodo,
+                a.comision_tipo,
+                a.acceso,
+                a.dni,
+                a.fecha_ingreso,
+                a.id_seguridad_social,
+                COALESCE(deps.departamentos, '[]') AS departamentos,
+                COALESCE(carga.carga_familiar, '[]') AS carga_familiar
+            FROM
+                api_empresas.empresas_usuarios a
+            LEFT JOIN (
+                SELECT
+                    b.id_empleado,
+                    COALESCE('[' || string_agg(
+                        DISTINCT '{\"id\":' || b.id_departamento || ',\"nombre\":\"' || c.departamento || '\"}',
+                        ','
+                    ) || ']', '[]') AS departamentos
+                FROM
+                    api_empresas.empresas_usuarios_departamentos b
+                INNER JOIN departamentos c ON c._id = b.id_departamento AND c.eliminado = 0
+                GROUP BY
+                    b.id_empleado
+            ) deps ON deps.id_empleado = a.id_usuario
+            LEFT JOIN (
+                SELECT
+                    d.id_empleado,
+                    COALESCE('[' || string_agg(
+                        DISTINCT '{\"id_carga\":' || d.id_carga || ',\"nombre_completo\":\"' || d.nombre_completo || '\",\"cedula_o_id\":\"' || d.cedula_o_id || '\",\"parentesco\":\"' || d.tipo_relacion || '\",\"fecha_nacimiento\":\"' || d.fecha_nacimiento || '\",\"es_deducible\":' || d.es_deducible_impuesto || '}',
+                        ','
+                    ) || ']', '[]') AS carga_familiar
+                FROM
+                    salario_carga_familiar d
+                GROUP BY
+                    d.id_empleado
+            ) carga ON carga.id_empleado = a.id_usuario
+            WHERE
+                a.id_empresa = $idEmp;";
+    } else {
+        $sql = 'SELECT
+                a.id_usuario AS _id,
+                a.email AS username,
+                a.activo,
+                a.password,
+                a.nombre,
+                a.email,
+                a.telefono,
+                a.departamento,
+                a.comision,
+                a.comision_porcentaje,
+                a.salario_tipo,
+                a.salario_monto,
+                a.salario_periodo,
+                a.comision_tipo,
+                a.acceso,
+                a.dni,
+                a.fecha_ingreso,
+                a.id_seguridad_social,
+                -- FNULL(GROUP_CONCAT(b.id_departamento), null) AS departamentos
+                IFNULL(CONCAT("[", GROUP_CONCAT(
+                    DISTINCT CONCAT("{\"id\":", b.id_departamento, ",\"nombre\":\"", c.departamento, "\"}")
+                    SEPARATOR ","), "]"), "[]") AS departamentos,
+                IFNULL(CONCAT("[", GROUP_CONCAT(
+                    DISTINCT CONCAT("{\"id_carga\":", d.id_carga, ",\"nombre_completo\":\"", d.nombre_completo, "\",\"cedula_o_id\":\"", d.cedula_o_id, "\",\"parentesco\":\"", d.tipo_relacion, "\",\"fecha_nacimiento\":\"", d.fecha_nacimiento, "\",\"es_deducible\":", d.es_deducible_impuesto, "}")
+                    SEPARATOR ","), "]"), "[]") AS carga_familiar
+            FROM
+                api_empresas.empresas_usuarios a
+            LEFT JOIN api_empresas.empresas_usuarios_departamentos b ON b.id_empleado = a.id_usuario
+            LEFT JOIN ' . LOCAL_DB . '.departamentos c ON c._id = b.id_departamento
+            LEFT JOIN ' . LOCAL_DB . '.salario_carga_familiar d ON d.id_empleado = a.id_usuario
+            WHERE
+                a.id_empresa = ' . ID_EMPRESA . ' GROUP BY
+                a.id_usuario, a.email, a.password, a.nombre, a.departamento,
+                a.telefono, a.comision, a.comision_porcentaje,
+                a.salario_tipo, a.salario_monto, a.salario_periodo,
+                a.comision_tipo, a.acceso, a.dni, a.fecha_ingreso, a.id_seguridad_social;';
+    }
     $items = $localConnection->goQuery($sql);
 
     // Decodificar el campo `departamentos` y `carga_familiar`
