@@ -31,15 +31,25 @@ class LocalDB
       // Forzar localhost para evitar cuelgues de TCP con 127.0.0.1 en entornos LiteSpeed
       $sanitizedDSN = str_replace('127.0.0.1', 'localhost', $this->dsn);
       $timezoneOffset = date('P');
-      $this->pdo = new PDO(
-        $sanitizedDSN,
-        $this->user,
-        $this->pass,
-        array(
-          PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8; SET time_zone = '{$timezoneOffset}';"
-        )
-      );
-      $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+      $isPgsql = (strpos($this->dsn, 'pgsql:') === 0);
+
+      if ($isPgsql) {
+        $this->pdo = new PDO($this->dsn, $this->user, $this->pass);
+        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $this->pdo->exec("SET client_encoding TO 'UTF8';");
+        $this->pdo->exec("SET TIME ZONE '{$timezoneOffset}';");
+        $this->pdo->exec("SET lc_time TO 'es_ES.UTF-8';");
+      } else {
+        $this->pdo = new PDO(
+          $sanitizedDSN,
+          $this->user,
+          $this->pass,
+          array(
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8; SET time_zone = '{$timezoneOffset}';"
+          )
+        );
+        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+      }
     } catch (PDOException $e) {
       throw $e;  // Re-throw the exception to be caught by the calling code
     }
@@ -56,73 +66,115 @@ class LocalDB
 
   public function syncEmpleados($id_empresa)
   {
-    // Conectar a la base de datos api_empresas
-    $this->switchDatabase(EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+    $driver = getenv('DB_DRIVER') ?: 'mysql';
 
-    // Eliminar temporalmente la restricción de clave foránea
-    $this->goQuery('ALTER TABLE empresas_usuarios DROP FOREIGN KEY fk_id_empresa');
+    if ($driver === 'pgsql') {
+      // Conectar a la base de datos api_empresas
+      $this->switchDatabase(EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+      // Obtener los empleados de api_empresas
+      $employees = $this->goQuery('SELECT * FROM empresas_usuarios WHERE id_empresa = ' . $id_empresa);
 
-    // Obtener la estructura de la tabla empresas_usuarios sin la clave foránea
-    $tableStructure = $this->goQuery('SHOW CREATE TABLE empresas_usuarios');
-    $createTableSQL = $tableStructure[0]['Create Table'];
+      // Obtener detalles de conexión para la empresa
+      $data_empresa = $this->getConnectionDetails($id_empresa);
+      $port = getenv('DB_PORT') ?: '5432';
+      $LOCAL_DNS = 'pgsql:host=' . $data_empresa['db_host'] . ';port=' . $port . ';dbname=' . $data_empresa['db_name'];
+      $LOCAL_USER = $data_empresa['db_user'];
+      $LOCAL_PASS = $data_empresa['db_password'];
 
-    // Reemplazar el nombre de la tabla
-    $createTableSQL = str_replace('empresas_usuarios', 'empleados', $createTableSQL);
+      // Conectar a la base de datos específica de la empresa
+      $this->switchDatabase($LOCAL_DNS, $LOCAL_USER, $LOCAL_PASS);
 
-    // Log de la sentencia CREATE TABLE para depuración
-    error_log('CREATE TABLE SQL: ' . $createTableSQL);
+      // Vaciar la tabla empleados existente
+      $this->goQuery('DELETE FROM empleados;');
 
-    // Obtener los empleados de api_empresas
-    $employees = $this->goQuery('SELECT * FROM empresas_usuarios WHERE id_empresa = ' . $id_empresa);
+      // Insertar empleados en la tabla empleados
+      foreach ($employees as $employee) {
+        $sql = 'INSERT INTO empleados (id_usuario, email, password, nombre, departamento, id_empresa, activo, acceso, comision, moment, fecha_actualizacion)
+          VALUES (:id_usuario, :email, :password, :nombre, :departamento, :id_empresa, :activo, :acceso, :comision, :moment, :fecha_actualizacion)';
+        $params = [
+          ':id_usuario' => $employee['id_usuario'],
+          ':email' => $employee['email'],
+          ':password' => $employee['password'],
+          ':nombre' => $employee['nombre'],
+          ':departamento' => $employee['departamento'],
+          ':id_empresa' => $employee['id_empresa'],
+          ':activo' => $employee['activo'],
+          ':acceso' => $employee['acceso'],
+          ':comision' => $employee['comision'],
+          ':moment' => $employee['moment'],
+          ':fecha_actualizacion' => $employee['fecha_actualizacion'],
+        ];
+        $this->goQuery($sql, $params);
+      }
+    } else {
+      // Conectar a la base de datos api_empresas
+      $this->switchDatabase(EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
-    // Restablecer la clave foránea en la tabla original
-    $this->goQuery('ALTER TABLE empresas_usuarios ADD CONSTRAINT fk_id_empresa FOREIGN KEY (id_empresa) REFERENCES empresas(id_empresa) ON DELETE CASCADE');
+      // Eliminar temporalmente la restricción de clave foránea
+      $this->goQuery('ALTER TABLE empresas_usuarios DROP FOREIGN KEY fk_id_empresa');
 
-    // Obtener detalles de conexión para la empresa
-    $data_empresa = $this->getConnectionDetails($id_empresa);
-    $LOCAL_DNS = 'mysql:host=' . $data_empresa['db_host'] . ';dbname=' . $data_empresa['db_name'];
-    $LOCAL_USER = $data_empresa['db_user'];
-    $LOCAL_PASS = $data_empresa['db_password'];
+      // Obtener la estructura de la tabla empresas_usuarios sin la clave foránea
+      $tableStructure = $this->goQuery('SHOW CREATE TABLE empresas_usuarios');
+      $createTableSQL = $tableStructure[0]['Create Table'];
 
-    // Conectar a la base de datos específica de la empresa
-    $this->switchDatabase($LOCAL_DNS, $LOCAL_USER, $LOCAL_PASS);
+      // Reemplazar el nombre de la tabla
+      $createTableSQL = str_replace('empresas_usuarios', 'empleados', $createTableSQL);
 
-    // Eliminar y recrear la tabla empleados
-    $this->goQuery('SET FOREIGN_KEY_CHECKS = 0;');
-    $this->goQuery('DROP TABLE IF EXISTS empleados');
+      // Log de la sentencia CREATE TABLE para depuración
+      error_log('CREATE TABLE SQL: ' . $createTableSQL);
 
-    // Agregar una revisión aquí para asegurar que DROP TABLE se ejecutó correctamente
-    error_log('Tabla empleados eliminada');
+      // Obtener los empleados de api_empresas
+      $employees = $this->goQuery('SELECT * FROM empresas_usuarios WHERE id_empresa = ' . $id_empresa);
 
-    // Ejecutar la sentencia CREATE TABLE
-    $createResult = $this->goQuery($createTableSQL);
+      // Restablecer la clave foránea en la tabla original
+      $this->goQuery('ALTER TABLE empresas_usuarios ADD CONSTRAINT fk_id_empresa FOREIGN KEY (id_empresa) REFERENCES empresas(id_empresa) ON DELETE CASCADE');
 
-    // Verificar el resultado de la creación de la tabla
-    if (isset($createResult['status']) && $createResult['status'] === 'error') {
-      error_log('Error al crear la tabla: ' . $createResult['message']);
-      throw new Exception('Error al crear la tabla empleados: ' . $createResult['message']);
-    }
+      // Obtener detalles de conexión para la empresa
+      $data_empresa = $this->getConnectionDetails($id_empresa);
+      $LOCAL_DNS = 'mysql:host=' . $data_empresa['db_host'] . ';dbname=' . $data_empresa['db_name'];
+      $LOCAL_USER = $data_empresa['db_user'];
+      $LOCAL_PASS = $data_empresa['db_password'];
 
-    $this->goQuery('SET FOREIGN_KEY_CHECKS = 1;');
+      // Conectar a la base de datos específica de la empresa
+      $this->switchDatabase($LOCAL_DNS, $LOCAL_USER, $LOCAL_PASS);
 
-    // Insertar empleados en la tabla empleados
-    foreach ($employees as $employee) {
-      $sql = 'INSERT INTO empleados (id_usuario, email, password, nombre, departamento, id_empresa, activo, acceso, comision, moment, fecha_actualizacion)
-        VALUES (:id_usuario, :email, :password, :nombre, :departamento, :id_empresa, :activo, :acceso, :comision, :moment, :fecha_actualizacion)';
-      $params = [
-        ':id_usuario' => $employee['id_usuario'],
-        ':email' => $employee['email'],
-        ':password' => $employee['password'],
-        ':nombre' => $employee['nombre'],
-        ':departamento' => $employee['departamento'],
-        ':id_empresa' => $employee['id_empresa'],
-        ':activo' => $employee['activo'],
-        ':acceso' => $employee['acceso'],
-        ':comision' => $employee['comision'],
-        ':moment' => $employee['moment'],
-        ':fecha_actualizacion' => $employee['fecha_actualizacion'],
-      ];
-      $this->goQuery($sql, $params);
+      // Eliminar y recrear la tabla empleados
+      $this->goQuery('SET FOREIGN_KEY_CHECKS = 0;');
+      $this->goQuery('DROP TABLE IF EXISTS empleados');
+
+      // Agregar una revisión aquí para asegurar que DROP TABLE se ejecutó correctamente
+      error_log('Tabla empleados eliminada');
+
+      // Ejecutar la sentencia CREATE TABLE
+      $createResult = $this->goQuery($createTableSQL);
+
+      // Verificar el resultado de la creación de la tabla
+      if (isset($createResult['status']) && $createResult['status'] === 'error') {
+        error_log('Error al crear la tabla: ' . $createResult['message']);
+        throw new Exception('Error al crear la tabla empleados: ' . $createResult['message']);
+      }
+
+      $this->goQuery('SET FOREIGN_KEY_CHECKS = 1;');
+
+      // Insertar empleados en la tabla empleados
+      foreach ($employees as $employee) {
+        $sql = 'INSERT INTO empleados (id_usuario, email, password, nombre, departamento, id_empresa, activo, acceso, comision, moment, fecha_actualizacion)
+          VALUES (:id_usuario, :email, :password, :nombre, :departamento, :id_empresa, :activo, :acceso, :comision, :moment, :fecha_actualizacion)';
+        $params = [
+          ':id_usuario' => $employee['id_usuario'],
+          ':email' => $employee['email'],
+          ':password' => $employee['password'],
+          ':nombre' => $employee['nombre'],
+          ':departamento' => $employee['departamento'],
+          ':id_empresa' => $employee['id_empresa'],
+          ':activo' => $employee['activo'],
+          ':acceso' => $employee['acceso'],
+          ':comision' => $employee['comision'],
+          ':moment' => $employee['moment'],
+          ':fecha_actualizacion' => $employee['fecha_actualizacion'],
+        ];
+        $this->goQuery($sql, $params);
+      }
     }
   }
 
@@ -224,9 +276,10 @@ class LocalDB
       // El resto de errores conserva el comportamiento previo (retorno con
       // status=error) para no alterar flujos existentes (p. ej. el manejo de
       // duplicados por índice único, errno 1062).
+      $sqlState = $e->errorInfo[0] ?? '';
       $driverErrno = (is_array($e->errorInfo ?? null) && isset($e->errorInfo[1])) ? (int) $e->errorInfo[1] : 0;
       $foreignKeyErrnos = [1451, 1452, 1216, 1217];
-      if (in_array($driverErrno, $foreignKeyErrnos, true)) {
+      if ($sqlState === '23503' || in_array($driverErrno, $foreignKeyErrnos, true)) {
         throw new \App\Application\Exceptions\DatabaseConstraintException(
           'No se puede completar la operación porque viola una relación de datos (clave foránea).',
           0,

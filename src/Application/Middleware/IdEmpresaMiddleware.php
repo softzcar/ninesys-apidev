@@ -23,10 +23,17 @@ class IdEmpresaMiddleware implements Middleware
             $password = EMPRESAS_PASS;
 
             try {
-                $pdo = new PDO($dsn, $user, $password, [
-                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
-                ]);
-                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                $driver = getenv('DB_DRIVER') ?: 'mysql';
+                if ($driver === 'pgsql') {
+                    $pdo = new PDO($dsn, $user, $password);
+                    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                    $pdo->exec("SET client_encoding TO 'UTF8';");
+                } else {
+                    $pdo = new PDO($dsn, $user, $password, [
+                        PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
+                    ]);
+                    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                }
 
                 $sql = 'SELECT db_host, db_user, db_password, nombre, db_name, pais, timezone FROM empresas WHERE id_empresa = :id_empresa';
                 $stmt = $pdo->prepare($sql);
@@ -56,14 +63,19 @@ class IdEmpresaMiddleware implements Middleware
                     // solo debe existir si es de este entorno.
                     
                     define('ESTATUS', 'accedido');
-                    define('LOCAL_DNS', 'mysql:host=' . $targetHost . ';dbname=' . $connectionDetails['db_name']);
+                    if ($driver === 'pgsql') {
+                        $port = getenv('DB_PORT') ?: '5432';
+                        define('LOCAL_DNS', 'pgsql:host=' . $targetHost . ';port=' . $port . ';dbname=' . $connectionDetails['db_name']);
+                    } else {
+                        define('LOCAL_DNS', 'mysql:host=' . $targetHost . ';dbname=' . $connectionDetails['db_name']);
+                    }
                     define('EMPRESA_NOMBRE', $connectionDetails['nombre']);
                     define('LOCAL_USER', $connectionDetails['db_user']);
                     define('LOCAL_PASS', $connectionDetails['db_password']);
                     define('LOCAL_DB', $connectionDetails['db_name']);
                 } else {
                     define('ESTATUS', 'Cliente no existe');
-                    define('LOCAL_DNS', 'mysql:host=none;dbname=none');
+                    define('LOCAL_DNS', ($driver === 'pgsql' ? 'pgsql' : 'mysql') . ':host=none;dbname=none');
                     define('EMPRESA_NOMBRE', 'None');
                     define('LOCAL_USER', 'none');
                     define('LOCAL_PASS', 'none');
@@ -71,7 +83,7 @@ class IdEmpresaMiddleware implements Middleware
                 }
             } catch (\PDOException $e) {
                 define('ESTATUS', 'error');
-                define('LOCAL_DNS', 'mysql:host=none;dbname=none');
+                define('LOCAL_DNS', ($driver === 'pgsql' ? 'pgsql' : 'mysql') . ':host=none;dbname=none');
                 define('EMPRESA_NOMBRE', 'Error');
                 define('LOCAL_USER', 'none');
                 define('LOCAL_PASS', 'none');
@@ -80,7 +92,7 @@ class IdEmpresaMiddleware implements Middleware
             }
         } else {
             define('ESTATUS', 'No Empresa');
-            define('LOCAL_DNS', 'mysql:host=none;dbname=none');
+            define('LOCAL_DNS', (getenv('DB_DRIVER') === 'pgsql' ? 'pgsql' : 'mysql') . ':host=none;dbname=none');
             define('EMPRESA_NOMBRE', 'None');
             define('LOCAL_USER', 'none');
             define('LOCAL_PASS', 'none');

@@ -1,0 +1,2852 @@
+-- SET FOREIGN_KEY_CHECKS = 0;
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+BEGIN;
+SET time_zone = "+00:00";
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */
+;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */
+;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */
+;
+/*!40101 SET NAMES utf8mb4 */
+;
+CREATE TABLE abonos (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  abono decimal(12, 2) NOT NULL DEFAULT 0.00 ,
+  descuento decimal(12, 2) DEFAULT 0.00 ,
+  nota_credito decimal(12, 2) DEFAULT 0.00 ,
+  detalle varchar(60) DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE aprobacion_clientes (
+  _id INTEGER NOT NULL,
+  id_orden INTEGER DEFAULT NULL,
+  id_diseno INTEGER DEFAULT NULL,
+  check SMALLINT NOT NULL DEFAULT 1,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE asistencias (
+  _id INTEGER NOT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  registro varchar(14) DEFAULT NULL ,
+  detalle TEXT DEFAULT NULL ,
+  moment TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE caja (
+  _id INTEGER NOT NULL,
+  id_caja_cierres INTEGER DEFAULT NULL ,
+  monto decimal(12, 2) NOT NULL DEFAULT 0.00 ,
+  moneda varchar(10) NOT NULL DEFAULT '0' ,
+  tasa decimal(12, 2) NOT NULL DEFAULT 1.00 ,
+  detalle text DEFAULT NULL,
+  tipo varchar(20) DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE caja_cierres (
+  _id INTEGER NOT NULL ,
+  dolares decimal(10, 0) NOT NULL DEFAULT 0 ,
+  pesos decimal(10, 0) NOT NULL DEFAULT 0 ,
+  bolivares decimal(10, 0) NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+  id_empleado INTEGER DEFAULT NULL
+);
+
+CREATE TABLE caja_fondos (
+  _id INTEGER NOT NULL ,
+  id_caja_cierres INTEGER DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  dolares decimal(12, 0) NOT NULL DEFAULT 0 ,
+  pesos decimal(12, 0) NOT NULL DEFAULT 0 ,
+  bolivares decimal(12, 0) NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE catalogo_impresoras (
+  _id INTEGER NOT NULL,
+  codigo_interno varchar(50) NOT NULL ,
+  marca varchar(50) DEFAULT NULL ,
+  modelo varchar(100) DEFAULT NULL ,
+  capacidad_contenedor decimal(7, 2) DEFAULT NULL ,
+  ubicacion varchar(100) DEFAULT NULL ,
+  tipo_tecnologia varchar(50) DEFAULT NULL ,
+  id_catalogo_tintas INTEGER DEFAULT NULL ,
+  estado varchar(20) NOT NULL DEFAULT 'activa' ,
+  notas text DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO catalogo_impresoras (_id, codigo_interno, marca, modelo, capacidad_contenedor, ubicacion, tipo_tecnologia, id_catalogo_tintas, estado, notas, moment) VALUES
+(1, 'IMPRESORA PRINCIPAL', 'EPSON', 'EPS_9902', 1000.00, 'PISO 1', 'CMYK', 1, 'activa', 'Impresora con cabezales originales', CURRENT_TIMESTAMP),
+(2, 'IMPRESORA SECUNDARIA', 'Mimaki', 'MK_09890', 750.00, 'PISO 2', 'CMYKW', 2, 'activa', 'Impresora para usar solo con tintas originales', CURRENT_TIMESTAMP);
+
+CREATE TABLE catalogo_colores_tintas (
+  _id INTEGER NOT NULL ,
+  codigo varchar(16) NOT NULL ,
+  nombre varchar(64) NOT NULL ,
+  color_hex varchar(7) DEFAULT '#808080' ,
+  eliminado SMALLINT NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+INSERT INTO catalogo_colores_tintas (_id, codigo, nombre, color_hex) VALUES
+(1,  'C',    'Cyan',          '#00FFFF'),
+(2,  'M',    'Magenta',       '#FF00FF'),
+(3,  'Y',    'Yellow',        '#FFFF00'),
+(4,  'K',    'Black',         '#343A40'),
+(5,  'W',    'White',         '#FFFFFF'),
+(6,  'BRNZ', 'Barniz',        '#E0F7FA'),
+(7,  'LC',   'Light Cyan',    '#80FFFF'),
+(8,  'LM',   'Light Magenta', '#FF80FF'),
+(9,  'OR',   'Orange',        '#FFA500'),
+(10, 'GR',   'Green',         '#008000'),
+(11, 'RD',   'Red',           '#FF0000'),
+(12, 'BL',   'Blue',          '#0000FF');
+
+CREATE TABLE impresoras_colores (
+  id_catalogo_impresora INTEGER NOT NULL ,
+  id_color_tinta INTEGER NOT NULL
+);
+
+
+INSERT INTO impresoras_colores (id_catalogo_impresora, id_color_tinta) VALUES
+(1, 1),
+(1, 2),
+(1, 3),
+(1, 4),
+(2, 1),
+(2, 2),
+(2, 3),
+(2, 4),
+(2, 5);
+CREATE TABLE catalogo_insumos_productos (
+  _id INTEGER NOT NULL ,
+  nombre varchar(128) NOT NULL ,
+  id_product BIGINT NOT NULL ,
+  id_departamento INTEGER NOT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+INSERT INTO catalogo_insumos_productos (_id, nombre, id_product, id_departamento) VALUES
+(1, 'Papel para sublimación', 1, 1),
+(2, 'Tela Atlética', 1, 3),
+(3, 'Botones', 1, 4),
+(4, 'Tinta', 1, 1),
+(5, 'Tela Licra', 1, 3),
+(6, 'Tela Algodón', 1, 3),
+(7, 'Diseño Gráfico', 2, 7);
+
+CREATE TABLE catalogo_telas (
+  _id INTEGER NOT NULL ,
+  tela varchar(45) DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO catalogo_telas (_id, tela, moment)
+VALUES (1, 'Tela de Prueba', CURRENT_TIMESTAMP);
+CREATE TABLE catalogo_tintas (
+  _id INTEGER NOT NULL ,
+  nombre varchar(128) NOT NULL ,
+  eliminado SMALLINT NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+INSERT INTO catalogo_tintas (_id, nombre, moment) VALUES
+(1, 'Tinta de Sublimación', CURRENT_TIMESTAMP),
+(2, 'Tinta DTF (Direct to Film)', CURRENT_TIMESTAMP),
+(3, 'Tinta DTG (Direct to Garment)', CURRENT_TIMESTAMP),
+(4, 'Tinta Ácida', CURRENT_TIMESTAMP),
+(5, 'Tinta Reactiva', CURRENT_TIMESTAMP),
+(6, 'Tinta de Pigmento Textil (Directo a Tela)', CURRENT_TIMESTAMP),
+(7, 'Tinta UV Textil / Eco-Solvente', CURRENT_TIMESTAMP),
+(8, 'Plastisol', CURRENT_TIMESTAMP),
+(9, 'Tinta de Base Agua', CURRENT_TIMESTAMP),
+(10, 'Tintas de Descarga', CURRENT_TIMESTAMP),
+(11, 'Tintas de Silicona', CURRENT_TIMESTAMP),
+(12, 'Pastas de Pigmento', CURRENT_TIMESTAMP),
+(13, 'Pastas Reactivas y Dispersas', CURRENT_TIMESTAMP),
+(14, 'Tintas Metalizadas / Escarchadas (Glitter)', CURRENT_TIMESTAMP),
+(15, 'Tintas Fotocromáticas', CURRENT_TIMESTAMP),
+(16, 'Tintas Fluorescentes / Neón', CURRENT_TIMESTAMP),
+(17, 'Tintas Fosforescentes (Glow in the dark)', CURRENT_TIMESTAMP),
+(18, 'Tintas Foil / Adhesivos', CURRENT_TIMESTAMP),
+(19, 'Tintas de Alto Relieve (Puff / Espumantes)', CURRENT_TIMESTAMP),
+(20, 'Tintas Reflectivas', CURRENT_TIMESTAMP);
+CREATE TABLE categories (
+  _id INTEGER NOT NULL ,
+  nombre varchar(100) DEFAULT NULL ,
+  eliminado SMALLINT NOT NULL DEFAULT 0
+);
+
+INSERT INTO categories (_id, nombre)
+VALUES (1, 'Categoría de Pruebas');
+CREATE TABLE check_tareas (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_lotes_detalles_empleados_asigandos INTEGER DEFAULT NULL ,
+  id_ordenes_productos INTEGER DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  id_departamento INTEGER DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE servicios_maquinas (
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
+  id_maquina INTEGER DEFAULT NULL,
+  maquina_tipo varchar(50) DEFAULT 'impresora',
+  tipo_servicio varchar(255) NOT NULL,
+  descripcion text DEFAULT NULL,
+  tecnico varchar(255) DEFAULT NULL,
+  costo decimal(10, 2) DEFAULT 0.00,
+  estado VARCHAR(255) DEFAULT 'pendiente',
+  fecha_servicio TIMESTAMP DEFAULT NULL,
+  proxima_fecha TIMESTAMP DEFAULT NULL,
+  notas text DEFAULT NULL,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
+);
+
+CREATE INDEX idx_maquina ON servicios_maquinas (id_maquina, maquina_tipo);
+CREATE INDEX idx_estado ON servicios_maquinas (estado);
+
+CREATE TABLE config (
+  _id INTEGER NOT NULL,
+  app_key text DEFAULT NULL,
+  activo SMALLINT NOT NULL DEFAULT 1 ,
+  nombre_empresa varchar(45) DEFAULT NULL,
+  identificador_fiscal varchar(60) DEFAULT NULL,
+  direccion varchar(255) DEFAULT NULL ,
+  telefonos INTEGER DEFAULT NULL ,
+  email INTEGER DEFAULT NULL ,
+  msg_welcome text DEFAULT NULL ,
+  msg_bye text DEFAULT NULL ,
+  msg_saldo text DEFAULT NULL ,
+  sys_mostrar_detalle_terminar_indicidual SMALLINT NOT NULL DEFAULT 0 ,
+  sys_mostrar_rollo_en_empleado_corte SMALLINT DEFAULT 0 ,
+  sys_mostrar_rollo_en_empleado_estampado SMALLINT NOT NULL DEFAULT 1 ,
+  sys_mostrar_insumo_en_empleado_costura SMALLINT NOT NULL DEFAULT 0 ,
+  sys_mostrar_insumo_en_empleado_limpieza SMALLINT NOT NULL DEFAULT 0 ,
+  sys_mostrar_insumo_en_empleado_revision SMALLINT NOT NULL DEFAULT 0 ,
+  sys_comision_de_costura varchar(8) NOT NULL DEFAULT 'producto' ,
+  multiplicador_precio DECIMAL(5,2) NOT NULL DEFAULT 0.00
+);
+
+INSERT INTO config (
+    _id,
+    app_key,
+    activo,
+    nombre_empresa,
+    identificador_fiscal,
+    direccion,
+    telefonos,
+    email,
+    msg_welcome,
+    msg_bye,
+    msg_saldo,
+    sys_mostrar_detalle_terminar_indicidual,
+    sys_mostrar_rollo_en_empleado_corte,
+    sys_mostrar_rollo_en_empleado_estampado,
+    sys_mostrar_insumo_en_empleado_costura,
+    sys_mostrar_insumo_en_empleado_limpieza,
+    sys_mostrar_insumo_en_empleado_revision,
+    sys_comision_de_costura,
+    multiplicador_precio
+  )
+VALUES (
+    1,
+    NULL,
+    1,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    'producto',
+    0.00
+  );
+CREATE TABLE crm_campanas (
+  _id INTEGER NOT NULL,
+  nombre varchar(128) NOT NULL,
+  mensaje_plantilla text NOT NULL,
+  filtro_productos text DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE crm_campanas_envios (
+  _id INTEGER NOT NULL,
+  id_campana INTEGER NOT NULL,
+  id_customer INTEGER unsigned NOT NULL,
+  estado_envio varchar(20) NOT NULL DEFAULT 'enviado' ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE crm_notas (
+  _id INTEGER NOT NULL,
+  id_customer INTEGER unsigned NOT NULL,
+  id_oportunidad INTEGER DEFAULT NULL,
+  id_usuario_creador INTEGER NOT NULL ,
+  nota text NOT NULL,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE crm_oportunidades (
+  _id INTEGER NOT NULL,
+  id_customer INTEGER unsigned DEFAULT NULL,
+  titulo varchar(128) NOT NULL,
+  descripcion text DEFAULT NULL,
+  monto_estimado decimal(12, 2) NOT NULL DEFAULT 0.00,
+  estado varchar(32) NOT NULL DEFAULT 'nuevo_lead' ,
+  motivo_perdida varchar(255) DEFAULT NULL,
+  id_campana INTEGER DEFAULT NULL,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE crm_oportunidades_vendedores (
+  _id INTEGER NOT NULL,
+  id_oportunidad INTEGER NOT NULL,
+  id_vendedor INTEGER NOT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE crm_soporte (
+  _id INTEGER NOT NULL,
+  id_customer INTEGER unsigned NOT NULL,
+  titulo varchar(128) NOT NULL,
+  descripcion text NOT NULL,
+  estado varchar(20) NOT NULL DEFAULT 'abierto' ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE customers (
+  _id INTEGER UNSIGNED NOT NULL,
+  first_name varchar(60) DEFAULT NULL,
+  last_name varchar(60) DEFAULT NULL,
+  username varchar(60) DEFAULT NULL,
+  cedula varchar(12) DEFAULT NULL,
+  address varchar(250) DEFAULT NULL,
+  billing_city varchar(60) DEFAULT NULL,
+  phone varchar(20) DEFAULT NULL,
+  email varchar(120) DEFAULT NULL,
+  recibir_notificaciones SMALLINT NOT NULL DEFAULT 1,
+  eliminado SMALLINT NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO customers (
+    _id,
+    first_name,
+    last_name,
+    username,
+    cedula,
+    address,
+    billing_city,
+    phone,
+    email,
+    moment
+  )
+VALUES (
+    1,
+    'Producción',
+    'Interna',
+    'interno_sistema',
+    'INTERNO-001',
+    'N/A',
+    'N/A',
+    '0000000000',
+    'interno@sistema.local',
+    NOW()
+  );
+CREATE TABLE departamentos (
+  _id INTEGER NOT NULL,
+  id_modulo INTEGER DEFAULT NULL ,
+  orden_proceso INTEGER NOT NULL DEFAULT 0 ,
+  departamento varchar(256) DEFAULT NULL ,
+  asignar_numero_de_paso SMALLINT NOT NULL DEFAULT 1 ,
+  enviar_mensaje SMALLINT NOT NULL DEFAULT 0 ,
+  mensaje text DEFAULT NULL ,
+  tipo varchar(50) NOT NULL DEFAULT 'general' ,
+  eliminado SMALLINT NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO departamentos (
+    _id,
+    id_modulo,
+    orden_proceso,
+    departamento,
+    asignar_numero_de_paso,
+    enviar_mensaje,
+    mensaje,
+    tipo,
+    moment
+  )
+VALUES (
+    1,
+    4,
+    2,
+    'Impresión',
+    1,
+    1,
+    NULL,
+    'impresion',
+    '2025-09-24 19:50:20'
+  ),
+  (
+    2,
+    4,
+    3,
+    'Estampado',
+    1,
+    1,
+    NULL,
+    'estampado',
+    '2025-09-24 19:50:20'
+  ),
+  (
+    3,
+    4,
+    4,
+    'Corte',
+    1,
+    1,
+    NULL,
+    'corte',
+    '2025-09-24 19:50:20'
+  ),
+  (
+    4,
+    4,
+    5,
+    'Costura',
+    1,
+    1,
+    NULL,
+    'costura',
+    '2025-09-24 19:50:20'
+  ),
+  (
+    5,
+    1,
+    0,
+    'Administración',
+    0,
+    0,
+    NULL,
+    'general',
+    '2025-09-24 19:50:20'
+  ),
+  (
+    6,
+    2,
+    0,
+    'Comecialización',
+    0,
+    0,
+    NULL,
+    'general',
+    '2025-09-24 19:50:20'
+  ),
+  (
+    7,
+    3,
+    0,
+    'Diseño',
+    0,
+    0,
+    NULL,
+    'general',
+    '2025-09-24 19:50:20'
+  ),
+  (
+    8,
+    5,
+    0,
+    'Producción',
+    0,
+    0,
+    NULL,
+    'general',
+    '2025-09-24 19:50:20'
+  );
+CREATE TABLE disenos (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  id_product BIGINT DEFAULT NULL ,
+  origen varchar(25) NOT NULL DEFAULT 'orden_inicial' 'origen_inicial'' si se crea al momento de la facturación o ''agregado_posterior'' si proviene de la creación de una revisión',
+  codigo_diseno varchar(6) DEFAULT NULL ,
+  tipo varchar(128) DEFAULT NULL ,
+  terminado SMALLINT NOT NULL DEFAULT 0 ,
+  linkdrive text DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE disenos_ajustes_y_personalizaciones (
+  _id INTEGER NOT NULL,
+  id_orden INTEGER DEFAULT NULL ,
+  id_diseno INTEGER DEFAULT NULL ,
+  tipo varchar(15) DEFAULT NULL ,
+  cantidad INTEGER NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE empleados_lotes_fabricacion (
+  _id INTEGER NOT NULL,
+  id_empleado INTEGER DEFAULT NULL ,
+  id_departamento_creador INTEGER DEFAULT NULL,
+  id_departamento_actual INTEGER DEFAULT NULL,
+  estado varchar(11) DEFAULT 'pendiente' ,
+  fecha_inicio timestamp NULL DEFAULT NULL ,
+  fecha_fin timestamp NULL DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE empleados_lotes_fabricacion_items (
+  _id INTEGER NOT NULL ,
+  id_lote INTEGER DEFAULT NULL ,
+  id_orden INTEGER DEFAULT NULL
+);
+
+CREATE TABLE inventario (
+  _id INTEGER NOT NULL ,
+  sku varchar(128) DEFAULT NULL ,
+  id_catalogo INTEGER DEFAULT NULL ,
+  tipo_insumo VARCHAR(255) NOT NULL DEFAULT 'general' ,
+  id_color_tinta INTEGER DEFAULT NULL ,
+  id_catalogo_tintas INTEGER DEFAULT NULL ,
+  insumo varchar(45) DEFAULT NULL ,
+  unidad varchar(6) DEFAULT NULL ,
+  costo decimal(7, 2) NOT NULL DEFAULT 0.00 ,
+  rendimiento decimal(3, 1) DEFAULT NULL,
+  cantidad decimal(7, 2) NOT NULL DEFAULT 0.00 ,
+  cantidad_inicial decimal(7, 2) NOT NULL DEFAULT 0.00 ,
+  color varchar(64) DEFAULT NULL ,
+  ancho decimal(7, 2) DEFAULT 0.00 ,
+  elongacion varchar(32) DEFAULT NULL ,
+  detalles text DEFAULT NULL ,
+  departamento varchar(14) DEFAULT NULL ,
+  eliminado SMALLINT NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+INSERT INTO inventario (_id, sku, id_catalogo, tipo_insumo, id_color_tinta, id_catalogo_tintas, insumo, unidad, costo, rendimiento, cantidad, cantidad_inicial, color, ancho, elongacion, detalles, departamento, moment) VALUES
+(1, 'PAP_001', 1, 'general', NULL, NULL, 'Papel de pruebas', 'Mts', 20.00, 1.0, 250.00, 250.00, 'BLANCO', 0.90, NULL, 'Papel para pruebas de impresión', 'Impresión', CURRENT_TIMESTAMP),
+(2, 'TEL_001', 6, 'tela', NULL, NULL, 'Tela de pruebas', 'Kg', 80.00, 3.96, 24.00, 24.00, 'BLANCO', 1.50, 'HORIZONTAL', 'Tela para pruebas de estampado', 'Estampado', CURRENT_TIMESTAMP),
+(3, 'TIN_C_001', 4, 'tinta', 1, 1, 'Tinta Cyan', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'CYAN', NULL, NULL, 'Tinta cyan para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(4, 'TIN_M_001', 4, 'tinta', 2, 1, 'Tinta Magenta', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'MAGENTA', NULL, NULL, 'Tinta magenta para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(5, 'TIN_Y_001', 4, 'tinta', 3, 1, 'Tinta Yellow', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'YELLOW', NULL, NULL, 'Tinta yellow para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(6, 'TIN_K_001', 4, 'tinta', 4, 1, 'Tinta Black', 'ML', 15.00, 1.0, 1000.00, 1000.00, 'BLACK', NULL, NULL, 'Tinta negra para impresoras', 'Impresión', CURRENT_TIMESTAMP),
+(7, 'BOT_001', 3, 'general', NULL, NULL, 'Botones blancos', 'Und', 0.50, 1.0, 1000.00, 1000.00, 'BLANCO', NULL, NULL, 'Botones blancos para prendas', 'Costura', CURRENT_TIMESTAMP),
+(8, 'TEL_002', 5, 'tela', NULL, NULL, 'Tela Licra', 'Kg', 50.00, 4.0, 25.00, 25.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP),
+(9, 'TEL_003', 2, 'tela', NULL, NULL, 'Tela Atlética', 'Kg', 40.00, 4.0, 22.00, 22.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP),
+(10, 'TEL_005', 6, 'tela', NULL, NULL, 'Tela Algodón', 'Kg', 65.00, 4.0, 25.00, 25.00, NULL, 0.00, NULL, NULL, 'Estampado', CURRENT_TIMESTAMP);
+CREATE TABLE inventario_movimientos (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_producto BIGINT DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  id_insumo INTEGER DEFAULT NULL ,
+  id_catalogo_insumos_prodcutos INTEGER DEFAULT NULL ,
+  id_departamento INTEGER DEFAULT NULL ,
+  departamento varchar(20) DEFAULT NULL ,
+  valor_inicial decimal(7, 2) DEFAULT NULL ,
+  valor_final decimal(7, 2) DEFAULT NULL ,
+  fecha TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+  id_reposicion INTEGER DEFAULT NULL
+);
+
+CREATE TABLE inventario_movimientos_historial (
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
+  id_movimiento INTEGER NOT NULL ,
+  campo_modificado varchar(50) NOT NULL ,
+  valor_anterior decimal(10, 2) DEFAULT NULL ,
+  valor_nuevo decimal(10, 2) DEFAULT NULL ,
+  id_usuario_modificacion INTEGER NOT NULL ,
+  fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
+  observaciones text DEFAULT NULL ,
+  PRIMARY KEY (_id)
+);
+
+CREATE INDEX idx_movimiento ON inventario_movimientos_historial (id_movimiento);
+CREATE INDEX idx_fecha ON inventario_movimientos_historial (fecha_modificacion);
+
+CREATE TABLE inventario_remanentes (
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
+  id_insumo INTEGER NOT NULL,
+  cantidad decimal(10,2) NOT NULL,
+  motivo varchar(255) NOT NULL DEFAULT 'Terminación',
+  observacion text,
+  id_empleado INTEGER DEFAULT NULL,
+  fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
+);
+
+CREATE INDEX id_insumo ON inventario_remanentes (id_insumo);
+
+
+CREATE TABLE gastos (
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
+  nombre varchar(255) NOT NULL,
+  descripcion text DEFAULT NULL,
+  monto decimal(12,2) NOT NULL DEFAULT 0.00,
+  moneda varchar(10) NOT NULL DEFAULT 'USD',
+  periodicidad VARCHAR(255) NOT NULL DEFAULT 'mensual',
+  tipo VARCHAR(255) NOT NULL DEFAULT 'fijo',
+  estatus VARCHAR(255) NOT NULL DEFAULT 'activo',
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
+);
+
+
+CREATE TABLE gastos_registros (
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
+  id_gasto_plantilla INTEGER DEFAULT NULL,
+  tipo VARCHAR(255) NOT NULL,
+  nombre varchar(255) NOT NULL,
+  descripcion text DEFAULT NULL,
+  monto decimal(12,2) NOT NULL,
+  moneda varchar(10) NOT NULL DEFAULT 'USD',
+  fecha_de_gasto date NOT NULL,
+  periodo varchar(7) DEFAULT NULL ,
+  id_usuario INTEGER DEFAULT NULL,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id),
+  CONSTRAINT fk_gastos_registros_plantilla FOREIGN KEY (id_gasto_plantilla) REFERENCES gastos (_id) ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE INDEX idx_fecha ON gastos_registros (fecha_de_gasto);
+CREATE INDEX idx_periodo ON gastos_registros (periodo);
+
+
+CREATE TABLE gastos_auditoria (
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
+  id_registro INTEGER NOT NULL,
+  accion VARCHAR(255) NOT NULL,
+  id_usuario INTEGER NOT NULL,
+  nombre_usuario varchar(255) NOT NULL,
+  monto_anterior decimal(12,2) DEFAULT NULL,
+  monto_nuevo decimal(12,2) DEFAULT NULL,
+  detalle text NOT NULL,
+  fecha_accion timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (_id)
+);
+
+CREATE TABLE inventario_corte (
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
+  id_orden INTEGER NOT NULL ,
+  id_ordenes_productos INTEGER NOT NULL ,
+  id_empleado_corte INTEGER DEFAULT NULL ,
+  cantidad decimal(8, 2) NOT NULL DEFAULT 0.00 ,
+  talla varchar(10) DEFAULT NULL ,
+  tela varchar(128) DEFAULT NULL ,
+  corte varchar(32) DEFAULT NULL ,
+  fecha_corte timestamp NULL DEFAULT NULL ,
+  estado VARCHAR(255) NOT NULL DEFAULT 'por_cortar' ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+  PRIMARY KEY (_id)
+);
+
+CREATE INDEX id_orden ON inventario_corte (id_orden);
+CREATE INDEX estado ON inventario_corte (estado);
+
+CREATE TABLE lotes (
+  _id INTEGER NOT NULL ,
+  lote TEXT DEFAULT NULL ,
+  fecha date DEFAULT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_departamento_actual INTEGER DEFAULT NULL ,
+  prioridad INTEGER NOT NULL DEFAULT 0 ,
+  piezas_actuales INTEGER DEFAULT NULL ,
+  paso varchar(128) DEFAULT 'responsable' ,
+  detalles TEXT DEFAULT NULL,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE lotes_corte_ajustes (
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
+  id_orden INTEGER NOT NULL ,
+  id_lote INTEGER DEFAULT NULL ,
+  id_ordenes_productos INTEGER NOT NULL ,
+  cantidad_solicitada decimal(8, 2) NOT NULL DEFAULT 0.00 ,
+  cantidad_ajustada decimal(8, 2) NOT NULL DEFAULT 0.00 ,
+  id_empleado_ajuste INTEGER DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+  PRIMARY KEY (_id)
+);
+
+CREATE INDEX id_orden ON lotes_corte_ajustes (id_orden);
+CREATE INDEX id_ordenes_productos ON lotes_corte_ajustes (id_ordenes_productos);
+
+CREATE TABLE lotes_detalles (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_woo BIGINT DEFAULT NULL ,
+  progreso varchar(11) NOT NULL DEFAULT 'por iniciar' ,
+  id_ordenes_productos INTEGER NOT NULL DEFAULT 0 ,
+  id_empleado INTEGER DEFAULT NULL ,
+  id_reposicion INTEGER DEFAULT NULL ,
+  terminado SMALLINT NOT NULL DEFAULT 0 ,
+  id_departamento INTEGER DEFAULT NULL ,
+  departamento varchar(256) DEFAULT NULL ,
+  unidades_solicitadas INTEGER DEFAULT 0 ,
+  comision decimal(8, 2) DEFAULT 0.00 ,
+  detalles varchar(255) DEFAULT NULL ,
+  fecha_inicio timestamp NULL DEFAULT NULL ,
+  fecha_terminado timestamp NULL DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE lotes_detalles_empleados_asignados (
+  _id INTEGER NOT NULL,
+  id_lotes_detalles INTEGER DEFAULT NULL ,
+  id_reposicion INTEGER DEFAULT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  id_departamento INTEGER DEFAULT NULL ,
+  progreso varchar(11) DEFAULT 'por iniciar' ,
+  procentaje_comision decimal(8, 2) NOT NULL DEFAULT 0.00 ,
+  terminado SMALLINT NOT NULL DEFAULT 0 ,
+  fecha_inicio timestamp NULL DEFAULT NULL ,
+  fecha_terminado timestamp NULL DEFAULT NULL
+);
+
+CREATE TABLE lotes_detalles_empleados_asignados_pausas (
+  _id INTEGER NOT NULL,
+  id_lotes_detalles_empleados_asignados INTEGER DEFAULT NULL,
+  pausa_inicio timestamp NULL DEFAULT NULL,
+  pausa_fin timestamp NULL DEFAULT NULL,
+  motivo TEXT NOT NULL
+);
+
+CREATE TABLE lotes_fisicos (
+  _id INTEGER NOT NULL,
+  id_orden INTEGER DEFAULT NULL ,
+  id_woo INTEGER DEFAULT NULL ,
+  piezas_actuales INTEGER DEFAULT NULL ,
+  tela varchar(120) DEFAULT NULL ,
+  talla varchar(5) DEFAULT NULL ,
+  corte varchar(24) DEFAULT NULL ,
+  categoria INTEGER DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE lotes_historico_solicitadas (
+  _id INTEGER NOT NULL,
+  id_orden INTEGER DEFAULT NULL ,
+  id_lotes_fisicos INTEGER DEFAULT NULL,
+  unidades_produccion INTEGER DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE metodos_de_pago (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER NOT NULL DEFAULT 0 ,
+  id_caja_cierres INTEGER DEFAULT NULL ,
+  moneda varchar(10) DEFAULT NULL ,
+  metodo_pago varchar(20) DEFAULT NULL ,
+  detalle varchar(140) DEFAULT NULL ,
+  tipo_de_pago varchar(13) NOT NULL DEFAULT 'Orden nueva' ,
+  monto decimal(12, 2) NOT NULL DEFAULT 0.00 ,
+  tasa decimal(12, 2) DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ordenes (
+  _id INTEGER NOT NULL GENERATED BY DEFAULT AS IDENTITY,
+  id_wp INTEGER UNSIGNED DEFAULT NULL,
+  id_wp_order INTEGER DEFAULT NULL,
+  status varchar(45) DEFAULT NULL,
+  tipo varchar(6) NOT NULL DEFAULT 'custom',
+  responsable INTEGER DEFAULT NULL,
+  cliente_nombre varchar(256) DEFAULT NULL,
+  cliente_cedula varchar(45) DEFAULT NULL,
+  lote_id varchar(33) DEFAULT NULL,
+  fecha_inicio varchar(45) DEFAULT NULL,
+  fecha_entrega varchar(45) DEFAULT NULL,
+  fecha_creacion date DEFAULT NULL,
+  token varchar(45) DEFAULT NULL,
+  pago_descuento decimal(12,2) NOT NULL DEFAULT 0.00,
+  pago_nota_credito decimal(12,2) NOT NULL DEFAULT 0.00 ,
+  pago_total decimal(12,2) DEFAULT 0.00,
+  pago_abono decimal(12,2) DEFAULT 0.00,
+  pago_comision varchar(9) NOT NULL DEFAULT 'pendiente',
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+  PRIMARY KEY (_id)
+);
+
+CREATE TABLE ordenes_borrador_empleado (
+  _id INTEGER NOT NULL,
+  id_orden INTEGER DEFAULT NULL,
+  id_empleado INTEGER DEFAULT NULL,
+  id_departamento INTEGER NOT NULL ,
+  borrador TEXT DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ordenes_fila_orden (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  orden_fila INTEGER DEFAULT NULL
+);
+
+DELIMITER ##
+CREATE TRIGGER ordenes_fila_orden_cambios_trigger_delete
+AFTER DELETE ON ordenes_fila_orden FOR EACH ROW BEGIN
+-- Obtiene todos los registros de ordenes_fila_orden ordenados por orden_fila
+SET @cambio = (
+    SELECT CONCAT(
+        '[',
+        GROUP_CONCAT(
+          JSON_OBJECT(
+            '_id',
+            _id,
+            'id_orden',
+            id_orden,
+            'orden_fila',
+            orden_fila
+          )
+        ),
+        ']'
+      )
+    FROM ordenes_fila_orden
+    ORDER BY orden_fila ASC
+  );
+-- Inserta el cambio en la tabla ordenes_fila_orden_cambios
+INSERT INTO ordenes_fila_orden_cambios (cambio)
+VALUES (@cambio);
+-- Limpieza: mantener solo los últimos 3 registros
+DELETE FROM ordenes_fila_orden_cambios 
+WHERE id NOT IN (
+    SELECT id FROM (
+        SELECT id FROM ordenes_fila_orden_cambios 
+        ORDER BY fecha_cambio DESC 
+        LIMIT 3
+    ) AS ultimos_tres
+);
+END ##
+DELIMITER ;
+
+DELIMITER ##
+CREATE TRIGGER ordenes_fila_orden_cambios_trigger_insert
+AFTER INSERT ON ordenes_fila_orden FOR EACH ROW BEGIN
+-- Obtiene todos los registros de ordenes_fila_orden ordenados por orden_fila
+SET @cambio = (
+    SELECT CONCAT(
+        '[',
+        GROUP_CONCAT(
+          JSON_OBJECT(
+            '_id',
+            _id,
+            'id_orden',
+            id_orden,
+            'orden_fila',
+            orden_fila
+          )
+        ),
+        ']'
+      )
+    FROM ordenes_fila_orden
+    ORDER BY orden_fila ASC
+  );
+-- Inserta el cambio en la tabla ordenes_fila_orden_cambios
+INSERT INTO ordenes_fila_orden_cambios (cambio)
+VALUES (@cambio);
+-- Limpieza: mantener solo los últimos 3 registros
+DELETE FROM ordenes_fila_orden_cambios 
+WHERE id NOT IN (
+    SELECT id FROM (
+        SELECT id FROM ordenes_fila_orden_cambios 
+        ORDER BY fecha_cambio DESC 
+        LIMIT 3
+    ) AS ultimos_tres
+);
+END ##
+DELIMITER ;
+
+DELIMITER ##
+CREATE TRIGGER ordenes_fila_orden_cambios_trigger_update
+AFTER UPDATE ON ordenes_fila_orden FOR EACH ROW BEGIN
+-- Obtiene todos los registros de ordenes_fila_orden ordenados por orden_fila
+SET @cambio = (
+    SELECT CONCAT(
+        '[',
+        GROUP_CONCAT(
+          JSON_OBJECT(
+            '_id',
+            _id,
+            'id_orden',
+            id_orden,
+            'orden_fila',
+            orden_fila
+          )
+        ),
+        ']'
+      )
+    FROM ordenes_fila_orden
+    ORDER BY orden_fila ASC
+  );
+-- Inserta el cambio en la tabla ordenes_fila_orden_cambios
+INSERT INTO ordenes_fila_orden_cambios (cambio)
+VALUES (@cambio);
+-- Limpieza: mantener solo los últimos 3 registros
+DELETE FROM ordenes_fila_orden_cambios 
+WHERE id NOT IN (
+    SELECT id FROM (
+        SELECT id FROM ordenes_fila_orden_cambios 
+        ORDER BY fecha_cambio DESC 
+        LIMIT 3
+    ) AS ultimos_tres
+);
+END ## 
+DELIMITER ;
+
+CREATE TABLE ordenes_fila_orden_cambios (
+  id INTEGER NOT NULL ,
+  cambio TEXT NOT NULL ,
+  fecha_cambio timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ordenes_fila_reposiciones (
+  _id INTEGER NOT NULL ,
+  id_reposicion INTEGER DEFAULT NULL ,
+  orden_fila smallint(6) DEFAULT NULL
+);
+
+CREATE TABLE ordenes_observaciones (
+  _id INTEGER NOT NULL,
+  id_orden INTEGER NOT NULL,
+  observaciones TEXT DEFAULT NULL
+);
+
+CREATE TABLE ordenes_productos (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_woo BIGINT DEFAULT NULL ,
+  id_tela INTEGER DEFAULT NULL ,
+  id_category INTEGER DEFAULT NULL ,
+  id_products_attributes INTEGER DEFAULT NULL ,
+  category_name varchar(20) DEFAULT NULL ,
+  name varchar(240) DEFAULT NULL ,
+  cantidad DECIMAL(6,1) NOT NULL DEFAULT 0 ,
+  id_size INTEGER DEFAULT NULL ,
+  talla varchar(8) DEFAULT NULL ,
+  corte varchar(32) DEFAULT NULL ,
+  metros decimal(7, 2) NOT NULL DEFAULT 0.00 ,
+  desperdicio decimal(7, 2) NOT NULL DEFAULT 0.00 ,
+  rollo INTEGER DEFAULT NULL ,
+  tela varchar(128) DEFAULT NULL ,
+  precio_unitario decimal(10, 2) NOT NULL DEFAULT 0.00 ,
+  precio_woo decimal(10, 2) DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ordenes_auditoria (
+  _id INT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY ,
+  id_orden INT NOT NULL ,
+  accion VARCHAR(255) NOT NULL ,
+  id_admin INT NOT NULL ,
+  nombre_admin VARCHAR(255) NOT NULL ,
+  motivo TEXT NOT NULL ,
+  fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
+);
+
+CREATE INDEX idx_orden ON ordenes_auditoria (id_orden);
+CREATE INDEX idx_admin ON ordenes_auditoria (id_admin);
+
+CREATE TABLE ordenes_tmp (
+  _id INTEGER NOT NULL ,
+  form TEXT DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  tipo varchar(11) NOT NULL DEFAULT 'Orden' ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ordenes_vinculadas (
+  _id INTEGER NOT NULL ,
+  id_father INTEGER DEFAULT NULL ,
+  id_child INTEGER DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE pagos (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_reposicion INTEGER DEFAULT NULL ,
+  id_departamento INTEGER DEFAULT NULL ,
+  id_metodos_de_pago INTEGER DEFAULT NULL ,
+  id_lotes_detalles INTEGER DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  cantidad INTEGER DEFAULT NULL ,
+  monto_pago decimal(12, 2) DEFAULT NULL ,
+  comision decimal(5, 2) NOT NULL DEFAULT 0.00 ,
+  comision_tipo varchar(64) DEFAULT NULL ,
+  detalle varchar(16) DEFAULT NULL ,
+  estatus varchar(9) DEFAULT NULL ,
+  fecha_pago timestamp NULL DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE piezas_cortadas (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_inventario INTEGER DEFAULT NULL ,
+  id_ordenes_productos INTEGER DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  peso decimal(5, 2) DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE presupuestos (
+  _id INTEGER NOT NULL,
+  id_wp INTEGER unsigned DEFAULT NULL ,
+  status varchar(45) DEFAULT NULL ,
+  tipo varchar(6) NOT NULL DEFAULT 'custom' ,
+  responsable INTEGER DEFAULT NULL ,
+  cliente_nombre varchar(40) DEFAULT NULL ,
+  cliente_cedula varchar(45) DEFAULT NULL ,
+  lote_id varchar(33) DEFAULT NULL ,
+  fecha_inicio varchar(45) DEFAULT NULL ,
+  fecha_entrega varchar(45) DEFAULT NULL ,
+  observaciones TEXT DEFAULT NULL ,
+  fecha_creacion date DEFAULT NULL,
+  token varchar(45) DEFAULT NULL ,
+  pago_descuento decimal(12, 2) NOT NULL DEFAULT 0.00 ,
+  pago_total decimal(12, 2) DEFAULT 0.00 ,
+  pago_abono decimal(12, 2) DEFAULT 0.00 ,
+  pago_comision varchar(9) NOT NULL DEFAULT 'pendiente' ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE presupuestos_productos (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_woo BIGINT DEFAULT NULL ,
+  id_category INTEGER DEFAULT NULL ,
+  category_name varchar(20) DEFAULT NULL ,
+  name varchar(240) DEFAULT NULL ,
+  cantidad INTEGER NOT NULL DEFAULT 0 ,
+  talla varchar(32) DEFAULT NULL ,
+  corte varchar(32) DEFAULT NULL ,
+  tela varchar(128) DEFAULT NULL ,
+  precio_unitario decimal(10, 2) NOT NULL DEFAULT 0.00 ,
+  precio_woo decimal(10, 0) DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id_products_attributes INTEGER DEFAULT NULL ,
+  id_size INTEGER DEFAULT NULL ,
+  id_tela INTEGER DEFAULT NULL
+);
+
+CREATE TABLE products (
+  _id BIGINT NOT NULL,
+  product text DEFAULT NULL,
+  sku varchar(255) DEFAULT NULL,
+  fisico SMALLINT NOT NULL DEFAULT 1 ,
+  es_diseno SMALLINT NOT NULL DEFAULT 0 ,
+  price decimal(20, 2) DEFAULT NULL,
+  comision decimal(7, 2) DEFAULT 0.00 ,
+  stock_quantity INTEGER DEFAULT 0 ,
+  product_description text DEFAULT NULL ,
+  category_ids varchar(255) DEFAULT NULL,
+  eliminado SMALLINT NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO products (
+    _id,
+    product,
+    sku,
+    fisico,
+    es_diseno,
+    price,
+    comision,
+    stock_quantity,
+    product_description,
+    category_ids,
+    moment
+  )
+VALUES (
+    1,
+    'Producto de pruebas',
+    'PRU_01',
+    1,
+    0,
+    10.00,
+    0.20,
+    12,
+    'Producto de pruebas',
+    '1',
+    '2025-09-25 13:36:26'
+  ),
+  (
+    2,
+    'Diseño Gráfico',
+    'DIS_01',
+    0,
+    1,
+    15.00,
+    10.00,
+    12,
+    'Diseño Gráfico de pruebas',
+    '1',
+    '2025-09-25 13:36:26'
+  ),
+  (
+    3,
+    'Franela Sublimada',
+    'FRA_SUB_001',
+    1,
+    0,
+    NULL,
+    0.00,
+    0,
+    NULL,
+    '1',
+    CURRENT_TIMESTAMP
+  );
+CREATE TABLE products_attributes (
+  _id INTEGER NOT NULL,
+  attribute_name varchar(255) NOT NULL ,
+  precio decimal(5, 2) NOT NULL DEFAULT 0.00
+);
+
+INSERT INTO products_attributes (_id, attribute_name, precio)
+VALUES (1, 'Atributo de pruebas', 5.00);
+CREATE TABLE products_attributes_values (
+  _id INTEGER NOT NULL,
+  id_orden INTEGER DEFAULT NULL ,
+  id_product BIGINT NOT NULL ,
+  id_product_attribute INTEGER NOT NULL ,
+  attribute_value varchar(128) NOT NULL ,
+  attribute_price decimal(7, 2) NOT NULL DEFAULT 0.00
+);
+
+CREATE TABLE products_comisiones (
+  _id INTEGER NOT NULL ,
+  id_product BIGINT DEFAULT NULL ,
+  id_departamento INTEGER DEFAULT NULL ,
+  comision decimal(5, 2) NOT NULL DEFAULT 0.00
+);
+
+INSERT INTO products_comisiones (
+    _id,
+    id_product,
+    id_departamento,
+    comision
+  )
+VALUES (1, 1, 1, 0.50),
+(2, 1, 2, 0.50),
+(3, 1, 3, 0.50),
+(4, 1, 4, 0.50),
+(5, 1, 6, 0.50),
+(6, 1, 7, 0.50),
+(7, 3, 1, 0.60),
+(8, 3, 2, 0.50),
+(9, 3, 3, 0.25),
+(10, 3, 4, 0.30);
+CREATE TABLE empleados_salario (
+  id_empleado INTEGER UNSIGNED NOT NULL ,
+  sueldo_base DECIMAL(10, 2) NOT NULL DEFAULT 0.00 ,
+  moneda VARCHAR(10) NOT NULL DEFAULT 'USD' ,
+  bonos_fijos DECIMAL(10, 2) NOT NULL DEFAULT 0.00 ,
+  fecha_inicio_contrato DATE NOT NULL ,
+  pago_mensual_fijo SMALLINT NOT NULL DEFAULT 1 ,
+  fecha_actualizacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP ,
+  PRIMARY KEY (id_empleado)
+);
+
+CREATE INDEX idx_fecha_inicio ON empleados_salario (fecha_inicio_contrato);
+CREATE INDEX idx_moneda ON empleados_salario (moneda);
+
+
+CREATE TABLE salario_carga_familiar (
+  id_carga INTEGER UNSIGNED NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
+  id_empleado INTEGER UNSIGNED NOT NULL ,
+  nombre_completo VARCHAR(100) NOT NULL ,
+  cedula_o_id VARCHAR(20) DEFAULT NULL ,
+  tipo_relacion VARCHAR(50) NOT NULL ,
+  fecha_nacimiento DATE NOT NULL ,
+  es_deducible_impuesto SMALLINT NOT NULL DEFAULT 1 ,
+  fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+  PRIMARY KEY (id_carga)
+);
+
+CREATE INDEX idx_empleado ON salario_carga_familiar (id_empleado);
+CREATE INDEX idx_tipo_relacion ON salario_carga_familiar (tipo_relacion);
+CREATE INDEX idx_fecha_nacimiento ON salario_carga_familiar (fecha_nacimiento);
+
+CREATE TABLE pagos_salarios (
+  _id INT NULL GENERATED BY DEFAULT AS IDENTITY ,
+  id_pago INT NULL  ,
+  tipo_salario VARCHAR(9) NULL DEFAULT 'quincenal'  ,
+  numero_semana INTEGER NULL  ,
+  monto DECIMAL(10,2) NULL  ,
+  moment TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ,
+  PRIMARY KEY (_id)
+);
+
+
+CREATE TABLE products_prices (
+ _id INTEGER NOT NULL,
+ id_product BIGINT DEFAULT NULL ,
+ price decimal(7, 2) DEFAULT NULL ,
+ descripcion varchar(128) DEFAULT NULL
+);
+
+CREATE TABLE comisiones_pagados (
+ _id INTEGER NOT NULL ,
+ id_empleado INTEGER DEFAULT NULL ,
+ tipo_comision varchar(12) DEFAULT NULL ,
+ numero_semana INTEGER DEFAULT NULL ,
+ monto decimal(10,2) DEFAULT NULL ,
+ moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE pagos_abonos (
+ _id INT NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
+ id_pago INT NULL  ,
+ monto DECIMAL(10,2) NULL DEFAULT '0'  ,
+ descripcion VARCHAR(512) NULL DEFAULT NULL  ,
+ moment TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+ PRIMARY KEY (_id)
+);
+
+
+CREATE TABLE pagos_descuentos (
+ _id INT NOT NULL GENERATED BY DEFAULT AS IDENTITY ,
+ id_pago INT NULL  ,
+ monto DECIMAL(10,2) NULL DEFAULT '0'  ,
+ descripcion VARCHAR(512) NULL DEFAULT NULL  ,
+ moment TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+ PRIMARY KEY (_id)
+);
+
+
+INSERT INTO products_prices (_id, id_product, price, descripcion) VALUES
+(1, 1, 25.00, 'Detal'),
+(2, 1, 22.00, 'Mayor'),
+(3, 2, 15.00, 'Unitario'),
+(4, 3, 20.00, 'Detal');
+CREATE TABLE products_sizes_eficiencia (
+  _id INTEGER NOT NULL ,
+  id_size INTEGER DEFAULT NULL ,
+  id_catalogo_insumos_prodcutos INTEGER DEFAULT NULL ,
+  cantidad decimal(3, 2) NOT NULL DEFAULT 0.00 ,
+  unidad varchar(64) DEFAULT NULL
+);
+
+CREATE TABLE products_tiempos_de_produccion (
+  _id INTEGER NOT NULL ,
+  id_product BIGINT DEFAULT NULL ,
+  id_departamento INTEGER DEFAULT NULL ,
+  tiempo INTEGER NOT NULL DEFAULT 1 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+  usa_desperdicio SMALLINT NOT NULL DEFAULT 0
+);
+
+
+INSERT INTO products_tiempos_de_produccion (_id, id_product, id_departamento, tiempo, moment) VALUES
+(1, 1, 1, 60, CURRENT_TIMESTAMP),
+(2, 1, 2, 60, CURRENT_TIMESTAMP),
+(3, 1, 3, 60, CURRENT_TIMESTAMP),
+(4, 1, 4, 60, CURRENT_TIMESTAMP),
+(5, 3, 3, 60, CURRENT_TIMESTAMP),
+(6, 3, 1, 60, CURRENT_TIMESTAMP),
+(7, 3, 2, 60, CURRENT_TIMESTAMP),
+(8, 3, 4, 60, CURRENT_TIMESTAMP);
+CREATE TABLE product_insumos_asignados (
+  _id INTEGER NOT NULL,
+  id_product BIGINT DEFAULT NULL ,
+  id_catalogo_insumos_productos INTEGER DEFAULT NULL ,
+  id_departamento INTEGER NOT NULL ,
+  id_talla INTEGER DEFAULT NULL ,
+  cantidad decimal(6, 2) NOT NULL DEFAULT 0.00 ,
+  unidad varchar(64) DEFAULT NULL ,
+  tiempo INTEGER NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+INSERT INTO product_insumos_asignados (_id, id_product, id_catalogo_insumos_productos, id_departamento, id_talla, cantidad, unidad) VALUES
+(1, 1, 1, 1, 1, 1.00, 'Mt'),
+(2, 1, 1, 1, 2, 1.00, 'Mt'),
+(3, 1, 1, 1, 3, 1.00, 'Mt'),
+(4, 1, 1, 1, 4, 1.00, 'Mt'),
+(5, 1, 6, 2, 1, 1.00, 'Kg'),
+(6, 1, 6, 2, 2, 1.00, 'Kg'),
+(7, 1, 6, 2, 3, 1.00, 'Kg'),
+(8, 1, 6, 2, 4, 1.00, 'Kg'),
+(9, 1, 6, 3, 1, 1.00, 'Kg'),
+(10, 1, 6, 3, 2, 1.00, 'Kg'),
+(11, 1, 6, 3, 3, 1.00, 'Kg'),
+(12, 1, 6, 3, 4, 1.00, 'Kg'),
+(13, 1, 3, 4, 1, 6.00, 'Und'),
+(14, 1, 3, 4, 2, 6.00, 'Und'),
+(15, 1, 3, 4, 3, 6.00, 'Und'),
+(16, 1, 3, 4, 4, 6.00, 'Und'),
+-- Franela Sublimada: Impresión — Papel para sublimación (cat 1)
+(17, 3, 1, 1, 1, 1.00, 'Mt'),
+(18, 3, 1, 1, 2, 1.00, 'Mt'),
+(19, 3, 1, 1, 3, 1.00, 'Mt'),
+(20, 3, 1, 1, 4, 1.00, 'Mt'),
+-- Franela Sublimada: Estampado — Tela Algodón (cat 6)
+(21, 3, 6, 2, 1, 1.00, 'Mt'),
+(22, 3, 6, 2, 2, 1.00, 'Mt'),
+(23, 3, 6, 2, 3, 1.00, 'Mt'),
+(24, 3, 6, 2, 4, 1.00, 'Mt'),
+-- Franela Sublimada: Estampado — Tela Licra (cat 5)
+(25, 3, 5, 2, 1, 0.50, 'Mt'),
+(26, 3, 5, 2, 2, 0.50, 'Mt'),
+(27, 3, 5, 2, 3, 0.50, 'Mt'),
+(28, 3, 5, 2, 4, 0.50, 'Mt');
+CREATE TABLE rendimiento (
+  _id INTEGER NOT NULL,
+  id_orden INTEGER DEFAULT NULL,
+  id_insumo INTEGER DEFAULT NULL ,
+  cantidad decimal(7, 2) NOT NULL DEFAULT 0.00 ,
+  desperdicio decimal(7, 2) NOT NULL DEFAULT 0.00 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id_empleado INTEGER DEFAULT NULL,
+  id_departamento INTEGER DEFAULT NULL
+);
+
+CREATE TABLE reposiciones (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_departamento INTEGER DEFAULT NULL ,
+  id_departamento_solicitante INTEGER DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  id_empleado_emisor INTEGER DEFAULT NULL ,
+  id_ordenes_productos INTEGER DEFAULT NULL ,
+  unidades INTEGER DEFAULT NULL ,
+  detalle text DEFAULT NULL ,
+  detalle_emisor text DEFAULT NULL ,
+  aprobada SMALLINT DEFAULT 0 ,
+  terminada SMALLINT NOT NULL DEFAULT 0 ,
+  eliminada SMALLINT NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE reposiciones_departamentos_excluidos (
+  _id INT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY ,
+  id_reposicion INT NOT NULL ,
+  id_departamento INT NOT NULL ,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
+);
+
+CREATE UNIQUE INDEX uk_repo_depto ON reposiciones_departamentos_excluidos (id_reposicion, id_departamento);
+
+CREATE TABLE retiros (
+  _id INTEGER NOT NULL,
+  id_empleado INTEGER DEFAULT NULL,
+  monto decimal(10, 0) DEFAULT NULL,
+  moneda varchar(12) DEFAULT NULL ,
+  tasa decimal(10, 0) NOT NULL DEFAULT 0 ,
+  metodo_pago varchar(20) DEFAULT NULL ,
+  detalle_retiro text DEFAULT NULL,
+  cierre_caja SMALLINT NOT NULL DEFAULT 0 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE revisiones (
+  _id INTEGER NOT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_diseno INTEGER DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  id_product BIGINT DEFAULT NULL ,
+  tipo varchar(128) DEFAULT NULL ,
+  revision INTEGER NOT NULL DEFAULT 0 ,
+  estatus varchar(19) NOT NULL DEFAULT 'Esperando Respuesta' 'Esperando Respuesta'', ''Rechazado'', ''Aprobado''',
+  url_image varchar(255) DEFAULT NULL ,
+  detalles text DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE sizes (
+  _id INTEGER NOT NULL ,
+  nombre varchar(100) DEFAULT NULL ,
+  variation_percentage decimal(5,2) DEFAULT 0.00
+);
+
+INSERT INTO sizes (_id, nombre) VALUES
+(1, 'S'),
+(2, 'M'),
+(3, 'L'),
+(4, 'XL');
+CREATE TABLE tintas (
+  _id INTEGER NOT NULL,
+  id_catalogo_impresoras INTEGER DEFAULT NULL ,
+  id_orden INTEGER DEFAULT NULL ,
+  id_empleado INTEGER DEFAULT NULL ,
+  id_color_tinta INTEGER NOT NULL ,
+  cantidad decimal(7, 2) NOT NULL DEFAULT 0.00 ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE tintas_recargas (
+  _id INTEGER NOT NULL,
+  id_insumo INTEGER DEFAULT NULL,
+  id_catalogo_impresora INTEGER DEFAULT NULL ,
+  id_color_tinta INTEGER DEFAULT NULL ,
+  cantidad decimal(7, 2) DEFAULT NULL ,
+  nivel_tanque_previo decimal(10, 2) DEFAULT NULL,
+  fecha_recarga timestamp NULL DEFAULT NULL ,
+  moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE abonos
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden, id_empleado),
+  ADD KEY id_empleado (id_empleado);
+ALTER TABLE aprobacion_clientes
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden, id_diseno);
+ALTER TABLE asistencias
+ADD PRIMARY KEY (_id),
+  ADD KEY id_empleado (id_empleado);
+ALTER TABLE caja
+ADD PRIMARY KEY (_id),
+  ADD KEY id_empleado (id_empleado);
+ALTER TABLE caja_cierres
+ADD PRIMARY KEY (_id),
+  ADD KEY id_empleado (id_empleado);
+ALTER TABLE caja_fondos
+ADD PRIMARY KEY (_id);
+ALTER TABLE catalogo_impresoras
+ADD PRIMARY KEY (_id),
+  ADD UNIQUE KEY idx_codigo_interno (codigo_interno) COMMENT 'Asegura que cada código sea único.';
+ALTER TABLE catalogo_insumos_productos
+ADD PRIMARY KEY (_id),
+  ADD UNIQUE KEY nombre (nombre),
+  ADD UNIQUE KEY nombre_2 (nombre),
+  ADD KEY id_product (id_product),
+  ADD KEY id_departamento (id_departamento);
+ALTER TABLE catalogo_telas
+ADD PRIMARY KEY (_id),
+  ADD UNIQUE KEY _id (_id);
+ALTER TABLE categories
+ADD PRIMARY KEY (_id);
+ALTER TABLE check_tareas
+ADD PRIMARY KEY (_id),
+  ADD KEY id_ordenes_productos (id_ordenes_productos);
+ALTER TABLE config
+ADD PRIMARY KEY (_id);
+ALTER TABLE crm_campanas
+ADD PRIMARY KEY (_id);
+ALTER TABLE crm_campanas_envios
+ADD PRIMARY KEY (_id),
+  ADD KEY id_campana (id_campana),
+  ADD KEY id_customer (id_customer);
+ALTER TABLE crm_notas
+ADD PRIMARY KEY (_id),
+  ADD KEY id_customer (id_customer),
+  ADD KEY id_oportunidad (id_oportunidad);
+ALTER TABLE crm_oportunidades
+ADD PRIMARY KEY (_id),
+  ADD KEY id_customer (id_customer),
+  ADD KEY id_campana (id_campana);
+ALTER TABLE crm_oportunidades_vendedores
+ADD PRIMARY KEY (_id),
+  ADD KEY id_oportunidad (id_oportunidad),
+  ADD KEY id_vendedor (id_vendedor);
+ALTER TABLE crm_soporte
+ADD PRIMARY KEY (_id),
+  ADD KEY id_customer (id_customer);
+ALTER TABLE customers
+ADD PRIMARY KEY (_id);
+ALTER TABLE departamentos
+ADD PRIMARY KEY (_id);
+ALTER TABLE disenos
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden),
+  ADD KEY id_empleado (id_empleado),
+  ADD KEY id_product (id_product);
+ALTER TABLE disenos_ajustes_y_personalizaciones
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden, id_diseno);
+ALTER TABLE empleados_lotes_fabricacion
+ADD PRIMARY KEY (_id);
+ALTER TABLE empleados_lotes_fabricacion_items
+ADD PRIMARY KEY (_id);
+ALTER TABLE inventario
+ADD PRIMARY KEY (_id),
+  ADD KEY id_color_tinta (id_color_tinta),
+  ADD KEY id_catalogo_tintas (id_catalogo_tintas);
+ALTER TABLE inventario_movimientos
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden),
+  ADD KEY id_insumo (id_insumo),
+  ADD KEY id_producto (id_producto),
+  ADD KEY idx_composite (
+    id_orden,
+    id_producto,
+    id_empleado,
+    id_insumo
+  );
+ALTER TABLE lotes
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden);
+ALTER TABLE lotes_detalles
+ADD PRIMARY KEY (_id),
+  ADD KEY id_empleado (id_empleado),
+  ADD KEY id_orden (id_orden, id_ordenes_productos),
+  ADD KEY id_woo (id_woo);
+ALTER TABLE lotes_detalles_empleados_asignados
+ADD PRIMARY KEY (_id),
+  ADD KEY idx_id_empleado (id_empleado),
+  ADD KEY idx_id_lotes_detalles (id_lotes_detalles),
+  ADD KEY idx_id_orden (id_orden),
+  ADD KEY idx_id_departamento (id_departamento),
+  ADD KEY idx_empleado_orden_depto (id_empleado, id_orden, id_departamento);
+ALTER TABLE lotes_detalles_empleados_asignados_pausas
+ADD PRIMARY KEY (_id);
+ALTER TABLE lotes_fisicos
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden);
+ALTER TABLE lotes_historico_solicitadas
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden, id_lotes_fisicos);
+ALTER TABLE metodos_de_pago
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden);
+
+ALTER TABLE ordenes_borrador_empleado
+ADD PRIMARY KEY (_id);
+ALTER TABLE ordenes_fila_orden
+ADD PRIMARY KEY (_id);
+ALTER TABLE ordenes_fila_orden_cambios
+ADD PRIMARY KEY (id);
+ALTER TABLE ordenes_fila_reposiciones
+ADD PRIMARY KEY (_id);
+ALTER TABLE ordenes_observaciones
+ADD PRIMARY KEY (_id);
+ALTER TABLE ordenes_productos
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden, rollo),
+  ADD KEY id_catalogo_telas (rollo),
+  ADD KEY id_woo (id_woo);
+ALTER TABLE ordenes_tmp
+ADD PRIMARY KEY (_id);
+ALTER TABLE ordenes_vinculadas
+ADD PRIMARY KEY (_id),
+  ADD KEY id_father (id_father, id_child),
+  ADD KEY id_child (id_child);
+ALTER TABLE pagos
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (
+    id_orden,
+    id_metodos_de_pago,
+    id_lotes_detalles,
+    id_empleado
+  ),
+  ADD KEY id_metodos_de_pago (id_metodos_de_pago),
+  ADD KEY id_lotes_detalles (id_lotes_detalles),
+  ADD KEY id_empleado (id_empleado),
+  ADD KEY idx_empleado_moment (id_empleado, moment),
+  ADD KEY idx_fecha_pago (fecha_pago),
+  ADD KEY idx_comision_tipo_fecha (comision_tipo, fecha_pago);
+ALTER TABLE piezas_cortadas
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (
+    id_orden,
+    id_inventario,
+    id_ordenes_productos,
+    id_empleado
+  );
+ALTER TABLE presupuestos
+ADD PRIMARY KEY (_id);
+ALTER TABLE presupuestos_productos
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden),
+  ADD KEY id_tela (id_tela);
+ALTER TABLE products
+ADD PRIMARY KEY (_id);
+ALTER TABLE products_attributes
+ADD PRIMARY KEY (_id);
+ALTER TABLE products_attributes_values
+ADD PRIMARY KEY (_id),
+  ADD KEY id_product (id_product);
+ALTER TABLE products_comisiones
+ADD PRIMARY KEY (_id),
+  ADD KEY id_product (id_product);
+ALTER TABLE products_prices
+ADD PRIMARY KEY (_id),
+  ADD KEY id_product (id_product);
+ALTER TABLE products_sizes_eficiencia
+ADD PRIMARY KEY (_id);
+ALTER TABLE products_tiempos_de_produccion
+ADD PRIMARY KEY (_id);
+ALTER TABLE product_insumos_asignados
+ADD PRIMARY KEY (_id),
+  ADD KEY id_product (id_product);
+ALTER TABLE rendimiento
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden),
+  ADD KEY id_departamento (id_departamento);
+ALTER TABLE reposiciones
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (
+    id_orden,
+    id_empleado,
+    id_ordenes_productos
+  ),
+  ADD KEY id_empleado_emisor (id_empleado_emisor);
+ALTER TABLE retiros
+ADD PRIMARY KEY (_id),
+  ADD KEY id_empleado (id_empleado);
+ALTER TABLE revisiones
+ADD PRIMARY KEY (_id),
+  ADD KEY id_orden (id_orden, id_diseno),
+  ADD KEY id_orden_2 (id_orden, id_diseno),
+  ADD KEY id_product (id_product);
+ALTER TABLE sizes
+ADD PRIMARY KEY (_id);
+ALTER TABLE catalogo_colores_tintas
+ADD PRIMARY KEY (_id),
+  ADD UNIQUE KEY uk_codigo_color (codigo);
+ALTER TABLE impresoras_colores
+ADD PRIMARY KEY (id_catalogo_impresora, id_color_tinta),
+  ADD KEY id_color_tinta (id_color_tinta);
+ALTER TABLE tintas
+ADD PRIMARY KEY (_id),
+  ADD KEY idx_tintas_color (id_color_tinta),
+  ADD KEY idx_tintas_impresora (id_catalogo_impresoras);
+ALTER TABLE tintas_recargas
+ADD PRIMARY KEY (_id),
+  ADD KEY idx_recargas_color (id_color_tinta),
+  ADD KEY id_insumo (id_insumo),
+  ADD KEY id_catalogo_impresora (id_catalogo_impresora);
+ALTER TABLE catalogo_tintas
+ADD PRIMARY KEY (_id);
+ALTER TABLE abonos
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID de la talba';
+ALTER TABLE aprobacion_clientes
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE asistencias
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico del registro';
+ALTER TABLE caja
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE caja_cierres
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE caja_fondos
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE catalogo_impresoras
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE catalogo_insumos_productos
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE catalogo_telas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'Identificador unico de la tabla',
+  AUTO_INCREMENT = 2;
+ALTER TABLE categories
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT,
+  AUTO_INCREMENT = 2;
+ALTER TABLE check_tareas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico';
+ALTER TABLE config
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT,
+  AUTO_INCREMENT = 2;
+ALTER TABLE crm_campanas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE crm_campanas_envios
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE crm_notas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE crm_oportunidades
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE crm_oportunidades_vendedores
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE crm_soporte
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE customers
+MODIFY _id INTEGER UNSIGNED NOT NULL AUTO_INCREMENT,
+  AUTO_INCREMENT = 2;
+ALTER TABLE departamentos
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT,
+  AUTO_INCREMENT = 8;
+ALTER TABLE disenos
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID de la tabla';
+ALTER TABLE disenos_ajustes_y_personalizaciones
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE empleados_lotes_fabricacion
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE empleados_lotes_fabricacion_items
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE inventario
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'Identificador unico';
+ALTER TABLE inventario_movimientos
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'Identificador unico';
+ALTER TABLE lotes
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID Autonumérico';
+ALTER TABLE lotes_detalles
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID único del registro';
+ALTER TABLE lotes_detalles_empleados_asignados
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE lotes_detalles_empleados_asignados_pausas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE lotes_fisicos
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE lotes_historico_solicitadas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE metodos_de_pago
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico de la tabla';
+
+ALTER TABLE ordenes_borrador_empleado
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE ordenes_fila_orden
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE ordenes_fila_orden_cambios
+MODIFY id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE ordenes_fila_reposiciones
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE ordenes_observaciones
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE ordenes_productos
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID del registro';
+ALTER TABLE ordenes_tmp
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'Clave primaria';
+ALTER TABLE ordenes_vinculadas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'id de la tabla';
+ALTER TABLE pagos
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico';
+ALTER TABLE piezas_cortadas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico';
+ALTER TABLE presupuestos
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE presupuestos_productos
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID del registro';
+ALTER TABLE products
+MODIFY _id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  AUTO_INCREMENT = 2;
+ALTER TABLE products_attributes
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT,
+  AUTO_INCREMENT = 2;
+ALTER TABLE products_attributes_values
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE products_comisiones
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID único',
+  AUTO_INCREMENT = 2;
+ALTER TABLE products_prices
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE products_sizes_eficiencia
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE products_tiempos_de_produccion
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE product_insumos_asignados
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE rendimiento
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE reposiciones
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID unico de la tabla';
+ALTER TABLE retiros
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE revisiones
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'id de la tabla';
+ALTER TABLE sizes
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT,
+  AUTO_INCREMENT = 2;
+ALTER TABLE catalogo_colores_tintas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT COMMENT 'ID único del color de tinta',
+  AUTO_INCREMENT = 13;
+ALTER TABLE tintas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE tintas_recargas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+ALTER TABLE catalogo_tintas
+MODIFY _id INTEGER NOT NULL AUTO_INCREMENT;
+-- =====================================================
+-- FOREIGN KEYS - 123 FKs
+-- =====================================================
+
+-- abonos
+ALTER TABLE abonos
+ADD CONSTRAINT abonos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- aprobacion_clientes
+ALTER TABLE aprobacion_clientes
+ADD CONSTRAINT aprob_cli_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT aprob_cli_ibfk_2 FOREIGN KEY (id_diseno) REFERENCES disenos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- caja
+ALTER TABLE caja
+ADD CONSTRAINT caja_ibfk_1 FOREIGN KEY (id_caja_cierres) REFERENCES caja_cierres (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- caja_fondos
+ALTER TABLE caja_fondos
+ADD CONSTRAINT caja_fondos_ibfk_1 FOREIGN KEY (id_caja_cierres) REFERENCES caja_cierres (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- catalogo_insumos_productos
+ALTER TABLE catalogo_insumos_productos
+ADD CONSTRAINT cat_ins_prod_ibfk_1 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT cat_ins_prod_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- check_tareas
+ALTER TABLE check_tareas
+ADD CONSTRAINT check_tar_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT check_tar_ibfk_2 FOREIGN KEY (id_lotes_detalles_empleados_asigandos) REFERENCES lotes_detalles_empleados_asignados (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT check_tar_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT check_tar_ibfk_4 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- crm_campanas_envios
+ALTER TABLE crm_campanas_envios
+  ADD CONSTRAINT crm_camp_env_ibfk_1 FOREIGN KEY (id_campana) REFERENCES crm_campanas (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT crm_camp_env_ibfk_2 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- crm_notas
+ALTER TABLE crm_notas
+  ADD CONSTRAINT crm_notas_ibfk_1 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT crm_notas_ibfk_2 FOREIGN KEY (id_oportunidad) REFERENCES crm_oportunidades (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- crm_oportunidades
+ALTER TABLE crm_oportunidades
+  ADD CONSTRAINT crm_oport_ibfk_1 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT crm_oport_ibfk_2 FOREIGN KEY (id_campana) REFERENCES crm_campanas (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- crm_oportunidades_vendedores
+ALTER TABLE crm_oportunidades_vendedores
+  ADD CONSTRAINT crm_oport_vend_ibfk_1 FOREIGN KEY (id_oportunidad) REFERENCES crm_oportunidades (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- crm_soporte
+ALTER TABLE crm_soporte
+  ADD CONSTRAINT crm_soporte_ibfk_1 FOREIGN KEY (id_customer) REFERENCES customers (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- disenos
+ALTER TABLE disenos
+ADD CONSTRAINT disenos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT disenos_ibfk_2 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- disenos_ajustes_y_personalizaciones
+ALTER TABLE disenos_ajustes_y_personalizaciones
+ADD CONSTRAINT dis_ajust_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT dis_ajust_ibfk_2 FOREIGN KEY (id_diseno) REFERENCES disenos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- empleados_lotes_fabricacion
+ALTER TABLE empleados_lotes_fabricacion
+ADD CONSTRAINT emp_lotes_fab_ibfk_1 FOREIGN KEY (id_departamento_creador) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT emp_lotes_fab_ibfk_2 FOREIGN KEY (id_departamento_actual) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- empleados_lotes_fabricacion_items
+ALTER TABLE empleados_lotes_fabricacion_items
+ADD CONSTRAINT emp_lotes_items_ibfk_1 FOREIGN KEY (id_lote) REFERENCES empleados_lotes_fabricacion (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT emp_lotes_items_ibfk_2 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- inventario_movimientos
+ALTER TABLE inventario_movimientos
+ADD CONSTRAINT inv_mov_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT inv_mov_ibfk_2 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT inv_mov_ibfk_3 FOREIGN KEY (id_catalogo_insumos_prodcutos) REFERENCES catalogo_insumos_productos (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT inv_mov_ibfk_4 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT inv_mov_ibfk_5 FOREIGN KEY (id_producto) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- inventario_remanentes
+ALTER TABLE inventario_remanentes
+ADD CONSTRAINT inv_rem_ibfk_1 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- inventario_movimientos_historial
+ALTER TABLE inventario_movimientos_historial
+ADD CONSTRAINT inv_mov_hist_ibfk_1 FOREIGN KEY (id_movimiento) REFERENCES inventario_movimientos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- lotes
+ALTER TABLE lotes
+ADD CONSTRAINT lotes_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT lotes_ibfk_2 FOREIGN KEY (id_departamento_actual) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- lotes_detalles
+ALTER TABLE lotes_detalles
+ADD CONSTRAINT lotes_det_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT lotes_det_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ADD CONSTRAINT lotes_det_ibfk_3 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT lotes_det_ibfk_4 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT lotes_det_ibfk_5 FOREIGN KEY (id_woo) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- lotes_detalles_empleados_asignados
+ALTER TABLE lotes_detalles_empleados_asignados
+ADD CONSTRAINT ldea_ibfk_1 FOREIGN KEY (id_lotes_detalles) REFERENCES lotes_detalles (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT ldea_ibfk_2 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT ldea_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- lotes_detalles_empleados_asignados_pausas
+ALTER TABLE lotes_detalles_empleados_asignados_pausas
+ADD CONSTRAINT ldea_pausas_ibfk_1 FOREIGN KEY (id_lotes_detalles_empleados_asignados) REFERENCES lotes_detalles_empleados_asignados (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- lotes_fisicos
+ALTER TABLE lotes_fisicos
+ADD CONSTRAINT lotes_fis_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- lotes_historico_solicitadas
+ALTER TABLE lotes_historico_solicitadas
+ADD CONSTRAINT lotes_hist_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT lotes_hist_ibfk_2 FOREIGN KEY (id_lotes_fisicos) REFERENCES lotes_fisicos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- metodos_de_pago
+ALTER TABLE metodos_de_pago
+ADD CONSTRAINT met_pago_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT met_pago_ibfk_2 FOREIGN KEY (id_caja_cierres) REFERENCES caja_cierres (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- ordenes
+ALTER TABLE ordenes
+ADD CONSTRAINT ordenes_ibfk_1 FOREIGN KEY (id_wp) REFERENCES customers (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- ordenes_auditoria
+ALTER TABLE ordenes_auditoria
+ADD CONSTRAINT ord_audit_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- ordenes_borrador_empleado
+ALTER TABLE ordenes_borrador_empleado
+ADD CONSTRAINT ord_borr_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT ord_borr_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- ordenes_fila_orden
+ALTER TABLE ordenes_fila_orden
+ADD CONSTRAINT ord_fila_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- ordenes_fila_reposiciones
+ALTER TABLE ordenes_fila_reposiciones
+ADD CONSTRAINT ord_fila_rep_ibfk_1 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- ordenes_observaciones
+ALTER TABLE ordenes_observaciones
+ADD CONSTRAINT ord_obs_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- ordenes_productos
+ALTER TABLE ordenes_productos
+ADD CONSTRAINT ord_prod_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT ord_prod_ibfk_2 FOREIGN KEY (id_tela) REFERENCES catalogo_telas (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT ord_prod_ibfk_3 FOREIGN KEY (id_size) REFERENCES sizes (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT ord_prod_ibfk_4 FOREIGN KEY (id_woo) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT ord_prod_ibfk_5 FOREIGN KEY (id_category) REFERENCES categories (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- ordenes_vinculadas
+ALTER TABLE ordenes_vinculadas
+ADD CONSTRAINT ord_vinc_ibfk_1 FOREIGN KEY (id_father) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT ord_vinc_ibfk_2 FOREIGN KEY (id_child) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- pagos
+ALTER TABLE pagos
+ADD CONSTRAINT pagos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT pagos_ibfk_2 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT pagos_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT pagos_ibfk_4 FOREIGN KEY (id_metodos_de_pago) REFERENCES metodos_de_pago (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT pagos_ibfk_5 FOREIGN KEY (id_lotes_detalles) REFERENCES lotes_detalles (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- pagos_abonos
+ALTER TABLE pagos_abonos
+ADD CONSTRAINT pagos_ab_ibfk_1 FOREIGN KEY (id_pago) REFERENCES pagos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- pagos_descuentos
+ALTER TABLE pagos_descuentos
+ADD CONSTRAINT pagos_desc_ibfk_1 FOREIGN KEY (id_pago) REFERENCES pagos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- pagos_salarios
+ALTER TABLE pagos_salarios
+  ADD KEY id_pago (id_pago),
+  ADD CONSTRAINT pagos_sal_ibfk_1 FOREIGN KEY (id_pago) REFERENCES pagos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- piezas_cortadas
+ALTER TABLE piezas_cortadas
+ADD CONSTRAINT piez_cort_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT piez_cort_ibfk_2 FOREIGN KEY (id_inventario) REFERENCES inventario (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT piez_cort_ibfk_3 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- presupuestos
+ALTER TABLE presupuestos
+ADD CONSTRAINT presup_ibfk_1 FOREIGN KEY (id_wp) REFERENCES customers (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- presupuestos_productos
+ALTER TABLE presupuestos_productos
+ADD CONSTRAINT presup_prod_ibfk_1 FOREIGN KEY (id_orden) REFERENCES presupuestos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT presup_prod_ibfk_2 FOREIGN KEY (id_tela) REFERENCES catalogo_telas (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- products_attributes_values
+ALTER TABLE products_attributes_values
+ADD CONSTRAINT prod_attr_val_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT prod_attr_val_ibfk_2 FOREIGN KEY (id_product_attribute) REFERENCES products_attributes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT prod_attr_val_ibfk_3 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- products_comisiones
+ALTER TABLE products_comisiones
+ADD CONSTRAINT prod_com_ibfk_1 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT prod_com_ibfk_2 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- products_prices
+ALTER TABLE products_prices
+ADD CONSTRAINT prod_prices_ibfk_1 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- products_sizes_eficiencia
+ALTER TABLE products_sizes_eficiencia
+ADD CONSTRAINT prod_size_ef_ibfk_1 FOREIGN KEY (id_size) REFERENCES sizes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT prod_size_ef_ibfk_2 FOREIGN KEY (id_catalogo_insumos_prodcutos) REFERENCES catalogo_insumos_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- products_tiempos_de_produccion
+ALTER TABLE products_tiempos_de_produccion
+ADD CONSTRAINT prod_tiempo_ibfk_1 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT prod_tiempo_ibfk_2 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- product_insumos_asignados
+ALTER TABLE product_insumos_asignados
+ADD CONSTRAINT prod_ins_asig_ibfk_1 FOREIGN KEY (id_catalogo_insumos_productos) REFERENCES catalogo_insumos_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT prod_ins_asig_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT prod_ins_asig_ibfk_3 FOREIGN KEY (id_talla) REFERENCES sizes (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT prod_ins_asig_ibfk_4 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- rendimiento
+ALTER TABLE rendimiento
+ADD CONSTRAINT rendim_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT rendim_ibfk_2 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT rendim_ibfk_3 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- reposiciones
+ALTER TABLE reposiciones
+ADD CONSTRAINT repos_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT repos_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT repos_ibfk_3 FOREIGN KEY (id_departamento_solicitante) REFERENCES departamentos (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+ADD CONSTRAINT repos_ibfk_4 FOREIGN KEY (id_ordenes_productos) REFERENCES ordenes_productos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- reposiciones_departamentos_excluidos
+ALTER TABLE reposiciones_departamentos_excluidos
+ADD CONSTRAINT rde_ibfk_1 FOREIGN KEY (id_reposicion) REFERENCES reposiciones (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT rde_ibfk_2 FOREIGN KEY (id_departamento) REFERENCES departamentos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- revisiones
+ALTER TABLE revisiones
+ADD CONSTRAINT revisiones_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT revisiones_ibfk_2 FOREIGN KEY (id_diseno) REFERENCES disenos (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT revisiones_ibfk_3 FOREIGN KEY (id_product) REFERENCES products (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- catalogo_impresoras
+ALTER TABLE catalogo_impresoras
+  ADD CONSTRAINT fk_impresoras_cat_tintas FOREIGN KEY (id_catalogo_tintas) REFERENCES catalogo_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- impresoras_colores
+ALTER TABLE impresoras_colores
+  ADD CONSTRAINT fk_imp_col_impresora FOREIGN KEY (id_catalogo_impresora) REFERENCES catalogo_impresoras (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT fk_imp_col_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- inventario
+ALTER TABLE inventario
+  ADD CONSTRAINT fk_inventario_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  ADD CONSTRAINT fk_inventario_catalogo_tintas FOREIGN KEY (id_catalogo_tintas) REFERENCES catalogo_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- tintas
+ALTER TABLE tintas
+  ADD CONSTRAINT tintas_ibfk_1 FOREIGN KEY (id_catalogo_impresoras) REFERENCES catalogo_impresoras (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT tintas_ibfk_2 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT fk_tintas_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- tintas_recargas
+ALTER TABLE tintas_recargas
+  ADD CONSTRAINT tintas_rec_ibfk_1 FOREIGN KEY (id_insumo) REFERENCES inventario (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT tintas_rec_ibfk_2 FOREIGN KEY (id_catalogo_impresora) REFERENCES catalogo_impresoras (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT fk_recargas_color FOREIGN KEY (id_color_tinta) REFERENCES catalogo_colores_tintas (_id) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- =====================================================
+-- INDICES ADICIONALES PARA OPTIMIZACION
+-- =====================================================
+ALTER TABLE lotes_detalles_empleados_asignados
+  ADD INDEX idx_orden_depto (id_orden, id_departamento);
+
+ALTER TABLE ordenes
+  ADD INDEX idx_status (status),
+  ADD KEY id_wp (id_wp);
+
+ALTER TABLE ordenes_fila_orden
+  ADD INDEX idx_id_orden (id_orden);
+
+ALTER TABLE ordenes_productos
+  ADD INDEX idx_orden_woo (id_orden, id_woo),
+  ADD KEY id_category (id_category);
+
+ALTER TABLE products_tiempos_de_produccion
+  ADD INDEX idx_prod_depto (id_product, id_departamento);
+
+-- =====================================================
+-- CATÁLOGO GEOGRÁFICO (País / Estado / Ciudad)
+-- Usado por los selects encadenados de dirección de clientes.
+-- Sincronizado con: ninesys-api/app/routes/geografia.php
+-- =====================================================
+CREATE TABLE IF NOT EXISTS catalogo_paises (
+  _id INTEGER NOT NULL AUTO_INCREMENT,
+  nombre varchar(100) NOT NULL,
+  codigo_iso2 varchar(2) NOT NULL,
+  codigo_telefonico varchar(10) DEFAULT NULL,
+  formato_postal varchar(20) DEFAULT NULL,
+  codigo_postal_ejemplo varchar(20) DEFAULT NULL,
+  moment timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (_id),
+  UNIQUE KEY uk_codigo_iso2 (codigo_iso2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Catálogo maestro de países (ISO 3166-1 alpha-2).';
+
+INSERT INTO catalogo_paises (_id, nombre, codigo_iso2, codigo_telefonico, formato_postal, codigo_postal_ejemplo) VALUES
+  (1, 'Afganistán', 'AF', '+93', 'NNNN', '1001'),
+  (2, 'Albania', 'AL', '+355', 'NNNN', '1001'),
+  (3, 'Alemania', 'DE', '+49', 'NNNNN', '10115'),
+  (4, 'Andorra', 'AD', '+376', 'AANNNN', 'AD100'),
+  (5, 'Angola', 'AO', '+244', NULL, NULL),
+  (6, 'Antigua y Barbuda', 'AG', '+1-268', NULL, NULL),
+  (7, 'Arabia Saudita', 'SA', '+966', 'NNNNN', '11564'),
+  (8, 'Argelia', 'DZ', '+213', 'NNNNN', '16000'),
+  (9, 'Argentina', 'AR', '+54', 'ANNNNAAA', 'C1002'),
+  (10, 'Armenia', 'AM', '+374', 'NNNN', '0010'),
+  (11, 'Australia', 'AU', '+61', 'NNNN', '2000'),
+  (12, 'Austria', 'AT', '+43', 'NNNN', '1010'),
+  (13, 'Azerbaiyán', 'AZ', '+994', 'AANNNNNN', 'AZ1000'),
+  (14, 'Bahamas', 'BS', '+1-242', NULL, NULL),
+  (15, 'Bahrein', 'BH', '+973', 'NNN o NNNN', '317'),
+  (16, 'Bangladesh', 'BD', '+880', 'NNNN', '1000'),
+  (17, 'Barbados', 'BB', '+1-246', 'AANNNNNN', 'BB11000'),
+  (18, 'Belice', 'BZ', '+501', NULL, NULL),
+  (19, 'Benín', 'BJ', '+229', NULL, NULL),
+  (20, 'Bielorrusia', 'BY', '+375', 'NNNNNN', '220000'),
+  (21, 'Bolivia', 'BO', '+591', NULL, NULL),
+  (22, 'Bosnia y Herzegovina', 'BA', '+387', 'NNNNN', '71000'),
+  (23, 'Botsuana', 'BW', '+267', NULL, NULL),
+  (24, 'Brasil', 'BR', '+55', 'NNNNN-NNN', '01310-100'),
+  (25, 'Brunéi', 'BN', '+673', 'AANNNN', 'BS8311'),
+  (26, 'Bulgaria', 'BG', '+359', 'NNNN', '1000'),
+  (27, 'Burkina Faso', 'BF', '+226', NULL, NULL),
+  (28, 'Burundi', 'BI', '+257', NULL, NULL),
+  (29, 'Bután', 'BT', '+975', 'NNNNN', '11001'),
+  (30, 'Bélgica', 'BE', '+32', 'NNNN', '1000'),
+  (31, 'Cabo Verde', 'CV', '+238', 'NNNN', '7600'),
+  (32, 'Camboya', 'KH', '+855', 'NNNNN', '12000'),
+  (33, 'Camerún', 'CM', '+237', NULL, NULL),
+  (34, 'Canadá', 'CA', '+1', 'ANA NAN', 'K1A 0A6'),
+  (35, 'Catar', 'QA', '+974', NULL, NULL),
+  (36, 'Chad', 'TD', '+235', NULL, NULL),
+  (37, 'Chile', 'CL', '+56', 'NNNNNNN', '8320000'),
+  (38, 'China', 'CN', '+86', 'NNNNNN', '100000'),
+  (39, 'Chipre', 'CY', '+357', 'NNNN', '1010'),
+  (40, 'Colombia', 'CO', '+57', 'NNNNNN', '110111'),
+  (41, 'Comoras', 'KM', '+269', NULL, NULL),
+  (42, 'Congo (Rep. Dem.)', 'CD', '+243', NULL, NULL),
+  (43, 'Congo (Rep.)', 'CG', '+242', NULL, NULL),
+  (44, 'Corea del Norte', 'KP', '+850', NULL, NULL),
+  (45, 'Corea del Sur', 'KR', '+82', 'NNNNN', '03000'),
+  (46, 'Costa Rica', 'CR', '+506', 'NNNNN', '10101'),
+  (47, 'Costa de Marfil', 'CI', '+225', NULL, NULL),
+  (48, 'Croacia', 'HR', '+385', 'NNNNN', '10000'),
+  (49, 'Cuba', 'CU', '+53', 'NNNNN', '10400'),
+  (50, 'Dinamarca', 'DK', '+45', 'NNNN', '1000'),
+  (51, 'Djibouti', 'DJ', '+253', NULL, NULL),
+  (52, 'Dominica', 'DM', '+1-767', NULL, NULL),
+  (53, 'Ecuador', 'EC', '+593', 'NNNNNN', '170150'),
+  (54, 'Egipto', 'EG', '+20', 'NNNNN', '11511'),
+  (55, 'El Salvador', 'SV', '+503', 'NNNNN', '01101'),
+  (56, 'Emiratos Árabes Unidos', 'AE', '+971', NULL, NULL),
+  (57, 'Eritrea', 'ER', '+291', NULL, NULL),
+  (58, 'Eslovaquia', 'SK', '+421', 'NNN NN', '811 01'),
+  (59, 'Eslovenia', 'SI', '+386', 'NNNN', '1000'),
+  (60, 'España', 'ES', '+34', 'NNNNN', '28001'),
+  (61, 'Estados Unidos', 'US', '+1', 'NNNNN', '10001'),
+  (62, 'Estonia', 'EE', '+372', 'NNNNN', '10111'),
+  (63, 'Etiopía', 'ET', '+251', 'NNNN', '1000'),
+  (64, 'Filipinas', 'PH', '+63', 'NNNN', '1000'),
+  (65, 'Finlandia', 'FI', '+358', 'NNNNN', '00100'),
+  (66, 'Fiyi', 'FJ', '+679', NULL, NULL),
+  (67, 'Francia', 'FR', '+33', 'NNNNN', '75001'),
+  (68, 'Gabón', 'GA', '+241', NULL, NULL),
+  (69, 'Gambia', 'GM', '+220', NULL, NULL),
+  (70, 'Georgia', 'GE', '+995', 'NNNN', '0100'),
+  (71, 'Ghana', 'GH', '+233', NULL, NULL),
+  (72, 'Granada', 'GD', '+1-473', NULL, NULL),
+  (73, 'Grecia', 'GR', '+30', 'NNN NN', '10431'),
+  (74, 'Guatemala', 'GT', '+502', 'NNNNN', '01001'),
+  (75, 'Guinea', 'GN', '+224', NULL, NULL),
+  (76, 'Guinea Ecuatorial', 'GQ', '+240', NULL, NULL),
+  (77, 'Guinea-Bisáu', 'GW', '+245', 'NNNN', '1000'),
+  (78, 'Guyana', 'GY', '+592', NULL, NULL),
+  (79, 'Haití', 'HT', '+509', 'AANNNN', 'HT6120'),
+  (80, 'Honduras', 'HN', '+504', 'NNNNN', '11101'),
+  (81, 'Hungría', 'HU', '+36', 'NNNN', '1011'),
+  (82, 'India', 'IN', '+91', 'NNNNNN', '110001'),
+  (83, 'Indonesia', 'ID', '+62', 'NNNNN', '10110'),
+  (84, 'Irak', 'IQ', '+964', 'NNNNN', '10001'),
+  (85, 'Irlanda', 'IE', '+353', 'ANN AAAA', 'D01 F5P2'),
+  (86, 'Irán', 'IR', '+98', 'NNNNNNNNNN', '1111111111'),
+  (87, 'Islandia', 'IS', '+354', 'NNN', '101'),
+  (88, 'Islas Marshall', 'MH', '+692', 'NNNNN', '96960'),
+  (89, 'Islas Salomón', 'SB', '+677', NULL, NULL),
+  (90, 'Israel', 'IL', '+972', 'NNNNNNN', '9100000'),
+  (91, 'Italia', 'IT', '+39', 'NNNNN', '00100'),
+  (92, 'Jamaica', 'JM', '+1-876', 'AAAANNNN', 'JMAAW19'),
+  (93, 'Japón', 'JP', '+81', 'NNN-NNNN', '100-0001'),
+  (94, 'Jordania', 'JO', '+962', 'NNNNN', '11110'),
+  (95, 'Kazajistán', 'KZ', '+7', 'NNNNNN', '010000'),
+  (96, 'Kenia', 'KE', '+254', 'NNNNN', '00100'),
+  (97, 'Kirguistán', 'KG', '+996', 'NNNNNN', '720001'),
+  (98, 'Kiribati', 'KI', '+686', NULL, NULL),
+  (99, 'Kuwait', 'KW', '+965', 'NNNNN', '13001'),
+  (100, 'Laos', 'LA', '+856', 'NNNNN', '01000'),
+  (101, 'Lesoto', 'LS', '+266', 'NNN', '100'),
+  (102, 'Letonia', 'LV', '+371', 'AANNNN', 'LV-1010'),
+  (103, 'Liberia', 'LR', '+231', 'NNNN', '1000'),
+  (104, 'Libia', 'LY', '+218', NULL, NULL),
+  (105, 'Liechtenstein', 'LI', '+423', 'NNNN', '9490'),
+  (106, 'Lituania', 'LT', '+370', 'AANNNNNN', 'LT-01001'),
+  (107, 'Luxemburgo', 'LU', '+352', 'ANNNN', 'L-1111'),
+  (108, 'Líbano', 'LB', '+961', 'NNNN NNNN', '2038 3054'),
+  (109, 'Macedonia del Norte', 'MK', '+389', 'NNNN', '1000'),
+  (110, 'Madagascar', 'MG', '+261', 'NNN', '101'),
+  (111, 'Malasia', 'MY', '+60', 'NNNNN', '50000'),
+  (112, 'Malaui', 'MW', '+265', NULL, NULL),
+  (113, 'Maldivas', 'MV', '+960', 'NNNNN', '20026'),
+  (114, 'Malta', 'MT', '+356', 'AAA NNNN', 'VLT 1117'),
+  (115, 'Malí', 'ML', '+223', NULL, NULL),
+  (116, 'Marruecos', 'MA', '+212', 'NNNNN', '10000'),
+  (117, 'Mauricio', 'MU', '+230', 'NNNNN', '42101'),
+  (118, 'Mauritania', 'MR', '+222', NULL, NULL),
+  (119, 'Micronesia', 'FM', '+691', 'NNNNN', '96941'),
+  (120, 'Moldavia', 'MD', '+373', 'AANNNNNN', 'MD-2001'),
+  (121, 'Mongolia', 'MN', '+976', 'NNNNN', '14200'),
+  (122, 'Montenegro', 'ME', '+382', 'NNNNN', '81000'),
+  (123, 'Mozambique', 'MZ', '+258', 'NNNN', '1100'),
+  (124, 'Myanmar', 'MM', '+95', 'NNNNN', '11181'),
+  (125, 'México', 'MX', '+52', 'NNNNN', '06600'),
+  (126, 'Mónaco', 'MC', '+377', 'NNNNN', '98000'),
+  (127, 'Namibia', 'NA', '+264', 'NNNN', '9000'),
+  (128, 'Nauru', 'NR', '+674', NULL, NULL),
+  (129, 'Nepal', 'NP', '+977', 'NNNNN', '44600'),
+  (130, 'Nicaragua', 'NI', '+505', 'NNNNN', '11001'),
+  (131, 'Nigeria', 'NG', '+234', 'NNNNNN', '100001'),
+  (132, 'Noruega', 'NO', '+47', 'NNNN', '0010'),
+  (133, 'Nueva Zelanda', 'NZ', '+64', 'NNNN', '6011'),
+  (134, 'Níger', 'NE', '+227', 'NNNN', '8001'),
+  (135, 'Omán', 'OM', '+968', 'NNN', '100'),
+  (136, 'Pakistán', 'PK', '+92', 'NNNNN', '44000'),
+  (137, 'Palaos', 'PW', '+680', 'NNNNN', '96940'),
+  (138, 'Panamá', 'PA', '+507', 'NNNN', '0801'),
+  (139, 'Papúa Nueva Guinea', 'PG', '+675', 'NNN', '111'),
+  (140, 'Paraguay', 'PY', '+595', 'NNNN', '1001'),
+  (141, 'Países Bajos', 'NL', '+31', 'NNNN AA', '1011 AB'),
+  (142, 'Perú', 'PE', '+51', 'NNNNN', '15001'),
+  (143, 'Polonia', 'PL', '+48', 'NN-NNN', '00-001'),
+  (144, 'Portugal', 'PT', '+351', 'NNNN-NNN', '1000-001'),
+  (145, 'Reino Unido', 'GB', '+44', 'AANN NAA', 'SW1A 1AA'),
+  (146, 'República Centroafricana', 'CF', '+236', NULL, NULL),
+  (147, 'República Checa', 'CZ', '+420', 'NNN NN', '110 00'),
+  (148, 'República Dominicana', 'DO', '+1-809', 'NNNNN', '10101'),
+  (149, 'Ruanda', 'RW', '+250', NULL, NULL),
+  (150, 'Rumania', 'RO', '+40', 'NNNNNN', '010011'),
+  (151, 'Rusia', 'RU', '+7', 'NNNNNN', '101000'),
+  (152, 'Samoa', 'WS', '+685', NULL, NULL),
+  (153, 'San Cristóbal y Nieves', 'KN', '+1-869', NULL, NULL),
+  (154, 'San Marino', 'SM', '+378', 'NNNNN', '47890'),
+  (155, 'San Vicente y las Granadinas', 'VC', '+1-784', 'AANNNN', 'VC0100'),
+  (156, 'Santa Lucía', 'LC', '+1-758', 'AANN NNN', 'LC01 101'),
+  (157, 'Santo Tomé y Príncipe', 'ST', '+239', NULL, NULL),
+  (158, 'Senegal', 'SN', '+221', 'NNNNN', '10700'),
+  (159, 'Serbia', 'RS', '+381', 'NNNNN', '11000'),
+  (160, 'Seychelles', 'SC', '+248', NULL, NULL),
+  (161, 'Sierra Leona', 'SL', '+232', NULL, NULL),
+  (162, 'Singapur', 'SG', '+65', 'NNNNNN', '018956'),
+  (163, 'Siria', 'SY', '+963', NULL, NULL),
+  (164, 'Somalia', 'SO', '+252', 'AA NNNNN', 'JH 09010'),
+  (165, 'Sri Lanka', 'LK', '+94', 'NNNNN', '10350'),
+  (166, 'Suazilandia', 'SZ', '+268', 'ANNN', 'H100'),
+  (167, 'Sudáfrica', 'ZA', '+27', 'NNNN', '0001'),
+  (168, 'Sudán', 'SD', '+249', 'NNNNN', '11111'),
+  (169, 'Sudán del Sur', 'SS', '+211', NULL, NULL),
+  (170, 'Suecia', 'SE', '+46', 'NNN NN', '113 51'),
+  (171, 'Suiza', 'CH', '+41', 'NNNN', '8001'),
+  (172, 'Surinam', 'SR', '+597', NULL, NULL),
+  (173, 'Tailandia', 'TH', '+66', 'NNNNN', '10200'),
+  (174, 'Tanzania', 'TZ', '+255', NULL, NULL),
+  (175, 'Tayikistán', 'TJ', '+992', 'NNNNNN', '734000'),
+  (176, 'Timor Oriental', 'TL', '+670', NULL, NULL),
+  (177, 'Togo', 'TG', '+228', NULL, NULL),
+  (178, 'Tonga', 'TO', '+676', NULL, NULL),
+  (179, 'Trinidad y Tobago', 'TT', '+1-868', 'NNNNNN', '100100'),
+  (180, 'Turkmenistán', 'TM', '+993', 'NNNNNN', '744000'),
+  (181, 'Turquía', 'TR', '+90', 'NNNNN', '06010'),
+  (182, 'Tuvalu', 'TV', '+688', NULL, NULL),
+  (183, 'Túnez', 'TN', '+216', 'NNNN', '1000'),
+  (184, 'Ucrania', 'UA', '+380', 'NNNNN', '01001'),
+  (185, 'Uganda', 'UG', '+256', NULL, NULL),
+  (186, 'Uruguay', 'UY', '+598', 'NNNNN', '11000'),
+  (187, 'Uzbekistán', 'UZ', '+998', 'NNNNNN', '100000'),
+  (188, 'Vanuatu', 'VU', '+678', NULL, NULL),
+  (189, 'Venezuela', 'VE', '+58', 'NNNN', '1010'),
+  (190, 'Vietnam', 'VN', '+84', 'NNNNNN', '100000'),
+  (191, 'Yemen', 'YE', '+967', NULL, NULL),
+  (192, 'Zambia', 'ZM', '+260', 'NNNNN', '10101'),
+  (193, 'Zimbabue', 'ZW', '+263', NULL, NULL);
+
+CREATE TABLE IF NOT EXISTS catalogo_estados (
+  _id INTEGER NOT NULL AUTO_INCREMENT,
+  id_pais INTEGER NOT NULL,
+  nombre varchar(100) NOT NULL,
+  moment timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (_id),
+  UNIQUE KEY uk_pais_estado (id_pais, nombre),
+  CONSTRAINT fk_estado_pais FOREIGN KEY (id_pais) REFERENCES catalogo_paises (_id) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Estados/provincias por país (24 de Venezuela precargados).';
+
+INSERT INTO catalogo_estados (_id, id_pais, nombre) VALUES
+  (1, 189, 'Amazonas'),
+  (2, 189, 'Anzoátegui'),
+  (3, 189, 'Apure'),
+  (4, 189, 'Aragua'),
+  (5, 189, 'Barinas'),
+  (6, 189, 'Bolívar'),
+  (7, 189, 'Carabobo'),
+  (8, 189, 'Cojedes'),
+  (9, 189, 'Delta Amacuro'),
+  (10, 189, 'Distrito Capital'),
+  (11, 189, 'Falcón'),
+  (12, 189, 'Guárico'),
+  (13, 189, 'Lara'),
+  (14, 189, 'Miranda'),
+  (15, 189, 'Monagas'),
+  (16, 189, 'Mérida'),
+  (17, 189, 'Nueva Esparta'),
+  (18, 189, 'Portuguesa'),
+  (19, 189, 'Sucre'),
+  (20, 189, 'Trujillo'),
+  (21, 189, 'Táchira'),
+  (22, 189, 'Vargas'),
+  (23, 189, 'Yaracuy'),
+  (24, 189, 'Zulia');
+
+CREATE TABLE IF NOT EXISTS catalogo_ciudades (
+  _id INTEGER NOT NULL AUTO_INCREMENT,
+  id_estado INTEGER NOT NULL,
+  nombre varchar(100) NOT NULL,
+  codigo_postal varchar(20) DEFAULT NULL,
+  moment timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (_id),
+  KEY idx_ciudad_estado (id_estado),
+  UNIQUE KEY uk_estado_ciudad (id_estado, nombre),
+  CONSTRAINT fk_ciudad_estado FOREIGN KEY (id_estado) REFERENCES catalogo_estados (_id) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Ciudades/municipios por estado (274 de Venezuela precargadas).';
+
+INSERT INTO catalogo_ciudades (_id, id_estado, nombre, codigo_postal) VALUES
+  (1, 1, 'Isla Ratón', '7281'),
+  (2, 1, 'La Esmeralda', '7271'),
+  (3, 1, 'Maroa', '7251'),
+  (4, 1, 'Puerto Ayacucho', '7101'),
+  (5, 1, 'San Carlos de Río Negro', '7261'),
+  (6, 1, 'San Fernando de Atabapo', '7201'),
+  (7, 1, 'San Juan de Manapiare', '7211'),
+  (8, 2, 'Anaco', '6303'),
+  (9, 2, 'Aragua de Barcelona', '6021'),
+  (10, 2, 'Barcelona', '6001'),
+  (11, 2, 'Boca de Uchire', '6016'),
+  (12, 2, 'Cantaura', '6060'),
+  (13, 2, 'Clarines', '6013'),
+  (14, 2, 'El Chaparro', '6017'),
+  (15, 2, 'El Tigre', '6030'),
+  (16, 2, 'El Tigrito', '6031'),
+  (17, 2, 'Guanta', '6022'),
+  (18, 2, 'Lecherías', '6023'),
+  (19, 2, 'Onoto', '6040'),
+  (20, 2, 'Puerto La Cruz', '6023'),
+  (21, 2, 'Puerto Píritu', '6012'),
+  (22, 2, 'Píritu', '6011'),
+  (23, 2, 'San José de Guanipa', '6050'),
+  (24, 2, 'San Mateo', '6070'),
+  (25, 2, 'Santa Ana', '6080'),
+  (26, 2, 'Soledad', '6302'),
+  (27, 2, 'Valle de Guanape', '6041'),
+  (28, 3, 'Achaguas', '7101'),
+  (29, 3, 'Biruaca', '7002'),
+  (30, 3, 'Bruzual', '7401'),
+  (31, 3, 'El Amparo', '7202'),
+  (32, 3, 'Elorza', '7211'),
+  (33, 3, 'Guasdualito', '7201'),
+  (34, 3, 'Puerto Páez', '7301'),
+  (35, 3, 'San Fernando de Apure', '7001'),
+  (36, 4, 'Cagua', '2122'),
+  (37, 4, 'Camatagua', '2302'),
+  (38, 4, 'Colonia Tovar', '2113'),
+  (39, 4, 'El Consejo', '2205'),
+  (40, 4, 'El Limón', '2107'),
+  (41, 4, 'La Victoria', '2201'),
+  (42, 4, 'Las Tejerías', '2204'),
+  (43, 4, 'Magdaleno', '2312'),
+  (44, 4, 'Maracay', '2101'),
+  (45, 4, 'Ocumare de la Costa', '2401'),
+  (46, 4, 'Palo Negro', '2103'),
+  (47, 4, 'San Casimiro', '2303'),
+  (48, 4, 'San Mateo', '2155'),
+  (49, 4, 'Santa Cruz de Aragua', '2120'),
+  (50, 4, 'Turmero', '2115'),
+  (51, 4, 'Villa de Cura', '2301'),
+  (52, 5, 'Arismendi', '5221'),
+  (53, 5, 'Barinas', '5201'),
+  (54, 5, 'Barinitas', '5211'),
+  (55, 5, 'Ciudad Bolivia', '5251'),
+  (56, 5, 'Nutrias', '5271'),
+  (57, 5, 'Obispos', '5213'),
+  (58, 5, 'Pueblo Nuevo del Sur', '5281'),
+  (59, 5, 'Sabaneta', '5261'),
+  (60, 5, 'Santa Bárbara', '5241'),
+  (61, 5, 'Socopó', '5231'),
+  (62, 6, 'Caicara del Orinoco', '8201'),
+  (63, 6, 'Ciudad Bolívar', '8001'),
+  (64, 6, 'Ciudad Piar', '8301'),
+  (65, 6, 'El Callao', '8151'),
+  (66, 6, 'Guasipati', '8151'),
+  (67, 6, 'Los Pijiguaos', '8201'),
+  (68, 6, 'Maripa', '8501'),
+  (69, 6, 'Matanzas', '8051'),
+  (70, 6, 'Puerto Ordaz', '8050'),
+  (71, 6, 'San Félix', '8070'),
+  (72, 6, 'Santa Elena de Uairén', '8601'),
+  (73, 6, 'Soledad', '8350'),
+  (74, 6, 'Tumeremo', '8401'),
+  (75, 6, 'Upata', '8101'),
+  (76, 7, 'Bejuma', '2041'),
+  (77, 7, 'Guacara', '2015'),
+  (78, 7, 'Güigüe', '2031'),
+  (79, 7, 'Los Guayos', '2016'),
+  (80, 7, 'Mariara', '2021'),
+  (81, 7, 'Miranda', '2042'),
+  (82, 7, 'Montalbán', '2051'),
+  (83, 7, 'Morón', '2110'),
+  (84, 7, 'Naguanagua', '2005'),
+  (85, 7, 'Puerto Cabello', '2101'),
+  (86, 7, 'San Diego', '2006'),
+  (87, 7, 'San Joaquín', '2014'),
+  (88, 7, 'Tocuyito', '2017'),
+  (89, 7, 'Valencia', '2001'),
+  (90, 8, 'El Baúl', '2301'),
+  (91, 8, 'La Aguadita', '2202'),
+  (92, 8, 'Las Vegas', '2241'),
+  (93, 8, 'Libertad', '2231'),
+  (94, 8, 'Macapo', '2251'),
+  (95, 8, 'San Carlos', '2201'),
+  (96, 8, 'Tinaco', '2211'),
+  (97, 8, 'Tinaquillo', '2212'),
+  (98, 9, 'Curiapo', '6301'),
+  (99, 9, 'Pedernales', '6201'),
+  (100, 9, 'Sierra Imataca', '6401'),
+  (101, 9, 'Tucupita', '6101'),
+  (102, 10, '23 de Enero', '1010'),
+  (103, 10, 'Altagracia', '1010'),
+  (104, 10, 'Antímano', '1020'),
+  (105, 10, 'Caracas (Libertador)', '1010'),
+  (106, 10, 'Caricuao', '1050'),
+  (107, 10, 'Coche', '1070'),
+  (108, 10, 'El Paraíso', '1030'),
+  (109, 10, 'El Valle', '1040'),
+  (110, 10, 'La Vega', '1060'),
+  (111, 10, 'Macarao', '1080'),
+  (112, 11, 'Chichiriviche', '4162'),
+  (113, 11, 'Coro', '4101'),
+  (114, 11, 'Cumarebo', '4171'),
+  (115, 11, 'Dabajuro', '4109'),
+  (116, 11, 'Guaibacoa', '4121'),
+  (117, 11, 'La Vela de Coro', '4101'),
+  (118, 11, 'Mene de Mauroa', '4118'),
+  (119, 11, 'Mirimire', '4131'),
+  (120, 11, 'Palmasola', '4119'),
+  (121, 11, 'Punto Fijo', '4102'),
+  (122, 11, 'Santa Cruz de Bucaral', '4111'),
+  (123, 11, 'Tucacas', '4161'),
+  (124, 12, 'Altagracia de Orituco', '2331'),
+  (125, 12, 'Calabozo', '2312'),
+  (126, 12, 'Chaguaramas', '2302'),
+  (127, 12, 'El Sombrero', '2341'),
+  (128, 12, 'Las Mercedes', '2323'),
+  (129, 12, 'San José de Guaribe', '2332'),
+  (130, 12, 'San Juan de los Morros', '2301'),
+  (131, 12, 'Tucupido', '2351'),
+  (132, 12, 'Valle de la Pascua', '2321'),
+  (133, 12, 'Zaraza', '2350'),
+  (134, 13, 'Barquisimeto', '3001'),
+  (135, 13, 'Cabudare', '3023'),
+  (136, 13, 'Carora', '3201'),
+  (137, 13, 'Duaca', '3061'),
+  (138, 13, 'El Tocuyo', '3101'),
+  (139, 13, 'Guarico', '3071'),
+  (140, 13, 'Quíbor', '3051'),
+  (141, 13, 'Sanare', '3021'),
+  (142, 13, 'Sarare', '3151'),
+  (143, 13, 'Siquisique', '4201'),
+  (144, 13, 'Yaritagua', '3031'),
+  (145, 14, 'Baruta', '1080'),
+  (146, 14, 'Caucagua', '1231'),
+  (147, 14, 'Chacao', '1060'),
+  (148, 14, 'Charallave', '1216'),
+  (149, 14, 'Cúa', '1214'),
+  (150, 14, 'Cúpira', '1238'),
+  (151, 14, 'El Hatillo', '1083'),
+  (152, 14, 'Guarenas', '1220'),
+  (153, 14, 'Guatire', '1221'),
+  (154, 14, 'Higuerote', '1237'),
+  (155, 14, 'Los Teques', '1201'),
+  (156, 14, 'Ocumare del Tuy', '1212'),
+  (157, 14, 'Petare', '1070'),
+  (158, 14, 'Río Chico', '1236'),
+  (159, 14, 'San Francisco de Yare', '1213'),
+  (160, 14, 'Santa Teresa del Tuy', '1215'),
+  (161, 15, 'Barrancas', '6401'),
+  (162, 15, 'Caripe', '6211'),
+  (163, 15, 'Caripito', '6241'),
+  (164, 15, 'Maturín', '6201'),
+  (165, 15, 'Maturín Este', '6210'),
+  (166, 15, 'Punta de Mata', '6301'),
+  (167, 15, 'Quiriquire', '6251'),
+  (168, 15, 'Temblador', '6351'),
+  (169, 15, 'Uracoa', '6461'),
+  (170, 16, 'Aricagua', '5221'),
+  (171, 16, 'Arzobispo Chacón', '5271'),
+  (172, 16, 'Bailadores', '5231'),
+  (173, 16, 'Canaguá', '5261'),
+  (174, 16, 'Ejido', '5111'),
+  (175, 16, 'El Vigía', '5311'),
+  (176, 16, 'Guaraque', '5241'),
+  (177, 16, 'La Azulita', '5301'),
+  (178, 16, 'Lagunillas', '5141'),
+  (179, 16, 'Mucuchíes', '5131'),
+  (180, 16, 'Mérida', '5101'),
+  (181, 16, 'Santa Bárbara', '5181'),
+  (182, 16, 'Santa Cruz de Mora', '5321'),
+  (183, 16, 'Tabay', '5121'),
+  (184, 16, 'Timotes', '5161'),
+  (185, 16, 'Tovar', '5211'),
+  (186, 16, 'Zea', '5251'),
+  (187, 17, 'El Valle del Espíritu Santo', '6313'),
+  (188, 17, 'Juan Griego', '6311'),
+  (189, 17, 'La Asunción', '6301'),
+  (190, 17, 'Pampatar', '6303'),
+  (191, 17, 'Porlamar', '6302'),
+  (192, 17, 'Punta de Piedras', '6322'),
+  (193, 17, 'San Juan Bautista', '6321'),
+  (194, 18, 'Acarigua', '3301'),
+  (195, 18, 'Araure', '3303'),
+  (196, 18, 'Biscucuy', '3311'),
+  (197, 18, 'Guanare', '3301'),
+  (198, 18, 'Guanarito', '3321'),
+  (199, 18, 'Ospino', '3331'),
+  (200, 18, 'Papelón', '3351'),
+  (201, 18, 'Píritu', '3341'),
+  (202, 18, 'San Rafael de Onoto', '3361'),
+  (203, 18, 'Turen', '3371'),
+  (204, 19, 'Araya', '6161'),
+  (205, 19, 'Carúpano', '6201'),
+  (206, 19, 'Casanay', '6141'),
+  (207, 19, 'Cumanacoa', '6121'),
+  (208, 19, 'Cumaná', '6101'),
+  (209, 19, 'Güiria', '6301'),
+  (210, 19, 'Irapa', '6311'),
+  (211, 19, 'Río Caribe', '6222'),
+  (212, 19, 'San Antonio del Golfo', '6131'),
+  (213, 19, 'Yaguaraparo', '6321'),
+  (214, 20, 'Betijoque', '3161'),
+  (215, 20, 'Boconó', '3251'),
+  (216, 20, 'El Paradero', '3141'),
+  (217, 20, 'Escuque', '3131'),
+  (218, 20, 'La Ceiba', '3191'),
+  (219, 20, 'Monte Carmelo', '3201'),
+  (220, 20, 'Motatán', '3121'),
+  (221, 20, 'Pampanito', '3181'),
+  (222, 20, 'Pampán', '3171'),
+  (223, 20, 'Sabana de Mendoza', '3111'),
+  (224, 20, 'Trujillo', '3151'),
+  (225, 20, 'Valera', '3101'),
+  (226, 21, 'Abejales', '5171'),
+  (227, 21, 'Capacho', '5022'),
+  (228, 21, 'Colón', '5131'),
+  (229, 21, 'La Fría', '5121'),
+  (230, 21, 'La Grita', '5201'),
+  (231, 21, 'Lobatera', '5011'),
+  (232, 21, 'Michelena', '5031'),
+  (233, 21, 'Palmira', '5012'),
+  (234, 21, 'Rubio', '5021'),
+  (235, 21, 'San Antonio del Táchira', '5101'),
+  (236, 21, 'San Cristóbal', '5001'),
+  (237, 21, 'Seboruco', '5141'),
+  (238, 21, 'Táriba', '5021'),
+  (239, 21, 'Ureña', '5111'),
+  (240, 22, 'Caraballeda', '1162'),
+  (241, 22, 'Catia La Mar', '1163'),
+  (242, 22, 'El Junko', '1166'),
+  (243, 22, 'La Guaira', '1160'),
+  (244, 22, 'Macuto', '1161'),
+  (245, 22, 'Maiquetía', '1164'),
+  (246, 22, 'Naiguatá', '1165'),
+  (247, 22, 'Tanaguarena', '1167'),
+  (248, 23, 'Aroa', '2251'),
+  (249, 23, 'Chivacoa', '2211'),
+  (250, 23, 'Cocorote', '2231'),
+  (251, 23, 'Independencia', '2271'),
+  (252, 23, 'La Unión', '2241'),
+  (253, 23, 'Nirgua', '2221'),
+  (254, 23, 'San Felipe', '2201'),
+  (255, 23, 'Urachiche', '2261'),
+  (256, 23, 'Veroes', '2281'),
+  (257, 23, 'Yaritagua', '3031'),
+  (258, 24, 'Bobures', '4171'),
+  (259, 24, 'Cabimas', '4013'),
+  (260, 24, 'Ciudad Ojeda', '4028'),
+  (261, 24, 'Colón', '4131'),
+  (262, 24, 'El Vigía (Zulia)', '4141'),
+  (263, 24, 'Encontrados', '4121'),
+  (264, 24, 'Jesús Enrique Lossada', '4003'),
+  (265, 24, 'La Cañada de Urdaneta', '4051'),
+  (266, 24, 'La Villa del Rosario', '4071'),
+  (267, 24, 'Lagunillas', '4028'),
+  (268, 24, 'Los Puertos de Altagracia', '4011'),
+  (269, 24, 'Machiques', '4101'),
+  (270, 24, 'Maracaibo', '4001'),
+  (271, 24, 'Moporo', '4081'),
+  (272, 24, 'San Francisco', '4001'),
+  (273, 24, 'Santa Bárbara del Zulia', '4151'),
+  (274, 24, 'Totumos', '4061');
+
+-- Columnas de dirección estructurada en customers (país/estado/ciudad seleccionados)
+ALTER TABLE customers
+  ADD COLUMN id_catalogo_pais INTEGER DEFAULT NULL,
+  ADD COLUMN id_catalogo_estado INTEGER DEFAULT NULL,
+  ADD COLUMN id_catalogo_ciudad INTEGER DEFAULT NULL,
+  ADD CONSTRAINT fk_customers_pais FOREIGN KEY (id_catalogo_pais) REFERENCES catalogo_paises (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT fk_customers_estado FOREIGN KEY (id_catalogo_estado) REFERENCES catalogo_estados (_id) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT fk_customers_ciudad FOREIGN KEY (id_catalogo_ciudad) REFERENCES catalogo_ciudades (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- =====================================================
+-- PERMISOS REQUERIDOS (PARA REFERENCIA)
+-- =====================================================
+-- Estos comandos deben ejecutarse con el usuario root después de crear la empresa:
+-- 1. GRANT EXECUTE ON api_empresas.* TO 'api_user_N'@'localhost';
+-- 2. GRANT EXECUTE ON api_empresas.* TO 'api_user_N'@'%';
+-- 3. FLUSH PRIVILEGES;
+
+-- Permisos necesarios para consultas cruzadas (Módulo Administrador / Empleados)
+-- GRANT SELECT ON api_emp_N.* TO 'api_adminemp'@'localhost';
+
+-- =====================================================
+-- TABLAS DEL SERVICIO msg_ninesys (WhatsApp / Baileys)
+-- =====================================================
+-- Sincronizado con: msg_ninesys/db/migrations/001_wa_tables.sql
+-- Cualquier cambio en este bloque debe replicarse allá (y viceversa).
+
+CREATE TABLE IF NOT EXISTS wa_session_auth (
+  key_name   VARCHAR(255) NOT NULL,
+  key_value  LONGBLOB NOT NULL,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (key_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wa_session_state (
+  id           TINYINT NOT NULL DEFAULT 1,
+  phone_number VARCHAR(32)  NULL,
+  pushname     VARCHAR(128) NULL,
+  status       ENUM('NOT_REGISTERED','INITIALIZING','REQUIRES_QR','AUTHENTICATED',
+                      'READY','PAUSED','ERROR','DISCONNECTED','DEGRADED')
+                 NOT NULL DEFAULT 'NOT_REGISTERED',
+  last_error   TEXT NULL,
+  qr_attempts  INT NOT NULL DEFAULT 0,
+  paused_until BIGINT NULL,
+  last_seen_at DATETIME NULL,
+  updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  CONSTRAINT wa_session_state_singleton CHECK (id = 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wa_conversations (
+  id           BIGINT NOT NULL AUTO_INCREMENT,
+  jid          VARCHAR(64)  NOT NULL,
+  name         VARCHAR(255) NULL,
+  is_group     SMALLINT NOT NULL DEFAULT 0,
+  mode         ENUM('bot','human','hybrid') NOT NULL DEFAULT 'hybrid',
+  ai_enabled   SMALLINT NOT NULL DEFAULT 1,
+  ai_agent_id     INT       NULL,
+  assigned_to          INT       NULL,
+  owner_id             INT       NULL,
+  last_inbound_at      DATETIME  NULL,
+  assigned_at          DATETIME  NULL,
+  last_vendor_reply_at DATETIME  NULL,
+  unread_count    INT NOT NULL DEFAULT 0,
+  last_message    TEXT NULL,
+  last_ts         BIGINT NULL,
+  tags            JSON NULL,
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at      DATETIME NULL,
+  deleted_by      INT       NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_jid (jid),
+  KEY idx_last_ts (last_ts DESC),
+  KEY idx_assigned (assigned_to),
+  KEY idx_owner (owner_id),
+  KEY idx_ai_agent (ai_agent_id),
+  KEY idx_deleted_at (deleted_at),
+  KEY idx_assigned_at (assigned_at),
+  KEY idx_last_vendor_reply_at (last_vendor_reply_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Estado de disponibilidad y límites de carga por vendedor (Fase D.2).
+-- user_id = id del empleado en la tabla de la empresa.
+CREATE TABLE IF NOT EXISTS wa_vendor_state (
+  user_id           INT NOT NULL PRIMARY KEY,
+  is_available      SMALLINT NOT NULL DEFAULT 1,
+  max_active        INT NOT NULL DEFAULT 0,  -- 0 = sin tope
+  allow_auto_assign SMALLINT NOT NULL DEFAULT 1,
+  updated_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                      ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Mapeo LID ↔ JID-fono para contactos de WhatsApp.
+-- WhatsApp puede entregar mensajes con remoteJid = <numero>@lid
+-- (privacy feature) sin teléfono real. Se popula desde los eventos
+-- contacts.upsert/update, chats.phoneNumberShare y messaging-history.set
+-- de Baileys. Permite identificar al cliente en customers.phone cuando
+-- el chat llega por LID.
+CREATE TABLE IF NOT EXISTS wa_lid_phone_map (
+  lid_jid       VARCHAR(100) NOT NULL,
+  phone_jid     VARCHAR(100) NOT NULL,
+  pushname      VARCHAR(255) DEFAULT NULL,
+  first_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                  ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (lid_jid),
+  KEY idx_phone_jid (phone_jid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wa_messages (
+  id                   BIGINT NOT NULL AUTO_INCREMENT,
+  jid                  VARCHAR(64) NOT NULL,
+  wa_message_id        VARCHAR(128) NULL,
+  from_me              SMALLINT NOT NULL,
+  sender               VARCHAR(64) NULL,
+  type                 ENUM('text','image','audio','video','document','sticker','location','contact','system')
+                         NOT NULL DEFAULT 'text',
+  body                 MEDIUMTEXT NULL,
+  transcript           TEXT           NULL,
+  transcript_lang      VARCHAR(8)     NULL,
+  transcript_cost_usd  DECIMAL(10,6)  NULL,
+  transcript_error     VARCHAR(255)   NULL,
+  media_url            VARCHAR(512) NULL,
+  media_mime           VARCHAR(128) NULL,
+  via                  ENUM('human','api','ai','template') NOT NULL DEFAULT 'api',
+  sent_by_user         INT NULL,
+  status               ENUM('pending','sent','delivered','read','failed') NOT NULL DEFAULT 'pending',
+  ts                   BIGINT NOT NULL,
+  created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+  deleted_at           DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_wa_msg (wa_message_id),
+  KEY idx_conv (jid, ts),
+  KEY idx_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wa_templates (
+  id         INT NOT NULL AUTO_INCREMENT,
+  name       VARCHAR(128) NOT NULL,
+  body       TEXT NOT NULL,
+  variables  JSON NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wa_ai_settings (
+  id             TINYINT NOT NULL DEFAULT 1,
+  provider          ENUM('anthropic','gemini') NOT NULL DEFAULT 'gemini',
+  enabled           SMALLINT NOT NULL DEFAULT 1,
+  model             VARCHAR(64) NOT NULL DEFAULT 'claude-sonnet-4-6',
+  system_prompt     TEXT NULL,
+  temperature       DECIMAL(3,2) NOT NULL DEFAULT 0.30,
+  max_tokens        INT NOT NULL DEFAULT 1024,
+  handoff_rules     JSON NULL,
+  knowledge_base    JSON NULL,
+  updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  respond_in_groups SMALLINT NOT NULL DEFAULT 0,
+  always_ai         SMALLINT NOT NULL DEFAULT 0 COMMENT '0=handoff normal; 1=IA siempre activa (solo notifica, no pasa a modo humano)',
+  PRIMARY KEY (id),
+  CONSTRAINT wa_ai_settings_singleton CHECK (id = 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wa_ai_agents (
+  id             INT NOT NULL AUTO_INCREMENT,
+  name           VARCHAR(128) NOT NULL,
+  slug           VARCHAR(64)  NOT NULL,
+  system_prompt  TEXT NULL,
+  knowledge_base JSON NULL,
+  model          VARCHAR(64) NOT NULL DEFAULT 'gemini-2.5-flash',
+  temperature    DECIMAL(3,2) NOT NULL DEFAULT 0.30,
+  max_tokens     INT NOT NULL DEFAULT 1024,
+  enabled        SMALLINT NOT NULL DEFAULT 1,
+  is_default     SMALLINT NOT NULL DEFAULT 0,
+  created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_slug (slug)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wa_send_log (
+  id           BIGINT NOT NULL AUTO_INCREMENT,
+  endpoint     VARCHAR(64) NOT NULL,
+  phone        VARCHAR(32) NOT NULL,
+  template     VARCHAR(128) NULL,
+  status       ENUM('ok','error') NOT NULL,
+  error        TEXT NULL,
+  requested_by VARCHAR(128) NULL,
+  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Acumulado mensual de consumo por proveedor de IA (Whisper, Gemini).
+-- usd_micros = millonésimas de USD (1e-6). Int para ser aditivo sin
+-- errores de float; evita redondear a 0 los costos por llamada pequeños
+-- (una nota de voz de 30s en Whisper cuesta ~$0.003 = 3000 micros).
+CREATE TABLE IF NOT EXISTS wa_usage_monthly (
+  year_month  CHAR(7)     NOT NULL,
+  provider    VARCHAR(16) NOT NULL,
+  usd_micros  BIGINT      NOT NULL DEFAULT 0,
+  call_count  INT         NOT NULL DEFAULT 0,
+  updated_at  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                    ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (year_month, provider)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Config STT por tenant (singleton id=1). Toggle, tope mensual en USD,
+-- umbral de audio largo (handoff humano sin transcribir) e idioma hint.
+CREATE TABLE IF NOT EXISTS wa_tenant_config (
+  id                      TINYINT       NOT NULL DEFAULT 1,
+  stt_enabled             SMALLINT    NOT NULL DEFAULT 1,
+  stt_monthly_usd_limit   DECIMAL(10,2) NOT NULL DEFAULT 3.00,
+  stt_long_audio_seconds  INT           NOT NULL DEFAULT 120,
+  stt_language            VARCHAR(8)    NOT NULL DEFAULT 'es',
+  updated_at              TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                                  ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  CONSTRAINT wa_tenant_config_singleton CHECK (id = 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO wa_session_state (id, status) VALUES (1, 'NOT_REGISTERED');
+INSERT IGNORE INTO wa_ai_settings (id) VALUES (1);
+INSERT IGNORE INTO wa_tenant_config (id) VALUES (1);
+INSERT IGNORE INTO wa_ai_agents (id, name, slug, system_prompt, enabled, is_default)
+VALUES (1, 'General', 'general', 'Eres un asistente de atención al cliente vía WhatsApp. Responde de forma breve, amable y útil.', 1, 1);
+INSERT IGNORE INTO wa_ai_agents (id, name, slug, system_prompt, knowledge_base, model, temperature, max_tokens, enabled, is_default) VALUES (2,'Ventas','ventas','Eres un agente virtual especializado en atención al cliente para la marca **Nineteen**, una empresa venezolana con más de 13 años de experiencia en confección e impresión de prendas personalizadas, ubicada en **El Vigía, Venezuela**.\\n\\n---\\n\\n## Audios y Notas de Voz\\nSi recibes un mensaje que proviene de una nota de voz transcrita, trátalo como texto normal.\\nNo menciones que fue audio, no digas \"no puedo escuchar\", simplemente responde la pregunta del cliente de forma natural y profesional. La transcripción es tan válida como un mensaje escrito.\\n\\n---\\n\\n## INSTRUCCIÓN CRÍTICA — Leer primero\\nCuando en el contexto aparezca un bloque \"Productos encontrados\", esos precios son exactos y actualizados. **Muéstralos directamente sin pedir información adicional ni escalar a un asesor.** Solo pide información adicional (tela, cantidad, tallas) cuando el cliente claramente esté listo para hacer una cotización.\\n\\n**REGLA ABSOLUTA — Función submit_presupuesto:** Cada vez que envíes el mensaje de confirmación del presupuesto (el que contiene el resumen y pide al cliente que responda SÍ), DEBES llamar OBLIGATORIAMENTE a la función submit_presupuesto con todos los datos del pedido. Si omites esa llamada, el sistema no podrá registrar el pedido y el trabajo de recopilación se perderá. Esta es la instrucción más importante de este prompt.\\n\\n---\\n\\n## Flujo de atención\\n\\n### 1. Cliente consulta información o precios\\nSi el cliente pregunta por un producto o sus precios y el contexto contiene ese producto con precios:\\n- Muestra el nombre del producto, descripción breve y **todos los precios** por cantidad\\n- Pregunta si le interesa cotizar ese producto\\n- **Nunca escales ni digas que no tienes precio**\\n\\n### 2. Cliente quiere cotizar (presupuesto)\\nCuando el cliente manifieste interés en cotizar, recopila la información **UN PASO A LA VEZ**: envía un único mensaje por paso y **ESPERA la respuesta del cliente antes de continuar** con el siguiente paso. No agrupes preguntas en un mismo mensaje.\\n\\n**REGLA CRÍTICA — Información ya proporcionada:** Antes de hacer cualquier pregunta de los Pasos A–D, revisa el historial completo de la conversación. Si el cliente ya indicó un dato, está ABSOLUTAMENTE PROHIBIDO volvérselo a preguntar.\\n\\nCómo aplicarlo:\\n- Si ya tienes producto + cantidad + talla → solo pregunta el corte (Paso B parcial), luego pasa al Paso C.\\n- Si ya tienes producto + cantidad + talla + corte → Paso B completo, pasa directo al Paso C (tela).\\n- Si ya tienes todo el Paso B → pasa directo al Paso C sin mencionar los datos ya recabados.\\n\\nEjemplos concretos:\\n• Cliente dijo \"3 camisas talla M\" y luego eligió tipo → tienes cantidad=3 y talla=M. Solo pregunta el corte: \"¿Serían de corte Damas, Caballeros o Niños?\" — NUNCA preguntes cantidad ni talla de nuevo.\\n• Cliente dijo \"3 camisas sublimadas talla M\" desde el primer mensaje → tienes Paso A y Paso B completos. Ve directo al Paso C (tela).\\n\\nSi el cliente pide varios productos, completa los pasos A–D para el primero antes de preguntar por el siguiente.\\n\\n**Paso A: Confirmar producto**\\nConfirma el producto seleccionado con el cliente.\\n*Espera respuesta.*\\n\\n**Paso B: Cantidades, tallas y corte**\\nAntes de preguntar, revisa el historial y determina cuáles de estos tres datos ya tienes para este producto: **cantidad**, **talla(s)** y **corte**. Luego actúa así:\\n\\n- Si no tienes **ninguno**: pregunta los tres juntos en un solo mensaje. Ejemplo: \"¿En qué talla(s) y corte necesitas y cuántas de cada una? Por ejemplo: 10 talla S Damas, 10 talla XL Caballeros.\"\\n- Si te faltan **dos**: pregunta solo los dos que faltan en un mismo mensaje.\\n- Si te falta **uno solo**: pregunta únicamente ese dato. Ejemplos:\\n  - Solo falta corte → \"¿Serían de corte Damas, Caballeros o Niños?\"\\n  - Solo falta talla → \"¿En qué talla(s) la necesitas?\"\\n  - Solo falta cantidad → \"¿Cuántas unidades necesitas?\"\\n- Si ya tienes los **tres**: no preguntes nada de Paso B, pasa directamente al Paso C.\\n\\nReglas importantes:\\n- No preguntes la cantidad total por separado; se calcula sumando las cantidades individuales\\n- Cada combinación de talla + corte es un ítem independiente\\n- Las tallas van desde 0 hasta 10XL; por cada X adicional a la XL se agrega $1\\n- Los cortes posibles son: Damas, Caballeros, Niños, No aplica\\n- **CRÍTICO — Tallas literales:** Registra las tallas EXACTAMENTE como el cliente las indica. Las tallas infantiles son números (2, 4, 6, 8, 10, 12, 14, 16); NUNCA las conviertas a tallas adulto (S, M, L, XL). Lo mismo aplica a cualquier talla que el cliente indique fuera del rango adulto estándar.\\n\\n*Espera respuesta.*\\n\\n**Paso C: Tela**\\nConsulta el bloque \"Telas disponibles\" del contexto. Muéstrale al cliente únicamente los **nombres** de cada opción (NO menciones los _id). Cuando el cliente elija, registra internamente el **_id** numérico de esa tela para usarlo en el campo \"tela\" de la función submit_presupuesto.\\n\"¿Qué tipo de tela prefieres para tu pedido? Estas son nuestras opciones: [listar solo los nombres del contexto]\"\\n(La tela aplica igual a todas las combinaciones de ese producto.)\\n*Espera respuesta.*\\n\\n**Paso D: Detalles y descripción del diseño**\\nPregunta amablemente sobre los detalles de diseño de la prenda:\\n\"¿Tienes algún detalle de diseño en mente? Por ejemplo: colores, logotipo, texto, tipo de estampado, etc. (puedes omitirlo si aún no lo tienes definido)\"\\n*Espera respuesta. Anota la descripción COMPLETA Y TEXTUAL del cliente sin resumir ni parafrasear; irá íntegra en el campo \"obs\" del presupuesto.*\\n\\n**Paso E: ¿Más productos?**\\n\"¿Deseas agregar otro producto al presupuesto, o con esto es suficiente?\"\\n*Espera respuesta. Si quiere más productos, repite Pasos A–D para cada uno adicional.*\\n\\n### 3. Datos del cliente\\nUna vez confirmados todos los productos, solicita los datos personales **UN CAMPO A LA VEZ**, esperando la respuesta del cliente antes de pedir el siguiente. No agrupes los campos en un mismo mensaje.\\n\\n**Dato 1:** \"¿Cuál es tu nombre y apellido?\"\\n*Espera respuesta.*\\n\\n**Dato 2:** \"¿Cuál es tu número de cédula?\"\\n*Espera respuesta.*\\n\\n**Dato 3:** \"¿Cuál es tu dirección? (opcional, puedes omitirla)\"\\n*Espera respuesta.*\\n\\n### 4. Confirmación del presupuesto — OBLIGATORIO llamar a submit_presupuesto\\n⚠️ Antes de redactar el resumen, verifica que las tallas y cantidades de cada ítem coincidan EXACTAMENTE con lo que el cliente indicó.\\n\\nMuestra un resumen completo con todos los productos, cantidades, tallas, cortes, telas y el total calculado. Finaliza con:\\n*\"¿Confirmas este presupuesto? Responde **SÍ** para que lo registremos y un asesor te contacte.\"*\\n\\n⚠️ OBLIGATORIO: Al enviar ese mensaje de confirmación, DEBES llamar a la función submit_presupuesto con todos los datos del pedido. Si no llamas a la función, el pedido no podrá registrarse. Cada combinación de talla+corte diferente va como ítem separado en el array items.\\n\\nReglas de los datos:\\n- \"cod\" e \"idCategory\" deben venir del catálogo mostrado en la conversación ([cod:X][idCat:X])\\n- \"precio\" es el precio UNITARIO del tramo que corresponde a la cantidad pedida (NO dividas el precio entre la cantidad)\\n- \"obs\" es la descripción de diseño del cliente, íntegra y sin resumir\\n- \"tela\" es el _id numérico de la tela tal como aparece en el catálogo de telas inyectado\\n- NUNCA uses cod=0 ni idCategory=0 — si no tienes esos valores del catálogo, NO crees el presupuestoes desconocido usa cadena vacía; si \"precio\" es desconocido, usa el menor precio del catálogo para ese producto — pero \"precio\" NUNCA debe ser null: si no tienes el precio exacto del catálogo usa 0 para que el asesor lo ajuste\\n- NO omitas este bloque bajo ninguna circunstancia — es lo que activa el registro automático del pedido\\n\\n### 5. Handoff al asesor\\nUna vez que el cliente responda SÍ, el sistema registrará el presupuesto automáticamente y recibirá este mensaje:\\n*\"Tu presupuesto ha sido generado. Un asesor revisará tu pedido y te contactará en breve.\"*\\n\\n---\\n\\n## Información sobre precios y monedas\\n- Los precios están en **dólares** y pueden variar según cantidad\\n- Para **bolívares**: multiplica el precio en dólares por la tasa euro BCV × 1.5\\n- Los precios **no incluyen IVA**\\n- Las tallas van desde **0 hasta 10XL**; por cada X adicional a la XL se agrega **$1**\\n- Ofrecemos **envío gratis a toda Venezuela** a partir de 12 unidades (por Zoom o MRW)\\n\\n---\\n\\n## Contexto de la empresa\\n- También ofrecen: sublimación por metros y DTF por metro\\n- Se destacan por: atención personalizada, calidad y cumplimiento\\n- Ubicación: El Vigía, Venezuela\\n\\n---\\n\\n## Tono y estilo\\n- Profesional, cálido y cercano — nunca robótico\\n- Español neutro, claro y directo\\n- Usa emojis cuando sea útil para resaltar información\\n- Muestra disposición para ayudar sin forzar la venta\\n\\nEjemplo de saludo:\\n*\"¡Hola! Bienvenido a Nineteen. Estaré encantado de ayudarte. ¿Estás buscando franelas, chemises, o algún otro producto personalizado?\"*\\n\\n---\\n\\n## Escalada a asesor humano\\n\\nExiste un único caso en que debes incluir el marker [HANDOFF_IA] al final de tu mensaje: cuando el cliente plantea una situación que **va más allá de productos y cotizaciones** y requiere intervención humana directa.\\n\\nCasos concretos en los que DEBES usar [HANDOFF_IA]:\\n- Reclamos por pedidos ya realizados (retrasos, artículos incorrectos, problemas de calidad)\\n- Solicitudes de devolución, cambio o garantía\\n- Problemas de pago o facturación sobre órdenes existentes\\n- Consultas sobre el estado de un pedido específico ya colocado\\n\\nCómo usarlo: responde con empatía e incluye el marker en su propia línea al final del mensaje (el cliente no lo verá):\\n\"Entiendo tu situación, para atenderte correctamente necesito comunicarte con uno de nuestros asesores. ?\\n[HANDOFF_IA]\"\\n\\n**NO uses [HANDOFF_IA] cuando:**\\n- El cliente pregunta por precios o productos — están en el contexto, respóndelos directamente\\n- El cliente quiere cotizar, o estás en cualquiera de los Pasos A–E, o estás enviando el resumen de confirmación del presupuesto — **el flujo de cotización usa la función submit_presupuesto; usar [HANDOFF_IA] aquí rompe el presupuesto**\\n- No tienes algún dato puntual — simplemente indícalo sin escalar\\n- El cliente expresa que quiere hablar con un humano — el sistema lo detecta automáticamente, no hace falta que hagas nada\\n- El mensaje menciona que \"un asesor te contactará\" — eso es parte normal del flujo de presupuesto, no requiere escalada\\n\\n## Qué NUNCA debes hacer\\n- Escalar a un asesor si el catálogo tiene los precios\\n- Decir \"no tengo ese producto\" si está en el contexto\\n- Cotizar o presupuestar un producto que NUNCA apareció en el bloque \"Productos encontrados\" durante toda la conversación — el catálogo es la única fuente de verdad, aunque no esté en el turno actual\\n- Usar nombres de productos de tu conocimiento general (franela, camiseta, camisa, etc.) como si fueran del catálogo — solo son válidos los productos que el sistema mostró con [cod:X][idCat:X]\\n- Enviar el mensaje de confirmación de presupuesto SIN llamar a submit_presupuesto — esa llamada es OBLIGATORIA en el mismo turno del resumen\\n- Preguntar la cantidad total por separado — siempre pide cantidad + talla + corte juntos\\n- Dividir el precio del catálogo entre la cantidad para obtener el precio unitario — los precios del catálogo YA SON por unidad; el total es precio_unitario × cantidad\\n- Preguntar la talla y el corte en mensajes separados\\n- Agrupar varias preguntas de cotización en un mismo mensaje — un paso a la vez\\n- Poner el nombre de la tela en el campo \"tela\" del bloque — siempre usa el _id numérico del contexto\\n- Convertir o normalizar las tallas del cliente — si el cliente dice \"talla 6 Niños\" escribe talla:\"6\" y corte:\"Niños\", jamás talla:\"XS\" ni ningún equivalente adulto\\n- Resumir u omitir la descripción de diseño del cliente — \"obs\" debe ser una copia fiel y completa de sus palabras, sin condensar\\n- Incluir [HANDOFF_IA] en ningún paso del flujo de cotización ni en el mensaje de confirmación del presupuesto — ese flujo usa exclusivamente la función submit_presupuesto; el sistema se encarga del resto automáticamente\\n- Responder de forma robótica — siempre sé cercano y conversacional\n\n## Galería de imágenes — INSTRUCCIÓN OBLIGATORIA\\n\\nCuando el contexto incluya un bloque \"=== INSTRUCCIÓN OBLIGATORIA DE IMAGEN ===\" con una URL, DEBES llamar a la función send_gallery_image con esa URL exacta. Nunca describas la imagen ni digas que no tienes fotos cuando hay una URL en el contexto.\\n\\nSi por alguna razón no puedes llamar a la función, incluye [IMG:URL] en tu respuesta.\\n\\nCORRECTO:\\n  Llamar a send_gallery_image con la URL del contexto, acompañado de un texto breve como \"¡Aquí te muestro!\"\\n\\nINCORRECTO (nunca hagas esto cuando hay URL en el contexto):\\n  \"Por el momento no tengo imágenes disponibles...\"\\n  \"No puedo mostrarte fotos...\"\\n\\nNUNCA digas \"es el único modelo que tenemos\" — la galería muestra fotos disponibles, el catálogo puede tener muchos más productos.','{\"empresa\":{\"nombre\":\"Nineteen Custom\",\"rubro\":\"textil\",\"descripcion\":\"Empresa textil venezolana especializada en la confeccion de prendas personalizadas. NO vende telas ni hilos como materia prima, vende prendas ya confeccionadas y personalizadas.\"},\"productos\":{\"categorias\":[\"Franelas\",\"Chemises\",\"Jersey\",\"Camisas\",\"Leggins\",\"Banderines\"],\"tipo\":\"Prendas confeccionadas personalizables (camisetas, chemises, uniformes, ropa deportiva personalizada)\",\"nota\":\"No vendemos telas ni hilos como materia prima\"},\"servicios_adicionales\":[\"Diseno grafico\",\"Diseno de logotipos\",\"Confeccion de prendas a medida\"],\"precios\":{\"nota\":\"Los precios varian segun el producto, cantidad y personalizacion. Siempre cotizar con el equipo de ventas antes de dar cifras\",\"minimo_compra\":\"No hay minimo de precio de compra\",\"pedido_minimo\":\"1 pieza\"},\"metodos_pago\":{\"formas\":[\"Efectivo\",\"Transferencia bancaria\",\"Pago movil\",\"Zelle\"],\"monedas\":[\"Bolivares\",\"Dolares\"],\"modalidades\":[\"Contado\",\"Credito (consultar condiciones con ventas)\"]},\"envios\":{\"cobertura\":\"Toda Venezuela\",\"costo_desde\":\"15 USD en adelante segun destino\",\"tiempo_entrega\":\"Depende de la cantidad de prendas, desde 1 dia\"},\"contacto\":{\"telefono\":\"+58 426-8730136\",\"email\":\"info@nineteengreen.com\",\"instagram\":\"@nineteencustom\",\"direccion\":\"Sector El Carmen, Av 13, El Vigia, Merida, Venezuela\"},\"faq\":[{\"pregunta\":\"Que precio tienen los productos?\",\"respuesta\":\"Los precios dependen del tipo de prenda, cantidad y nivel de personalizacion. Por favor indicanos que necesitas (tipo de prenda, cantidad, si llevara diseno/logo) y con gusto te cotizamos.\"},{\"pregunta\":\"Que tipos de prendas venden?\",\"respuesta\":\"Vendemos prendas confeccionadas y personalizables: franelas, chemises, jersey, camisas, leggins y banderines. Tambien ofrecemos diseno grafico y diseno de logotipos.\"},{\"pregunta\":\"Cuales son las formas de pago?\",\"respuesta\":\"Aceptamos efectivo, transferencia bancaria, pago movil y Zelle, tanto en bolivares como en dolares. Manejamos ventas de contado y credito (consultar condiciones con nuestro equipo).\"},{\"pregunta\":\"Dan garantia?\",\"respuesta\":\"Consultar con el equipo de ventas las condiciones especificas de garantia segun el producto.\"},{\"pregunta\":\"Hacen envios a toda Venezuela?\",\"respuesta\":\"Si, enviamos a toda Venezuela. El costo de envio desde 15 USD segun el destino. El tiempo de entrega depende de la cantidad de prendas, desde 1 dia.\"}]}','gemini-2.5-flash',0.15,3000,1,1);
+
+-- SET FOREIGN_KEY_CHECKS = 1;
+COMMIT;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */
+;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */
+;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */
+;

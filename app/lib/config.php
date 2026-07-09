@@ -12,7 +12,13 @@ define('LOCAL_API', 'http://ninesys.ddns.net/');
 define('PING_URL', getenv('PING_DOMAIN') ?: 'nineteencustom.com');
 define('MSG_URL', getenv('MSG_API_URL') ?: 'http://194.195.86.253:3000/send-message');
 
-define('EMPRESAS_DNS', 'mysql:host=' . (getenv('DB_HOST') ?: 'none') . ';dbname=' . (getenv('DB_NAME') ?: 'none'));
+$driver = getenv('DB_DRIVER') ?: 'mysql';
+$port = getenv('DB_PORT') ?: ($driver === 'pgsql' ? '5432' : '3306');
+if ($driver === 'pgsql') {
+  define('EMPRESAS_DNS', 'pgsql:host=' . (getenv('DB_HOST') ?: 'localhost') . ';port=' . $port . ';dbname=' . (getenv('DB_NAME') ?: 'api_empresas') . ';options=\'--client_encoding=UTF8\'');
+} else {
+  define('EMPRESAS_DNS', 'mysql:host=' . (getenv('DB_HOST') ?: 'none') . ';dbname=' . (getenv('DB_NAME') ?: 'none'));
+}
 define('EMPRESAS_USER', getenv('DB_USER') ?: 'none');
 define('EMPRESAS_PASS', getenv('DB_PASS') ?: 'none');
 
