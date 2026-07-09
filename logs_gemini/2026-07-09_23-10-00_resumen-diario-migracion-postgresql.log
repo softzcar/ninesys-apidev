@@ -1,0 +1,42 @@
+# Resumen de Sesión y Avance del Día — 2026-07-09 (Noche)
+## Proyecto: `ninesys-api` | Rama: `feature/postgresql-support`
+**Estado del Progreso:** ~25% de los endpoints adaptados (63 de 247 consultas)
+
+---
+
+## 📌 Trabajo Completado Hoy
+
+### 1. tables.php (100% Adaptado)
+Todos los endpoints en `tables.php` (6 en total) fueron reescritos para soportar dualidad:
+- **`GET /ordenes-reporte-semanal-produccion/{fecha}`**: DATE_FORMAT a TO_CHAR con casteo seguro mediante NULLIF para strings vacíos de fecha. WEEK() reemplazado por EXTRACT(WEEK).
+- **`GET /ordenes-reporte-semanal/{fecha}`**: WEEK() a EXTRACT(WEEK). Remoción de `ORDER BY _id ASC` que causaba fallos de agregación estricta en PostgreSQL.
+- **`GET /ordenes/borrador/reporte-semanal/{id}/{dep}`**: YEARWEEK() reemplazado por condicional dual de semana y año.
+- **`GET /table/ordenes-activas/{id_empleado}` y `/table/ordenes-todas`**: GROUP_CONCAT + JSON_OBJECT reemplazado por `json_agg(json_build_object(...))` en PostgreSQL. FIND_IN_SET reemplazado por `col::text = ANY(string_to_array(..., ','))`.
+- **`GET /table/ordenes-con-deuda`**: DATE_FORMAT adaptado.
+- *Validación:* Todos devuelven HTTP 200 con JSON correcto para la empresa `194` en desarrollo. ✅
+
+### 2. employees.php — Reportes de Asistencias (100% Adaptados)
+- **`GET /asistencias/tabla/{fecha}`**: DATE_FORMAT y WEEK condicionales, UNIX_TIMESTAMP a EPOCH, DAYNAME a TO_CHAR. Ajuste de GROUP BY (agrupación estricta en PG) y remoción del ordenamiento no agregado de `a.moment` en la subconsulta semanal.
+- **`GET /asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin}`**: TIMESTAMPDIFF(MINUTE) a EXTRACT(EPOCH) / 60.0. IFNULL a COALESCE. Agrupación por `b.nombre` requerida en PostgreSQL.
+- *Validación:* Probados con curl en dev, retornan JSON exitosamente. ✅
+
+### 3. manufacturing.php (9% Adaptado)
+- **`GET /empleados/ordenes-asignadas/v2/...`**: DATE_FORMAT condicional de `fecha_entrega` (varchar). Conversión de `IF()` a `CASE WHEN` y `IFNULL` a `COALESCE` en cálculo de unidades/corte para compatibilidad dual.
+- **`GET /sse/empleados/ordenes-asignadas/{id_empleado}`**: DATE_FORMAT condicional.
+- **`GET /empleados-todos`**: GROUP_CONCAT reemplazado por subconsultas agregadas con `string_agg` para evitar fallos de GROUP BY en PostgreSQL.
+- *Validación:* Endpoints probados con curl en dev, retornan JSON exitosamente (empleados-todos retorna 15 registros). ✅
+
+---
+
+## 📋 Punto de Partida para Mañana (Fase 1 - Continuación)
+
+1. **manufacturing.php — Endpoints de Eficiencia y Tiempos**
+   - Adaptar `TIMESTAMPDIFF(SECOND, ...)` de las líneas ~2820 (Tiempo por orden), ~3836 (Eficiencia producción) y ~4132 (Reporte eficiencia extendido) a `EXTRACT(EPOCH FROM (b::timestamp - a::timestamp))`.
+   
+2. **production.php — Endpoints de Producción e Insumos**
+   - Adaptar `DATE_FORMAT` y `IFNULL(CONCAT("[", GROUP_CONCAT...` en inicio de producción y consumos de tinta (líneas ~133, ~396, ~478, ~982, ~1032).
+
+3. **Verificación de Rama y Driver:**
+   - La rama activa local y remota es `feature/postgresql-support`.
+   - El driver en `vps-contabo-dev` está configurado en `DB_DRIVER=pgsql`.
+   - Las BDs de prueba `api_emp_194` y `api_empresas` en PostgreSQL del VPS están operativas y enlazadas mediante `postgres_fdw`.
