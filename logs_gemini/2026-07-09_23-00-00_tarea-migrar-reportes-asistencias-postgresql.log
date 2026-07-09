@@ -1,0 +1,33 @@
+# Bitácora de Tarea — 2026-07-09
+# Tarea: Adaptación de endpoints de reporte de asistencias en employees.php para PostgreSQL/MariaDB
+# Resultado: COMPLETADO Y VERIFICADO EN DESARROLLO
+
+## Resumen
+Se ha completado la adaptación para soporte dual de PostgreSQL y MariaDB de los endpoints restantes de control y reporte de asistencias de la Fase 1.
+
+## Trabajo Realizado
+
+### 1. Modificación de app/routes/employees.php
+Se adaptaron condicionalmente a `DB_DRIVER === 'pgsql'` los siguientes endpoints:
+
+- **GET `/asistencias/tabla/{fecha}`**
+  - Se sustituyó `DATE_FORMAT(b.moment, ...)` por `TO_CHAR(b.moment, ...)`.
+  - Se sustituyó `UNIX_TIMESTAMP(a.moment)` por la expresión nativa en PostgreSQL: `EXTRACT(EPOCH FROM a.moment::timestamp)::bigint`.
+  - Se sustituyó `DAYNAME(a.moment)` por `TO_CHAR(a.moment, 'Day')`.
+  - Se sustituyó `WEEK(a.moment)` y `WEEK(NOW())` por `EXTRACT(WEEK FROM a.moment)` combinado con filtro por año.
+  - Se corrigió la consulta semanal agrupando por `b._id, b.username` y eliminando el `a.moment` no agregado del `ORDER BY` para cumplir con las restricciones sintácticas de PostgreSQL.
+
+- **GET `/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin}`**
+  - Se adaptó el cálculo de horas trabajadas reemplazando `TIMESTAMPDIFF(MINUTE, min_entrada, max_salida)` por:
+    `EXTRACT(EPOCH FROM (max_salida::timestamp - min_entrada::timestamp)) / 60.0 / 60.0`
+  - Se reemplazó `IFNULL` por `COALESCE` para PostgreSQL.
+  - Se incluyó `b.nombre` en el `GROUP BY` para evitar errores sintácticos en PostgreSQL.
+  - Se adaptó la consulta de reporte detallado utilizando `TO_CHAR` para formatear fecha y hora, y reemplazando la ordenación `FIELD(registro, ...)` por un condicional `CASE WHEN registro = '...' THEN N ... END`.
+
+## Pruebas de Validación
+Se verificó el funcionamiento local y en el VPS mediante curl para la empresa autorizada `194`:
+- `GET /asistencias/tabla/2026-07-09` ➔ Retornó exitosamente la información diaria y semanal sin warnings. ✅
+- `GET /asistencias/reporte/resumen/2026-07-01/2026-07-09` ➔ Retornó exitosamente el resumen y el desglose de horas por empleado. ✅
+
+## Archivos Modificados
+- [employees.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/employees.php)
