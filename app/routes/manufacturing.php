@@ -4199,7 +4199,7 @@ return function (App $app) {
                   lotes_detalles ld ON ld.id_ordenes_productos = op._id
               $whereClause
               GROUP BY 
-                  op._id
+                  op._id, o._id, o.id_wp, o.status, c.first_name, c.cedula, op.id_woo, op.name, op.cantidad, op.category_name
               ORDER BY 
                   o._id DESC
               LIMIT $limit";
