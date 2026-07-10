@@ -1060,7 +1060,7 @@ return function (App $app) {
               WHERE
                   a.fecha_pago IS NULL AND d.status != 'cancelada' AND a.detalle = 'Comercialización' {$whereFecha}
               GROUP BY
-                  a._id, c.salario_tipo, c.nombre, d.pago_abono, e.monto, d.status, e.tipo_de_pago
+                  a._id, c.salario_tipo, c.nombre, d.pago_abono, e.monto, d.status, e.tipo_de_pago, d._id
               ORDER BY
                   d._id ASC,
                   a._id DESC";
@@ -1426,7 +1426,7 @@ return function (App $app) {
           pagos_salarios ps ON ps.id_pago = a._id
           WHERE {$whereFechaPago} AND a.fecha_pago IS NOT NULL AND a.detalle = 'Comercialización'
           GROUP BY
-          a._id, c.nombre, d.pago_abono, e.monto, d.status, e.tipo_de_pago
+          a._id, c.nombre, d.pago_abono, e.monto, d.status, e.tipo_de_pago, d._id
           ORDER BY
           d._id ASC, a._id DESC;
           ";
@@ -1500,6 +1500,7 @@ return function (App $app) {
         p.id_empleado
         FROM pagos_abonos pa
         JOIN pagos p ON pa.id_pago = p._id
+        LEFT JOIN pagos_salarios ps ON ps.id_pago = p._id
         WHERE {$whereFechaPagoP} AND p.fecha_pago IS NOT NULL";
 
     $bonosData = $localConnection->goQuery($sqlBonos);
@@ -1512,6 +1513,7 @@ return function (App $app) {
         p.id_empleado
         FROM pagos_descuentos pd
         JOIN pagos p ON pd.id_pago = p._id
+        LEFT JOIN pagos_salarios ps ON ps.id_pago = p._id
         WHERE {$whereFechaPagoP} AND p.fecha_pago IS NOT NULL";
 
     $descuentosData = $localConnection->goQuery($sqlDescuentos);
@@ -1601,6 +1603,7 @@ return function (App $app) {
           FROM
               pagos p
           JOIN revisiones r ON p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado
+          LEFT JOIN pagos_salarios ps ON ps.id_pago = p._id
           WHERE ' . $whereFechaPagoP . ' AND p.fecha_pago IS NOT NULL
           GROUP BY p._id, p.id_orden, r._id, p.monto_pago, p.id_empleado, p.fecha_pago, r.id_product
           ';
@@ -1617,6 +1620,7 @@ return function (App $app) {
           FROM
               pagos p
           JOIN revisiones r ON p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado
+          LEFT JOIN pagos_salarios ps ON ps.id_pago = p._id
           WHERE ' . $whereFechaPagoP . ' AND p.fecha_pago IS NOT NULL
           GROUP BY p._id
           ';
