@@ -1,0 +1,19 @@
+**Tarea:** Adaptar el endpoint de inicio de sesión (/login) para compatibilidad dual MySQL/PostgreSQL
+**Fecha:** 2026-07-10 20:10:00
+**Rama:** feature/postgresql-support
+
+### Cambios Realizados:
+1. **Detección dinámica de DSN en `auth.php`**:
+   - Reemplazados los DSNs MySQL codificados de forma fija (`mysql:host=`) por una detección dinámica basada en la constante `DB_DRIVER` de `config.php`.
+   - Si `DB_DRIVER === 'pgsql'`, se construye el DSN usando el prefijo `pgsql:host=`, especificando el puerto correspondiente (por defecto `5432` si no está configurado).
+2. **Reemplazo de Backticks en Consultas SQL**:
+   - Removidos los backticks en palabras como `` `password` `` y `` `db_name` `` en `auth.php` para asegurar la compatibilidad con PostgreSQL, manteniendo la validez en MySQL.
+3. **Adaptación de la consulta `$sql_empleado`**:
+   - Para PostgreSQL (`DB_DRIVER === 'pgsql'`), se reescribió la consulta de departamentos utilizando `json_agg` y `json_build_object` junto con `COALESCE` en lugar del MySQL-specific `GROUP_CONCAT` e `IFNULL`.
+4. **Corrección de comillas dobles en literales de texto de consultas**:
+   - Se corrigieron las comillas dobles `"activo"` dentro de la consulta de `$sql_gastos` reemplazándolas por comillas sencillas `'activo'` para evitar que PostgreSQL las interprete como columnas.
+5. **Configuración de Vistas en base de datos global `api_empresas`**:
+   - Creado el esquema `api_empresas` dentro de la base de datos `api_empresas` de PostgreSQL conteniendo vistas (`CREATE OR REPLACE VIEW`) hacia las tablas en `public` (como `modulos` y `empresas_gastos`). Esto permite resolver la sintaxis calificada `api_empresas.modulos` sin alterar el código MySQL existente.
+6. **Aprovisionamiento y Prueba**:
+   - Re-aprovisionada la base de datos `api_emp_194` usando `provision_company_db_postgres.sh 194`.
+   - Ejecutado `test_auth.php` contra la API del VPS de desarrollo obteniendo código de respuesta `200 OK` con un cuerpo JSON libre de errores.
