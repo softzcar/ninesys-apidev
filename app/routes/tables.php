@@ -104,7 +104,7 @@ return function (App $app) {
         b.nombre empleado,
         (a.pago_total - a.pago_descuento) - a.pago_abono + a.pago_nota_credito AS total_pendiente
         FROM ordenes a
-        JOIN empleados b ON a.responsable = b._id
+        JOIN api_empresas.empresas_usuarios b ON a.responsable = b.id_usuario
         WHERE $weekCond";
     $object['items'] = $localConnection->goQuery($sql);
 
@@ -141,9 +141,9 @@ return function (App $app) {
   $app->get('/presupuestos/guardados', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT a._id, a.form, a.tipo, b._id AS id_empleadodo, b.nombre AS empleado 
-          FROM ordenes_tmp a 
-          JOIN empleados b ON a.id_empleado = b._id';
+    $sql = 'SELECT a._id, a.form, a.tipo, b.id_usuario AS id_empleadodo, b.nombre AS empleado
+          FROM ordenes_tmp a
+          JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario';
 
     $object['items'] = $localConnection->goQuery($sql);
 
@@ -322,7 +322,7 @@ return function (App $app) {
     $resp = $localConnection->goQuery($sql);
 
     if (empty($resp)) {
-      $sql = 'INSERT INTO ordenes_borrador_empleado (`id_orden`, `id_empleado`, `id_departamento`, `borrador`) VALUES (' . $data['id_orden'] . ', ' . $data['id_empleado'] . ", '{$data['id_departamento']}', '" . addslashes($data['borrador'] ?? '') . "');";
+      $sql = 'INSERT INTO ordenes_borrador_empleado (id_orden, id_empleado, id_departamento, borrador) VALUES (' . $data['id_orden'] . ', ' . $data['id_empleado'] . ", '{$data['id_departamento']}', '" . addslashes($data['borrador'] ?? '') . "');";
     } else {
       $sql = 'UPDATE ordenes_borrador_empleado SET id_departamento = ' . $data['id_departamento'] . ', id_orden = ' . $data['id_orden'] . ', id_empleado = ' . $data['id_empleado'] . ", borrador = '" . addslashes($data['borrador'] ?? '') . "' WHERE id_orden = " . $data['id_orden'] . ' AND id_empleado = ' . $data['id_empleado'];
     }
