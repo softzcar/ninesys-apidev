@@ -217,6 +217,11 @@ return function (App $app) {
     $obj['emp_asignados'] = $localConnection->goQuery($sql);
 
     // ITEMS DE LISTA DE PRODUCCIÓN (Subconsulta prog_info acotada a órdenes activas)
+    // PG exige GROUP BY estricto: a.* es funcionalmente dependiente de a._id (PK), pero
+    // el resto de columnas de otras tablas deben listarse explicitamente (MySQL no lo exige).
+    $groupByItems = DB_DRIVER === 'pgsql'
+        ? "GROUP BY a._id, f.orden_fila, cus.first_name, cus.last_name, b.prioridad, prog_info.total_departamentos, prog_info.paso_actual, prog_info.departamentos_terminados, d.estatus, n.borrador, c._id, e.nombre"
+        : "GROUP BY a._id";
     $sql = "SELECT
             a._id AS orden,
             f.orden_fila,
@@ -294,8 +299,7 @@ return function (App $app) {
         ) AS prog_info ON a._id = prog_info.id_orden
         WHERE
             a.status IN ('activa', 'pausada', 'En espera')
-        GROUP BY
-            a._id
+        $groupByItems
         ORDER BY
             f.orden_fila ASC;
     ";
