@@ -1,0 +1,13 @@
+**Tarea:** Adaptar el endpoint /lotes/activos para compatibilidad con PostgreSQL en `manufacturing.php`
+**Fecha:** 2026-07-10 20:28:00
+**Rama:** feature/postgresql-support
+
+### Cambios Realizados:
+1. **Adaptación de la consulta SQL en `/lotes/activos`**:
+   - Para PostgreSQL (`DB_DRIVER === 'pgsql'`), se eliminaron las uniones cruzadas y el `GROUP BY` externo del lote. En su lugar, se implementó una subconsulta con `json_agg` y `json_build_object` casteado a `text` para obtener el listado de órdenes en formato JSON compatible.
+   - Para MySQL, se mantuvo la lógica original utilizando `GROUP_CONCAT` y `JSON_OBJECT`.
+2. **Robustez en la decodificación de JSON**:
+   - Ajustado el ciclo `foreach` posterior para detectar si la cadena JSON devuelta ya posee corchetes `[` (comportamiento de `json_agg` en PG) o si requiere concatenarlos (comportamiento original en MySQL).
+3. **Validación**:
+   - Creado y ejecutado un script de prueba `/public/test_manufacturing.php` en el entorno del VPS de desarrollo.
+   - Verificado el retorno exitoso de `HTTP 200` y respuesta estructurada correcta sin errores SQL.
