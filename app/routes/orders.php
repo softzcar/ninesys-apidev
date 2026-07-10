@@ -446,11 +446,11 @@ return function (App $app) {
     //  Verificar existencia de la orden
     $sql = "SELECT 
               b._id as id_orden, 
-              IFNULL((SELECT SUM(abono) FROM abonos WHERE id_orden = b._id), 0) abono, 
-              IFNULL((SELECT SUM(descuento) FROM abonos WHERE id_orden = b._id), 0) descuento, 
-              IFNULL((SELECT SUM(nota_credito) FROM abonos WHERE id_orden = b._id), 0) nota_credito, 
+              COALESCE((SELECT SUM(abono) FROM abonos WHERE id_orden = b._id), 0) abono, 
+              COALESCE((SELECT SUM(descuento) FROM abonos WHERE id_orden = b._id), 0) descuento, 
+              COALESCE((SELECT SUM(nota_credito) FROM abonos WHERE id_orden = b._id), 0) nota_credito, 
               b.pago_total as total, 
-              IFNULL((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = b._id), 0) total_abono_descuento
+              COALESCE((SELECT SUM(abono) + SUM(descuento) FROM abonos WHERE id_orden = b._id), 0) total_abono_descuento
             FROM ordenes b 
             WHERE b._id = " . intval($args['id']);
     $datosAbono = $localConnection->goQuery($sql);
@@ -745,7 +745,69 @@ return function (App $app) {
     $object['fields'][4]['label'] = 'Detalle';
     $object['fields'][4]['sortable'] = false;
     //  Obtener historial completo (Pagos, NC y Descuentos)
-    $sql = "SELECT 
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT 
+                CONCAT('P-', met._id::text) as _id, 
+                ord._id as orden, 
+                ord.responsable as id_empleado, 
+                COALESCE(emp.nombre, 'Sistema') as empleado, 
+                met.metodo_pago as metodo_pago, 
+                met.monto as monto, 
+                met.detalle as detalle, 
+                met.tasa as tasa, 
+                met.moneda as moneda, 
+                TO_CHAR(met.moment, 'DD/MM/YYYY') AS fecha, 
+                TO_CHAR(met.moment, 'HH12:MI AM') AS hora,
+                met.monto as abono, 0 as descuento, 0 as nota_credito,
+                met.moment
+            FROM metodos_de_pago met
+            JOIN ordenes ord ON met.id_orden = ord._id
+            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
+            WHERE met.id_orden = " . intval($args['id']) . "
+            
+            UNION ALL
+            
+            SELECT 
+                CONCAT('NC-', ab._id::text) as _id, 
+                ab.id_orden as orden, 
+                ab.id_empleado as id_empleado, 
+                COALESCE(emp.nombre, 'Sistema') as empleado, 
+                'Nota de Crédito' as metodo_pago, 
+                ab.nota_credito as monto, 
+                ab.detalle as detalle, 
+                1 as tasa, 
+                'Dólares' as moneda, 
+                TO_CHAR(ab.moment, 'DD/MM/YYYY') AS fecha, 
+                TO_CHAR(ab.moment, 'HH12:MI AM') AS hora,
+                0 as abono, 0 as descuento, ab.nota_credito as nota_credito,
+                ab.moment
+            FROM abonos ab
+            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ab.id_empleado
+            WHERE ab.id_orden = " . intval($args['id']) . " AND ab.nota_credito > 0
+            
+            UNION ALL
+            
+            SELECT 
+                CONCAT('D-', ab._id::text) as _id, 
+                ab.id_orden as orden, 
+                ab.id_empleado as id_empleado, 
+                COALESCE(emp.nombre, 'Sistema') as empleado, 
+                'Descuento' as metodo_pago, 
+                ab.descuento as monto, 
+                ab.detalle as detalle, 
+                1 as tasa, 
+                'Dólares' as moneda, 
+                TO_CHAR(ab.moment, 'DD/MM/YYYY') AS fecha, 
+                TO_CHAR(ab.moment, 'HH12:MI AM') AS hora,
+                0 as abono, ab.descuento as descuento, 0 as nota_credito,
+                ab.moment
+            FROM abonos ab
+            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ab.id_empleado
+            WHERE ab.id_orden = " . intval($args['id']) . " AND ab.descuento > 0
+            
+            ORDER BY moment DESC";
+    } else {
+      $sql = "SELECT 
                 CONCAT('P-', met._id) as _id, 
                 ord._id as orden, 
                 ord.responsable as id_empleado, 
@@ -805,6 +867,7 @@ return function (App $app) {
             WHERE ab.id_orden = " . intval($args['id']) . " AND ab.descuento > 0
             
             ORDER BY moment DESC";
+    }
 
     $datosAbono = $localConnection->goQuery($sql);
     $object['items'] = $datosAbono;
@@ -888,7 +951,44 @@ return function (App $app) {
     $datosEmpleado = $localConnection->goQuery($sqlEmpleado);
     $object['datos_empleado'] = !empty($datosEmpleado) ? $datosEmpleado[0] : null;
 
-    $sql = "SELECT DISTINCT
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT DISTINCT
+                a._id id_lote_detalles,
+                a.id_orden,
+                string_agg(DISTINCT e.product, ', ') as product,
+                (SELECT cliente_nombre FROM ordenes WHERE _id = a.id_orden) cliente,
+                a.fecha_inicio,
+                a.fecha_terminado,
+                a.progreso,
+                (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = a.id_orden) total_productos,
+                (SELECT comision_tipo FROM pagos WHERE id_lotes_detalles = a._id AND fecha_pago IS NULL LIMIT 1) AS comision_tipo,
+                (SELECT SUM(monto_pago) FROM pagos WHERE id_lotes_detalles = a._id AND fecha_pago IS NULL) AS monto_pago,
+                eu.salario_tipo,
+                eu.salario_monto,
+                eu.salario_periodo,
+                EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int AS tiempo_empleado,
+                SUM(c.tiempo * b.cantidad) AS tiempo_estimado_de_produccion,
+                (EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int - SUM(c.tiempo * b.cantidad)) rendimiento,
+                SUM(b.cantidad) unidades,
+                (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$args['id_departamento']}) cantidad_empleados_asigandos,
+                string_agg(DISTINCT b.id_woo::text, ',') id_producto,
+                'EficienciaInsumos' eficiencia_insumos,
+                string_agg(DISTINCT b.talla, ', ') as talla
+            FROM
+                lotes_detalles_empleados_asignados a
+            JOIN ordenes_productos b ON b.id_orden = a.id_orden
+            JOIN products e ON e._id = b.id_woo
+            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
+            LEFT JOIN api_empresas.empresas_usuarios eu ON a.id_empleado = eu.id_usuario
+            WHERE a.id_empleado = {$args['id_empleado']} 
+              AND a.id_departamento = {$args['id_departamento']} 
+              AND a.fecha_terminado IS NOT NULL 
+              AND EXISTS (SELECT 1 FROM pagos WHERE id_lotes_detalles = a._id AND fecha_pago IS NULL)
+            GROUP BY a._id, a.id_orden, a.fecha_inicio, a.fecha_terminado, a.progreso, eu.salario_tipo, eu.salario_monto, eu.salario_periodo
+            ORDER BY a.id_orden ASC
+        ";
+    } else {
+      $sql = "SELECT DISTINCT
                 a._id id_lote_detalles,
                 a.id_orden,
                 GROUP_CONCAT(DISTINCT e.product SEPARATOR ', ') as product,
@@ -923,13 +1023,15 @@ return function (App $app) {
             GROUP BY a.id_orden
             ORDER BY a.id_orden ASC
         ";
+    }
     $object['sql_terminadas'] = $sql;
 
     $pagos = $localConnection->goQuery($sql);
     $object['ordenes_terminadas'] = $pagos;
 
     // ORDENES PENDIENTES  ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable,
-    $sql = "SELECT DISTINCT
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT DISTINCT
                 a._id id_lote_detalles,
                 a.id_orden,
                 ord.cliente_nombre cliente,
@@ -937,9 +1039,9 @@ return function (App $app) {
                 a.fecha_terminado,
                 a.progreso,
                 d.comision_tipo,
-                TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) AS tiempo_empleado,
+                EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int AS tiempo_empleado,
                 c.tiempo tiempo_estimado_de_produccion,
-                (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - c.tiempo) rendimiento,
+                (EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int - c.tiempo) rendimiento,
                 b.cantidad unidades,
                 SUM(b.cantidad) total_productos,
                 (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$args['id_departamento']}) cantidad_empleados_asigandos,
@@ -961,12 +1063,102 @@ return function (App $app) {
             WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND a.progreso != 'terminada' AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
             GROUP BY a.id_orden ORDER BY ofo.orden_fila ASC, a.id_orden DESC, a.progreso ASC
         ";
+    } else {
+      $sql = "SELECT DISTINCT
+                a._id id_lote_detalles,
+                a.id_orden,
+                ord.cliente_nombre cliente,
+                a.fecha_inicio,
+                a.fecha_terminado,
+                a.progreso,
+                d.comision_tipo,
+                TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) AS tiempo_empleado,
+                c.tiempo tiempo_estimado_de_produccion,
+                (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - c.tiempo) rendimiento,
+                b.cantidad unidades,
+                SUM(b.cantidad) total_productos,
+                (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$args['id_departamento']}) cantidad_empleados_asigandos,
+                b.id_woo id_producto,
+                e.product,
+                b.talla,
+                ((SUM(b.cantidad) * e.comision)) AS total_comision_variable,
+                ((SUM(b.cantidad) * d.comision)) AS total_comision_fija
+            FROM
+                lotes_detalles_empleados_asignados a
+            JOIN ordenes ord ON ord._id = a.id_orden
+            JOIN ordenes_productos b ON b.id_orden = a.id_orden
+            JOIN products e ON e._id = b.id_woo
+            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
+            LEFT JOIN api_empresas.empresas_usuarios d ON d.id_usuario = a.id_empleado
+            LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = ord._id
+            WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND a.progreso != 'terminada' AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
+            GROUP BY a.id_orden ORDER BY ofo.orden_fila ASC, a.id_orden DESC, a.progreso ASC
+        ";
+    }
     $pendientes = $localConnection->goQuery($sql);
     $object['sql_pendientes'] = $sql;
     $object['ordenes_pendientes'] = $pendientes;
 
     // ORDENES PARA CALCULO DE TIEMPO
-    $sql = "SELECT 
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT 
+            y.id_orden,
+            MAX(ofo.orden_fila) AS orden_fila,
+            (SELECT COUNT(_id) FROM inventario_movimientos WHERE id_orden = y.id_orden AND id_empleado = y.id_empleado) AS extra,
+            (SELECT COUNT(_id) FROM reposiciones WHERE id_departamento = 4 AND id_empleado = 20 AND terminada = 0 AND id_orden = y.id_orden) AS en_reposiciones,
+            (SELECT COUNT(_id) FROM tintas WHERE id_orden = y.id_orden) AS en_tintas,
+            (SELECT COUNT(_id) FROM inventario_movimientos WHERE id_orden = y.id_orden AND id_empleado = 20) AS en_inv_mov,
+            (SELECT valor_inicial FROM inventario_movimientos WHERE id_orden = y.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_inicial,
+            (SELECT valor_final FROM inventario_movimientos WHERE id_orden = y.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_final,
+            MAX(c.prioridad) AS prioridad,
+            MAX(z.unidades_produccion) AS unidades_solicitadas,
+            SUM(a.cantidad) AS unidades,
+            SUM(a.cantidad) AS piezas_actuales,
+            MAX(y.fecha_inicio) AS fecha_inicio,
+            MAX(y.fecha_terminado) AS fecha_terminado,
+            MAX(TO_CHAR(d.fecha_entrega, 'DD-MM-YYYY')) AS fecha_entrega,
+            MAX(y._id) AS lotes_detalles_empleados_asignados,
+            y.id_departamento,
+            (SELECT MIN(dep.orden_proceso) FROM lotes_detalles_empleados_asignados ldea JOIN departamentos dep ON ldea.id_departamento = dep._id WHERE ldea.id_orden = y.id_orden) AS orden_proceso_min,
+            (SELECT orden_proceso FROM departamentos WHERE _id = 4) AS orden_proceso_departamento,            
+            (SELECT orden_proceso FROM departamentos WHERE _id = MAX(c.id_departamento_actual)) AS orden_proceso,
+            MAX(c.id_departamento_actual) AS id_departamento_actual,
+            y.id_orden AS orden,
+            string_agg(DISTINCT a.name, ', ') AS producto,
+            y.id_empleado,
+            MAX(x.detalle) AS detalle_reposicion,
+            string_agg(DISTINCT (SELECT nombre FROM sizes WHERE _id = a.id_size), ', ') AS talla,
+            string_agg(DISTINCT a.corte, ', ') AS corte,
+            string_agg(DISTINCT a.tela, ', ') AS tela,
+            MAX(tp.tiempo) AS tiempo_produccion,
+            MAX(y.procentaje_comision) AS procentaje_comision,
+            MAX(c.paso) AS paso,
+            MAX(d.status) AS status,
+            MAX(d.fecha_entrega) AS fecha_enrega_raw,
+            MAX(d.fecha_entrega) AS fecha_enrega_orden,
+            MAX(y.progreso) AS progreso,
+            NULL AS detalles_revision
+        FROM
+            lotes_detalles_empleados_asignados y
+            JOIN ordenes_productos a ON y.id_orden = a.id_orden
+            JOIN ordenes d ON a.id_orden = d._id
+            JOIN products p ON p._id = a.id_woo
+            JOIN products_tiempos_de_produccion tp ON tp.id_product = p._id AND tp.id_departamento = 4
+            LEFT JOIN lotes c ON c.id_orden = y.id_orden
+            LEFT JOIN lotes_historico_solicitadas z ON z.id_orden = a.id_orden
+            LEFT JOIN reposiciones x ON x.id_orden = d._id AND x.id_empleado = y.id_empleado AND x.id_ordenes_productos = a._id
+            LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = d._id
+        WHERE  
+            (y.id_empleado = 20)
+            AND (y.id_departamento = 4)
+        GROUP BY
+            y.id_orden, y.id_empleado, y.id_departamento
+        ORDER BY
+            orden_fila ASC,
+            y.id_orden DESC;
+        ";
+    } else {
+      $sql = "SELECT 
             y.id_orden,
             MAX(ofo.orden_fila) AS orden_fila,
             (SELECT COUNT(_id) FROM inventario_movimientos WHERE id_orden = y.id_orden AND id_empleado = y.id_empleado) AS extra,
@@ -1017,7 +1209,6 @@ return function (App $app) {
         WHERE  
             (y.id_empleado = 20)
             AND (y.id_departamento = 4)
-            -- Se eliminan los filtros extra de 'status' y 'fisico' para que la lógica de filtrado sea idéntica a la de la consulta de 'ordenes pendientes'.
         -- ========================================================================
         GROUP BY
             y.id_orden, y.id_empleado, y.id_departamento
@@ -1025,82 +1216,156 @@ return function (App $app) {
             orden_fila ASC,
             y.id_orden DESC;
         ";
+    }
 
     $ordenes = $localConnection->goQuery($sql);
     $object['sql_ordenes'] = $sql;
     $object['ordenes'] = $ordenes;
 
     // EFICIENCIA DE INSUMOS
-    $sql = "SELECT
-          est.id_orden,
-          est.id_empleado,
-          est.id_departamento,
-          est.nombre_empleado,
-          est.nombre_departamento,
-          est.fecha_asignacion,
-          est.nombre_producto,
-          est.talla,
-          est.nombre_insumo,
-          est.cantidad_piezas,
-          est.consumo_estimado_total,
-          COALESCE(consumo_r.consumo_real_total, 0) AS consumo_real_total,
-          (COALESCE(consumo_r.consumo_real_total, 0) - COALESCE(est.consumo_estimado_total, 0)) AS diferencia
-      FROM
-          (
-              SELECT
-                  op.id_orden,
-                  ldea.id_empleado,
-                  ldea.id_departamento,
-                  GROUP_CONCAT(DISTINCT p.product SEPARATOR ', ') AS nombre_producto,
-                  GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') AS talla,
-                  cip.nombre AS nombre_insumo,
-                  pia.id_catalogo_insumos_productos,
-                  SUM(op.cantidad) AS cantidad_piezas,
-                  SUM(op.cantidad * COALESCE(pia.cantidad, 0)) AS consumo_estimado_total,
-                  eu.nombre AS nombre_empleado,
-                  dep.departamento AS nombre_departamento,
-                  ldea.fecha_inicio AS fecha_asignacion
-              FROM
-                  lotes_detalles_empleados_asignados ldea
-              JOIN ordenes_productos op ON ldea.id_orden = op.id_orden
-              JOIN products p ON op.id_woo = p._id
-              LEFT JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
-              LEFT JOIN departamentos dep ON ldea.id_departamento = dep._id
-              LEFT JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product 
-                                                      AND op.id_size = pia.id_talla
-                                                      AND ldea.id_departamento = pia.id_departamento
-              LEFT JOIN sizes s ON op.id_size = s._id
-              LEFT JOIN catalogo_insumos_productos cip ON pia.id_catalogo_insumos_productos = cip._id
-              WHERE
-                  ldea.id_empleado = {$args['id_empleado']}
-                  AND ldea.id_departamento = {$args['id_departamento']}
-                  AND pia.id_catalogo_insumos_productos IS NOT NULL
-              GROUP BY
-                  ldea.id_orden, ldea.id_empleado, ldea.id_departamento,
-                  cip.nombre, pia.id_catalogo_insumos_productos,
-                  eu.nombre, dep.departamento, ldea.fecha_inicio
-          ) AS est
-      LEFT JOIN
-          (
-              SELECT
-                  im.id_orden,
-                  im.id_departamento,
-                  im.id_empleado,
-                  im.id_catalogo_insumos_prodcutos,
-                  SUM((im.valor_inicial - im.valor_final) * COALESCE(inv.rendimiento, 1)) AS consumo_real_total
-              FROM
-                  inventario_movimientos im
-              LEFT JOIN inventario inv ON im.id_insumo = inv._id
-              WHERE
-                  im.id_empleado = {$args['id_empleado']}
-                  AND im.id_departamento = {$args['id_departamento']}
-              GROUP BY
-                  im.id_orden, im.id_departamento, im.id_empleado, im.id_catalogo_insumos_prodcutos
-          ) AS consumo_r ON est.id_orden = consumo_r.id_orden
-                        AND est.id_departamento = consumo_r.id_departamento
-                        AND est.id_empleado = consumo_r.id_empleado
-                        AND est.id_catalogo_insumos_productos = consumo_r.id_catalogo_insumos_prodcutos;
-      ";
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT
+            est.id_orden,
+            est.id_empleado,
+            est.id_departamento,
+            est.nombre_empleado,
+            est.nombre_departamento,
+            est.fecha_asignacion,
+            est.nombre_producto,
+            est.talla,
+            est.nombre_insumo,
+            est.cantidad_piezas,
+            est.consumo_estimado_total,
+            COALESCE(consumo_r.consumo_real_total, 0) AS consumo_real_total,
+            (COALESCE(consumo_r.consumo_real_total, 0) - COALESCE(est.consumo_estimado_total, 0)) AS diferencia
+        FROM
+            (
+                SELECT
+                    op.id_orden,
+                    ldea.id_empleado,
+                    ldea.id_departamento,
+                    string_agg(DISTINCT p.product, ', ') AS nombre_producto,
+                    string_agg(DISTINCT s.nombre, ', ') AS talla,
+                    cip.nombre AS nombre_insumo,
+                    pia.id_catalogo_insumos_productos,
+                    SUM(op.cantidad) AS cantidad_piezas,
+                    SUM(op.cantidad * COALESCE(pia.cantidad, 0)) AS consumo_estimado_total,
+                    eu.nombre AS nombre_empleado,
+                    dep.departamento AS nombre_departamento,
+                    ldea.fecha_inicio AS fecha_asignacion
+                FROM
+                    lotes_detalles_empleados_asignados ldea
+                JOIN ordenes_productos op ON ldea.id_orden = op.id_orden
+                JOIN products p ON op.id_woo = p._id
+                LEFT JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
+                LEFT JOIN departamentos dep ON ldea.id_departamento = dep._id
+                LEFT JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product 
+                                                        AND op.id_size = pia.id_talla
+                                                        AND ldea.id_departamento = pia.id_departamento
+                LEFT JOIN sizes s ON op.id_size = s._id
+                LEFT JOIN catalogo_insumos_productos cip ON pia.id_catalogo_insumos_productos = cip._id
+                WHERE
+                    ldea.id_empleado = {$args['id_empleado']}
+                    AND ldea.id_departamento = {$args['id_departamento']}
+                    AND pia.id_catalogo_insumos_productos IS NOT NULL
+                GROUP BY
+                    ldea.id_orden, ldea.id_empleado, ldea.id_departamento,
+                    cip.nombre, pia.id_catalogo_insumos_productos,
+                    eu.nombre, dep.departamento, ldea.fecha_inicio
+            ) AS est
+        LEFT JOIN
+            (
+                SELECT
+                    im.id_orden,
+                    im.id_departamento,
+                    im.id_empleado,
+                    im.id_catalogo_insumos_prodcutos,
+                    SUM((im.valor_inicial - im.valor_final) * COALESCE(inv.rendimiento, 1)) AS consumo_real_total
+                FROM
+                    inventario_movimientos im
+                LEFT JOIN inventario inv ON im.id_insumo = inv._id
+                WHERE
+                    im.id_empleado = {$args['id_empleado']}
+                    AND im.id_departamento = {$args['id_departamento']}
+                GROUP BY
+                    im.id_orden, im.id_departamento, im.id_empleado, im.id_catalogo_insumos_prodcutos
+            ) AS consumo_r ON est.id_orden = consumo_r.id_orden
+                          AND est.id_departamento = consumo_r.id_departamento
+                          AND est.id_empleado = consumo_r.id_empleado
+                          AND est.id_catalogo_insumos_productos = consumo_r.id_catalogo_insumos_prodcutos;
+        ";
+    } else {
+      $sql = "SELECT
+            est.id_orden,
+            est.id_empleado,
+            est.id_departamento,
+            est.nombre_empleado,
+            est.nombre_departamento,
+            est.fecha_asignacion,
+            est.nombre_producto,
+            est.talla,
+            est.nombre_insumo,
+            est.cantidad_piezas,
+            est.consumo_estimado_total,
+            COALESCE(consumo_r.consumo_real_total, 0) AS consumo_real_total,
+            (COALESCE(consumo_r.consumo_real_total, 0) - COALESCE(est.consumo_estimado_total, 0)) AS diferencia
+        FROM
+            (
+                SELECT
+                    op.id_orden,
+                    ldea.id_empleado,
+                    ldea.id_departamento,
+                    GROUP_CONCAT(DISTINCT p.product SEPARATOR ', ') AS nombre_producto,
+                    GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') AS talla,
+                    cip.nombre AS nombre_insumo,
+                    pia.id_catalogo_insumos_productos,
+                    SUM(op.cantidad) AS cantidad_piezas,
+                    SUM(op.cantidad * COALESCE(pia.cantidad, 0)) AS consumo_estimado_total,
+                    eu.nombre AS nombre_empleado,
+                    dep.departamento AS nombre_departamento,
+                    ldea.fecha_inicio AS fecha_asignacion
+                FROM
+                    lotes_detalles_empleados_asignados ldea
+                JOIN ordenes_productos op ON ldea.id_orden = op.id_orden
+                JOIN products p ON op.id_woo = p._id
+                LEFT JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
+                LEFT JOIN departamentos dep ON ldea.id_departamento = dep._id
+                LEFT JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product 
+                                                        AND op.id_size = pia.id_talla
+                                                        AND ldea.id_departamento = pia.id_departamento
+                LEFT JOIN sizes s ON op.id_size = s._id
+                LEFT JOIN catalogo_insumos_productos cip ON pia.id_catalogo_insumos_productos = cip._id
+                WHERE
+                    ldea.id_empleado = {$args['id_empleado']}
+                    AND ldea.id_departamento = {$args['id_departamento']}
+                    AND pia.id_catalogo_insumos_productos IS NOT NULL
+                GROUP BY
+                    ldea.id_orden, ldea.id_empleado, ldea.id_departamento,
+                    cip.nombre, pia.id_catalogo_insumos_productos,
+                    eu.nombre, dep.departamento, ldea.fecha_inicio
+            ) AS est
+        LEFT JOIN
+            (
+                SELECT
+                    im.id_orden,
+                    im.id_departamento,
+                    im.id_empleado,
+                    im.id_catalogo_insumos_prodcutos,
+                    SUM((im.valor_inicial - im.valor_final) * COALESCE(inv.rendimiento, 1)) AS consumo_real_total
+                FROM
+                    inventario_movimientos im
+                LEFT JOIN inventario inv ON im.id_insumo = inv._id
+                WHERE
+                    im.id_empleado = {$args['id_empleado']}
+                    AND im.id_departamento = {$args['id_departamento']}
+                GROUP BY
+                    im.id_orden, im.id_departamento, im.id_empleado, im.id_catalogo_insumos_prodcutos
+            ) AS consumo_r ON est.id_orden = consumo_r.id_orden
+                          AND est.id_departamento = consumo_r.id_departamento
+                          AND est.id_empleado = consumo_r.id_empleado
+                          AND est.id_catalogo_insumos_productos = consumo_r.id_catalogo_insumos_prodcutos;
+        ";
+    }
     $reficiencia_insumos = $localConnection->goQuery($sql);
     $object['sql_eficiencia_insumos'] = $sql;
     $object['eficiencia_insumos'] = $reficiencia_insumos;
@@ -1297,7 +1562,7 @@ return function (App $app) {
 
     // 1. Resumen de Órdenes
     $queries = [
-      'creadas' => "SELECT COUNT(*) as total FROM ordenes WHERE YEARWEEK(fecha_creacion, 1) = YEARWEEK(NOW(), 1) AND responsable = $id_empleado",
+      'creadas' => (DB_DRIVER === 'pgsql' ? "SELECT COUNT(*) as total FROM ordenes WHERE EXTRACT(WEEK FROM fecha_creacion) = EXTRACT(WEEK FROM NOW()) AND EXTRACT(YEAR FROM fecha_creacion) = EXTRACT(YEAR FROM NOW()) AND responsable = $id_empleado" : "SELECT COUNT(*) as total FROM ordenes WHERE YEARWEEK(fecha_creacion, 1) = YEARWEEK(NOW(), 1) AND responsable = $id_empleado"),
       'terminadas' => "SELECT COUNT(*) as total FROM ordenes WHERE status = 'terminada' AND responsable = $id_empleado",
       'entregadas' => "SELECT COUNT(*) as total FROM ordenes WHERE status = 'entregada' AND responsable = $id_empleado"
     ];
@@ -1333,13 +1598,23 @@ return function (App $app) {
     $object['estado_ordenes'] = $estados;
 
     // 3. Pagos de la Semana
-    $sqlPagos = "SELECT DATE_FORMAT(a.moment, '%w') as dia_num, SUM(a.abono) as total 
+    if (DB_DRIVER === 'pgsql') {
+      $sqlPagos = "SELECT EXTRACT(DOW FROM a.moment)::int as dia_num, SUM(a.abono) as total 
+                 FROM abonos a
+                 JOIN ordenes o ON a.id_orden = o._id
+                 WHERE EXTRACT(WEEK FROM a.moment) = EXTRACT(WEEK FROM NOW()) AND EXTRACT(YEAR FROM a.moment) = EXTRACT(YEAR FROM NOW())
+                 AND o.responsable = $id_empleado
+                 GROUP BY dia_num 
+                 ORDER BY dia_num ASC";
+    } else {
+      $sqlPagos = "SELECT DATE_FORMAT(a.moment, '%w') as dia_num, SUM(a.abono) as total 
                  FROM abonos a
                  JOIN ordenes o ON a.id_orden = o._id
                  WHERE YEARWEEK(a.moment, 1) = YEARWEEK(NOW(), 1)
                  AND o.responsable = $id_empleado
                  GROUP BY dia_num 
                  ORDER BY dia_num ASC";
+    }
     $pagosData = $localConnection->goQuery($sqlPagos);
     if (isset($pagosData['status']) && $pagosData['status'] === 'error') {
       return $sendJson(['error' => 'Error SQL Pagos', 'details' => $pagosData], 500);
@@ -4012,7 +4287,7 @@ $object['sales_commission_ISSET'][] = false;
       $cliente_nombre = trim($data['cliente_nombre']);
       $sql_cliente = "SELECT _id, first_name, last_name, phone, cedula, email
                       FROM customers
-                      WHERE eliminado = 0 AND CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+                      WHERE eliminado = 0 AND CONCAT(first_name, ' ', COALESCE(last_name, '')) LIKE ?
                       LIMIT 5";
       $clientes = $localConnection->goQuery($sql_cliente, ["%{$cliente_nombre}%"]);
 
@@ -4445,7 +4720,7 @@ $object['sales_commission_ISSET'][] = false;
       $cliente_nombre = trim($data['cliente_nombre']);
       $sql_cliente = "SELECT _id, first_name, last_name, phone, cedula, email, address
                       FROM customers
-                      WHERE eliminado = 0 AND CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+                      WHERE eliminado = 0 AND CONCAT(first_name, ' ', COALESCE(last_name, '')) LIKE ?
                       LIMIT 5";
       $clientes = $localConnection->goQuery($sql_cliente, ["%{$cliente_nombre}%"]);
 
@@ -4771,12 +5046,12 @@ $object['sales_commission_ISSET'][] = false;
       if (!empty($buscarClientes)) {
         $nombre = trim($buscarClientes);
         $sql = "SELECT _id as id, 
-                       CONCAT(first_name, ' ', IFNULL(last_name, '')) as nombre_completo,
+                       CONCAT(first_name, ' ', COALESCE(last_name, '')) as nombre_completo,
                        phone as telefono
                 FROM customers
                 WHERE eliminado = 0 AND (first_name LIKE ?
                    OR last_name LIKE ?
-                   OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?)
+                   OR CONCAT(first_name, ' ', COALESCE(last_name, '')) LIKE ?)
                 ORDER BY first_name ASC
                 LIMIT 10";
         $clientes = $localConnection->goQuery($sql, ["%{$nombre}%", "%{$nombre}%", "%{$nombre}%"]);
@@ -4899,7 +5174,7 @@ $object['sales_commission_ISSET'][] = false;
             FROM customers
             WHERE eliminado = 0 AND (first_name LIKE ?
                OR last_name LIKE ?
-               OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?)
+               OR CONCAT(first_name, ' ', COALESCE(last_name, '')) LIKE ?)
             ORDER BY first_name ASC
             LIMIT 10";
     $clientes = $db->goQuery($sql, ["%{$nombre}%", "%{$nombre}%", "%{$nombre}%"]);
