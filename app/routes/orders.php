@@ -377,7 +377,7 @@ return function (App $app) {
     $sql['orden_empleados']['revision'] = "SELECT b.nombre nombre, b.id_usuario _id FROM ordenes a JOIN api_empresas.empresas_usuarios b ON a.dep_revision = b.id_usuario WHERE a._id = '" . $id . "'";
     $sql['orden_empleados']['responsable'] = "SELECT b.nombre nombre, b.id_usuario _id FROM ordenes a JOIN api_empresas.empresas_usuarios b ON a.dep_responsable = b.id_usuario WHERE a._id = '" . $id . "'";
     $sql['orden_empleados']['diseno'] = "SELECT b.nombre nombre, b.id_usuario _id FROM ordenes a JOIN api_empresas.empresas_usuarios b ON a.dep_diseno = b.id_usuario WHERE a._id = '" . $id . "'";
-    $sql['orden_productos_cantidad'] = "SELECT a.cantidad, a.prodcuto,. a.idp FROM ordenes_personas_productos a WHERE  id_orden = '" . $id . "'";
+    $sql['orden_productos_cantidad'] = "SELECT a.cantidad, a.prodcuto, a.idp FROM ordenes_personas_productos a WHERE  id_orden = '" . $id . "'";
     $sql['lotes_detalles'] = 'SELECT producto, unidades_solicitadas, unidades_restantes, departamento, id_orden FROM lotes_detalles WHERE id_orden = ' . $id;
 
     $object = $localConnection->goQuery($sql['orden'])[0];
