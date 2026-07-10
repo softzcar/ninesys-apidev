@@ -329,7 +329,7 @@ return function (App $app) {
         if ($order['estado'] === 'terminada') {
           // UPDATE PRODUCTS QUANTITY
           // Buscar cantidades de productos en ninesys
-          $sql = 'SELECT id_woo, cantidad FROM `ordenes_productos` WHERE id_orden = ' . intval($order['id']);
+          $sql = 'SELECT id_woo, cantidad FROM ordenes_productos WHERE id_orden = ' . intval($order['id']);
           $productos = $localConnection->goQuery($sql);
 
           foreach ($productos as $key => $producto) {
@@ -363,7 +363,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
     $id = $args['id'];
 
-    $sql['detalle_empleados'] = 'SELECT `dep_responsable_detalles` responsable, `dep_diseno_detalles` diseno, `dep_corte_detalles` corte, `dep_impresion_detalles` impresion, `dep_estampado_detalles` estampado, `dep_confeccion_detalles` confeccion, `dep_revision_detalles` revision FROM `ordenes` WHERE `_id` = ' . $id;
+    $sql['detalle_empleados'] = 'SELECT dep_responsable_detalles responsable, dep_diseno_detalles diseno, dep_corte_detalles corte, dep_impresion_detalles impresion, dep_estampado_detalles estampado, dep_confeccion_detalles confeccion, dep_revision_detalles revision FROM ordenes WHERE _id = ' . $id;
 
     $sql['orden'] = " SELECT _id, status, cliente_nombre, cliente_cedula, lote_id lote, fecha_inicio, fecha_entrega FROM ordenes WHERE _id = '" . $id . "' ";
     $sql['orden_personas'] = "SELECT * FROM ordenes_personas WHERE id_order = '" . $id . "'";
@@ -554,12 +554,13 @@ return function (App $app) {
 
       // VERIFICAR SI YA EXISTE UN ABONO IDÉNTICO RECIENTE (últimos 10 segundos)
       // Esto previene duplicados por doble clic o reintentos rápidos
-      $sql_check_duplicate = "SELECT COUNT(*) as count FROM abonos 
+      $momentoRecienteExpr = DB_DRIVER === 'pgsql' ? "NOW() - INTERVAL '10 seconds'" : 'DATE_SUB(NOW(), INTERVAL 10 SECOND)';
+      $sql_check_duplicate = "SELECT COUNT(*) as count FROM abonos
         WHERE id_orden = " . intval($datosAbono['id']) . "
         AND id_empleado = " . intval($datosAbono['empleado']) . "
         AND ABS(abono - " . $abono_val . ") < 0.01
         AND ABS(descuento - " . $descuento_val . ") < 0.01
-        AND moment > DATE_SUB(NOW(), INTERVAL 10 SECOND)";
+        AND moment > $momentoRecienteExpr";
       $check_result = $localConnection->goQuery($sql_check_duplicate);
 
       if (!empty($check_result) && $check_result[0]['count'] > 0) {
@@ -1728,7 +1729,11 @@ return function (App $app) {
     $object['fields'][3]['key'] = 'descuento';
     $object['fields'][3]['label'] = 'Descuento';
 
-    $sql = 'SELECT a._id, a.id_orden, a.abono abono, a.descuento, a.moment FROM abonos a  WHERE YEARWEEK(a.moment)=YEARWEEK(NOW()) ORDER BY a.id_orden ASC';
+    if (DB_DRIVER === 'pgsql') {
+      $sql = 'SELECT a._id, a.id_orden, a.abono abono, a.descuento, a.moment FROM abonos a WHERE EXTRACT(WEEK FROM a.moment) = EXTRACT(WEEK FROM NOW()) AND EXTRACT(YEAR FROM a.moment) = EXTRACT(YEAR FROM NOW()) ORDER BY a.id_orden ASC';
+    } else {
+      $sql = 'SELECT a._id, a.id_orden, a.abono abono, a.descuento, a.moment FROM abonos a  WHERE YEARWEEK(a.moment)=YEARWEEK(NOW()) ORDER BY a.id_orden ASC';
+    }
     $datosAbono = $localConnection->goQuery($sql);
     $object['items'] = $datosAbono;
 
@@ -1774,7 +1779,7 @@ return function (App $app) {
       $object['customer'][0] = $woo->getCustomerById($id_customer);
 
       // Buscar datos de productos
-      $sql = 'SELECT _id, name, id_woo cod, cantidad, talla, corte, precio_unitario precio FROM `ordenes_productos` WHERE id_orden = ' . $id;
+      $sql = 'SELECT _id, name, id_woo cod, cantidad, talla, corte, precio_unitario precio FROM ordenes_productos WHERE id_orden = ' . $id;
       $object['productos'] = $localConnection->goQuery($sql);
     }
 
@@ -1860,7 +1865,7 @@ return function (App $app) {
                 }
 
 // Buscar datos de productos
-                $sql = "SELECT _id, name, id_woo cod, cantidad, talla, tela, corte, precio_unitario precio FROM `ordenes_productos` WHERE id_orden = " . $id;
+                $sql = "SELECT _id, name, id_woo cod, cantidad, talla, tela, corte, precio_unitario precio FROM ordenes_productos WHERE id_orden = " . $id;
                 $object['productos'] = $localConnection->goQuery($sql);
 
 // Crear estructura del email de bienvenida:
@@ -2234,12 +2239,12 @@ $object['sales_commission_ISSET'][] = false;
             $sql_lote_detalles = '';
             // $sql_lote_detalles = "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Responsable');";
             // $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Diseño');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Corte');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Impresión');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Estampado');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Costura');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Limpieza');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Revisión');";
+            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Corte');";
+            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Impresión');";
+            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Estampado');";
+            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Costura');";
+            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Limpieza');";
+            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Revisión');";
             $object['sql_lotes_detalles'][$i] = $sql_lote_detalles;
             $object['lote_detalles'][$i] = $localConnection->goQuery($sql_lote_detalles);
           }
@@ -3187,7 +3192,7 @@ $object['sales_commission_ISSET'][] = false;
     $localConnection->beginTransaction();
 
     try {
-      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, `status` ) VALUES (' . intval($newJson['responsable']) . ", '" . $now . "', " . $descuento_value . ', ' . $abono_value . ",  " . $id_wp_sql . ", '" . addslashes($arr['cedula'] ?? '') . "', " . floatval($newJson['total']) . ",'" . addslashes($cliente ?? '') . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
+      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . intval($newJson['responsable']) . ", '" . $now . "', " . $descuento_value . ', ' . $abono_value . ",  " . $id_wp_sql . ", '" . addslashes($arr['cedula'] ?? '') . "', " . floatval($newJson['total']) . ",'" . addslashes($cliente ?? '') . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
       $nueva_oreden_response = $localConnection->goQuery($sql);
       $object['nueva_oreden_sql'] = $sql;
 
@@ -3218,7 +3223,7 @@ $object['sales_commission_ISSET'][] = false;
       $lastOrdenFila = $localConnection->goQuery('SELECT MAX(orden_fila) AS max FROM ordenes_fila_orden;');
       $lastOrdenFila = $lastOrdenFila[0]['max'] + 1;
 
-      $sql = "INSERT INTO `ordenes_fila_orden`(`id_orden`, `orden_fila`)  VALUES ($last_id, $lastOrdenFila)";
+      $sql = "INSERT INTO ordenes_fila_orden(id_orden, orden_fila)  VALUES ($last_id, $lastOrdenFila)";
       $object['sql_orden_fila'] = $sql;
       $response_last_fila = $localConnection->goQuery($sql);
 
@@ -3450,7 +3455,7 @@ $object['sales_commission_ISSET'][] = false;
               $sql_lote_detalles = '';
 
               foreach ($resultDepartamentos as $departamento) {
-                $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `id_departamento`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', {$departamento['_id']}, '{$departamento['departamento']}');";
+                $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, id_departamento, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', {$departamento['_id']}, '{$departamento['departamento']}');";
               }
 
               $object['lotes_detalles_sql'][$i] = $sql_lote_detalles;
@@ -3739,7 +3744,7 @@ $object['sales_commission_ISSET'][] = false;
       // Si es NULL, no ponemos comillas. Si es número, tampoco (o sí, MySQL lo acepta). Pero NULL no va entre comillas.
       $id_wp_sql_val = ($id_wp_val === "NULL") ? "NULL" : "'" . $id_wp_val . "'";
 
-      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, `status`, tipo ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql_val . ", '" . $arr['cedula'] . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'entregada', 'sport')";
+      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status, tipo ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql_val . ", '" . $arr['cedula'] . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'entregada', 'sport')";
 
       $nueva_oreden_response = $localConnection->goQuery($sql);
       $object['nueva_oreden_sql'] = $sql;
