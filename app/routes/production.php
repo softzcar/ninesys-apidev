@@ -122,22 +122,41 @@ return function (App $app) {
   // SSE PRODUCCION
   $app->get('/sse/produccion/ordenes-activas', function (Request $request, Response $response, array $args) {  // /lotes/en-proceso
     $localConnection = new LocalDB();
-    $sql = "SELECT 
-            a.id_orden orden, 
-            b.nombre AS empleado, 
-            c.name producto, 
-            c.cantidad, 
-            c.talla, 
-            c.corte, 
-            c.tela, 
-            DATE_FORMAT(a.fecha_inicio, '%h:%i:%s %p') AS hora, 
-            DATE_FORMAT(a.fecha_inicio, '%d-%m-%Y') AS fecha 
-            FROM lotes_detalles a 
-            JOIN empleados b ON a.id_empleado = b._id 
-            JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
-            WHERE a.progreso = 'en curso' 
-            ORDER BY a.fecha_inicio DESC, b.nombre ASC
-        ";
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT 
+              a.id_orden orden, 
+              b.nombre AS empleado, 
+              c.name producto, 
+              c.cantidad, 
+              c.talla, 
+              c.corte, 
+              c.tela, 
+              TO_CHAR(a.fecha_inicio, 'HH12:MI:SS AM') AS hora, 
+              TO_CHAR(a.fecha_inicio, 'DD-MM-YYYY') AS fecha 
+              FROM lotes_detalles a 
+              JOIN empleados b ON a.id_empleado = b._id 
+              JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
+              WHERE a.progreso = 'en curso' 
+              ORDER BY a.fecha_inicio DESC, b.nombre ASC
+          ";
+    } else {
+      $sql = "SELECT 
+              a.id_orden orden, 
+              b.nombre AS empleado, 
+              c.name producto, 
+              c.cantidad, 
+              c.talla, 
+              c.corte, 
+              c.tela, 
+              DATE_FORMAT(a.fecha_inicio, '%h:%i:%s %p') AS hora, 
+              DATE_FORMAT(a.fecha_inicio, '%d-%m-%Y') AS fecha 
+              FROM lotes_detalles a 
+              JOIN empleados b ON a.id_empleado = b._id 
+              JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
+              WHERE a.progreso = 'en curso' 
+              ORDER BY a.fecha_inicio DESC, b.nombre ASC
+          ";
+    }
     $object['items'] = $localConnection->goQuery($sql);
 
     // $sse = new SSE($obj);
@@ -385,62 +404,121 @@ return function (App $app) {
       $obj['reposicion_ordenes_productos'] = $localConnection->goQuery($sql);
 
       // BUSCAR REPOSICIONES SOLICITADAS POR EMPLEADOS
-      $sql = "SELECT
-        a._id id_reposicion,
-        a.id_orden,
-        a.id_departamento_solicitante,
-        a.id_departamento,
-        c._id id_ordenes_productos,
-        b.nombre empleado,
-        a.detalle_emisor,
-        DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
-        DATE_FORMAT(a.moment, '%I:%i %p') AS hora,
-        c.name producto,
-        a.unidades,
-        c.talla,
-        c.corte,
-        c.tela
-        FROM
-            reposiciones a
-        LEFT JOIN ordenes_fila_reposiciones d ON d.id_reposicion = a._id
-        LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor
-        JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
-        WHERE
-            (a.aprobada IS NULL OR (a.aprobada = 0 AND a.detalle IS NULL)) AND a.id_empleado IS NULL AND a.eliminada = 0
-        ORDER BY d.orden_fila ASC;
-        ";
+      if (DB_DRIVER === 'pgsql') {
+        $sql = "SELECT
+          a._id id_reposicion,
+          a.id_orden,
+          a.id_departamento_solicitante,
+          a.id_departamento,
+          c._id id_ordenes_productos,
+          b.nombre empleado,
+          a.detalle_emisor,
+          TO_CHAR(a.moment, 'DD/MM/YYYY') AS fecha,
+          TO_CHAR(a.moment, 'HH12:MI AM') AS hora,
+          c.name producto,
+          a.unidades,
+          c.talla,
+          c.corte,
+          c.tela
+          FROM
+              reposiciones a
+          LEFT JOIN ordenes_fila_reposiciones d ON d.id_reposicion = a._id
+          LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor
+          JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
+          WHERE
+              (a.aprobada IS NULL OR (a.aprobada = 0 AND a.detalle IS NULL)) AND a.id_empleado IS NULL AND a.eliminada = 0
+          ORDER BY d.orden_fila ASC;
+          ";
+      } else {
+        $sql = "SELECT
+          a._id id_reposicion,
+          a.id_orden,
+          a.id_departamento_solicitante,
+          a.id_departamento,
+          c._id id_ordenes_productos,
+          b.nombre empleado,
+          a.detalle_emisor,
+          DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
+          DATE_FORMAT(a.moment, '%I:%i %p') AS hora,
+          c.name producto,
+          a.unidades,
+          c.talla,
+          c.corte,
+          c.tela
+          FROM
+              reposiciones a
+          LEFT JOIN ordenes_fila_reposiciones d ON d.id_reposicion = a._id
+          LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor
+          JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
+          WHERE
+              (a.aprobada IS NULL OR (a.aprobada = 0 AND a.detalle IS NULL)) AND a.id_empleado IS NULL AND a.eliminada = 0
+          ORDER BY d.orden_fila ASC;
+          ";
+      }
       $obj['reposiciones_solicitadas'] = $localConnection->goQuery($sql);
 
       // BUSCAR REPOSICIONES EN CURSO (APROBADAS Y NO TERMINADAS)
-      $sql = "SELECT
-        a._id id_reposicion,
-        a.id_orden,
-        a.id_departamento_solicitante,
-        a.id_departamento,
-        dep.departamento AS nombre_departamento,
-        c._id id_ordenes_productos,
-        b.nombre emisor,
-        e.nombre empleado,
-        a.detalle_emisor,
-        a.detalle,
-        DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
-        DATE_FORMAT(a.moment, '%I:%i %p') AS hora,
-        c.name producto,
-        a.unidades,
-        c.talla,
-        c.corte,
-        c.tela
-        FROM
-            reposiciones a
-        LEFT JOIN ordenes_fila_reposiciones d ON d.id_reposicion = a._id
-        LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor
-        LEFT JOIN api_empresas.empresas_usuarios e ON e.id_usuario = a.id_empleado
-        LEFT JOIN departamentos dep ON dep._id = a.id_departamento
-        JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
-        WHERE
-            a.aprobada = 1 AND a.terminada = 0 AND a.id_empleado IS NOT NULL AND a.id_empleado <> '' AND a.id_empleado <> 0 AND a.eliminada = 0
-        ORDER BY d.orden_fila ASC;
-        ";
+      if (DB_DRIVER === 'pgsql') {
+        $sql = "SELECT
+          a._id id_reposicion,
+          a.id_orden,
+          a.id_departamento_solicitante,
+          a.id_departamento,
+          dep.departamento AS nombre_departamento,
+          c._id id_ordenes_productos,
+          b.nombre emisor,
+          e.nombre empleado,
+          a.detalle_emisor,
+          a.detalle,
+          TO_CHAR(a.moment, 'DD/MM/YYYY') AS fecha,
+          TO_CHAR(a.moment, 'HH12:MI AM') AS hora,
+          c.name producto,
+          a.unidades,
+          c.talla,
+          c.corte,
+          c.tela
+          FROM
+              reposiciones a
+          LEFT JOIN ordenes_fila_reposiciones d ON d.id_reposicion = a._id
+          LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor
+          LEFT JOIN api_empresas.empresas_usuarios e ON e.id_usuario = a.id_empleado
+          LEFT JOIN departamentos dep ON dep._id = a.id_departamento
+          JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
+          WHERE
+              a.aprobada = 1 AND a.terminada = 0 AND a.id_empleado IS NOT NULL AND a.id_empleado <> '' AND a.id_empleado <> 0 AND a.eliminada = 0
+          ORDER BY d.orden_fila ASC;
+          ";
+      } else {
+        $sql = "SELECT
+          a._id id_reposicion,
+          a.id_orden,
+          a.id_departamento_solicitante,
+          a.id_departamento,
+          dep.departamento AS nombre_departamento,
+          c._id id_ordenes_productos,
+          b.nombre emisor,
+          e.nombre empleado,
+          a.detalle_emisor,
+          a.detalle,
+          DATE_FORMAT(a.moment, '%d/%m/%Y') AS fecha,
+          DATE_FORMAT(a.moment, '%I:%i %p') AS hora,
+          c.name producto,
+          a.unidades,
+          c.talla,
+          c.corte,
+          c.tela
+          FROM
+              reposiciones a
+          LEFT JOIN ordenes_fila_reposiciones d ON d.id_reposicion = a._id
+          LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado_emisor
+          LEFT JOIN api_empresas.empresas_usuarios e ON e.id_usuario = a.id_empleado
+          LEFT JOIN departamentos dep ON dep._id = a.id_departamento
+          JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
+          WHERE
+              a.aprobada = 1 AND a.terminada = 0 AND a.id_empleado IS NOT NULL AND a.id_empleado <> '' AND a.id_empleado <> 0 AND a.eliminada = 0
+          ORDER BY d.orden_fila ASC;
+          ";
+      }
       $obj['reposiciones_en_curso'] = $localConnection->goQuery($sql);
 
       // Detalles de los productos
@@ -465,28 +543,59 @@ return function (App $app) {
       $obj['productos'] = $localConnection->goQuery($sql);
 
       // EMPLEADOS (a.password removido por seguridad)
-      $sql = 'SELECT
-            a.id_usuario AS _id,
-            a.id_usuario AS acciones,
-            a.email AS username,
-            a.nombre,
-            a.email,
-            a.departamento,
-            a.comision,
-            a.comision_tipo,
-            a.acceso,
-            IFNULL(CONCAT("[", GROUP_CONCAT(
-                CONCAT("{\"id\":", b.id_departamento, ",\"nombre\":\"", c.departamento, "\"}")
-                SEPARATOR ","), "]"), "[]") AS departamentos
-        FROM 
-            api_empresas.empresas_usuarios a
-        LEFT JOIN api_empresas.empresas_usuarios_departamentos b ON b.id_empleado = a.id_usuario
-        LEFT JOIN ' . LOCAL_DB . '.departamentos c ON c._id = b.id_departamento
-        WHERE
-            a.activo = 1  AND a.id_empresa = ' . ID_EMPRESA . ' GROUP BY 
-            a.id_usuario, a.email, a.nombre, a.departamento, 
-            a.comision, a.comision_tipo, a.acceso;
-            ';
+      if (DB_DRIVER === 'pgsql') {
+        $sql = "SELECT
+              a.id_usuario AS _id,
+              a.id_usuario AS acciones,
+              a.email AS username,
+              a.nombre,
+              a.email,
+              a.departamento,
+              a.comision,
+              a.comision_tipo,
+              a.acceso,
+              COALESCE(deps.departamentos, '[]') AS departamentos
+          FROM 
+              api_empresas.empresas_usuarios a
+          LEFT JOIN (
+              SELECT
+                  b.id_empleado,
+                  COALESCE('[' || string_agg(
+                      DISTINCT '{\"id\":' || b.id_departamento || ',\"nombre\":\"' || c.departamento || '\"}',
+                      ','
+                  ) || ']', '[]') AS departamentos
+              FROM
+                  api_empresas.empresas_usuarios_departamentos b
+              INNER JOIN departamentos c ON c._id = b.id_departamento AND c.eliminado = 0
+              GROUP BY
+                  b.id_empleado
+          ) deps ON deps.id_empleado = a.id_usuario
+          WHERE
+              a.activo = 1  AND a.id_empresa = " . ID_EMPRESA . ";";
+      } else {
+        $sql = 'SELECT
+              a.id_usuario AS _id,
+              a.id_usuario AS acciones,
+              a.email AS username,
+              a.nombre,
+              a.email,
+              a.departamento,
+              a.comision,
+              a.comision_tipo,
+              a.acceso,
+              IFNULL(CONCAT("[", GROUP_CONCAT(
+                  CONCAT("{\"id\":", b.id_departamento, ",\"nombre\":\"", c.departamento, "\"}")
+                  SEPARATOR ","), "]"), "[]") AS departamentos
+          FROM 
+              api_empresas.empresas_usuarios a
+          LEFT JOIN api_empresas.empresas_usuarios_departamentos b ON b.id_empleado = a.id_usuario
+          LEFT JOIN ' . LOCAL_DB . '.departamentos c ON c._id = b.id_departamento
+          WHERE
+              a.activo = 1  AND a.id_empresa = ' . ID_EMPRESA . ' GROUP BY 
+              a.id_usuario, a.email, a.nombre, a.departamento, 
+              a.comision, a.comision_tipo, a.acceso;
+              ';
+      }
       $items = $localConnection->goQuery($sql);
       $obj['sql_empleados'] = $sql;
 
@@ -890,7 +999,11 @@ return function (App $app) {
     }
 
     if ($excluir) {
-      $sql = "INSERT IGNORE INTO reposiciones_departamentos_excluidos (id_reposicion, id_departamento) VALUES ({$id_reposicion}, {$id_departamento})";
+      if (DB_DRIVER === 'pgsql') {
+        $sql = "INSERT INTO reposiciones_departamentos_excluidos (id_reposicion, id_departamento) VALUES ({$id_reposicion}, {$id_departamento}) ON CONFLICT DO NOTHING";
+      } else {
+        $sql = "INSERT IGNORE INTO reposiciones_departamentos_excluidos (id_reposicion, id_departamento) VALUES ({$id_reposicion}, {$id_departamento})";
+      }
     } else {
       $sql = "DELETE FROM reposiciones_departamentos_excluidos WHERE id_reposicion = {$id_reposicion} AND id_departamento = {$id_departamento}";
     }
@@ -922,8 +1035,14 @@ return function (App $app) {
       $whereConditions[] = "ord.status = '" . $args['estatus_orden'] . "'";
     }
 
-    if ($fechaInicio && $fechaFin && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaFin)) {
-      $whereConditions[] = "DATE(re.moment) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+    if (DB_DRIVER === 'pgsql') {
+      if ($fechaInicio && $fechaFin && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaFin)) {
+        $whereConditions[] = "re.moment::date BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+      }
+    } else {
+      if ($fechaInicio && $fechaFin && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaFin)) {
+        $whereConditions[] = "DATE(re.moment) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+      }
     }
 
     $whereParams = '';
@@ -931,67 +1050,131 @@ return function (App $app) {
       $whereParams = "WHERE " . implode(" AND ", $whereConditions);
     }
 
-    $sql = "SELECT
-                re._id id_reposicion,
-                re.id_orden,
-                re.id_empleado,
-                re.id_empleado_emisor,
-                re.id_ordenes_productos,
-                op.id_woo id_producto,
-                ord.status estatus_orden,    
-                op.name producto,
-                op.talla,
-                op.corte,
-                op.tela,
-                re.unidades unidades,
-                em_emisor.nombre empleado_emisor,
-                em_asignado.nombre empleado_asignado,
-                re.detalle detalle_emisor,
-                re.detalle detalle_encargado,                
-                COALESCE(
-                  SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
-                ) + 
-                COALESCE(
-                  (SELECT SUM(
-                    (t.c * (ic.costo / NULLIF(ic.cantidad_inicial, 0))) +
-                    (t.m * (im.costo / NULLIF(im.cantidad_inicial, 0))) +
-                    (t.y * (iy.costo / NULLIF(iy.cantidad_inicial, 0))) +
-                    (t.k * (ik.costo / NULLIF(ik.cantidad_inicial, 0)))
-                  )
-                  FROM tintas t
-                  LEFT JOIN inventario ic ON ic._id = 3
-                  LEFT JOIN inventario im ON im._id = 4
-                  LEFT JOIN inventario iy ON iy._id = 5
-                  LEFT JOIN inventario ik ON ik._id = 6
-                  WHERE t.id_orden = re.id_orden 
-                    AND t.moment >= re.moment 
-                    AND t.moment < COALESCE(
-                      (SELECT MIN(re_next.moment) 
-                       FROM reposiciones re_next 
-                       WHERE re_next.id_orden = re.id_orden 
-                         AND re_next.moment > re.moment
-                         AND re_next.eliminada = 0), 
-                      '9999-12-31 23:59:59'
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT
+                  re._id id_reposicion,
+                  re.id_orden,
+                  re.id_empleado,
+                  re.id_empleado_emisor,
+                  re.id_ordenes_productos,
+                  op.id_woo id_producto,
+                  ord.status estatus_orden,    
+                  op.name producto,
+                  op.talla,
+                  op.corte,
+                  op.tela,
+                  re.unidades unidades,
+                  em_emisor.nombre empleado_emisor,
+                  em_asignado.nombre empleado_asignado,
+                  re.detalle detalle_emisor,
+                  re.detalle detalle_encargado,                
+                  COALESCE(
+                    SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
+                  ) + 
+                  COALESCE(
+                    (SELECT SUM(
+                      (t.c * (ic.costo / NULLIF(ic.cantidad_inicial, 0))) +
+                      (t.m * (im.costo / NULLIF(im.cantidad_inicial, 0))) +
+                      (t.y * (iy.costo / NULLIF(iy.cantidad_inicial, 0))) +
+                      (t.k * (ik.costo / NULLIF(ik.cantidad_inicial, 0)))
                     )
-                  ), 0
-                ) +
-                COALESCE(
-                  (SELECT SUM(monto_pago) FROM pagos WHERE id_reposicion = re._id), 0
-                ) material_consumido,
-                '$' as unidad,
-                DATE_FORMAT(re.moment, '%d/%m/%Y') fecha_creacion,
-                DATE_FORMAT(re.moment, '%h:%i %p') hora_creacion
-            FROM
-                reposiciones re
-            LEFT JOIN api_empresas.empresas_usuarios em_asignado ON re.id_empleado = em_asignado.id_usuario
-            LEFT JOIN ordenes ord On ord._id = re.id_orden
-            JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
-            JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
-            LEFT JOIN inventario_movimientos inm ON (inm.id_reposicion = re._id) OR (inm.id_reposicion IS NULL AND inm.id_orden = re.id_orden AND inm.moment >= re.moment AND inm.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = re.id_orden AND re_next.moment > re.moment AND re_next.eliminada = 0), '9999-12-31 23:59:59'))
-            LEFT JOIN inventario inv ON inv._id = inm.id_producto
-            {$whereParams}
-            GROUP BY re._id
-            ORDER BY re.id_orden ASC, re._id ASC;";
+                    FROM tintas t
+                    LEFT JOIN inventario ic ON ic._id = 3
+                    LEFT JOIN inventario im ON im._id = 4
+                    LEFT JOIN inventario iy ON iy._id = 5
+                    LEFT JOIN inventario ik ON ik._id = 6
+                    WHERE t.id_orden = re.id_orden 
+                      AND t.moment >= re.moment 
+                      AND t.moment < COALESCE(
+                        (SELECT MIN(re_next.moment) 
+                         FROM reposiciones re_next 
+                         WHERE re_next.id_orden = re.id_orden 
+                           AND re_next.moment > re.moment
+                           AND re_next.eliminada = 0), 
+                        '9999-12-31 23:59:59'
+                      )
+                    ), 0
+                  ) +
+                  COALESCE(
+                    (SELECT SUM(monto_pago) FROM pagos WHERE id_reposicion = re._id), 0
+                  ) material_consumido,
+                  '$' as unidad,
+                  TO_CHAR(re.moment, 'DD/MM/YYYY') fecha_creacion,
+                  TO_CHAR(re.moment, 'HH12:MI AM') hora_creacion
+              FROM
+                  reposiciones re
+              LEFT JOIN api_empresas.empresas_usuarios em_asignado ON re.id_empleado = em_asignado.id_usuario
+              LEFT JOIN ordenes ord On ord._id = re.id_orden
+              JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
+              JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
+              LEFT JOIN inventario_movimientos inm ON (inm.id_reposicion = re._id) OR (inm.id_reposicion IS NULL AND inm.id_orden = re.id_orden AND inm.moment >= re.moment AND inm.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = re.id_orden AND re_next.moment > re.moment AND re_next.eliminada = 0), '9999-12-31 23:59:59'))
+              LEFT JOIN inventario inv ON inv._id = inm.id_producto
+              {$whereParams}
+              GROUP BY re._id, re.id_orden, re.id_empleado, re.id_empleado_emisor, re.id_ordenes_productos, op.id_woo, ord.status, op.name, op.talla, op.corte, op.tela, re.unidades, em_emisor.nombre, em_asignado.nombre, re.detalle, re.moment
+              ORDER BY re.id_orden ASC, re._id ASC;";
+    } else {
+      $sql = "SELECT
+                  re._id id_reposicion,
+                  re.id_orden,
+                  re.id_empleado,
+                  re.id_empleado_emisor,
+                  re.id_ordenes_productos,
+                  op.id_woo id_producto,
+                  ord.status estatus_orden,    
+                  op.name producto,
+                  op.talla,
+                  op.corte,
+                  op.tela,
+                  re.unidades unidades,
+                  em_emisor.nombre empleado_emisor,
+                  em_asignado.nombre empleado_asignado,
+                  re.detalle detalle_emisor,
+                  re.detalle detalle_encargado,                
+                  COALESCE(
+                    SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
+                  ) + 
+                  COALESCE(
+                    (SELECT SUM(
+                      (t.c * (ic.costo / NULLIF(ic.cantidad_inicial, 0))) +
+                      (t.m * (im.costo / NULLIF(im.cantidad_inicial, 0))) +
+                      (t.y * (iy.costo / NULLIF(iy.cantidad_inicial, 0))) +
+                      (t.k * (ik.costo / NULLIF(ik.cantidad_inicial, 0)))
+                    )
+                    FROM tintas t
+                    LEFT JOIN inventario ic ON ic._id = 3
+                    LEFT JOIN inventario im ON im._id = 4
+                    LEFT JOIN inventario iy ON iy._id = 5
+                    LEFT JOIN inventario ik ON ik._id = 6
+                    WHERE t.id_orden = re.id_orden 
+                      AND t.moment >= re.moment 
+                      AND t.moment < COALESCE(
+                        (SELECT MIN(re_next.moment) 
+                         FROM reposiciones re_next 
+                         WHERE re_next.id_orden = re.id_orden 
+                           AND re_next.moment > re.moment
+                           AND re_next.eliminada = 0), 
+                        '9999-12-31 23:59:59'
+                      )
+                    ), 0
+                  ) +
+                  COALESCE(
+                    (SELECT SUM(monto_pago) FROM pagos WHERE id_reposicion = re._id), 0
+                  ) material_consumido,
+                  '$' as unidad,
+                  DATE_FORMAT(re.moment, '%d/%m/%Y') fecha_creacion,
+                  DATE_FORMAT(re.moment, '%h:%i %p') hora_creacion
+              FROM
+                  reposiciones re
+              LEFT JOIN api_empresas.empresas_usuarios em_asignado ON re.id_empleado = em_asignado.id_usuario
+              LEFT JOIN ordenes ord On ord._id = re.id_orden
+              JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
+              JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
+              LEFT JOIN inventario_movimientos inm ON (inm.id_reposicion = re._id) OR (inm.id_reposicion IS NULL AND inm.id_orden = re.id_orden AND inm.moment >= re.moment AND inm.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = re.id_orden AND re_next.moment > re.moment AND re_next.eliminada = 0), '9999-12-31 23:59:59'))
+              LEFT JOIN inventario inv ON inv._id = inm.id_producto
+              {$whereParams}
+              GROUP BY re._id
+              ORDER BY re.id_orden ASC, re._id ASC;";
+    }
 
     $object = $localConnection->goQuery($sql);
 
@@ -1020,6 +1203,16 @@ return function (App $app) {
     $id_orden = $repoData[0]['id_orden'];
     $id_empleado = $repoData[0]['id_empleado'];
 
+    if (DB_DRIVER === 'pgsql') {
+      $fechaFormatInm = "TO_CHAR(inm.moment, 'DD/MM/YYYY HH12:MI AM')";
+      $fechaFormatT = "TO_CHAR(t.moment, 'DD/MM/YYYY HH12:MI AM')";
+      $fechaFormatP = "TO_CHAR(p.moment, 'DD/MM/YYYY HH12:MI AM')";
+    } else {
+      $fechaFormatInm = "DATE_FORMAT(inm.moment, '%d/%m/%Y %h:%i %p')";
+      $fechaFormatT = "DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p')";
+      $fechaFormatP = "DATE_FORMAT(p.moment, '%d/%m/%Y %h:%i %p')";
+    }
+
     // 2. Consultar desglose de movimientos
     $sql = "SELECT 
               inv.insumo,
@@ -1029,7 +1222,7 @@ return function (App $app) {
               (inm.valor_inicial - inm.valor_final) as cantidad_consumida,
               (inv.costo / NULLIF(inv.cantidad_inicial, 0)) as costo_unitario,
               ((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))) as costo_total,
-              DATE_FORMAT(inm.moment, '%d/%m/%Y %h:%i %p') as fecha,
+              $fechaFormatInm as fecha,
               inv.color,
               COALESCE(inv.id_catalogo, 0) as id_catalogo
             FROM inventario_movimientos inm
@@ -1052,25 +1245,25 @@ return function (App $app) {
             UNION ALL
 
             SELECT 
-              'Tinta Cyan' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.c as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.c * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'CYAN' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              'Tinta Cyan' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.c as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.c * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'CYAN' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
             FROM tintas t JOIN inventario i ON i._id = 3 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
 
             UNION ALL
 
             SELECT 
-              'Tinta Magenta' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.m as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.m * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'MAGENTA' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              'Tinta Magenta' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.m as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.m * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'MAGENTA' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
             FROM tintas t JOIN inventario i ON i._id = 4 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
 
             UNION ALL
 
             SELECT 
-              'Tinta Yellow' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.y as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.y * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'YELLOW' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              'Tinta Yellow' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.y as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.y * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'YELLOW' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
             FROM tintas t JOIN inventario i ON i._id = 5 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
 
             UNION ALL
 
             SELECT 
-              'Tinta Black' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.k as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.k * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p') as fecha, 'BLACK' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              'Tinta Black' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.k as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.k * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'BLACK' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
             FROM tintas t JOIN inventario i ON i._id = 6 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
 
             UNION ALL
@@ -1083,7 +1276,7 @@ return function (App $app) {
                 1 as cantidad_consumida,
                 p.monto_pago as costo_unitario,
                 p.monto_pago as costo_total,
-                DATE_FORMAT(p.moment, '%d/%m/%Y %h:%i %p') as fecha,
+                $fechaFormatP as fecha,
                 'N/A' as color,
                 9999 as id_catalogo
             FROM pagos p
