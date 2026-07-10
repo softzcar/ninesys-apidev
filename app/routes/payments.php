@@ -530,7 +530,7 @@ return function (App $app) {
               FROM
                   pagos p
               JOIN revisiones r ON
-                  p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado AND r.estatus = "Aprobado"
+                  p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado AND r.estatus = \'Aprobado\'
               WHERE p.fecha_pago IS NULL AND p.detalle IN (\'Diseño\', \'ajuste\', \'personalización\')' . $whereFecha . '
               GROUP BY p._id
           ';
