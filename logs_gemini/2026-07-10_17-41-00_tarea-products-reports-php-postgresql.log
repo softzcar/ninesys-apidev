@@ -1,0 +1,27 @@
+**Tarea:** Adaptar los 3 endpoints de `app/routes/products_reports.php` para compatibilidad con PostgreSQL (Tarea Pendiente 2 de CLAUDE_POSTGRES_INSTRUCTIONS.md)
+**Fecha:** 2026-07-10 17:41:00
+**Rama:** feature/postgresql-support
+**Commit:** 18b0f7e
+
+### Cambios Realizados
+
+1. **Helper compartido `$getSalarios`** (usado por los 3 endpoints): la query de horario laboral (`FROM empresas`) se calificó como `api_empresas.empresas` en pgsql (mismo motivo que en `reports.php`: al conectar directo a `LOCAL_DNS` ya no hay una DB "actual" llamada `api_empresas`).
+
+2. **Conexión cross-DB** en los 3 endpoints (`/reportes/costos-productos`, `/reportes/costos-productos/categorias`, `/reportes/costos-productos/{id}/detalle}`): mismo patrón condicional que en `reports.php` (`LOCAL_DNS` + sin `$companyDB` porque este archivo no usa prefijo `$companyDB.tabla`, todas las tablas propias de la empresa se referencian sin prefijo).
+
+3. **`DATE(o.moment)`** (5 usos por endpoint, en `$dateCond`/`$dateCond1`/`$dateCond2`): en vez de duplicar cada query completa, se extrajo a una sola variable `$momentDateExpr` por endpoint (`o.moment::date` en pgsql) y se interpola en las 3 asignaciones de `$dateCond*`, que a su vez ya se interpolaban dentro de cada query — un solo punto de cambio cubre los 5 usos.
+
+4. **`GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, STR_TO_DATE(...), o.fecha_creacion, DATE(o.moment))))`** (2 variantes — con y sin `/ 3600` — repetidas idénticamente en los 3 endpoints, 6 ocurrencias totales): extraído a variables `$fechaCierreExpr`, `$tiempoSegundosExpr`, `$tiempoHorasExpr` por endpoint. Equivalencia pgsql: `STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d')` → `NULLIF(o.fecha_entrega, '')::date` (pgsql castea directo un texto `YYYY-MM-DD` a `date`, no necesita función de parseo); `TIMESTAMPDIFF(SECOND, a, b)` → `EXTRACT(EPOCH FROM (b::timestamp - a::timestamp))`. Las 6 ocurrencias del texto literal se reemplazaron con `replace_all` (eran byte-idénticas en los 3 endpoints) por la interpolación de las variables `$tiempoSegundosExpr`/`$tiempoHorasExpr`.
+
+Nota: se optó por extraer a variables en vez de duplicar las queries completas (a diferencia de algunos casos en `reports.php`) porque aquí los bloques SQL embebidos son grandes (con funciones de ventana `SUM(...) OVER (PARTITION BY ...)`) y duplicarlos 2-3 veces por endpoint habría agregado ~90 líneas de SQL casi idéntico, dañando mantenibilidad sin beneficio real.
+
+### Validación
+- `php -l app/routes/products_reports.php`: sin errores de sintaxis.
+- Commit `18b0f7e` pusheado a `origin/feature/postgresql-support` y desplegado a Desarrollo (Contabo dev) vía `ninesys-hub/bin/deploy_backend.sh` (opción 2).
+- Verificado en vivo desde el navegador (sesión autenticada como admin, empresa 194 = piloto PostgreSQL) con `fetch()` + header `Authorization: <id_empresa>`:
+  - `GET /reportes/costos-productos?fecha_inicio=2026-06-01&fecha_fin=2026-07-10` → 200, sin error (data vacía, la empresa de prueba no tiene productos con sku + órdenes terminadas en el rango, pero la query corrió sin fallar).
+  - `GET /reportes/costos-productos/categorias?...` → 200, sin error.
+  - `GET /reportes/costos-productos/{1,2,3}/detalle?...` → 200 en los 3 casos, sin error, con las claves esperadas (`producto`, `teorico_labor_dept`, `teorico_tiempo_dept`, `tallas_detalle`).
+
+### Resultado
+Éxito. Los 3 endpoints de `products_reports.php` funcionan contra PostgreSQL en Desarrollo sin errores SQL. Con esto quedan completas ambas tareas pendientes de `CLAUDE_POSTGRES_INSTRUCTIONS.md` (reports.php y products_reports.php).
