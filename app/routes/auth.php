@@ -118,7 +118,7 @@ return function (App $app) {
             $error_response_object['datos_empresa']['tipos_de_monedas'] = json_decode($empresa_data['tipos_de_monedas']);
 
             // Consultar gastos fijos de la empresa
-            $sql_gastos = 'SELECT _id, nombre, descripcion, monto, moneda, periodicidad, estatus FROM api_empresas.empresas_gastos WHERE id_empresa = ? AND estatus = "activo"';
+            $sql_gastos = "SELECT _id, nombre, descripcion, monto, moneda, periodicidad, estatus FROM api_empresas.empresas_gastos WHERE id_empresa = ? AND estatus = 'activo'";
             $gastos_data = $localConnection->goQuery($sql_gastos, [$usuario_data['id_empresa']]);
 
             if (!empty($gastos_data)) {
@@ -312,7 +312,7 @@ return function (App $app) {
             ];
 
             // Consultar gastos fijos de la empresa
-            $sql_gastos = 'SELECT _id, nombre, descripcion, monto, moneda, periodicidad, estatus FROM api_empresas.empresas_gastos WHERE id_empresa = ? AND estatus = "activo"';
+            $sql_gastos = "SELECT _id, nombre, descripcion, monto, moneda, periodicidad, estatus FROM api_empresas.empresas_gastos WHERE id_empresa = ? AND estatus = 'activo'";
             $gastos_data = $localConnection->goQuery($sql_gastos, [$usuario_data['id_empresa']]);
 
             if (!empty($gastos_data)) {
@@ -424,7 +424,7 @@ return function (App $app) {
         ];
 
         // 4. Consultar gastos fijos de la empresa (Global)
-        $sql_gastos = 'SELECT _id, nombre, descripcion, monto, moneda, periodicidad, estatus FROM api_empresas.empresas_gastos WHERE id_empresa = ? AND estatus = "activo"';
+        $sql_gastos = "SELECT _id, nombre, descripcion, monto, moneda, periodicidad, estatus FROM api_empresas.empresas_gastos WHERE id_empresa = ? AND estatus = 'activo'";
         $gastos_data = $localConnection->goQuery($sql_gastos, [$usuario_data['id_empresa']]);
         if (!empty($gastos_data)) {
             $object['datos_empresa']['gastos_fijos'] = $gastos_data;
