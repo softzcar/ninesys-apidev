@@ -1654,9 +1654,11 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     if (isset($data['numero_semana'])) {
-      //
-      $where = 'WEEK(e.moment, 1) = ' . $data['numero_semana'] . "%' AND e.fecha_pago IS NULL";
-      // $where = "e.moment LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL";
+      if (DB_DRIVER === 'pgsql') {
+        $where = 'EXTRACT(WEEK FROM e.moment) = ' . $data['numero_semana'] . " AND e.fecha_pago IS NULL";
+      } else {
+        $where = 'WEEK(e.moment, 1) = ' . $data['numero_semana'] . " AND e.fecha_pago IS NULL";
+      }
       $whereEmpleados = "b.fecha_terminado LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL ";
     } else {
     }
@@ -1664,47 +1666,86 @@ return function (App $app) {
     if ($data['fecha_inicio'] === $data['fecha_fin']) {
       $where = "e.moment LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL";
       $whereEmpleados = "b.fecha_terminado LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL ";
-      // $where = "e.moment LIKE '" . $data["fecha_inicio"] . "%' ";
     } else {
-      $where = "(DATE(e.moment) BETWEEN '" . $data['fecha_inicio'] . "'AND '" . $data['fecha_fin'] . "') ";
-      $whereEmpleados = "b.fecha_inicio >= '" . $data['fecha_inicio'] . "' AND DATE_ADD(b.fecha_terminado, INTERVAL -1 DAY) <= '" . $data['fecha_fin'] . "' ";
+      if (DB_DRIVER === 'pgsql') {
+        $where = "(e.moment::date BETWEEN '" . $data['fecha_inicio'] . "' AND '" . $data['fecha_fin'] . "') ";
+        $whereEmpleados = "b.fecha_inicio >= '" . $data['fecha_inicio'] . "' AND (b.fecha_terminado - INTERVAL '1 day')::date <= '" . $data['fecha_fin'] . "' ";
+      } else {
+        $where = "(DATE(e.moment) BETWEEN '" . $data['fecha_inicio'] . "'AND '" . $data['fecha_fin'] . "') ";
+        $whereEmpleados = "b.fecha_inicio >= '" . $data['fecha_inicio'] . "' AND DATE_ADD(b.fecha_terminado, INTERVAL -1 DAY) <= '" . $data['fecha_fin'] . "' ";
+      }
     }
 
-    $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, TO_CHAR(a.moment, 'DD/MM/YYYY') fecha_de_pago FROM pagos a JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
+    } else {
+      $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
+    }
     $object['data']['vendedores'] = $localConnection->goQuery($sql);
     // FIN BUSCAR PAGOS DE VENDEDORES
 
     // OBTENER PAGOS DE EMPLEADOS
-    $sql = 'SELECT
-            a._id id_pago,
-            b._id id_lotes_detalles,
-            a.id_orden orden,
-            NULL as id_woo,
-            \'Pago Multi-Producto\' as producto,
-            \'N/A\' as talla,
-            c.id_usuario id_empleado,
-            c.nombre,
-            c.comision,
-            b.id_departamento,
-            a.detalle as departamento,
-            DATE_FORMAT(b.fecha_terminado, "%a") dia,
-            DATE_FORMAT(b.fecha_terminado, "%v") semana,
-            DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
-            a.cantidad cantidad,
-            a.monto_pago pago,
-            a.fecha_pago,
-            a.cantidad,
-            TIMEDIFF(b.fecha_terminado, b.fecha_inicio) tiempo_transcurrido
-            FROM
-            pagos a
-            LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
-            JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
-            WHERE ' . $whereEmpleados . ' AND a.fecha_pago IS NULL 
-            ORDER BY
-            c.nombre ASC,
-            a.id_orden ASC,
-            a._id ASC;
-        ';
+    if (DB_DRIVER === 'pgsql') {
+      $sql = 'SELECT
+              a._id id_pago,
+              b._id id_lotes_detalles,
+              a.id_orden orden,
+              NULL as id_woo,
+              \'Pago Multi-Producto\' as producto,
+              \'N/A\' as talla,
+              c.id_usuario id_empleado,
+              c.nombre,
+              c.comision,
+              b.id_departamento,
+              a.detalle as departamento,
+              TO_CHAR(b.fecha_terminado, \'Dy\') dia,
+              TO_CHAR(b.fecha_terminado, \'IW\') semana,
+              TO_CHAR(b.fecha_terminado, \'DD/MM/YY\') fecha,
+              a.cantidad cantidad,
+              a.monto_pago pago,
+              a.fecha_pago,
+              to_char(b.fecha_terminado - b.fecha_inicio, \'HH24:MI:SS\') tiempo_transcurrido
+              FROM
+              pagos a
+              LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+              JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
+              WHERE ' . $whereEmpleados . ' AND a.fecha_pago IS NULL
+              ORDER BY
+              c.nombre ASC,
+              a.id_orden ASC,
+              a._id ASC;
+          ';
+    } else {
+      $sql = 'SELECT
+              a._id id_pago,
+              b._id id_lotes_detalles,
+              a.id_orden orden,
+              NULL as id_woo,
+              \'Pago Multi-Producto\' as producto,
+              \'N/A\' as talla,
+              c.id_usuario id_empleado,
+              c.nombre,
+              c.comision,
+              b.id_departamento,
+              a.detalle as departamento,
+              DATE_FORMAT(b.fecha_terminado, "%a") dia,
+              DATE_FORMAT(b.fecha_terminado, "%v") semana,
+              DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
+              a.cantidad cantidad,
+              a.monto_pago pago,
+              a.fecha_pago,
+              TIMEDIFF(b.fecha_terminado, b.fecha_inicio) tiempo_transcurrido
+              FROM
+              pagos a
+              LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+              JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
+              WHERE ' . $whereEmpleados . ' AND a.fecha_pago IS NULL
+              ORDER BY
+              c.nombre ASC,
+              a.id_orden ASC,
+              a._id ASC;
+          ';
+    }
 
     $object['sql']['empleados'] = $sql;
     $object['data']['empleados'] = $localConnection->goQuery($sql);
@@ -1779,48 +1820,84 @@ return function (App $app) {
     if ($data['fecha_inicio'] === $data['fecha_fin']) {
       $where = "e.moment LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL";
       $whereEmpleados = "b.fecha_terminado LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL ";
-      // $where = "e.moment LIKE '" . $data["fecha_inicio"] . "%' ";
     } else {
-      $where = "(DATE(e.moment) BETWEEN '" . $data['fecha_inicio'] . "'AND '" . $data['fecha_fin'] . "') ";
-      $whereEmpleados = "b.fecha_terminado BETWEEN '" . $data['fecha_inicio'] . "%' AND '" . $data['fecha_fin'] . "' AND e.fecha_pago IS NULL ";
-
-      // $where = "(DATE(e.moment) BETWEEN '" . $data["fecha_inicio"] . "' AND '" . $data["fecha_fin"] . "') ";
+      if (DB_DRIVER === 'pgsql') {
+        $where = "(e.moment::date BETWEEN '" . $data['fecha_inicio'] . "' AND '" . $data['fecha_fin'] . "') ";
+        $whereEmpleados = "b.fecha_terminado::date BETWEEN '" . $data['fecha_inicio'] . "' AND '" . $data['fecha_fin'] . "' AND e.fecha_pago IS NULL ";
+      } else {
+        $where = "(DATE(e.moment) BETWEEN '" . $data['fecha_inicio'] . "'AND '" . $data['fecha_fin'] . "') ";
+        $whereEmpleados = "b.fecha_terminado BETWEEN '" . $data['fecha_inicio'] . "%' AND '" . $data['fecha_fin'] . "' AND e.fecha_pago IS NULL ";
+      }
     }
 
-    $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, TO_CHAR(a.moment, 'DD/MM/YYYY') fecha_de_pago FROM pagos a JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
+    } else {
+      $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
+    }
     $object['data']['vendedores'] = $localConnection->goQuery($sql);
     // FIN BUSCAR PAGOS DE VENDEDORES
 
     // OBTENER PAGOS DE EMPLEADOS
-    $sql = 'SELECT
-    a._id id_pago,
-    b._id id_lotes_detalles,
-    a.id_orden orden,
-    NULL as id_woo,
-    \'Pago Multi-Producto\' as producto,
-    \'N/A\' as talla,
-    c._id id_empleado,
-    c.nombre,
-    c.comision,
-    c.departamento,
-    DATE_FORMAT(b.fecha_terminado, "%a") dia,
-    DATE_FORMAT(b.fecha_terminado, "%v") semana,
-    DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
-    a.cantidad cantidad,
-    a.monto_pago pago,
-    a.fecha_pago,
-    a.cantidad,
-    TIMEDIFF(b.fecha_terminado, b.fecha_inicio) tiempo_transcurrido
-    FROM
-    pagos a
-    LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
-    JOIN empleados c ON a.id_empleado = c._id
-    WHERE ' . $whereEmpleados . ' AND a.fecha_pago IS NULL 
-    ORDER BY
-    c.nombre ASC,
-    a.id_orden ASC,
-    a._id ASC;
-    ';
+    if (DB_DRIVER === 'pgsql') {
+      $sql = 'SELECT
+          a._id id_pago,
+          b._id id_lotes_detalles,
+          a.id_orden orden,
+          NULL as id_woo,
+          \'Pago Multi-Producto\' as producto,
+          \'N/A\' as talla,
+          c.id_usuario id_empleado,
+          c.nombre,
+          c.comision,
+          c.departamento,
+          TO_CHAR(b.fecha_terminado, \'Dy\') dia,
+          TO_CHAR(b.fecha_terminado, \'IW\') semana,
+          TO_CHAR(b.fecha_terminado, \'DD/MM/YY\') fecha,
+          a.cantidad cantidad,
+          a.monto_pago pago,
+          a.fecha_pago,
+          to_char(b.fecha_terminado - b.fecha_inicio, \'HH24:MI:SS\') tiempo_transcurrido
+          FROM
+          pagos a
+          LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+          JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
+          WHERE ' . $whereEmpleados . ' AND a.fecha_pago IS NULL
+          ORDER BY
+          c.nombre ASC,
+          a.id_orden ASC,
+          a._id ASC;
+          ';
+    } else {
+      $sql = 'SELECT
+          a._id id_pago,
+          b._id id_lotes_detalles,
+          a.id_orden orden,
+          NULL as id_woo,
+          \'Pago Multi-Producto\' as producto,
+          \'N/A\' as talla,
+          c._id id_empleado,
+          c.nombre,
+          c.comision,
+          c.departamento,
+          DATE_FORMAT(b.fecha_terminado, "%a") dia,
+          DATE_FORMAT(b.fecha_terminado, "%v") semana,
+          DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
+          a.cantidad cantidad,
+          a.monto_pago pago,
+          a.fecha_pago,
+          TIMEDIFF(b.fecha_terminado, b.fecha_inicio) tiempo_transcurrido
+          FROM
+          pagos a
+          LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
+          JOIN empleados c ON a.id_empleado = c._id
+          WHERE ' . $whereEmpleados . ' AND a.fecha_pago IS NULL
+          ORDER BY
+          c.nombre ASC,
+          a.id_orden ASC,
+          a._id ASC;
+          ';
+    }
 
     $object['sql']['empleados'] = $sql;
     $object['data']['empleados'] = $localConnection->goQuery($sql);
