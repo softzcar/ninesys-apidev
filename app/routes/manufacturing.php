@@ -269,7 +269,7 @@ return function (App $app) {
     $values .= "'" . $miRevision['id_empleado'] . "',";
     $values .= "'" . $currID . "')";
 
-    $sql = 'INSERT INTO revisiones (`id_diseno`, `id_orden`, `id_empleado`, `revision`) VALUES ' . $values;
+    $sql = 'INSERT INTO revisiones (id_diseno, id_orden, id_empleado, revision) VALUES ' . $values;
     $object['response_insert'] = json_encode($localConnection->goQuery($sql));
 
     $object['sql_insert'] = $sql;
@@ -353,7 +353,7 @@ return function (App $app) {
           $values .= "'" . $miRevision['id_orden'] . "',";
           $values .= "'" . $currID . "')";
 
-          $sql = 'INSERT INTO revisiones (`id_diseno`, `id_orden`, `revision`) VALUES ' . $values;
+          $sql = 'INSERT INTO revisiones (id_diseno, id_orden, revision) VALUES ' . $values;
           $object['response_insert'] = json_encode($localConnection->goQuery($sql));
 
           $object['sql_insert'] = $sql;
@@ -451,7 +451,7 @@ return function (App $app) {
   $app->get('/revision/trabajos', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "SELECT a._id id_lotes_detalles, a.id_orden, b.name producto, b.cantidad, c.nombre empleado, d.estatus, d._id id_pagos, e.status estatus_orden FROM lotes_detalles a JOIN ordenes_productos b ON a.id_ordenes_productos = b._id JOIN empleados c ON a.id_empleado = c._id JOIN pagos d ON d.id_lotes_detalles = a._id JOIN ordenes e ON e._id = a.id_orden WHERE (e.status = 'Activa' OR e.status = 'Pausada' OR e.status = 'En espera') AND d.estatus = 'aprobado'";
+    $sql = "SELECT a._id id_lotes_detalles, a.id_orden, b.name producto, b.cantidad, c.nombre empleado, d.estatus, d._id id_pagos, e.status estatus_orden FROM lotes_detalles a JOIN ordenes_productos b ON a.id_ordenes_productos = b._id JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario JOIN pagos d ON d.id_lotes_detalles = a._id JOIN ordenes e ON e._id = a.id_orden WHERE (e.status = 'Activa' OR e.status = 'Pausada' OR e.status = 'En espera') AND d.estatus = 'aprobado'";
     $object['sql'] = $sql;
     $object['items'] = $localConnection->goQuery($sql);
 
@@ -515,7 +515,7 @@ return function (App $app) {
         '{$time_terminado}'
     )";
     } else {
-      $sql = "DELETE FROM `check_tareas` 
+      $sql = "DELETE FROM check_tareas 
         WHERE id_orden = {$data['id_orden']} 
         AND id_empleado = {$data['id_empleado']} 
         AND id_departamento = {$data['id_departamento']} 
@@ -681,7 +681,7 @@ return function (App $app) {
         $check = $localConnection->goQuery("SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$id_repo}");
 
         if (!empty($check) && isset($check[0])) {
-          $sqlUpdateTracking = "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE _id = {$check[0]['_id']};";
+          $sqlUpdateTracking = "UPDATE lotes_detalles_empleados_asignados SET progreso = 'en curso', fecha_inicio = '{$now}' WHERE _id = {$check[0]['_id']};";
           $localConnection->goQuery($sqlUpdateTracking);
         } else {
           $sqlInsertTracking = "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision, id_reposicion) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0, {$id_repo});";
@@ -693,11 +693,11 @@ return function (App $app) {
         $localConnection->goQuery($sqlUpdateRepoEmployee);
       } else {
         // Regular Order logic: original behavior
-        $sqlUpdateTracking = "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . " AND id_departamento = " . $miEmpleado['id_departamento'] . ";";
+        $sqlUpdateTracking = "UPDATE lotes_detalles_empleados_asignados SET progreso = 'en curso', fecha_inicio = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . " AND id_departamento = " . $miEmpleado['id_departamento'] . ";";
         $localConnection->goQuery($sqlUpdateTracking);
       }
       // Actualizar status de la orden a 'activa' al iniciar primer paso
-      $sqlUpdateOrden = "UPDATE ordenes SET `status` = 'activa' WHERE _id = " . $miEmpleado['id_orden'] . " AND `status` = 'En espera';";
+      $sqlUpdateOrden = "UPDATE ordenes SET status = 'activa' WHERE _id = " . $miEmpleado['id_orden'] . " AND status = 'En espera';";
       $response_update = $localConnection->goQuery($sqlUpdateOrden);
       $object['response_update_lotes'] = $response_update;
     }
@@ -750,7 +750,7 @@ return function (App $app) {
             $sqlRepo = "UPDATE reposiciones SET id_departamento = {$nextDeptId}, id_empleado = NULL WHERE _id = {$repoId};";
 
             // Finish current tracking
-            $sqlRepo .= "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'terminada', `fecha_terminado` = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$repoId};";
+            $sqlRepo .= "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$repoId};";
 
             $localConnection->goQuery($sqlRepo);
           }
@@ -763,10 +763,10 @@ return function (App $app) {
             $sqlRepo1 = "UPDATE reposiciones SET terminada = 1 WHERE _id = ?;";
             $localConnection->goQuery($sqlRepo1, [$miEmpleado['id_reposicion']]);
 
-            $sqlRepo2 = "DELETE FROM `ordenes_fila_reposiciones` WHERE id_reposicion = ?;";
+            $sqlRepo2 = "DELETE FROM ordenes_fila_reposiciones WHERE id_reposicion = ?;";
             $localConnection->goQuery($sqlRepo2, [$miEmpleado['id_reposicion']]);
 
-            $sqlRepo3 = "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'terminada', `fecha_terminado` = '{$now}' WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = ?;";
+            $sqlRepo3 = "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = '{$now}' WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = ?;";
             $localConnection->goQuery($sqlRepo3, [$miEmpleado['id_orden'], $miEmpleado['id_empleado'], $miEmpleado['id_departamento'], $miEmpleado['id_reposicion']]);
 
             $localConnection->commit();
@@ -823,7 +823,7 @@ return function (App $app) {
               $sqlLote = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?;";
               $localConnection->goQuery($sqlLote, [$miEmpleado['id_orden']]);
 
-              $sqlOrden = "UPDATE ordenes SET `status` = 'terminada' WHERE _id = ?;";
+              $sqlOrden = "UPDATE ordenes SET status = 'terminada' WHERE _id = ?;";
               $localConnection->goQuery($sqlOrden, [$miEmpleado['id_orden']]);
 
               $localConnection->commit();
@@ -916,12 +916,12 @@ return function (App $app) {
         // CORTE: Siempre usar inventario_corte como fuente de piezas (incluye excedentes).
         // Si hay registro en inventario_corte, ese es el número real de piezas mandadas a cortar.
         if ($deptTipo === 'corte' && !$miEmpleado['es_reposicion']) {
-          $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = {$miEmpleado['id_orden']}";
+          $sqlExcedente = "SELECT COALESCE(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = {$miEmpleado['id_orden']}";
           $rspExcedente = $localConnection->goQuery($sqlExcedente);
           $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
           if ($cantidad_real > 0) {
             $piezas = $cantidad_real * ($porcentajeAsignado / 100);
-            $sqlMontoPct = "SELECT IFNULL(SUM(ic.cantidad * op.precio_unitario * ({$comisionValue} / 100)), 0) AS monto
+            $sqlMontoPct = "SELECT COALESCE(SUM(ic.cantidad * op.precio_unitario * ({$comisionValue} / 100)), 0) AS monto
                 FROM inventario_corte ic
                 JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos
                 JOIN products p ON p._id = op.id_woo
@@ -1001,7 +1001,7 @@ return function (App $app) {
 
         // CORTE: Siempre usar inventario_corte como fuente de piezas (incluye excedentes).
         if ($deptTipo === 'corte' && !$miEmpleado['es_reposicion']) {
-          $sqlExcedente = "SELECT IFNULL(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = {$miEmpleado['id_orden']}";
+          $sqlExcedente = "SELECT COALESCE(SUM(ic.cantidad), 0) AS cantidad_real_cortada FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos WHERE ic.id_orden = {$miEmpleado['id_orden']}";
           $rspExcedente = $localConnection->goQuery($sqlExcedente);
           $cantidad_real = floatval($rspExcedente[0]['cantidad_real_cortada'] ?? 0);
           if ($cantidad_real > 0) {
@@ -1047,12 +1047,12 @@ return function (App $app) {
                   COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad),
                   c.cantidad
                 ) ) AS cantidad,
-              IFNULL(pc.comision, 0) AS comision_producto,
+              COALESCE(pc.comision, 0) AS comision_producto,
               1 AS factor_empleado,
               ( IF(a.id_departamento = 3,
                   COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad),
                   c.cantidad
-                ) * IFNULL(pc.comision, 0) ) AS monto_comision_por_producto,
+                ) * COALESCE(pc.comision, 0) ) AS monto_comision_por_producto,
               c.id_woo AS id_producto
           FROM
               lotes_detalles_empleados_asignados a
@@ -1131,7 +1131,7 @@ return function (App $app) {
           $sqlExcVar = "SELECT
               lca.id_ordenes_productos,
               (lca.cantidad_ajustada - lca.cantidad_solicitada) AS excedente,
-              IFNULL(pc.comision, 0) AS comision_producto,
+              COALESCE(pc.comision, 0) AS comision_producto,
               a._id AS id_lotes_detalles,
               a.procentaje_comision
             FROM lotes_corte_ajustes lca
@@ -1189,7 +1189,7 @@ return function (App $app) {
     $sql = 'SELECT _id FROM lotes_detalles WHERE ';
 
     // ELIMINAR REGISTRO DE EMPLEADO ASIGNADO
-    $sql = "DELETE FROM `lotes_detalles_empleados_asignados` WHERE id_empleado = {$miEmpleado['id_empleado']} AND id_orden = {$miEmpleado['id_orden']} AND id_departamento = {$miEmpleado['id_departamento']}";
+    $sql = "DELETE FROM lotes_detalles_empleados_asignados WHERE id_empleado = {$miEmpleado['id_empleado']} AND id_orden = {$miEmpleado['id_orden']} AND id_departamento = {$miEmpleado['id_departamento']}";
     $resultados = $localConnection->goQuery($sql);
     $object['sql'] = $sql;
     $object['resultados'] = $resultados;
@@ -1872,7 +1872,7 @@ return function (App $app) {
             $cantidad_piezas = $res_calc[0]['total_piezas'] ?? 0;
             $total_monto_pago = ($cantidad_piezas * $comision_value_emp) * ($procentaje_comision_asignado / 100);
           } else { // Variable (por producto - usando comision departamental)
-            $sql_calc = "SELECT c.cantidad, IFNULL(pc.comision, 0) AS com_prod FROM ordenes_productos c JOIN products p ON c.id_woo = p._id LEFT JOIN products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = ? WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+            $sql_calc = "SELECT c.cantidad, COALESCE(pc.comision, 0) AS com_prod FROM ordenes_productos c JOIN products p ON c.id_woo = p._id LEFT JOIN products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = ? WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_departamento, $id_orden_actual]);
             $comision_guardar = $res_calc[0]['com_prod'] ?? 0; // Referencia visual de la tabla
             foreach ($res_calc as $prod) {
@@ -2339,7 +2339,7 @@ return function (App $app) {
           $comision_guardar = $comision_value_emp;
 
           if ($comision_tipo === 'porcentaje') {
-            $sql_calc = "SELECT IFNULL(SUM(ic.cantidad), 0) AS total_piezas, IFNULL(SUM(ic.cantidad * op.precio_unitario * ($comision_value_emp / 100)), 0) AS total_monto FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos JOIN products p ON p._id = op.id_woo WHERE ic.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+            $sql_calc = "SELECT COALESCE(SUM(ic.cantidad), 0) AS total_piezas, COALESCE(SUM(ic.cantidad * op.precio_unitario * ($comision_value_emp / 100)), 0) AS total_monto FROM inventario_corte ic JOIN ordenes_productos op ON op._id = ic.id_ordenes_productos JOIN products p ON p._id = op.id_woo WHERE ic.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual]);
             $cantidad_real_lote = floatval($res_calc[0]['total_piezas'] ?? 0);
             if ($cantidad_real_lote > 0) {
@@ -2352,7 +2352,7 @@ return function (App $app) {
               $total_monto_pago = ($res_calc_fb[0]['total_monto'] ?? 0) * ($procentaje_comision_asignado / 100);
             }
           } elseif ($comision_tipo === 'fija') {
-            $sql_calc = "SELECT IFNULL(SUM(ic.cantidad), 0) AS total_piezas FROM inventario_corte ic WHERE ic.id_orden = ?";
+            $sql_calc = "SELECT COALESCE(SUM(ic.cantidad), 0) AS total_piezas FROM inventario_corte ic WHERE ic.id_orden = ?";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual]);
             $cantidad_real_lote = floatval($res_calc[0]['total_piezas'] ?? 0);
             if ($cantidad_real_lote > 0) {
@@ -2365,7 +2365,7 @@ return function (App $app) {
               $total_monto_pago = ($cantidad_piezas * $comision_value_emp) * ($procentaje_comision_asignado / 100);
             }
           } else {
-            $sql_calc = "SELECT COALESCE(NULLIF(SUM(ic.cantidad), 0), op.cantidad) AS cantidad, IFNULL(pc.comision, 0) AS com_prod FROM ordenes_productos op JOIN products p ON p._id = op.id_woo LEFT JOIN inventario_corte ic ON ic.id_ordenes_productos = op._id AND ic.id_orden = ? LEFT JOIN products_comisiones pc ON pc.id_product = op.id_woo AND pc.id_departamento = ? WHERE op.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL) GROUP BY op._id";
+            $sql_calc = "SELECT COALESCE(NULLIF(SUM(ic.cantidad), 0), op.cantidad) AS cantidad, COALESCE(pc.comision, 0) AS com_prod FROM ordenes_productos op JOIN products p ON p._id = op.id_woo LEFT JOIN inventario_corte ic ON ic.id_ordenes_productos = op._id AND ic.id_orden = ? LEFT JOIN products_comisiones pc ON pc.id_product = op.id_woo AND pc.id_departamento = ? WHERE op.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL) GROUP BY op._id";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual, $id_departamento, $id_orden_actual]);
             $comision_guardar = $res_calc[0]['com_prod'] ?? 0;
             foreach ($res_calc as $prod) {
@@ -2389,7 +2389,7 @@ return function (App $app) {
           $sqlExcVar = "SELECT
                 lca.id_ordenes_productos,
                 (lca.cantidad_ajustada - lca.cantidad_solicitada) AS excedente,
-                IFNULL(pc.comision, 0) AS comision_producto,
+                COALESCE(pc.comision, 0) AS comision_producto,
                 op.precio_unitario
               FROM lotes_corte_ajustes lca
               LEFT JOIN ordenes_productos op ON op._id = lca.id_ordenes_productos
@@ -2518,7 +2518,7 @@ return function (App $app) {
         $id_dep_actual = $resDep[0]['_id'] ?? 0;
 
         // Buscar comision en el producto (por departamento)
-        $sqlc = "SELECT IFNULL(pc.comision, 0) AS comision 
+        $sqlc = "SELECT COALESCE(pc.comision, 0) AS comision 
                  FROM lotes_detalles a 
                  LEFT JOIN products_comisiones pc ON pc.id_product = a.id_woo AND pc.id_departamento = $id_dep_actual
                  WHERE a._id = " . $args['id_lotes_detalles'];
@@ -2681,7 +2681,7 @@ return function (App $app) {
         } else {
           // CALCULAR MONTO DEL PAGO
 
-          $sqlc = 'SELECT comision FROM empleados WHERE _id = ' . $respLotesDetalles[0]['id_empleado'];
+          $sqlc = 'SELECT comision FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $respLotesDetalles[0]['id_empleado'];
           $comisionEmpleado = $localConnection->goQuery($sqlc);
           $object['comision'] = $respLotesDetalles;
 
@@ -2932,7 +2932,7 @@ return function (App $app) {
     }
 
     // Actualizar Status de la orden
-    $sql .= "UPDATE ordenes SET `status` = '$status_order' WHERE _id = {$data['id_orden']}";
+    $sql .= "UPDATE ordenes SET status = '$status_order' WHERE _id = {$data['id_orden']}";
 
     // Atomicidad FK: pausa + actualización de estado de la orden en una transacción
     $localConnection->beginTransaction();
@@ -3633,10 +3633,10 @@ return function (App $app) {
                 a.fecha_ingreso,
                 a.id_seguridad_social,
                 -- FNULL(GROUP_CONCAT(b.id_departamento), null) AS departamentos
-                IFNULL(CONCAT("[", GROUP_CONCAT(
+                COALESCE(CONCAT("[", GROUP_CONCAT(
                     DISTINCT CONCAT("{\"id\":", b.id_departamento, ",\"nombre\":\"", c.departamento, "\"}")
                     SEPARATOR ","), "]"), "[]") AS departamentos,
-                IFNULL(CONCAT("[", GROUP_CONCAT(
+                COALESCE(CONCAT("[", GROUP_CONCAT(
                     DISTINCT CONCAT("{\"id_carga\":", d.id_carga, ",\"nombre_completo\":\"", d.nombre_completo, "\",\"cedula_o_id\":\"", d.cedula_o_id, "\",\"parentesco\":\"", d.tipo_relacion, "\",\"fecha_nacimiento\":\"", d.fecha_nacimiento, "\",\"es_deducible\":", d.es_deducible_impuesto, "}")
                     SEPARATOR ","), "]"), "[]") AS carga_familiar
             FROM
@@ -3837,6 +3837,7 @@ return function (App $app) {
             ) ic_corte ON ic_corte.id_ordenes_productos = op._id";
 
     $piezas_expr = "COALESCE(ic_corte.cantidad_cortada, op.cantidad)";
+    $sieteDiasExpr = DB_DRIVER === 'pgsql' ? "CURRENT_DATE - INTERVAL '7 days'" : 'DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
 
     $sql = "
             SELECT
@@ -3846,7 +3847,7 @@ return function (App $app) {
                   LEFT JOIN inventario inv ON inv._id = im.id_insumo
                   WHERE im.id_orden IN ($idsString)
                     AND (inv.id_catalogo = cip._id OR im.id_catalogo_insumos_prodcutos = cip._id)
-                    AND im.fecha >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+                    AND im.fecha >= $sieteDiasExpr
                 ), (SELECT MAX(_id) FROM inventario WHERE id_catalogo = cip._id)) AS id_insumo,
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
@@ -3878,7 +3879,7 @@ return function (App $app) {
                     LEFT JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
                     WHERE im_sub.id_orden IN ($idsString)
                       AND (inv_sub.id_catalogo = cip._id OR im_sub.id_catalogo_insumos_prodcutos = cip._id)
-                      AND im_sub.fecha >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+                      AND im_sub.fecha >= $sieteDiasExpr
                 ), 0) AS cantidad_real
 
             FROM ordenes_productos op
