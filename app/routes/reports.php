@@ -18,8 +18,14 @@ return function (App $app) {
         $debug = isset($queryParams['debug']) && (string)$queryParams['debug'] === '1';
 
         try {
-            $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
-            $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
+            if (DB_DRIVER === 'pgsql') {
+                $dbEmpresas = new LocalDB('', LOCAL_DNS, LOCAL_USER, LOCAL_PASS);
+                $companyDB = 'public';
+            } else {
+                $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
+                $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
+                $companyDB = LOCAL_DB;
+            }
 
             $finalResponse = [];
 
@@ -27,18 +33,29 @@ return function (App $app) {
             $params = [];
 
             if ($inicio && $fin) {
-                $companyDB = LOCAL_DB;
-                $whereConditions[] = "a._id IN (
-                    SELECT DISTINCT id_orden 
-                    FROM $companyDB.lotes_detalles_empleados_asignados 
-                    WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
-                )";
+                if (DB_DRIVER === 'pgsql') {
+                    $whereConditions[] = "a._id IN (
+                        SELECT DISTINCT id_orden
+                        FROM $companyDB.lotes_detalles_empleados_asignados
+                        WHERE fecha_terminado::date BETWEEN :inicio AND :fin
+                    )";
+                } else {
+                    $whereConditions[] = "a._id IN (
+                        SELECT DISTINCT id_orden
+                        FROM $companyDB.lotes_detalles_empleados_asignados
+                        WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
+                    )";
+                }
                 $params[':inicio'] = $inicio;
                 $params[':fin'] = $fin;
             }
 
             // --- OPTIMIZACIÓN: Obtener horario laboral una vez para evitar subconsultas redundantes ---
-            $horarioQuery = "SELECT horario_laboral FROM empresas WHERE id_empresa = ?";
+            if (DB_DRIVER === 'pgsql') {
+                $horarioQuery = "SELECT horario_laboral FROM api_empresas.empresas WHERE id_empresa = ?";
+            } else {
+                $horarioQuery = "SELECT horario_laboral FROM empresas WHERE id_empresa = ?";
+            }
             $horarioResult = $dbEmpresas->goQuery($horarioQuery, [$id_empresa]);
             
             $horario_laboral = (!empty($horarioResult) && isset($horarioResult[0]['horario_laboral'])) ? $horarioResult[0]['horario_laboral'] : null;
@@ -96,8 +113,6 @@ return function (App $app) {
             }
             $finalResponse['costo_hora_empleado'] = $salariosData;
 
-            $companyDB = LOCAL_DB;
-            
             // --- 3. Obtener Costo de Tinta (api_empresas.tintas_recargas) ---
             $tintaSql = "SELECT precio_litro FROM api_empresas.tintas_recargas WHERE id_empresa = :id_empresa ORDER BY fecha DESC LIMIT 1";
             $tintaData = $dbEmpresas->goQuery($tintaSql, ['id_empresa' => $id_empresa]);
@@ -207,13 +222,23 @@ return function (App $app) {
                 }
 
                 // 7. BATCH: Empleados Asignados y Tiempo de Producción (Optimizado)
-                $empAsigSql = "SELECT 
-                        id_orden, 
-                        GROUP_CONCAT(DISTINCT id_empleado) as empleados,
-                        SUM(TIME_TO_SEC(TIMEDIFF(fecha_terminado, fecha_inicio)) / 3600) as tiempo_total
-                    FROM $companyDB.lotes_detalles_empleados_asignados 
-                    WHERE id_orden IN ($orderIdsStr) 
-                    GROUP BY id_orden";
+                if (DB_DRIVER === 'pgsql') {
+                    $empAsigSql = "SELECT
+                            id_orden,
+                            string_agg(DISTINCT id_empleado::text, ',') as empleados,
+                            SUM(EXTRACT(EPOCH FROM (fecha_terminado::timestamp - fecha_inicio::timestamp)) / 3600) as tiempo_total
+                        FROM $companyDB.lotes_detalles_empleados_asignados
+                        WHERE id_orden IN ($orderIdsStr)
+                        GROUP BY id_orden";
+                } else {
+                    $empAsigSql = "SELECT
+                            id_orden,
+                            GROUP_CONCAT(DISTINCT id_empleado) as empleados,
+                            SUM(TIME_TO_SEC(TIMEDIFF(fecha_terminado, fecha_inicio)) / 3600) as tiempo_total
+                        FROM $companyDB.lotes_detalles_empleados_asignados
+                        WHERE id_orden IN ($orderIdsStr)
+                        GROUP BY id_orden";
+                }
                 $empAsigRaw = $dbEmpresas->goQuery($empAsigSql);
                 $empAsigMap = [];
                 $tiempoMap = [];
@@ -307,25 +332,38 @@ return function (App $app) {
                 
                 $totalSalarioMensualNoTracked = 0;
                 if ($inicio && $fin) {
-                    $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto 
-                                     FROM api_empresas.empresas_usuarios 
-                                     WHERE id_empresa = :id_empresa 
-                                       AND activo = 1 
-                                       AND salario_tipo IN ('Salario', 'Salario más Comisión') 
-                                       AND id_usuario NOT IN (
-                                           SELECT DISTINCT id_empleado 
-                                           FROM $companyDB.lotes_detalles_empleados_asignados 
-                                           WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
-                                       )";
+                    if (DB_DRIVER === 'pgsql') {
+                        $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto
+                                         FROM api_empresas.empresas_usuarios
+                                         WHERE id_empresa = :id_empresa
+                                           AND activo = 1
+                                           AND salario_tipo IN ('Salario', 'Salario más Comisión')
+                                           AND id_usuario NOT IN (
+                                               SELECT DISTINCT id_empleado
+                                               FROM $companyDB.lotes_detalles_empleados_asignados
+                                               WHERE fecha_terminado::date BETWEEN :inicio AND :fin
+                                           )";
+                    } else {
+                        $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto
+                                         FROM api_empresas.empresas_usuarios
+                                         WHERE id_empresa = :id_empresa
+                                           AND activo = 1
+                                           AND salario_tipo IN ('Salario', 'Salario más Comisión')
+                                           AND id_usuario NOT IN (
+                                               SELECT DISTINCT id_empleado
+                                               FROM $companyDB.lotes_detalles_empleados_asignados
+                                               WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
+                                           )";
+                    }
                     $noTrackedRaw = $dbEmpresas->goQuery($sqlNoTracked, [':id_empresa' => $id_empresa, ':inicio' => $inicio, ':fin' => $fin]);
-                    
+
                     if (is_array($noTrackedRaw) && !isset($noTrackedRaw['status'])) {
                         foreach ($noTrackedRaw as $emp) {
                             $totalSalarioMensualNoTracked += (float)($emp['salario_monto'] ?? 0);
                         }
                     }
                 }
-                
+
                 $totalSalariosFijosNoTrackedPeriodo = $totalSalarioMensualNoTracked * $factor_mensual;
                 $costoSalarioNoTrackedPorProducto = 0;
                 if ($totalProductosPeriodo > 0) {
@@ -376,7 +414,11 @@ return function (App $app) {
                 $finalResponse['insumos_detalles'] = [];
 
                 // 11. Tareas de Empleados
-                $sqlTareas = "SELECT a.id_orden, a.id_empleado, a.fecha_inicio, a.fecha_terminado, TIME_TO_SEC(TIMEDIFF(a.fecha_terminado, a.fecha_inicio)) / 60 AS minutos_transcurridos FROM $companyDB.lotes_detalles_empleados_asignados a WHERE a.id_orden IN ($orderIdsStr) AND a.fecha_terminado IS NOT NULL";
+                if (DB_DRIVER === 'pgsql') {
+                    $sqlTareas = "SELECT a.id_orden, a.id_empleado, a.fecha_inicio, a.fecha_terminado, EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp)) / 60 AS minutos_transcurridos FROM $companyDB.lotes_detalles_empleados_asignados a WHERE a.id_orden IN ($orderIdsStr) AND a.fecha_terminado IS NOT NULL";
+                } else {
+                    $sqlTareas = "SELECT a.id_orden, a.id_empleado, a.fecha_inicio, a.fecha_terminado, TIME_TO_SEC(TIMEDIFF(a.fecha_terminado, a.fecha_inicio)) / 60 AS minutos_transcurridos FROM $companyDB.lotes_detalles_empleados_asignados a WHERE a.id_orden IN ($orderIdsStr) AND a.fecha_terminado IS NOT NULL";
+                }
                 $finalResponse['tareas_data'] = $dbEmpresas->goQuery($sqlTareas);
             }
 
@@ -511,12 +553,13 @@ return function (App $app) {
             }
 
             // D. Mantenimiento de Impresoras (Servicios técnicos) en el periodo
+            $fechaServicioCond = DB_DRIVER === 'pgsql' ? 's.fecha_servicio::date' : 'DATE(s.fecha_servicio)';
             $sqlMantenimiento = "SELECT s._id, s.costo, s.fecha_servicio, s.tipo_servicio, s.descripcion, s.tecnico, s.id_maquina, ci.codigo_interno as maquina_nombre
                                  FROM $companyDB.servicios_maquinas s
                                  LEFT JOIN $companyDB.catalogo_impresoras ci ON s.id_maquina = ci._id AND s.maquina_tipo = 'impresora'
-                                 WHERE s.estado = 'completado' 
+                                 WHERE s.estado = 'completado'
                                    AND s.maquina_tipo = 'impresora'
-                                   AND DATE(s.fecha_servicio) BETWEEN :inicio AND :fin
+                                   AND $fechaServicioCond BETWEEN :inicio AND :fin
                                  ORDER BY s.fecha_servicio DESC";
             $mantenimientoRaw = $dbEmpresas->goQuery($sqlMantenimiento, [':inicio' => $inicio, ':fin' => $fin]);
 
@@ -647,9 +690,14 @@ return function (App $app) {
         $pagosData = $db->goQuery($sqlPagos, [$id_orden]);
 
         // Load work schedule to compute costo_por_hora
-        $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
-        $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
-        $horarioResult = $dbEmpresas->goQuery("SELECT horario_laboral FROM empresas WHERE id_empresa = ?", [$id_empresa]);
+        if (DB_DRIVER === 'pgsql') {
+            $dbEmpresas = new LocalDB('', LOCAL_DNS, LOCAL_USER, LOCAL_PASS);
+            $horarioResult = $dbEmpresas->goQuery("SELECT horario_laboral FROM api_empresas.empresas WHERE id_empresa = ?", [$id_empresa]);
+        } else {
+            $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
+            $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $horarioResult = $dbEmpresas->goQuery("SELECT horario_laboral FROM empresas WHERE id_empresa = ?", [$id_empresa]);
+        }
         $horario_laboral = (!empty($horarioResult) && isset($horarioResult[0]['horario_laboral'])) ? $horarioResult[0]['horario_laboral'] : null;
         $horarioObj = $horario_laboral ? json_decode($horario_laboral, true) : null;
         $horasDia = 0;
@@ -663,18 +711,33 @@ return function (App $app) {
         $dbEmpresas->disconnect();
 
         // Salary employees who worked on this order (from task records)
-        $sqlSalarios = "SELECT
-                            ldea.id_empleado,
-                            eu.nombre AS nombre_empleado,
-                            eu.salario_monto,
-                            eu.salario_periodo,
-                            SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS horas_trabajadas
-                        FROM lotes_detalles_empleados_asignados ldea
-                        JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
-                        WHERE ldea.id_orden = ?
-                        AND ldea.fecha_inicio IS NOT NULL
-                        AND eu.salario_tipo IN ('Salario', 'Salario más Comisión')
-                        GROUP BY ldea.id_empleado, eu.nombre, eu.salario_monto, eu.salario_periodo";
+        if (DB_DRIVER === 'pgsql') {
+            $sqlSalarios = "SELECT
+                                ldea.id_empleado,
+                                eu.nombre AS nombre_empleado,
+                                eu.salario_monto,
+                                eu.salario_periodo,
+                                SUM(EXTRACT(EPOCH FROM (COALESCE(ldea.fecha_terminado, NOW())::timestamp - ldea.fecha_inicio::timestamp)) / 3600) AS horas_trabajadas
+                            FROM lotes_detalles_empleados_asignados ldea
+                            JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                            WHERE ldea.id_orden = ?
+                            AND ldea.fecha_inicio IS NOT NULL
+                            AND eu.salario_tipo IN ('Salario', 'Salario más Comisión')
+                            GROUP BY ldea.id_empleado, eu.nombre, eu.salario_monto, eu.salario_periodo";
+        } else {
+            $sqlSalarios = "SELECT
+                                ldea.id_empleado,
+                                eu.nombre AS nombre_empleado,
+                                eu.salario_monto,
+                                eu.salario_periodo,
+                                SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS horas_trabajadas
+                            FROM lotes_detalles_empleados_asignados ldea
+                            JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                            WHERE ldea.id_orden = ?
+                            AND ldea.fecha_inicio IS NOT NULL
+                            AND eu.salario_tipo IN ('Salario', 'Salario más Comisión')
+                            GROUP BY ldea.id_empleado, eu.nombre, eu.salario_monto, eu.salario_periodo";
+        }
 
         $salariosRaw = $db->goQuery($sqlSalarios, [$id_orden]);
         $db->disconnect();
@@ -730,34 +793,64 @@ return function (App $app) {
         $fin = $queryParams['fin'] ?? null;
         
         if ($inicio && $fin) {
-            $companyDB = LOCAL_DB;
-            $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
-            $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
-            
+            if (DB_DRIVER === 'pgsql') {
+                $dbEmpresas = new LocalDB('', LOCAL_DNS, LOCAL_USER, LOCAL_PASS);
+                $companyDB = 'public';
+            } else {
+                $companyDB = LOCAL_DB;
+                $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
+                $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
+            }
+
             // 1. Obtener total de productos fabricados en el periodo
-            $sqlTotalProdPeriodo = "SELECT SUM(op.cantidad) as total 
-                                    FROM $companyDB.ordenes_productos op
-                                    JOIN $companyDB.ordenes o ON op.id_orden = o._id
-                                    WHERE o.status IN ('terminada', 'entregada')
-                                      AND o._id IN (
-                                          SELECT DISTINCT id_orden 
-                                          FROM $companyDB.lotes_detalles_empleados_asignados 
-                                          WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
-                                      )";
+            if (DB_DRIVER === 'pgsql') {
+                $sqlTotalProdPeriodo = "SELECT SUM(op.cantidad) as total
+                                        FROM $companyDB.ordenes_productos op
+                                        JOIN $companyDB.ordenes o ON op.id_orden = o._id
+                                        WHERE o.status IN ('terminada', 'entregada')
+                                          AND o._id IN (
+                                              SELECT DISTINCT id_orden
+                                              FROM $companyDB.lotes_detalles_empleados_asignados
+                                              WHERE fecha_terminado::date BETWEEN :inicio AND :fin
+                                          )";
+            } else {
+                $sqlTotalProdPeriodo = "SELECT SUM(op.cantidad) as total
+                                        FROM $companyDB.ordenes_productos op
+                                        JOIN $companyDB.ordenes o ON op.id_orden = o._id
+                                        WHERE o.status IN ('terminada', 'entregada')
+                                          AND o._id IN (
+                                              SELECT DISTINCT id_orden
+                                              FROM $companyDB.lotes_detalles_empleados_asignados
+                                              WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
+                                          )";
+            }
             $prodPeriodoRaw = $dbEmpresas->goQuery($sqlTotalProdPeriodo, [':inicio' => $inicio, ':fin' => $fin]);
             $totalProductosPeriodo = (float)($prodPeriodoRaw[0]['total'] ?? 0);
-            
+
             // 2. Obtener empleados activos con salario fijo que no trackean tiempo
-            $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto 
-                             FROM api_empresas.empresas_usuarios 
-                             WHERE id_empresa = :id_empresa 
-                               AND activo = 1 
-                               AND salario_tipo IN ('Salario', 'Salario más Comisión') 
-                               AND id_usuario NOT IN (
-                                   SELECT DISTINCT id_empleado 
-                                   FROM $companyDB.lotes_detalles_empleados_asignados 
-                                   WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
-                               )";
+            if (DB_DRIVER === 'pgsql') {
+                $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto
+                                 FROM api_empresas.empresas_usuarios
+                                 WHERE id_empresa = :id_empresa
+                                   AND activo = 1
+                                   AND salario_tipo IN ('Salario', 'Salario más Comisión')
+                                   AND id_usuario NOT IN (
+                                       SELECT DISTINCT id_empleado
+                                       FROM $companyDB.lotes_detalles_empleados_asignados
+                                       WHERE fecha_terminado::date BETWEEN :inicio AND :fin
+                                   )";
+            } else {
+                $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto
+                                 FROM api_empresas.empresas_usuarios
+                                 WHERE id_empresa = :id_empresa
+                                   AND activo = 1
+                                   AND salario_tipo IN ('Salario', 'Salario más Comisión')
+                                   AND id_usuario NOT IN (
+                                       SELECT DISTINCT id_empleado
+                                       FROM $companyDB.lotes_detalles_empleados_asignados
+                                       WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
+                                   )";
+            }
             $noTrackedRaw = $dbEmpresas->goQuery($sqlNoTracked, [':id_empresa' => $id_empresa, ':inicio' => $inicio, ':fin' => $fin]);
             
             $dias_periodo = (new DateTime($inicio))->diff(new DateTime($fin))->days + 1;
@@ -872,45 +965,84 @@ return function (App $app) {
         $db = new LocalDB();
         try {
             // 1. Obtener Órdenes
-            $sqlOrders = "SELECT 
-                    a._id AS orden,
-                    a._id AS _id,
-                    CONCAT(COALESCE(cus.first_name, ''), ' ', COALESCE(cus.last_name, '')) AS cliente_nombre,
-                    a.fecha_inicio AS inicio,
-                    a.fecha_entrega AS entrega,
-                    (SELECT CONCAT(o.fecha_entrega, ' 08:30:00') FROM ordenes o WHERE o._id = a._id) AS fecha_entrega_orden,
-                    a.status AS status,
-                    a.moment,
-                    (
-                        SELECT SUM(op.cantidad) 
-                        FROM ordenes_productos op 
-                        JOIN products p ON op.id_woo = p._id 
-                        WHERE op.id_orden = a._id 
-                        AND (p.fisico = 1 OR p.fisico IS NULL)
-                        AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
-                    ) AS total_unidades,
-                    (
-                        SELECT GROUP_CONCAT(DISTINCT cat2._id ORDER BY cat2._id SEPARATOR ',')
-                        FROM ordenes_productos op2
-                        JOIN products p2 ON p2._id = op2.id_woo
-                        JOIN categories cat2 ON FIND_IN_SET(cat2._id, p2.category_ids)
-                        WHERE op2.id_orden = a._id
-                        AND (p2.fisico = 1 OR p2.fisico IS NULL)
-                        AND (p2.es_diseno = 0 OR p2.es_diseno IS NULL)
-                    ) AS _category_ids
-                FROM ordenes a
-                LEFT JOIN customers cus ON cus._id = a.id_wp
-                WHERE a.status IN ('terminada', 'entregada')
-                AND a._id IN (
-                    SELECT DISTINCT id_orden 
-                    FROM lotes_detalles_empleados_asignados 
-                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
-                )
-                ORDER BY a._id DESC";
-            
+            if (DB_DRIVER === 'pgsql') {
+                $sqlOrders = "SELECT
+                        a._id AS orden,
+                        a._id AS _id,
+                        CONCAT(COALESCE(cus.first_name, ''), ' ', COALESCE(cus.last_name, '')) AS cliente_nombre,
+                        a.fecha_inicio AS inicio,
+                        a.fecha_entrega AS entrega,
+                        (SELECT CONCAT(o.fecha_entrega, ' 08:30:00') FROM ordenes o WHERE o._id = a._id) AS fecha_entrega_orden,
+                        a.status AS status,
+                        a.moment,
+                        (
+                            SELECT SUM(op.cantidad)
+                            FROM ordenes_productos op
+                            JOIN products p ON op.id_woo = p._id
+                            WHERE op.id_orden = a._id
+                            AND (p.fisico = 1 OR p.fisico IS NULL)
+                            AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+                        ) AS total_unidades,
+                        (
+                            SELECT string_agg(DISTINCT cat2._id::text, ',' ORDER BY cat2._id::text)
+                            FROM ordenes_productos op2
+                            JOIN products p2 ON p2._id = op2.id_woo
+                            JOIN categories cat2 ON cat2._id::text = ANY(string_to_array(p2.category_ids, ','))
+                            WHERE op2.id_orden = a._id
+                            AND (p2.fisico = 1 OR p2.fisico IS NULL)
+                            AND (p2.es_diseno = 0 OR p2.es_diseno IS NULL)
+                        ) AS _category_ids
+                    FROM ordenes a
+                    LEFT JOIN customers cus ON cus._id = a.id_wp
+                    WHERE a.status IN ('terminada', 'entregada')
+                    AND a._id IN (
+                        SELECT DISTINCT id_orden
+                        FROM lotes_detalles_empleados_asignados
+                        WHERE fecha_terminado::date BETWEEN ? AND ?
+                    )
+                    ORDER BY a._id DESC";
+            } else {
+                $sqlOrders = "SELECT
+                        a._id AS orden,
+                        a._id AS _id,
+                        CONCAT(COALESCE(cus.first_name, ''), ' ', COALESCE(cus.last_name, '')) AS cliente_nombre,
+                        a.fecha_inicio AS inicio,
+                        a.fecha_entrega AS entrega,
+                        (SELECT CONCAT(o.fecha_entrega, ' 08:30:00') FROM ordenes o WHERE o._id = a._id) AS fecha_entrega_orden,
+                        a.status AS status,
+                        a.moment,
+                        (
+                            SELECT SUM(op.cantidad)
+                            FROM ordenes_productos op
+                            JOIN products p ON op.id_woo = p._id
+                            WHERE op.id_orden = a._id
+                            AND (p.fisico = 1 OR p.fisico IS NULL)
+                            AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+                        ) AS total_unidades,
+                        (
+                            SELECT GROUP_CONCAT(DISTINCT cat2._id ORDER BY cat2._id SEPARATOR ',')
+                            FROM ordenes_productos op2
+                            JOIN products p2 ON p2._id = op2.id_woo
+                            JOIN categories cat2 ON FIND_IN_SET(cat2._id, p2.category_ids)
+                            WHERE op2.id_orden = a._id
+                            AND (p2.fisico = 1 OR p2.fisico IS NULL)
+                            AND (p2.es_diseno = 0 OR p2.es_diseno IS NULL)
+                        ) AS _category_ids
+                    FROM ordenes a
+                    LEFT JOIN customers cus ON cus._id = a.id_wp
+                    WHERE a.status IN ('terminada', 'entregada')
+                    AND a._id IN (
+                        SELECT DISTINCT id_orden
+                        FROM lotes_detalles_empleados_asignados
+                        WHERE DATE(fecha_terminado) BETWEEN ? AND ?
+                    )
+                    ORDER BY a._id DESC";
+            }
+
             $orders = $db->goQuery($sqlOrders, [$inicio, $fin]);
 
             // 5. Obtener Ranking de Productos Top 10 (usa rango de fechas, no depende de orders)
+            $dateTerminadoCond = DB_DRIVER === 'pgsql' ? 'fecha_terminado::date' : 'DATE(fecha_terminado)';
             $sqlTop = "SELECT
                     p.product AS name,
                     SUM(op.cantidad) AS value
@@ -920,7 +1052,7 @@ return function (App $app) {
                 WHERE o._id IN (
                     SELECT DISTINCT id_orden
                     FROM lotes_detalles_empleados_asignados
-                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
+                    WHERE $dateTerminadoCond BETWEEN ? AND ?
                 )
                 AND (p.fisico = 1 OR p.fisico IS NULL)
                 AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
@@ -938,7 +1070,7 @@ return function (App $app) {
                 WHERE op.id_orden IN (
                     SELECT DISTINCT id_orden
                     FROM lotes_detalles_empleados_asignados
-                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
+                    WHERE $dateTerminadoCond BETWEEN ? AND ?
                 )
                 AND (p.fisico = 1 OR p.fisico IS NULL)
                 AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
@@ -949,21 +1081,39 @@ return function (App $app) {
             // 7. Obtener Categorías únicas involucradas en los productos de las órdenes del período
             // Usamos products.category_ids + categories para obtener el nombre REAL de categoría
             // (ordenes_productos.category_name puede tener datos incorrectos como 'Uncategorized')
-            $sqlCategories = "SELECT
-                    cat._id AS id_category,
-                    cat.nombre AS category_name
-                FROM ordenes_productos op
-                JOIN products p ON p._id = op.id_woo
-                JOIN categories cat ON FIND_IN_SET(cat._id, p.category_ids)
-                WHERE op.id_orden IN (
-                    SELECT DISTINCT id_orden
-                    FROM lotes_detalles_empleados_asignados
-                    WHERE DATE(fecha_terminado) BETWEEN ? AND ?
-                )
-                AND (p.fisico = 1 OR p.fisico IS NULL)
-                AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
-                GROUP BY cat._id, cat.nombre
-                ORDER BY cat.nombre ASC";
+            if (DB_DRIVER === 'pgsql') {
+                $sqlCategories = "SELECT
+                        cat._id AS id_category,
+                        cat.nombre AS category_name
+                    FROM ordenes_productos op
+                    JOIN products p ON p._id = op.id_woo
+                    JOIN categories cat ON cat._id::text = ANY(string_to_array(p.category_ids, ','))
+                    WHERE op.id_orden IN (
+                        SELECT DISTINCT id_orden
+                        FROM lotes_detalles_empleados_asignados
+                        WHERE fecha_terminado::date BETWEEN ? AND ?
+                    )
+                    AND (p.fisico = 1 OR p.fisico IS NULL)
+                    AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+                    GROUP BY cat._id, cat.nombre
+                    ORDER BY cat.nombre ASC";
+            } else {
+                $sqlCategories = "SELECT
+                        cat._id AS id_category,
+                        cat.nombre AS category_name
+                    FROM ordenes_productos op
+                    JOIN products p ON p._id = op.id_woo
+                    JOIN categories cat ON FIND_IN_SET(cat._id, p.category_ids)
+                    WHERE op.id_orden IN (
+                        SELECT DISTINCT id_orden
+                        FROM lotes_detalles_empleados_asignados
+                        WHERE DATE(fecha_terminado) BETWEEN ? AND ?
+                    )
+                    AND (p.fisico = 1 OR p.fisico IS NULL)
+                    AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+                    GROUP BY cat._id, cat.nombre
+                    ORDER BY cat.nombre ASC";
+            }
             $categories = $db->goQuery($sqlCategories, [$inicio, $fin]);
             $categories = is_array($categories) && !isset($categories['status']) ? $categories : [];
             // Renombrar clave 'nombre' → 'category_name' si es necesario (ya se hace en el SELECT)
@@ -979,7 +1129,35 @@ return function (App $app) {
             $idsString = implode(',', $orderIds);
 
             // 2. Obtener Tareas para el Semáforo
-            $sqlTasks = "SELECT
+            if (DB_DRIVER === 'pgsql') {
+                $sqlTasks = "SELECT
+                    ldea.id_orden AS _id,
+                    ldea.id_orden,
+                    ldea.id_departamento,
+                    dep.departamento AS nombre_departamento,
+                    dep.orden_proceso AS orden_proceso_departamento,
+                    MIN(ldea.fecha_inicio) AS fecha_inicio,
+                    MAX(ldea.fecha_terminado) AS fecha_terminado,
+                    TO_CHAR(MIN(ldea.fecha_inicio), 'DD/MM/YYYY HH12:MI AM') AS fecha_inicio_formateada,
+                    TO_CHAR(MAX(ldea.fecha_terminado), 'DD/MM/YYYY HH12:MI AM') AS fecha_terminado_formateada,
+                    TO_CHAR(MIN(ldea.fecha_inicio), 'DD/MM/YYYY HH12:MI AM') AS fecha_estimada_inicio_formateada,
+                    TO_CHAR(MAX(ldea.fecha_terminado), 'DD/MM/YYYY HH12:MI AM') AS fecha_estimada_fin_formateada,
+                    'terminado' AS status,
+                    COALESCE(COUNT(DISTINCT ldea.id_empleado), 1) as cant_empleados,
+                    (
+                        SELECT COALESCE(SUM(ptp.tiempo * op_sub.cantidad), 0)
+                        FROM products_tiempos_de_produccion ptp
+                        JOIN ordenes_productos op_sub ON op_sub.id_woo = ptp.id_product
+                        WHERE op_sub.id_orden = ldea.id_orden AND ptp.id_departamento = ldea.id_departamento
+                    ) AS tiempo_total_orden_depto
+                FROM
+                    lotes_detalles_empleados_asignados ldea
+                JOIN departamentos dep ON dep._id = ldea.id_departamento
+                WHERE ldea.id_orden IN ($idsString)
+                GROUP BY ldea.id_orden, ldea.id_departamento
+                ORDER BY ldea.id_orden, dep.orden_proceso ASC";
+            } else {
+                $sqlTasks = "SELECT
                     ldea.id_orden AS _id,
                     ldea.id_orden,
                     ldea.id_departamento,
@@ -1005,7 +1183,8 @@ return function (App $app) {
                 WHERE ldea.id_orden IN ($idsString)
                 GROUP BY ldea.id_orden, ldea.id_departamento
                 ORDER BY ldea.id_orden, dep.orden_proceso ASC";
-            
+            }
+
             $tasks = $db->goQuery($sqlTasks);
             
             // 3. Obtener Eficiencia de Material (Consolidado por Orden)
@@ -1025,21 +1204,39 @@ return function (App $app) {
             $matEff = $db->goQuery($sqlMat);
 
             // 4. Obtener Eficiencia de Tiempo (Consolidado por Orden)
-            $sqlTime = "SELECT 
-                    o._id AS id_orden,
-                    (
-                        SELECT COALESCE(SUM(ptp.tiempo * op_sub.cantidad), 0)
-                        FROM products_tiempos_de_produccion ptp
-                        JOIN ordenes_productos op_sub ON op_sub.id_woo = ptp.id_product
-                        WHERE op_sub.id_orden = o._id
-                    ) AS projected,
-                    COALESCE((
-                        SELECT SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, ldea.fecha_terminado))
-                        FROM lotes_detalles_empleados_asignados ldea
-                        WHERE ldea.id_orden = o._id AND ldea.fecha_inicio IS NOT NULL AND ldea.fecha_terminado IS NOT NULL
-                    ), 0) AS `real`
-                FROM ordenes o
-                WHERE o._id IN ($idsString)";
+            if (DB_DRIVER === 'pgsql') {
+                $sqlTime = "SELECT
+                        o._id AS id_orden,
+                        (
+                            SELECT COALESCE(SUM(ptp.tiempo * op_sub.cantidad), 0)
+                            FROM products_tiempos_de_produccion ptp
+                            JOIN ordenes_productos op_sub ON op_sub.id_woo = ptp.id_product
+                            WHERE op_sub.id_orden = o._id
+                        ) AS projected,
+                        COALESCE((
+                            SELECT SUM(EXTRACT(EPOCH FROM (ldea.fecha_terminado::timestamp - ldea.fecha_inicio::timestamp)))
+                            FROM lotes_detalles_empleados_asignados ldea
+                            WHERE ldea.id_orden = o._id AND ldea.fecha_inicio IS NOT NULL AND ldea.fecha_terminado IS NOT NULL
+                        ), 0) AS real
+                    FROM ordenes o
+                    WHERE o._id IN ($idsString)";
+            } else {
+                $sqlTime = "SELECT
+                        o._id AS id_orden,
+                        (
+                            SELECT COALESCE(SUM(ptp.tiempo * op_sub.cantidad), 0)
+                            FROM products_tiempos_de_produccion ptp
+                            JOIN ordenes_productos op_sub ON op_sub.id_woo = ptp.id_product
+                            WHERE op_sub.id_orden = o._id
+                        ) AS projected,
+                        COALESCE((
+                            SELECT SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, ldea.fecha_terminado))
+                            FROM lotes_detalles_empleados_asignados ldea
+                            WHERE ldea.id_orden = o._id AND ldea.fecha_inicio IS NOT NULL AND ldea.fecha_terminado IS NOT NULL
+                        ), 0) AS `real`
+                    FROM ordenes o
+                    WHERE o._id IN ($idsString)";
+            }
             $timeEff = $db->goQuery($sqlTime);
 
             $db->disconnect();
@@ -1139,8 +1336,11 @@ return function (App $app) {
 
         $db = new LocalDB();
         try {
+            $fechaCondDetalles = DB_DRIVER === 'pgsql'
+                ? "ldea.fecha_inicio::date BETWEEN ? AND ? OR ldea.fecha_terminado::date BETWEEN ? AND ?"
+                : "DATE(ldea.fecha_inicio) BETWEEN ? AND ? OR DATE(ldea.fecha_terminado) BETWEEN ? AND ?";
             $sqlDetalles = "
-                SELECT 
+                SELECT
                     ldea.id_empleado,
                     eu.nombre AS empleado_nombre,
                     ldea.id_orden,
@@ -1151,12 +1351,12 @@ return function (App $app) {
                         SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
                         FROM products_tiempos_de_produccion ptp_sub
                         JOIN ordenes_productos op ON ptp_sub.id_product = op.id_woo
-                        WHERE ptp_sub.id_departamento = ldea.id_departamento 
+                        WHERE ptp_sub.id_departamento = ldea.id_departamento
                         AND op.id_orden = ldea.id_orden
                     ) AS projected_seconds
                 FROM lotes_detalles_empleados_asignados ldea
                 JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
-                WHERE (DATE(ldea.fecha_inicio) BETWEEN ? AND ? OR DATE(ldea.fecha_terminado) BETWEEN ? AND ?)
+                WHERE ($fechaCondDetalles)
                 AND ldea.fecha_inicio IS NOT NULL
                 ORDER BY eu.nombre, ldea.fecha_inicio DESC
             ";
