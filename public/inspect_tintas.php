@@ -6,33 +6,46 @@ error_reporting(E_ALL);
 header('Content-Type: text/plain');
 
 try {
-    require __DIR__ . '/../vendor/autoload.php';
-    require __DIR__ . '/../app/config.php';
-    require __DIR__ . '/../app/model/LocalDB.php';
+    require __DIR__ . '/../app/config.php'; // Esto llama a loadEnvFile()
 } catch (Throwable $t) {
-    die("Error en requires: " . $t->getMessage() . " en " . $t->getFile() . ":" . $t->getLine() . "\n");
+    die("Error cargando config.php: " . $t->getMessage() . "\n");
 }
 
-$company = '194';
-if (!defined('ID_EMPRESA')) {
-    define('ID_EMPRESA', $company);
-}
-if (!defined('LOCAL_DB')) {
-    define('LOCAL_DB', 'api_emp_' . $company);
-}
+$driver = getenv('DB_DRIVER') ?: 'mysql';
+$host = getenv('DB_HOST') ?: '127.0.0.1';
+$port = getenv('DB_PORT') ?: ($driver === 'pgsql' ? '5432' : '3306');
+$user = getenv('DB_USER') ?: 'root';
+$pass = getenv('DB_PASS') ?: '';
+$dbname = 'api_emp_194'; // Empresa autorizada para pruebas
+
+echo "Entorno detectado:\n";
+echo "Driver: $driver\n";
+echo "Host: $host\n";
+echo "Port: $port\n";
+echo "User: $user\n";
+echo "DbName: $dbname\n\n";
 
 try {
-    $db = new LocalDB();
-    echo "DB Driver: " . DB_DRIVER . "\n";
-    echo "DSN: " . LOCAL_DNS . "\n";
-    
-    if (DB_DRIVER === 'pgsql') {
-        $q = $db->goQuery("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'tintas'");
-        print_r($q);
+    if ($driver === 'pgsql') {
+        $dsn = "pgsql:host=$host;port=$port;dbname=$dbname";
+        $pdo = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        echo "Conexión exitosa a PostgreSQL.\n\nEstructura de la tabla 'tintas':\n";
+        
+        $stmt = $pdo->query("SELECT column_name, data_type, character_maximum_length, column_default, is_nullable 
+                             FROM information_schema.columns 
+                             WHERE table_name = 'tintas' 
+                             ORDER BY ordinal_position");
+        $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        print_r($columns);
     } else {
-        $q = $db->goQuery("DESCRIBE tintas");
-        print_r($q);
+        $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
+        $pdo = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        echo "Conexión exitosa a MySQL.\n\nEstructura de la tabla 'tintas':\n";
+        
+        $stmt = $pdo->query("DESCRIBE tintas");
+        $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        print_r($columns);
     }
 } catch (Throwable $e) {
-    echo "Error ejecutando query: " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n";
+    echo "Error de conexión o query: " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n";
 }
