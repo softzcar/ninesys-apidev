@@ -294,7 +294,7 @@ return function (App $app) {
         $values .= "'" . $miEmpleado['fecha_ingreso'] . "',";
         $values .= "'" . $miEmpleado['id_seguridad_social'] . "')";
 
-        $sql = 'INSERT INTO api_empresas.empresas_usuarios (`moment`, `acceso`, `comision`, `comision_tipo`, `comision_porcentaje`, `email`, `telefono`, `nombre`, `id_empresa`, `password`, `salario_tipo`, `salario_monto`, `salario_periodo`, `dni`, `fecha_ingreso`, `id_seguridad_social`) VALUES ' . $values;
+        $sql = 'INSERT INTO api_empresas.empresas_usuarios (moment, acceso, comision, comision_tipo, comision_porcentaje, email, telefono, nombre, id_empresa, password, salario_tipo, salario_monto, salario_periodo, dni, fecha_ingreso, id_seguridad_social) VALUES ' . $values;
         $object['response'] = $localConnection->goQuery($sql);
         $lastInsert = $object['response']['insert_id'];
 
@@ -326,7 +326,7 @@ return function (App $app) {
                     $dep_values .= "'" . $dependiente['fecha_nacimiento'] . "',";
                     $dep_values .= "'" . ($dependiente['es_deducible'] ? 1 : 0) . "')";
 
-                    $sql_dep = 'INSERT INTO salario_carga_familiar (`id_usuario`, `nombre_completo`, `cedula_o_id`, `parentesco`, `fecha_nacimiento`, `es_deducible`) VALUES ' . $dep_values;
+                    $sql_dep = 'INSERT INTO salario_carga_familiar (id_usuario, nombre_completo, cedula_o_id, parentesco, fecha_nacimiento, es_deducible) VALUES ' . $dep_values;
                     $object['response_dependientes'][] = $localConnection->goQuery($sql_dep);
                 }
             }
@@ -428,7 +428,7 @@ return function (App $app) {
                     $dep_values .= "'" . $dependiente['fecha_nacimiento'] . "',";
                     $dep_values .= "'" . ($dependiente['es_deducible'] ? 1 : 0) . "')";
 
-                    $sql_dep = 'INSERT INTO salario_carga_familiar (`id_usuario`, `nombre_completo`, `cedula_o_id`, `parentesco`, `fecha_nacimiento`, `es_deducible`) VALUES ' . $dep_values;
+                    $sql_dep = 'INSERT INTO salario_carga_familiar (id_usuario, nombre_completo, cedula_o_id, parentesco, fecha_nacimiento, es_deducible) VALUES ' . $dep_values;
                     $object['response_dependientes'][] = $localConnection->goQuery($sql_dep);
                 }
             }
@@ -482,7 +482,11 @@ return function (App $app) {
     $app->get('/empleados/produccion/asignacion', function (Request $request, Response $response) {
         $localConnection = new LocalDB();
 
-        $sql = 'SELECT _id, username, nombre, comision, departamento FROM empleados WHERE activo = 1 ORDER BY nombre ASC';
+        if (DB_DRIVER === 'pgsql') {
+            $sql = 'SELECT id_usuario _id, email username, nombre, comision, departamento FROM api_empresas.empresas_usuarios WHERE activo = 1 AND id_empresa = ' . ID_EMPRESA . ' ORDER BY nombre ASC';
+        } else {
+            $sql = 'SELECT _id, username, nombre, comision, departamento FROM empleados WHERE activo = 1 ORDER BY nombre ASC';
+        }
         $object['response'] = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();
@@ -500,7 +504,7 @@ return function (App $app) {
         $data = $request->getParsedBody();
         $localConnection = new LocalDB();
 
-        $sql = 'INSERT INTO `asistencias`(`id_empleado`, `registro`, `moment`) VALUES (' . $data['id_empleado'] . ",'" . $data['registro'] . "','" . $data['moment'] . "')";
+        $sql = 'INSERT INTO asistencias(id_empleado, registro, moment) VALUES (' . $data['id_empleado'] . ",'" . $data['registro'] . "','" . $data['moment'] . "')";
         $object['response'] = json_encode($localConnection->goQuery($sql));
 
         $localConnection->disconnect();
@@ -538,7 +542,7 @@ return function (App $app) {
                     WHEN a.registro = 'salida_tarde' THEN 'Salida tarde'
                 END AS registro
             FROM asistencias a
-            JOIN empleados e ON a.id_empleado = e._id
+            JOIN api_empresas.empresas_usuarios e ON a.id_empleado = e.id_usuario
             WHERE
                 EXTRACT(WEEK FROM a.moment) = EXTRACT(WEEK FROM NOW())
                 AND EXTRACT(YEAR FROM a.moment) = EXTRACT(YEAR FROM NOW())
@@ -603,7 +607,11 @@ return function (App $app) {
         $object['fields'][4]['label'] = 'Salida Tarde';
 
         // OBTENER TODOS LOS EMPLEADOS
-        $sql = 'SELECT * FROM empleados WHERE activo = 1 ORDER BY nombre ASC';
+        if (DB_DRIVER === 'pgsql') {
+            $sql = 'SELECT id_usuario _id, email username, nombre, comision, departamento, activo FROM api_empresas.empresas_usuarios WHERE activo = 1 AND id_empresa = ' . ID_EMPRESA . ' ORDER BY nombre ASC';
+        } else {
+            $sql = 'SELECT * FROM empleados WHERE activo = 1 ORDER BY nombre ASC';
+        }
         $object['empleados'] = $localConnection->goQuery($sql);
 
         $today = null;
@@ -613,16 +621,16 @@ return function (App $app) {
         // OBTENER ASISTENCIAS DIARIAS
         if (DB_DRIVER === 'pgsql') {
             $sql = "SELECT
-            a._id AS id_empleado,
+            a.id_usuario AS id_empleado,
             b._id AS id_asistencia,
             a.nombre,
             TO_CHAR(b.moment, 'HH12:MI AM') AS hora,
             TO_CHAR(b.moment, 'YYYY-MM-DD') AS fecha,
             b.registro,
             b.detalle
-            FROM empleados a
-            LEFT JOIN asistencias b ON b.id_empleado = a._id
-            WHERE a.activo = 1 AND ((b.moment::text LIKE '" . $fecha . "%') OR (b.moment IS NULL))
+            FROM api_empresas.empresas_usuarios a
+            LEFT JOIN asistencias b ON b.id_empleado = a.id_usuario
+            WHERE a.activo = 1 AND a.id_empresa = " . ID_EMPRESA . " AND ((b.moment::text LIKE '" . $fecha . "%') OR (b.moment IS NULL))
             ORDER BY a.nombre ASC;";
         } else {
             $sql = "SELECT
@@ -645,13 +653,13 @@ return function (App $app) {
         // NUEVO REPORTE
         if (DB_DRIVER === 'pgsql') {
             $sql = "SELECT
-            a.id_empleado, b.username, a.moment,
+            a.id_empleado, b.email username, a.moment,
             a.moment::date AS fecha,
             EXTRACT(EPOCH FROM a.moment::timestamp)::bigint - 3600 AS timestamp,
             TO_CHAR(a.moment, 'Day') AS dia,
             a.registro
             FROM asistencias a
-            JOIN empleados b ON a.id_empleado = b._id
+            JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario
             WHERE EXTRACT(WEEK FROM a.moment) = EXTRACT(WEEK FROM NOW())
               AND EXTRACT(YEAR FROM a.moment) = EXTRACT(YEAR FROM NOW());";
         } else {
@@ -665,14 +673,14 @@ return function (App $app) {
 
         if (DB_DRIVER === 'pgsql') {
             $sql = "SELECT
-             b._id,
-             b.username AS empleado
+             b.id_usuario AS _id,
+             b.email AS empleado
              FROM asistencias a
-             JOIN empleados b ON b._id = a.id_empleado
+             JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado
              WHERE EXTRACT(WEEK FROM a.moment) = EXTRACT(WEEK FROM '" . $today . "'::date)
                AND EXTRACT(YEAR FROM a.moment) = EXTRACT(YEAR FROM '" . $today . "'::date)
-             GROUP BY b._id, b.username
-             ORDER BY b.username ASC";
+             GROUP BY b.id_usuario, b.email
+             ORDER BY b.email ASC";
         } else {
             $sql = "SELECT
              b._id,
@@ -731,8 +739,8 @@ return function (App $app) {
                              ))::numeric,
                       2
                       ) AS horas_trabajadas
-                FROM asistencias a 
-                JOIN empleados b ON b._id = a.id_empleado 
+                FROM asistencias a
+                JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado
                 WHERE a.moment::date BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
                 GROUP BY a.id_empleado, b.nombre;
                 ";
@@ -781,8 +789,8 @@ return function (App $app) {
                 WHEN a.registro = 'salida_tarde' THEN 'Salida tarde'
                 ELSE a.registro 
                 END AS registro 
-                FROM asistencias a 
-                JOIN empleados b ON b._id = a.id_empleado 
+                FROM asistencias a
+                JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado
                 WHERE a.moment::date BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
                 ORDER BY b.nombre ASC, a.moment ASC,
                 CASE 
@@ -1006,13 +1014,13 @@ return function (App $app) {
                     $sqlPagos = "SELECT
                             SUM(p.monto_pago) as total_pagado,
                             TO_CHAR(p.moment, 'Day') as dia,
-                            DATE(p.moment) as fecha
+                            p.moment::date as fecha
                         FROM pagos p
                         WHERE p.id_empleado = $id_empleado
                         AND p.estatus = 'aprobado'
                         AND EXTRACT(WEEK FROM p.moment) = EXTRACT(WEEK FROM NOW())
                         AND EXTRACT(YEAR FROM p.moment) = EXTRACT(YEAR FROM NOW())
-                        GROUP BY DATE(p.moment)";
+                        GROUP BY p.moment::date";
                 } else {
                     $sqlPagos = "SELECT 
                             SUM(p.monto_pago) as total_pagado,
@@ -1206,14 +1214,14 @@ return function (App $app) {
                     $sqlPagos = "SELECT
                             SUM(p.monto_pago) as total_pagado,
                             TO_CHAR(ldea.fecha_terminado, 'Day') as dia,
-                            DATE(ldea.fecha_terminado) as fecha
+                            ldea.fecha_terminado::date as fecha
                         FROM pagos p
                         JOIN lotes_detalles_empleados_asignados ldea ON p.id_lotes_detalles = ldea._id
                         WHERE p.id_empleado = $id_empleado
                         AND p.estatus = 'aprobado'
                         AND EXTRACT(WEEK FROM ldea.fecha_terminado) = EXTRACT(WEEK FROM NOW())
                         AND EXTRACT(YEAR FROM ldea.fecha_terminado) = EXTRACT(YEAR FROM NOW())
-                        GROUP BY DATE(ldea.fecha_terminado)";
+                        GROUP BY ldea.fecha_terminado::date";
                 } else {
                     $sqlPagos = "SELECT 
                             SUM(p.monto_pago) as total_pagado,
