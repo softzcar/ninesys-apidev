@@ -439,8 +439,8 @@ return function (App $app) {
                   r.url_image,
                   p.id_empleado,
                   p.fecha_pago,
-                  (SELECT numero_semana FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = p.id_empleado ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
-                  (SELECT EXTRACT(YEAR FROM pa.moment) FROM ' . LOCAL_DB . '.pagos_salarios ps JOIN ' . LOCAL_DB . '.pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = p.id_empleado ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
+                  (SELECT numero_semana FROM pagos_salarios ps JOIN pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = p.id_empleado ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+                  (SELECT EXTRACT(YEAR FROM pa.moment) FROM pagos_salarios ps JOIN pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = p.id_empleado ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
                   (SELECT CASE WHEN p.id_reposicion > 0 THEN (SELECT unidades FROM reposiciones WHERE _id = p.id_reposicion) ELSE (SELECT COALESCE(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = p.id_orden) END) as cantidad_productos,
                   (
                   SELECT
@@ -794,9 +794,9 @@ return function (App $app) {
                           NULL AS fecha_pago,
                           '' AS tiempo_transcurrido,
                           0 as cantidad,
-                          (SELECT numero_semana FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = eu.id_usuario ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
-                          (SELECT EXTRACT(YEAR FROM pa.moment) FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = eu.id_usuario ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
-                          (SELECT TO_CHAR(pa.fecha_pago, 'DD/MM/YYYY') FROM " . LOCAL_DB . ".pagos pa LEFT JOIN " . LOCAL_DB . ".pagos_salarios ps ON ps.id_pago = pa._id WHERE pa.id_empleado = eu.id_usuario AND pa.fecha_pago IS NOT NULL AND (EXTRACT(WEEK FROM pa.fecha_pago) = EXTRACT(WEEK FROM CURRENT_DATE) OR ps.numero_semana = EXTRACT(WEEK FROM CURRENT_DATE)) AND EXTRACT(YEAR FROM pa.fecha_pago) = EXTRACT(YEAR FROM CURRENT_DATE) ORDER BY pa.fecha_pago DESC LIMIT 1) ultima_fecha_pago
+                          (SELECT numero_semana FROM pagos_salarios ps JOIN pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = eu.id_usuario ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+                          (SELECT EXTRACT(YEAR FROM pa.moment) FROM pagos_salarios ps JOIN pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = eu.id_usuario ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
+                          (SELECT TO_CHAR(pa.fecha_pago, 'DD/MM/YYYY') FROM pagos pa LEFT JOIN pagos_salarios ps ON ps.id_pago = pa._id WHERE pa.id_empleado = eu.id_usuario AND pa.fecha_pago IS NOT NULL AND (EXTRACT(WEEK FROM pa.fecha_pago) = EXTRACT(WEEK FROM CURRENT_DATE) OR ps.numero_semana = EXTRACT(WEEK FROM CURRENT_DATE)) AND EXTRACT(YEAR FROM pa.fecha_pago) = EXTRACT(YEAR FROM CURRENT_DATE) ORDER BY pa.fecha_pago DESC LIMIT 1) ultima_fecha_pago
                       FROM
                           api_empresas.empresas_usuarios eu
                       WHERE
@@ -1043,8 +1043,8 @@ return function (App $app) {
                   d.status,
                   e.tipo_de_pago,
                   a.fecha_pago,
-                  (SELECT numero_semana FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_empleado ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
-                  (SELECT EXTRACT(YEAR FROM pa.moment) FROM " . LOCAL_DB . ".pagos_salarios ps JOIN " . LOCAL_DB . ".pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_empleado ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
+                  (SELECT numero_semana FROM pagos_salarios ps JOIN pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_empleado ORDER by pa.moment DESC LIMIT 1) ultima_semana_pagada,
+                  (SELECT EXTRACT(YEAR FROM pa.moment) FROM pagos_salarios ps JOIN pagos pa ON ps.id_pago = pa._id WHERE pa.id_empleado = a.id_empleado ORDER by pa.moment DESC LIMIT 1) ultimo_anio_pagado,
                   TO_CHAR(a.moment, 'DD/MM/YYYY') fecha_de_pago,
                   (SELECT CASE WHEN a.id_reposicion > 0 THEN (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion) ELSE (SELECT COALESCE(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = a.id_orden) END) as cantidad_productos
               FROM
