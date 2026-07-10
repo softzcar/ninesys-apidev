@@ -38,6 +38,7 @@ return function (App $app) {
     $object['searchVendedor'] = $searchVendedor;
 
     if (is_null($inicio) || is_null($fin)) {
+    if (DB_DRIVER === 'pgsql') {
       $sql = "SELECT
     met._id,
     ord._id orden,
@@ -56,14 +57,69 @@ return function (App $app) {
         WHERE
             op.id_orden = ord._id
     ) AS total_orden,
-    (SELECT IFNULL(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id) AS total_descuento,
-    (SELECT IFNULL(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id) AS total_nota_credito,
-    (SELECT IFNULL(SUM(abono), 0) FROM abonos WHERE id_orden = ord._id) AS total_abonos_base,
+    (SELECT COALESCE(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id) AS total_descuento,
+    (SELECT COALESCE(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id) AS total_nota_credito,
+    (SELECT COALESCE(SUM(abono), 0) FROM abonos WHERE id_orden = ord._id) AS total_abonos_base,
+    (
+        SELECT
+            COALESCE(json_agg(
+                json_build_object(
+                    'category_name', t_cat.category_name,
+                    'category_total', t_cat.category_total
+                )
+            )::text, '[]')
+        FROM (
+            SELECT 
+                op_in.id_orden,
+                c_in.nombre as category_name,
+                SUM(op_in.cantidad * op_in.precio_unitario) as category_total
+            FROM 
+                ordenes_productos op_in
+            JOIN products p_in ON op_in.id_woo = p_in._id
+            JOIN categories c_in ON (c_in._id::text = ANY(string_to_array(p_in.category_ids, ',')))
+            GROUP BY 
+                op_in.id_orden, c_in.nombre
+        ) t_cat
+        WHERE t_cat.id_orden = ord._id
+    ) AS product_categories,
+    TO_CHAR(met.moment, 'DD/MM/YYYY') AS fecha,
+    TO_CHAR(met.moment, 'HH12:MI AM') AS hora
+    FROM
+        metodos_de_pago met
+    JOIN ordenes ord ON met.id_orden = ord._id 
+    JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
+    WHERE
+    (ord.status = 'activa' OR ord.status = 'En espera' OR ord.status = 'terminada' OR ord.status = 'pausada' OR ord.status = 'entregada')
+        {$searchVendedor}
+    ORDER BY
+        met.id_orden DESC, met.moment ASC;";
+    } else {
+      $sql = "SELECT
+    met._id,
+    ord._id orden,
+    ord.responsable id_empleado,
+    emp.nombre empleado,
+    met.metodo_pago,
+    met.monto,
+    met.detalle,
+    met.tasa,
+    met.moneda,
+    (
+        SELECT
+            SUM(op.cantidad * op.precio_unitario)
+        FROM
+            ordenes_productos op
+        WHERE
+            op.id_orden = ord._id
+    ) AS total_orden,
+    (SELECT COALESCE(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id) AS total_descuento,
+    (SELECT COALESCE(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id) AS total_nota_credito,
+    (SELECT COALESCE(SUM(abono), 0) FROM abonos WHERE id_orden = ord._id) AS total_abonos_base,
     (
         SELECT
             CONCAT(
                 '[',
-                IFNULL(GROUP_CONCAT(
+                COALESCE(GROUP_CONCAT(
                     JSON_OBJECT(
                         'category_name', t_cat.category_name,
                         'category_total', t_cat.category_total
@@ -93,11 +149,10 @@ return function (App $app) {
     JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
     WHERE
     (ord.status = 'activa' OR ord.status = 'En espera' OR ord.status = 'terminada' OR ord.status = 'pausada' OR ord.status = 'entregada')
-        -- met.moment >= DATE_SUB(CURDATE(), INTERVAL 1 WEEK)
-        -- AND MONTH(met.moment) = MONTH(CURDATE()) -- Comentar esta línea
         {$searchVendedor}
     ORDER BY
         met.id_orden DESC, met.moment ASC;";
+    }
       /* $sql = "SELECT
                 met._id,
                 ord._id orden,
@@ -122,6 +177,7 @@ return function (App $app) {
                 met.id_orden DESC, met.moment ASC;
             '; */
     } else {
+    if (DB_DRIVER === 'pgsql') {
       $sql = "SELECT
                 met._id,
                 ord._id orden,
@@ -140,14 +196,69 @@ return function (App $app) {
                     WHERE
                         op.id_orden = ord._id
                 ) AS total_orden,
-                (SELECT IFNULL(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id) AS total_descuento,
-                (SELECT IFNULL(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id) AS total_nota_credito,
-                (SELECT IFNULL(SUM(abono), 0) FROM abonos WHERE id_orden = ord._id) AS total_abonos_base,
+                (SELECT COALESCE(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id) AS total_descuento,
+                (SELECT COALESCE(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id) AS total_nota_credito,
+                (SELECT COALESCE(SUM(abono), 0) FROM abonos WHERE id_orden = ord._id) AS total_abonos_base,
+                (
+                    SELECT
+                        COALESCE(json_agg(
+                            json_build_object(
+                                'category_name', t_cat.category_name,
+                                'category_total', t_cat.category_total
+                            )
+                        )::text, '[]')
+                    FROM (
+                        SELECT 
+                            op_in.id_orden,
+                            c_in.nombre as category_name,
+                            SUM(op_in.cantidad * op_in.precio_unitario) as category_total
+                        FROM 
+                            ordenes_productos op_in
+                        JOIN products p_in ON op_in.id_woo = p_in._id
+                        JOIN categories c_in ON (c_in._id::text = ANY(string_to_array(p_in.category_ids, ',')))
+                        GROUP BY 
+                            op_in.id_orden, c_in.nombre
+                    ) t_cat
+                    WHERE t_cat.id_orden = ord._id
+                ) AS product_categories,
+                TO_CHAR(met.moment, 'DD/MM/YYYY') AS fecha,
+                TO_CHAR(met.moment, 'HH12:MI AM') AS hora
+            FROM
+                metodos_de_pago met
+            JOIN ordenes ord ON met.id_orden = ord._id 
+            JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
+            WHERE
+                met.moment::date BETWEEN '" . $inicio . "' AND '" . $fin . "' 
+                " . $searchVendedor . '
+                ORDER BY
+                met.id_orden DESC, met.moment ASC;';
+    } else {
+      $sql = "SELECT
+                met._id,
+                ord._id orden,
+                ord.responsable id_empleado,
+                emp.nombre empleado,
+                met.metodo_pago,
+                met.monto,
+                met.detalle,
+                met.tasa,
+                met.moneda,
+                (
+                    SELECT
+                        SUM(op.cantidad * op.precio_unitario)
+                    FROM
+                        ordenes_productos op
+                    WHERE
+                        op.id_orden = ord._id
+                ) AS total_orden,
+                (SELECT COALESCE(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id) AS total_descuento,
+                (SELECT COALESCE(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id) AS total_nota_credito,
+                (SELECT COALESCE(SUM(abono), 0) FROM abonos WHERE id_orden = ord._id) AS total_abonos_base,
                 (
                     SELECT
                         CONCAT(
                             '[',
-                            IFNULL(GROUP_CONCAT(
+                            COALESCE(GROUP_CONCAT(
                                 JSON_OBJECT(
                                     'category_name', t_cat.category_name,
                                     'category_total', t_cat.category_total
@@ -181,6 +292,7 @@ return function (App $app) {
                 ORDER BY
                 met.id_orden DESC, met.moment ASC;';
     }
+  }
 
     // $object['sql_pagos'] = $sql;
 
@@ -362,15 +474,27 @@ return function (App $app) {
     }
 
     /** RETIROS */
-    $sql = "SELECT 
-              SUM(a.monto) monto, 
-              a.moneda, 
-              a.tasa, 
-              SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
-              'Retiros' metodo_pago
-            FROM retiros AS a 
-            WHERE DATE(a.moment) BETWEEN '$inicio' AND '$fin' $filterUserRetiros
-            GROUP BY a.tasa, a.moneda";
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT 
+                SUM(a.monto) monto, 
+                a.moneda, 
+                a.tasa, 
+                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
+                'Retiros' metodo_pago
+              FROM retiros AS a 
+              WHERE a.moment::date BETWEEN '$inicio' AND '$fin' $filterUserRetiros
+              GROUP BY a.tasa, a.moneda";
+    } else {
+      $sql = "SELECT 
+                SUM(a.monto) monto, 
+                a.moneda, 
+                a.tasa, 
+                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
+                'Retiros' metodo_pago
+              FROM retiros AS a 
+              WHERE DATE(a.moment) BETWEEN '$inicio' AND '$fin' $filterUserRetiros
+              GROUP BY a.tasa, a.moneda";
+    }
 
     $object['data']['retiros'] = $localConnection->goQuery($sql);
 
@@ -419,7 +543,7 @@ return function (App $app) {
         if ($moneda === 'Pesos') $extraFondo = $fondo['pesos'];
         if ($moneda === 'Bolívares') $extraFondo = $fondo['bolivares'];
 
-        $sqlSaldo = "SELECT (IFNULL(SUM(c.monto), 0) + $extraFondo - IFNULL(SUM(a.monto), 0)) AS saldo 
+        $sqlSaldo = "SELECT (COALESCE(SUM(c.monto), 0) + $extraFondo - COALESCE(SUM(a.monto), 0)) AS saldo 
                      FROM caja c 
                      LEFT JOIN retiros a ON c.id_empleado = a.id_empleado AND a.moneda = ? 
                      WHERE c.moneda = ? AND c.id_caja_cierres IS NULL AND c.id_empleado = ?";
@@ -617,7 +741,11 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     // Obtener retiros
-    $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario WHERE DATE(a.moment) BETWEEN '" . $args['inicio'] . "' AND '" . $args['fin'] . "' ORDER BY a.moment DESC";
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario WHERE a.moment::date BETWEEN '" . $args['inicio'] . "' AND '" . $args['fin'] . "' ORDER BY a.moment DESC";
+    } else {
+      $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario WHERE DATE(a.moment) BETWEEN '" . $args['inicio'] . "' AND '" . $args['fin'] . "' ORDER BY a.moment DESC";
+    }
 
     $pbject['sql']['data_retiros'] = $sql;
     $object['data']['retiros'] = $localConnection->goQuery($sql);
@@ -636,8 +764,8 @@ return function (App $app) {
      $id_emp = $args['id_empleado'];
 
     // DÓLARES EN CAJA
-    $montoDolaresCaja = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM caja WHERE moneda = 'Dólares' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
-    $montoDolaresRetiros = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Dólares' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
+    $montoDolaresCaja = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM caja WHERE moneda = 'Dólares' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
+    $montoDolaresRetiros = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Dólares' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
     $saldoDolares = floatval($montoDolaresCaja + ($fondo[0]['dolares'] ?? 0) - $montoDolaresRetiros);
 
     $object['data']['caja'] = [[
@@ -648,8 +776,8 @@ return function (App $app) {
     ]];
 
     // PESOS EN CAJA
-    $montoPesosCaja = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM caja WHERE moneda = 'Pesos' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
-    $montoPesosRetiros = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Pesos' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
+    $montoPesosCaja = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM caja WHERE moneda = 'Pesos' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
+    $montoPesosRetiros = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Pesos' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
     $saldoPesos = floatval($montoPesosCaja + ($fondo[0]['pesos'] ?? 0) - $montoPesosRetiros);
     
     $resTasaP = $localConnection->goQuery("SELECT tasa FROM caja WHERE moneda = 'Pesos' AND id_empleado = ? ORDER BY _id DESC LIMIT 1", [$id_emp]);
@@ -664,8 +792,8 @@ return function (App $app) {
     ]);
 
     // BOLIVARES EN CAJA
-    $montoBolivaresCaja = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM caja WHERE moneda = 'Bolívares' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
-    $montoBolivaresRetiros = floatval($localConnection->goQuery("SELECT IFNULL(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Bolívares' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
+    $montoBolivaresCaja = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM caja WHERE moneda = 'Bolívares' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
+    $montoBolivaresRetiros = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Bolívares' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
     $saldoBolivares = floatval($montoBolivaresCaja + ($fondo[0]['bolivares'] ?? 0) - $montoBolivaresRetiros);
 
     $resTasaB = $localConnection->goQuery("SELECT tasa FROM caja WHERE moneda = 'Bolívares' AND id_empleado = ? ORDER BY _id DESC LIMIT 1", [$id_emp]);
@@ -711,7 +839,43 @@ return function (App $app) {
     $filterVendedor = $id_vendedor === 0 ? "" : " AND c.id_empleado = $id_vendedor";
 
     // Consulta para obtener los cierres y calcular el balance
-    $sql = "SELECT 
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT 
+              c._id,
+              c.moment AS fecha_cierre,
+              u.nombre AS vendedor,
+              c.dolares AS monto_cierre_usd,
+              c.pesos AS monto_cierre_cop,
+              c.bolivares AS monto_cierre_bs,
+              f.dolares AS fondo_nuevo_usd,
+              f.pesos AS fondo_nuevo_cop,
+              f.bolivares AS fondo_nuevo_bs,
+              -- Fondo anterior (del cierre previo)
+              (SELECT f_ant.dolares FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_usd,
+              (SELECT f_ant.pesos FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_cop,
+              (SELECT f_ant.bolivares FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_bs,
+              -- Recaudado en este cierre
+              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Dólares') as recaudado_usd,
+              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Pesos') as recaudado_cop,
+              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Bolívares') as recaudado_bs,
+              -- Tasas manejadas en este cierre (o la última conocida hasta ese momento)
+              COALESCE(
+                (SELECT tasa FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Pesos' ORDER BY _id DESC LIMIT 1),
+                (SELECT tasa FROM caja WHERE moneda = 'Pesos' AND moment <= c.moment ORDER BY moment DESC LIMIT 1),
+                1
+              ) as tasa_cop,
+              COALESCE(
+                (SELECT tasa FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Bolívares' ORDER BY _id DESC LIMIT 1),
+                (SELECT tasa FROM caja WHERE moneda = 'Bolívares' AND moment <= c.moment ORDER BY moment DESC LIMIT 1),
+                1
+              ) as tasa_bs
+            FROM caja_cierres c
+            JOIN caja_fondos f ON c._id = f.id_caja_cierres
+            JOIN api_empresas.empresas_usuarios u ON c.id_empleado = u.id_usuario
+            WHERE c.moment::date BETWEEN '$inicio' AND '$fin' $filterVendedor
+            ORDER BY c.moment DESC";
+    } else {
+      $sql = "SELECT 
               c._id,
               c.moment AS fecha_cierre,
               u.nombre AS vendedor,
@@ -745,6 +909,7 @@ return function (App $app) {
             JOIN api_empresas.empresas_usuarios u ON c.id_empleado = u.id_usuario
             WHERE DATE(c.moment) BETWEEN '$inicio' AND '$fin' $filterVendedor
             ORDER BY c.moment DESC";
+    }
 
     $object['data'] = $localConnection->goQuery($sql);
     $localConnection->disconnect();
