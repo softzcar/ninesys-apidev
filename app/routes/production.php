@@ -131,10 +131,10 @@ return function (App $app) {
               c.talla, 
               c.corte, 
               c.tela, 
-              TO_CHAR(a.fecha_inicio, 'HH12:MI:SS AM') AS hora, 
-              TO_CHAR(a.fecha_inicio, 'DD-MM-YYYY') AS fecha 
-              FROM lotes_detalles a 
-              JOIN empleados b ON a.id_empleado = b._id 
+              TO_CHAR(a.fecha_inicio, 'HH12:MI:SS AM') AS hora,
+              TO_CHAR(a.fecha_inicio, 'DD-MM-YYYY') AS fecha
+              FROM lotes_detalles a
+              JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario
               JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
               WHERE a.progreso = 'en curso' 
               ORDER BY a.fecha_inicio DESC, b.nombre ASC
@@ -336,28 +336,31 @@ return function (App $app) {
     $sql = "SELECT b.id_orden, b.paso from lotes b JOIN ordenes a ON a._id = b.id_orden WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera'";
     $obj['pasos'] = $localConnection->goQuery($sql);
 
+    $categoryJoinCond = DB_DRIVER === 'pgsql'
+        ? "cat._id::text = ANY(string_to_array(p.category_ids, ','))"
+        : "FIND_IN_SET(cat._id, p.category_ids)";
     $sql = "SELECT DISTINCT
         b._id,
         b._id id_ordenes_productos,
         b.id_orden,
-        (SELECT _id FROM lotes_fisicos WHERE id_orden = b._id) id_lotes, 
+        (SELECT _id FROM lotes_fisicos WHERE id_orden = b._id) id_lotes,
         b.id_woo,
         p.fisico,
         b.id_category,
         cat.nombre as category_name,
-        b.name,        
-        b.cantidad, 
+        b.name,
+        b.cantidad,
         c.piezas_actuales,
         b.talla,
         b.corte,
         b.tela,
         b.precio_unitario,
-        b.precio_woo,   
+        b.precio_woo,
         b.moment
-        FROM 
+        FROM
             ordenes_productos b
         LEFT JOIN products p ON p._id = b.id_woo
-        LEFT JOIN categories cat ON FIND_IN_SET(cat._id, p.category_ids)
+        LEFT JOIN categories cat ON $categoryJoinCond
         LEFT JOIN lotes_fisicos c ON c.id_orden = b._id
         LEFT JOIN ordenes a ON
             b.id_orden = a._id
@@ -684,7 +687,7 @@ return function (App $app) {
     $obj[0]['sql'] = $sql;
     $obj[0]['name'] = 'items';
 
-    $sql = "SELECT _id id_empleado, nombre FROM empleados WHERE departamento = 'Corte' AND activo = 1";
+    $sql = "SELECT id_usuario id_empleado, nombre FROM api_empresas.empresas_usuarios WHERE departamento = 'Corte' AND activo = 1 AND id_empresa = " . ID_EMPRESA;
     $obj[1]['sql'] = $sql;
     $obj[1]['name'] = 'empleados';
 
@@ -1517,7 +1520,7 @@ return function (App $app) {
         $nextOrdenFilaRepo = intval($lastOrdenFilaRepo[0]['max']) + 1;
       }
 
-      $sql_fila_repo = "INSERT INTO `ordenes_fila_reposiciones`(`id_reposicion`, `orden_fila`) VALUES ({$id_reposicion_creada}, {$nextOrdenFilaRepo})";
+      $sql_fila_repo = "INSERT INTO ordenes_fila_reposiciones(id_reposicion, orden_fila) VALUES ({$id_reposicion_creada}, {$nextOrdenFilaRepo})";
       $object['sql_orden_fila_reposicion'] = $sql_fila_repo;
       $object['response_orden_fila_reposicion'] = $localConnection->goQuery($sql_fila_repo);
     }
