@@ -537,6 +537,7 @@ return function (App $app) {
     }
     $object['data']['diseno'] = $localConnection->goQuery($sql);
 
+
     foreach ($object['data']['diseno'] as $key => $value) {
       // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
       $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ' . $value['id_orden'];
@@ -1904,26 +1905,49 @@ return function (App $app) {
     // FIN PAGOS EMPLEADOS
 
     // OBTENER INFORMACION DE DISEÑADORES
-    $sql = "SELECT 
-    e._id id_pago,
-    e.id_orden, 
-    e.id_empleado,
-    e.detalle detalle_pago,
-    a._id id_diseno, 
-    b.nombre nombre, 
-    b.departamento, 
-    e.monto_pago pago,
-    e.cantidad,
-    c.name producto 
-    FROM pagos e   
-    JOIN disenos a ON a.id_empleado = e.id_empleado AND a.id_orden = e.id_orden
-    JOIN empleados b 
-    ON b._id = e.id_empleado 
-    JOIN ordenes_productos c 
-    ON e.id_orden = c.id_orden AND c.category_name = 'Diseños'
-    WHERE " . $where . ' AND e.monto_pago > 0 AND e.fecha_pago IS NULL';
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT
+          e._id id_pago,
+          e.id_orden,
+          e.id_empleado,
+          e.detalle detalle_pago,
+          a._id id_diseno,
+          b.nombre nombre,
+          b.departamento,
+          e.monto_pago pago,
+          e.cantidad,
+          c.name producto
+          FROM pagos e
+          JOIN disenos a ON a.id_empleado = e.id_empleado AND a.id_orden = e.id_orden
+          JOIN api_empresas.empresas_usuarios b
+          ON b.id_usuario = e.id_empleado
+          JOIN ordenes_productos c
+          ON e.id_orden = c.id_orden AND c.category_name = 'Diseños'
+          WHERE " . $where . ' AND e.monto_pago > 0 AND e.fecha_pago IS NULL';
+    } else {
+      $sql = "SELECT
+          e._id id_pago,
+          e.id_orden,
+          e.id_empleado,
+          e.detalle detalle_pago,
+          a._id id_diseno,
+          b.nombre nombre,
+          b.departamento,
+          e.monto_pago pago,
+          e.cantidad,
+          c.name producto
+          FROM pagos e
+          JOIN disenos a ON a.id_empleado = e.id_empleado AND a.id_orden = e.id_orden
+          JOIN empleados b
+          ON b._id = e.id_empleado
+          JOIN ordenes_productos c
+          ON e.id_orden = c.id_orden AND c.category_name = 'Diseños'
+          WHERE " . $where . ' AND e.monto_pago > 0 AND e.fecha_pago IS NULL';
+    }
     $object['sql']['diseno'] = $sql;
     $object['data']['diseno'] = $localConnection->goQuery($sql);
+    if (isset($object['data']['diseno']['status']) && $object['data']['diseno']['status'] === 'error') { $object['data']['diseno'] = []; }
+
 
     foreach ($object['data']['diseno'] as $key => $value) {
       // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
