@@ -1,0 +1,49 @@
+**Tarea:** Adaptar los 4 endpoints de `app/routes/reports.php` para compatibilidad con PostgreSQL (Tarea Pendiente 1 de CLAUDE_POSTGRES_INSTRUCTIONS.md)
+**Fecha:** 2026-07-10 17:33:00
+**Rama:** feature/postgresql-support
+**Commit:** acd8add
+
+### Contexto
+Los números de línea y la agrupación de queries por endpoint en `CLAUDE_POSTGRES_INSTRUCTIONS.md` ya no coincidían exactamente con el estado actual del archivo (1177 líneas, evolucionó desde que se escribió el plan). Se re-mapeó el archivo completo por contenido (grep de GROUP_CONCAT/TIMESTAMPDIFF/DATE()/DATE_FORMAT/FIND_IN_SET/adminDNS) para ubicar todos los puntos reales que requerían adaptación, no solo los citados literalmente en el documento.
+
+### Cambios Realizados
+
+1. **`/reportes/costos-produccion/{inicio}/{fin}`**:
+   - Conexión condicional: en pgsql se conecta directo a `LOCAL_DNS` (empresa) con `$companyDB = 'public'`; en MySQL se mantiene la conexión a `EMPRESAS_DNS` con `$companyDB = LOCAL_DB`. Se eliminó una reasignación redundante de `$companyDB` que sobreescribía `'public'`.
+   - Query de horario laboral (`FROM empresas`) calificada como `api_empresas.empresas` en pgsql (necesario porque ya no se conecta a la DB admin directamente).
+   - `$empAsigSql`: `GROUP_CONCAT` → `string_agg`, `TIME_TO_SEC(TIMEDIFF(...))` → `EXTRACT(EPOCH FROM (...::timestamp - ...::timestamp))`.
+   - `$sqlNoTracked` y el `WHERE` de `whereConditions`: `DATE(fecha_terminado)` → `fecha_terminado::date`.
+   - `$sqlTareas`: mismo patrón TIME_TO_SEC/TIMEDIFF → EXTRACT(EPOCH).
+   - `$sqlMantenimiento`: `DATE(s.fecha_servicio)` → `s.fecha_servicio::date` (no estaba listado explícitamente en el documento, se detectó en la auditoría completa del archivo).
+
+2. **`/reportes/mano-obra-por-orden/{id_orden}`**:
+   - Conexión de horario laboral condicional (igual patrón que endpoint 1) con `api_empresas.empresas` calificado en pgsql.
+   - `$sqlSalarios`: `TIMESTAMPDIFF(SECOND, ...)` → `EXTRACT(EPOCH FROM (...))`.
+   - Bloque de "salarios fijos no trackeados" (mismo patrón de conexión + `DATE(fecha_terminado)`) — tampoco estaba explícito en el documento bajo este endpoint, pero es el mismo código que Tarea 1 y requería el mismo fix.
+
+3. **`/reportes/semanal-detallado`** (el documento lo etiquetaba parcialmente como parte de employee-efficiency-global; en el archivo real es un endpoint separado):
+   - `$sqlOrders`: `GROUP_CONCAT(...SEPARATOR ',')` → `string_agg(...::text, ',' ORDER BY ...)`; `FIND_IN_SET` → `ANY(string_to_array(p2.category_ids, ','))`; `DATE(fecha_terminado)` → `fecha_terminado::date`.
+   - `$sqlTop`, `$sqlAll`: `DATE(fecha_terminado)` condicionado vía variable `$dateTerminadoCond` (mismo valor reusado, sin duplicar el query completo ya que solo difiere ese token).
+   - `$sqlCategories`: mismo patrón FIND_IN_SET + DATE que `$sqlOrders`.
+   - `$sqlTasks`: `DATE_FORMAT(..., '%d/%m/%Y %h:%i %p')` → `TO_CHAR(..., 'DD/MM/YYYY HH12:MI AM')`.
+   - `$sqlTime`: `TIMESTAMPDIFF` → `EXTRACT(EPOCH FROM (...))`; alias `` `real` `` (backtick, MySQL-only) → `real` sin comillas en pgsql (evitar comillas dobles dentro de un string PHP ya delimitado por comillas dobles, causaba parse error).
+
+4. **`/reportes/employee-efficiency-global`** (en el archivo real es mucho más simple que lo descrito en el documento — un solo query):
+   - `$sqlDetalles`: `DATE(ldea.fecha_inicio)` / `DATE(ldea.fecha_terminado)` condicionados vía variable `$fechaCondDetalles` interpolada en el string (no concatenación con `.`, para no romper el string PHP multi-línea ya abierto).
+
+### Errores durante la implementación
+- Primer intento de condicionar `$sqlDetalles` con concatenación `"..." . (cond) . "..."` rompió el parser PHP porque el string ya era una única cadena multi-línea sin cerrar en ese punto — corregido usando interpolación de variable dentro del mismo string.
+- Alias `AS "real"` (comillas dobles, sintaxis pgsql) dentro de un string PHP delimitado por comillas dobles cerraba el string prematuramente (`php -l` detectó el error) — corregido quitando las comillas (alias sin comillas es válido en pgsql para este identificador).
+
+### Validación
+- `php -l app/routes/reports.php`: sin errores de sintaxis.
+- Commit `acd8add` pusheado a `origin/feature/postgresql-support` y desplegado a Desarrollo (Contabo dev) vía `ninesys-hub/bin/deploy_backend.sh` (opción 2).
+- Verificado en vivo desde el navegador (sesión autenticada como admin, empresa 194 = piloto PostgreSQL) usando `fetch()` con el header `Authorization: <id_empresa>` (mecanismo real de auth de estos endpoints, no JWT):
+  - `GET /reportes/costos-produccion/2026-07-01/2026-07-10` → 200, sin error.
+  - `GET /reportes/semanal-detallado?inicio=2026-07-01&fin=2026-07-10` → 200, sin error.
+  - `GET /reportes/employee-efficiency-global?inicio=2026-07-01&fin=2026-07-10` → 200, sin error.
+  - `GET /reportes/mano-obra-por-orden/{1..5}` → 200 en los 5 casos, sin error.
+  - `GET /reportes/mano-obra-por-orden/1?inicio=2026-06-01&fin=2026-07-10` (ejercita el bloque de salarios no trackeados con el fix de conexión+DATE) → 200, sin error.
+
+### Resultado
+Éxito. Los 4 endpoints de `reports.php` funcionan contra PostgreSQL en Desarrollo sin errores SQL. Continúa la Tarea Pendiente 2 (`products_reports.php`).
