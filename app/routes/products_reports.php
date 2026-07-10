@@ -10,7 +10,11 @@ return function (App $app) {
     // HELPER: CALCULAR COSTO HORA EMPLEADOS (SALARIADOS)
     // =================================================================
     $getSalarios = function($db, $dbEmpresas, $id_empresa) {
-        $horarioQuery = "SELECT horario_laboral FROM empresas WHERE id_empresa = ?";
+        if (DB_DRIVER === 'pgsql') {
+            $horarioQuery = "SELECT horario_laboral FROM api_empresas.empresas WHERE id_empresa = ?";
+        } else {
+            $horarioQuery = "SELECT horario_laboral FROM empresas WHERE id_empresa = ?";
+        }
         $horarioResult = $dbEmpresas->goQuery($horarioQuery, [$id_empresa]);
         
         $horario_laboral = (!empty($horarioResult) && isset($horarioResult[0]['horario_laboral'])) ? $horarioResult[0]['horario_laboral'] : null;
@@ -77,9 +81,13 @@ return function (App $app) {
 
         try {
             $db = new LocalDB();
-            $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
-            $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
-            
+            if (DB_DRIVER === 'pgsql') {
+                $dbEmpresas = new LocalDB('', LOCAL_DNS, LOCAL_USER, LOCAL_PASS);
+            } else {
+                $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
+                $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
+            }
+
             // 1. Obtener todos los productos físicos (o con sku)
             $productsRaw = $db->goQuery("SELECT _id, product as nombre, sku, price as precio_venta, category_ids FROM products WHERE sku IS NOT NULL AND sku <> ''");
             if (isset($productsRaw['status']) && $productsRaw['status'] === 'error') {
@@ -149,10 +157,21 @@ return function (App $app) {
             }
 
             // --- DATOS REALES HISTÓRICOS DESDE EL TALLER ---
+            $momentDateExpr = DB_DRIVER === 'pgsql' ? 'o.moment::date' : 'DATE(o.moment)';
+            $fechaCierreExpr = DB_DRIVER === 'pgsql'
+                ? "COALESCE(ldea.fecha_terminado, NULLIF(o.fecha_entrega, '')::date, o.fecha_creacion, o.moment::date)"
+                : "COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment))";
+            $tiempoSegundosExpr = DB_DRIVER === 'pgsql'
+                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)))"
+                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr))";
+            $tiempoHorasExpr = DB_DRIVER === 'pgsql'
+                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)) / 3600)"
+                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr) / 3600)";
+
             $params = [];
             $dateCond = "";
             if ($fecha_inicio && $fecha_fin) {
-                $dateCond = " AND DATE(o.moment) BETWEEN :fecha_inicio AND :fecha_fin ";
+                $dateCond = " AND $momentDateExpr BETWEEN :fecha_inicio AND :fecha_fin ";
                 $params['fecha_inicio'] = $fecha_inicio;
                 $params['fecha_fin'] = $fecha_fin;
             }
@@ -161,8 +180,8 @@ return function (App $app) {
             $dateCond1 = "";
             $dateCond2 = "";
             if ($fecha_inicio && $fecha_fin) {
-                $dateCond1 = " AND DATE(o.moment) BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
-                $dateCond2 = " AND DATE(o.moment) BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
+                $dateCond1 = " AND $momentDateExpr BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
+                $dateCond2 = " AND $momentDateExpr BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
                 $paramsUnion['fecha_inicio_1'] = $fecha_inicio;
                 $paramsUnion['fecha_fin_1'] = $fecha_fin;
                 $paramsUnion['fecha_inicio_2'] = $fecha_inicio;
@@ -235,8 +254,7 @@ return function (App $app) {
                 SELECT id_producto, SUM(total_tiempo) AS total_tiempo
                 FROM (
                     SELECT op.id_woo AS id_producto,
-                           GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio,
-                               COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment))))
+                           $tiempoSegundosExpr
                            * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
                            / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_tiempo
                     FROM lotes_detalles_empleados_asignados ldea
@@ -262,8 +280,7 @@ return function (App $app) {
                 SELECT id_producto, id_empleado, SUM(total_horas) AS total_horas
                 FROM (
                     SELECT op.id_woo AS id_producto, ldea.id_empleado,
-                           GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio,
-                               COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment)))) / 3600
+                           $tiempoHorasExpr
                            * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
                            / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_horas
                     FROM lotes_detalles_empleados_asignados ldea
@@ -403,9 +420,13 @@ return function (App $app) {
 
         try {
             $db = new LocalDB();
-            $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
-            $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
-            
+            if (DB_DRIVER === 'pgsql') {
+                $dbEmpresas = new LocalDB('', LOCAL_DNS, LOCAL_USER, LOCAL_PASS);
+            } else {
+                $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
+                $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
+            }
+
             // Reusar toda la lógica agregada a nivel de producto
             $productsRaw = $db->goQuery("SELECT _id, product as nombre, sku, price as precio_venta, category_ids FROM products WHERE sku IS NOT NULL AND sku <> ''");
             $categoriesRaw = $db->goQuery("SELECT _id, nombre FROM categories");
@@ -484,10 +505,21 @@ return function (App $app) {
             }
 
             // Datos reales filtrados
+            $momentDateExpr = DB_DRIVER === 'pgsql' ? 'o.moment::date' : 'DATE(o.moment)';
+            $fechaCierreExpr = DB_DRIVER === 'pgsql'
+                ? "COALESCE(ldea.fecha_terminado, NULLIF(o.fecha_entrega, '')::date, o.fecha_creacion, o.moment::date)"
+                : "COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment))";
+            $tiempoSegundosExpr = DB_DRIVER === 'pgsql'
+                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)))"
+                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr))";
+            $tiempoHorasExpr = DB_DRIVER === 'pgsql'
+                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)) / 3600)"
+                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr) / 3600)";
+
             $params = [];
             $dateCond = "";
             if ($fecha_inicio && $fecha_fin) {
-                $dateCond = " AND DATE(o.moment) BETWEEN :fecha_inicio AND :fecha_fin ";
+                $dateCond = " AND $momentDateExpr BETWEEN :fecha_inicio AND :fecha_fin ";
                 $params['fecha_inicio'] = $fecha_inicio;
                 $params['fecha_fin'] = $fecha_fin;
             }
@@ -496,8 +528,8 @@ return function (App $app) {
             $dateCond1 = "";
             $dateCond2 = "";
             if ($fecha_inicio && $fecha_fin) {
-                $dateCond1 = " AND DATE(o.moment) BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
-                $dateCond2 = " AND DATE(o.moment) BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
+                $dateCond1 = " AND $momentDateExpr BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
+                $dateCond2 = " AND $momentDateExpr BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
                 $paramsUnion['fecha_inicio_1'] = $fecha_inicio;
                 $paramsUnion['fecha_fin_1'] = $fecha_fin;
                 $paramsUnion['fecha_inicio_2'] = $fecha_inicio;
@@ -563,8 +595,7 @@ return function (App $app) {
                 SELECT id_producto, SUM(total_tiempo) AS total_tiempo
                 FROM (
                     SELECT op.id_woo AS id_producto,
-                           GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio,
-                               COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment))))
+                           $tiempoSegundosExpr
                            * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
                            / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_tiempo
                     FROM lotes_detalles_empleados_asignados ldea
@@ -589,8 +620,7 @@ return function (App $app) {
                 SELECT id_producto, id_empleado, SUM(total_horas) AS total_horas
                 FROM (
                     SELECT op.id_woo AS id_producto, ldea.id_empleado,
-                           GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio,
-                               COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment)))) / 3600
+                           $tiempoHorasExpr
                            * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
                            / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_horas
                     FROM lotes_detalles_empleados_asignados ldea
@@ -749,8 +779,12 @@ return function (App $app) {
 
         try {
             $db = new LocalDB();
-            $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
-            $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
+            if (DB_DRIVER === 'pgsql') {
+                $dbEmpresas = new LocalDB('', LOCAL_DNS, LOCAL_USER, LOCAL_PASS);
+            } else {
+                $adminDNS = str_replace('127.0.0.1', 'localhost', EMPRESAS_DNS);
+                $dbEmpresas = new LocalDB('', $adminDNS, EMPRESAS_USER, EMPRESAS_PASS);
+            }
 
             // 1. Obtener detalles básicos del producto
             $productRaw = $db->goQuery("SELECT _id, product as nombre, sku, price as precio_venta FROM products WHERE _id = ?", [$id_producto]);
@@ -824,10 +858,21 @@ return function (App $app) {
             $teoricoTiempo = is_array($tiemposRaw) ? $tiemposRaw : [];
 
             // --- HISTORIAL DE DATOS REALES REGISTRADOS POR TALLA EN TALLER ---
+            $momentDateExpr = DB_DRIVER === 'pgsql' ? 'o.moment::date' : 'DATE(o.moment)';
+            $fechaCierreExpr = DB_DRIVER === 'pgsql'
+                ? "COALESCE(ldea.fecha_terminado, NULLIF(o.fecha_entrega, '')::date, o.fecha_creacion, o.moment::date)"
+                : "COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment))";
+            $tiempoSegundosExpr = DB_DRIVER === 'pgsql'
+                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)))"
+                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr))";
+            $tiempoHorasExpr = DB_DRIVER === 'pgsql'
+                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)) / 3600)"
+                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr) / 3600)";
+
             $params = [':id_producto' => $id_producto];
             $dateCond = "";
             if ($fecha_inicio && $fecha_fin) {
-                $dateCond = " AND DATE(o.moment) BETWEEN :fecha_inicio AND :fecha_fin ";
+                $dateCond = " AND $momentDateExpr BETWEEN :fecha_inicio AND :fecha_fin ";
                 $params['fecha_inicio'] = $fecha_inicio;
                 $params['fecha_fin'] = $fecha_fin;
             }
@@ -836,8 +881,8 @@ return function (App $app) {
             $dateCond1 = "";
             $dateCond2 = "";
             if ($fecha_inicio && $fecha_fin) {
-                $dateCond1 = " AND DATE(o.moment) BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
-                $dateCond2 = " AND DATE(o.moment) BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
+                $dateCond1 = " AND $momentDateExpr BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
+                $dateCond2 = " AND $momentDateExpr BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
                 $paramsUnion['fecha_inicio_1'] = $fecha_inicio;
                 $paramsUnion['fecha_fin_1'] = $fecha_fin;
                 $paramsUnion['fecha_inicio_2'] = $fecha_inicio;
@@ -867,8 +912,7 @@ return function (App $app) {
                 SELECT id_talla, SUM(total_tiempo) AS total_tiempo
                 FROM (
                     SELECT op.id_woo, op.id_size AS id_talla,
-                           GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio,
-                               COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment))))
+                           $tiempoSegundosExpr
                            * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
                            / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_tiempo
                     FROM lotes_detalles_empleados_asignados ldea
@@ -921,8 +965,7 @@ return function (App $app) {
                 SELECT id_talla, id_empleado, SUM(total_horas) AS total_horas
                 FROM (
                     SELECT op.id_woo, op.id_size AS id_talla, ldea.id_empleado,
-                           GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio,
-                               COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment)))) / 3600
+                           $tiempoHorasExpr
                            * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
                            / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_horas
                     FROM lotes_detalles_empleados_asignados ldea
