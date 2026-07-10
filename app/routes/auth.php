@@ -14,7 +14,7 @@ return function (App $app) {
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
         // Paso 1: Buscar usuario solo por email
-        $sql_user = 'SELECT id_usuario, email, `password`, nombre, telefono, departamento, id_empresa, activo, acceso, comision FROM empresas_usuarios WHERE email = ?';
+        $sql_user = 'SELECT id_usuario, email, password, nombre, telefono, departamento, id_empresa, activo, acceso, comision FROM empresas_usuarios WHERE email = ?';
         $object['debug'][] = 'Buscando usuario por email.';
         $credenciales = $localConnection->goQuery($sql_user, [$datosAcceso['email']]);
 
@@ -48,7 +48,7 @@ return function (App $app) {
         }
 
         // Paso 3: Obtener datos de la empresa
-        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, `db_name` FROM empresas WHERE id_empresa = ?';
+        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, db_name FROM empresas WHERE id_empresa = ?';
         $object['debug'][] = 'Obteniendo datos de la empresa.';
         $data_empresa = $localConnection->goQuery($sql_empresa, [$usuario_data['id_empresa']]);
 
@@ -367,7 +367,7 @@ return function (App $app) {
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
         // 1. Obtener datos del usuario
-        $sql_user = 'SELECT id_usuario, email, `password`, nombre, telefono, departamento, id_empresa, activo, acceso, comision FROM empresas_usuarios WHERE id_usuario = ?';
+        $sql_user = 'SELECT id_usuario, email, password, nombre, telefono, departamento, id_empresa, activo, acceso, comision FROM empresas_usuarios WHERE id_usuario = ?';
         $credenciales = $localConnection->goQuery($sql_user, [$id_usuario]);
 
         if (empty($credenciales)) {
@@ -379,7 +379,7 @@ return function (App $app) {
         $usuario_data = $credenciales[0];
 
         // 2. Obtener datos de la empresa
-        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, `db_name` FROM empresas WHERE id_empresa = ?';
+        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, db_name FROM empresas WHERE id_empresa = ?';
         $data_empresa = $localConnection->goQuery($sql_empresa, [$usuario_data['id_empresa']]);
 
         if (empty($data_empresa)) {
