@@ -1933,44 +1933,82 @@ return function (App $app) {
 
     $localConnection = new LocalDB();
     try {
-      // MODIFICADO: Se busca por id_departamento_actual y se quita el filtro de id_empleado
-      $sql = "SELECT
-              elf._id AS id,
-              elf.estado,
-              elf.fecha_inicio,
-              elf.fecha_fin,
-              (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = elf.id_empleado) AS nombre_empleado_creador,
-              (SELECT departamento FROM departamentos WHERE _id = elf.id_departamento_creador) AS nombre_departamento_creador,
-              GROUP_CONCAT(
-                  JSON_OBJECT(
-                      'id_orden', elfi.id_orden,
-                      'cliente_nombre', o.cliente_nombre
-                  )
-              ) AS ordenes
-          FROM
-              empleados_lotes_fabricacion elf
-          JOIN
-              empleados_lotes_fabricacion_items elfi ON elf._id = elfi.id_lote
-          JOIN
-              ordenes o ON elfi.id_orden = o._id
-          WHERE
-              -- elf.id_departamento_actual > 0 -- Hack para saltar el departamento del empelado y trascender el resultado a los demás departamentos
-              elf.id_departamento_creador = {$data['id_departamento']} 
-              AND
-              elf.id_empleado = {$data['id_empleado']} 
-              AND elf.estado IN ('pendiente', 'en_curso')
-          GROUP BY
-              elf._id, elf.estado, elf.fecha_inicio, elf.fecha_fin
-          ORDER BY
-              elf.fecha_inicio DESC, elf._id DESC
-      ";
+      if (DB_DRIVER === 'pgsql') {
+        $sql = "SELECT
+                elf._id AS id,
+                elf.estado,
+                elf.fecha_inicio,
+                elf.fecha_fin,
+                (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = elf.id_empleado) AS nombre_empleado_creador,
+                (SELECT departamento FROM departamentos WHERE _id = elf.id_departamento_creador) AS nombre_departamento_creador,
+                (
+                  SELECT json_agg(
+                    json_build_object(
+                      'id_orden', sub_elfi.id_orden,
+                      'cliente_nombre', sub_o.cliente_nombre
+                    )
+                  )::text
+                  FROM empleados_lotes_fabricacion_items sub_elfi
+                  JOIN ordenes sub_o ON sub_elfi.id_orden = sub_o._id
+                  WHERE sub_elfi.id_lote = elf._id
+                ) AS ordenes
+            FROM
+                empleados_lotes_fabricacion elf
+            WHERE
+                elf.id_departamento_creador = {$data['id_departamento']} 
+                AND
+                elf.id_empleado = {$data['id_empleado']} 
+                AND elf.estado IN ('pendiente', 'en_curso')
+            ORDER BY
+                elf.fecha_inicio DESC, elf._id DESC
+        ";
+      } else {
+        $sql = "SELECT
+                elf._id AS id,
+                elf.estado,
+                elf.fecha_inicio,
+                elf.fecha_fin,
+                (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = elf.id_empleado) AS nombre_empleado_creador,
+                (SELECT departamento FROM departamentos WHERE _id = elf.id_departamento_creador) AS nombre_departamento_creador,
+                GROUP_CONCAT(
+                    JSON_OBJECT(
+                        'id_orden', elfi.id_orden,
+                        'cliente_nombre', o.cliente_nombre
+                    )
+                ) AS ordenes
+            FROM
+                empleados_lotes_fabricacion elf
+            JOIN
+                empleados_lotes_fabricacion_items elfi ON elf._id = elfi.id_lote
+            JOIN
+                ordenes o ON elfi.id_orden = o._id
+            WHERE
+                -- elf.id_departamento_actual > 0 -- Hack para saltar el departamento del empelado y trascender el resultado a los demás departamentos
+                elf.id_departamento_creador = {$data['id_departamento']} 
+                AND
+                elf.id_empleado = {$data['id_empleado']} 
+                AND elf.estado IN ('pendiente', 'en_curso')
+            GROUP BY
+                elf._id, elf.estado, elf.fecha_inicio, elf.fecha_fin
+            ORDER BY
+                elf.fecha_inicio DESC, elf._id DESC
+        ";
+      }
 
       $params = [$id_departamento];
       // $query_result = $localConnection->goQuery($sql, $params);
       $query_result = $localConnection->goQuery($sql);
 
       foreach ($query_result as &$row) {
-        $row['ordenes'] = !empty($row['ordenes']) ? json_decode('[' . $row['ordenes'] . ']', true) : [];
+        if (!empty($row['ordenes'])) {
+          if (strpos($row['ordenes'], '[') === 0) {
+            $row['ordenes'] = json_decode($row['ordenes'], true);
+          } else {
+            $row['ordenes'] = json_decode('[' . $row['ordenes'] . ']', true);
+          }
+        } else {
+          $row['ordenes'] = [];
+        }
       }
 
       $response->getBody()->write(json_encode($query_result, JSON_NUMERIC_CHECK));
