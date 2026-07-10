@@ -57,16 +57,26 @@
 | `/ordenes-reporte-semanal/{fecha}` | GET | ✅ **Adaptado** | `WEEK`, `SUM` ORDER BY fix | ✅ HTTP 200 |
 | `/ordenes/borrador/reporte-semanal/{id}/{dep}` | GET | ✅ **Adaptado** | `YEARWEEK` | ✅ HTTP 200 |
 | `/table/ordenes-activas/{id}` | GET | ✅ **Adaptado** | `json_agg`/`json_build_object` (sustituto `GROUP_CONCAT` + `JSON_OBJECT`), `FIND_IN_SET` replacement, `COALESCE` | ✅ HTTP 200 |
-| `/table/ordenes-todas` | GET | ✅ **Adaptado** | `json_agg` replacement para categorías, `FIND_IN_SET` replacement | ✅ HTTP 200 |
-| `/table/ordenes-con-deuda` | GET | ✅ **Adaptado** | `TO_CHAR(moment)` | ✅ HTTP 200 |
-
-### 📁 `manufacturing.php`
+| `/table/ordenes-todas` | GET | ✅ **Adaptado** | `json_agg` replacement para categorías, `FIND_IN_SET` replacement | ✅ ### 📁 `manufacturing.php`
 
 | Endpoint | Método | Estado | Funciones adaptadas | Verificado |
 |---|---|---|---|---|
 | `/empleados/ordenes-asignadas/v2/...` | GET | ✅ **Adaptado** | `DATE_FORMAT(fecha_entrega)` condicional, `IF` ➔ `CASE WHEN`, `IFNULL` ➔ `COALESCE` | ✅ HTTP 200 |
 | `/sse/empleados/ordenes-asignadas/{id_empleado}` | GET | ✅ **Adaptado** | `DATE_FORMAT` condicional | — (SSE stream) |
 | `/empleados-todos` | GET | ✅ **Adaptado** | `GROUP_CONCAT` ➔ subconsulta string_agg, `IFNULL` | ✅ HTTP 200 |
+| `/rendimiento-empleado/{id_orden}/{id_departamento}/{id_empleado}` | GET | ✅ **Adaptado** | `TIMESTAMPDIFF(SECOND)` ➔ `EXTRACT(EPOCH)` | ✅ HTTP 200 |
+| `/reports/manufacturing-time` | GET | ✅ **Adaptado** | `TIMESTAMPDIFF` ➔ `EXTRACT(EPOCH)`, `GROUP BY` estricto corregido | ✅ HTTP 200 |
+| `/reports/manufacturing-time` | POST | ✅ **Adaptado** | CTE `TiemposCalculados` interval/extract, `IF` ➔ `CASE WHEN` en tarea_terminada, `$sqlDetalles` interval | ✅ HTTP 200 |
+
+### 📁 `production.php`
+
+| Endpoint | Método | Estado | Funciones adaptadas | Verificado |
+|---|---|---|---|---|
+| `/sse/produccion/ordenes-activas` | GET | ✅ **Adaptado** | `DATE_FORMAT` ➔ `TO_CHAR` | ✅ HTTP 200 |
+| `/sse/produccion` | GET | ✅ **Adaptado** | `DATE_FORMAT` ➔ `TO_CHAR`, `GROUP_CONCAT` ➔ subconsulta string_agg | ✅ HTTP 200 |
+| `/reposiciones-reporte/{estatus_orden}` | GET | ✅ **Adaptado** | `DATE` ➔ `::date`, `DATE_FORMAT` ➔ `TO_CHAR`, sumatoria de tintas Cyan/Magenta/Yellow/Black adaptada por id_color_tinta/cantidad, `GROUP BY` estricto corregido | ✅ HTTP 200 |
+| `/reposicion-detalles/{id_reposicion}` | GET | ✅ **Adaptado** | `DATE_FORMAT` ➔ `TO_CHAR`, unión de tintas individualizada por id_color_tinta y t.cantidad | ✅ HTTP 200 |
+| `/reposicion/excluir-departamento/{id_reposicion}` | POST | ✅ **Adaptado** | `INSERT IGNORE` ➔ `ON CONFLICT DO NOTHING` | ✅ HTTP 200 |
 
 ---
 
@@ -116,26 +126,11 @@
 
 ---
 
-### 📁 `manufacturing.php` — Pendientes (29 ocurrencias)
+### 📁 `manufacturing.php` — Pendientes (18 ocurrencias)
 
 | Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
 |---|---|---|---|---|
 | ~1944 | (ruta de manufactura) | GET | 🟡 | `GROUP_CONCAT` |
-| ~2820 | Tiempo por orden | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` ×2 |
-| ~3836 | Eficiencia producción | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` ×6 |
-| ~4132 | Reporte eficiencia extendido | GET | 🟡 | `TIMESTAMPDIFF(SECOND)` ×2 |
-
----
-
-### 📁 `production.php` — Pendientes (15 ocurrencias)
-
-| Línea | Endpoint | Método | Prio | Funciones MySQL a reemplazar |
-|---|---|---|---|---|
-| ~133 | Inicio de producción | GET | 🔴 | `DATE_FORMAT('%h:%i:%s %p')`, `DATE_FORMAT('%d-%m-%Y')` |
-| ~396 | Registro de momento | GET | 🔴 | `DATE_FORMAT('%d/%m/%Y')`, `DATE_FORMAT('%I:%i %p')` ×2 |
-| ~478 | Órdenes con insumos | GET | 🟡 | `IFNULL(CONCAT('[', GROUP_CONCAT...` |
-| ~982 | Reposiciones creadas | GET | 🟡 | `DATE_FORMAT('%d/%m/%Y')`, `DATE_FORMAT('%h:%i %p')` ×2 |
-| ~1032 | Consumo de tinta | GET | 🟡 | `DATE_FORMAT('%d/%m/%Y %h:%i %p')` ×5 |
 
 ---
 
@@ -189,25 +184,25 @@
 
 | Archivo | Total ocurrencias MySQL | Adaptadas | % |
 |---|---|---|---|
-| `employees.php` | 38 | 37 (5 endpoints) | **97%** ✅ |
+| `employees.php` | 38 | 37 (5 endpoints) | **97%** |
 | `tables.php` | 23 | 23 (6 endpoints) | **100%** ✅ |
-| `manufacturing.php` | 32 | 3 (3 endpoints) | **9%** |
+| `manufacturing.php` | 32 | 11 (6 endpoints) | **34%** |
 | `orders.php` | 46 | 0 | **0%** |
 | `payments.php` | 34 | 0 | **0%** |
 | `finance.php` | 22 | 0 | **0%** |
-| `production.php` | 15 | 0 | **0%** |
+| `production.php` | 15 | 15 (5 endpoints) | **100%** ✅ |
 | `reports.php` | 8 | 0 | **0%** |
 | `products_reports.php` | 6 | 0 | **0%** |
 | **Otros menores** | ~23 | 0 | **0%** |
-| **TOTAL** | **~247** | **~63** | **~25%** |
+| **TOTAL** | **~247** | **~86** | **~35%** |
 
 ---
 
 ## 🗺️ Orden de Trabajo Recomendado
 
 ### Fase 1 — Alta prioridad (interfaz activa) 
-1. `manufacturing.php` → endpoints de `fecha_entrega` y `departamentos` (avanzar los de eficiencia ~3836)
-2. `production.php` → inicio de producción, registro de momento
+1. `manufacturing.php` → endpoints de `fecha_entrega` y `departamentos` (avanzar los de eficiencia ~3836) [COMPLETADO]
+2. `production.php` → inicio de producción, registro de momento [COMPLETADO]
 
 ### Fase 2 — Pagos y finanzas
 3. `payments.php` → listado de pagos (usan `%a`, `%v` de DATE_FORMAT)
@@ -215,14 +210,13 @@
 5. `finance.php` → detalle de movimientos
 
 ### Fase 3 — Reportes
-6. `production.php` → consumo de tinta, reposiciones
-7. `orders.php` → reportes de órdenes y comercialización
-8. `reports.php` → reportes globales de eficiencia
-9. `products_reports.php` → costos de productos
-10. `manufacturing.php` → eficiencia de producción
+6. `orders.php` → reportes de órdenes y comercialización
+7. `reports.php` → reportes globales de eficiencia
+8. `products_reports.php` → costos de productos
+9. `manufacturing.php` → eficiencia de producción (restantes)
 
 ### Fase 4 — Baja prioridad
-11. `auth.php`, `buscar.php`, `catalogs.php`, `communications.php`, `msg_service.php`, `printers.php`, `administration.php`, `inventory.php`
+10. `auth.php`, `buscar.php`, `catalogs.php`, `communications.php`, `msg_service.php`, `printers.php`, `administration.php`, `inventory.php`
 
 ---
 
@@ -246,6 +240,16 @@
 ```bash
 # 1. Verificar rama correcta
 git -C /home/developer/Escritorio/niesys/ninesys-api branch
+
+# 2. Ver BDs en el VPS
+ssh vps-contabo-dev "su - postgres -c \"psql -l | grep api_\""
+
+# 3. Probar el último endpoint adaptado
+curl -s -H "Authorization: 194" "https://api.nineteengreen.com/reposiciones-reporte/activa?fecha_inicio=2026-07-01&fecha_fin=2026-07-10"
+
+# 4. Continuar adaptando payments.php (por ejemplo, buscar DATE_FORMAT en línea ~603)
+grep -n "DATE_FORMAT" /home/developer/Escritorio/niesys/ninesys-api/app/routes/payments.php
+```iesys/ninesys-api branch
 
 # 2. Ver BDs en el VPS
 ssh vps-contabo-dev "su - postgres -c \"psql -l | grep api_\""
