@@ -1,0 +1,42 @@
+# Bitácora de Tarea — 2026-07-10
+# Tarea: Adaptación del módulo de producción (production.php) para soporte PostgreSQL
+# Resultado: COMPLETADO Y VERIFICADO EN DESARROLLO
+
+## Resumen
+Se ha completado la adaptación para soporte dual de PostgreSQL y MariaDB de todos los endpoints de inicio, registro y consumo de producción de la Fase 1.
+
+## Trabajo Realizado
+
+### 1. Modificación de app/routes/production.php
+Se adaptaron condicionalmente a `DB_DRIVER === 'pgsql'` las siguientes rutas y consultas:
+
+- **GET `/sse/produccion/ordenes-activas`**
+  - Se sustituyó `DATE_FORMAT(fecha_inicio, ...)` por `TO_CHAR(fecha_inicio, ...)` para la hora y fecha en PostgreSQL.
+
+- **GET `/sse/produccion`**
+  - Se adaptaron las consultas de `reposiciones_solicitadas` y `reposiciones_en_curso` sustituyendo `DATE_FORMAT` por `TO_CHAR`.
+  - Se adaptó la consulta de `empleados` reescribiendo la agregación de departamentos basada en `GROUP_CONCAT` en MySQL como una subconsulta utilizando `string_agg` en PostgreSQL para cumplir la agregación estricta y resolver la relación.
+
+- **POST `/reposicion/excluir-departamento/{id_reposicion}`**
+  - Se sustituyó condicionalmente `INSERT IGNORE` por `ON CONFLICT DO NOTHING` en PostgreSQL.
+
+- **GET `/reposiciones-reporte/{estatus_orden}`**
+  - Se sustituyó `DATE(moment) BETWEEN ...` por `moment::date BETWEEN ...` en PostgreSQL.
+  - Se adaptaron `DATE_FORMAT` por `TO_CHAR` para la fecha y hora de creación.
+  - Se adaptó el cálculo del costo del material consumido de la tabla `tintas`, que hacía sumas directas de columnas `c`, `m`, `y`, `k` (las cuales no existen en el esquema estándar de Postgres), reescribiéndolo como una sumatoria ponderada por `CASE WHEN` sobre `id_color_tinta` y `cantidad`.
+  - Se corrigió la cláusula `GROUP BY` listando todas las columnas no agregadas presentes en el select para cumplir con la sintaxis de agrupación estricta de PostgreSQL.
+
+- **GET `/reposicion-detalles/{id_reposicion}`**
+  - Se adaptaron los formatos de fecha `DATE_FORMAT` a `TO_CHAR` para la unión de movimientos, tintas y pagos.
+  - Se adaptó la unión del consumo de tintas individuales Cyan, Magenta, Yellow y Black en el `UNION ALL` para PostgreSQL, filtrando por el correspondiente `id_color_tinta` (1, 2, 3, 4) y sumando la columna `cantidad` en lugar de las columnas no existentes `c`, `m`, `y`, `k`.
+
+## Pruebas de Validación
+Se verificó el funcionamiento en el VPS mediante curl para la empresa autorizada `194`:
+- `GET /sse/produccion/ordenes-activas` ➔ Retornó exitosamente datos estructurados sin errores SQL. ✅
+- `GET /sse/produccion/check-version` ➔ Retornó checksum exitosamente. ✅
+- `GET /sse/produccion` ➔ Retornó el listado de empleados con departamentos decodificados correctamente. ✅
+- `GET /reposiciones-reporte/activa?fecha_inicio=2026-07-01&fecha_fin=2026-07-10` ➔ Retornó exitosamente sin excepciones de columna o agrupamiento. ✅
+- `GET /reposicion-detalles/1` ➔ Retornó exitosamente la información del desglose. ✅
+
+## Archivos Modificados
+- [production.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/production.php)
