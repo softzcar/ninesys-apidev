@@ -1,41 +1,24 @@
 <?php
-require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../app/config/config.php';
-require __DIR__ . '/../app/model/LocalDB.php';
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
 
 header('Content-Type: text/plain');
 
-// Para simular la resolución de empresas en index.php
+try {
+    require __DIR__ . '/../vendor/autoload.php';
+    require __DIR__ . '/../app/config.php';
+    require __DIR__ . '/../app/model/LocalDB.php';
+} catch (Throwable $t) {
+    die("Error en requires: " . $t->getMessage() . " en " . $t->getFile() . ":" . $t->getLine() . "\n");
+}
+
 $company = '194';
 if (!defined('ID_EMPRESA')) {
     define('ID_EMPRESA', $company);
 }
 if (!defined('LOCAL_DB')) {
     define('LOCAL_DB', 'api_emp_' . $company);
-}
-
-// Configurar constantes de base de datos manualmente para pruebas rápidas
-// replicando la lógica del middleware de resolución de base de datos
-$driver = getenv('DB_DRIVER') ?: 'mysql';
-define('DB_DRIVER', $driver);
-
-// Leer configuración para DSN
-$host = getenv('DB_HOST') ?: '127.0.0.1';
-$port = getenv('DB_PORT') ?: ($driver === 'pgsql' ? '5432' : '3306');
-$user = getenv('DB_USER') ?: 'root';
-$pass = getenv('DB_PASS') ?: '';
-$dbname = 'api_emp_' . $company;
-
-if ($driver === 'pgsql') {
-    $dsn = "pgsql:host=$host;port=$port;dbname=$dbname";
-} else {
-    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
-}
-
-if (!defined('LOCAL_DNS')) {
-    define('LOCAL_DNS', $dsn);
-    define('LOCAL_USER', $user);
-    define('LOCAL_PASS', $pass);
 }
 
 try {
@@ -50,6 +33,6 @@ try {
         $q = $db->goQuery("DESCRIBE tintas");
         print_r($q);
     }
-} catch (Exception $e) {
-    echo "Error: " . $e->getMessage() . "\n";
+} catch (Throwable $e) {
+    echo "Error ejecutando query: " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n";
 }
