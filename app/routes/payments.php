@@ -1147,10 +1147,10 @@ return function (App $app) {
               LEFT JOIN metodos_de_pago e ON
                   e._id = a.id_metodos_de_pago
               WHERE
-                  a.id_empleado = {$args['id_vendedoor']} AND 
+                  a.id_empleado = {$args['id_vendedoor']} AND
                   a.fecha_pago IS NULL
               GROUP BY
-                  a._id, c.nombre, d.pago_abono, e.monto, d.status, e.tipo_de_pago
+                  a._id, c.nombre, d.pago_abono, e.monto, d.status, e.tipo_de_pago, d._id
               ORDER BY
                   d._id ASC,
                   a._id DESC";
