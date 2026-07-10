@@ -522,7 +522,7 @@ return function (App $app) {
         if (DB_DRIVER === 'pgsql') {
             $sql = "SELECT
                 a._id AS id_asistencias,
-                e._id AS id_empleado,
+                e.id_usuario AS id_empleado,
                 e.nombre AS empleado,
                 TO_CHAR(a.moment, 'HH24:MI') AS hora,
                 TO_CHAR(a.moment, 'DD/MM/YYYY') AS fecha,
@@ -778,7 +778,7 @@ return function (App $app) {
         // REPORTE DETALLADO
         if (DB_DRIVER === 'pgsql') {
             $sql = "SELECT
-                b._id AS id_empleado,
+                b.id_usuario AS id_empleado,
                 b.nombre,
                 TO_CHAR(a.moment, 'DD/MM/YYYY') AS fecha,
                 TO_CHAR(a.moment, 'HH12:MI AM') AS hora,
