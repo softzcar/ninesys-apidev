@@ -369,14 +369,14 @@ return function (App $app) {
     $sql['orden_personas'] = "SELECT * FROM ordenes_personas WHERE id_order = '" . $id . "'";
     $sql['ordeen_personas_productos'] = "SELECT a._id, a.id_orden, a.idp, a.prodcuto, a.cantidad, a.talla, a.tela, a.detalles, b.nombre FROM ordenes_personas_productos a JOIN ordenes_personas b ON a.idp = b.idp WHERE id_orden = '" . $id . "'";
     $sql['orden_productos'] = "SELECT _id, id_woo, name FROM ordenes_productos WHERE id_orden = '" . $id . "'";
-    $sql['orden_empleados']['diseno'] = "SELECT b.username nombre, b._id FROM ordenes a JOIN empleados b ON a.dep_diseno = b._id WHERE a._id = '" . $id . "'";
-    $sql['orden_empleados']['corte'] = "SELECT b.username nombre, b._id FROM ordenes a JOIN empleados b ON a.dep_corte = b._id WHERE a._id = '" . $id . "'";
-    $sql['orden_empleados']['impresion'] = "SELECT b.username nombre, b._id FROM ordenes a JOIN empleados b ON a.dep_impresion = b._id WHERE a._id = '" . $id . "'";
-    $sql['orden_empleados']['estampado'] = "SELECT b.username nombre, b._id FROM ordenes a JOIN empleados b ON a.dep_estampado = b._id WHERE a._id = '" . $id . "'";
-    $sql['orden_empleados']['confeccion'] = "SELECT b.username nombre, b._id FROM ordenes a JOIN empleados b ON a.dep_confeccion = b._id WHERE a._id = '" . $id . "'";
-    $sql['orden_empleados']['revision'] = "SELECT b.username nombre, b._id FROM ordenes a JOIN empleados b ON a.dep_revision = b._id WHERE a._id = '" . $id . "'";
-    $sql['orden_empleados']['responsable'] = "SELECT b.username nombre, b._id FROM ordenes a JOIN empleados b ON a.dep_responsable = b._id WHERE a._id = '" . $id . "'";
-    $sql['orden_empleados']['diseno'] = "SELECT b.username nombre, b._id FROM ordenes a JOIN empleados b ON a.dep_diseno = b._id WHERE a._id = '" . $id . "'";
+    $sql['orden_empleados']['diseno'] = "SELECT b.nombre nombre, b.id_usuario _id FROM ordenes a JOIN api_empresas.empresas_usuarios b ON a.dep_diseno = b.id_usuario WHERE a._id = '" . $id . "'";
+    $sql['orden_empleados']['corte'] = "SELECT b.nombre nombre, b.id_usuario _id FROM ordenes a JOIN api_empresas.empresas_usuarios b ON a.dep_corte = b.id_usuario WHERE a._id = '" . $id . "'";
+    $sql['orden_empleados']['impresion'] = "SELECT b.nombre nombre, b.id_usuario _id FROM ordenes a JOIN api_empresas.empresas_usuarios b ON a.dep_impresion = b.id_usuario WHERE a._id = '" . $id . "'";
+    $sql['orden_empleados']['estampado'] = "SELECT b.nombre nombre, b.id_usuario _id FROM ordenes a JOIN api_empresas.empresas_usuarios b ON a.dep_estampado = b.id_usuario WHERE a._id = '" . $id . "'";
+    $sql['orden_empleados']['confeccion'] = "SELECT b.nombre nombre, b.id_usuario _id FROM ordenes a JOIN api_empresas.empresas_usuarios b ON a.dep_confeccion = b.id_usuario WHERE a._id = '" . $id . "'";
+    $sql['orden_empleados']['revision'] = "SELECT b.nombre nombre, b.id_usuario _id FROM ordenes a JOIN api_empresas.empresas_usuarios b ON a.dep_revision = b.id_usuario WHERE a._id = '" . $id . "'";
+    $sql['orden_empleados']['responsable'] = "SELECT b.nombre nombre, b.id_usuario _id FROM ordenes a JOIN api_empresas.empresas_usuarios b ON a.dep_responsable = b.id_usuario WHERE a._id = '" . $id . "'";
+    $sql['orden_empleados']['diseno'] = "SELECT b.nombre nombre, b.id_usuario _id FROM ordenes a JOIN api_empresas.empresas_usuarios b ON a.dep_diseno = b.id_usuario WHERE a._id = '" . $id . "'";
     $sql['orden_productos_cantidad'] = "SELECT a.cantidad, a.prodcuto,. a.idp FROM ordenes_personas_productos a WHERE  id_orden = '" . $id . "'";
     $sql['lotes_detalles'] = 'SELECT producto, unidades_solicitadas, unidades_restantes, departamento, id_orden FROM lotes_detalles WHERE id_orden = ' . $id;
 
