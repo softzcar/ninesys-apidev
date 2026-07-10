@@ -2812,22 +2812,41 @@ return function (App $app) {
   $app->get('/rendimiento-empleado/{id_orden}/{id_departamento}/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "SELECT DISTINCT
-                a._id id_lote_Detalles,
-                a.id_orden,
-                a.fecha_inicio,
-                a.fecha_terminado,
-                TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) AS tiempo_empleado,
-                c.tiempo tiempo_estimado_de_produccion,
-                (TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) - c.tiempo) rendimiento,
-                b.id_woo id_producto,
-                b.talla
-            FROM
-                lotes_detalles_empleados_asignados a
-            JOIN ordenes_productos b ON b.id_orden = a.id_orden
-            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
-            WHERE a.id_orden = {$args['id_orden']} AND a.id_empleado = {$args['id_empleado']}
-        ";
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT DISTINCT
+                  a._id id_lote_Detalles,
+                  a.id_orden,
+                  a.fecha_inicio,
+                  a.fecha_terminado,
+                  EXTRACT(EPOCH FROM (a.fecha_terminado - a.fecha_inicio)) AS tiempo_empleado,
+                  c.tiempo tiempo_estimado_de_produccion,
+                  (EXTRACT(EPOCH FROM (a.fecha_terminado - a.fecha_inicio)) - c.tiempo) rendimiento,
+                  b.id_woo id_producto,
+                  b.talla
+              FROM
+                  lotes_detalles_empleados_asignados a
+              JOIN ordenes_productos b ON b.id_orden = a.id_orden
+              JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
+              WHERE a.id_orden = {$args['id_orden']} AND a.id_empleado = {$args['id_empleado']}
+          ";
+    } else {
+      $sql = "SELECT DISTINCT
+                  a._id id_lote_Detalles,
+                  a.id_orden,
+                  a.fecha_inicio,
+                  a.fecha_terminado,
+                  TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) AS tiempo_empleado,
+                  c.tiempo tiempo_estimado_de_produccion,
+                  (TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) - c.tiempo) rendimiento,
+                  b.id_woo id_producto,
+                  b.talla
+              FROM
+                  lotes_detalles_empleados_asignados a
+              JOIN ordenes_productos b ON b.id_orden = a.id_orden
+              JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
+              WHERE a.id_orden = {$args['id_orden']} AND a.id_empleado = {$args['id_empleado']}
+          ";
+    }
 
     $rspRendimientoTiempo = $localConnection->goQuery($sql);
     $object['rendimiento'] = $rspRendimientoTiempo;
@@ -3893,100 +3912,198 @@ return function (App $app) {
       }
 
       // Define Real Time Calculation Logic
-      if ($id_empleado) {
-        $realTimeCalculationTerminado = "
-            COALESCE(
-                 (SELECT SUM(
-                    CASE 
-                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
-                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
-                        ELSE 0 
-                    END
-                    / 
-                    CASE 
-                        WHEN sub_ldea.id_lotes_detalles IS NULL THEN 
-                            (SELECT COUNT(*) FROM lotes_detalles ld_count WHERE ld_count.id_orden = sub_ldea.id_orden AND ld_count.id_departamento = sub_ldea.id_departamento)
-                        ELSE 1
-                    END
-                 )
-                 FROM lotes_detalles_empleados_asignados sub_ldea 
-                 WHERE (sub_ldea.id_lotes_detalles = ld._id 
-                    OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento))
-                 AND sub_ldea.id_empleado = $id_empleado
-                 ), 
-                0
-            )
-          ";
+      if (DB_DRIVER === 'pgsql') {
+        if ($id_empleado) {
+          $realTimeCalculationTerminado = "
+              COALESCE(
+                   (SELECT SUM(
+                      CASE 
+                          WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                              EXTRACT(EPOCH FROM (sub_ldea.fecha_terminado - sub_ldea.fecha_inicio))
+                          ELSE 0 
+                      END
+                      / 
+                      CASE 
+                          WHEN sub_ldea.id_lotes_detalles IS NULL THEN 
+                              (SELECT COUNT(*) FROM lotes_detalles ld_count WHERE ld_count.id_orden = sub_ldea.id_orden AND ld_count.id_departamento = sub_ldea.id_departamento)
+                          ELSE 1
+                      END
+                   )
+                   FROM lotes_detalles_empleados_asignados sub_ldea 
+                   WHERE (sub_ldea.id_lotes_detalles = ld._id 
+                      OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento))
+                   AND sub_ldea.id_empleado = $id_empleado
+                   ), 
+                  0
+              )
+            ";
 
-        $realTimeCalculationEnCurso = "
-            COALESCE(
-                 (SELECT SUM(
-                    CASE 
-                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
-                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
-                        ELSE 0 
-                    END
-                    / 
-                    CASE 
-                        WHEN sub_ldea.id_lotes_detalles IS NULL THEN 
-                            (SELECT COUNT(*) FROM lotes_detalles ld_count WHERE ld_count.id_orden = sub_ldea.id_orden AND ld_count.id_departamento = sub_ldea.id_departamento)
-                        ELSE 1
-                    END
-                 )
-                 FROM lotes_detalles_empleados_asignados sub_ldea 
-                 WHERE (sub_ldea.id_lotes_detalles = ld._id 
-                    OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento))
-                 AND sub_ldea.id_empleado = $id_empleado
-                 ), 
-                0
-            )
-          ";
+          $realTimeCalculationEnCurso = "
+              COALESCE(
+                   (SELECT SUM(
+                      CASE 
+                          WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                              EXTRACT(EPOCH FROM (NOW() - sub_ldea.fecha_inicio))
+                          ELSE 0 
+                      END
+                      / 
+                      CASE 
+                          WHEN sub_ldea.id_lotes_detalles IS NULL THEN 
+                              (SELECT COUNT(*) FROM lotes_detalles ld_count WHERE ld_count.id_orden = sub_ldea.id_orden AND ld_count.id_departamento = sub_ldea.id_departamento)
+                          ELSE 1
+                      END
+                   )
+                   FROM lotes_detalles_empleados_asignados sub_ldea 
+                   WHERE (sub_ldea.id_lotes_detalles = ld._id 
+                      OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento))
+                   AND sub_ldea.id_empleado = $id_empleado
+                   ), 
+                  0
+              )
+            ";
+        } else {
+          $realTimeCalculationTerminado = "
+              (CASE 
+                  WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
+                      EXTRACT(EPOCH FROM (ld.fecha_terminado - ld.fecha_inicio))
+                  ELSE 
+                      COALESCE(
+                           (SELECT SUM(
+                              CASE 
+                                  WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                                      EXTRACT(EPOCH FROM (sub_ldea.fecha_terminado - sub_ldea.fecha_inicio))
+                                  ELSE 0 
+                              END
+                           )
+                           FROM lotes_detalles_empleados_asignados sub_ldea 
+                           WHERE sub_ldea.id_lotes_detalles = ld._id 
+                              OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
+                          0
+                      )
+              END
+              / 
+              (SELECT COUNT(*) FROM lotes_detalles ld_div WHERE ld_div.id_orden = ld.id_orden AND ld_div.id_departamento = ld.id_departamento))
+            ";
+
+          $realTimeCalculationEnCurso = "
+              (CASE 
+                  WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
+                      EXTRACT(EPOCH FROM (NOW() - ld.fecha_inicio))
+                  ELSE 
+                      COALESCE(
+                           (SELECT SUM(
+                              CASE 
+                                  WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                                      EXTRACT(EPOCH FROM (NOW() - sub_ldea.fecha_inicio))
+                                  ELSE 0 
+                              END
+                           )
+                           FROM lotes_detalles_empleados_asignados sub_ldea 
+                           WHERE sub_ldea.id_lotes_detalles = ld._id 
+                              OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
+                          0
+                      )
+              END
+              / 
+              (SELECT COUNT(*) FROM lotes_detalles ld_div WHERE ld_div.id_orden = ld.id_orden AND ld_div.id_departamento = ld.id_departamento))
+            ";
+        }
       } else {
-        $realTimeCalculationTerminado = "
-            (CASE 
-                WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
-                    TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
-                ELSE 
-                    COALESCE(
-                         (SELECT SUM(
-                            CASE 
-                                WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
-                                    TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
-                                ELSE 0 
-                            END
-                         )
-                         FROM lotes_detalles_empleados_asignados sub_ldea 
-                         WHERE sub_ldea.id_lotes_detalles = ld._id 
-                            OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
-                        0
-                    )
-            END
-            / 
-            (SELECT COUNT(*) FROM lotes_detalles ld_div WHERE ld_div.id_orden = ld.id_orden AND ld_div.id_departamento = ld.id_departamento))
-          ";
+        if ($id_empleado) {
+          $realTimeCalculationTerminado = "
+              COALESCE(
+                   (SELECT SUM(
+                      CASE 
+                          WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                              TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                          ELSE 0 
+                      END
+                      / 
+                      CASE 
+                          WHEN sub_ldea.id_lotes_detalles IS NULL THEN 
+                              (SELECT COUNT(*) FROM lotes_detalles ld_count WHERE ld_count.id_orden = sub_ldea.id_orden AND ld_count.id_departamento = sub_ldea.id_departamento)
+                          ELSE 1
+                      END
+                   )
+                   FROM lotes_detalles_empleados_asignados sub_ldea 
+                   WHERE (sub_ldea.id_lotes_detalles = ld._id 
+                      OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento))
+                   AND sub_ldea.id_empleado = $id_empleado
+                   ), 
+                  0
+              )
+            ";
 
-        $realTimeCalculationEnCurso = "
-            (CASE 
-                WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
-                    TIMESTAMPDIFF(SECOND, ld.fecha_inicio, NOW())
-                ELSE 
-                    COALESCE(
-                         (SELECT SUM(
-                            CASE 
-                                WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
-                                    TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
-                                ELSE 0 
-                            END
-                         )
-                         FROM lotes_detalles_empleados_asignados sub_ldea 
-                         WHERE sub_ldea.id_lotes_detalles = ld._id 
-                            OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
-                        0
-                    )
-            END
-            / 
-            (SELECT COUNT(*) FROM lotes_detalles ld_div WHERE ld_div.id_orden = ld.id_orden AND ld_div.id_departamento = ld.id_departamento))
-          ";
+          $realTimeCalculationEnCurso = "
+              COALESCE(
+                   (SELECT SUM(
+                      CASE 
+                          WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                              TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
+                          ELSE 0 
+                      END
+                      / 
+                      CASE 
+                          WHEN sub_ldea.id_lotes_detalles IS NULL THEN 
+                              (SELECT COUNT(*) FROM lotes_detalles ld_count WHERE ld_count.id_orden = sub_ldea.id_orden AND ld_count.id_departamento = sub_ldea.id_departamento)
+                          ELSE 1
+                      END
+                   )
+                   FROM lotes_detalles_empleados_asignados sub_ldea 
+                   WHERE (sub_ldea.id_lotes_detalles = ld._id 
+                      OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento))
+                   AND sub_ldea.id_empleado = $id_empleado
+                   ), 
+                  0
+              )
+            ";
+        } else {
+          $realTimeCalculationTerminado = "
+              (CASE 
+                  WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NOT NULL THEN 
+                      TIMESTAMPDIFF(SECOND, ld.fecha_inicio, ld.fecha_terminado)
+                  ELSE 
+                      COALESCE(
+                           (SELECT SUM(
+                              CASE 
+                                  WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL THEN 
+                                      TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                                  ELSE 0 
+                              END
+                           )
+                           FROM lotes_detalles_empleados_asignados sub_ldea 
+                           WHERE sub_ldea.id_lotes_detalles = ld._id 
+                              OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
+                          0
+                      )
+              END
+              / 
+              (SELECT COUNT(*) FROM lotes_detalles ld_div WHERE ld_div.id_orden = ld.id_orden AND ld_div.id_departamento = ld.id_departamento))
+            ";
+
+          $realTimeCalculationEnCurso = "
+              (CASE 
+                  WHEN ld.fecha_inicio IS NOT NULL AND ld.fecha_terminado IS NULL THEN 
+                      TIMESTAMPDIFF(SECOND, ld.fecha_inicio, NOW())
+                  ELSE 
+                      COALESCE(
+                           (SELECT SUM(
+                              CASE 
+                                  WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN 
+                                      TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
+                                  ELSE 0 
+                              END
+                           )
+                           FROM lotes_detalles_empleados_asignados sub_ldea 
+                           WHERE sub_ldea.id_lotes_detalles = ld._id 
+                              OR (sub_ldea.id_lotes_detalles IS NULL AND sub_ldea.id_orden = ld.id_orden AND sub_ldea.id_departamento = ld.id_departamento)), 
+                          0
+                      )
+              END
+              / 
+              (SELECT COUNT(*) FROM lotes_detalles ld_div WHERE ld_div.id_orden = ld.id_orden AND ld_div.id_departamento = ld.id_departamento))
+            ";
+        }
       }
 
       $sql = "SELECT 
@@ -4188,109 +4305,211 @@ return function (App $app) {
                 )";
       }
 
-      $sql = "
-        WITH TiemposCalculados AS (
-            SELECT
-                sub_ldea.id_orden,
-                SUM(
-                    CASE
-                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND sub_ldea.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN
-                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
-                        ELSE 0
-                    END
-                ) AS tiempo_terminado,
-                SUM(
-                    CASE
-                        WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN
-                            TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
-                        ELSE 0
-                    END
-                ) AS tiempo_en_curso
-            FROM lotes_detalles_empleados_asignados sub_ldea
-            WHERE sub_ldea.id_orden IN ($idsStr)
-            $empleadoCondition
-            AND sub_ldea.fecha_inicio IS NOT NULL
-            AND sub_ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-            GROUP BY sub_ldea.id_orden
-        )
-        SELECT
-            o._id AS id_orden,
-            o.status,
-            op.name AS producto,
-            op.cantidad,
+      if (DB_DRIVER === 'pgsql') {
+        $sql = "
+          WITH TiemposCalculados AS (
+              SELECT
+                  sub_ldea.id_orden,
+                  SUM(
+                      CASE
+                          WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND sub_ldea.fecha_terminado >= CURRENT_DATE - INTERVAL '7 days' THEN
+                              EXTRACT(EPOCH FROM (sub_ldea.fecha_terminado - sub_ldea.fecha_inicio))
+                          ELSE 0
+                      END
+                  ) AS tiempo_terminado,
+                  SUM(
+                      CASE
+                          WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN
+                              EXTRACT(EPOCH FROM (NOW() - sub_ldea.fecha_inicio))
+                          ELSE 0
+                      END
+                  ) AS tiempo_en_curso
+              FROM lotes_detalles_empleados_asignados sub_ldea
+              WHERE sub_ldea.id_orden IN ($idsStr)
+              $empleadoCondition
+              AND sub_ldea.fecha_inicio IS NOT NULL
+              AND sub_ldea.fecha_inicio >= CURRENT_DATE - INTERVAL '7 days'
+              GROUP BY sub_ldea.id_orden
+          )
+          SELECT
+              o._id AS id_orden,
+              o.status,
+              op.name AS producto,
+              op.cantidad,
+  
+              -- Tiempos Reales (divididos por productos físicos para balancear la suma agrupada)
+              COALESCE(tc.tiempo_terminado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealTerminadas,
+              COALESCE(tc.tiempo_en_curso, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealEnCurso,
+  
+              -- Tiempos Proyectados (filtrados por departamento cuando se especifica)
+              (
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  FROM products_tiempos_de_produccion ptp_sub
+                  WHERE ptp_sub.id_product = op.id_woo
+                  AND ptp_sub.id_departamento $deptProjTerminadas
+              ) AS totalProjectedTerminadas,
+  
+              (
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  FROM products_tiempos_de_produccion ptp_sub
+                  WHERE ptp_sub.id_product = op.id_woo
+                  AND ptp_sub.id_departamento $deptProjEnCurso
+              ) AS totalProjectedEnCurso,
+  
+              -- Legacy / Totales
+              (COALESCE(tc.tiempo_terminado, 0) + COALESCE(tc.tiempo_en_curso, 0)) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
+              (
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  FROM products_tiempos_de_produccion ptp_sub
+                  WHERE ptp_sub.id_product = op.id_woo
+                  AND ptp_sub.id_departamento $deptProjTotal
+              ) AS tiempo_proyectado_segundos,
+  
+              (
+                  SELECT MIN(fecha_inicio)
+                  FROM lotes_detalles_empleados_asignados ldea_start
+                  WHERE ldea_start.id_orden = o._id
+              ) AS fecha_inicio_primer_proceso,
+              (
+                  SELECT CASE WHEN COUNT(*) > 0 AND COUNT(*) = SUM(CASE WHEN fecha_terminado IS NOT NULL THEN 1 ELSE 0 END) THEN 1 ELSE 0 END
+                  FROM lotes_detalles_empleados_asignados ldea_check
+                  WHERE ldea_check.id_orden = o._id
+                    AND ldea_check.fecha_inicio IS NOT NULL
+                    " . ($id_empleado ? "AND ldea_check.id_empleado = $id_empleado" : "") . "
+                    " . ($id_departamento ? "AND ldea_check.id_departamento = $id_departamento" : "") . "
+              ) AS tarea_terminada
+          FROM 
+              ordenes o
+          JOIN 
+              ordenes_productos op ON op.id_orden = o._id
+          JOIN
+              products p_main ON p_main._id = op.id_woo AND p_main.fisico = 1
+          LEFT JOIN 
+              TiemposCalculados tc ON tc.id_orden = o._id
+          $whereClause
+          ORDER BY 
+              o._id DESC
+          LIMIT $limit
+        ";
 
-            -- Tiempos Reales (divididos por productos físicos para balancear la suma agrupada)
-            COALESCE(tc.tiempo_terminado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealTerminadas,
-            COALESCE(tc.tiempo_en_curso, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealEnCurso,
+        $sqlDetalles = "
+          SELECT 
+              ldea.id_orden,
+              ldea.fecha_inicio,
+              ldea.fecha_terminado,
+              ldea.id_departamento
+          FROM lotes_detalles_empleados_asignados ldea
+          JOIN ordenes o ON o._id = ldea.id_orden
+          $whereClause
+          " . ($id_empleado ? " AND ldea.id_empleado = $id_empleado" : "") . "
+          AND ldea.fecha_inicio IS NOT NULL
+          AND ldea.fecha_inicio >= CURRENT_DATE - INTERVAL '30 days'
+          ORDER BY ldea.fecha_inicio DESC
+        ";
+      } else {
+        $sql = "
+          WITH TiemposCalculados AS (
+              SELECT
+                  sub_ldea.id_orden,
+                  SUM(
+                      CASE
+                          WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NOT NULL AND sub_ldea.fecha_terminado >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN
+                              TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, sub_ldea.fecha_terminado)
+                          ELSE 0
+                      END
+                  ) AS tiempo_terminado,
+                  SUM(
+                      CASE
+                          WHEN sub_ldea.fecha_inicio IS NOT NULL AND sub_ldea.fecha_terminado IS NULL THEN
+                              TIMESTAMPDIFF(SECOND, sub_ldea.fecha_inicio, NOW())
+                          ELSE 0
+                      END
+                  ) AS tiempo_en_curso
+              FROM lotes_detalles_empleados_asignados sub_ldea
+              WHERE sub_ldea.id_orden IN ($idsStr)
+              $empleadoCondition
+              AND sub_ldea.fecha_inicio IS NOT NULL
+              AND sub_ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+              GROUP BY sub_ldea.id_orden
+          )
+          SELECT
+              o._id AS id_orden,
+              o.status,
+              op.name AS producto,
+              op.cantidad,
+  
+              -- Tiempos Reales (divididos por productos físicos para balancear la suma agrupada)
+              COALESCE(tc.tiempo_terminado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealTerminadas,
+              COALESCE(tc.tiempo_en_curso, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealEnCurso,
+  
+              -- Tiempos Proyectados (filtrados por departamento cuando se especifica)
+              (
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  FROM products_tiempos_de_produccion ptp_sub
+                  WHERE ptp_sub.id_product = op.id_woo
+                  AND ptp_sub.id_departamento $deptProjTerminadas
+              ) AS totalProjectedTerminadas,
+  
+              (
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  FROM products_tiempos_de_produccion ptp_sub
+                  WHERE ptp_sub.id_product = op.id_woo
+                  AND ptp_sub.id_departamento $deptProjEnCurso
+              ) AS totalProjectedEnCurso,
+  
+              -- Legacy / Totales
+              (COALESCE(tc.tiempo_terminado, 0) + COALESCE(tc.tiempo_en_curso, 0)) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
+              (
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  FROM products_tiempos_de_produccion ptp_sub
+                  WHERE ptp_sub.id_product = op.id_woo
+                  AND ptp_sub.id_departamento $deptProjTotal
+              ) AS tiempo_proyectado_segundos,
+  
+              (
+                  SELECT MIN(fecha_inicio)
+                  FROM lotes_detalles_empleados_asignados ldea_start
+                  WHERE ldea_start.id_orden = o._id
+              ) AS fecha_inicio_primer_proceso,
+              (
+                  SELECT IF(COUNT(*) > 0 AND COUNT(*) = SUM(IF(fecha_terminado IS NOT NULL, 1, 0)), 1, 0)
+                  FROM lotes_detalles_empleados_asignados ldea_check
+                  WHERE ldea_check.id_orden = o._id
+                    AND ldea_check.fecha_inicio IS NOT NULL
+                    " . ($id_empleado ? "AND ldea_check.id_empleado = $id_empleado" : "") . "
+                    " . ($id_departamento ? "AND ldea_check.id_departamento = $id_departamento" : "") . "
+              ) AS tarea_terminada
+          FROM 
+              ordenes o
+          JOIN 
+              ordenes_productos op ON op.id_orden = o._id
+          JOIN
+              products p_main ON p_main._id = op.id_woo AND p_main.fisico = 1
+          LEFT JOIN 
+              TiemposCalculados tc ON tc.id_orden = o._id
+          $whereClause
+          ORDER BY 
+              o._id DESC
+          LIMIT $limit
+        ";
 
-            -- Tiempos Proyectados (filtrados por departamento cuando se especifica)
-            (
-                SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
-                FROM products_tiempos_de_produccion ptp_sub
-                WHERE ptp_sub.id_product = op.id_woo
-                AND ptp_sub.id_departamento $deptProjTerminadas
-            ) AS totalProjectedTerminadas,
-
-            (
-                SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
-                FROM products_tiempos_de_produccion ptp_sub
-                WHERE ptp_sub.id_product = op.id_woo
-                AND ptp_sub.id_departamento $deptProjEnCurso
-            ) AS totalProjectedEnCurso,
-
-            -- Legacy / Totales
-            (COALESCE(tc.tiempo_terminado, 0) + COALESCE(tc.tiempo_en_curso, 0)) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
-            (
-                SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
-                FROM products_tiempos_de_produccion ptp_sub
-                WHERE ptp_sub.id_product = op.id_woo
-                AND ptp_sub.id_departamento $deptProjTotal
-            ) AS tiempo_proyectado_segundos,
-
-            (
-                SELECT MIN(fecha_inicio)
-                FROM lotes_detalles_empleados_asignados ldea_start
-                WHERE ldea_start.id_orden = o._id
-            ) AS fecha_inicio_primer_proceso,
-            (
-                SELECT IF(COUNT(*) > 0 AND COUNT(*) = SUM(IF(fecha_terminado IS NOT NULL, 1, 0)), 1, 0)
-                FROM lotes_detalles_empleados_asignados ldea_check
-                WHERE ldea_check.id_orden = o._id
-                  AND ldea_check.fecha_inicio IS NOT NULL
-                  " . ($id_empleado ? "AND ldea_check.id_empleado = $id_empleado" : "") . "
-                  " . ($id_departamento ? "AND ldea_check.id_departamento = $id_departamento" : "") . "
-            ) AS tarea_terminada
-        FROM 
-            ordenes o
-        JOIN 
-            ordenes_productos op ON op.id_orden = o._id
-        JOIN
-            products p_main ON p_main._id = op.id_woo AND p_main.fisico = 1
-        LEFT JOIN 
-            TiemposCalculados tc ON tc.id_orden = o._id
-        $whereClause
-        ORDER BY 
-            o._id DESC
-        LIMIT $limit
-      ";
-
-      $dataResumen = $localConnection->goQuery($sql);
-
-      $sqlDetalles = "
-        SELECT 
-            ldea.id_orden,
-            ldea.fecha_inicio,
-            ldea.fecha_terminado,
-            ldea.id_departamento
-        FROM lotes_detalles_empleados_asignados ldea
-        JOIN ordenes o ON o._id = ldea.id_orden
-        $whereClause
-        " . ($id_empleado ? " AND ldea.id_empleado = $id_empleado" : "") . "
-        AND ldea.fecha_inicio IS NOT NULL
-        AND ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-        ORDER BY ldea.fecha_inicio DESC
-      ";
+        $sqlDetalles = "
+          SELECT 
+              ldea.id_orden,
+              ldea.fecha_inicio,
+              ldea.fecha_terminado,
+              ldea.id_departamento
+          FROM lotes_detalles_empleados_asignados ldea
+          JOIN ordenes o ON o._id = ldea.id_orden
+          $whereClause
+          " . ($id_empleado ? " AND ldea.id_empleado = $id_empleado" : "") . "
+          AND ldea.fecha_inicio IS NOT NULL
+          AND ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+          ORDER BY ldea.fecha_inicio DESC
+        ";
+      }
       
+      $dataResumen = $localConnection->goQuery($sql);
       $dataDetalles = $localConnection->goQuery($sqlDetalles);
       
       file_put_contents('/tmp/gemini_debug_sqldetalles.txt', "SQL: $sqlDetalles\n\nROWS: " . count($dataDetalles) . "\n" . print_r($dataDetalles, true));
