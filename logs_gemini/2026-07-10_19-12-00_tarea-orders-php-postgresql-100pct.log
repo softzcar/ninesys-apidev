@@ -1,0 +1,47 @@
+# Bitácora de Sesión — Migración orders.php a PostgreSQL (100%)
+**Fecha:** 2026-07-10
+**Rama:** feature/postgresql-support
+
+---
+
+## Trabajo Realizado
+
+### 1. Reemplazo de IFNULL por COALESCE de forma global en `orders.php`
+Se reemplazaron todas las ocurrencias de `IFNULL` por `COALESCE` en `app/routes/orders.php`, ya que `COALESCE` es soportado nativamente y con la misma semántica tanto en PostgreSQL como en MariaDB/MySQL.
+
+### 2. Adaptación de /ordenes/abono-detale/{id}
+Se adaptó el endpoint para usar dualidad `pgsql`/`mysql`:
+- En PostgreSQL (`DB_DRIVER === 'pgsql'`), se adaptaron las llamadas `DATE_FORMAT(moment, ...)` por `TO_CHAR(moment, 'DD/MM/YYYY')` y `TO_CHAR(moment, 'HH12:MI AM')`.
+- Se corrigieron los concatenados `CONCAT('P-', _id)` por `CONCAT('P-', _id::text)` para evitar problemas de tipos en PostgreSQL.
+
+### 3. Adaptación del reporte de resumen de empleados
+En `/reportes/resumen/empleados/{id_empleado}/{id_departamento}`:
+- Se implementó dualidad de base de datos para la consulta de órdenes terminadas y pendientes.
+- Se adaptaron `GROUP_CONCAT` y `TIMESTAMPDIFF` a sus equivalentes PostgreSQL `string_agg` y `EXTRACT(EPOCH FROM ...)` respectivamente.
+
+### 4. Adaptación del dashboard comercialización
+En `/comercializacion/dashboard/{id_empleado}/{id_departamento}`:
+- Se adaptó la consulta de órdenes creadas de la semana usando `EXTRACT(WEEK FROM ...)` y `EXTRACT(YEAR FROM ...)` para PostgreSQL en lugar de `YEARWEEK(...)`.
+- En la consulta de pagos de la semana (`$sqlPagos`), se adaptó `DATE_FORMAT(a.moment, '%w')` por `EXTRACT(DOW FROM a.moment)::int` y `YEARWEEK` por el extracto correspondiente en PostgreSQL.
+
+### 5. Adaptación de la consulta para cálculo de tiempos
+En la consulta principal para cálculo de tiempos de producción:
+- Se adaptaron los `GROUP_CONCAT` por `string_agg(DISTINCT ...)` en PostgreSQL.
+- Se adaptó el `DATE_FORMAT` de la fecha de entrega por `TO_CHAR(...)`.
+
+### 6. Adaptación de la consulta para eficiencia de insumos
+- Se adaptaron los `GROUP_CONCAT` de producto y talla por `string_agg(...)` en PostgreSQL.
+
+### 7. Verificación de los endpoints en el VPS de desarrollo
+Se ejecutó un set completo de pruebas automatizadas mediante `public/test_orders.php` contra el servidor remoto (VPS) con los siguientes resultados:
+- ✅ [200] GET /ordenes/abono-detale/1
+- ✅ [200] GET /reportes/resumen/empleados/1/4
+- ✅ [200] GET /comercializacion/dashboard/1/4
+- ✅ [200] GET /comercializacion/ordenes/reporte/terminadas/-7 days
+- ✅ [200] GET /comercializacion/ordenes/reporte/entregadas/-7 days
+
+---
+
+## Estado de Progreso Total
+- `orders.php`: **100% ✅** (6 endpoints adaptados y verificados)
+- Total de ocurrencias MySQL adaptadas: **166 de ~247** (~67% completado)
