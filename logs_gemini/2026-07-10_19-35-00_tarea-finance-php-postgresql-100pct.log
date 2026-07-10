@@ -1,0 +1,39 @@
+# Bitácora de Sesión — Migración finance.php a PostgreSQL (100%)
+**Fecha:** 2026-07-10
+**Rama:** feature/postgresql-support
+
+---
+
+## Trabajo Realizado
+
+### 1. Reemplazo de IFNULL por COALESCE de forma global en `finance.php`
+Se reemplazaron todas las ocurrencias de `IFNULL` por `COALESCE` en `app/routes/finance.php`, lo cual es compatible con PostgreSQL y MariaDB.
+
+### 2. Adaptación del reporte general de pagos (`/reporte-de-pagos`)
+Se adaptó el endpoint usando dualidad de bases de datos para los dos SQLs de pagos:
+- Se implementó la lógica JSON compatible con PostgreSQL usando `json_agg` y `json_build_object` junto con `string_to_array` y `ANY` para el reemplazo de `FIND_IN_SET`.
+- Se reemplazaron las funciones `DATE_FORMAT` por `TO_CHAR(moment, 'DD/MM/YYYY')` y `TO_CHAR(moment, 'HH12:MI AM')`.
+- Se adaptó `DATE(moment)` por `moment::date` en PostgreSQL.
+
+### 3. Adaptación del totalizador de retiros (`/retiros/{inicio}/{fin}/{id_vendedor}`)
+- Se implementó dualidad de base de datos para la consulta de retiros en la caja, adaptando `DATE(a.moment)` a `a.moment::date`.
+
+### 4. Adaptación de la consulta para obtener lista de retiros (`/retiros/{inicio}/{fin}/{id_empleado}`)
+- Se implementó dualidad de base de datos adaptando `DATE(a.moment)` a `a.moment::date`.
+
+### 5. Adaptación del balance de cierres (`/balance-de-cierres/{inicio}/{fin}/{id_vendedor}`)
+- Se implementó dualidad en la consulta de cierres, adaptando `DATE(c.moment)` a `c.moment::date` en PostgreSQL.
+
+### 6. Pruebas y verificación de la API
+Se ejecutó un set completo de pruebas automatizadas mediante `public/test_finance.php` contra el servidor remoto (VPS) con los siguientes resultados:
+- ✅ [200] GET /reporte-de-pagos
+- ✅ [200] GET /reporte-de-pagos/2026-07-01/2026-07-10/0
+- ✅ [200] GET /retiros/2026-07-01/2026-07-10/0
+- ✅ [200] GET /retiros/2026-07-01/2026-07-10/20
+- ✅ [200] GET /balance-de-cierres/2026-07-01/2026-07-10/0
+
+---
+
+## Estado de Progreso Total
+- `finance.php`: **100% ✅** (4 endpoints adaptados y verificados)
+- Total de ocurrencias MySQL adaptadas: **188 de ~247** (~76% completado)
