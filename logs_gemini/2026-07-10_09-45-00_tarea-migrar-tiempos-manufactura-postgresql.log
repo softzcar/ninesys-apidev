@@ -1,0 +1,31 @@
+# Bitácora de Tarea — 2026-07-10
+# Tarea: Adaptación de reportes de tiempos de fabricación en manufacturing.php para soporte PostgreSQL
+# Resultado: COMPLETADO Y VERIFICADO EN DESARROLLO
+
+## Resumen
+Se ha completado la adaptación para soporte dual de PostgreSQL y MariaDB de los endpoints de cálculo de tiempos y eficiencias de manufacturación de la Fase 1.
+
+## Trabajo Realizado
+
+### 1. Modificación de app/routes/manufacturing.php
+Se adaptaron condicionalmente a `DB_DRIVER === 'pgsql'` las siguientes rutas y consultas:
+
+- **GET `/rendimiento-empleado/{id_orden}/{id_departamento}/{id_empleado}`**
+  - Se sustituyó `TIMESTAMPDIFF(SECOND, ...)` por `EXTRACT(EPOCH FROM (fecha_terminado - fecha_inicio))`.
+
+- **GET `/reports/manufacturing-time`**
+  - Se sustituyó `TIMESTAMPDIFF(SECOND, ...)` por `EXTRACT(EPOCH FROM (ld.fecha_terminado - ld.fecha_inicio))` (para tareas terminadas) y `EXTRACT(EPOCH FROM (NOW() - ld.fecha_inicio))` (para tareas en curso) según corresponda.
+  - Se corrigió la cláusula `GROUP BY` incluyendo todas las columnas no agregadas presentes en el select (`o._id, o.id_wp, o.status, c.first_name, c.cedula, op.id_woo, op.name, op.cantidad, op.category_name`) para evitar errores sintácticos estrictos de PostgreSQL.
+
+- **POST `/reports/manufacturing-time`**
+  - Se adaptaron los cálculos de tiempos reales de la expresión CTE `TiemposCalculados` y la subconsulta `$sqlDetalles` reemplazando `TIMESTAMPDIFF` por `EXTRACT(EPOCH)` e intervalos de MySQL (`DATE_SUB(CURDATE(), INTERVAL 7 DAY)`) por intervalos PostgreSQL (`CURRENT_DATE - INTERVAL '7 days'`).
+  - Se adaptó la expresión condicional de MySQL `IF()` en `tarea_terminada` reescribiéndola usando la sintaxis estándar `CASE WHEN ... THEN 1 ELSE 0 END`.
+
+## Pruebas de Validación
+Se verificó el funcionamiento local y en el VPS mediante curl para la empresa autorizada `194`:
+- `GET /rendimiento-empleado/1/1/1` ➔ Retornó exitosamente sin excepciones SQL. ✅
+- `GET /reports/manufacturing-time?limit=5` ➔ Retornó exitosamente array sin errores. ✅
+- `POST /reports/manufacturing-time` con payload JSON ➔ Retornó exitosamente resumen estructurado. ✅
+
+## Archivos Modificados
+- [manufacturing.php](file:///home/developer/Escritorio/niesys/ninesys-api/app/routes/manufacturing.php)
