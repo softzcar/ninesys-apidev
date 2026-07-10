@@ -11,7 +11,7 @@ try {
     die("Error cargando config.php: " . $t->getMessage() . "\n");
 }
 
-$driver = getenv('DB_DRIVER') ?: 'mysql';
+$driver = 'mysql';
 $host = getenv('DB_HOST') ?: '127.0.0.1';
 $port = getenv('DB_PORT') ?: ($driver === 'pgsql' ? '5432' : '3306');
 $user = getenv('DB_USER') ?: 'root';
