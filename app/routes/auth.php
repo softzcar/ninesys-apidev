@@ -127,7 +127,9 @@ return function (App $app) {
 
             $connectionDetails = $localConnection->getConnectionDetails($usuario_data['id_empresa']);
             if ($connectionDetails) {
-                $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
+                $companyDsn = (DB_DRIVER === 'pgsql') 
+                    ? 'pgsql:host=' . $connectionDetails['db_host'] . ';port=' . (getenv('DB_PORT') ?: '5432') . ';dbname=' . $connectionDetails['db_name']
+                    : 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
                 $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
 
                 $sql_config = 'SELECT sys_mostrar_detalle_terminar_indicidual, sys_mostrar_rollo_en_empleado_corte, sys_mostrar_rollo_en_empleado_estampado, sys_mostrar_insumo_en_empleado_costura, sys_mostrar_insumo_en_empleado_limpieza, sys_mostrar_insumo_en_empleado_revision, sys_comision_de_costura, multiplicador_precio FROM config WHERE _id = 1';
@@ -166,7 +168,9 @@ return function (App $app) {
         }
 
         try {
-            $test_dns = 'mysql:host=' . $empresa_data['db_host'] . ';dbname=' . $empresa_data['db_name'];
+            $test_dns = (DB_DRIVER === 'pgsql') 
+                ? 'pgsql:host=' . $empresa_data['db_host'] . ';port=' . (getenv('DB_PORT') ?: '5432') . ';dbname=' . $empresa_data['db_name']
+                : 'mysql:host=' . $empresa_data['db_host'] . ';dbname=' . $empresa_data['db_name'];
             $test_user = $empresa_data['db_user'];
             $test_pass = $empresa_data['db_password'];
             $test_pdo = new PDO($test_dns, $test_user, $test_pass);
@@ -184,7 +188,9 @@ return function (App $app) {
         $sql_modulos = 'SELECT _id, modulo, folder, descripcion from api_empresas.modulos ORDER BY modulo ASC';
         $object['modulos'] = $localConnection->goQuery($sql_modulos);
 
-        $company_dns = 'mysql:host=' . $empresa_data['db_host'] . ';dbname=' . $empresa_data['db_name'];
+        $company_dns = (DB_DRIVER === 'pgsql') 
+            ? 'pgsql:host=' . $empresa_data['db_host'] . ';port=' . (getenv('DB_PORT') ?: '5432') . ';dbname=' . $empresa_data['db_name']
+            : 'mysql:host=' . $empresa_data['db_host'] . ';dbname=' . $empresa_data['db_name'];
         $company_user = $empresa_data['db_user'];
         $company_pass = $empresa_data['db_password'];
         $localConnection->switchDatabase($company_dns, $company_user, $company_pass);
@@ -207,7 +213,44 @@ return function (App $app) {
             $object['departamentos'] = $departamentos;
         }
 
-        $sql_empleado = "SELECT a.id_usuario AS _id, a.email AS username, a.password, a.nombre, a.email, a.departamento, c.orden_proceso, a.comision, a.comision_tipo, a.acceso, IFNULL( CONCAT( '[', GROUP_CONCAT( CONCAT( '{\"id\":', b.id_departamento, ',\"modulo\":\"', d.folder, '\",\"id_modulo\":\"', c.id_modulo, '\",\"orden_proceso\":\"', c.orden_proceso, '\",\"nombre\":\"', c.departamento, '\",\"tipo\":\"', IFNULL(c.tipo, 'general'), '\"}' ) SEPARATOR ',' ), ']' ), '[]' ) AS departamentos FROM api_empresas.empresas_usuarios a LEFT JOIN api_empresas.empresas_usuarios_departamentos b ON b.id_empleado = a.id_usuario LEFT JOIN departamentos c ON c._id = b.id_departamento AND c.eliminado = 0 LEFT JOIN api_empresas.modulos d ON d._id = c.id_modulo WHERE a.id_usuario = ? AND a.activo = 1 AND a.id_empresa = ? GROUP BY a.id_usuario, a.email, a.password, a.nombre, a.departamento, a.comision, a.comision_tipo, a.acceso;";
+        if (DB_DRIVER === 'pgsql') {
+            $sql_empleado = "SELECT 
+                a.id_usuario AS _id, 
+                a.email AS username, 
+                a.password, 
+                a.nombre, 
+                a.email, 
+                a.departamento, 
+                c.orden_proceso, 
+                a.comision, 
+                a.comision_tipo, 
+                a.acceso, 
+                COALESCE(
+                  (
+                    SELECT json_agg(
+                      json_build_object(
+                        'id', b_sub.id_departamento,
+                        'modulo', d_sub.folder,
+                        'id_modulo', c_sub.id_modulo,
+                        'orden_proceso', c_sub.orden_proceso,
+                        'nombre', c_sub.departamento,
+                        'tipo', COALESCE(c_sub.tipo, 'general')
+                      )
+                    )::text
+                    FROM api_empresas.empresas_usuarios_departamentos b_sub
+                    LEFT JOIN departamentos c_sub ON c_sub._id = b_sub.id_departamento AND c_sub.eliminado = 0
+                    LEFT JOIN api_empresas.modulos d_sub ON d_sub._id = c_sub.id_modulo
+                    WHERE b_sub.id_empleado = a.id_usuario
+                  ), '[]'
+                ) AS departamentos 
+            FROM api_empresas.empresas_usuarios a 
+            LEFT JOIN api_empresas.empresas_usuarios_departamentos b ON b.id_empleado = a.id_usuario 
+            LEFT JOIN departamentos c ON c._id = b.id_departamento AND c.eliminado = 0 
+            WHERE a.id_usuario = ? AND a.activo = 1 AND a.id_empresa = ? 
+            GROUP BY a.id_usuario, a.email, a.password, a.nombre, a.departamento, a.comision, a.comision_tipo, a.acceso, c.orden_proceso;";
+        } else {
+            $sql_empleado = "SELECT a.id_usuario AS _id, a.email AS username, a.password, a.nombre, a.email, a.departamento, c.orden_proceso, a.comision, a.comision_tipo, a.acceso, COALESCE( CONCAT( '[', GROUP_CONCAT( CONCAT( '{\"id\":', b.id_departamento, ',\"modulo\":\"', d.folder, '\",\"id_modulo\":\"', c.id_modulo, '\",\"orden_proceso\":\"', c.orden_proceso, '\",\"nombre\":\"', c.departamento, '\",\"tipo\":\"', COALESCE(c.tipo, 'general'), '\"}' ) SEPARATOR ',' ), ']' ), '[]' ) AS departamentos FROM api_empresas.empresas_usuarios a LEFT JOIN api_empresas.empresas_usuarios_departamentos b ON b.id_empleado = a.id_usuario LEFT JOIN departamentos c ON c._id = b.id_departamento AND c.eliminado = 0 LEFT JOIN api_empresas.modulos d ON d._id = c.id_modulo WHERE a.id_usuario = ? AND a.activo = 1 AND a.id_empresa = ? GROUP BY a.id_usuario, a.email, a.password, a.nombre, a.departamento, a.comision, a.comision_tipo, a.acceso;";
+        }
         $items = $localConnection->goQuery($sql_empleado, [$usuario_data['id_usuario'], $empresa_data['id_empresa']]);
 
         if (isset($items['status']) && $items['status'] === 'error') {
@@ -277,7 +320,9 @@ return function (App $app) {
             }
 
             // Obtener datos de personalización desde la base de datos de la empresa
-            $companyDsn = 'mysql:host=' . $empresa_data['db_host'] . ';dbname=' . $empresa_data['db_name'];
+            $companyDsn = (DB_DRIVER === 'pgsql') 
+            ? 'pgsql:host=' . $empresa_data['db_host'] . ';port=' . (getenv('DB_PORT') ?: '5432') . ';dbname=' . $empresa_data['db_name']
+            : 'mysql:host=' . $empresa_data['db_host'] . ';dbname=' . $empresa_data['db_name'];
             $localConnection->switchDatabase($companyDsn, $empresa_data['db_user'], $empresa_data['db_password']);
 
             $sql_config = 'SELECT sys_mostrar_detalle_terminar_indicidual, sys_mostrar_rollo_en_empleado_corte, sys_mostrar_rollo_en_empleado_estampado, sys_mostrar_insumo_en_empleado_costura, sys_mostrar_insumo_en_empleado_limpieza, sys_mostrar_insumo_en_empleado_revision, sys_comision_de_costura, multiplicador_precio FROM config WHERE _id = 1';
@@ -387,7 +432,9 @@ return function (App $app) {
 
         // 5. Obtener datos de personalización (Local de la empresa)
         if (!empty($empresa_data['db_name'])) {
-            $companyDsn = 'mysql:host=' . $empresa_data['db_host'] . ';dbname=' . $empresa_data['db_name'];
+            $companyDsn = (DB_DRIVER === 'pgsql') 
+            ? 'pgsql:host=' . $empresa_data['db_host'] . ';port=' . (getenv('DB_PORT') ?: '5432') . ';dbname=' . $empresa_data['db_name']
+            : 'mysql:host=' . $empresa_data['db_host'] . ';dbname=' . $empresa_data['db_name'];
             $localConnection->switchDatabase($companyDsn, $empresa_data['db_user'], $empresa_data['db_password']);
 
             $sql_config = 'SELECT sys_mostrar_detalle_terminar_indicidual, sys_mostrar_rollo_en_empleado_corte, sys_mostrar_rollo_en_empleado_estampado, sys_mostrar_insumo_en_empleado_costura, sys_mostrar_insumo_en_empleado_limpieza, sys_mostrar_insumo_en_empleado_revision, sys_comision_de_costura, multiplicador_precio FROM config WHERE _id = 1';
