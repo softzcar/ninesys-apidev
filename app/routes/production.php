@@ -1073,10 +1073,13 @@ return function (App $app) {
                   ) + 
                   COALESCE(
                     (SELECT SUM(
-                      (t.c * (ic.costo / NULLIF(ic.cantidad_inicial, 0))) +
-                      (t.m * (im.costo / NULLIF(im.cantidad_inicial, 0))) +
-                      (t.y * (iy.costo / NULLIF(iy.cantidad_inicial, 0))) +
-                      (t.k * (ik.costo / NULLIF(ik.cantidad_inicial, 0)))
+                      t.cantidad * CASE 
+                        WHEN t.id_color_tinta = 1 THEN (ic.costo / NULLIF(ic.cantidad_inicial, 0))
+                        WHEN t.id_color_tinta = 2 THEN (im.costo / NULLIF(im.cantidad_inicial, 0))
+                        WHEN t.id_color_tinta = 3 THEN (iy.costo / NULLIF(iy.cantidad_inicial, 0))
+                        WHEN t.id_color_tinta = 4 THEN (ik.costo / NULLIF(ik.cantidad_inicial, 0))
+                        ELSE 0
+                      END
                     )
                     FROM tintas t
                     LEFT JOIN inventario ic ON ic._id = 3
@@ -1214,76 +1217,149 @@ return function (App $app) {
     }
 
     // 2. Consultar desglose de movimientos
-    $sql = "SELECT 
-              inv.insumo,
-              inv.unidad,
-              inm.valor_inicial,
-              inm.valor_final,
-              (inm.valor_inicial - inm.valor_final) as cantidad_consumida,
-              (inv.costo / NULLIF(inv.cantidad_inicial, 0)) as costo_unitario,
-              ((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))) as costo_total,
-              $fechaFormatInm as fecha,
-              inv.color,
-              COALESCE(inv.id_catalogo, 0) as id_catalogo
-            FROM inventario_movimientos inm
-            JOIN inventario inv ON inv._id = inm.id_producto
-            WHERE 
-              (inm.id_reposicion = {$id_reposicion}) 
-              OR 
-              (inm.id_reposicion IS NULL AND inm.id_orden = {$id_orden} 
-               AND inm.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
-               AND inm.moment < COALESCE(
-                 (SELECT MIN(re_next.moment) 
-                  FROM reposiciones re_next 
-                  WHERE re_next.id_orden = {$id_orden} 
-                    AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
-                    AND re_next.eliminada = 0), 
-                 '9999-12-31 23:59:59'
-               )
-              )
-            
-            UNION ALL
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT 
+                inv.insumo,
+                inv.unidad,
+                inm.valor_inicial,
+                inm.valor_final,
+                (inm.valor_inicial - inm.valor_final) as cantidad_consumida,
+                (inv.costo / NULLIF(inv.cantidad_inicial, 0)) as costo_unitario,
+                ((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))) as costo_total,
+                $fechaFormatInm as fecha,
+                inv.color,
+                COALESCE(inv.id_catalogo, 0) as id_catalogo
+              FROM inventario_movimientos inm
+              JOIN inventario inv ON inv._id = inm.id_producto
+              WHERE 
+                (inm.id_reposicion = {$id_reposicion}) 
+                OR 
+                (inm.id_reposicion IS NULL AND inm.id_orden = {$id_orden} 
+                 AND inm.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+                 AND inm.moment < COALESCE(
+                   (SELECT MIN(re_next.moment) 
+                    FROM reposiciones re_next 
+                    WHERE re_next.id_orden = {$id_orden} 
+                      AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+                      AND re_next.eliminada = 0), 
+                   '9999-12-31 23:59:59'
+                 )
+                )
+              
+              UNION ALL
 
-            SELECT 
-              'Tinta Cyan' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.c as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.c * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'CYAN' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-            FROM tintas t JOIN inventario i ON i._id = 3 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
+              SELECT 
+                'Tinta Cyan' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.cantidad as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.cantidad * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'CYAN' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              FROM tintas t JOIN inventario i ON i._id = 3 WHERE t.id_color_tinta = 1 AND t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
 
-            UNION ALL
+              UNION ALL
 
-            SELECT 
-              'Tinta Magenta' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.m as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.m * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'MAGENTA' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-            FROM tintas t JOIN inventario i ON i._id = 4 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
+              SELECT 
+                'Tinta Magenta' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.cantidad as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.cantidad * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'MAGENTA' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              FROM tintas t JOIN inventario i ON i._id = 4 WHERE t.id_color_tinta = 2 AND t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
 
-            UNION ALL
+              UNION ALL
 
-            SELECT 
-              'Tinta Yellow' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.y as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.y * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'YELLOW' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-            FROM tintas t JOIN inventario i ON i._id = 5 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
+              SELECT 
+                'Tinta Yellow' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.cantidad as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.cantidad * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'YELLOW' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              FROM tintas t JOIN inventario i ON i._id = 5 WHERE t.id_color_tinta = 3 AND t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
 
-            UNION ALL
+              UNION ALL
 
-            SELECT 
-              'Tinta Black' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.k as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.k * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'BLACK' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-            FROM tintas t JOIN inventario i ON i._id = 6 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
+              SELECT 
+                'Tinta Black' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.cantidad as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.cantidad * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'BLACK' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              FROM tintas t JOIN inventario i ON i._id = 6 WHERE t.id_color_tinta = 4 AND t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
 
-            UNION ALL
+              UNION ALL
 
-            SELECT 
-                CONCAT('Mano de Obra - ', u.nombre) as insumo,
-                'UND' as unidad,
-                0 as valor_inicial,
-                0 as valor_final,
-                1 as cantidad_consumida,
-                p.monto_pago as costo_unitario,
-                p.monto_pago as costo_total,
-                $fechaFormatP as fecha,
-                'N/A' as color,
-                9999 as id_catalogo
-            FROM pagos p
-            JOIN api_empresas.empresas_usuarios u ON u.id_usuario = p.id_empleado
-            WHERE p.id_reposicion = {$id_reposicion} AND p.monto_pago > 0
-            
-            ORDER BY id_catalogo ASC, fecha DESC";
+              SELECT 
+                  CONCAT('Mano de Obra - ', u.nombre) as insumo,
+                  'UND' as unidad,
+                  0 as valor_inicial,
+                  0 as valor_final,
+                  1 as cantidad_consumida,
+                  p.monto_pago as costo_unitario,
+                  p.monto_pago as costo_total,
+                  $fechaFormatP as fecha,
+                  'N/A' as color,
+                  9999 as id_catalogo
+              FROM pagos p
+              JOIN api_empresas.empresas_usuarios u ON u.id_usuario = p.id_empleado
+              WHERE p.id_reposicion = {$id_reposicion} AND p.monto_pago > 0
+              
+              ORDER BY id_catalogo ASC, fecha DESC";
+    } else {
+      $sql = "SELECT 
+                inv.insumo,
+                inv.unidad,
+                inm.valor_inicial,
+                inm.valor_final,
+                (inm.valor_inicial - inm.valor_final) as cantidad_consumida,
+                (inv.costo / NULLIF(inv.cantidad_inicial, 0)) as costo_unitario,
+                ((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))) as costo_total,
+                $fechaFormatInm as fecha,
+                inv.color,
+                COALESCE(inv.id_catalogo, 0) as id_catalogo
+              FROM inventario_movimientos inm
+              JOIN inventario inv ON inv._id = inm.id_producto
+              WHERE 
+                (inm.id_reposicion = {$id_reposicion}) 
+                OR 
+                (inm.id_reposicion IS NULL AND inm.id_orden = {$id_orden} 
+                 AND inm.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+                 AND inm.moment < COALESCE(
+                   (SELECT MIN(re_next.moment) 
+                    FROM reposiciones re_next 
+                    WHERE re_next.id_orden = {$id_orden} 
+                      AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion})
+                      AND re_next.eliminada = 0), 
+                   '9999-12-31 23:59:59'
+                 )
+                )
+              
+              UNION ALL
+
+              SELECT 
+                'Tinta Cyan' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.c as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.c * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'CYAN' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              FROM tintas t JOIN inventario i ON i._id = 3 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
+
+              UNION ALL
+
+              SELECT 
+                'Tinta Magenta' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.m as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.m * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'MAGENTA' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              FROM tintas t JOIN inventario i ON i._id = 4 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
+
+              UNION ALL
+
+              SELECT 
+                'Tinta Yellow' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.y as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.y * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'YELLOW' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              FROM tintas t JOIN inventario i ON i._id = 5 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
+
+              UNION ALL
+
+              SELECT 
+                'Tinta Black' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.k as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.k * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'BLACK' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
+              FROM tintas t JOIN inventario i ON i._id = 6 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
+
+              UNION ALL
+
+              SELECT 
+                  CONCAT('Mano de Obra - ', u.nombre) as insumo,
+                  'UND' as unidad,
+                  0 as valor_inicial,
+                  0 as valor_final,
+                  1 as cantidad_consumida,
+                  p.monto_pago as costo_unitario,
+                  p.monto_pago as costo_total,
+                  $fechaFormatP as fecha,
+                  'N/A' as color,
+                  9999 as id_catalogo
+              FROM pagos p
+              JOIN api_empresas.empresas_usuarios u ON u.id_usuario = p.id_empleado
+              WHERE p.id_reposicion = {$id_reposicion} AND p.monto_pago > 0
+              
+              ORDER BY id_catalogo ASC, fecha DESC";
+    }
 
     $items = $localConnection->goQuery($sql);
     $localConnection->disconnect();
