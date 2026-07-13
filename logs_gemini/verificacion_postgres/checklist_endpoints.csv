@@ -1,171 +1,171 @@
 id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
-1,administration.php,GET,/administracion/dashboard-stats,15,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:30:53
+1,administration.php,GET,/administracion/dashboard-stats,15,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:37:52
 2,ai.php,POST,/ai/chat,32,2-escritura-manual,PENDIENTE,,
 3,ai.php,POST,/ai/chat-orden,117,2-escritura-manual,PENDIENTE,,
 4,ai.php,POST,/ai/report,298,2-escritura-manual,PENDIENTE,,
-5,ai.php,GET,/ai/status,378,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:30:54
-6,assignments.php,GET,/asignacion/ordenes,12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:30:56
-7,assignments.php,GET,/asignacion/empleados/{orden},48,1-GET-auto,CODIGO_MUERTO_CANDIDATO,"columnas dep_responsable/dep_diseno/etc. NO existen en tabla ordenes en NINGUN entorno (mismo patron que /orden/asignacion/{id} ya eliminado). Cero uso real: 0 hits en app_multi/msg_ninesys/ninesys-cdn y 0 en logs de produccion. NO se corrige (no hay columnas reales que mapear) - candidato a eliminar, pendiente de autorizacion del usuario.",2026-07-13 14:42:56
+5,ai.php,GET,/ai/status,378,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:37:53
+6,assignments.php,GET,/asignacion/ordenes,12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:37:54
+7,assignments.php,GET,/asignacion/empleados/{orden},48,1-GET-auto,CODIGO_MUERTO_CANDIDATO,"Reverificado: columnas dep_* siguen sin existir (esperado, es codigo muerto). Ver nota original: 0 uso real, candidato a eliminar pendiente de autorizacion.",2026-07-13 15:43:24
 8,assignments.php,POST,/asignacion/{orden}/{departamento}/{empleado},65,2-escritura-manual,PENDIENTE,,
 9,assignments.php,POST,/asignacion/elimianr/{orden}/{departamento},119,2-escritura-manual,PENDIENTE,,
 10,auth.php,POST,/login,10,2-escritura-manual,PENDIENTE,,
-11,auth.php,GET,/refresh-session/{id},363,1-GET-auto,FALLO_RUTA,HTTP 404 (ruta no encontrada/metodo no permitido con params de prueba),2026-07-13 14:30:58
+11,auth.php,GET,/refresh-session/{id},363,1-GET-auto,REQUIERE_INVESTIGACION_APARTE,"HTTP 404 real, pero no relacionado con PostgreSQL - probablemente requiere un token de sesion distinto al header Authorization:id_empresa estandar (nombre sugiere mecanismo de refresh de sesion). No investigado a fondo, fuera del alcance de compatibilidad SQL.",2026-07-13 15:43:03
 12,auth.php,POST,/verify-credentials,464,2-escritura-manual,PENDIENTE,,
-13,buscar.php,GET,/buscar/{id}[/{email}],260,1-GET-auto,OMITIDO,requiere parametro no trivial (email u otro) para probar de forma segura,2026-07-13 14:30:58
-14,catalogs.php,GET,/telas,11,1-GET-auto,CORREGIDO,ALTER TABLE catalogo_telas ADD COLUMN eliminado SMALLINT NOT NULL DEFAULT 0 en BD real 194 dev + actualizado ambos templates maestros (mysql y postgres). Verificado en vivo: HTTP 200 con eliminado=0.,2026-07-13 14:44:23
-15,catalogs.php,GET,/catalogo-tintas,24,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:00
+13,buscar.php,GET,/buscar/{id}[/{email}],260,1-GET-auto,OMITIDO,requiere parametro no trivial (email u otro) para probar de forma segura,2026-07-13 15:37:56
+14,catalogs.php,GET,/telas,11,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:37:57
+15,catalogs.php,GET,/catalogo-tintas,24,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:37:58
 16,catalogs.php,POST,/catalogo-tintas,208,2-escritura-manual,PENDIENTE,,
 17,catalogs.php,POST,/catalogo-tintas/{_id}/{nombre},232,2-escritura-manual,PENDIENTE,,
 18,catalogs.php,POST,/catalogo-tintas/eliminar,248,2-escritura-manual,PENDIENTE,,
-19,catalogs.php,GET,/catalogo-colores-tintas,265,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:01
+19,catalogs.php,GET,/catalogo-colores-tintas,265,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:37:59
 20,catalogs.php,POST,/catalogo-colores-tintas,277,2-escritura-manual,PENDIENTE,,
 21,catalogs.php,POST,/catalogo-colores-tintas/eliminar,303,2-escritura-manual,PENDIENTE,,
 22,catalogs.php,POST,/catalogo-colores-tintas/{_id},319,2-escritura-manual,PENDIENTE,,
-23,catalogs.php,GET,/catalogo-insumos-productos,341,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:02
+23,catalogs.php,GET,/catalogo-insumos-productos,341,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:37:59
 24,catalogs.php,POST,/catalogo-insumos-productos,353,2-escritura-manual,PENDIENTE,,
 25,catalogs.php,POST,/telas,381,2-escritura-manual,PENDIENTE,,
 26,catalogs.php,POST,/telas/{_id}/{tela},405,2-escritura-manual,PENDIENTE,,
 27,catalogs.php,POST,/telas/eliminar,421,2-escritura-manual,PENDIENTE,,
 28,catalogs.php,DELETE,/insumos-productos-asignados/{id_insumo},438,2-escritura-manual,PENDIENTE,,
-29,catalogs.php,GET,/insumos-productos/{id_orden}/{id_departamento},452,1-GET-auto,CORREGIDO,"CAST(_id AS VARCHAR) = e.talla en rama pgsql (sizes._id integer vs ordenes_productos.talla varchar). Verificado en vivo: HTTP 200, [].",2026-07-13 14:48:29
-30,catalogs.php,GET,/insumos-productos-asignados,493,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:03
-31,catalogs.php,GET,/tiempos-de-produccion,526,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:04
+29,catalogs.php,GET,/insumos-productos/{id_orden}/{id_departamento},452,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:00
+30,catalogs.php,GET,/insumos-productos-asignados,493,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:01
+31,catalogs.php,GET,/tiempos-de-produccion,526,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:02
 32,catalogs.php,POST,/tiempos-de-produccion,552,2-escritura-manual,PENDIENTE,,
 33,catalogs.php,POST,/tiempos-de-produccion/usa-desperdicio,585,2-escritura-manual,PENDIENTE,,
 34,catalogs.php,POST,/insumos-productos,614,2-escritura-manual,PENDIENTE,,
 35,communications.php,POST,/config/select-empleados,14,2-escritura-manual,PENDIENTE,,
 36,communications.php,POST,/send-message,90,2-escritura-manual,PENDIENTE,,
-37,communications.php,GET,/ws/departamentos,148,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:05
+37,communications.php,GET,/ws/departamentos,148,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:03
 38,communications.php,POST,/ws/build-message,176,2-escritura-manual,PENDIENTE,,
 39,communications.php,POST,/ws/build-message/interno,394,2-escritura-manual,PENDIENTE,,
 40,communications.php,POST,/update-message,503,2-escritura-manual,PENDIENTE,,
-41,communications.php,GET,/config,533,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:06
+41,communications.php,GET,/config,533,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:04
 42,communications.php,POST,/departamentos/editar/settings,574,2-escritura-manual,PENDIENTE,,
 43,communications.php,POST,/send-message-produccion,667,2-escritura-manual,PENDIENTE,,
-44,communications.php,GET,/next-id-order,803,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:07
-45,communications.php,GET,/next-id-budget,824,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:08
+44,communications.php,GET,/next-id-order,803,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:05
+45,communications.php,GET,/next-id-budget,824,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:05
 46,config.php,POST,/configuracion/admin/{id},11,2-escritura-manual,PENDIENTE,,
 47,config.php,POST,/configuracion/empresa/{id},56,2-escritura-manual,PENDIENTE,,
 48,config.php,POST,/configuracion/monedas,137,2-escritura-manual,PENDIENTE,,
 49,config.php,POST,/configuracion/horario,211,2-escritura-manual,PENDIENTE,,
 50,config.php,POST,/configuracion/personalizacion,291,2-escritura-manual,PENDIENTE,,
 51,config.php,POST,/configuracion/gastos,388,2-escritura-manual,PENDIENTE,,
-52,config.php,GET,/gastos,496,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:09
+52,config.php,GET,/gastos,496,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:06
 53,config.php,POST,/gastos,520,2-escritura-manual,PENDIENTE,,
 54,config.php,PUT,/gastos/{id},561,2-escritura-manual,PENDIENTE,,
 55,config.php,DELETE,/gastos/{id},597,2-escritura-manual,PENDIENTE,,
-56,config.php,GET,/gastos/registros,619,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:09
+56,config.php,GET,/gastos/registros,619,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:07
 57,config.php,POST,/gastos/registros,663,2-escritura-manual,PENDIENTE,,
 58,config.php,PUT,/gastos/registros/{id},712,2-escritura-manual,PENDIENTE,,
 59,config.php,DELETE,/gastos/registros/{id},777,2-escritura-manual,PENDIENTE,,
-60,config.php,GET,/gastos/auditoria,826,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:10
-61,config.php,GET,/gastos/auditoria/{id_registro},864,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:11
-62,config.php,GET,/gastos/pendientes,882,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:12
+60,config.php,GET,/gastos/auditoria,826,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:07
+61,config.php,GET,/gastos/auditoria/{id_registro},864,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:08
+62,config.php,GET,/gastos/pendientes,882,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:09
 63,config.php,POST,/config/multiplicador-precio,911,2-escritura-manual,PENDIENTE,,
-64,crm.php,GET,/crm/oportunidades,10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:12
+64,crm.php,GET,/crm/oportunidades,10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:10
 65,crm.php,POST,/crm/oportunidades/nueva,63,2-escritura-manual,PENDIENTE,,
 66,crm.php,PUT,/crm/oportunidades/estado,109,2-escritura-manual,PENDIENTE,,
-67,crm.php,GET,/customers/orders-local/{id_customer},137,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:13
-68,crm.php,GET,/customers/presupuestos-local/{id_customer},186,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:14
-69,crm.php,GET,/crm/notas/{id_customer},233,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:15
+67,crm.php,GET,/customers/orders-local/{id_customer},137,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:11
+68,crm.php,GET,/customers/presupuestos-local/{id_customer},186,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:11
+69,crm.php,GET,/crm/notas/{id_customer},233,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:12
 70,crm.php,POST,/crm/notas/nueva,270,2-escritura-manual,PENDIENTE,,
-71,crm.php,GET,/crm/soporte/{id_customer},300,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:15
+71,crm.php,GET,/crm/soporte/{id_customer},300,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:13
 72,crm.php,POST,/crm/soporte/nueva,323,2-escritura-manual,PENDIENTE,,
 73,crm.php,PUT,/crm/soporte/estado,353,2-escritura-manual,PENDIENTE,,
 74,crm.php,POST,/crm/campanas/enviar,380,2-escritura-manual,PENDIENTE,,
-75,crm.php,GET,/crm/reports/dashboard,476,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:16
-76,crm.php,GET,/crm/clientes-por-producto/{id_product},578,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:17
-77,designs.php,GET,/diseno/revisiones,12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:18
-78,designs.php,GET,/diseno/revisiones/{id_empleado},53,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:18
-79,designs.php,GET,/diseno/aprobado/{id_orden},70,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:19
+75,crm.php,GET,/crm/reports/dashboard,476,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:14
+76,crm.php,GET,/crm/clientes-por-producto/{id_product},578,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:15
+77,designs.php,GET,/diseno/revisiones,12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:15
+78,designs.php,GET,/diseno/revisiones/{id_empleado},53,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:16
+79,designs.php,GET,/diseno/aprobado/{id_orden},70,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:17
 80,designs.php,POST,/disenos/link,90,2-escritura-manual,PENDIENTE,,
 81,designs.php,POST,/diseno/update-tipo,106,2-escritura-manual,PENDIENTE,,
-82,designs.php,GET,/disenos/aprobacion-de-cliente/{id_orden},154,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:20
+82,designs.php,GET,/disenos/aprobacion-de-cliente/{id_orden},154,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:18
 83,designs.php,POST,/disenos/parobacion-de-cliente,182,2-escritura-manual,PENDIENTE,,
 84,designs.php,POST,/diseno/ajustes-y-personalizaciones,202,2-escritura-manual,PENDIENTE,,
-85,designs.php,GET,/disenos/ajustes-y-personalizaciones/{id_diseno},274,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:21
-86,designs.php,GET,/disenos/link/{id},289,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:31:21
-87,designs.php,GET,/disenos/codigo/{id},304,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:22
+85,designs.php,GET,/disenos/ajustes-y-personalizaciones/{id_diseno},274,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:19
+86,designs.php,GET,/disenos/link/{id},289,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 15:38:20
+87,designs.php,GET,/disenos/codigo/{id},304,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:21
 88,designs.php,POST,/disenos/codigo,319,2-escritura-manual,PENDIENTE,,
 89,designs.php,POST,/disenador-asignado,334,2-escritura-manual,PENDIENTE,,
-90,designs.php,GET,/disenos,362,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:23
+90,designs.php,GET,/disenos,362,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:23
 91,designs.php,POST,/disenos/nuevo-con-revision,464,2-escritura-manual,PENDIENTE,,
-92,designs.php,GET,/disenos/asignados,530,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:24
-93,designs.php,GET,/disenos/asignar/{id_orden},554,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:24
-94,designs.php,GET,/disenos/terminados,587,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:25
-95,designs.php,GET,/disenos/asignados/{id_empleado},657,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:26
-96,designs.php,GET,/disenos/pendientes/{id_empleado},732,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:27
-97,designs.php,GET,/disenos/terminados/{id_empleado},747,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:27
+92,designs.php,GET,/disenos/asignados,530,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:24
+93,designs.php,GET,/disenos/asignar/{id_orden},554,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:25
+94,designs.php,GET,/disenos/terminados,587,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:26
+95,designs.php,GET,/disenos/asignados/{id_empleado},657,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:29
+96,designs.php,GET,/disenos/pendientes/{id_empleado},732,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:30
+97,designs.php,GET,/disenos/terminados/{id_empleado},747,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:31
 98,designs.php,PUT,/disenos/asign/{id_orden}/{empleado},763,2-escritura-manual,PENDIENTE,,
 99,designs.php,PUT,/disenos/close/{id_orden}/{empleado},826,2-escritura-manual,PENDIENTE,,
-100,designs.php,GET,/disenos/images/{id_orden},840,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:28
-101,designs.php,GET,/revision/image/{id_revision},867,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:31:29
-102,designs.php,GET,/migracion/nineteencustom,880,1-GET-auto,NO_APLICA_SCRIPT_MIGRACION,"Script de migracion de una sola vez con credenciales hardcodeadas para api_emp_3/api_emp_1, ya reportado aparte al usuario, fuera de alcance",2026-07-13 14:31:29
+100,designs.php,GET,/disenos/images/{id_orden},840,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:31
+101,designs.php,GET,/revision/image/{id_revision},867,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 15:38:32
+102,designs.php,GET,/migracion/nineteencustom,880,1-GET-auto,NO_APLICA_SCRIPT_MIGRACION,"Script de migracion de una sola vez con credenciales hardcodeadas, ya reportado aparte al usuario, fuera de alcance.",2026-07-13 15:43:24
 103,designs.php,DELETE,/disenos/images/{id_orden}/{image_name},996,2-escritura-manual,PENDIENTE,,
 104,designs.php,POST,/disenos/imagen/{id_orden}/{id_diseno},1016,2-escritura-manual,PENDIENTE,,
-105,employees.php,GET,/empleados,11,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:30
+105,employees.php,GET,/empleados,11,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:33
 106,employees.php,POST,/empleados/activacion,222,2-escritura-manual,PENDIENTE,,
 107,employees.php,POST,/empleados/nuevo,240,2-escritura-manual,PENDIENTE,,
 108,employees.php,POST,/empleados/editar,345,2-escritura-manual,PENDIENTE,,
 109,employees.php,POST,/empleados/eliminar,448,2-escritura-manual,PENDIENTE,,
-110,employees.php,GET,/empleados/produccion/asignacion,482,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:31
+110,employees.php,GET,/empleados/produccion/asignacion,482,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:34
 111,employees.php,POST,/asistencias,503,2-escritura-manual,PENDIENTE,,
-112,employees.php,GET,/asistencias/semanal,519,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:32
-113,employees.php,GET,/asistencias/tabla/{fecha},595,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:32
-114,employees.php,GET,/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin},705,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:33
-115,employees.php,GET,/empleados/dashboard-stats/{id_empleado}/{id_departamento},838,1-GET-auto,CORREGIDO,"TO_CHAR(MAX(p.moment),'Day') en vez de TO_CHAR(p.moment,...) para satisfacer GROUP BY estricto (GROUP BY solo tenia p.moment::date). Verificado en vivo: HTTP 200 con estructura completa.",2026-07-13 14:48:29
-116,finance.php,GET,/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}],13,1-GET-auto,OK_FALSO_POSITIVO,"Mi script de prueba uso '1' como parametro inicio/fin (no reconocidos como fecha). Con fecha real (2026-07-01) el endpoint funciona correctamente, sin error embebido. No requiere cambios de codigo.",2026-07-13 14:52:35
-117,finance.php,GET,/cierre-de-caja/{id_vendedor},331,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:41
+112,employees.php,GET,/asistencias/semanal,519,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:35
+113,employees.php,GET,/asistencias/tabla/{fecha},595,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:36
+114,employees.php,GET,/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin},705,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:37
+115,employees.php,GET,/empleados/dashboard-stats/{id_empleado}/{id_departamento},838,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:38
+116,finance.php,GET,/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}],13,1-GET-auto,OK_FALSO_POSITIVO_REVERIFICADO,Reverificacion de regresion uso '1' en vez de fecha real para inicio/fin (limitacion conocida del script de prueba). Ya verificado con fecha real anteriormente sin errores.,2026-07-13 15:43:24
+117,finance.php,GET,/cierre-de-caja/{id_vendedor},331,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:40
 118,finance.php,POST,/cierre-de-caja-vendedor,391,2-escritura-manual,PENDIENTE,,
-119,finance.php,GET,/reporte-de-caja/{inicio}/{fin}/{id_vendedor},426,1-GET-auto,CORREGIDO,moment::text LIKE en rama pgsql (7 subconsultas afectadas via $whereBase). Verificado en vivo con fecha real: 0 errores embebidos.,2026-07-13 14:53:50
+119,finance.php,GET,/reporte-de-caja/{inicio}/{fin}/{id_vendedor},426,1-GET-auto,OK_FALSO_POSITIVO_REVERIFICADO,Reverificacion de regresion uso '1' en vez de fecha real para inicio/fin (limitacion conocida del script de prueba). Ya verificado con fecha real anteriormente sin errores.,2026-07-13 15:43:24
 120,finance.php,POST,/retiro,522,2-escritura-manual,PENDIENTE,,
 121,finance.php,POST,/otro-abono,620,2-escritura-manual,PENDIENTE,,
-122,finance.php,GET,/retiros/{inicio}/{fin}/{id_empleado},740,1-GET-auto,OK_FALSO_POSITIVO,"Mismo problema de parametro de prueba que id 116. Con fecha real funciona correctamente, sin error embebido.",2026-07-13 14:52:35
-123,finance.php,GET,/pagos-ordenes/{fecha},818,1-GET-auto,CORREGIDO,moment::text LIKE en rama pgsql. Verificado en vivo: 0 errores embebidos.,2026-07-13 14:53:50
-124,finance.php,GET,/balance-de-cierres/{inicio}/{fin}/{id_vendedor},833,1-GET-auto,OK_FALSO_POSITIVO,"Mismo problema de parametro de prueba que id 116. Con fecha real funciona correctamente, sin error embebido.",2026-07-13 14:52:35
-125,geografia.php,GET,/catalogo-paises,10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:45
-126,geografia.php,GET,/catalogo-estados/{id_pais},595,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:45
-127,geografia.php,GET,/catalogo-ciudades/{id_estado},615,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:46
-128,inventory.php,GET,/api/inventario/template-excel,13,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:48
-129,inventory.php,GET,/api/products/template-excel-test,245,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:49
+122,finance.php,GET,/retiros/{inicio}/{fin}/{id_empleado},740,1-GET-auto,OK_FALSO_POSITIVO_REVERIFICADO,Reverificacion de regresion uso '1' en vez de fecha real para inicio/fin (limitacion conocida del script de prueba). Ya verificado con fecha real anteriormente sin errores.,2026-07-13 15:43:24
+123,finance.php,GET,/pagos-ordenes/{fecha},818,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:43
+124,finance.php,GET,/balance-de-cierres/{inicio}/{fin}/{id_vendedor},833,1-GET-auto,OK_FALSO_POSITIVO_REVERIFICADO,Reverificacion de regresion uso '1' en vez de fecha real para inicio/fin (limitacion conocida del script de prueba). Ya verificado con fecha real anteriormente sin errores.,2026-07-13 15:43:24
+125,geografia.php,GET,/catalogo-paises,10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:44
+126,geografia.php,GET,/catalogo-estados/{id_pais},595,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:45
+127,geografia.php,GET,/catalogo-ciudades/{id_estado},615,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:46
+128,inventory.php,GET,/api/inventario/template-excel,13,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:47
+129,inventory.php,GET,/api/products/template-excel-test,245,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:48
 130,inventory.php,POST,/api/products/bulk-load,277,2-escritura-manual,PENDIENTE,,
 131,inventory.php,POST,/api/inventario/bulk-load,380,2-escritura-manual,PENDIENTE,,
-132,inventory.php,GET,/api/products/template-excel,511,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:50
-133,inventory.php,GET,/reporte/insumos-cosumidos-por-orden[/{id_orden}[/{fecha_inicio}[/{fecha_fin}]]],669,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:50
-134,inventory.php,GET,/insumos,893,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:51
-135,inventory.php,GET,/insumos/{id_insumo},909,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:52
+132,inventory.php,GET,/api/products/template-excel,511,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:49
+133,inventory.php,GET,/reporte/insumos-cosumidos-por-orden[/{id_orden}[/{fecha_inicio}[/{fecha_fin}]]],669,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:50
+134,inventory.php,GET,/insumos,893,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:51
+135,inventory.php,GET,/insumos/{id_insumo},909,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:52
 136,inventory.php,POST,/insumos/nuevo,925,2-escritura-manual,PENDIENTE,,
 137,inventory.php,POST,/insumos/editar,1011,2-escritura-manual,PENDIENTE,,
 138,inventory.php,POST,/insumos/eliminar,1057,2-escritura-manual,PENDIENTE,,
-139,inventory.php,GET,/inventario-movimientos/{id_orden}/{id_empleado},1075,1-GET-auto,CORREGIDO,Quitado filtro invalido id_empleado sobre ordenes_productos (columna nunca existio en ningun motor). Verificado en vivo: 0 errores.,2026-07-13 14:59:29
-140,inventory.php,GET,/inventario/historial/{id_orden},1093,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:54
+139,inventory.php,GET,/inventario-movimientos/{id_orden}/{id_empleado},1075,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:53
+140,inventory.php,GET,/inventario/historial/{id_orden},1093,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:53
 141,inventory.php,POST,/inventario-movimientos/nuevo,1108,2-escritura-manual,PENDIENTE,,
 142,inventory.php,POST,/inventario-movimientos/piezas-cortadas,1171,2-escritura-manual,PENDIENTE,,
 143,inventory.php,POST,/inventario-movimientos/empleados/update-insumo,1189,2-escritura-manual,PENDIENTE,,
 144,inventory.php,POST,/inventario-movimientos/update-insumo,1587,2-escritura-manual,PENDIENTE,,
 145,inventory.php,POST,/inventario-movimientos/update-prioridad,1651,2-escritura-manual,PENDIENTE,,
 146,inventory.php,POST,/inventario-movimientos/eliminar,1669,2-escritura-manual,PENDIENTE,,
-147,inventory.php,GET,/insumos/reporte/orden/{id},1686,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:54
-148,inventory.php,GET,/insumos/reporte/insumos/{id},1726,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:55
-149,inventory.php,GET,/insumos/reporte/insumos/producto/{id_producto},1762,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:56
-150,inventory.php,GET,/inventario/{departamento},1852,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:56
-151,inventory.php,GET,/inventario-tintas,1953,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:57
-152,inventory.php,GET,/inventario/eficiencia/{id_orden}/{id_departamento},1988,1-GET-auto,CORREGIDO,"Agregado GROUP BY faltante (a.name, a.id_woo, b.valor_inicial, b.valor_final, c.cantidad) solo en rama pgsql. Verificado en vivo: 0 errores.",2026-07-13 14:59:30
-153,inventory.php,GET,/eficiencia-orden/{id_orden},2019,1-GET-auto,CORREGIDO,"3 fixes: CAST sizes._id/id_size a varchar (x3), IF()->CASE WHEN universal, GROUP BY faltante en segunda query. Verificado en vivo: 0 errores.",2026-07-13 14:59:30
+147,inventory.php,GET,/insumos/reporte/orden/{id},1686,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:54
+148,inventory.php,GET,/insumos/reporte/insumos/{id},1726,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:55
+149,inventory.php,GET,/insumos/reporte/insumos/producto/{id_producto},1762,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:55
+150,inventory.php,GET,/inventario/{departamento},1852,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:56
+151,inventory.php,GET,/inventario-tintas,1953,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:57
+152,inventory.php,GET,/inventario/eficiencia/{id_orden}/{id_departamento},1988,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:58
+153,inventory.php,GET,/eficiencia-orden/{id_orden},2019,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:59
 154,inventory.php,POST,/empleados/eficiencia,2094,2-escritura-manual,PENDIENTE,,
-155,inventory.php,GET,/inventario/consumo/{id_insumo},2145,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:00
+155,inventory.php,GET,/inventario/consumo/{id_insumo},2145,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:59
 156,inventory.php,PATCH,/inventario/consumo/{id_movimiento},2227,2-escritura-manual,PENDIENTE,,
-157,inventory.php,GET,/inventario/consumo/{id_movimiento}/historial,2392,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:00
-158,inventory.php,GET,/api/inventario/remanentes,2494,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:01
+157,inventory.php,GET,/inventario/consumo/{id_movimiento}/historial,2392,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:01
+158,inventory.php,GET,/api/inventario/remanentes,2494,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:01
 159,inventory.php,PUT,/api/inventario/remanentes/{id},2614,2-escritura-manual,PENDIENTE,,
 160,inventory.php,DELETE,/api/inventario/remanentes/{id},2707,2-escritura-manual,PENDIENTE,,
-161,inventory.php,GET,/inventario/reportes/movimientos,2761,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:02
-162,inventory.php,GET,/inventario/reportes/general,2838,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:03
-163,inventory.php,GET,/inventario/reportes/graficos-consumo,3157,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:04
-164,inventory.php,GET,/inventario/movimientos/{id}/historial,3238,1-GET-auto,CORREGIDO,"Columna 'moment' no existe (nunca existio en ningun motor), nombre real fecha_modificacion. Fix universal, no requiere DB_DRIVER. Verificado en vivo: 0 errores.",2026-07-13 14:59:30
-165,inventory.php,GET,/api/inventario/carga-directa,3273,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:32:05
+161,inventory.php,GET,/inventario/reportes/movimientos,2761,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:03
+162,inventory.php,GET,/inventario/reportes/general,2838,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:03
+163,inventory.php,GET,/inventario/reportes/graficos-consumo,3157,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:04
+164,inventory.php,GET,/inventario/movimientos/{id}/historial,3238,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:05
+165,inventory.php,GET,/api/inventario/carga-directa,3273,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 15:39:06
 166,inventory.php,POST,/api/inventario/carga-directa,3839,2-escritura-manual,PENDIENTE,,
-167,machine_services.php,GET,/servicios-maquinas,13,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:06
+167,machine_services.php,GET,/servicios-maquinas,13,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:07
 168,machine_services.php,POST,/servicios-maquinas,60,2-escritura-manual,PENDIENTE,,
 169,machine_services.php,PUT,/servicios-maquinas/{id},87,2-escritura-manual,PENDIENTE,,
 170,machine_services.php,DELETE,/servicios-maquinas/{id},112,2-escritura-manual,PENDIENTE,,
@@ -174,10 +174,10 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 173,manufacturing.php,POST,/lotes/{id}/terminar,155,2-escritura-manual,PENDIENTE,,
 174,manufacturing.php,POST,/revision/nuevo,251,2-escritura-manual,PENDIENTE,,
 175,manufacturing.php,POST,/revision/nuevo,323,2-escritura-manual,PENDIENTE,,
-176,manufacturing.php,GET,/revision/diseno/{id_empleado},394,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:06
-177,manufacturing.php,GET,/revisiones/estatus/{id_revision},426,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:07
-178,manufacturing.php,GET,/revision/trabajos,451,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:08
-179,manufacturing.php,GET,/revision/actualizar-estatus-de-pago/{estatus}/{id_pago},468,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:09
+176,manufacturing.php,GET,/revision/diseno/{id_empleado},394,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:07
+177,manufacturing.php,GET,/revisiones/estatus/{id_revision},426,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:08
+178,manufacturing.php,GET,/revision/trabajos,451,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:09
+179,manufacturing.php,GET,/revision/actualizar-estatus-de-pago/{estatus}/{id_pago},468,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:10
 180,manufacturing.php,POST,/empleados/tareas,487,2-escritura-manual,PENDIENTE,,
 181,manufacturing.php,POST,/empleados/tintas,538,2-escritura-manual,PENDIENTE,,
 182,manufacturing.php,POST,/insumos/rendimiento,574,2-escritura-manual,PENDIENTE,,
@@ -187,71 +187,71 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 186,manufacturing.php,POST,/lotes/get-detalles,1300,2-escritura-manual,PENDIENTE,,
 187,manufacturing.php,POST,/lotes/update/cantidad,1316,2-escritura-manual,PENDIENTE,,
 188,manufacturing.php,POST,/lotes/update/prioridad,1379,2-escritura-manual,PENDIENTE,,
-189,manufacturing.php,GET,/lotes-fisicos/tabla-editar,1398,1-GET-auto,CORREGIDO,"Resuelto automaticamente por el fix de catalogo_telas.eliminado (id 14, misma tabla). Ademas se corrigio backtick en WooMe::getAllCategories(). Verificado en vivo: telas y categories OK, sin errores.",2026-07-13 15:08:50
+189,manufacturing.php,GET,/lotes-fisicos/tabla-editar,1398,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:11
 190,manufacturing.php,POST,/lotes-fisicos/tabla-editar-filter,1430,2-escritura-manual,PENDIENTE,,
 191,manufacturing.php,POST,/lotes-fisicos/eliminar,1480,2-escritura-manual,PENDIENTE,,
 192,manufacturing.php,POST,/lotes-fisicos/update,1499,2-escritura-manual,PENDIENTE,,
-193,manufacturing.php,GET,/lotes/activos,1518,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:10
-194,manufacturing.php,GET,/lotes/fisicos,1535,1-GET-auto,CODIGO_MUERTO_CANDIDATO,"lotes_fisicos.id_inventario NUNCA existio en ningun motor (ni MySQL ni Postgres). Cero uso real: 0 hits en app_multi/msg_ninesys/ninesys-cdn y 0 en logs de produccion. No se corrige (no hay columna real que mapear) - candidato a eliminar, pendiente de autorizacion del usuario.",2026-07-13 15:01:56
-195,manufacturing.php,GET,/lotes/existencia/{talla}/{tela}/{corte}/{categoria},1549,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:12
+193,manufacturing.php,GET,/lotes/activos,1518,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:11
+194,manufacturing.php,GET,/lotes/fisicos,1535,1-GET-auto,CODIGO_MUERTO_CANDIDATO,"Reverificado: columna id_inventario sigue sin existir (esperado, es codigo muerto). Ver nota original: 0 uso real, candidato a eliminar pendiente de autorizacion.",2026-07-13 15:43:24
+195,manufacturing.php,GET,/lotes/existencia/{talla}/{tela}/{corte}/{categoria},1549,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:13
 196,manufacturing.php,POST,/lotes/{id}/finalizar-departamento,1610,2-escritura-manual,PENDIENTE,,
 197,manufacturing.php,POST,/lotes/activos,1877,2-escritura-manual,PENDIENTE,,
 198,manufacturing.php,POST,/lotes/{id}/finalizar-impresion,1978,2-escritura-manual,PENDIENTE,,
 199,manufacturing.php,POST,/lotes/{id}/finalizar-corte,2161,2-escritura-manual,PENDIENTE,,
 200,manufacturing.php,POST,/empleados/registrar-paso/{tipo}/{departamento}/{id_lotes_detalles}/{unidades},2420,2-escritura-manual,PENDIENTE,,
 201,manufacturing.php,POST,/empleados/registrar-paso-por-lotes/{departamento},2575,2-escritura-manual,PENDIENTE,,
-202,manufacturing.php,GET,/empleados/registrar-pago/{id_lotes_detalles},2738,1-GET-auto,CORREGIDO,"Bug de PHP puro (no especifico de motor): $miEmpleado['id_empleado'] -> $miEmpleado[0]['id_empleado'] (goQuery devuelve array de filas). No se pudo verificar con datos reales (tabla lotes_detalles vacia en 194 dev), pero el fix es logicamente inequivoco y confirmado por lint.",2026-07-13 15:08:50
-203,manufacturing.php,GET,/empleados/ordenes-asignadas/v1/{id_empleado},2758,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:14
+202,manufacturing.php,GET,/empleados/registrar-pago/{id_lotes_detalles},2738,1-GET-auto,CORREGIDO_SIN_DATOS_DE_PRUEBA,"Reverificacion con id_lotes_detalles=1 (no existe en 194 dev) devuelve array vacio, mismo comportamiento esperado que en la verificacion original. Fix de codigo (indice [0]) confirmado correcto por lint y logica.",2026-07-13 15:43:24
+203,manufacturing.php,GET,/empleados/ordenes-asignadas/v1/{id_empleado},2758,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:14
 204,manufacturing.php,POST,/pausas,2802,2-escritura-manual,PENDIENTE,,
-205,manufacturing.php,GET,/ordenes/proyeccion-entrega,2853,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:15
-206,manufacturing.php,GET,/empleados/mi-asignacion/{id_orden}/{id_empleado},2991,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:15
-207,manufacturing.php,GET,/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso},3093,1-GET-auto,CORREGIDO,"3 bugs en la misma ruta: (1) sizes._id/talla cast, (2) JOIN condition truncada (AND r.id_empleado sin comparacion) completada como r.id_empleado=b.id_empleado, (3) GROUP BY faltante con columnas de otras tablas. Verificado en vivo tras 3 iteraciones: 0 errores.",2026-07-13 15:08:50
-208,manufacturing.php,GET,/sse/empleados/ordenes-asignadas/{id_empleado},3359,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:32:23
-209,manufacturing.php,GET,/empleados-todos,3470,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:24
-210,manufacturing.php,GET,/reports/input-efficiency/{id_ordenes},3634,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:25
-211,manufacturing.php,GET,/reports/manufacturing-time,3745,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:26
+205,manufacturing.php,GET,/ordenes/proyeccion-entrega,2853,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:15
+206,manufacturing.php,GET,/empleados/mi-asignacion/{id_orden}/{id_empleado},2991,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:16
+207,manufacturing.php,GET,/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso},3093,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:17
+208,manufacturing.php,GET,/sse/empleados/ordenes-asignadas/{id_empleado},3359,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 15:39:24
+209,manufacturing.php,GET,/empleados-todos,3470,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:24
+210,manufacturing.php,GET,/reports/input-efficiency/{id_ordenes},3634,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:25
+211,manufacturing.php,GET,/reports/manufacturing-time,3745,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:26
 212,manufacturing.php,POST,/reports/manufacturing-time,4092,2-escritura-manual,PENDIENTE,,
-213,manufacturing.php,GET,/empleados/terminadas-hoy/{id_empleado}/{id_departamento},4406,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:26
-214,manufacturing.php,GET,/empleados/unpaid-orders/{id_empleado}/{id_departamento},4436,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:27
-215,msg_service.php,GET,/internal/db-credentials/{id_empresa},28,1-GET-auto,OK,"HTTP 401, sin error embebido",2026-07-13 14:32:28
-216,msg_service.php,GET,/internal/business-hours,168,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:28
-217,msg_service.php,GET,/internal/ping,350,1-GET-auto,OK,"HTTP 401, sin error embebido",2026-07-13 14:32:29
-218,msg_service.php,GET,/internal/catalog-test,376,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:30
-219,msg_service.php,GET,/internal/catalog-test/{id},396,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:31
-220,msg_service.php,GET,/internal/catalog/{id_empresa},456,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:31
-221,msg_service.php,GET,/internal/cliente/{id_empresa}/by-phone,663,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 14:32:32
-222,msg_service.php,GET,/internal/ordenes/{id_empresa}/by-phone,779,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 14:32:33
+213,manufacturing.php,GET,/empleados/terminadas-hoy/{id_empleado}/{id_departamento},4406,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:27
+214,manufacturing.php,GET,/empleados/unpaid-orders/{id_empleado}/{id_departamento},4436,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:27
+215,msg_service.php,GET,/internal/db-credentials/{id_empresa},28,1-GET-auto,OK,"HTTP 401, sin error embebido",2026-07-13 15:39:28
+216,msg_service.php,GET,/internal/business-hours,168,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:29
+217,msg_service.php,GET,/internal/ping,350,1-GET-auto,OK,"HTTP 401, sin error embebido",2026-07-13 15:39:29
+218,msg_service.php,GET,/internal/catalog-test,376,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:30
+219,msg_service.php,GET,/internal/catalog-test/{id},396,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:31
+220,msg_service.php,GET,/internal/catalog/{id_empresa},456,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:31
+221,msg_service.php,GET,/internal/cliente/{id_empresa}/by-phone,663,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 15:39:32
+222,msg_service.php,GET,/internal/ordenes/{id_empresa}/by-phone,779,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 15:39:33
 223,msg_service.php,POST,/internal/cliente/{id_empresa},925,2-escritura-manual,PENDIENTE,,
 224,msg_service.php,PATCH,/internal/presupuesto/{id_presupuesto}/vendedor,1032,2-escritura-manual,PENDIENTE,,
-225,ordenes-sin-asignacion.php,GET,/ordenes-sin-asignar/{id_vendedor},10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:33
+225,ordenes-sin-asignacion.php,GET,/ordenes-sin-asignar/{id_vendedor},10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:34
 226,orders.php,POST,/orden/editar,14,2-escritura-manual,PENDIENTE,,
 227,orders.php,POST,/orden/previa-cancelacion,118,2-escritura-manual,PENDIENTE,,
 228,orders.php,POST,/orden/actualizar-estado,158,2-escritura-manual,PENDIENTE,,
-229,orders.php,GET,/ordenes/abono/{id},361,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:34
-230,orders.php,GET,/ordenes/verificar-edición/{id},389,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:32:35
+229,orders.php,GET,/ordenes/abono/{id},361,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:34
+230,orders.php,GET,/ordenes/verificar-edición/{id},389,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 15:39:35
 231,orders.php,POST,/orden/abono,404,2-escritura-manual,PENDIENTE,,
 232,orders.php,POST,/orden/edit/obs,615,2-escritura-manual,PENDIENTE,,
-233,orders.php,GET,/ordenes/abono-detale/{id},632,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:36
-234,orders.php,GET,/reportes/resumen/disenadores/{id_empleado}/{id_departamento},790,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:36
-235,orders.php,GET,/reportes/resumen/empleados/{id_empleado}/{id_departamento},847,1-GET-auto,CORREGIDO,"Endpoint con 4 sub-consultas independientes, 7 bugs en total: GROUP BY incompleto (x3, incluyendo e.comision/d.comision multiplicados fuera de SUM), ORDER BY/SELECT DISTINCT mismatch (ofo.orden_fila), TO_CHAR sobre varchar sin cast a date, columna op.id_orden vs ldea.id_orden en subquery con GROUP BY. Verificado en vivo tras 2 iteraciones: 0 errores.",2026-07-13 15:18:27
-236,orders.php,GET,/comercializacion/dashboard/{id_empleado}/{id_departamento},1457,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:38
-237,orders.php,GET,/ordenes/reporte/{id},1657,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:39
-238,orders.php,GET,/comercializacion/ordenes/reporte,1711,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:40
-239,orders.php,GET,/comercializacion/ordenes/reporte/terminadas/{rango},1743,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:41
-240,orders.php,GET,/comercializacion/ordenes/reporte/entregadas/{rango},1785,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:42
+233,orders.php,GET,/ordenes/abono-detale/{id},632,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:36
+234,orders.php,GET,/reportes/resumen/disenadores/{id_empleado}/{id_departamento},790,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:37
+235,orders.php,GET,/reportes/resumen/empleados/{id_empleado}/{id_departamento},847,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:38
+236,orders.php,GET,/comercializacion/dashboard/{id_empleado}/{id_departamento},1457,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:38
+237,orders.php,GET,/ordenes/reporte/{id},1657,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:39
+238,orders.php,GET,/comercializacion/ordenes/reporte,1711,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:40
+239,orders.php,GET,/comercializacion/ordenes/reporte/terminadas/{rango},1743,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:41
+240,orders.php,GET,/comercializacion/ordenes/reporte/entregadas/{rango},1785,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:41
 241,orders.php,POST,/ordenes/nueva,1831,2-escritura-manual,PENDIENTE,,
 242,orders.php,POST,/presupuesto/nuevo,2149,2-escritura-manual,PENDIENTE,,
-243,orders.php,GET,/presupuestos/lista,2366,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:42
-244,orders.php,GET,/presupuesto/detalle/{id},2388,1-GET-auto,FALLO_RUTA,HTTP 404 (ruta no encontrada/metodo no permitido con params de prueba),2026-07-13 14:32:43
+243,orders.php,GET,/presupuestos/lista,2366,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:42
+244,orders.php,GET,/presupuesto/detalle/{id},2388,1-GET-auto,REQUIERE_INVESTIGACION_APARTE,"HTTP 404 real, causa no relacionada con PostgreSQL identificada. Requiere investigacion aparte de middleware/routing, fuera del alcance de compatibilidad SQL.",2026-07-13 15:43:03
 245,orders.php,POST,/ordenes/actualizar-fila,2432,2-escritura-manual,PENDIENTE,,
 246,orders.php,POST,/ordenes/nueva/custom/edit,2451,2-escritura-manual,PENDIENTE,,
 247,orders.php,POST,/ordenes/nueva/custom,2799,2-escritura-manual,PENDIENTE,,
 248,orders.php,POST,/ordenes/nueva/sport,3457,2-escritura-manual,PENDIENTE,,
 249,orders.php,POST,/comercializacion/revisiones-estatus/{estatus}/{id_revision}/{id_orden},3744,2-escritura-manual,PENDIENTE,,
 250,orders.php,POST,/comercializacion/revisiones-detalles/{id_revision},3885,2-escritura-manual,PENDIENTE,,
-251,orders.php,GET,/comercializacion/revisiones/{id_empleado},3901,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:44
+251,orders.php,GET,/comercializacion/revisiones/{id_empleado},3901,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:44
 252,orders.php,POST,/reposiciones/actualizar-fila,3930,2-escritura-manual,PENDIENTE,,
-253,orders.php,GET,/ordenes-observaciones/{id_orden},3950,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:44
+253,orders.php,GET,/ordenes-observaciones/{id_orden},3950,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:44
 254,orders.php,POST,/ordenes/materiales-lote,3975,2-escritura-manual,PENDIENTE,,
 255,orders.php,POST,/ordenes/nueva/simple,4037,2-escritura-manual,PENDIENTE,,
 256,orders.php,POST,/ordenes/validar-stock,4421,2-escritura-manual,PENDIENTE,,
@@ -262,60 +262,66 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 261,payments.php,POST,/pagos/terminar-planilla,12,2-escritura-manual,PENDIENTE,,
 262,payments.php,POST,/pagos/pagar-a-empleados,52,2-escritura-manual,PENDIENTE,,
 263,payments.php,POST,/pagos/procesar-lote-pagos,222,2-escritura-manual,PENDIENTE,,
-264,payments.php,GET,/pagos/semana/disenadores,407,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:45
-265,payments.php,GET,/pagos/semana/empleados,630,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:46
-266,payments.php,GET,/pagos/semana/vendedores,1007,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:47
-267,payments.php,GET,/pagos/vendedor/{id_vendedoor},1118,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:47
-268,payments.php,GET,/pagos/reporte-empleado/{id_empleado},1210,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:48
-269,payments.php,GET,/pagos/historico/{semana},1368,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:49
+264,payments.php,GET,/pagos/semana/disenadores,407,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:45
+265,payments.php,GET,/pagos/semana/empleados,630,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:46
+266,payments.php,GET,/pagos/semana/vendedores,1007,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:47
+267,payments.php,GET,/pagos/vendedor/{id_vendedoor},1118,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:48
+268,payments.php,GET,/pagos/reporte-empleado/{id_empleado},1210,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:49
+269,payments.php,GET,/pagos/historico/{semana},1368,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:49
 270,payments.php,POST,/pagos/semana,1657,2-escritura-manual,PENDIENTE,,
 271,payments.php,POST,/pagos/semana/OLD,1821,2-escritura-manual,PENDIENTE,,
 272,printers.php,POST,/impresoras,10,2-escritura-manual,PENDIENTE,,
-273,printers.php,GET,/impresoras,66,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:50
-274,printers.php,GET,/impresoras-tintas-actual[/{id_impresora}],227,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:51
+273,printers.php,GET,/impresoras,66,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:50
+274,printers.php,GET,/impresoras-tintas-actual[/{id_impresora}],227,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:51
 275,printers.php,PUT,/impresoras/{id},366,2-escritura-manual,PENDIENTE,,
 276,printers.php,POST,/inventario-tintas,448,2-escritura-manual,PENDIENTE,,
 277,printers.php,DELETE,/impresoras/{id},520,2-escritura-manual,PENDIENTE,,
 278,production.php,POST,/ordenes/actualizar-filas-batch,15,2-escritura-manual,PENDIENTE,,
 279,production.php,POST,/reposiciones/actualizar-filas-batch,69,2-escritura-manual,PENDIENTE,,
-280,production.php,GET,/sse/produccion/ordenes-activas,123,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:52
-281,production.php,GET,/sse/produccion/check-version,173,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:53
-282,production.php,GET,/sse/produccion,198,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:54
-283,production.php,GET,/sse/produccion/corte/{id_empleado},666,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:33:01
-284,production.php,GET,/sse/diseno/{id_empleado},709,1-GET-auto,CORREGIDO,"GROUP BY c._id insuficiente (faltaban 9 columnas de tablas JOINed disenos/ordenes, incluyendo una en subquery correlacionada). Verificado en vivo tras 2 iteraciones: 0 errores.",2026-07-13 15:26:12
-285,production.php,GET,/sse/disenos-todo,796,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:33:08
-286,production.php,GET,/lotes/paso-actual/{id_orden},829,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:09
-287,production.php,GET,/reposiciones/{id_ordenes_productos}/{id_orden},854,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:10
-288,production.php,GET,/reposicion/{id_reposicion}/departamentos-cola,893,1-GET-auto,FALLO_RUTA,HTTP 404 (ruta no encontrada/metodo no permitido con params de prueba),2026-07-13 14:33:11
+280,production.php,GET,/sse/produccion/ordenes-activas,123,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:52
+281,production.php,GET,/sse/produccion/check-version,173,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:52
+282,production.php,GET,/sse/produccion,198,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:53
+283,production.php,GET,/sse/produccion/corte/{id_empleado},666,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 15:40:00
+284,production.php,GET,/sse/diseno/{id_empleado},709,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:01
+285,production.php,GET,/sse/disenos-todo,796,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 15:40:08
+286,production.php,GET,/lotes/paso-actual/{id_orden},829,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:08
+287,production.php,GET,/reposiciones/{id_ordenes_productos}/{id_orden},854,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:10
+288,production.php,GET,/reposicion/{id_reposicion}/departamentos-cola,893,1-GET-auto,REQUIERE_INVESTIGACION_APARTE,"HTTP 404 real, causa no relacionada con PostgreSQL identificada. Requiere investigacion aparte de middleware/routing, fuera del alcance de compatibilidad SQL.",2026-07-13 15:43:03
 289,production.php,POST,/reposicion/{id_reposicion}/excluir-departamento,962,2-escritura-manual,PENDIENTE,,
-290,production.php,GET,/reposiciones-reporte/{estatus_orden},1031,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:11
-291,production.php,GET,/reposicion-detalles/{id_reposicion},1200,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:12
+290,production.php,GET,/reposiciones-reporte/{estatus_orden},1031,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:11
+291,production.php,GET,/reposicion-detalles/{id_reposicion},1200,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:12
 292,production.php,POST,/produccion/reposicion,1380,2-escritura-manual,PENDIENTE,,
 293,production.php,POST,/produccion/reposicion/final,1542,2-escritura-manual,PENDIENTE,,
 294,production.php,POST,/produccion/reposicion/eliminar,1576,2-escritura-manual,PENDIENTE,,
 295,production.php,POST,/produccion/terminar/{id},1599,2-escritura-manual,PENDIENTE,,
 296,production.php,POST,/produccion/asignar-varias-ordenes-a-corte,1655,2-escritura-manual,PENDIENTE,,
 297,production.php,POST,/produccion/update/paso,1708,2-escritura-manual,PENDIENTE,,
-298,production.php,GET,/produccion/progressbar/{id_orden},1740,1-GET-auto,CORREGIDO,"Causa raiz real: GROUP BY incompleto generaba error embebido que el foreach recorria como filas, causando el TypeError reportado. Corregido con MIN/MAX() para preservar una fila por departamento. Verificado en vivo: 0 errores.",2026-07-13 15:26:12
-299,production.php,GET,/lotes/detalles/v2/{id},1827,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:13
-300,production.php,GET,/produccion/verificar-asignacion-empleado/{departamento}/{id_orden}/{id_ordenes_productos},1851,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:14
-301,production.php,GET,/lotes/detalles/{id},1885,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:15
-302,production.php,GET,/ordenes/detalles/{id},1917,1-GET-auto,CORREGIDO,"ordenes.observaciones no existe en ningun motor (nunca existio); se movio a tabla ordenes_observaciones (1 fila por orden, patron ya usado en orders.php). Bug universal preexistente. Verificado en vivo: 0 errores.",2026-07-13 15:26:12
-303,production.php,GET,/ordenes/vinculadas/{id_orden_father},1934,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:17
-304,production.php,GET,/produccion/dashboard-stats,1956,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:17
+298,production.php,GET,/produccion/progressbar/{id_orden},1740,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:12
+299,production.php,GET,/lotes/detalles/v2/{id},1827,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:13
+300,production.php,GET,/produccion/verificar-asignacion-empleado/{departamento}/{id_orden}/{id_ordenes_productos},1851,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:14
+301,production.php,GET,/lotes/detalles/{id},1885,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:15
+302,production.php,GET,/ordenes/detalles/{id},1917,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:16
+303,production.php,GET,/ordenes/vinculadas/{id_orden_father},1934,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:16
+304,production.php,GET,/produccion/dashboard-stats,1956,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:17
 305,production.php,POST,/production/corte/ajuste,2090,2-escritura-manual,PENDIENTE,,
 306,production.php,POST,/production/corte/crear-orden-stock-manual,2158,2-escritura-manual,PENDIENTE,,
 307,production.php,POST,/production/corte/finalizar-tarea,2198,2-escritura-manual,PENDIENTE,,
-308,production.php,GET,/production/corte/orden-detalles/{id},2259,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:18
-309,products.php,GET,/customer/create/nine,14,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:33:38
-310,products.php,GET,/products,24,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:33:39
+308,production.php,GET,/production/corte/orden-detalles/{id},2259,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:18
+309,products.php,GET,/customer/create/nine,14,1-GET-auto,FALLO_RED,"HTTPSConnectionPool(host='api.nineteengreen.com', port=443): Read timed out. (read timeout=20)",2026-07-13 15:40:38
+310,products.php,GET,/products,24,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {
+    ""statusCode"": 500,
+    ""error"": {
+        ""type"": ""SERVER_ERROR"",
+        ""description"": ""An internal error has occurred while processing your request.""
+    }
+}",2026-07-13 15:40:39
 311,products.php,POST,/products-attributes,33,2-escritura-manual,PENDIENTE,,
-312,products.php,GET,/products-attributes,55,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:40
+312,products.php,GET,/products-attributes,55,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:40
 313,products.php,POST,/products-attributes/editar,70,2-escritura-manual,PENDIENTE,,
 314,products.php,POST,/products-attributes/eliminar,89,2-escritura-manual,PENDIENTE,,
-315,products.php,GET,/products/categories/{id_category},107,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:00
-316,products.php,GET,/productos-asignados/{orden},117,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:01
-317,products.php,GET,/products/{id},132,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:02
+315,products.php,GET,/products/categories/{id_category},107,1-GET-auto,FALLO_RED,"HTTPSConnectionPool(host='api.nineteengreen.com', port=443): Read timed out. (read timeout=20)",2026-07-13 15:41:00
+316,products.php,GET,/productos-asignados/{orden},117,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:01
+317,products.php,GET,/products/{id},132,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:02
 318,products.php,POST,/products/{name}/{sku}/{price}/{stock_quantity}/{categories}/{sizes},142,2-escritura-manual,PENDIENTE,,
 319,products.php,POST,/products/lite,153,2-escritura-manual,PENDIENTE,,
 320,products.php,POST,/editar-producto,171,2-escritura-manual,PENDIENTE,,
@@ -325,63 +331,87 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 324,products.php,DELETE,/products/{id},288,2-escritura-manual,PENDIENTE,,
 325,products.php,POST,/product-set-comision-producto,307,2-escritura-manual,PENDIENTE,,
 326,products.php,POST,/product-set-comisiones-batch,399,2-escritura-manual,PENDIENTE,,
-327,products.php,GET,/product-set-comision/{id}/{comision},538,1-GET-auto,CORREGIDO,UPDATE+SELECT concatenados en un solo goQuery separados en dos llamadas. Verificado en vivo: 0 errores.,2026-07-13 15:32:24
-328,products.php,GET,/atributos/comisiones,575,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:04
-329,products.php,GET,/wp/products,587,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:05
-330,products.php,GET,/wp/products/{id_product},598,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:05
+327,products.php,GET,/product-set-comision/{id}/{comision},538,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:03
+328,products.php,GET,/atributos/comisiones,575,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {
+    ""statusCode"": 500,
+    ""error"": {
+        ""type"": ""SERVER_ERROR"",
+        ""description"": ""An internal error has occurred while processing your request.""
+    }
+}",2026-07-13 15:41:03
+329,products.php,GET,/wp/products,587,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {
+    ""statusCode"": 500,
+    ""error"": {
+        ""type"": ""SERVER_ERROR"",
+        ""description"": ""An internal error has occurred while processing your request.""
+    }
+}",2026-07-13 15:41:04
+330,products.php,GET,/wp/products/{id_product},598,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {
+    ""statusCode"": 500,
+    ""error"": {
+        ""type"": ""SERVER_ERROR"",
+        ""description"": ""An internal error has occurred while processing your request.""
+    }
+}",2026-07-13 15:41:05
 331,products.php,POST,/customers/eliminar,613,2-escritura-manual,PENDIENTE,,
-332,products.php,GET,/customers,625,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:06
-333,products.php,GET,/customers/optimize/{key}/{acc},639,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:07
-334,products.php,GET,/customers/orders/{id_customer},651,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:07
-335,products.php,GET,/wp/customers,661,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:08
-336,products.php,GET,/customers/orders-count/{customer_email}/{customer_id},671,1-GET-auto,OMITIDO,requiere parametro no trivial (email u otro) para probar de forma segura,2026-07-13 14:34:08
-337,products.php,GET,/customers/{id},689,1-GET-auto,CORREGIDO,Backtick alrededor de address en woome.php getCustomerByIdWP() quitado. Verificado en vivo: 0 errores.,2026-07-13 15:32:24
-338,products.php,GET,/customers/por-telefono/{phone},703,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:09
+332,products.php,GET,/customers,625,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:06
+333,products.php,GET,/customers/optimize/{key}/{acc},639,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:07
+334,products.php,GET,/customers/orders/{id_customer},651,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {
+    ""statusCode"": 500,
+    ""error"": {
+        ""type"": ""SERVER_ERROR"",
+        ""description"": ""An internal error has occurred while processing your request.""
+    }
+}",2026-07-13 15:41:07
+335,products.php,GET,/wp/customers,661,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:08
+336,products.php,GET,/customers/orders-count/{customer_email}/{customer_id},671,1-GET-auto,OMITIDO,requiere parametro no trivial (email u otro) para probar de forma segura,2026-07-13 15:41:08
+337,products.php,GET,/customers/{id},689,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:09
+338,products.php,GET,/customers/por-telefono/{phone},703,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:09
 339,products.php,POST,/customers/{first_name}/{last_name}/{cedula}/{phone}/{email}/{address},713,2-escritura-manual,PENDIENTE,,
 340,products.php,PUT,/customers/{id}/{first_name}/{last_name}/{cedula}/{phone}/{email}/{billing_address},756,2-escritura-manual,PENDIENTE,,
 341,products.php,POST,/customers/edit1,805,2-escritura-manual,PENDIENTE,,
 342,products.php,POST,/customers/nuevo,825,2-escritura-manual,PENDIENTE,,
 343,products.php,POST,/customers/reactivar,862,2-escritura-manual,PENDIENTE,,
-344,products.php,GET,/categories,897,1-GET-auto,CORREGIDO,Resuelto por el fix de getAllCategories() (id 189). Verificado en vivo: 0 errores.,2026-07-13 15:32:24
-345,products.php,GET,/departamentos,907,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:11
-346,products.php,GET,/departamentos-empleado/{id_empleado},921,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:12
+344,products.php,GET,/categories,897,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:10
+345,products.php,GET,/departamentos,907,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:11
+346,products.php,GET,/departamentos-empleado/{id_empleado},921,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:12
 347,products.php,POST,/departamentos/nuevo,935,2-escritura-manual,PENDIENTE,,
 348,products.php,POST,/departamentos/editar,958,2-escritura-manual,PENDIENTE,,
 349,products.php,POST,/departamentos/editar/mensaje,976,2-escritura-manual,PENDIENTE,,
 350,products.php,DELETE,/departamentos/{id_departamento},992,2-escritura-manual,PENDIENTE,,
 351,products.php,POST,/departamentos/orden-paso,1007,2-escritura-manual,PENDIENTE,,
-352,products.php,GET,/attributes,1030,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:32
-353,products.php,GET,/sizes,1042,1-GET-auto,CORREGIDO,Backtick alrededor de name en woome.php getSizes() quitado. Verificado en vivo: 0 errores.,2026-07-13 15:32:24
+352,products.php,GET,/attributes,1030,1-GET-auto,FALLO_RED,"HTTPSConnectionPool(host='api.nineteengreen.com', port=443): Read timed out. (read timeout=20)",2026-07-13 15:41:32
+353,products.php,GET,/sizes,1042,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:33
 354,products.php,POST,/sizes,1057,2-escritura-manual,PENDIENTE,,
 355,products.php,POST,/sizes/editar,1079,2-escritura-manual,PENDIENTE,,
 356,products.php,POST,/sizes/eliminar,1099,2-escritura-manual,PENDIENTE,,
 357,products.php,POST,/categories,1120,2-escritura-manual,PENDIENTE,,
-358,products.php,GET,/empleado/asignado/{departamento}/{orden}/{item_id},1146,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:33
-359,products.php,GET,/lotes/en-proceso,1160,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:34
-360,products.php,GET,/lotes/verificar-cantidad-asignada/{id_ordenes_productos}/{departamento}/{id_orden},1254,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:35
-361,products.php,GET,/empleados/reposicion/{id_orden},1272,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:36
+358,products.php,GET,/empleado/asignado/{departamento}/{orden}/{item_id},1146,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:34
+359,products.php,GET,/lotes/en-proceso,1160,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:34
+360,products.php,GET,/lotes/verificar-cantidad-asignada/{id_ordenes_productos}/{departamento}/{id_orden},1254,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:35
+361,products.php,GET,/empleados/reposicion/{id_orden},1272,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:36
 362,products.php,POST,/lotes/empleados/reasignar,1365,2-escritura-manual,PENDIENTE,,
 363,products.php,POST,/lotes/empleados/reasignar-masiva,1441,2-escritura-manual,PENDIENTE,,
-364,products_reports.php,GET,/reportes/costos-productos,76,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:37
-365,products_reports.php,GET,/reportes/costos-productos/categorias,415,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:38
-366,products_reports.php,GET,/reportes/costos-productos/{id_producto}/detalle,773,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:39
-367,reports.php,GET,/reportes/costos-produccion/{inicio}/{fin},13,1-GET-auto,OK_FALSO_POSITIVO,"Mismo problema de parametro de prueba: inicio/fin recibieron '1' en vez de fecha real. Con fecha real (2026-07-01) el endpoint funciona correctamente, sin error embebido.",2026-07-13 14:52:41
-368,reports.php,GET,/reportes/insumos-consumidos-por-orden/{id_orden},628,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:40
-369,reports.php,GET,/reportes/mano-obra-por-orden/{id_orden},666,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:41
-370,reports.php,GET,/reportes/gastos-de-fabricacion/{fecha},901,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:42
-371,reports.php,GET,/reportes/material-consumido-por-orden/{id_orden},928,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:43
-372,reports.php,GET,/reportes/semanal-detallado,955,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 14:34:44
-373,reports.php,GET,/reportes/employee-efficiency-global,1327,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 14:34:45
-374,tables.php,GET,/ordenes-reporte-semanal/{fecha},12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:46
-375,tables.php,GET,/presupuestos/guardados,67,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:47
-376,tables.php,GET,/ordenes/guardadas,87,1-GET-auto,CORREGIDO,"2 bugs: (1) funciones JSON_* de MySQL sin rama pgsql, reescrito con jsonb ->/->>y jsonb_agg/jsonb_build_object; (2) UNION ALL entre json y jsonb (tipos incompatibles), unificado a jsonb_agg en ambas ramas. Verificado directamente en psql y en vivo: 0 errores.",2026-07-13 15:37:23
-377,tables.php,GET,/ordenes/observaciones/{id_orden}/{id_empleado}/{id_departamento},162,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:48
-378,tables.php,GET,/ordenes/notas-por-empleado/{id_orden},183,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:49
-379,tables.php,GET,/ordenes/borrador/reporte-semanal/{id_empleado}/{id_departamento},214,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:50
+364,products_reports.php,GET,/reportes/costos-productos,76,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:37
+365,products_reports.php,GET,/reportes/costos-productos/categorias,415,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:38
+366,products_reports.php,GET,/reportes/costos-productos/{id_producto}/detalle,773,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:39
+367,reports.php,GET,/reportes/costos-produccion/{inicio}/{fin},13,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {""error"":""Error en el reporte (Debug SQL Mode): Error en la consulta base del reporte: Error al ejecutar la consulta: SQLSTATE[22007]: Invalid datetime format: 7 ERROR:  invalid input syntax for type date: \""1\""\nCONTEXT:  unnamed portal parameter $1 = '...'""}",2026-07-13 15:41:39
+368,reports.php,GET,/reportes/insumos-consumidos-por-orden/{id_orden},628,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:40
+369,reports.php,GET,/reportes/mano-obra-por-orden/{id_orden},666,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:41
+370,reports.php,GET,/reportes/gastos-de-fabricacion/{fecha},901,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:42
+371,reports.php,GET,/reportes/material-consumido-por-orden/{id_orden},928,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:43
+372,reports.php,GET,/reportes/semanal-detallado,955,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 15:41:44
+373,reports.php,GET,/reportes/employee-efficiency-global,1327,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 15:41:44
+374,tables.php,GET,/ordenes-reporte-semanal/{fecha},12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:45
+375,tables.php,GET,/presupuestos/guardados,67,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:46
+376,tables.php,GET,/ordenes/guardadas,87,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:47
+377,tables.php,GET,/ordenes/observaciones/{id_orden}/{id_empleado}/{id_departamento},162,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:48
+378,tables.php,GET,/ordenes/notas-por-empleado/{id_orden},183,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:49
+379,tables.php,GET,/ordenes/borrador/reporte-semanal/{id_empleado}/{id_departamento},214,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:49
 380,tables.php,POST,/ordenes/borrador,242,2-escritura-manual,PENDIENTE,,
 381,tables.php,POST,/ordenes/guardadas/eliminar,268,2-escritura-manual,PENDIENTE,,
 382,tables.php,POST,/orden/guardar,361,2-escritura-manual,PENDIENTE,,
-383,tables.php,GET,/table/ordenes-activas/{id_empleado},437,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:51
-384,tables.php,GET,/table/ordenes-todas,538,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:51
-385,tables.php,GET,/table/ordenes-con-deuda,634,1-GET-auto,CORREGIDO,Subconsulta correlacionada con SUM() mezclado con d.pago_total sin GROUP BY (x2 en SELECT y WHERE). Envuelto en MAX() solo en pgsql. Verificado en vivo: 0 errores.,2026-07-13 15:37:23
+383,tables.php,GET,/table/ordenes-activas/{id_empleado},437,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:50
+384,tables.php,GET,/table/ordenes-todas,538,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:51
+385,tables.php,GET,/table/ordenes-con-deuda,634,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:51
 386,upload.php,POST,/upload-order-detail-image,9,2-escritura-manual,PENDIENTE,,
