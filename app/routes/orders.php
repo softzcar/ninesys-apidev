@@ -969,7 +969,7 @@ return function (App $app) {
             LEFT JOIN api_empresas.empresas_usuarios d ON d.id_usuario = a.id_empleado
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = ord._id
             WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND a.progreso != 'terminada' AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
-            GROUP BY a._id, a.id_orden, ord.cliente_nombre, a.fecha_inicio, a.fecha_terminado, a.progreso, d.comision_tipo, c.tiempo, b.cantidad, b.id_woo, e.product, b.talla, ofo.orden_fila
+            GROUP BY a._id, a.id_orden, ord.cliente_nombre, a.fecha_inicio, a.fecha_terminado, a.progreso, d.comision_tipo, c.tiempo, b.cantidad, b.id_woo, e.product, b.talla, ofo.orden_fila, e.comision, d.comision
             ORDER BY ofo.orden_fila ASC, a.id_orden DESC, a.progreso ASC
         ";
     } else {
@@ -1025,7 +1025,7 @@ return function (App $app) {
             SUM(a.cantidad) AS piezas_actuales,
             MAX(y.fecha_inicio) AS fecha_inicio,
             MAX(y.fecha_terminado) AS fecha_terminado,
-            MAX(TO_CHAR(d.fecha_entrega, 'DD-MM-YYYY')) AS fecha_entrega,
+            MAX(TO_CHAR(NULLIF(d.fecha_entrega, '')::date, 'DD-MM-YYYY')) AS fecha_entrega,
             MAX(y._id) AS lotes_detalles_empleados_asignados,
             y.id_departamento,
             (SELECT MIN(dep.orden_proceso) FROM lotes_detalles_empleados_asignados ldea JOIN departamentos dep ON ldea.id_departamento = dep._id WHERE ldea.id_orden = y.id_orden) AS orden_proceso_min,
@@ -1150,7 +1150,7 @@ return function (App $app) {
         FROM
             (
                 SELECT
-                    op.id_orden,
+                    ldea.id_orden,
                     ldea.id_empleado,
                     ldea.id_departamento,
                     string_agg(DISTINCT p.product, ', ') AS nombre_producto,
