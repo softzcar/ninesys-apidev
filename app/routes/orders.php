@@ -3260,11 +3260,10 @@ $object['sales_commission_ISSET'][] = false;
               $sql_lote_detalles = '';
 
               foreach ($resultDepartamentos as $departamento) {
-                $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, id_departamento, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', {$departamento['_id']}, '{$departamento['departamento']}');";
+                $sql_lote_detalles = "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, id_departamento, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', {$departamento['_id']}, '{$departamento['departamento']}');";
+                $object['lotes_detalles_sql'][$i][] = $sql_lote_detalles;
+                $object['lote_detalles_response'][$i][] = $localConnection->goQuery($sql_lote_detalles);
               }
-
-              $object['lotes_detalles_sql'][$i] = $sql_lote_detalles;
-              $object['lote_detalles_response'][$i] = $localConnection->goQuery($sql_lote_detalles);
             }
           }
         }
@@ -3323,69 +3322,86 @@ $object['sales_commission_ISSET'][] = false;
         }
       }
 
-      $sql_stock_update = '';
-
       // Aumentos por orden interna
       foreach ($stock_additions as $product_id => $total_quantity) {
-        $sql_stock_update .= "UPDATE products SET stock_quantity = stock_quantity + {$total_quantity} WHERE _id = {$product_id};";
+        $sql_stock_update = "UPDATE products SET stock_quantity = stock_quantity + {$total_quantity} WHERE _id = {$product_id};";
+        $object['custom_stock_update_sql'][] = $sql_stock_update;
+        $object['custom_stock_update_response'][] = $localConnection->goQuery($sql_stock_update);
       }
 
       // Descuentos por venta estándar
       foreach ($stock_deductions as $product_id => $total_quantity) {
-        $sql_stock_update .= "UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - {$total_quantity}) WHERE _id = {$product_id};";
-      }
-
-      if (!empty($sql_stock_update)) {
-        $object['custom_stock_update_sql'] = $sql_stock_update;
-        $object['custom_stock_update_response'] = $localConnection->goQuery($sql_stock_update);
+        $sql_stock_update = "UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - {$total_quantity}) WHERE _id = {$product_id};";
+        $object['custom_stock_update_sql'][] = $sql_stock_update;
+        $object['custom_stock_update_response'][] = $localConnection->goQuery($sql_stock_update);
       }
       // FIN: Lógica para actualizar stock en /nueva/custom
 
       // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
-      $sql_metodos_pago = '';
+      $object['sql_metodos_pago'] = [];
+      $object['metodos_pago'] = [];
 
       if (floatval($arr['montoDolaresEfectivo']) > 0) {  // Usar floatval para comparar con 0
-        $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Efectivo', '" . $arr['montoDolaresEfectivo'] . "', '1', '');";
-        $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoDolaresEfectivo'] . "', 'Dólares', 1, 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
+        $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Efectivo', '" . $arr['montoDolaresEfectivo'] . "', '1', '');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
+        $sql_metodos_pago = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoDolaresEfectivo'] . "', 'Dólares', 1, 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
       }
 
       if (floatval($arr['montoDolaresZelle']) > 0) {
-        $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Zelle', '" . $arr['montoDolaresZelle'] . "', '1', '" . addslashes($arr['montoDolaresZelleDetalle'] ?? '') . "');";
+        $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Zelle', '" . $arr['montoDolaresZelle'] . "', '1', '" . addslashes($arr['montoDolaresZelleDetalle'] ?? '') . "');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
       }
 
       if (floatval($arr['montoDolaresPanama']) > 0) {
-        $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Panamá', '" . $arr['montoDolaresPanama'] . "', '1', '" . addslashes($arr['montoDolaresPanamaDetalle'] ?? '') . "');";
+        $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Panamá', '" . $arr['montoDolaresPanama'] . "', '1', '" . addslashes($arr['montoDolaresPanamaDetalle'] ?? '') . "');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
       }
 
       if (floatval($arr['montoPesosEfectivo']) > 0) {
-        $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Pesos', 'Efectivo', '" . $arr['montoPesosEfectivo'] . "', '" . $arr['tasa_peso'] . "', '');";
-        $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoPesosEfectivo'] . "', 'Pesos', '" . $arr['tasa_peso'] . "', 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
+        $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Pesos', 'Efectivo', '" . $arr['montoPesosEfectivo'] . "', '" . $arr['tasa_peso'] . "', '');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
+        $sql_metodos_pago = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoPesosEfectivo'] . "', 'Pesos', '" . $arr['tasa_peso'] . "', 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
       }
 
       if (floatval($arr['montoPesosTransferencia']) > 0) {
-        $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Pesos', 'Transferencia', '" . $arr['montoPesosTransferencia'] . "', '" . $arr['tasa_peso'] . "', '" . addslashes($arr['montoPesosTransferenciaDetalle'] ?? '') . "');";
+        $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Pesos', 'Transferencia', '" . $arr['montoPesosTransferencia'] . "', '" . $arr['tasa_peso'] . "', '" . addslashes($arr['montoPesosTransferenciaDetalle'] ?? '') . "');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
       }
 
       if (floatval($arr['montoBolivaresEfectivo']) > 0) {
-        $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Efectivo', '" . $arr['montoBolivaresEfectivo'] . "', '" . $arr['tasa_dolar'] . "', '');";
-        $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoBolivaresEfectivo'] . "', 'Bolívares', '" . $arr['tasa_dolar'] . "', 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
+        $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Efectivo', '" . $arr['montoBolivaresEfectivo'] . "', '" . $arr['tasa_dolar'] . "', '');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
+        $sql_metodos_pago = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoBolivaresEfectivo'] . "', 'Bolívares', '" . $arr['tasa_dolar'] . "', 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
       }
 
       if (floatval($arr['montoBolivaresPunto']) > 0) {
-        $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Punto', '" . $arr['montoBolivaresPunto'] . "', '" . $arr['tasa_dolar'] . "', '');";
+        $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Punto', '" . $arr['montoBolivaresPunto'] . "', '" . $arr['tasa_dolar'] . "', '');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
       }
 
       if (floatval($arr['montoBolivaresPagomovil']) > 0) {
-        $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Pagomovil', '" . $arr['montoBolivaresPagomovil'] . "', '" . $arr['tasa_dolar'] . "', '" . addslashes($arr['montoBolivaresPagomovilDetalle'] ?? '') . "');";
+        $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Pagomovil', '" . $arr['montoBolivaresPagomovil'] . "', '" . $arr['tasa_dolar'] . "', '" . addslashes($arr['montoBolivaresPagomovilDetalle'] ?? '') . "');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
       }
 
       if (floatval($arr['montoBolivaresTransferencia']) > 0) {
-        $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Transferencia', '" . $arr['montoBolivaresTransferencia'] . "', '" . $arr['tasa_dolar'] . "', '" . addslashes($arr['montoBolivaresTransferenciaDetalle'] ?? '') . "');";
-      }
-      $object['sql_metodos_pago'] = $sql_metodos_pago;
-
-      if ($sql_metodos_pago != '') {
-        $object['metodos_pago'] = $localConnection->goQuery($sql_metodos_pago);
+        $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Transferencia', '" . $arr['montoBolivaresTransferencia'] . "', '" . $arr['tasa_dolar'] . "', '" . addslashes($arr['montoBolivaresTransferenciaDetalle'] ?? '') . "');";
+        $object['sql_metodos_pago'][] = $sql_metodos_pago;
+        $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
       }
 
       // ========== CONFIRMAR TRANSACCIÓN ==========
