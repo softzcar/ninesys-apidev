@@ -1,0 +1,78 @@
+- **Solicitud del Usuario:** "Continua" / "Continua con los siguientes por favor" — continuación de la Fase 2 de la migración PostgreSQL tras el endurecimiento de `goQuery()` (ver bitácora `2026-07-13_17-37-47`), siguiendo el mismo método de checklist granular commiteado en `logs_gemini/verificacion_postgres/checklist_endpoints.csv`.
+
+- **Fecha y Hora:** 2026-07-13 17:40:00 a 2026-07-13 18:44:43
+
+- **Proyecto(s):** Backend (ninesys-api, rama feature/postgresql-support)
+
+- **Archivos Involucrados:**
+    - app/routes/catalogs.php
+    - app/routes/manufacturing.php
+    - app/routes/production.php
+    - app/routes/designs.php
+    - app/routes/tables.php
+    - app/lib/woome.php
+    - logs_gemini/verificacion_postgres/checklist_endpoints.csv
+
+- **Commits Relacionados:**
+    - Backend:
+        - 4fff675 - catalogs.php /telas/{_id}/{tela} - multi-statement
+        - f433977 - catalogs.php /insumos-productos - parametro ambiguo IS NULL (SQLSTATE 42P18)
+        - 0442611 - production.php /produccion/reposicion - QUOTE() no existe en Postgres
+        - 70ab0f1 - manufacturing.php /lotes/finalizar-departamento - comillas dobles ('aprobado')
+        - 1d8e655 - production.php /produccion/asignar-varias-ordenes-a-corte - multi-statement
+        - 5715ef9 - woome.php createCustomer() - backticks
+        - b0dcb7e - designs.php /disenador-asignado - multi-statement
+        - 9603b83 - manufacturing.php /pausas - multi-statement
+        - 3d73e75 - woome.php getAllProducts() - reescritura completa (GROUP_CONCAT/JSON_OBJECT/FIND_IN_SET/backticks)
+        - 8c1490b - tables.php /ordenes/guardadas/eliminar - JSON_UNQUOTE/JSON_EXTRACT/JSON_ARRAYAGG/JSON_OBJECT
+        - Más ~15 commits de actualización incremental del checklist CSV (EN_PROGRESO/CORREGIDO/OK por cada endpoint)
+    - Frontend: N/A (ver commit 8361067 de app_multi documentado en la bitácora previa)
+
+- **Acción Realizada:**
+    Se continuó el mismo protocolo de Fase 2 (EN_PROGRESO → leer código → probar en vivo contra 194 dev → corregir si hay bug → lint → commit → deploy → re-verificar → CORREGIDO/OK con detalle → commit CSV) para 12 endpoints adicionales:
+
+    1. `manufacturing.php POST /empleados/tintas` → OK (ya visto antes de esta ronda)
+    2. `manufacturing.php POST /lotes/empleados/eliminar` → OK
+    3. `communications.php POST /send-message-produccion` → CORREGIDO (verificado, WhatsApp externo fuera de alcance)
+    4. `production.php POST /ordenes/actualizar-filas-batch` → OK
+    5. `upload.php POST /upload-order-detail-image` → OK (sin BD)
+    6. `inventory.php POST /insumos/editar` → OK
+    7. `orders.php POST /comercializacion/revisiones-estatus` → **CORREGIDO** (multi-statement)
+    8. `config.php POST /configuracion/monedas` → OK
+    9. `catalogs.php DELETE /insumos-productos-asignados` → OK
+    10. `catalogs.php POST /insumos-productos` → **CORREGIDO** (bug nuevo: parámetro ambiguo con `IS NULL` causaba `SQLSTATE 42P18 Indeterminate datatype`, enmascarado como falso "ya existe" antes del endurecimiento de goQuery)
+    11. `manufacturing.php POST /lotes/{id}/finalizar-departamento` → **CORREGIDO** (comillas dobles) + 2 bugs preexistentes documentados aparte (mismatch de FK `id_lotes_detalles`, `id_reposicion=0` hardcodeado)
+    12. `production.php POST /reposicion/{id}/excluir-departamento` → OK (con nota menor sobre `insert_id` en `ON CONFLICT DO NOTHING`)
+    13. `config.php POST /configuracion/monedas`, `production.php /reposiciones/actualizar-filas-batch`, `designs.php /disenador-asignado`, `designs.php /disenos/nuevo-con-revision`, `manufacturing.php /lotes/{id}/iniciar`, `manufacturing.php POST /pausas`, `products.php POST /editar-producto`, `tables.php POST /ordenes/guardadas/eliminar` → revisados y corregidos donde aplicaba (ver commits arriba)
+    14. `products.php POST /customers/{first_name}/.../{address}` → **CORREGIDO** (backticks en `woome.php::createCustomer()`)
+    15. `production.php POST /produccion/asignar-varias-ordenes-a-corte` → **CORREGIDO** (multi-statement, encontrado incidentalmente)
+
+    **Hallazgo mayor durante la revisión de `/editar-producto`:** al investigar `woome.php::updateProductLite()` se encontraron backticks (corregidos), y al revisar el archivo completo se descubrió que `woome.php::getAllProducts()` —usada por 4 endpoints GET (`/products`, `/atributos/comisiones`, `/wp/products`, `/wp/products/{id}`)— tenía una consulta masiva con `GROUP_CONCAT`, `JSON_OBJECT`, `FIND_IN_SET`, comillas dobles como literal SQL y un alias con backtick, TODO inválido en PostgreSQL. Esta función llevaba rota desde la Fase 1 (esos 4 endpoints estaban marcados `FALLO_HTTP_500` sin diagnóstico específico, por ser un error genérico). Se reescribió completamente con rama `DB_DRIVER`, usando `jsonb_agg(jsonb_build_object(...))` y `string_to_array()::ANY()`, y se eliminó el `GROUP BY` externo (innecesario, sin fan-out real).
+
+    **Cierre completo del backlog de `FALLO_*` de Fase 1:** dado el hallazgo anterior, se auditaron TODOS los registros con estado `FALLO_*` restantes en el checklist (9 en total, ids 309, 315, 328, 329, 330, 334, 352, 367):
+    - 4 (310, 328, 329, 330) → resueltos por el fix de `getAllProducts()`.
+    - 367 (`/reportes/costos-produccion`) → `REQUIERE_INVESTIGACION_APARTE`: consulta referencia columnas (`precio_litro`, `fecha`, `id_empresa`) que NO EXISTEN en la tabla real `tintas_recargas` — bug preexistente idéntico en MySQL, no relacionado con la migración.
+    - 334 (`/customers/orders/{id}`) → `REQUIERE_INVESTIGACION_APARTE`: llama a `\$woo->getCustomerOrders()`, método que NO EXISTE en la clase `WooMe` — error PHP de método indefinido, no relacionado con SQL/Postgres.
+    - 309, 315, 352 → `NO_APLICA_WOOCOMMERCE`: los 3 hacen llamadas reales a la API de WooCommerce (servicio externo), causando timeout en el smoke test — mismo criterio ya establecido para otros endpoints de WooCommerce.
+
+    Al cierre de esta ronda, el checklist queda con **0 registros `FALLO_*` sin clasificar**.
+
+- **Inconvenientes y Desafíos:**
+    - Varios "falsos positivos" de datos de prueba (ya cubiertos en la bitácora anterior) siguieron apareciendo — se resolvieron con datos de prueba más realistas, no con cambios de código.
+    - El bug de `/insumos-productos` (parámetro ambiguo `IS NULL`) solo se detectó porque, gracias al endurecimiento de `goQuery()` de la ronda anterior, el error real (SQLSTATE 42P18) quedó visible en el log del servidor en vez de manifestarse como un falso "ya existe" silencioso — validación práctica de que ese cambio de infraestructura ya está dando valor.
+    - La consulta de `tables.php /ordenes/guardadas/eliminar` requirió reconstruir manualmente en `psql` la reescritura completa (UNION ALL de dos ramas con tipos JSON) antes de aplicarla al código, para verificar que los tipos `jsonb` coincidieran entre ambas ramas del UNION.
+
+- **Decisión Final y Justificación:**
+    Se mantiene el criterio de "solo corregir lo que difiere entre motores" — los 2 bugs preexistentes encontrados en `/lotes/finalizar-departamento` (FK `id_lotes_detalles` mal referenciada, `id_reposicion=0` hardcodeado) y los 2 endpoints con bugs de PHP/esquema no relacionados con Postgres (`/reportes/costos-produccion`, `/customers/orders/{id}`) se documentaron en detalle en el checklist pero NO se corrigieron, por ser idénticos en MySQL y estar fuera del alcance de esta tarea. Se decidió invertir el tiempo en cerrar el backlog completo de `FALLO_*` de Fase 1 en vez de posponerlo, dado que ya se había abierto el archivo `woome.php` y el hallazgo era directamente relevante.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (`ssh`/`psql` para pruebas directas y reconstrucción de queries, `curl` para pruebas HTTP en vivo, `git`), script auxiliar `update_row.py`.
+
+- **Resultado:** Éxito.
+
+- **Verificación:** Cada corrección se probó en vivo contra la empresa 194 en `vps-contabo-dev` tras cada deploy, incluyendo pruebas de las 2 ramas de UNION en `/ordenes/guardadas/eliminar` y de los 4 endpoints dependientes de `getAllProducts()` (confirmando HTTP 200 con JSON completo y correcto en los 4).
+
+- **Logro Conseguido:** Se cerró por completo el backlog de fallos sin diagnosticar que había quedado abierto desde la Fase 1 (9 registros), revelando y corrigiendo un bug que afectaba a 4 endpoints GET de uso real (listado/catálogo de productos). Se continuó la Fase 2 con 12 endpoints adicionales, de los cuales 8 requirieron corrección real. Avance acumulado del día: 242/386 endpoints (62.7%) revisados y verificados en vivo; Fase 1 100% completa; Fase 2 en 23% (43/187).
+
+- **Observaciones de Claude:** Quedan 144 endpoints de Fase 2 pendientes (19 con uso real en producción). Los 2 bugs preexistentes de `/lotes/finalizar-departamento` y los 2 endpoints con bugs de PHP no relacionados con Postgres quedan documentados en el checklist a la espera de que el usuario decida si se abordan como tarea aparte.
+
+- **Respuesta de Claude:** Se completó una segunda ronda de Fase 2 (12 endpoints, 8 con corrección real) y se cerró por completo el backlog de fallos sin diagnóstico de la Fase 1, incluyendo un hallazgo que afectaba a 4 endpoints GET de uso real. Todo commiteado y desplegado a Desarrollo Contabo.
