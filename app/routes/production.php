@@ -740,7 +740,7 @@ return function (App $app) {
                     a.id_empleado = {$args['id_empleado']}
                     AND a.terminado = 0
                     AND (b.status = 'activa' OR b.status = 'pausada' OR b.status = 'En espera')
-                GROUP BY c._id, a.id_orden, a._id, a.id_empleado, a.linkdrive, a.codigo_diseno, b.cliente_nombre, b.fecha_inicio, b.status
+                GROUP BY c._id, a.id_orden, a._id, a.id_empleado, a.linkdrive, a.codigo_diseno, b.cliente_nombre, b.fecha_inicio, b.status, b.id_wp
                 ORDER BY
                     a.id_orden
                 DESC
