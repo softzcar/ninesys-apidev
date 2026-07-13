@@ -4127,11 +4127,12 @@ return function (App $app) {
         $deptWhere = $id_departamento
           ? "AND id_departamento = $id_departamento"
           : "AND id_departamento = (SELECT id_departamento FROM lotes_detalles_empleados_asignados WHERE id_orden IN ($idsStr) LIMIT 1)";
+        $terminadoHoyCond = DB_DRIVER === 'pgsql' ? 'fecha_terminado::date = CURRENT_DATE' : 'DATE(fecha_terminado) = CURDATE()';
         $whereClause = "WHERE (o._id IN ($idsStr) OR o._id IN (
             SELECT DISTINCT id_orden
             FROM lotes_detalles_empleados_asignados
             WHERE id_empleado = $id_empleado
-            AND DATE(fecha_terminado) = CURDATE()
+            AND $terminadoHoyCond
             $deptWhere
         ))";
       }
