@@ -3799,9 +3799,11 @@ $object['sales_commission_ISSET'][] = false;
     if ($args['estatus'] === 'Aprobado') {
       $estatusTerminado = 1;
       $sql = 'UPDATE disenos SET terminado = ' . $estatusTerminado . ' WHERE id_orden = ' . $miDiseno[0]['id_orden'] . ';';
-      $sql .= "UPDATE ordenes SET status = 'activa' WHERE _id = " . $args['id_orden'] . ';';
       $miRevision = $localConnection->goQuery($sql);
       $object['sql_revision'] = $sql;
+      $sql = "UPDATE ordenes SET status = 'activa' WHERE _id = " . $args['id_orden'] . ';';
+      $miRevision = $localConnection->goQuery($sql);
+      $object['sql_orden'] = $sql;
 
       // BUSCAR DATOS DE LA REVISON
       $sql = 'SELECT id_empleado, id_product FROM revisiones WHERE _id = ' . $args['id_revision'];
