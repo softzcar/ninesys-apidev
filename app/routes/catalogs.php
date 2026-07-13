@@ -451,13 +451,16 @@ return function (App $app) {
 
   $app->get('/insumos-productos/{id_orden}/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
+    // sizes._id es entero y ordenes_productos.talla es varchar; MySQL compara con coerción
+    // implícita, PostgreSQL no lo permite ("operator does not exist: integer = character varying").
+    $sizeMatchExpr = DB_DRIVER === 'pgsql' ? 'CAST(_id AS VARCHAR) = e.talla' : '_id = e.talla';
     $sql = "SELECT DISTINCT
                     a._id id_product_insumos_asignados,
                     b._id id_product,
                     e.id_orden,
                     d._id id_departamento,
                     b.product producto,
-                    (SELECT nombre FROM sizes WHERE _id = e.talla) talla,
+                    (SELECT nombre FROM sizes WHERE $sizeMatchExpr) talla,
                     e.cantidad unidades_solicitadas,
                     c.nombre insumo,
                     d.departamento,

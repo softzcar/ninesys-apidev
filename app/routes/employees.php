@@ -1013,7 +1013,7 @@ return function (App $app) {
                 if (DB_DRIVER === 'pgsql') {
                     $sqlPagos = "SELECT
                             SUM(p.monto_pago) as total_pagado,
-                            TO_CHAR(p.moment, 'Day') as dia,
+                            TO_CHAR(MAX(p.moment), 'Day') as dia,
                             p.moment::date as fecha
                         FROM pagos p
                         WHERE p.id_empleado = $id_empleado

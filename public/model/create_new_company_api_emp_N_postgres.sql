@@ -146,6 +146,7 @@ INSERT INTO catalogo_insumos_productos (_id, nombre, id_product, id_departamento
 CREATE TABLE catalogo_telas (
   _id INTEGER NOT NULL ,
   tela varchar(45) DEFAULT NULL ,
+  eliminado SMALLINT NOT NULL DEFAULT 0,
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (_id)
 );

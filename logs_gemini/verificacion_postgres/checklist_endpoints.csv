@@ -5,18 +5,14 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 4,ai.php,POST,/ai/report,298,2-escritura-manual,PENDIENTE,,
 5,ai.php,GET,/ai/status,378,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:30:54
 6,assignments.php,GET,/asignacion/ordenes,12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:30:56
-7,assignments.php,GET,/asignacion/empleados/{orden},48,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column ""dep_responsable"" does not exist
-LINE 1: SELECT dep_responsable responsable,dep_diseno diseno, dep_je...
-               ^",2026-07-13 14:30:57
+7,assignments.php,GET,/asignacion/empleados/{orden},48,1-GET-auto,CODIGO_MUERTO_CANDIDATO,"columnas dep_responsable/dep_diseno/etc. NO existen en tabla ordenes en NINGUN entorno (mismo patron que /orden/asignacion/{id} ya eliminado). Cero uso real: 0 hits en app_multi/msg_ninesys/ninesys-cdn y 0 en logs de produccion. NO se corrige (no hay columnas reales que mapear) - candidato a eliminar, pendiente de autorizacion del usuario.",2026-07-13 14:42:56
 8,assignments.php,POST,/asignacion/{orden}/{departamento}/{empleado},65,2-escritura-manual,PENDIENTE,,
 9,assignments.php,POST,/asignacion/elimianr/{orden}/{departamento},119,2-escritura-manual,PENDIENTE,,
 10,auth.php,POST,/login,10,2-escritura-manual,PENDIENTE,,
 11,auth.php,GET,/refresh-session/{id},363,1-GET-auto,FALLO_RUTA,HTTP 404 (ruta no encontrada/metodo no permitido con params de prueba),2026-07-13 14:30:58
 12,auth.php,POST,/verify-credentials,464,2-escritura-manual,PENDIENTE,,
 13,buscar.php,GET,/buscar/{id}[/{email}],260,1-GET-auto,OMITIDO,requiere parametro no trivial (email u otro) para probar de forma segura,2026-07-13 14:30:58
-14,catalogs.php,GET,/telas,11,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column ""eliminado"" does not exist
-LINE 1: SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY te...
-                                           ^",2026-07-13 14:30:59
+14,catalogs.php,GET,/telas,11,1-GET-auto,CORREGIDO,ALTER TABLE catalogo_telas ADD COLUMN eliminado SMALLINT NOT NULL DEFAULT 0 en BD real 194 dev + actualizado ambos templates maestros (mysql y postgres). Verificado en vivo: HTTP 200 con eliminado=0.,2026-07-13 14:44:23
 15,catalogs.php,GET,/catalogo-tintas,24,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:00
 16,catalogs.php,POST,/catalogo-tintas,208,2-escritura-manual,PENDIENTE,,
 17,catalogs.php,POST,/catalogo-tintas/{_id}/{nombre},232,2-escritura-manual,PENDIENTE,,
@@ -31,10 +27,7 @@ LINE 1: SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY te...
 26,catalogs.php,POST,/telas/{_id}/{tela},405,2-escritura-manual,PENDIENTE,,
 27,catalogs.php,POST,/telas/eliminar,421,2-escritura-manual,PENDIENTE,,
 28,catalogs.php,DELETE,/insumos-productos-asignados/{id_insumo},438,2-escritura-manual,PENDIENTE,,
-29,catalogs.php,GET,/insumos-productos/{id_orden}/{id_departamento},452,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: integer = character varying
-LINE 7: ...              (SELECT nombre FROM sizes WHERE _id = e.talla)...
-                                                             ^
-HINT:  No operator matches the ",2026-07-13 14:31:03
+29,catalogs.php,GET,/insumos-productos/{id_orden}/{id_departamento},452,1-GET-auto,EN_PROGRESO,investigando: operator does not exist: integer = character varying,2026-07-13 14:44:31
 30,catalogs.php,GET,/insumos-productos-asignados,493,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:03
 31,catalogs.php,GET,/tiempos-de-produccion,526,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:04
 32,catalogs.php,POST,/tiempos-de-produccion,552,2-escritura-manual,PENDIENTE,,
@@ -120,9 +113,7 @@ HINT:  No operator matches the ",2026-07-13 14:31:03
 112,employees.php,GET,/asistencias/semanal,519,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:32
 113,employees.php,GET,/asistencias/tabla/{fecha},595,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:32
 114,employees.php,GET,/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin},705,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:33
-115,employees.php,GET,/empleados/dashboard-stats/{id_empleado}/{id_departamento},838,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42803]: Grouping error: 7 ERROR:  column ""p.moment"" must appear in the GROUP BY clause or be used in an aggregate function
-LINE 3:                             TO_CHAR(p.moment, 'Day') as dia,
-                                            ^",2026-07-13 14:31:34
+115,employees.php,GET,/empleados/dashboard-stats/{id_empleado}/{id_departamento},838,1-GET-auto,EN_PROGRESO,investigando: column p.moment must appear in GROUP BY clause,2026-07-13 14:46:39
 116,finance.php,GET,/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}],13,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[22007]: Invalid datetime format: 7 ERROR:  invalid input syntax for type date: ""1""
 LINE 51:                 met.moment::date BETWEEN '1' AND '1' 
                                                   ^",2026-07-13 14:31:35

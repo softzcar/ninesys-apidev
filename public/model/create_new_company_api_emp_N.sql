@@ -137,6 +137,7 @@ INSERT INTO `catalogo_insumos_productos` (`_id`, `nombre`, `id_product`, `id_dep
 CREATE TABLE `catalogo_telas` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico de la tabla',
   `tela` varchar(45) DEFAULT NULL COMMENT 'Nombre de la tela',
+  `eliminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Borrado lógico: 0 = activo, 1 = eliminado/oculto',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de telas disponibles. Almacena tipos de tela con características para selección en órdenes de producción.';
 INSERT INTO `catalogo_telas` (`_id`, `tela`, `moment`)
