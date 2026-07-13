@@ -1340,9 +1340,8 @@ class WooMe
             VALUES
                 (' . $id . ", '" . $username . "', '" . $first_name . "', '" . $last_name . "', '" . $cedula . "', '" . $phone . "', '" . $email . "', '" . $address . "', ?, ?, ?" . $recibirVal . ");";
     }
-    $sql .= 'SELECT * FROM customers WHERE _id = ' . $id;
-
-    $data = $localConnection->goQuery($sql, [$id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad]);
+    $localConnection->goQuery($sql, [$id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad]);
+    $data = $localConnection->goQuery('SELECT * FROM customers WHERE _id = ' . $id);
     $localConnection->disconnect();
 
     return json_encode($data);
