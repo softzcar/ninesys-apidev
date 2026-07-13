@@ -85,7 +85,7 @@ return function (App $app) {
         }
 
         // Verificar que al menos UN administrador tenga teléfono
-        $sql_admin_check = 'SELECT id_usuario FROM empresas_usuarios WHERE id_empresa = ? AND departamento = "Administración" AND telefono IS NOT NULL AND telefono != "" LIMIT 1';
+        $sql_admin_check = "SELECT id_usuario FROM empresas_usuarios WHERE id_empresa = ? AND departamento = 'Administración' AND telefono IS NOT NULL AND telefono != '' LIMIT 1";
         $admin_with_phone = $localConnection->goQuery($sql_admin_check, [$usuario_data['id_empresa']]);
 
         if (empty($admin_with_phone)) {
