@@ -2926,7 +2926,9 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
             // 1. Telas e Insumos
             $limitSql = $limiteGrafico > 0 ? " LIMIT " . $limiteGrafico : "";
+            $isPg = DB_DRIVER === 'pgsql';
             if ($filtroStock === 'enStock') {
+                $groupByMateriales1 = $isPg ? 'sku, insumo, unidad, tipo_insumo' : 'sku, insumo, unidad';
                 $sqlMateriales = "SELECT
                                     insumo as label,
                                     ROUND(SUM(cantidad * CASE WHEN tipo_insumo = 'tela' THEN COALESCE(NULLIF(rendimiento, 0), 1) ELSE 1 END), 2) as value,
@@ -2934,21 +2936,22 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                                 FROM inventario
                                 WHERE cantidad > 0
                                   {$deptWhereDirect}
-                                GROUP BY sku, insumo, unidad
+                                GROUP BY {$groupByMateriales1}
                                 ORDER BY value DESC
                                 {$limitSql}";
             } else {
+                $groupByMateriales2 = $isPg ? 'i.sku, i.insumo, i.tipo_insumo, i.unidad' : 'i.sku';
                 $sqlMateriales = "SELECT
                                     i.insumo as label,
                                     ROUND(SUM((im.valor_inicial - im.valor_final) * CASE WHEN i.tipo_insumo = 'tela' THEN COALESCE(NULLIF(i.rendimiento, 0), 1) ELSE 1 END), 2) as value,
                                     CASE WHEN i.tipo_insumo = 'tela' THEN 'Mts' ELSE i.unidad END as unidad
-                                FROM inventario_movimientos im 
-                                JOIN inventario i ON im.id_insumo = i._id 
+                                FROM inventario_movimientos im
+                                JOIN inventario i ON im.id_insumo = i._id
                                 WHERE {$fechaWhere}
                                   AND (im.valor_inicial - im.valor_final) > 0
                                   {$deptWhere}
-                                GROUP BY i.sku 
-                                ORDER BY value DESC 
+                                GROUP BY {$groupByMateriales2}
+                                ORDER BY value DESC
                                 {$limitSql}";
             }
             $chartData['materiales'] = $localConnection->goQuery($sqlMateriales) ?: [];
@@ -3090,16 +3093,17 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                                 GROUP BY i.departamento
                                 ORDER BY value DESC";
                 } else {
-                    $sqlCostos = "SELECT 
-                                    i.insumo as label, 
+                    $groupByCostos = $isPg ? 'i.sku, i.insumo' : 'i.sku';
+                    $sqlCostos = "SELECT
+                                    i.insumo as label,
                                     ROUND(SUM((im.valor_inicial - im.valor_final) * i.costo), 2) as value
-                                FROM inventario_movimientos im 
-                                JOIN inventario i ON im.id_insumo = i._id 
+                                FROM inventario_movimientos im
+                                JOIN inventario i ON im.id_insumo = i._id
                                 WHERE {$fechaWhere}
                                   AND (im.valor_inicial - im.valor_final) > 0
                                   AND i.departamento = '" . addslashes($departamento) . "'
-                                GROUP BY i.sku 
-                                ORDER BY value DESC 
+                                GROUP BY {$groupByCostos}
+                                ORDER BY value DESC
                                 LIMIT 5";
                 }
             }
@@ -3159,6 +3163,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             // Agrupamos por SKU para sumar el consumo de diferentes rollos del mismo producto
             $ultimos30Dias = DB_DRIVER === 'pgsql' ? "CURRENT_TIMESTAMP - INTERVAL '30 days'" : 'DATE_SUB(NOW(), INTERVAL 30 DAY)';
             $weekExpr = DB_DRIVER === 'pgsql' ? 'EXTRACT(WEEK FROM im.moment)' : 'WEEK(im.moment, 1)';
+            $groupByMateriales = DB_DRIVER === 'pgsql' ? 'i.sku, i.insumo, i.tipo_insumo, i.unidad' : 'i.sku';
             $sqlMateriales = "SELECT
                                 i.insumo as label,
                                 ROUND(SUM((im.valor_inicial - im.valor_final) * CASE WHEN i.tipo_insumo = 'tela' THEN COALESCE(NULLIF(i.rendimiento, 0), 1) ELSE 1 END), 2) as value,
@@ -3167,7 +3172,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                             JOIN inventario i ON im.id_insumo = i._id
                             WHERE im.moment >= $ultimos30Dias
                               AND (im.valor_inicial - im.valor_final) > 0
-                            GROUP BY i.sku
+                            GROUP BY {$groupByMateriales}
                             ORDER BY value DESC
                             LIMIT 5";
             $data['materiales'] = $localConnection->goQuery($sqlMateriales);
