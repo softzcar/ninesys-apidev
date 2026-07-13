@@ -379,7 +379,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 378,tables.php,GET,/ordenes/notas-por-empleado/{id_orden},183,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:49
 379,tables.php,GET,/ordenes/borrador/reporte-semanal/{id_empleado}/{id_departamento},214,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:49
 380,tables.php,POST,/ordenes/borrador,242,2-escritura-manual,CORREGIDO,"Sin patrones MySQL-only. Probado en vivo: responde 409 (FK constraint) porque la tabla ordenes esta vacia en 194 dev (orden 1 no existe realmente), no por bug de sintaxis. Se beneficio del fix de identity en ordenes_borrador_empleado (una de las 60 tablas del hallazgo critico).",2026-07-13 16:10:13
-381,tables.php,POST,/ordenes/guardadas/eliminar,268,2-escritura-manual,PENDIENTE,,
+381,tables.php,POST,/ordenes/guardadas/eliminar,268,2-escritura-manual,EN_PROGRESO,Investigando POST /ordenes/guardadas/eliminar,2026-07-13 18:31:40
 382,tables.php,POST,/orden/guardar,361,2-escritura-manual,PENDIENTE,,
 383,tables.php,GET,/table/ordenes-activas/{id_empleado},437,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:50
 384,tables.php,GET,/table/ordenes-todas,538,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:51
