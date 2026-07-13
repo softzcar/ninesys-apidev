@@ -229,7 +229,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 228,orders.php,POST,/orden/actualizar-estado,158,2-escritura-manual,CORREGIDO,Sin patrones MySQL-only. Probado en vivo con datos reales: cambio simple de estado y validacion de tareas pendientes (JOIN con api_empresas.empresas_usuarios) ambos funcionan sin errores. Sin cambios de codigo necesarios.,2026-07-13 16:15:36
 229,orders.php,GET,/ordenes/abono/{id},361,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:34
 230,orders.php,GET,/ordenes/verificar-edición/{id},389,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 15:39:35
-231,orders.php,POST,/orden/abono,404,2-escritura-manual,PENDIENTE,,
+231,orders.php,POST,/orden/abono,404,2-escritura-manual,EN_PROGRESO,Investigando /orden/abono,2026-07-13 16:26:20
 232,orders.php,POST,/orden/edit/obs,615,2-escritura-manual,PENDIENTE,,
 233,orders.php,GET,/ordenes/abono-detale/{id},632,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:36
 234,orders.php,GET,/reportes/resumen/disenadores/{id_empleado}/{id_departamento},790,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:37
