@@ -2834,12 +2834,14 @@ return function (App $app) {
       $sql = '';  // Editar desde administración
     }
 
-    // Actualizar Status de la orden
-    $sql .= "UPDATE ordenes SET status = '$status_order' WHERE _id = {$data['id_orden']}";
-
     // Atomicidad FK: pausa + actualización de estado de la orden en una transacción
     $localConnection->beginTransaction();
-    $object['response'] = $localConnection->goQuery($sql);
+    if ($sql !== '') {
+      $object['response_pausa'] = $localConnection->goQuery($sql);
+    }
+    // Actualizar Status de la orden
+    $sqlOrden = "UPDATE ordenes SET status = '$status_order' WHERE _id = {$data['id_orden']}";
+    $object['response'] = $localConnection->goQuery($sqlOrden);
     $localConnection->commit();
 
     $localConnection->disconnect();
