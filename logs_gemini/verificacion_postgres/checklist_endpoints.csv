@@ -325,7 +325,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 324,products.php,DELETE,/products/{id},288,2-escritura-manual,PENDIENTE,,
 325,products.php,POST,/product-set-comision-producto,307,2-escritura-manual,PENDIENTE,,
 326,products.php,POST,/product-set-comisiones-batch,399,2-escritura-manual,PENDIENTE,,
-327,products.php,GET,/product-set-comision/{id}/{comision},538,1-GET-auto,ERROR_ENCONTRADO,Error al ejecutar la consulta: SQLSTATE[42601]: Syntax error: 7 ERROR:  cannot insert multiple commands into a prepared statement,2026-07-13 14:34:03
+327,products.php,GET,/product-set-comision/{id}/{comision},538,1-GET-auto,CORREGIDO,UPDATE+SELECT concatenados en un solo goQuery separados en dos llamadas. Verificado en vivo: 0 errores.,2026-07-13 15:32:24
 328,products.php,GET,/atributos/comisiones,575,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:04
 329,products.php,GET,/wp/products,587,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:05
 330,products.php,GET,/wp/products/{id_product},598,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:05
@@ -335,19 +335,14 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 334,products.php,GET,/customers/orders/{id_customer},651,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:07
 335,products.php,GET,/wp/customers,661,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:08
 336,products.php,GET,/customers/orders-count/{customer_email}/{customer_id},671,1-GET-auto,OMITIDO,requiere parametro no trivial (email u otro) para probar de forma segura,2026-07-13 14:34:08
-337,products.php,GET,/customers/{id},689,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: ` character varying
-LINE 10:         `address` billing_address_1, 
-                 ^
-HINT:  No operator matches the given name and argument type. You might need to add an explicit type cast.",2026-07-13 14:34:09
+337,products.php,GET,/customers/{id},689,1-GET-auto,CORREGIDO,Backtick alrededor de address en woome.php getCustomerByIdWP() quitado. Verificado en vivo: 0 errores.,2026-07-13 15:32:24
 338,products.php,GET,/customers/por-telefono/{phone},703,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:09
 339,products.php,POST,/customers/{first_name}/{last_name}/{cedula}/{phone}/{email}/{address},713,2-escritura-manual,PENDIENTE,,
 340,products.php,PUT,/customers/{id}/{first_name}/{last_name}/{cedula}/{phone}/{email}/{billing_address},756,2-escritura-manual,PENDIENTE,,
 341,products.php,POST,/customers/edit1,805,2-escritura-manual,PENDIENTE,,
 342,products.php,POST,/customers/nuevo,825,2-escritura-manual,PENDIENTE,,
 343,products.php,POST,/customers/reactivar,862,2-escritura-manual,PENDIENTE,,
-344,products.php,GET,/categories,897,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42601]: Syntax error: 7 ERROR:  syntax error at or near ""FROM""
-LINE 1: SELECT _id id, nombre `name` FROM categories WHERE eliminado...
-                                     ^",2026-07-13 14:34:10
+344,products.php,GET,/categories,897,1-GET-auto,CORREGIDO,Resuelto por el fix de getAllCategories() (id 189). Verificado en vivo: 0 errores.,2026-07-13 15:32:24
 345,products.php,GET,/departamentos,907,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:11
 346,products.php,GET,/departamentos-empleado/{id_empleado},921,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:12
 347,products.php,POST,/departamentos/nuevo,935,2-escritura-manual,PENDIENTE,,
@@ -356,9 +351,7 @@ LINE 1: SELECT _id id, nombre `name` FROM categories WHERE eliminado...
 350,products.php,DELETE,/departamentos/{id_departamento},992,2-escritura-manual,PENDIENTE,,
 351,products.php,POST,/departamentos/orden-paso,1007,2-escritura-manual,PENDIENTE,,
 352,products.php,GET,/attributes,1030,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:32
-353,products.php,GET,/sizes,1042,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42601]: Syntax error: 7 ERROR:  syntax error at or near "",""
-LINE 1: SELECT _id, nombre `name`, variation_percentage FROM sizes
-                                 ^",2026-07-13 14:34:33
+353,products.php,GET,/sizes,1042,1-GET-auto,CORREGIDO,Backtick alrededor de name en woome.php getSizes() quitado. Verificado en vivo: 0 errores.,2026-07-13 15:32:24
 354,products.php,POST,/sizes,1057,2-escritura-manual,PENDIENTE,,
 355,products.php,POST,/sizes/editar,1079,2-escritura-manual,PENDIENTE,,
 356,products.php,POST,/sizes/eliminar,1099,2-escritura-manual,PENDIENTE,,
