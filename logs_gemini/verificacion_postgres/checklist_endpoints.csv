@@ -8,7 +8,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 7,assignments.php,GET,/asignacion/empleados/{orden},48,1-GET-auto,CODIGO_MUERTO_CANDIDATO,"Reverificado: columnas dep_* siguen sin existir (esperado, es codigo muerto). Ver nota original: 0 uso real, candidato a eliminar pendiente de autorizacion.",2026-07-13 15:43:24
 8,assignments.php,POST,/asignacion/{orden}/{departamento}/{empleado},65,2-escritura-manual,PENDIENTE,,
 9,assignments.php,POST,/asignacion/elimianr/{orden}/{departamento},119,2-escritura-manual,PENDIENTE,,
-10,auth.php,POST,/login,10,2-escritura-manual,PENDIENTE,,
+10,auth.php,POST,/login,10,2-escritura-manual,EN_PROGRESO,Investigando /login,2026-07-13 16:28:49
 11,auth.php,GET,/refresh-session/{id},363,1-GET-auto,REQUIERE_INVESTIGACION_APARTE,"HTTP 404 real, pero no relacionado con PostgreSQL - probablemente requiere un token de sesion distinto al header Authorization:id_empresa estandar (nombre sugiere mecanismo de refresh de sesion). No investigado a fondo, fuera del alcance de compatibilidad SQL.",2026-07-13 15:43:03
 12,auth.php,POST,/verify-credentials,464,2-escritura-manual,PENDIENTE,,
 13,buscar.php,GET,/buscar/{id}[/{email}],260,1-GET-auto,OMITIDO,requiere parametro no trivial (email u otro) para probar de forma segura,2026-07-13 15:37:56
