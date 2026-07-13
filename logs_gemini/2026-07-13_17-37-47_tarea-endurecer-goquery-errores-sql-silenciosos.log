@@ -1,0 +1,47 @@
+- **Solicitud del Usuario:** El usuario planteó una preocupación arquitectónica durante la revisión de Fase 2: `goQuery()` (LocalDB.php) silencia cualquier error SQL que no sea violación de FK, devolviendo un array `{status: error, message: ...}` sin lanzar excepción. Esto causó que un bug real (parámetro de tipo ambiguo en `/insumos-productos`, ver bitácora anterior del mismo día) se manifestara como un falso positivo de negocio ("ya existe") en vez de un error visible. El usuario preguntó si esto representaba un riesgo de que la revisión de Fase 2 quedara con errores importantes sin detectar, y pidió corregirlo si es que representa ese riesgo, dejando claro el principio: **"Es muy importante que la app no mienta al usuario"** — si algo falla, la aplicación debe poder enterarse y reaccionar, no fingir éxito con datos falsos o vacíos.
+
+- **Fecha y Hora:** 2026-07-13 17:15:00 a 2026-07-13 17:37:47
+
+- **Proyecto(s):** Backend (ninesys-api, rama feature/postgresql-support)
+
+- **Archivos Involucrados:**
+    - app/model/LocalDB.php
+    - src/Application/Exceptions/DatabaseQueryException.php (nuevo)
+    - src/Application/Handlers/HttpErrorHandler.php (solo lectura, se confirmó que ya maneja excepciones genéricas de forma segura)
+    - app/settings.php (solo lectura, se confirmó configuración de logging)
+
+- **Commits Relacionados:**
+    - Backend: 609ed8d - Endurecer goQuery(): cualquier error SQL que no sea FK ni duplicado por indice unico ahora lanza DatabaseQueryException
+    - Frontend: N/A (pendiente de análisis, ver Observaciones)
+
+- **Acción Realizada:**
+    Antes de tocar el código compartido, se investigó el manejador de errores central de Slim (`HttpErrorHandler.php`) para confirmar que era seguro lanzar excepciones más agresivamente: se confirmó que `displayErrorDetails: false` (nunca expone detalles internos al cliente, siempre un mensaje genérico) pero `logError: true` y `logErrorDetails: true` (el detalle completo, incluyendo traza, se registra server-side). Ya existía un patrón establecido para esto: `DatabaseConstraintException` para violaciones de FK, mapeado a HTTP 409.
+
+    Se aplicó un fix **acotado, no un cambio de "todo o nada"**:
+    1. Las violaciones de FK siguen igual (ya lanzaban excepción → 409).
+    2. Las violaciones de índice único (SQLSTATE 23505 / errno MySQL 1062) **se preservan como retorno silencioso** (`status: error` en el array), porque ~35 endpoints ya revisan explícitamente ese campo para mostrar mensajes de negocio tipo "ya existe" — endurecer también este caso habría roto esos flujos de UX intencionales.
+    3. **Cualquier otro error SQL** (sintaxis, columna inexistente, tipo de dato ambiguo, etc.) ahora se registra explícitamente vía `error_log()` y se propaga como una excepción nueva `DatabaseQueryException` (clase nueva, mismo patrón que `DatabaseConstraintException`), que el manejador central captura y convierte en HTTP 500 con mensaje genérico seguro.
+
+    Se desplegó a Desarrollo Contabo y se hicieron 3 rondas de prueba en vivo contra la empresa 194:
+    - Confirmar que una violación de FK real sigue devolviendo 409 (sin cambios).
+    - Forzar un error SQL genuino (valor no numérico en un campo `numeric`) y confirmar que ahora devuelve HTTP 500 con mensaje genérico (sin filtrar detalles), y que el error real queda registrado server-side.
+    - Regresión: se re-probó el "camino feliz" de 4 endpoints ya marcados `OK`/`CORREGIDO` en la revisión de Fase 2 de esta misma sesión (`/orden/abono`, `/empleados/tintas`, `/login`, `/diseno/update-tipo`) para confirmar que seguían respondiendo `HTTP 200` sin cambios de comportamiento.
+
+- **Inconvenientes y Desafíos:**
+    - **Hallazgo importante sobre logging**: al buscar el error real generado en la prueba, `/usr/local/lsws/logs/stderr.log` (la ubicación usada hasta ahora en sesiones anteriores para depurar 500s) estaba desactualizado (última entrada del 2026-07-10). El log correcto y completo, con traza completa de Slim, resultó ser **`/usr/local/lsws/logs/error.log`** (diferente archivo, mismo directorio). Se confirma mediante el vhost.conf del sitio (`errorlog $VH_ROOT/logs/$VH_NAME.error_log`) — aunque en la práctica el log activo era el genérico del servidor LiteSpeed, no el específico del vhost (que estaba vacío). Esto corrige/actualiza el conocimiento de depuración de sesiones anteriores.
+    - No existían constraints `UNIQUE` "puras" (fuera de claves primarias) en el esquema de la empresa 194 para probar de punta a punta el camino "silencioso" de duplicado por índice único a través de un endpoint HTTP real; se confió en que el código usa la misma extracción de `\$sqlState` ya validada con el camino de FK (mismo mecanismo, ya probado funcionando).
+
+- **Decisión Final y Justificación:**
+    Se optó por el fix acotado (opción intermedia) en vez de: (a) dejar todo igual con solo más disciplina manual al probar (insuficiente, según lo señalado por el usuario, porque un error real puede pasar desapercibido si la respuesta HTTP "parece" válida), o (b) endurecer absolutamente todo incluyendo duplicados por índice único (demasiado invasivo, rompe flujos de negocio intencionales en ~35 endpoints). El fix aplicado cierra el punto ciego real (errores de bug genuino que antes se disfrazaban de datos válidos) sin alterar el comportamiento de los endpoints que ya manejan sus errores correctamente ni de los que dependen del patrón de duplicado suave.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Write`, `Edit`, `Bash` (incluyendo `ssh`/`psql`, `curl`, `git`, y exploración del sistema de logs de LiteSpeed).
+
+- **Resultado:** Éxito.
+
+- **Verificación:** Ver "Acción Realizada" — 3 rondas de prueba en vivo contra 194 dev, incluyendo confirmación de que el error real completo (SQLSTATE 22P02, mensaje de Postgres, traza completa) queda registrado en `/usr/local/lsws/logs/error.log` sin exponerse al cliente HTTP, y regresión de 4 endpoints previamente verificados sin cambios de comportamiento.
+
+- **Logro Conseguido:** Se cerró un punto ciego arquitectónico real en el manejo de errores SQL de la API: antes, un bug genuino en una consulta podía manifestarse como un `HTTP 200` con datos falsos o una interpretación de negocio incorrecta (como ocurrió con `/insumos-productos`), sin que la aplicación ni el usuario final tuvieran forma de saber que algo había fallado. Ahora, cualquier error SQL no esperado se convierte en un `HTTP 500` honesto y detectable, con el detalle completo preservado en el log del servidor para depuración, sin exponer información sensible al cliente. Esto fortalece la confiabilidad de todo el resto de la revisión de Fase 2 (y de la API en general, más allá de esta migración).
+
+- **Observaciones de Claude:** Queda pendiente investigar cómo `app_multi` (frontend) maneja los errores HTTP hoy: si existe un interceptor global (ej. de axios) que reaccione a códigos de error como este nuevo 500, o si cada componente maneja sus propios errores de forma independiente. El usuario preguntó esto explícitamente y es la continuación natural de este mismo tema: de nada sirve que el backend ahora sea honesto si el frontend sigue sin poder reaccionar visiblemente ante un error real. Esto se investigará y reportará en la siguiente bitácora/respuesta.
+
+- **Respuesta de Claude:** Se aplicó y verificó en vivo un endurecimiento acotado del manejo de errores SQL en el backend: los errores genuinos ahora son honestos (HTTP 500 detectable) en vez de silenciosos, preservando los flujos de negocio que dependían intencionalmente del comportamiento anterior (duplicados por índice único). Sigue en curso la investigación de cómo reacciona el frontend a esto.
