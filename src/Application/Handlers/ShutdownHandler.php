@@ -41,10 +41,18 @@ class ShutdownHandler
         $this->displayErrorDetails = $displayErrorDetails;
     }
 
+    /**
+     * Tipos de error que realmente detienen la ejecución del script.
+     * Los warnings/notices/deprecated NO detienen el script, por lo que si
+     * llegan aquí es porque el request ya terminó con éxito (o con un error
+     * ya manejado) y no deben sobrescribir esa respuesta con un 500 falso.
+     */
+    private const FATAL_ERROR_TYPES = E_ERROR | E_PARSE | E_CORE_ERROR | E_COMPILE_ERROR | E_USER_ERROR;
+
     public function __invoke()
     {
         $error = error_get_last();
-        if ($error) {
+        if ($error && ($error['type'] & self::FATAL_ERROR_TYPES)) {
             $errorFile = $error['file'];
             $errorLine = $error['line'];
             $errorMessage = $error['message'];
