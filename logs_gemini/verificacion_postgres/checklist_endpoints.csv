@@ -187,7 +187,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 186,manufacturing.php,POST,/lotes/get-detalles,1300,2-escritura-manual,PENDIENTE,,
 187,manufacturing.php,POST,/lotes/update/cantidad,1316,2-escritura-manual,PENDIENTE,,
 188,manufacturing.php,POST,/lotes/update/prioridad,1379,2-escritura-manual,PENDIENTE,,
-189,manufacturing.php,GET,/lotes-fisicos/tabla-editar,1398,1-GET-auto,EN_PROGRESO,investigando: column eliminado does not exist,2026-07-13 14:59:38
+189,manufacturing.php,GET,/lotes-fisicos/tabla-editar,1398,1-GET-auto,CORREGIDO,"Resuelto automaticamente por el fix de catalogo_telas.eliminado (id 14, misma tabla). Ademas se corrigio backtick en WooMe::getAllCategories(). Verificado en vivo: telas y categories OK, sin errores.",2026-07-13 15:08:50
 190,manufacturing.php,POST,/lotes-fisicos/tabla-editar-filter,1430,2-escritura-manual,PENDIENTE,,
 191,manufacturing.php,POST,/lotes-fisicos/eliminar,1480,2-escritura-manual,PENDIENTE,,
 192,manufacturing.php,POST,/lotes-fisicos/update,1499,2-escritura-manual,PENDIENTE,,
@@ -200,12 +200,12 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 199,manufacturing.php,POST,/lotes/{id}/finalizar-corte,2161,2-escritura-manual,PENDIENTE,,
 200,manufacturing.php,POST,/empleados/registrar-paso/{tipo}/{departamento}/{id_lotes_detalles}/{unidades},2420,2-escritura-manual,PENDIENTE,,
 201,manufacturing.php,POST,/empleados/registrar-paso-por-lotes/{departamento},2575,2-escritura-manual,PENDIENTE,,
-202,manufacturing.php,GET,/empleados/registrar-pago/{id_lotes_detalles},2738,1-GET-auto,EN_PROGRESO,investigando: syntax error at or near ),2026-07-13 15:02:03
+202,manufacturing.php,GET,/empleados/registrar-pago/{id_lotes_detalles},2738,1-GET-auto,CORREGIDO,"Bug de PHP puro (no especifico de motor): $miEmpleado['id_empleado'] -> $miEmpleado[0]['id_empleado'] (goQuery devuelve array de filas). No se pudo verificar con datos reales (tabla lotes_detalles vacia en 194 dev), pero el fix es logicamente inequivoco y confirmado por lint.",2026-07-13 15:08:50
 203,manufacturing.php,GET,/empleados/ordenes-asignadas/v1/{id_empleado},2758,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:14
 204,manufacturing.php,POST,/pausas,2802,2-escritura-manual,PENDIENTE,,
 205,manufacturing.php,GET,/ordenes/proyeccion-entrega,2853,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:15
 206,manufacturing.php,GET,/empleados/mi-asignacion/{id_orden}/{id_empleado},2991,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:15
-207,manufacturing.php,GET,/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso},3093,1-GET-auto,EN_PROGRESO,investigando: operator does not exist integer = character varying (sizes._id vs talla ya conocido),2026-07-13 15:02:44
+207,manufacturing.php,GET,/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso},3093,1-GET-auto,CORREGIDO,"3 bugs en la misma ruta: (1) sizes._id/talla cast, (2) JOIN condition truncada (AND r.id_empleado sin comparacion) completada como r.id_empleado=b.id_empleado, (3) GROUP BY faltante con columnas de otras tablas. Verificado en vivo tras 3 iteraciones: 0 errores.",2026-07-13 15:08:50
 208,manufacturing.php,GET,/sse/empleados/ordenes-asignadas/{id_empleado},3359,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:32:23
 209,manufacturing.php,GET,/empleados-todos,3470,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:24
 210,manufacturing.php,GET,/reports/input-efficiency/{id_ordenes},3634,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:25
