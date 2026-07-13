@@ -27,7 +27,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 26,catalogs.php,POST,/telas/{_id}/{tela},405,2-escritura-manual,PENDIENTE,,
 27,catalogs.php,POST,/telas/eliminar,421,2-escritura-manual,PENDIENTE,,
 28,catalogs.php,DELETE,/insumos-productos-asignados/{id_insumo},438,2-escritura-manual,PENDIENTE,,
-29,catalogs.php,GET,/insumos-productos/{id_orden}/{id_departamento},452,1-GET-auto,EN_PROGRESO,investigando: operator does not exist: integer = character varying,2026-07-13 14:44:31
+29,catalogs.php,GET,/insumos-productos/{id_orden}/{id_departamento},452,1-GET-auto,CORREGIDO,"CAST(_id AS VARCHAR) = e.talla en rama pgsql (sizes._id integer vs ordenes_productos.talla varchar). Verificado en vivo: HTTP 200, [].",2026-07-13 14:48:29
 30,catalogs.php,GET,/insumos-productos-asignados,493,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:03
 31,catalogs.php,GET,/tiempos-de-produccion,526,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:04
 32,catalogs.php,POST,/tiempos-de-produccion,552,2-escritura-manual,PENDIENTE,,
@@ -113,10 +113,8 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 112,employees.php,GET,/asistencias/semanal,519,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:32
 113,employees.php,GET,/asistencias/tabla/{fecha},595,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:32
 114,employees.php,GET,/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin},705,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:33
-115,employees.php,GET,/empleados/dashboard-stats/{id_empleado}/{id_departamento},838,1-GET-auto,EN_PROGRESO,investigando: column p.moment must appear in GROUP BY clause,2026-07-13 14:46:39
-116,finance.php,GET,/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}],13,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[22007]: Invalid datetime format: 7 ERROR:  invalid input syntax for type date: ""1""
-LINE 51:                 met.moment::date BETWEEN '1' AND '1' 
-                                                  ^",2026-07-13 14:31:35
+115,employees.php,GET,/empleados/dashboard-stats/{id_empleado}/{id_departamento},838,1-GET-auto,CORREGIDO,"TO_CHAR(MAX(p.moment),'Day') en vez de TO_CHAR(p.moment,...) para satisfacer GROUP BY estricto (GROUP BY solo tenia p.moment::date). Verificado en vivo: HTTP 200 con estructura completa.",2026-07-13 14:48:29
+116,finance.php,GET,/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}],13,1-GET-auto,OK_FALSO_POSITIVO,"Mi script de prueba uso '1' como parametro inicio/fin (no reconocidos como fecha). Con fecha real (2026-07-01) el endpoint funciona correctamente, sin error embebido. No requiere cambios de codigo.",2026-07-13 14:52:35
 117,finance.php,GET,/cierre-de-caja/{id_vendedor},331,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:41
 118,finance.php,POST,/cierre-de-caja-vendedor,391,2-escritura-manual,PENDIENTE,,
 119,finance.php,GET,/reporte-de-caja/{inicio}/{fin}/{id_vendedor},426,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: timestamp without time zone ~~ unknown
@@ -125,16 +123,9 @@ LINE 7:               WHERE moment LIKE '1%'  AND id_empleado = 1 AN...
 HINT:  No operator matches the given name and arg",2026-07-13 14:31:42
 120,finance.php,POST,/retiro,522,2-escritura-manual,PENDIENTE,,
 121,finance.php,POST,/otro-abono,620,2-escritura-manual,PENDIENTE,,
-122,finance.php,GET,/retiros/{inicio}/{fin}/{id_empleado},740,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[22007]: Invalid datetime format: 7 ERROR:  invalid input syntax for type date: ""1""
-LINE 1: ...leado = b.id_usuario WHERE a.moment::date BETWEEN '1' AND '1...
-                                                             ^",2026-07-13 14:31:42
-123,finance.php,GET,/pagos-ordenes/{fecha},818,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: timestamp without time zone ~~ unknown
-LINE 1: ... id_orden, tasa FROM metodos_de_pago WHERE moment LIKE '2026...
-                                                             ^
-HINT:  No operator m",2026-07-13 14:31:43
-124,finance.php,GET,/balance-de-cierres/{inicio}/{fin}/{id_vendedor},833,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[22007]: Invalid datetime format: 7 ERROR:  invalid input syntax for type date: ""1""
-LINE 33:             WHERE c.moment::date BETWEEN '1' AND '1'  AND c....
-                                                  ^",2026-07-13 14:31:44
+122,finance.php,GET,/retiros/{inicio}/{fin}/{id_empleado},740,1-GET-auto,OK_FALSO_POSITIVO,"Mismo problema de parametro de prueba que id 116. Con fecha real funciona correctamente, sin error embebido.",2026-07-13 14:52:35
+123,finance.php,GET,/pagos-ordenes/{fecha},818,1-GET-auto,EN_PROGRESO,mismo patron: moment LIKE sobre timestamp sin cast,2026-07-13 14:51:49
+124,finance.php,GET,/balance-de-cierres/{inicio}/{fin}/{id_vendedor},833,1-GET-auto,OK_FALSO_POSITIVO,"Mismo problema de parametro de prueba que id 116. Con fecha real funciona correctamente, sin error embebido.",2026-07-13 14:52:35
 125,geografia.php,GET,/catalogo-paises,10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:45
 126,geografia.php,GET,/catalogo-estados/{id_pais},595,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:45
 127,geografia.php,GET,/catalogo-ciudades/{id_estado},615,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:46
@@ -414,7 +405,7 @@ LINE 1: SELECT _id, nombre `name`, variation_percentage FROM sizes
 364,products_reports.php,GET,/reportes/costos-productos,76,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:37
 365,products_reports.php,GET,/reportes/costos-productos/categorias,415,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:38
 366,products_reports.php,GET,/reportes/costos-productos/{id_producto}/detalle,773,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:39
-367,reports.php,GET,/reportes/costos-produccion/{inicio}/{fin},13,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {""error"":""Error en el reporte (Debug SQL Mode): Error en la consulta base del reporte: Error al ejecutar la consulta: SQLSTATE[22007]: Invalid datetime format: 7 ERROR:  invalid input syntax for type date: \""1\""\nCONTEXT:  unnamed portal parameter $1 = '...'""}",2026-07-13 14:34:40
+367,reports.php,GET,/reportes/costos-produccion/{inicio}/{fin},13,1-GET-auto,OK_FALSO_POSITIVO,"Mismo problema de parametro de prueba: inicio/fin recibieron '1' en vez de fecha real. Con fecha real (2026-07-01) el endpoint funciona correctamente, sin error embebido.",2026-07-13 14:52:41
 368,reports.php,GET,/reportes/insumos-consumidos-por-orden/{id_orden},628,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:40
 369,reports.php,GET,/reportes/mano-obra-por-orden/{id_orden},666,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:41
 370,reports.php,GET,/reportes/gastos-de-fabricacion/{fecha},901,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:42

@@ -431,7 +431,9 @@ return function (App $app) {
     $fin = $args['fin'];
 
     if ($inicio === $fin) {
-      $whereBase = "moment LIKE '$inicio%'";
+      // "moment" es timestamp; LIKE requiere cast a texto en PostgreSQL (no existe el
+      // operador LIKE para timestamp), MySQL lo tolera con coercion implicita.
+      $whereBase = DB_DRIVER === 'pgsql' ? "moment::text LIKE '$inicio%'" : "moment LIKE '$inicio%'";
     } else {
       $whereBase = "moment BETWEEN '$inicio' AND '$fin'";
     }
@@ -818,7 +820,8 @@ return function (App $app) {
   $app->get('/pagos-ordenes/{fecha}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "SELECT _id, moment, monto, moneda, metodo_pago, id_orden, tasa FROM metodos_de_pago WHERE moment LIKE '" . $args['fecha'] . "%'";
+    $momentLikeExpr = DB_DRIVER === 'pgsql' ? 'moment::text' : 'moment';
+    $sql = "SELECT _id, moment, monto, moneda, metodo_pago, id_orden, tasa FROM metodos_de_pago WHERE $momentLikeExpr LIKE '" . $args['fecha'] . "%'";
     $object['data'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
