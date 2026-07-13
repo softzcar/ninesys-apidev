@@ -137,7 +137,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 136,inventory.php,POST,/insumos/nuevo,925,2-escritura-manual,PENDIENTE,,
 137,inventory.php,POST,/insumos/editar,1011,2-escritura-manual,PENDIENTE,,
 138,inventory.php,POST,/insumos/eliminar,1057,2-escritura-manual,PENDIENTE,,
-139,inventory.php,GET,/inventario-movimientos/{id_orden}/{id_empleado},1075,1-GET-auto,EN_PROGRESO,investigando: column id_empleado does not exist,2026-07-13 14:53:57
+139,inventory.php,GET,/inventario-movimientos/{id_orden}/{id_empleado},1075,1-GET-auto,CORREGIDO,Quitado filtro invalido id_empleado sobre ordenes_productos (columna nunca existio en ningun motor). Verificado en vivo: 0 errores.,2026-07-13 14:59:29
 140,inventory.php,GET,/inventario/historial/{id_orden},1093,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:54
 141,inventory.php,POST,/inventario-movimientos/nuevo,1108,2-escritura-manual,PENDIENTE,,
 142,inventory.php,POST,/inventario-movimientos/piezas-cortadas,1171,2-escritura-manual,PENDIENTE,,
@@ -150,8 +150,8 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 149,inventory.php,GET,/insumos/reporte/insumos/producto/{id_producto},1762,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:56
 150,inventory.php,GET,/inventario/{departamento},1852,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:56
 151,inventory.php,GET,/inventario-tintas,1953,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:57
-152,inventory.php,GET,/inventario/eficiencia/{id_orden}/{id_departamento},1988,1-GET-auto,EN_PROGRESO,investigando: column a.name must appear in GROUP BY + posible sizes._id vs talla varchar,2026-07-13 14:55:15
-153,inventory.php,GET,/eficiencia-orden/{id_orden},2019,1-GET-auto,EN_PROGRESO,investigando: operator does not exist integer = character varying (sizes._id vs talla),2026-07-13 14:55:15
+152,inventory.php,GET,/inventario/eficiencia/{id_orden}/{id_departamento},1988,1-GET-auto,CORREGIDO,"Agregado GROUP BY faltante (a.name, a.id_woo, b.valor_inicial, b.valor_final, c.cantidad) solo en rama pgsql. Verificado en vivo: 0 errores.",2026-07-13 14:59:30
+153,inventory.php,GET,/eficiencia-orden/{id_orden},2019,1-GET-auto,CORREGIDO,"3 fixes: CAST sizes._id/id_size a varchar (x3), IF()->CASE WHEN universal, GROUP BY faltante en segunda query. Verificado en vivo: 0 errores.",2026-07-13 14:59:30
 154,inventory.php,POST,/empleados/eficiencia,2094,2-escritura-manual,PENDIENTE,,
 155,inventory.php,GET,/inventario/consumo/{id_insumo},2145,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:00
 156,inventory.php,PATCH,/inventario/consumo/{id_movimiento},2227,2-escritura-manual,PENDIENTE,,
@@ -162,7 +162,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 161,inventory.php,GET,/inventario/reportes/movimientos,2761,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:02
 162,inventory.php,GET,/inventario/reportes/general,2838,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:03
 163,inventory.php,GET,/inventario/reportes/graficos-consumo,3157,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:04
-164,inventory.php,GET,/inventario/movimientos/{id}/historial,3238,1-GET-auto,EN_PROGRESO,investigando: column h.moment does not exist,2026-07-13 14:57:37
+164,inventory.php,GET,/inventario/movimientos/{id}/historial,3238,1-GET-auto,CORREGIDO,"Columna 'moment' no existe (nunca existio en ningun motor), nombre real fecha_modificacion. Fix universal, no requiere DB_DRIVER. Verificado en vivo: 0 errores.",2026-07-13 14:59:30
 165,inventory.php,GET,/api/inventario/carga-directa,3273,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:32:05
 166,inventory.php,POST,/api/inventario/carga-directa,3839,2-escritura-manual,PENDIENTE,,
 167,machine_services.php,GET,/servicios-maquinas,13,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:06
@@ -187,16 +187,12 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 186,manufacturing.php,POST,/lotes/get-detalles,1300,2-escritura-manual,PENDIENTE,,
 187,manufacturing.php,POST,/lotes/update/cantidad,1316,2-escritura-manual,PENDIENTE,,
 188,manufacturing.php,POST,/lotes/update/prioridad,1379,2-escritura-manual,PENDIENTE,,
-189,manufacturing.php,GET,/lotes-fisicos/tabla-editar,1398,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column ""eliminado"" does not exist
-LINE 1: SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY te...
-                                           ^",2026-07-13 14:32:10
+189,manufacturing.php,GET,/lotes-fisicos/tabla-editar,1398,1-GET-auto,EN_PROGRESO,investigando: column eliminado does not exist,2026-07-13 14:59:38
 190,manufacturing.php,POST,/lotes-fisicos/tabla-editar-filter,1430,2-escritura-manual,PENDIENTE,,
 191,manufacturing.php,POST,/lotes-fisicos/eliminar,1480,2-escritura-manual,PENDIENTE,,
 192,manufacturing.php,POST,/lotes-fisicos/update,1499,2-escritura-manual,PENDIENTE,,
 193,manufacturing.php,GET,/lotes/activos,1518,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:10
-194,manufacturing.php,GET,/lotes/fisicos,1535,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column a.id_inventario does not exist
-LINE 1: ...nidades FROM lotes_fisicos a JOIN inventario b ON a.id_inven...
-                                                             ^",2026-07-13 14:32:11
+194,manufacturing.php,GET,/lotes/fisicos,1535,1-GET-auto,CODIGO_MUERTO_CANDIDATO,"lotes_fisicos.id_inventario NUNCA existio en ningun motor (ni MySQL ni Postgres). Cero uso real: 0 hits en app_multi/msg_ninesys/ninesys-cdn y 0 en logs de produccion. No se corrige (no hay columna real que mapear) - candidato a eliminar, pendiente de autorizacion del usuario.",2026-07-13 15:01:56
 195,manufacturing.php,GET,/lotes/existencia/{talla}/{tela}/{corte}/{categoria},1549,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:12
 196,manufacturing.php,POST,/lotes/{id}/finalizar-departamento,1610,2-escritura-manual,PENDIENTE,,
 197,manufacturing.php,POST,/lotes/activos,1877,2-escritura-manual,PENDIENTE,,
@@ -204,17 +200,12 @@ LINE 1: ...nidades FROM lotes_fisicos a JOIN inventario b ON a.id_inven...
 199,manufacturing.php,POST,/lotes/{id}/finalizar-corte,2161,2-escritura-manual,PENDIENTE,,
 200,manufacturing.php,POST,/empleados/registrar-paso/{tipo}/{departamento}/{id_lotes_detalles}/{unidades},2420,2-escritura-manual,PENDIENTE,,
 201,manufacturing.php,POST,/empleados/registrar-paso-por-lotes/{departamento},2575,2-escritura-manual,PENDIENTE,,
-202,manufacturing.php,GET,/empleados/registrar-pago/{id_lotes_detalles},2738,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42601]: Syntax error: 7 ERROR:  syntax error at or near "")""
-LINE 1: ...tes_detalles, estatus, id_empleado) VALUES (1, 'aprobado', )
-                                                                      ^",2026-07-13 14:32:13
+202,manufacturing.php,GET,/empleados/registrar-pago/{id_lotes_detalles},2738,1-GET-auto,EN_PROGRESO,investigando: syntax error at or near ),2026-07-13 15:02:03
 203,manufacturing.php,GET,/empleados/ordenes-asignadas/v1/{id_empleado},2758,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:14
 204,manufacturing.php,POST,/pausas,2802,2-escritura-manual,PENDIENTE,,
 205,manufacturing.php,GET,/ordenes/proyeccion-entrega,2853,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:15
 206,manufacturing.php,GET,/empleados/mi-asignacion/{id_orden}/{id_empleado},2991,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:15
-207,manufacturing.php,GET,/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso},3093,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: integer = character varying
-LINE 20: ...              (SELECT nombre FROM sizes WHERE _id =  c.talla...
-                                                              ^
-HINT:  No operator matches th",2026-07-13 14:32:16
+207,manufacturing.php,GET,/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso},3093,1-GET-auto,EN_PROGRESO,investigando: operator does not exist integer = character varying (sizes._id vs talla ya conocido),2026-07-13 15:02:44
 208,manufacturing.php,GET,/sse/empleados/ordenes-asignadas/{id_empleado},3359,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:32:23
 209,manufacturing.php,GET,/empleados-todos,3470,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:24
 210,manufacturing.php,GET,/reports/input-efficiency/{id_ordenes},3634,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:25

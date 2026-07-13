@@ -1391,7 +1391,7 @@ class WooMe
    */
   public function getAllCategories()
   {
-    $sql = 'SELECT _id id, nombre `name` FROM categories WHERE eliminado = 0';
+    $sql = 'SELECT _id id, nombre name FROM categories WHERE eliminado = 0';
 
     $localConnection = new LocalDB();
     $data = $localConnection->goQuery($sql);

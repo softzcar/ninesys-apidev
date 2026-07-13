@@ -2741,7 +2741,7 @@ return function (App $app) {
     $sql = 'SELECT id_empleado FROM lotes_detalles WHERE _id = ' . $args['id_lotes_detalles'];
     $miEmpleado = $localConnection->goQuery($sql);
 
-    $sql = 'INSERT INTO pagos(id_lotes_detalles, estatus, id_empleado) VALUES (' . $args['id_lotes_detalles'] . ", 'aprobado', " . $miEmpleado['id_empleado'] . ')';
+    $sql = 'INSERT INTO pagos(id_lotes_detalles, estatus, id_empleado) VALUES (' . $args['id_lotes_detalles'] . ", 'aprobado', " . $miEmpleado[0]['id_empleado'] . ')';
     $object['sql'] = $sql;
     $object['items'] = $localConnection->goQuery($sql);
 
@@ -3098,6 +3098,9 @@ return function (App $app) {
     $resp_orden_proceso = $localConnection->goQuery($sql);
 
     // Buscar reposiciones
+    // sizes._id es entero y ordenes_productos.talla es varchar; MySQL compara con coercion
+    // implicita, PostgreSQL no ("operator does not exist: integer = character varying").
+    $sizeMatchExprRepos = DB_DRIVER === 'pgsql' ? 'CAST(_id AS VARCHAR) = c.talla' : '_id = c.talla';
     $sql = "SELECT
                 a._id id_reposicion,
                 a.id_orden,
@@ -3117,7 +3120,7 @@ return function (App $app) {
                 c.id_woo id_producto,
                 -- d.orden_proceso orden_proceso_empleado_en_departamentos,
                 c.name nombre_producto,
-                (SELECT nombre FROM sizes WHERE _id =  c.talla) talla,
+                (SELECT nombre FROM sizes WHERE $sizeMatchExprRepos) talla,
                 {$args['orden_proceso']} orden_proceso_recibido,                
                 (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento_solicitante) orden_proceso_solicitante,
                 (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento) orden_proceso_inicial,
