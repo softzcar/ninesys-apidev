@@ -1570,59 +1570,6 @@ return function (App $app) {
 
   /** FIN PRODUCCION */
 
-  /** TRUNCAR ORDER Y LOTES */
-  $app->post('/truncate', function (Request $request, Response $response) {
-    $localConnection = new LocalDB();
-
-    // Deshabilitar las restricciones de claves foráneas y truncar las tablas
-    $sql = 'SET FOREIGN_KEY_CHECKS = 0;
-            TRUNCATE `abonos`;
-            TRUNCATE `aprobacion_clientes`;
-            TRUNCATE `asistencias`;
-            TRUNCATE `caja`;
-            TRUNCATE `caja_cierres`;
-            TRUNCATE `caja_fondos`;
-            -- TRUNCATE `catalogo_impresoras`;
-            -- TRUNCATE `catalogo_insumos_productos`;
-            -- TRUNCATE `catalogo_telas`;
-            -- TRUNCATE `categories`;
-            TRUNCATE `check_tareas`;
-            -- TRUNCATE `config`;
-            -- TRUNCATE `customers`;
-            -- TRUNCATE `departamentos`;
-            TRUNCATE `disenos`;
-            TRUNCATE `disenos_ajustes_y_personalizaciones`;
-            TRUNCATE `empleados_lotes_fabricacion`;
-            TRUNCATE `empleados_lotes_fabricacion_items`;
-            -- TRUNCATE `inventario`;
-            TRUNCATE `inventario_movimientos`;
-            TRUNCATE `lotes`;
-            TRUNCATE `lotes_detalles`;
-            TRUNCATE `lotes_detalles_empleados_asignados`;
-            TRUNCATE `lotes_detalles_empleados_asignados_pausas`;
-            TRUNCATE `lotes_fisicos`;
-            TRUNCATE `lotes_historico_solicitadas`;
-            TRUNCATE `metodos_de_pago`;
-            TRUNCATE `ordenes`;
-            TRUNCATE `ordenes_borrador_empleado`;
-            TRUNCATE `ordenes_fila_orden`;
-            TRUNCATE `ordenes_fila_orden_cambios`;
-            TRUNCATE `ordenes_fila_reposiciones`;
-            TRUNCATE `ordenes_productos`;
-            -- TRUNCATE `ordenes_tmp`;
-            TRUNCATE `ordenes_vinculadas`;
-            TRUNCATE `pagos`;
-            TRUNCATE `piezas_cortadas`;
-            TRUNCATE `presupuestos`;
-            TRUNCATE `presupuestos_productos`;';
-
-    $localConnection->goQuery($sql);
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode(['message' => 'Tablas truncadas correctamente']));
-    return $response->withHeader('Content-Type', 'application/json');
-  });
-
   /* CÓDIGO HUÉRFANO ELIMINADO
           $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $miEmpleado['id_reposicion'] . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . ' - Producto ID: ' . $producto['id_producto'] . "');";
           $object['sql_pagos'][] = $sql;
