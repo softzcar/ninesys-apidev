@@ -1724,7 +1724,11 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     $app->get('/insumos/reporte/insumos/{id}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
 
-        $sql = "SELECT a.id_orden, b.nombre, c.insumo, c.sku, a.valor_inicial, a.valor_final, DATE_FORMAT(a.moment, '%d/%m/%Y') moment FROM inventario_movimientos a JOIN empleados b ON a.id_empleado = b._id JOIN inventario c ON a.id_insumo = c._id WHERE a.id_insumo =" . $args['id'] . ' ORDER BY c.insumo';
+        if (DB_DRIVER === 'pgsql') {
+            $sql = "SELECT a.id_orden, b.nombre, c.insumo, c.sku, a.valor_inicial, a.valor_final, TO_CHAR(a.moment, 'DD/MM/YYYY') moment FROM inventario_movimientos a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario JOIN inventario c ON a.id_insumo = c._id WHERE a.id_insumo =" . $args['id'] . ' ORDER BY c.insumo';
+        } else {
+            $sql = "SELECT a.id_orden, b.nombre, c.insumo, c.sku, a.valor_inicial, a.valor_final, DATE_FORMAT(a.moment, '%d/%m/%Y') moment FROM inventario_movimientos a JOIN empleados b ON a.id_empleado = b._id JOIN inventario c ON a.id_insumo = c._id WHERE a.id_insumo =" . $args['id'] . ' ORDER BY c.insumo';
+        }
         $object['sql'] = $sql;
         $object['items'] = $localConnection->goQuery($sql);
 
@@ -1756,26 +1760,49 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     $app->get('/insumos/reporte/insumos/producto/{id_producto}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
 
-        $sql = "SELECT
+        if (DB_DRIVER === 'pgsql') {
+            $sql = "SELECT
     a.id_orden,
     a.id_woo id_producto,
     a.name producto,
-    b.id_insumo,   
+    b.id_insumo,
     d.insumo,
     d.sku,
     b.valor_inicial,
-    b.valor_final,   
+    b.valor_final,
+    c.nombre,
+    b.departamento,
+    TO_CHAR(b.moment, 'DD/MM/YYYY') moment
+
+    FROM
+    ordenes_productos a
+    JOIN inventario_movimientos b ON b.id_orden = a.id_orden
+    JOIN inventario d ON b.id_insumo = d._id
+    JOIN api_empresas.empresas_usuarios c ON c.id_usuario = b.id_empleado
+    WHERE a.id_woo =" . $args['id_producto'] . ' ORDER BY a.category_name
+    ';
+        } else {
+            $sql = "SELECT
+    a.id_orden,
+    a.id_woo id_producto,
+    a.name producto,
+    b.id_insumo,
+    d.insumo,
+    d.sku,
+    b.valor_inicial,
+    b.valor_final,
     c.nombre,
     b.departamento,
     DATE_FORMAT(b.moment, '%d/%m/%Y')moment
 
     FROM
     ordenes_productos a
-    JOIN inventario_movimientos b ON b.id_orden = a.id_orden 
+    JOIN inventario_movimientos b ON b.id_orden = a.id_orden
     JOIN inventario d ON b.id_insumo = d._id
-    JOIN empleados c ON c._id = b.id_empleado 
+    JOIN empleados c ON c._id = b.id_empleado
     WHERE a.id_woo =" . $args['id_producto'] . ' ORDER BY a.category_name
     ';
+        }
 
         $object['sql'] = $sql;
         $object['items'] = $localConnection->goQuery($sql);

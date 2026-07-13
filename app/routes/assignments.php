@@ -30,7 +30,7 @@ return function (App $app) {
     $object['fields'][4]['key'] = 'asignar';
     $object['fields'][4]['label'] = 'Asignar';
 
-    $sql = "SELECT a._id orden, a._id asignar, a.cliente_nombre cliente, a.fecha_inicio inicio, a.fecha_entrega entrega, a.status estatus, b.terminado FROM `ordenes` a JOIN disenos b ON a._id = b.id_orden WHERE (a.status = 'activa' OR a.status = 'terminada' OR a.status = 'En espera' OR status = 'pausada') AND b.terminado = 1 OR b.tipo = 'no' ORDER BY a._id DESC";
+    $sql = "SELECT a._id orden, a._id asignar, a.cliente_nombre cliente, a.fecha_inicio inicio, a.fecha_entrega entrega, a.status estatus, b.terminado FROM ordenes a JOIN disenos b ON a._id = b.id_orden WHERE (a.status = 'activa' OR a.status = 'terminada' OR a.status = 'En espera' OR status = 'pausada') AND b.terminado = 1 OR b.tipo = 'no' ORDER BY a._id DESC";
 
     $object['items'] = $localConnection->goQuery($sql);
     $object['data'] = $object['items'];
@@ -76,7 +76,11 @@ return function (App $app) {
     } else {
       // BUSCAR COMISION DEL EMPLEADO PARA LA ORDEN
       $sql_ordenes = 'UPDATE ordenes SET ' . $departamento . ' = ' . $args['empleado'] . ' WHERE _id = ' . $args['orden'];
-      $sql_comision = 'SELECT  comision FROM empleados WHERE _id = ' . $args['empleado'];
+      if (DB_DRIVER === 'pgsql') {
+        $sql_comision = 'SELECT comision FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $args['empleado'];
+      } else {
+        $sql_comision = 'SELECT  comision FROM empleados WHERE _id = ' . $args['empleado'];
+      }
       $dataEmpleado = $localConnection->goQuery($sql_comision);
 
       $comision = $dataEmpleado[0]['comision'];
