@@ -1180,18 +1180,18 @@ class WooMe
         $recibirVal = (int)$recibir_notificaciones;
       }
 
-      $sql = "INSERT INTO `customers`(
-                `first_name`,
-                `last_name`,
-                `username`,
-                `cedula`,
-                `address`,
-                `phone`,
-                `email`,
-                `recibir_notificaciones`,
-                `id_catalogo_pais`,
-                `id_catalogo_estado`,
-                `id_catalogo_ciudad`
+      $sql = "INSERT INTO customers(
+                first_name,
+                last_name,
+                username,
+                cedula,
+                address,
+                phone,
+                email,
+                recibir_notificaciones,
+                id_catalogo_pais,
+                id_catalogo_estado,
+                id_catalogo_ciudad
             )
             VALUES(
                 '" . $first_name . "',
