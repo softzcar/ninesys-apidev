@@ -32,7 +32,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 31,catalogs.php,GET,/tiempos-de-produccion,526,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:02
 32,catalogs.php,POST,/tiempos-de-produccion,552,2-escritura-manual,PENDIENTE,,
 33,catalogs.php,POST,/tiempos-de-produccion/usa-desperdicio,585,2-escritura-manual,PENDIENTE,,
-34,catalogs.php,POST,/insumos-productos,614,2-escritura-manual,PENDIENTE,,
+34,catalogs.php,POST,/insumos-productos,614,2-escritura-manual,EN_PROGRESO,Investigando POST /insumos-productos,2026-07-13 17:05:30
 35,communications.php,POST,/config/select-empleados,14,2-escritura-manual,PENDIENTE,,
 36,communications.php,POST,/send-message,90,2-escritura-manual,CORREGIDO,"Sin patrones MySQL-only. Consulta SQL verificada directamente en psql: 0 errores. El endpoint completo depende de WS_API_URL (servicio externo de WhatsApp) no alcanzable desde el entorno de dev (igual que WooCommerce) - no relacionado con PostgreSQL, fuera de alcance.",2026-07-13 16:26:20
 37,communications.php,GET,/ws/departamentos,148,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:03
