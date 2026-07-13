@@ -135,7 +135,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 134,inventory.php,GET,/insumos,893,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:51
 135,inventory.php,GET,/insumos/{id_insumo},909,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:52
 136,inventory.php,POST,/insumos/nuevo,925,2-escritura-manual,PENDIENTE,,
-137,inventory.php,POST,/insumos/editar,1011,2-escritura-manual,PENDIENTE,,
+137,inventory.php,POST,/insumos/editar,1011,2-escritura-manual,EN_PROGRESO,Investigando POST /insumos/editar,2026-07-13 16:52:02
 138,inventory.php,POST,/insumos/eliminar,1057,2-escritura-manual,PENDIENTE,,
 139,inventory.php,GET,/inventario-movimientos/{id_orden}/{id_empleado},1075,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:53
 140,inventory.php,GET,/inventario/historial/{id_orden},1093,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:53
