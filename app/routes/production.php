@@ -1661,14 +1661,13 @@ return function (App $app) {
     $object['data'] = $data;
     $object['request_data'] = json_decode($data['data']);
 
-    $sql = '';
-    foreach ($object['request_data'] as $key => $item) {
-      $sql .= 'UPDATE lotes_detalles SET id_empleado = ' . $data['id_empleado'] . ', unidades_solicitadas = ' . $object['request_data'][$key]->cantidad . '  WHERE _id = ' . $object['request_data'][$key]->id_lotes_detalles . ';';
-    }
-
     // Atomicidad: reasignación múltiple a corte (lotes_detalles) en una transacción
     $localConnection->beginTransaction();
-    $object['response_update'] = $localConnection->goQuery($sql);
+    $object['response_update'] = [];
+    foreach ($object['request_data'] as $key => $item) {
+      $sql = 'UPDATE lotes_detalles SET id_empleado = ' . $data['id_empleado'] . ', unidades_solicitadas = ' . $object['request_data'][$key]->cantidad . '  WHERE _id = ' . $object['request_data'][$key]->id_lotes_detalles . ';';
+      $object['response_update'][] = $localConnection->goQuery($sql);
+    }
     $localConnection->commit();
 
     $localConnection->disconnect();
