@@ -1843,7 +1843,7 @@ return function (App $app) {
           $check_pago = $localConnection->goQuery($sql_check_pago, [$id_orden_actual, $id_emp_asignado, $id_departamento]);
 
           if (empty($check_pago)) {
-            $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, 0, ?, ?, ?, ?, ?, "aprobado", ?, ?, ?)';
+            $sql_pago = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, 0, ?, ?, ?, ?, ?, 'aprobado', ?, ?, ?)";
             $localConnection->goQuery($sql_pago, [$id_orden_actual, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
           }
 
