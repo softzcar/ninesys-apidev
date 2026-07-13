@@ -747,12 +747,14 @@ return function (App $app) {
             $nextDeptId = $nextDept[0]['_id'];
 
             // Update reposition to next department and clear employee (Pool)
+            // PostgreSQL no permite multiples comandos en un solo prepared statement (MySQL
+            // lo tolera); se separan en dos llamadas.
             $sqlRepo = "UPDATE reposiciones SET id_departamento = {$nextDeptId}, id_empleado = NULL WHERE _id = {$repoId};";
+            $localConnection->goQuery($sqlRepo);
 
             // Finish current tracking
-            $sqlRepo .= "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$repoId};";
-
-            $localConnection->goQuery($sqlRepo);
+            $sqlRepoTracking = "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$repoId};";
+            $localConnection->goQuery($sqlRepoTracking);
           }
         }
 
@@ -962,7 +964,7 @@ return function (App $app) {
               a.procentaje_comision,
               b.comision AS comision_fija,
               SUM(c.cantidad) AS total_productos_empleado,
-              (SUM(c.cantidad) * b.comision) * (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100) AS total_comision_fija
+              (SUM(c.cantidad) * b.comision) * ((CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_fija
           FROM
               lotes_detalles_empleados_asignados a
           JOIN
@@ -1043,16 +1045,16 @@ return function (App $app) {
         $sql = "SELECT
               a._id AS id_lotes_detalles,
               a.procentaje_comision,
-              ( IF(a.id_departamento = 3,
-                  COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad),
-                  c.cantidad
-                ) ) AS cantidad,
+              ( CASE WHEN a.id_departamento = 3 THEN
+                  COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad)
+                  ELSE c.cantidad
+                END ) AS cantidad,
               COALESCE(pc.comision, 0) AS comision_producto,
               1 AS factor_empleado,
-              ( IF(a.id_departamento = 3,
-                  COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad),
-                  c.cantidad
-                ) * COALESCE(pc.comision, 0) ) AS monto_comision_por_producto,
+              ( CASE WHEN a.id_departamento = 3 THEN
+                  COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad)
+                  ELSE c.cantidad
+                END * COALESCE(pc.comision, 0) ) AS monto_comision_por_producto,
               c.id_woo AS id_producto
           FROM
               lotes_detalles_empleados_asignados a
