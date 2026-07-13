@@ -955,6 +955,7 @@ return function (App $app) {
                 b.id_woo id_producto,
                 e.product,
                 b.talla,
+                ofo.orden_fila,
                 ((SUM(b.cantidad) * e.comision)) AS total_comision_variable,
                 ((SUM(b.cantidad) * d.comision)) AS total_comision_fija
                 -- ((SUM(b.cantidad) * e.comision) * a.procentaje_comision / 100) AS total_comision_variable,
@@ -968,7 +969,8 @@ return function (App $app) {
             LEFT JOIN api_empresas.empresas_usuarios d ON d.id_usuario = a.id_empleado
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = ord._id
             WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND a.progreso != 'terminada' AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
-            GROUP BY a.id_orden ORDER BY ofo.orden_fila ASC, a.id_orden DESC, a.progreso ASC
+            GROUP BY a._id, a.id_orden, ord.cliente_nombre, a.fecha_inicio, a.fecha_terminado, a.progreso, d.comision_tipo, c.tiempo, b.cantidad, b.id_woo, e.product, b.talla, ofo.orden_fila
+            ORDER BY ofo.orden_fila ASC, a.id_orden DESC, a.progreso ASC
         ";
     } else {
       $sql = "SELECT DISTINCT
