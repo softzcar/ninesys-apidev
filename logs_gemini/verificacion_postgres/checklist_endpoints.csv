@@ -374,13 +374,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 373,reports.php,GET,/reportes/employee-efficiency-global,1327,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 14:34:45
 374,tables.php,GET,/ordenes-reporte-semanal/{fecha},12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:46
 375,tables.php,GET,/presupuestos/guardados,67,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:47
-376,tables.php,GET,/ordenes/guardadas,87,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {
-    ""statusCode"": 500,
-    ""error"": {
-        ""type"": ""SERVER_ERROR"",
-        ""description"": ""An internal error has occurred while processing your request.""
-    }
-}",2026-07-13 14:34:48
+376,tables.php,GET,/ordenes/guardadas,87,1-GET-auto,CORREGIDO,"2 bugs: (1) funciones JSON_* de MySQL sin rama pgsql, reescrito con jsonb ->/->>y jsonb_agg/jsonb_build_object; (2) UNION ALL entre json y jsonb (tipos incompatibles), unificado a jsonb_agg en ambas ramas. Verificado directamente en psql y en vivo: 0 errores.",2026-07-13 15:37:23
 377,tables.php,GET,/ordenes/observaciones/{id_orden}/{id_empleado}/{id_departamento},162,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:48
 378,tables.php,GET,/ordenes/notas-por-empleado/{id_orden},183,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:49
 379,tables.php,GET,/ordenes/borrador/reporte-semanal/{id_empleado}/{id_departamento},214,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:50
@@ -389,7 +383,5 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 382,tables.php,POST,/orden/guardar,361,2-escritura-manual,PENDIENTE,,
 383,tables.php,GET,/table/ordenes-activas/{id_empleado},437,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:51
 384,tables.php,GET,/table/ordenes-todas,538,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:51
-385,tables.php,GET,/table/ordenes-con-deuda,634,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42803]: Grouping error: 7 ERROR:  column ""d.pago_total"" must appear in the GROUP BY clause or be used in an aggregate function
-LINE 15:          d.pago_total - SUM(c.abono) - SUM(c.descuento) + SU...
-                  ^",2026-07-13 14:34:52
+385,tables.php,GET,/table/ordenes-con-deuda,634,1-GET-auto,CORREGIDO,Subconsulta correlacionada con SUM() mezclado con d.pago_total sin GROUP BY (x2 en SELECT y WHERE). Envuelto en MAX() solo en pgsql. Verificado en vivo: 0 errores.,2026-07-13 15:37:23
 386,upload.php,POST,/upload-order-detail-image,9,2-escritura-manual,PENDIENTE,,
