@@ -96,7 +96,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 95,designs.php,GET,/disenos/asignados/{id_empleado},657,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:29
 96,designs.php,GET,/disenos/pendientes/{id_empleado},732,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:30
 97,designs.php,GET,/disenos/terminados/{id_empleado},747,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:31
-98,designs.php,PUT,/disenos/asign/{id_orden}/{empleado},763,2-escritura-manual,EN_PROGRESO,Investigando PUT /disenos/asign/{id_orden}/{empleado},2026-07-13 16:56:22
+98,designs.php,PUT,/disenos/asign/{id_orden}/{empleado},763,2-escritura-manual,OK,"Sin patrones MySQL-only, 2 goQuery() independientes dentro de una transaccion (sin multi-statement), usa insert_id correctamente entre ambos INSERT. Probado en vivo end-to-end contra 194 dev: PUT /disenos/asign/8/3 -> diseno _id=2 creado, revision _id=2 creada vinculada correctamente via id_diseno, verificado en BD.",2026-07-13 16:56:45
 99,designs.php,PUT,/disenos/close/{id_orden}/{empleado},826,2-escritura-manual,PENDIENTE,,
 100,designs.php,GET,/disenos/images/{id_orden},840,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:31
 101,designs.php,GET,/revision/image/{id_revision},867,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 15:38:32
