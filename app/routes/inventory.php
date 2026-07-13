@@ -1348,9 +1348,10 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 // Normal consumption update
                 $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             }
-
-            $sql .= 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
-            $update_cantidad_inventario = $localConnection->goQuery($sql);
+            // PostgreSQL no permite multiples comandos en un solo prepared statement (MySQL lo tolera).
+            $localConnection->goQuery($sql);
+            $sqlSelectCantidad = 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $update_cantidad_inventario = $localConnection->goQuery($sqlSelectCantidad);
             $object['update_cantidad_invrntario_SQL'] = $sql;
             $object['update_cantidad_inventario_RSP'] = $update_cantidad_inventario;
             $object['update_success'] = !empty($update_cantidad_inventario);
@@ -1380,8 +1381,10 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . $miInsumo['id_insumo'] . ';';
                 $cantidad_consumida = 0; // Ensure movement history records final value as 0
             }
-            $sql .= 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
-            $update_cantidad_inventario = $localConnection->goQuery($sql);
+            // PostgreSQL no permite multiples comandos en un solo prepared statement (MySQL lo tolera).
+            $localConnection->goQuery($sql);
+            $sqlSelectCantidad = 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $update_cantidad_inventario = $localConnection->goQuery($sqlSelectCantidad);
             $object['update_cantidad_invrntario_SQL'] = $sql;
             $object['update_cantidad_inventario_RSP'] = $update_cantidad_inventario;
             $object['update_success'] = !empty($update_cantidad_inventario);
@@ -1416,9 +1419,10 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 // Normal consumption update
                 $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
             }
-
-            $sql .= 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
-            $update_cantidad_inventario = $localConnection->goQuery($sql);
+            // PostgreSQL no permite multiples comandos en un solo prepared statement (MySQL lo tolera).
+            $localConnection->goQuery($sql);
+            $sqlSelectCantidad = 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $update_cantidad_inventario = $localConnection->goQuery($sqlSelectCantidad);
             $object['update_cantidad_invrntario_SQL'] = $sql;
             $object['update_cantidad_inventario_RSP'] = $update_cantidad_inventario;
 
