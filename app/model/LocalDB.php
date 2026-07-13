@@ -277,9 +277,6 @@ class LocalDB
       // referencial NO deben quedar como un retorno silencioso (los llamadores
       // suelen no verificar el 'status'). Se propagan al manejador de errores
       // central de Slim (HttpErrorHandler), que responde un HTTP 409 limpio.
-      // El resto de errores conserva el comportamiento previo (retorno con
-      // status=error) para no alterar flujos existentes (p. ej. el manejo de
-      // duplicados por índice único, errno 1062).
       $sqlState = $e->errorInfo[0] ?? '';
       $driverErrno = (is_array($e->errorInfo ?? null) && isset($e->errorInfo[1])) ? (int) $e->errorInfo[1] : 0;
       $foreignKeyErrnos = [1451, 1452, 1216, 1217];
@@ -290,9 +287,30 @@ class LocalDB
           $e
         );
       }
-      $mat['sql'] = $sql;
-      $mat['status'] = 'error';
-      $mat['message'] = 'Error al ejecutar la consulta: ' . $e->getMessage();
+
+      // Duplicados por índice único: se preserva el retorno "suave" (status=error
+      // en el array) porque varios endpoints lo usan intencionalmente para mostrar
+      // mensajes de "ya existe" sin que sea un 500.
+      $uniqueViolationErrnos = [1062];
+      if ($sqlState === '23505' || in_array($driverErrno, $uniqueViolationErrnos, true)) {
+        $mat['sql'] = $sql;
+        $mat['status'] = 'error';
+        $mat['message'] = 'Error al ejecutar la consulta: ' . $e->getMessage();
+        return $mat;
+      }
+
+      // Red de seguridad general: cualquier OTRO error SQL (sintaxis, columna
+      // inexistente, tipo de dato ambiguo, etc.) indica un bug real, no una regla
+      // de negocio esperada. Se registra explícitamente y se propaga como
+      // excepción real -> HTTP 500 honesto, en vez de devolver silenciosamente un
+      // array que la mayoría de los llamadores no verifica y puede malinterpretar
+      // como datos válidos (la app no debe fingir éxito cuando la consulta falló).
+      error_log('goQuery() error SQL no manejado: ' . $e->getMessage() . ' | SQL: ' . $sql);
+      throw new \App\Application\Exceptions\DatabaseQueryException(
+        'Error interno al ejecutar una operación de base de datos.',
+        0,
+        $e
+      );
     }
 
     return $mat;
