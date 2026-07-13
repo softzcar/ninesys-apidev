@@ -1995,11 +1995,13 @@ return function (App $app) {
       // GRÁFICO 2: TIEMPOS DE ENTREGA (SEMÁFORO SIMPLIFICADO)
       // =====================================================================
       // Categoriza órdenes comparando fecha_entrega con HOY
-      $sqlSemaforo = "SELECT 
+      $fechaEntregaExpr = DB_DRIVER === 'pgsql' ? 'fecha_entrega::date' : 'DATE(fecha_entrega)';
+      $curDateExpr = DB_DRIVER === 'pgsql' ? 'CURRENT_DATE' : 'CURDATE()';
+      $sqlSemaforo = "SELECT
           SUM(CASE WHEN status = 'En espera' THEN 1 ELSE 0 END) as por_iniciar,
-          SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) < CURDATE() THEN 1 ELSE 0 END) as retrasado,
-          SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) = CURDATE() THEN 1 ELSE 0 END) as en_el_dia,
-          SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) > CURDATE() THEN 1 ELSE 0 END) as a_tiempo,
+          SUM(CASE WHEN status = 'activa' AND $fechaEntregaExpr < $curDateExpr THEN 1 ELSE 0 END) as retrasado,
+          SUM(CASE WHEN status = 'activa' AND $fechaEntregaExpr = $curDateExpr THEN 1 ELSE 0 END) as en_el_dia,
+          SUM(CASE WHEN status = 'activa' AND $fechaEntregaExpr > $curDateExpr THEN 1 ELSE 0 END) as a_tiempo,
           SUM(CASE WHEN status = 'pausada' THEN 1 ELSE 0 END) as pausadas
         FROM ordenes
         WHERE status IN ('En espera', 'activa', 'pausada')";

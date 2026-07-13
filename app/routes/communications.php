@@ -201,6 +201,7 @@ return function (App $app) {
     // Ejemplo conceptual (la implementación exacta depende de tu clase LocalDB):
     // $sql = "SELECT a._id id_orden, ... FROM ordenes a ... WHERE a._id = ?";
     // $orden = $localConnection->goQuery($sql, [$id_orden]);
+    $fechaEntregaExpr = DB_DRIVER === 'pgsql' ? "TO_CHAR(a.fecha_entrega, 'DD/MM/YYYY')" : "DATE_FORMAT(a.fecha_entrega, '%d/%m/%Y')";
     $sql = "SELECT
         a._id id_orden,
         a.cliente_nombre,
@@ -209,7 +210,7 @@ return function (App $app) {
         a.pago_abono,
         a.pago_total,
         ((a.pago_total -  a.pago_descuento) - a.pago_abono + a.pago_nota_credito) monto_pendiente,
-        DATE_FORMAT(a.fecha_entrega, '%d/%m/%Y') fecha_entrega
+        $fechaEntregaExpr fecha_entrega
         FROM
             ordenes a
         JOIN customers b ON b._id = a.id_wp

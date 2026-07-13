@@ -38,7 +38,7 @@ return function (App $app) {
     $values .= "'" . $miAtributo['nombre'] . "',";
     $values .= "'" . $miAtributo['precio'] . "')";
 
-    $sql = 'INSERT INTO products_attributes (`attribute_name`, `precio`) VALUES ' . $values . ';';
+    $sql = 'INSERT INTO products_attributes (attribute_name, precio) VALUES ' . $values . ';';
     $sql .= 'SELECT * FROM products_attributes ORDER BY products_attributes';
 
     $localConnection = new LocalDB();
@@ -315,7 +315,7 @@ return function (App $app) {
     $object['response_verify'] = $tmpConnection->goQuery($sql);
 
     if (empty($object['response_verify'])) {
-      $sql = 'INSERT INTO products_comisiones (`comision`, `id_product`, `id_departamento`) VALUES (' . $data['comision'] . ', ' . $data['id_product'] . ", '" . $data['id_departamento'] . "');";
+      $sql = 'INSERT INTO products_comisiones (comision, id_product, id_departamento) VALUES (' . $data['comision'] . ', ' . $data['id_product'] . ", '" . $data['id_departamento'] . "');";
     } else {
       $sql = "UPDATE products_comisiones SET comision = {$data['comision']} WHERE id_product = {$data['id_product']} AND id_departamento = {$data['id_departamento']}";
     }
@@ -443,7 +443,7 @@ return function (App $app) {
         $sql = '';
         if (empty($existingRecord)) {
           // Si no existe, insertar
-          $sql = "INSERT INTO products_comisiones (`comision`, `id_product`, `id_departamento`) VALUES ({$comision}, {$id_product}, {$id_departamento});";
+          $sql = "INSERT INTO products_comisiones (comision, id_product, id_departamento) VALUES ({$comision}, {$id_product}, {$id_departamento});";
         } else {
           // Si existe, actualizar
           $sql = "UPDATE products_comisiones SET comision = {$comision} WHERE id_product = {$id_product} AND id_departamento = {$id_departamento}";

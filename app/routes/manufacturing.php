@@ -1707,7 +1707,12 @@ return function (App $app) {
                 $desperdicio_total = floatval($consumo['desperdicio_total']);
                 $desperdicio_estimado = $desperdicio_total * $proporcion;
 
-                $sql_rendimiento = 'INSERT INTO rendimiento (id_orden, id_empleado_corte, desperdicio, id_insumo, metros) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE desperdicio = desperdicio + VALUES(desperdicio), metros = metros + VALUES(metros);';
+                // NOTA: la tabla `rendimiento` no tiene restricción UNIQUE (aparte de `_id`), por lo que
+                // ON DUPLICATE KEY UPDATE nunca se dispara realmente (deuda preexistente, no causada por
+                // esta migración). Se traduce preservando el comportamiento real actual (insert simple).
+                $sql_rendimiento = DB_DRIVER === 'pgsql'
+                  ? 'INSERT INTO rendimiento (id_orden, id_empleado_corte, desperdicio, id_insumo, metros) VALUES (?, ?, ?, ?, ?);'
+                  : 'INSERT INTO rendimiento (id_orden, id_empleado_corte, desperdicio, id_insumo, metros) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE desperdicio = desperdicio + VALUES(desperdicio), metros = metros + VALUES(metros);';
                 $localConnection->goQuery($sql_rendimiento, [$id_orden_actual, $id_empleado, $desperdicio_estimado, $id_insumo_actual, 0]);
               }
             }
@@ -4401,12 +4406,13 @@ return function (App $app) {
   $app->get('/empleados/terminadas-hoy/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
     try {
+      $fechaTerminadoCond = DB_DRIVER === 'pgsql' ? 'fecha_terminado::date = CURRENT_DATE' : 'DATE(fecha_terminado) = CURDATE()';
       $sql = "SELECT DISTINCT
                   id_orden
               FROM lotes_detalles_empleados_asignados
               WHERE id_empleado = {$args['id_empleado']}
                 AND id_departamento = {$args['id_departamento']}
-                AND DATE(fecha_terminado) = CURDATE()";
+                AND $fechaTerminadoCond";
 
       $result = $localConnection->goQuery($sql);
       $ids = [];

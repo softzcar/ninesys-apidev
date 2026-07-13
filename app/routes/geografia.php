@@ -10,6 +10,12 @@ return function (App $app) {
   $app->get('/catalogo-paises', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
 
+    // Esta migración auto-ejecutable (CREATE TABLE/ALTER TABLE con sintaxis MySQL: AUTO_INCREMENT,
+    // backticks, SHOW COLUMNS) solo aplica a empresas MySQL heredadas que aún no tienen el catálogo
+    // geográfico. Las empresas PostgreSQL se aprovisionan desde
+    // create_new_company_api_emp_N_postgres.sql, que ya incluye catalogo_paises, catalogo_estados,
+    // catalogo_ciudades y las columnas geográficas de customers en su forma final.
+    if (DB_DRIVER !== 'pgsql') {
     try {
       // 1. Crear tablas del catálogo geográfico si no existen
       $localConnection->goQuery("CREATE TABLE IF NOT EXISTS `catalogo_paises` (
@@ -568,6 +574,7 @@ return function (App $app) {
       }
     } catch (\Exception $e) {
       error_log("Error en migración auto-ejecutable del catálogo geográfico: " . $e->getMessage());
+    }
     }
 
     $sql = 'SELECT * FROM catalogo_paises ORDER BY nombre';

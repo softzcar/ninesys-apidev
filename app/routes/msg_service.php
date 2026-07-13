@@ -522,7 +522,11 @@ return function (App $app) {
             // Modo only_design=1: ignora "search" y lista TODOS los productos de
             // diseño gráfico (es_diseno=1), para que la IA pueda mostrar el catálogo
             // completo de servicios de diseño sin depender de un match de nombre.
-            $dbName = "`{$tenantDb}`";  // Backticks para seguridad
+            // $tenantConnection ya está conectado directamente a la BD del tenant (vía LOCAL_DNS
+            // resuelto por el middleware a partir del mismo header Authorization), así que el
+            // prefijo de base de datos es redundante. En pgsql, además, la notación "bd.tabla"
+            // cross-database no existe en una sola conexión (rompe con "schema does not existe").
+            $dbName = DB_DRIVER === 'pgsql' ? '' : "`{$tenantDb}`.";  // Backticks para seguridad (solo mysql)
 
             if ($onlyDesign) {
                 $whereClause = 'p.es_diseno = 1';
@@ -536,7 +540,7 @@ return function (App $app) {
             $sqlProducts = <<<SQL
                 SELECT DISTINCT p._id as id, p.product as name, p.product_description as description,
                        p.fisico as is_physical, p.es_diseno as is_design, p.category_ids
-                FROM {$dbName}.products p
+                FROM {$dbName}products p
                 WHERE {$whereClause}
                 ORDER BY p.product ASC
                 LIMIT {$limit}
@@ -553,7 +557,7 @@ return function (App $app) {
                 $productId = (int)$p['id'];
 
                 // Obtener TODOS los precios de este producto
-                $sqlPrices = "SELECT price, descripcion FROM {$dbName}.products_prices
+                $sqlPrices = "SELECT price, descripcion FROM {$dbName}products_prices
                               WHERE id_product = ? ORDER BY price DESC";
                 $prices = $tenantConnection->goQuery($sqlPrices, [$productId]) ?? [];
 
@@ -564,7 +568,7 @@ return function (App $app) {
                     $catIdsArr = array_map('intval', explode(',', $p['category_ids']));
                     $firstCategoryId = $catIdsArr[0];
                     $catIds = implode(',', $catIdsArr);
-                    $catSql = "SELECT nombre FROM {$dbName}.categories WHERE _id IN ({$catIds}) ORDER BY nombre";
+                    $catSql = "SELECT nombre FROM {$dbName}categories WHERE _id IN ({$catIds}) ORDER BY nombre";
                     $catRows = $tenantConnection->goQuery($catSql);
                     if (!isset($catRows['status'])) {
                         $categories = array_column((array)$catRows, 'nombre');
@@ -574,11 +578,14 @@ return function (App $app) {
                 // Obtener atributos (solo si el producto es físico o diseño)
                 $attributes = [];
                 if ((int)$p['is_physical'] === 1 || (int)$p['is_design'] === 1) {
+                    $valuesExpr = DB_DRIVER === 'pgsql'
+                        ? 'string_agg(pav.attribute_value, \',\' ORDER BY pav.attribute_value)'
+                        : 'GROUP_CONCAT(pav.attribute_value ORDER BY pav.attribute_value)';
                     $attrSql = <<<SQL
                         SELECT pa._id as id, pa.attribute_name as name,
-                               GROUP_CONCAT(pav.attribute_value ORDER BY pav.attribute_value) as values
-                        FROM {$dbName}.products_attributes pa
-                        JOIN {$dbName}.products_attributes_values pav ON pa._id = pav.id_product_attribute
+                               {$valuesExpr} as values
+                        FROM {$dbName}products_attributes pa
+                        JOIN {$dbName}products_attributes_values pav ON pa._id = pav.id_product_attribute
                         WHERE pav.id_product = ?
                         GROUP BY pa._id
                         ORDER BY pa.attribute_name ASC
@@ -686,14 +693,16 @@ return function (App $app) {
             return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe o está inactiva."], 404);
         }
 
-        $dbName = '`' . $rows[0]['db_name'] . '`';
+        // $tenantConnection ya está conectado directamente a la BD del tenant; el prefijo solo
+        // aplica en mysql (en pgsql "bd.tabla" cross-database no existe en una sola conexión).
+        $dbName = DB_DRIVER === 'pgsql' ? '' : '`' . $rows[0]['db_name'] . '`.';
 
         try {
             $tenantConnection = new LocalDB();
 
             $customers = $tenantConnection->goQuery(
                 "SELECT _id, first_name, last_name, cedula, phone, email, address
-                 FROM {$dbName}.customers WHERE phone = ? LIMIT 1",
+                 FROM {$dbName}customers WHERE phone = ? LIMIT 1",
                 [$phone]
             );
 
@@ -708,7 +717,7 @@ return function (App $app) {
             // Buscar último vendedor en presupuestos, luego en ordenes
             $lastVendedorId = null;
             $vendedorRows = $tenantConnection->goQuery(
-                "SELECT responsable FROM {$dbName}.presupuestos
+                "SELECT responsable FROM {$dbName}presupuestos
                  WHERE id_wp = ? AND responsable IS NOT NULL ORDER BY _id DESC LIMIT 1",
                 [$customerId]
             );
@@ -718,7 +727,7 @@ return function (App $app) {
 
             if (!$lastVendedorId) {
                 $vendedorRows = $tenantConnection->goQuery(
-                    "SELECT responsable FROM {$dbName}.ordenes
+                    "SELECT responsable FROM {$dbName}ordenes
                      WHERE id_wp = ? AND responsable IS NOT NULL ORDER BY _id DESC LIMIT 1",
                     [$customerId]
                 );
@@ -800,7 +809,9 @@ return function (App $app) {
             return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe o está inactiva."], 404);
         }
 
-        $dbName = '`' . $rows[0]['db_name'] . '`';
+        // $tenantConnection ya está conectado directamente a la BD del tenant; el prefijo solo
+        // aplica en mysql (en pgsql "bd.tabla" cross-database no existe en una sola conexión).
+        $dbName = DB_DRIVER === 'pgsql' ? '' : '`' . $rows[0]['db_name'] . '`.';
 
         try {
             $tenantConnection = new LocalDB();
@@ -808,7 +819,7 @@ return function (App $app) {
             // 1. Buscar cliente por teléfono
             $customers = $tenantConnection->goQuery(
                 "SELECT _id, first_name, last_name 
-                 FROM {$dbName}.customers WHERE phone = ? LIMIT 1",
+                 FROM {$dbName}customers WHERE phone = ? LIMIT 1",
                 [$phone]
             );
 
@@ -830,10 +841,10 @@ return function (App $app) {
                     o.pago_total,
                     o.pago_descuento,
                     o.pago_abono,
-                    IFNULL((SELECT SUM(a.abono) FROM {$dbName}.abonos a WHERE a.id_orden = o._id), 0) AS total_abonos,
-                    IFNULL((SELECT SUM(a.descuento) FROM {$dbName}.abonos a WHERE a.id_orden = o._id), 0) AS total_descuentos,
-                    IFNULL((SELECT SUM(a.nota_credito) FROM {$dbName}.abonos a WHERE a.id_orden = o._id), 0) AS total_notas_credito
-                FROM {$dbName}.ordenes o
+                    IFNULL((SELECT SUM(a.abono) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_abonos,
+                    IFNULL((SELECT SUM(a.descuento) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_descuentos,
+                    IFNULL((SELECT SUM(a.nota_credito) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_notas_credito
+                FROM {$dbName}ordenes o
                 WHERE o.id_wp = ? AND o.status != 'cancelada'
                 ORDER BY o._id DESC
             ";
@@ -851,7 +862,7 @@ return function (App $app) {
                 // Buscar productos de la orden
                 $productsQuery = "
                     SELECT name, cantidad, talla AS detalle_tallas 
-                    FROM {$dbName}.ordenes_productos 
+                    FROM {$dbName}ordenes_productos 
                     WHERE id_orden = ?
                 ";
                 $products = $tenantConnection->goQuery($productsQuery, [$idOrden]);
@@ -956,7 +967,9 @@ return function (App $app) {
             return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe."], 404);
         }
 
-        $dbName = '`' . $rows[0]['db_name'] . '`';
+        // $tenantConnection ya está conectado directamente a la BD del tenant; el prefijo solo
+        // aplica en mysql (en pgsql "bd.tabla" cross-database no existe en una sola conexión).
+        $dbName = DB_DRIVER === 'pgsql' ? '' : '`' . $rows[0]['db_name'] . '`.';
 
         try {
             $tenantConnection = new LocalDB();
@@ -973,13 +986,13 @@ return function (App $app) {
                 $conditions[] = "cedula = '$cedula'";
             }
             $existingRows = $tenantConnection->goQuery(
-                "SELECT _id FROM {$dbName}.customers WHERE (" . implode(' OR ', $conditions) . ") LIMIT 1"
+                "SELECT _id FROM {$dbName}customers WHERE (" . implode(' OR ', $conditions) . ") LIMIT 1"
             );
 
             if (!empty($existingRows) && !isset($existingRows['status'])) {
                 $customerId = (int) $existingRows[0]['_id'];
                 $tenantConnection->goQuery(
-                    "UPDATE {$dbName}.customers
+                    "UPDATE {$dbName}customers
                      SET first_name = '$nombre', last_name = '$apellido', cedula = '$cedula',
                          phone = '$telefono', email = '$email', address = '$direccion'
                      WHERE _id = $customerId"
@@ -989,7 +1002,7 @@ return function (App $app) {
             }
 
             $createResult = $tenantConnection->goQuery(
-                "INSERT INTO {$dbName}.customers (first_name, last_name, cedula, phone, email, address)
+                "INSERT INTO {$dbName}customers (first_name, last_name, cedula, phone, email, address)
                  VALUES ('$nombre', '$apellido', '$cedula', '$telefono', '$email', '$direccion')"
             );
             $tenantConnection->disconnect();
@@ -1055,13 +1068,15 @@ return function (App $app) {
             return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe."], 404);
         }
 
-        $dbName = '`' . $rows[0]['db_name'] . '`';
+        // $tenantConnection ya está conectado directamente a la BD del tenant; el prefijo solo
+        // aplica en mysql (en pgsql "bd.tabla" cross-database no existe en una sola conexión).
+        $dbName = DB_DRIVER === 'pgsql' ? '' : '`' . $rows[0]['db_name'] . '`.';
 
         try {
             $tenantConnection = new LocalDB();
 
             $existing = $tenantConnection->goQuery(
-                "SELECT _id FROM {$dbName}.presupuestos WHERE _id = ? LIMIT 1",
+                "SELECT _id FROM {$dbName}presupuestos WHERE _id = ? LIMIT 1",
                 [$idPresupuesto]
             );
 
@@ -1071,7 +1086,7 @@ return function (App $app) {
             }
 
             $tenantConnection->goQuery(
-                "UPDATE {$dbName}.presupuestos SET responsable = ? WHERE _id = ?",
+                "UPDATE {$dbName}presupuestos SET responsable = ? WHERE _id = ?",
                 [$idVendedor, $idPresupuesto]
             );
 

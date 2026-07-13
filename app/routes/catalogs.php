@@ -24,6 +24,13 @@ return function (App $app) {
   $app->get('/catalogo-tintas', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
 
+    // Esta migración auto-ejecutable (CREATE TABLE/ALTER TABLE con sintaxis MySQL: AUTO_INCREMENT,
+    // backticks, SHOW COLUMNS, RENAME TABLE multi-tabla, UPDATE con JOIN) solo aplica a empresas
+    // MySQL heredadas que aún no tienen el modelo nuevo de catálogo de tintas/colores. Las empresas
+    // PostgreSQL se aprovisionan desde create_new_company_api_emp_N_postgres.sql, que ya incluye
+    // catalogo_tintas, catalogo_colores_tintas, impresoras_colores y las columnas relacionadas en su
+    // forma final — no hay nada que migrar.
+    if (DB_DRIVER !== 'pgsql') {
     try {
       // 1. Crear catalogo_tintas si no existe
       $localConnection->goQuery("CREATE TABLE IF NOT EXISTS `catalogo_tintas` (
@@ -185,6 +192,7 @@ return function (App $app) {
       }
     } catch (\Exception $e) {
       error_log("Error en migración auto-ejecutable y adaptativa del catálogo de tintas y colores: " . $e->getMessage());
+    }
     }
 
     $sql = 'SELECT * FROM catalogo_tintas WHERE eliminado = 0 ORDER BY nombre';
@@ -380,7 +388,7 @@ return function (App $app) {
     $values = '(';
     $values .= "'" . $miTela['tela'] . "')";
 
-    $sql = 'INSERT INTO catalogo_telas (`tela`) VALUES ' . $values . ';';
+    $sql = 'INSERT INTO catalogo_telas (tela) VALUES ' . $values . ';';
     $sql .= 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
 
     $localConnection = new LocalDB();

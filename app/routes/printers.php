@@ -39,7 +39,10 @@ return function (App $app) {
       $canales = $data['canales'] ?? [];
       if (is_array($canales)) {
         foreach ($canales as $id_color) {
-          $localConnection->goQuery('INSERT IGNORE INTO impresoras_colores (id_catalogo_impresora, id_color_tinta) VALUES (?, ?)', [$new_id, intval($id_color)]);
+          $sqlInsertColor = DB_DRIVER === 'pgsql'
+            ? 'INSERT INTO impresoras_colores (id_catalogo_impresora, id_color_tinta) VALUES (?, ?) ON CONFLICT (id_catalogo_impresora, id_color_tinta) DO NOTHING'
+            : 'INSERT IGNORE INTO impresoras_colores (id_catalogo_impresora, id_color_tinta) VALUES (?, ?)';
+          $localConnection->goQuery($sqlInsertColor, [$new_id, intval($id_color)]);
         }
       }
 
@@ -63,26 +66,32 @@ return function (App $app) {
   $app->get('/impresoras', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
     try {
-      $sql = "SELECT 
-                    ci._id, 
-                    ci.codigo_interno, 
-                    ci.marca, 
-                    ci.modelo, 
-                    ci.capacidad_contenedor,
-                    ci.ubicacion, 
-                    ci.tipo_tecnologia, 
-                    ci.id_catalogo_tintas,
-                    ctt.nombre AS tecnologia_nombre,
-                    ci.estado, 
-                    ci.notas, 
-                    ci.moment,
-                    (
+      if (DB_DRIVER === 'pgsql') {
+        $canalesColoresExpr = "(
+                        SELECT (json_agg(json_build_object('id_color', ic.id_color_tinta, 'codigo', cct.codigo, 'nombre', cct.nombre, 'color_hex', cct.color_hex)))::text
+                        FROM impresoras_colores ic
+                        JOIN catalogo_colores_tintas cct ON ic.id_color_tinta = cct._id
+                        WHERE ic.id_catalogo_impresora = ci._id
+                    ) AS canales_colores";
+        $tintasRecargasExpr = "(json_agg(
+                        json_build_object(
+                            'id', tr._id,
+                            'id_catalogo_impresora', tr.id_catalogo_impresora,
+                            'id_insumo', tr.id_insumo,
+                            'color', cct_tr.codigo,
+                            'cantidad', tr.cantidad,
+                            'nivel_tanque_previo', COALESCE(tr.nivel_tanque_previo, 0),
+                            'fecha_recarga', tr.fecha_recarga
+                        )
+                    ))::text AS tintas_recargas";
+      } else {
+        $canalesColoresExpr = "(
                         SELECT CONCAT('[', GROUP_CONCAT(JSON_OBJECT('id_color', ic.id_color_tinta, 'codigo', cct.codigo, 'nombre', cct.nombre, 'color_hex', cct.color_hex)), ']')
                         FROM impresoras_colores ic
                         JOIN catalogo_colores_tintas cct ON ic.id_color_tinta = cct._id
                         WHERE ic.id_catalogo_impresora = ci._id
-                    ) AS canales_colores,
-                    CONCAT(
+                    ) AS canales_colores";
+        $tintasRecargasExpr = "CONCAT(
                         '[',
                         GROUP_CONCAT(
                             JSON_OBJECT(
@@ -96,8 +105,24 @@ return function (App $app) {
                             )
                         ),
                         ']'
-                    ) AS tintas_recargas
-                FROM 
+                    ) AS tintas_recargas";
+      }
+      $sql = "SELECT
+                    ci._id,
+                    ci.codigo_interno,
+                    ci.marca,
+                    ci.modelo,
+                    ci.capacidad_contenedor,
+                    ci.ubicacion,
+                    ci.tipo_tecnologia,
+                    ci.id_catalogo_tintas,
+                    ctt.nombre AS tecnologia_nombre,
+                    ci.estado,
+                    ci.notas,
+                    ci.moment,
+                    $canalesColoresExpr,
+                    $tintasRecargasExpr
+                FROM
                     catalogo_impresoras ci
                 LEFT JOIN 
                     catalogo_tintas ctt ON ci.id_catalogo_tintas = ctt._id
@@ -392,7 +417,10 @@ return function (App $app) {
         foreach ($canales as $id_color) {
           $id_color = intval(trim($id_color));
           if ($id_color > 0) {
-            $localConnection->goQuery('INSERT IGNORE INTO impresoras_colores (id_catalogo_impresora, id_color_tinta) VALUES (?, ?)', [$id_impresora, $id_color]);
+            $sqlInsertColor = DB_DRIVER === 'pgsql'
+              ? 'INSERT INTO impresoras_colores (id_catalogo_impresora, id_color_tinta) VALUES (?, ?) ON CONFLICT (id_catalogo_impresora, id_color_tinta) DO NOTHING'
+              : 'INSERT IGNORE INTO impresoras_colores (id_catalogo_impresora, id_color_tinta) VALUES (?, ?)';
+            $localConnection->goQuery($sqlInsertColor, [$id_impresora, $id_color]);
           }
         }
       }

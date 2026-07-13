@@ -17,19 +17,22 @@ return function ($app) {
         $localConnection = new LocalDB();
 
         $finalResponse = [];
+        $isPg = DB_DRIVER === 'pgsql';
 
         try {
             // =====================================================================
             // GRÁFICO 1: RESUMEN SEMANAL DE ÓRDENES (GLOBAL)
             // =====================================================================
             // Últimas órdenes agrupadas por día
-            $sqlResumenSemanal = "SELECT 
-                DATE_FORMAT(fecha_creacion, '%W') as dia,
-                DATE(fecha_creacion) as fecha,
+            $diaExpr = $isPg ? "TO_CHAR(fecha_creacion, 'FMDay')" : "DATE_FORMAT(fecha_creacion, '%W')";
+            $fechaCreacionExpr = $isPg ? 'fecha_creacion::date' : 'DATE(fecha_creacion)';
+            $sqlResumenSemanal = "SELECT
+                $diaExpr as dia,
+                $fechaCreacionExpr as fecha,
                 COUNT(*) as total_ordenes
             FROM ordenes
             WHERE fecha_creacion IS NOT NULL
-            GROUP BY DATE(fecha_creacion)
+            GROUP BY $fechaCreacionExpr
             ORDER BY fecha DESC
             LIMIT 7";
 
@@ -125,21 +128,21 @@ return function ($app) {
             // =====================================================================
             // GRÁFICO 4: VENTAS DEL MES VS SALDO POR COBRAR (GLOBAL)
             // =====================================================================
-            $sqlVentasVsSaldo = "SELECT 
-                (SELECT COALESCE(SUM(pago_total), 0) 
-                 FROM ordenes 
-                 WHERE YEAR(fecha_creacion) = YEAR(CURDATE()) 
-                   AND MONTH(fecha_creacion) = MONTH(CURDATE())
+            $mesActualCond = $isPg
+                ? 'EXTRACT(YEAR FROM fecha_creacion) = EXTRACT(YEAR FROM CURRENT_DATE) AND EXTRACT(MONTH FROM fecha_creacion) = EXTRACT(MONTH FROM CURRENT_DATE)'
+                : 'YEAR(fecha_creacion) = YEAR(CURDATE()) AND MONTH(fecha_creacion) = MONTH(CURDATE())';
+            $sqlVentasVsSaldo = "SELECT
+                (SELECT COALESCE(SUM(pago_total), 0)
+                 FROM ordenes
+                 WHERE $mesActualCond
                 ) as ventas_mes,
-                (SELECT COALESCE(SUM(pago_abono), 0) 
-                 FROM ordenes 
-                 WHERE YEAR(fecha_creacion) = YEAR(CURDATE()) 
-                   AND MONTH(fecha_creacion) = MONTH(CURDATE())
+                (SELECT COALESCE(SUM(pago_abono), 0)
+                 FROM ordenes
+                 WHERE $mesActualCond
                 ) as cobrado_mes,
-                (SELECT COALESCE(SUM(pago_total - pago_abono - pago_descuento + pago_nota_credito), 0) 
-                 FROM ordenes 
-                 WHERE YEAR(fecha_creacion) = YEAR(CURDATE()) 
-                   AND MONTH(fecha_creacion) = MONTH(CURDATE())
+                (SELECT COALESCE(SUM(pago_total - pago_abono - pago_descuento + pago_nota_credito), 0)
+                 FROM ordenes
+                 WHERE $mesActualCond
                    AND (pago_total - pago_abono - pago_descuento + pago_nota_credito) > 0
                 ) as saldo_por_cobrar";
 
@@ -200,11 +203,13 @@ return function ($app) {
             // =====================================================================
             // GRÁFICO 6: TIEMPOS DE ENTREGA (SEMÁFORO)
             // =====================================================================
-            $sqlSemaforo = "SELECT 
+            $fechaEntregaExpr = $isPg ? 'fecha_entrega::date' : 'DATE(fecha_entrega)';
+            $curDateExpr = $isPg ? 'CURRENT_DATE' : 'CURDATE()';
+            $sqlSemaforo = "SELECT
                 SUM(CASE WHEN status = 'En espera' THEN 1 ELSE 0 END) as por_iniciar,
-                SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) < CURDATE() THEN 1 ELSE 0 END) as retrasado,
-                SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) = CURDATE() THEN 1 ELSE 0 END) as en_el_dia,
-                SUM(CASE WHEN status = 'activa' AND DATE(fecha_entrega) > CURDATE() THEN 1 ELSE 0 END) as a_tiempo,
+                SUM(CASE WHEN status = 'activa' AND $fechaEntregaExpr < $curDateExpr THEN 1 ELSE 0 END) as retrasado,
+                SUM(CASE WHEN status = 'activa' AND $fechaEntregaExpr = $curDateExpr THEN 1 ELSE 0 END) as en_el_dia,
+                SUM(CASE WHEN status = 'activa' AND $fechaEntregaExpr > $curDateExpr THEN 1 ELSE 0 END) as a_tiempo,
                 SUM(CASE WHEN status = 'pausada' THEN 1 ELSE 0 END) as pausadas
               FROM ordenes
               WHERE status IN ('En espera', 'activa', 'pausada')";

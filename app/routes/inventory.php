@@ -681,23 +681,24 @@ return function (App $app) {
         }
 
         // BUSQUEDA POR FECHAS
+        $fechaCond = DB_DRIVER === 'pgsql' ? 'imo.moment::date' : 'DATE(imo.moment)';
         if (!is_null($fecha_inicio) && !is_null($fecha_fin)) {
             if ($where === '') {
-                $where = $where . " WHERE DATE(imo.moment) BETWEEN '" . $fecha_inicio . "' AND '" . $fecha_fin . "' ";
+                $where = $where . " WHERE $fechaCond BETWEEN '" . $fecha_inicio . "' AND '" . $fecha_fin . "' ";
             } else {
-                $where = $where . " AND DATE(imo.moment) BETWEEN '" . $fecha_inicio . "' AND '" . $fecha_fin . "' ";
+                $where = $where . " AND $fechaCond BETWEEN '" . $fecha_inicio . "' AND '" . $fecha_fin . "' ";
             }
         }
 
         $sql = 'SELECT
             imo.id_orden,
-            COALESCE(inv.sku, "N/A") as sku,
+            COALESCE(inv.sku, \'N/A\') as sku,
             COALESCE(inv._id, 0) as id_insumo,
-            CASE 
-                WHEN imo.id_insumo IS NULL OR imo.id_insumo = 0 THEN CONCAT("Material de ", COALESCE(imo.departamento, "Producción"), " no especificado")
-                WHEN inv._id IS NULL THEN CONCAT("Insumo Eliminado (ID: ", imo.id_insumo, ")")
+            CASE
+                WHEN imo.id_insumo IS NULL OR imo.id_insumo = 0 THEN CONCAT(\'Material de \', COALESCE(imo.departamento, \'Producción\'), \' no especificado\')
+                WHEN inv._id IS NULL THEN CONCAT(\'Insumo Eliminado (ID: \', imo.id_insumo, \')\')
                 ELSE inv.insumo
-            END as nombre_insumo,    
+            END as nombre_insumo,
             inv.color,
             COALESCE(inv.rendimiento, 1) as rendimiento,
             ROUND(
@@ -707,8 +708,8 @@ return function (App $app) {
             ROUND(COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0) * COALESCE(inv.rendimiento, 1), 2) as cantidad_utilizada,
             ROUND(COALESCE(inv.cantidad, 0) * COALESCE(inv.rendimiento, 1), 2) as cantidad_restante,
             ROUND((COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) * COALESCE(ABS(imo.valor_inicial - imo.valor_final), 0), 2) AS total_insumo,
-            "Mts" as unidad,
-            COALESCE(inv.departamento, imo.departamento, "N/A") as departamento
+            \'Mts\' as unidad,
+            COALESCE(inv.departamento, imo.departamento, \'N/A\') as departamento
         FROM
             inventario_movimientos imo
         LEFT JOIN inventario inv ON imo.id_insumo = inv._id
@@ -1669,7 +1670,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         $data = $request->getParsedBody();
         $localConnection = new LocalDB();
 
-        $sql = 'DELETE FROM `inventario_movimientos` WHERE _id = ' . $data['id'];
+        $sql = 'DELETE FROM inventario_movimientos WHERE _id = ' . $data['id'];
         $object['response'] = json_encode($localConnection->goQuery($sql));
 
         $localConnection->disconnect();
@@ -1684,7 +1685,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     // Reporte de insumos por número de orden
     $app->get('/insumos/reporte/orden/{id}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
-        $sql = "SELECT b._id id_insumo, a.id_orden,  b.insumo, b.sku, a.valor_inicial, a.valor_final, a.id_producto, DATE_FORMAT(a.moment, '%d/%m/%Y') moment FROM inventario_movimientos a JOIN inventario b ON a.id_insumo = b._id WHERE a.id_orden = " . $args['id'] . ' ORDER BY a.id_producto';
+        $momentExpr = DB_DRIVER === 'pgsql' ? "TO_CHAR(a.moment, 'DD/MM/YYYY')" : "DATE_FORMAT(a.moment, '%d/%m/%Y')";
+        $sql = "SELECT b._id id_insumo, a.id_orden,  b.insumo, b.sku, a.valor_inicial, a.valor_final, a.id_producto, $momentExpr moment FROM inventario_movimientos a JOIN inventario b ON a.id_insumo = b._id WHERE a.id_orden = " . $args['id'] . ' ORDER BY a.id_producto';
 
         $object['sql'] = $sql;
 
@@ -2771,7 +2773,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $queryParams = [];
             
             if ($inicio && $fin) {
-                $where[] = "DATE(m.moment) BETWEEN ? AND ?";
+                $where[] = DB_DRIVER === 'pgsql' ? "m.moment::date BETWEEN ? AND ?" : "DATE(m.moment) BETWEEN ? AND ?";
                 $queryParams[] = $inicio;
                 $queryParams[] = $fin;
             }
@@ -2917,28 +2919,29 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 $fechaWhere = "im.moment >= '" . addslashes($fechaDesde) . " 00:00:00' AND im.moment <= '" . addslashes($fechaHasta) . " 23:59:59'";
                 $fechaWhereTintas = "moment >= '" . addslashes($fechaDesde) . " 00:00:00' AND moment <= '" . addslashes($fechaHasta) . " 23:59:59'";
             } else {
-                $fechaWhere = "im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
-                $fechaWhereTintas = "moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+                $ultimos30Dias = DB_DRIVER === 'pgsql' ? "CURRENT_TIMESTAMP - INTERVAL '30 days'" : 'DATE_SUB(NOW(), INTERVAL 30 DAY)';
+                $fechaWhere = "im.moment >= $ultimos30Dias";
+                $fechaWhereTintas = "moment >= $ultimos30Dias";
             }
 
             // 1. Telas e Insumos
             $limitSql = $limiteGrafico > 0 ? " LIMIT " . $limiteGrafico : "";
             if ($filtroStock === 'enStock') {
-                $sqlMateriales = "SELECT 
-                                    insumo as label, 
-                                    ROUND(SUM(cantidad * IF(tipo_insumo = 'tela', COALESCE(NULLIF(rendimiento, 0), 1), 1)), 2) as value,
-                                    IF(tipo_insumo = 'tela', 'Mts', unidad) as unidad
-                                FROM inventario 
+                $sqlMateriales = "SELECT
+                                    insumo as label,
+                                    ROUND(SUM(cantidad * CASE WHEN tipo_insumo = 'tela' THEN COALESCE(NULLIF(rendimiento, 0), 1) ELSE 1 END), 2) as value,
+                                    CASE WHEN tipo_insumo = 'tela' THEN 'Mts' ELSE unidad END as unidad
+                                FROM inventario
                                 WHERE cantidad > 0
                                   {$deptWhereDirect}
                                 GROUP BY sku, insumo, unidad
-                                ORDER BY value DESC 
+                                ORDER BY value DESC
                                 {$limitSql}";
             } else {
-                $sqlMateriales = "SELECT 
-                                    i.insumo as label, 
-                                    ROUND(SUM((im.valor_inicial - im.valor_final) * IF(i.tipo_insumo = 'tela', COALESCE(NULLIF(i.rendimiento, 0), 1), 1)), 2) as value,
-                                    IF(i.tipo_insumo = 'tela', 'Mts', i.unidad) as unidad
+                $sqlMateriales = "SELECT
+                                    i.insumo as label,
+                                    ROUND(SUM((im.valor_inicial - im.valor_final) * CASE WHEN i.tipo_insumo = 'tela' THEN COALESCE(NULLIF(i.rendimiento, 0), 1) ELSE 1 END), 2) as value,
+                                    CASE WHEN i.tipo_insumo = 'tela' THEN 'Mts' ELSE i.unidad END as unidad
                                 FROM inventario_movimientos im 
                                 JOIN inventario i ON im.id_insumo = i._id 
                                 WHERE {$fechaWhere}
@@ -3039,16 +3042,17 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                     $papelFilterByDept = $deptWhere;
                 }
 
-                $sqlPapel = "SELECT 
-                                CONCAT('Sem ', WEEK(im.moment, 1)) as label, 
-                                ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value 
-                            FROM inventario_movimientos im 
-                            JOIN inventario i ON im.id_insumo = i._id 
+                $weekExpr = DB_DRIVER === 'pgsql' ? 'EXTRACT(WEEK FROM im.moment)' : 'WEEK(im.moment, 1)';
+                $sqlPapel = "SELECT
+                                CONCAT('Sem ', {$weekExpr}) as label,
+                                ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value
+                            FROM inventario_movimientos im
+                            JOIN inventario i ON im.id_insumo = i._id
                             WHERE {$fechaWhere}
                               AND (i.tipo_insumo = 'papel' OR i.insumo LIKE '%Papel%')
                               AND (im.valor_inicial - im.valor_final) > 0
                               {$papelFilterByDept}
-                            GROUP BY WEEK(im.moment, 1)
+                            GROUP BY {$weekExpr}
                             ORDER BY MIN(im.moment) ASC";
                 $chartData['papel'] = $localConnection->goQuery($sqlPapel) ?: [];
             }
@@ -3153,28 +3157,30 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
             // 1. Telas e Insumos Más Usados (Top 5 - Últimos 30 días)
             // Agrupamos por SKU para sumar el consumo de diferentes rollos del mismo producto
-            $sqlMateriales = "SELECT 
-                                i.insumo as label, 
-                                ROUND(SUM((im.valor_inicial - im.valor_final) * IF(i.tipo_insumo = 'tela', COALESCE(NULLIF(i.rendimiento, 0), 1), 1)), 2) as value,
-                                IF(i.tipo_insumo = 'tela', 'Mts', i.unidad) as unidad
-                            FROM inventario_movimientos im 
-                            JOIN inventario i ON im.id_insumo = i._id 
-                            WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            $ultimos30Dias = DB_DRIVER === 'pgsql' ? "CURRENT_TIMESTAMP - INTERVAL '30 days'" : 'DATE_SUB(NOW(), INTERVAL 30 DAY)';
+            $weekExpr = DB_DRIVER === 'pgsql' ? 'EXTRACT(WEEK FROM im.moment)' : 'WEEK(im.moment, 1)';
+            $sqlMateriales = "SELECT
+                                i.insumo as label,
+                                ROUND(SUM((im.valor_inicial - im.valor_final) * CASE WHEN i.tipo_insumo = 'tela' THEN COALESCE(NULLIF(i.rendimiento, 0), 1) ELSE 1 END), 2) as value,
+                                CASE WHEN i.tipo_insumo = 'tela' THEN 'Mts' ELSE i.unidad END as unidad
+                            FROM inventario_movimientos im
+                            JOIN inventario i ON im.id_insumo = i._id
+                            WHERE im.moment >= $ultimos30Dias
                               AND (im.valor_inicial - im.valor_final) > 0
-                            GROUP BY i.sku 
-                            ORDER BY value DESC 
+                            GROUP BY i.sku
+                            ORDER BY value DESC
                             LIMIT 5";
             $data['materiales'] = $localConnection->goQuery($sqlMateriales);
 
             // 2. Distribución de Tintas por Color (Suma total - Últimos 30 días)
-            $sqlTintas = "SELECT 
-                            ROUND(SUM(COALESCE(c, 0)), 2) as C, 
-                            ROUND(SUM(COALESCE(m, 0)), 2) as M, 
-                            ROUND(SUM(COALESCE(y, 0)), 2) as Y, 
-                            ROUND(SUM(COALESCE(k, 0)), 2) as K, 
-                            ROUND(SUM(COALESCE(w, 0)), 2) as W 
-                        FROM tintas 
-                        WHERE moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+            $sqlTintas = "SELECT
+                            ROUND(SUM(COALESCE(c, 0)), 2) as C,
+                            ROUND(SUM(COALESCE(m, 0)), 2) as M,
+                            ROUND(SUM(COALESCE(y, 0)), 2) as Y,
+                            ROUND(SUM(COALESCE(k, 0)), 2) as K,
+                            ROUND(SUM(COALESCE(w, 0)), 2) as W
+                        FROM tintas
+                        WHERE moment >= $ultimos30Dias";
             $tintasResult = $localConnection->goQuery($sqlTintas);
             if (!empty($tintasResult)) {
                 $t = $tintasResult[0];
@@ -3188,15 +3194,15 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             }
 
             // 3. Consumo de Papel (Agrupado por Semana - Últimos 30 días)
-            $sqlPapel = "SELECT 
-                            CONCAT('Sem ', WEEK(im.moment, 1)) as label, 
-                            ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value 
-                        FROM inventario_movimientos im 
-                        JOIN inventario i ON im.id_insumo = i._id 
-                        WHERE im.moment >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            $sqlPapel = "SELECT
+                            CONCAT('Sem ', {$weekExpr}) as label,
+                            ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value
+                        FROM inventario_movimientos im
+                        JOIN inventario i ON im.id_insumo = i._id
+                        WHERE im.moment >= $ultimos30Dias
                           AND (i.insumo LIKE '%Papel%' OR i.departamento IN ('Impresión', 'Impresion'))
                           AND (im.valor_inicial - im.valor_final) > 0
-                        GROUP BY WEEK(im.moment, 1)
+                        GROUP BY {$weekExpr}
                         ORDER BY MIN(im.moment) ASC";
             $data['papel'] = $localConnection->goQuery($sqlPapel);
 
