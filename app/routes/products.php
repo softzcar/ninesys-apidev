@@ -541,8 +541,11 @@ return function (App $app) {
     $res = $woo->updateProductComision($args['id'], $args['comision']);
     $object['res'] = $res; */
 
-    $sql = 'UPDATE products SET comision = ' . floatval($args['comision']) . ' WHERE _id = ' . $args['id'] . ';';
-    $sql .= 'SELECT * FROM products WHERE _id = ' . $args['id'];
+    // PostgreSQL no permite multiples comandos en un solo prepared statement (a diferencia de
+    // MySQL, que lo tolera); se separan en dos llamadas.
+    $sqlUpdate = 'UPDATE products SET comision = ' . floatval($args['comision']) . ' WHERE _id = ' . $args['id'] . ';';
+    $tmpConnection->goQuery($sqlUpdate);
+    $sql = 'SELECT * FROM products WHERE _id = ' . $args['id'];
     $object['res'] = $tmpConnection->goQuery($sql);
 
     $sql1 = 'SELECT _id id_lotes_detalles, unidades_solicitadas, id_empleado FROM lotes_detalles WHERE id_woo = ' . $args['id'] . " AND departamento = 'Costura' AND fecha_terminado IS NOT NULL";

@@ -769,7 +769,7 @@ class WooMe
   // Actualizar productos
   public function updateProduct($id, $name, $regular_price, $stock_quantity, $sku, $category)
   {
-    $sql = 'SELECT _id id, nombre `name` FROM categories';
+    $sql = 'SELECT _id id, nombre name FROM categories';
 
     $localConnection = new LocalDB();
     $response = $localConnection->goQuery($sql);
@@ -960,7 +960,7 @@ class WooMe
         phone, 
         null billing_city, 
         null billing_state, 
-        `address` billing_address_1, 
+        address billing_address_1,
         email billing_email,
         id_catalogo_pais,
         id_catalogo_estado,
@@ -1472,7 +1472,7 @@ class WooMe
    */
   public function getSizes()
   {
-    $sql = 'SELECT _id, nombre `name`, variation_percentage FROM sizes';
+    $sql = 'SELECT _id, nombre name, variation_percentage FROM sizes';
     $localConnection = new LocalDB();
     $sizes = $localConnection->goQuery($sql);
     $localConnection->disconnect();
