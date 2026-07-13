@@ -740,7 +740,7 @@ return function (App $app) {
                     a.id_empleado = {$args['id_empleado']}
                     AND a.terminado = 0
                     AND (b.status = 'activa' OR b.status = 'pausada' OR b.status = 'En espera')
-                GROUP BY c._id
+                GROUP BY c._id, a.id_orden, a._id, a.id_empleado, a.linkdrive, a.codigo_diseno, b.cliente_nombre, b.fecha_inicio, b.status
                 ORDER BY
                     a.id_orden
                 DESC
@@ -1750,17 +1750,17 @@ return function (App $app) {
       }
 
       // CALCULAR PROGRESO DESDE lotes_detalles_empleados_asignados
-      $sql = "SELECT 
+      $sql = "SELECT
                 ldea.id_departamento,
-                dep.departamento,
-                dep.orden_proceso,
-                ldea.fecha_inicio,
-                ldea.fecha_terminado
+                MAX(dep.departamento) AS departamento,
+                MAX(dep.orden_proceso) AS orden_proceso,
+                MIN(ldea.fecha_inicio) AS fecha_inicio,
+                MAX(ldea.fecha_terminado) AS fecha_terminado
               FROM lotes_detalles_empleados_asignados ldea
               JOIN departamentos dep ON dep._id = ldea.id_departamento
               WHERE ldea.id_orden = " . $args['id_orden'] . "
               GROUP BY ldea.id_departamento
-              ORDER BY dep.orden_proceso ASC";
+              ORDER BY orden_proceso ASC";
       $departamentos = $localConnection->goQuery($sql);
 
       $totalDepartamentos = count($departamentos);
@@ -1917,7 +1917,10 @@ return function (App $app) {
   $app->get('/ordenes/detalles/{id}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT observaciones FROM ordenes WHERE _id = ' . $args['id'];
+    // NOTA: "observaciones" ya no es columna de ordenes en ningun motor (MySQL ni Postgres);
+    // se movio a su propia tabla ordenes_observaciones (una fila por orden, patron upsert
+    // usado en orders.php). Bug preexistente en ambos motores, no especifico de esta migracion.
+    $sql = 'SELECT observaciones FROM ordenes_observaciones WHERE id_orden = ' . $args['id'];
     $object['sql'] = $sql;
     $object['detalle'] = $localConnection->goQuery($sql);
 
