@@ -1459,8 +1459,9 @@ return function (App $app) {
       $values .= $id_empleado_fin . ','; // Empleado destinatario del final (quien recibe el material al terminar)
       $values .= $producto['_id'] . ',';
       $values .= intval($data['cantidad']) . ',';
-      // quote() de MariaDB ya devuelve el valor con comillas simples incluidas, ej: 'texto'
-      $escaped_detalle = $localConnection->goQuery("SELECT quote(?) AS q", [$data['detalle']])[0]["q"];
+      // quote()/quote_literal() ya devuelve el valor con comillas simples incluidas, ej: 'texto'
+      $quoteFn = DB_DRIVER === 'pgsql' ? 'quote_literal' : 'quote';
+      $escaped_detalle = $localConnection->goQuery("SELECT {$quoteFn}(?) AS q", [$data['detalle']])[0]["q"];
       $values .= $escaped_detalle . ','; // detalle_emisor
       $values .= $escaped_detalle . ','; // detalle (supervisor direct description fallback)
       $values .= $id_depto_fin . ','; // Destino final
@@ -1497,8 +1498,9 @@ return function (App $app) {
       $values .= intval($data['id_empleado']) . ',';
       $values .= $producto['_id'] . ',';
       $values .= intval($data['cantidad']) . ',';
-      // quote() de MariaDB ya devuelve el valor con comillas simples incluidas
-      $values .= $localConnection->goQuery("SELECT quote(?) AS q", [$data['detalle']])[0]["q"] . ",";
+      // quote()/quote_literal() ya devuelve el valor con comillas simples incluidas
+      $quoteFn = DB_DRIVER === 'pgsql' ? 'quote_literal' : 'quote';
+      $values .= $localConnection->goQuery("SELECT {$quoteFn}(?) AS q", [$data['detalle']])[0]["q"] . ",";
       $values .= $id_depto_fin;
       $values .= ')';
     }
