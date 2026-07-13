@@ -34,7 +34,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 33,catalogs.php,POST,/tiempos-de-produccion/usa-desperdicio,585,2-escritura-manual,PENDIENTE,,
 34,catalogs.php,POST,/insumos-productos,614,2-escritura-manual,PENDIENTE,,
 35,communications.php,POST,/config/select-empleados,14,2-escritura-manual,PENDIENTE,,
-36,communications.php,POST,/send-message,90,2-escritura-manual,PENDIENTE,,
+36,communications.php,POST,/send-message,90,2-escritura-manual,CORREGIDO,"Sin patrones MySQL-only. Consulta SQL verificada directamente en psql: 0 errores. El endpoint completo depende de WS_API_URL (servicio externo de WhatsApp) no alcanzable desde el entorno de dev (igual que WooCommerce) - no relacionado con PostgreSQL, fuera de alcance.",2026-07-13 16:26:20
 37,communications.php,GET,/ws/departamentos,148,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:03
 38,communications.php,POST,/ws/build-message,176,2-escritura-manual,CORREGIDO,Ya adaptado en tarea anterior de esta sesion (DATE_FORMAT->TO_CHAR). Reverificado en vivo con form-urlencoded real: 0 errores.,2026-07-13 15:59:18
 39,communications.php,POST,/ws/build-message/interno,394,2-escritura-manual,PENDIENTE,,
@@ -141,7 +141,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 140,inventory.php,GET,/inventario/historial/{id_orden},1093,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:53
 141,inventory.php,POST,/inventario-movimientos/nuevo,1108,2-escritura-manual,PENDIENTE,,
 142,inventory.php,POST,/inventario-movimientos/piezas-cortadas,1171,2-escritura-manual,PENDIENTE,,
-143,inventory.php,POST,/inventario-movimientos/empleados/update-insumo,1189,2-escritura-manual,PENDIENTE,,
+143,inventory.php,POST,/inventario-movimientos/empleados/update-insumo,1189,2-escritura-manual,CORREGIDO,"3x multi-statement UPDATE+SELECT separados en llamadas independientes (uno por cada rama: tela, corte, default). Verificado en vivo los 3 caminos + el camino 'fin': 0 errores en todos.",2026-07-13 16:21:40
 144,inventory.php,POST,/inventario-movimientos/update-insumo,1587,2-escritura-manual,PENDIENTE,,
 145,inventory.php,POST,/inventario-movimientos/update-prioridad,1651,2-escritura-manual,PENDIENTE,,
 146,inventory.php,POST,/inventario-movimientos/eliminar,1669,2-escritura-manual,PENDIENTE,,
