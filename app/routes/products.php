@@ -1380,11 +1380,11 @@ return function (App $app) {
     // CALCULAR CANTIDAD DE UNIDADES SOLICITADAS
     $sql = "SELECT SUM(cantidad) total_cantidad FROM ordenes_productos WHERE id_orden = {$miEmpleado['id_orden']}";
     $total_cantidad = $localConnection->goQuery($sql)[0]['total_cantidad'] ?? 0;
-    // Si la orden no tiene productos, SUM() devuelve NULL. MySQL coerciona '' a 0 en una
-    // columna entera; PostgreSQL lo rechaza ("invalid input syntax for type integer").
-    if ($total_cantidad === null) {
-      $total_cantidad = 0;
-    }
+    // ordenes_productos.cantidad es numeric(6,1); SUM() devuelve algo como "10.0", pero
+    // lotes_detalles.unidades_solicitadas es entero. MySQL trunca "10.0" implicitamente;
+    // PostgreSQL rechaza el formato decimal como entero invalido. intval() normaliza ambos
+    // casos (incluyendo NULL cuando la orden no tiene productos).
+    $total_cantidad = intval($total_cantidad);
 
     $values = "id_departamento ='" . $miEmpleado['id_departamento'] . "',";
     $values .= "departamento ='" . $nombreDepartamento . "',";
