@@ -340,8 +340,10 @@ return function (App $app) {
 
     // ELIMINAR DISEÑO Y REVISIONES
     $sql = 'DELETE FROM revisiones WHERE id_orden =  ' . $data['id_orden'] . ' AND id_empleado = ' . $data['id_empleado'] . ';';
-    $sql .= 'DELETE FROM disenos WHERE _id =  ' . $data['id_diseno'] . ';';
     $object['response_delete_diseno_sql'] = $sql;
+    $object['response_delete_diseno'] = $localConnection->goQuery($sql);
+    $sql = 'DELETE FROM disenos WHERE _id =  ' . $data['id_diseno'] . ';';
+    $object['response_delete_diseno_sql'] .= $sql;
     $object['response_delete_diseno'] = $localConnection->goQuery($sql);
 
     // ELIMINAR PAGOS
