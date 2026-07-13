@@ -1,171 +1,201 @@
 id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
-1,administration.php,GET,/administracion/dashboard-stats,15,1-GET-auto,PENDIENTE,,
+1,administration.php,GET,/administracion/dashboard-stats,15,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:30:53
 2,ai.php,POST,/ai/chat,32,2-escritura-manual,PENDIENTE,,
 3,ai.php,POST,/ai/chat-orden,117,2-escritura-manual,PENDIENTE,,
 4,ai.php,POST,/ai/report,298,2-escritura-manual,PENDIENTE,,
-5,ai.php,GET,/ai/status,378,1-GET-auto,PENDIENTE,,
-6,assignments.php,GET,/asignacion/ordenes,12,1-GET-auto,PENDIENTE,,
-7,assignments.php,GET,/asignacion/empleados/{orden},48,1-GET-auto,PENDIENTE,,
+5,ai.php,GET,/ai/status,378,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:30:54
+6,assignments.php,GET,/asignacion/ordenes,12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:30:56
+7,assignments.php,GET,/asignacion/empleados/{orden},48,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column ""dep_responsable"" does not exist
+LINE 1: SELECT dep_responsable responsable,dep_diseno diseno, dep_je...
+               ^",2026-07-13 14:30:57
 8,assignments.php,POST,/asignacion/{orden}/{departamento}/{empleado},65,2-escritura-manual,PENDIENTE,,
 9,assignments.php,POST,/asignacion/elimianr/{orden}/{departamento},119,2-escritura-manual,PENDIENTE,,
 10,auth.php,POST,/login,10,2-escritura-manual,PENDIENTE,,
-11,auth.php,GET,/refresh-session/{id},363,1-GET-auto,PENDIENTE,,
+11,auth.php,GET,/refresh-session/{id},363,1-GET-auto,FALLO_RUTA,HTTP 404 (ruta no encontrada/metodo no permitido con params de prueba),2026-07-13 14:30:58
 12,auth.php,POST,/verify-credentials,464,2-escritura-manual,PENDIENTE,,
-13,buscar.php,GET,/buscar/{id}[/{email}],260,1-GET-auto,PENDIENTE,,
-14,catalogs.php,GET,/telas,11,1-GET-auto,PENDIENTE,,
-15,catalogs.php,GET,/catalogo-tintas,24,1-GET-auto,PENDIENTE,,
+13,buscar.php,GET,/buscar/{id}[/{email}],260,1-GET-auto,OMITIDO,requiere parametro no trivial (email u otro) para probar de forma segura,2026-07-13 14:30:58
+14,catalogs.php,GET,/telas,11,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column ""eliminado"" does not exist
+LINE 1: SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY te...
+                                           ^",2026-07-13 14:30:59
+15,catalogs.php,GET,/catalogo-tintas,24,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:00
 16,catalogs.php,POST,/catalogo-tintas,208,2-escritura-manual,PENDIENTE,,
 17,catalogs.php,POST,/catalogo-tintas/{_id}/{nombre},232,2-escritura-manual,PENDIENTE,,
 18,catalogs.php,POST,/catalogo-tintas/eliminar,248,2-escritura-manual,PENDIENTE,,
-19,catalogs.php,GET,/catalogo-colores-tintas,265,1-GET-auto,PENDIENTE,,
+19,catalogs.php,GET,/catalogo-colores-tintas,265,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:01
 20,catalogs.php,POST,/catalogo-colores-tintas,277,2-escritura-manual,PENDIENTE,,
 21,catalogs.php,POST,/catalogo-colores-tintas/eliminar,303,2-escritura-manual,PENDIENTE,,
 22,catalogs.php,POST,/catalogo-colores-tintas/{_id},319,2-escritura-manual,PENDIENTE,,
-23,catalogs.php,GET,/catalogo-insumos-productos,341,1-GET-auto,PENDIENTE,,
+23,catalogs.php,GET,/catalogo-insumos-productos,341,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:02
 24,catalogs.php,POST,/catalogo-insumos-productos,353,2-escritura-manual,PENDIENTE,,
 25,catalogs.php,POST,/telas,381,2-escritura-manual,PENDIENTE,,
 26,catalogs.php,POST,/telas/{_id}/{tela},405,2-escritura-manual,PENDIENTE,,
 27,catalogs.php,POST,/telas/eliminar,421,2-escritura-manual,PENDIENTE,,
 28,catalogs.php,DELETE,/insumos-productos-asignados/{id_insumo},438,2-escritura-manual,PENDIENTE,,
-29,catalogs.php,GET,/insumos-productos/{id_orden}/{id_departamento},452,1-GET-auto,PENDIENTE,,
-30,catalogs.php,GET,/insumos-productos-asignados,493,1-GET-auto,PENDIENTE,,
-31,catalogs.php,GET,/tiempos-de-produccion,526,1-GET-auto,PENDIENTE,,
+29,catalogs.php,GET,/insumos-productos/{id_orden}/{id_departamento},452,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: integer = character varying
+LINE 7: ...              (SELECT nombre FROM sizes WHERE _id = e.talla)...
+                                                             ^
+HINT:  No operator matches the ",2026-07-13 14:31:03
+30,catalogs.php,GET,/insumos-productos-asignados,493,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:03
+31,catalogs.php,GET,/tiempos-de-produccion,526,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:04
 32,catalogs.php,POST,/tiempos-de-produccion,552,2-escritura-manual,PENDIENTE,,
 33,catalogs.php,POST,/tiempos-de-produccion/usa-desperdicio,585,2-escritura-manual,PENDIENTE,,
 34,catalogs.php,POST,/insumos-productos,614,2-escritura-manual,PENDIENTE,,
 35,communications.php,POST,/config/select-empleados,14,2-escritura-manual,PENDIENTE,,
 36,communications.php,POST,/send-message,90,2-escritura-manual,PENDIENTE,,
-37,communications.php,GET,/ws/departamentos,148,1-GET-auto,PENDIENTE,,
+37,communications.php,GET,/ws/departamentos,148,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:05
 38,communications.php,POST,/ws/build-message,176,2-escritura-manual,PENDIENTE,,
 39,communications.php,POST,/ws/build-message/interno,394,2-escritura-manual,PENDIENTE,,
 40,communications.php,POST,/update-message,503,2-escritura-manual,PENDIENTE,,
-41,communications.php,GET,/config,533,1-GET-auto,PENDIENTE,,
+41,communications.php,GET,/config,533,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:06
 42,communications.php,POST,/departamentos/editar/settings,574,2-escritura-manual,PENDIENTE,,
 43,communications.php,POST,/send-message-produccion,667,2-escritura-manual,PENDIENTE,,
-44,communications.php,GET,/next-id-order,803,1-GET-auto,PENDIENTE,,
-45,communications.php,GET,/next-id-budget,824,1-GET-auto,PENDIENTE,,
+44,communications.php,GET,/next-id-order,803,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:07
+45,communications.php,GET,/next-id-budget,824,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:08
 46,config.php,POST,/configuracion/admin/{id},11,2-escritura-manual,PENDIENTE,,
 47,config.php,POST,/configuracion/empresa/{id},56,2-escritura-manual,PENDIENTE,,
 48,config.php,POST,/configuracion/monedas,137,2-escritura-manual,PENDIENTE,,
 49,config.php,POST,/configuracion/horario,211,2-escritura-manual,PENDIENTE,,
 50,config.php,POST,/configuracion/personalizacion,291,2-escritura-manual,PENDIENTE,,
 51,config.php,POST,/configuracion/gastos,388,2-escritura-manual,PENDIENTE,,
-52,config.php,GET,/gastos,496,1-GET-auto,PENDIENTE,,
+52,config.php,GET,/gastos,496,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:09
 53,config.php,POST,/gastos,520,2-escritura-manual,PENDIENTE,,
 54,config.php,PUT,/gastos/{id},561,2-escritura-manual,PENDIENTE,,
 55,config.php,DELETE,/gastos/{id},597,2-escritura-manual,PENDIENTE,,
-56,config.php,GET,/gastos/registros,619,1-GET-auto,PENDIENTE,,
+56,config.php,GET,/gastos/registros,619,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:09
 57,config.php,POST,/gastos/registros,663,2-escritura-manual,PENDIENTE,,
 58,config.php,PUT,/gastos/registros/{id},712,2-escritura-manual,PENDIENTE,,
 59,config.php,DELETE,/gastos/registros/{id},777,2-escritura-manual,PENDIENTE,,
-60,config.php,GET,/gastos/auditoria,826,1-GET-auto,PENDIENTE,,
-61,config.php,GET,/gastos/auditoria/{id_registro},864,1-GET-auto,PENDIENTE,,
-62,config.php,GET,/gastos/pendientes,882,1-GET-auto,PENDIENTE,,
+60,config.php,GET,/gastos/auditoria,826,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:10
+61,config.php,GET,/gastos/auditoria/{id_registro},864,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:11
+62,config.php,GET,/gastos/pendientes,882,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:12
 63,config.php,POST,/config/multiplicador-precio,911,2-escritura-manual,PENDIENTE,,
-64,crm.php,GET,/crm/oportunidades,10,1-GET-auto,PENDIENTE,,
+64,crm.php,GET,/crm/oportunidades,10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:12
 65,crm.php,POST,/crm/oportunidades/nueva,63,2-escritura-manual,PENDIENTE,,
 66,crm.php,PUT,/crm/oportunidades/estado,109,2-escritura-manual,PENDIENTE,,
-67,crm.php,GET,/customers/orders-local/{id_customer},137,1-GET-auto,PENDIENTE,,
-68,crm.php,GET,/customers/presupuestos-local/{id_customer},186,1-GET-auto,PENDIENTE,,
-69,crm.php,GET,/crm/notas/{id_customer},233,1-GET-auto,PENDIENTE,,
+67,crm.php,GET,/customers/orders-local/{id_customer},137,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:13
+68,crm.php,GET,/customers/presupuestos-local/{id_customer},186,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:14
+69,crm.php,GET,/crm/notas/{id_customer},233,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:15
 70,crm.php,POST,/crm/notas/nueva,270,2-escritura-manual,PENDIENTE,,
-71,crm.php,GET,/crm/soporte/{id_customer},300,1-GET-auto,PENDIENTE,,
+71,crm.php,GET,/crm/soporte/{id_customer},300,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:15
 72,crm.php,POST,/crm/soporte/nueva,323,2-escritura-manual,PENDIENTE,,
 73,crm.php,PUT,/crm/soporte/estado,353,2-escritura-manual,PENDIENTE,,
 74,crm.php,POST,/crm/campanas/enviar,380,2-escritura-manual,PENDIENTE,,
-75,crm.php,GET,/crm/reports/dashboard,476,1-GET-auto,PENDIENTE,,
-76,crm.php,GET,/crm/clientes-por-producto/{id_product},578,1-GET-auto,PENDIENTE,,
-77,designs.php,GET,/diseno/revisiones,12,1-GET-auto,PENDIENTE,,
-78,designs.php,GET,/diseno/revisiones/{id_empleado},53,1-GET-auto,PENDIENTE,,
-79,designs.php,GET,/diseno/aprobado/{id_orden},70,1-GET-auto,PENDIENTE,,
+75,crm.php,GET,/crm/reports/dashboard,476,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:16
+76,crm.php,GET,/crm/clientes-por-producto/{id_product},578,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:17
+77,designs.php,GET,/diseno/revisiones,12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:18
+78,designs.php,GET,/diseno/revisiones/{id_empleado},53,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:18
+79,designs.php,GET,/diseno/aprobado/{id_orden},70,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:19
 80,designs.php,POST,/disenos/link,90,2-escritura-manual,PENDIENTE,,
 81,designs.php,POST,/diseno/update-tipo,106,2-escritura-manual,PENDIENTE,,
-82,designs.php,GET,/disenos/aprobacion-de-cliente/{id_orden},154,1-GET-auto,PENDIENTE,,
+82,designs.php,GET,/disenos/aprobacion-de-cliente/{id_orden},154,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:20
 83,designs.php,POST,/disenos/parobacion-de-cliente,182,2-escritura-manual,PENDIENTE,,
 84,designs.php,POST,/diseno/ajustes-y-personalizaciones,202,2-escritura-manual,PENDIENTE,,
-85,designs.php,GET,/disenos/ajustes-y-personalizaciones/{id_diseno},274,1-GET-auto,PENDIENTE,,
-86,designs.php,GET,/disenos/link/{id},289,1-GET-auto,PENDIENTE,,
-87,designs.php,GET,/disenos/codigo/{id},304,1-GET-auto,PENDIENTE,,
+85,designs.php,GET,/disenos/ajustes-y-personalizaciones/{id_diseno},274,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:21
+86,designs.php,GET,/disenos/link/{id},289,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:31:21
+87,designs.php,GET,/disenos/codigo/{id},304,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:22
 88,designs.php,POST,/disenos/codigo,319,2-escritura-manual,PENDIENTE,,
 89,designs.php,POST,/disenador-asignado,334,2-escritura-manual,PENDIENTE,,
-90,designs.php,GET,/disenos,362,1-GET-auto,PENDIENTE,,
+90,designs.php,GET,/disenos,362,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:23
 91,designs.php,POST,/disenos/nuevo-con-revision,464,2-escritura-manual,PENDIENTE,,
-92,designs.php,GET,/disenos/asignados,530,1-GET-auto,PENDIENTE,,
-93,designs.php,GET,/disenos/asignar/{id_orden},554,1-GET-auto,PENDIENTE,,
-94,designs.php,GET,/disenos/terminados,587,1-GET-auto,PENDIENTE,,
-95,designs.php,GET,/disenos/asignados/{id_empleado},657,1-GET-auto,PENDIENTE,,
-96,designs.php,GET,/disenos/pendientes/{id_empleado},732,1-GET-auto,PENDIENTE,,
-97,designs.php,GET,/disenos/terminados/{id_empleado},747,1-GET-auto,PENDIENTE,,
+92,designs.php,GET,/disenos/asignados,530,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:24
+93,designs.php,GET,/disenos/asignar/{id_orden},554,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:24
+94,designs.php,GET,/disenos/terminados,587,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:25
+95,designs.php,GET,/disenos/asignados/{id_empleado},657,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:26
+96,designs.php,GET,/disenos/pendientes/{id_empleado},732,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:27
+97,designs.php,GET,/disenos/terminados/{id_empleado},747,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:27
 98,designs.php,PUT,/disenos/asign/{id_orden}/{empleado},763,2-escritura-manual,PENDIENTE,,
 99,designs.php,PUT,/disenos/close/{id_orden}/{empleado},826,2-escritura-manual,PENDIENTE,,
-100,designs.php,GET,/disenos/images/{id_orden},840,1-GET-auto,PENDIENTE,,
-101,designs.php,GET,/revision/image/{id_revision},867,1-GET-auto,PENDIENTE,,
-102,designs.php,GET,/migracion/nineteencustom,880,1-GET-auto,PENDIENTE,,
+100,designs.php,GET,/disenos/images/{id_orden},840,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:28
+101,designs.php,GET,/revision/image/{id_revision},867,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:31:29
+102,designs.php,GET,/migracion/nineteencustom,880,1-GET-auto,NO_APLICA_SCRIPT_MIGRACION,"Script de migracion de una sola vez con credenciales hardcodeadas para api_emp_3/api_emp_1, ya reportado aparte al usuario, fuera de alcance",2026-07-13 14:31:29
 103,designs.php,DELETE,/disenos/images/{id_orden}/{image_name},996,2-escritura-manual,PENDIENTE,,
 104,designs.php,POST,/disenos/imagen/{id_orden}/{id_diseno},1016,2-escritura-manual,PENDIENTE,,
-105,employees.php,GET,/empleados,11,1-GET-auto,PENDIENTE,,
+105,employees.php,GET,/empleados,11,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:30
 106,employees.php,POST,/empleados/activacion,222,2-escritura-manual,PENDIENTE,,
 107,employees.php,POST,/empleados/nuevo,240,2-escritura-manual,PENDIENTE,,
 108,employees.php,POST,/empleados/editar,345,2-escritura-manual,PENDIENTE,,
 109,employees.php,POST,/empleados/eliminar,448,2-escritura-manual,PENDIENTE,,
-110,employees.php,GET,/empleados/produccion/asignacion,482,1-GET-auto,PENDIENTE,,
+110,employees.php,GET,/empleados/produccion/asignacion,482,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:31
 111,employees.php,POST,/asistencias,503,2-escritura-manual,PENDIENTE,,
-112,employees.php,GET,/asistencias/semanal,519,1-GET-auto,PENDIENTE,,
-113,employees.php,GET,/asistencias/tabla/{fecha},595,1-GET-auto,PENDIENTE,,
-114,employees.php,GET,/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin},705,1-GET-auto,PENDIENTE,,
-115,employees.php,GET,/empleados/dashboard-stats/{id_empleado}/{id_departamento},838,1-GET-auto,PENDIENTE,,
-116,finance.php,GET,/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}],13,1-GET-auto,PENDIENTE,,
-117,finance.php,GET,/cierre-de-caja/{id_vendedor},331,1-GET-auto,PENDIENTE,,
+112,employees.php,GET,/asistencias/semanal,519,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:32
+113,employees.php,GET,/asistencias/tabla/{fecha},595,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:32
+114,employees.php,GET,/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin},705,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:33
+115,employees.php,GET,/empleados/dashboard-stats/{id_empleado}/{id_departamento},838,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42803]: Grouping error: 7 ERROR:  column ""p.moment"" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 3:                             TO_CHAR(p.moment, 'Day') as dia,
+                                            ^",2026-07-13 14:31:34
+116,finance.php,GET,/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}],13,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[22007]: Invalid datetime format: 7 ERROR:  invalid input syntax for type date: ""1""
+LINE 51:                 met.moment::date BETWEEN '1' AND '1' 
+                                                  ^",2026-07-13 14:31:35
+117,finance.php,GET,/cierre-de-caja/{id_vendedor},331,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:41
 118,finance.php,POST,/cierre-de-caja-vendedor,391,2-escritura-manual,PENDIENTE,,
-119,finance.php,GET,/reporte-de-caja/{inicio}/{fin}/{id_vendedor},426,1-GET-auto,PENDIENTE,,
+119,finance.php,GET,/reporte-de-caja/{inicio}/{fin}/{id_vendedor},426,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: timestamp without time zone ~~ unknown
+LINE 7:               WHERE moment LIKE '1%'  AND id_empleado = 1 AN...
+                                   ^
+HINT:  No operator matches the given name and arg",2026-07-13 14:31:42
 120,finance.php,POST,/retiro,522,2-escritura-manual,PENDIENTE,,
 121,finance.php,POST,/otro-abono,620,2-escritura-manual,PENDIENTE,,
-122,finance.php,GET,/retiros/{inicio}/{fin}/{id_empleado},740,1-GET-auto,PENDIENTE,,
-123,finance.php,GET,/pagos-ordenes/{fecha},818,1-GET-auto,PENDIENTE,,
-124,finance.php,GET,/balance-de-cierres/{inicio}/{fin}/{id_vendedor},833,1-GET-auto,PENDIENTE,,
-125,geografia.php,GET,/catalogo-paises,10,1-GET-auto,PENDIENTE,,
-126,geografia.php,GET,/catalogo-estados/{id_pais},595,1-GET-auto,PENDIENTE,,
-127,geografia.php,GET,/catalogo-ciudades/{id_estado},615,1-GET-auto,PENDIENTE,,
-128,inventory.php,GET,/api/inventario/template-excel,13,1-GET-auto,PENDIENTE,,
-129,inventory.php,GET,/api/products/template-excel-test,245,1-GET-auto,PENDIENTE,,
+122,finance.php,GET,/retiros/{inicio}/{fin}/{id_empleado},740,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[22007]: Invalid datetime format: 7 ERROR:  invalid input syntax for type date: ""1""
+LINE 1: ...leado = b.id_usuario WHERE a.moment::date BETWEEN '1' AND '1...
+                                                             ^",2026-07-13 14:31:42
+123,finance.php,GET,/pagos-ordenes/{fecha},818,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: timestamp without time zone ~~ unknown
+LINE 1: ... id_orden, tasa FROM metodos_de_pago WHERE moment LIKE '2026...
+                                                             ^
+HINT:  No operator m",2026-07-13 14:31:43
+124,finance.php,GET,/balance-de-cierres/{inicio}/{fin}/{id_vendedor},833,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[22007]: Invalid datetime format: 7 ERROR:  invalid input syntax for type date: ""1""
+LINE 33:             WHERE c.moment::date BETWEEN '1' AND '1'  AND c....
+                                                  ^",2026-07-13 14:31:44
+125,geografia.php,GET,/catalogo-paises,10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:45
+126,geografia.php,GET,/catalogo-estados/{id_pais},595,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:45
+127,geografia.php,GET,/catalogo-ciudades/{id_estado},615,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:46
+128,inventory.php,GET,/api/inventario/template-excel,13,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:48
+129,inventory.php,GET,/api/products/template-excel-test,245,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:49
 130,inventory.php,POST,/api/products/bulk-load,277,2-escritura-manual,PENDIENTE,,
 131,inventory.php,POST,/api/inventario/bulk-load,380,2-escritura-manual,PENDIENTE,,
-132,inventory.php,GET,/api/products/template-excel,511,1-GET-auto,PENDIENTE,,
-133,inventory.php,GET,/reporte/insumos-cosumidos-por-orden[/{id_orden}[/{fecha_inicio}[/{fecha_fin}]]],669,1-GET-auto,PENDIENTE,,
-134,inventory.php,GET,/insumos,893,1-GET-auto,PENDIENTE,,
-135,inventory.php,GET,/insumos/{id_insumo},909,1-GET-auto,PENDIENTE,,
+132,inventory.php,GET,/api/products/template-excel,511,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:50
+133,inventory.php,GET,/reporte/insumos-cosumidos-por-orden[/{id_orden}[/{fecha_inicio}[/{fecha_fin}]]],669,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:50
+134,inventory.php,GET,/insumos,893,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:51
+135,inventory.php,GET,/insumos/{id_insumo},909,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:52
 136,inventory.php,POST,/insumos/nuevo,925,2-escritura-manual,PENDIENTE,,
 137,inventory.php,POST,/insumos/editar,1011,2-escritura-manual,PENDIENTE,,
 138,inventory.php,POST,/insumos/eliminar,1057,2-escritura-manual,PENDIENTE,,
-139,inventory.php,GET,/inventario-movimientos/{id_orden}/{id_empleado},1075,1-GET-auto,PENDIENTE,,
-140,inventory.php,GET,/inventario/historial/{id_orden},1093,1-GET-auto,PENDIENTE,,
+139,inventory.php,GET,/inventario-movimientos/{id_orden}/{id_empleado},1075,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column ""id_empleado"" does not exist
+LINE 1: ...T * FROM ordenes_productos WHERE id_orden = 1 AND id_emplead...
+                                                             ^",2026-07-13 14:31:53
+140,inventory.php,GET,/inventario/historial/{id_orden},1093,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:54
 141,inventory.php,POST,/inventario-movimientos/nuevo,1108,2-escritura-manual,PENDIENTE,,
 142,inventory.php,POST,/inventario-movimientos/piezas-cortadas,1171,2-escritura-manual,PENDIENTE,,
 143,inventory.php,POST,/inventario-movimientos/empleados/update-insumo,1189,2-escritura-manual,PENDIENTE,,
 144,inventory.php,POST,/inventario-movimientos/update-insumo,1587,2-escritura-manual,PENDIENTE,,
 145,inventory.php,POST,/inventario-movimientos/update-prioridad,1651,2-escritura-manual,PENDIENTE,,
 146,inventory.php,POST,/inventario-movimientos/eliminar,1669,2-escritura-manual,PENDIENTE,,
-147,inventory.php,GET,/insumos/reporte/orden/{id},1686,1-GET-auto,PENDIENTE,,
-148,inventory.php,GET,/insumos/reporte/insumos/{id},1726,1-GET-auto,PENDIENTE,,
-149,inventory.php,GET,/insumos/reporte/insumos/producto/{id_producto},1762,1-GET-auto,PENDIENTE,,
-150,inventory.php,GET,/inventario/{departamento},1852,1-GET-auto,PENDIENTE,,
-151,inventory.php,GET,/inventario-tintas,1953,1-GET-auto,PENDIENTE,,
-152,inventory.php,GET,/inventario/eficiencia/{id_orden}/{id_departamento},1988,1-GET-auto,PENDIENTE,,
-153,inventory.php,GET,/eficiencia-orden/{id_orden},2019,1-GET-auto,PENDIENTE,,
+147,inventory.php,GET,/insumos/reporte/orden/{id},1686,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:54
+148,inventory.php,GET,/insumos/reporte/insumos/{id},1726,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:55
+149,inventory.php,GET,/insumos/reporte/insumos/producto/{id_producto},1762,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:56
+150,inventory.php,GET,/inventario/{departamento},1852,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:56
+151,inventory.php,GET,/inventario-tintas,1953,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:57
+152,inventory.php,GET,/inventario/eficiencia/{id_orden}/{id_departamento},1988,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42803]: Grouping error: 7 ERROR:  column ""a.name"" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 2:                     a.name producto,
+                            ^",2026-07-13 14:31:58
+153,inventory.php,GET,/eficiencia-orden/{id_orden},2019,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: integer = character varying
+LINE 5: ...              (SELECT nombre FROM sizes WHERE _id = a.talla)...
+                                                             ^
+HINT:  No operator matches the ",2026-07-13 14:31:59
 154,inventory.php,POST,/empleados/eficiencia,2094,2-escritura-manual,PENDIENTE,,
-155,inventory.php,GET,/inventario/consumo/{id_insumo},2145,1-GET-auto,PENDIENTE,,
+155,inventory.php,GET,/inventario/consumo/{id_insumo},2145,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:00
 156,inventory.php,PATCH,/inventario/consumo/{id_movimiento},2227,2-escritura-manual,PENDIENTE,,
-157,inventory.php,GET,/inventario/consumo/{id_movimiento}/historial,2392,1-GET-auto,PENDIENTE,,
-158,inventory.php,GET,/api/inventario/remanentes,2494,1-GET-auto,PENDIENTE,,
+157,inventory.php,GET,/inventario/consumo/{id_movimiento}/historial,2392,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:00
+158,inventory.php,GET,/api/inventario/remanentes,2494,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:01
 159,inventory.php,PUT,/api/inventario/remanentes/{id},2614,2-escritura-manual,PENDIENTE,,
 160,inventory.php,DELETE,/api/inventario/remanentes/{id},2707,2-escritura-manual,PENDIENTE,,
-161,inventory.php,GET,/inventario/reportes/movimientos,2761,1-GET-auto,PENDIENTE,,
-162,inventory.php,GET,/inventario/reportes/general,2838,1-GET-auto,PENDIENTE,,
-163,inventory.php,GET,/inventario/reportes/graficos-consumo,3157,1-GET-auto,PENDIENTE,,
-164,inventory.php,GET,/inventario/movimientos/{id}/historial,3238,1-GET-auto,PENDIENTE,,
-165,inventory.php,GET,/api/inventario/carga-directa,3273,1-GET-auto,PENDIENTE,,
+161,inventory.php,GET,/inventario/reportes/movimientos,2761,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:02
+162,inventory.php,GET,/inventario/reportes/general,2838,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:03
+163,inventory.php,GET,/inventario/reportes/graficos-consumo,3157,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:04
+164,inventory.php,GET,/inventario/movimientos/{id}/historial,3238,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column h.moment does not exist
+LINE 7:                         h.moment as fecha,
+                                ^",2026-07-13 14:32:04
+165,inventory.php,GET,/api/inventario/carga-directa,3273,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:32:05
 166,inventory.php,POST,/api/inventario/carga-directa,3839,2-escritura-manual,PENDIENTE,,
-167,machine_services.php,GET,/servicios-maquinas,13,1-GET-auto,PENDIENTE,,
+167,machine_services.php,GET,/servicios-maquinas,13,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:06
 168,machine_services.php,POST,/servicios-maquinas,60,2-escritura-manual,PENDIENTE,,
 169,machine_services.php,PUT,/servicios-maquinas/{id},87,2-escritura-manual,PENDIENTE,,
 170,machine_services.php,DELETE,/servicios-maquinas/{id},112,2-escritura-manual,PENDIENTE,,
@@ -174,10 +204,10 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 173,manufacturing.php,POST,/lotes/{id}/terminar,155,2-escritura-manual,PENDIENTE,,
 174,manufacturing.php,POST,/revision/nuevo,251,2-escritura-manual,PENDIENTE,,
 175,manufacturing.php,POST,/revision/nuevo,323,2-escritura-manual,PENDIENTE,,
-176,manufacturing.php,GET,/revision/diseno/{id_empleado},394,1-GET-auto,PENDIENTE,,
-177,manufacturing.php,GET,/revisiones/estatus/{id_revision},426,1-GET-auto,PENDIENTE,,
-178,manufacturing.php,GET,/revision/trabajos,451,1-GET-auto,PENDIENTE,,
-179,manufacturing.php,GET,/revision/actualizar-estatus-de-pago/{estatus}/{id_pago},468,1-GET-auto,PENDIENTE,,
+176,manufacturing.php,GET,/revision/diseno/{id_empleado},394,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:06
+177,manufacturing.php,GET,/revisiones/estatus/{id_revision},426,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:07
+178,manufacturing.php,GET,/revision/trabajos,451,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:08
+179,manufacturing.php,GET,/revision/actualizar-estatus-de-pago/{estatus}/{id_pago},468,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:09
 180,manufacturing.php,POST,/empleados/tareas,487,2-escritura-manual,PENDIENTE,,
 181,manufacturing.php,POST,/empleados/tintas,538,2-escritura-manual,PENDIENTE,,
 182,manufacturing.php,POST,/insumos/rendimiento,574,2-escritura-manual,PENDIENTE,,
@@ -187,71 +217,82 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 186,manufacturing.php,POST,/lotes/get-detalles,1300,2-escritura-manual,PENDIENTE,,
 187,manufacturing.php,POST,/lotes/update/cantidad,1316,2-escritura-manual,PENDIENTE,,
 188,manufacturing.php,POST,/lotes/update/prioridad,1379,2-escritura-manual,PENDIENTE,,
-189,manufacturing.php,GET,/lotes-fisicos/tabla-editar,1398,1-GET-auto,PENDIENTE,,
+189,manufacturing.php,GET,/lotes-fisicos/tabla-editar,1398,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column ""eliminado"" does not exist
+LINE 1: SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY te...
+                                           ^",2026-07-13 14:32:10
 190,manufacturing.php,POST,/lotes-fisicos/tabla-editar-filter,1430,2-escritura-manual,PENDIENTE,,
 191,manufacturing.php,POST,/lotes-fisicos/eliminar,1480,2-escritura-manual,PENDIENTE,,
 192,manufacturing.php,POST,/lotes-fisicos/update,1499,2-escritura-manual,PENDIENTE,,
-193,manufacturing.php,GET,/lotes/activos,1518,1-GET-auto,PENDIENTE,,
-194,manufacturing.php,GET,/lotes/fisicos,1535,1-GET-auto,PENDIENTE,,
-195,manufacturing.php,GET,/lotes/existencia/{talla}/{tela}/{corte}/{categoria},1549,1-GET-auto,PENDIENTE,,
+193,manufacturing.php,GET,/lotes/activos,1518,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:10
+194,manufacturing.php,GET,/lotes/fisicos,1535,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column a.id_inventario does not exist
+LINE 1: ...nidades FROM lotes_fisicos a JOIN inventario b ON a.id_inven...
+                                                             ^",2026-07-13 14:32:11
+195,manufacturing.php,GET,/lotes/existencia/{talla}/{tela}/{corte}/{categoria},1549,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:12
 196,manufacturing.php,POST,/lotes/{id}/finalizar-departamento,1610,2-escritura-manual,PENDIENTE,,
 197,manufacturing.php,POST,/lotes/activos,1877,2-escritura-manual,PENDIENTE,,
 198,manufacturing.php,POST,/lotes/{id}/finalizar-impresion,1978,2-escritura-manual,PENDIENTE,,
 199,manufacturing.php,POST,/lotes/{id}/finalizar-corte,2161,2-escritura-manual,PENDIENTE,,
 200,manufacturing.php,POST,/empleados/registrar-paso/{tipo}/{departamento}/{id_lotes_detalles}/{unidades},2420,2-escritura-manual,PENDIENTE,,
 201,manufacturing.php,POST,/empleados/registrar-paso-por-lotes/{departamento},2575,2-escritura-manual,PENDIENTE,,
-202,manufacturing.php,GET,/empleados/registrar-pago/{id_lotes_detalles},2738,1-GET-auto,PENDIENTE,,
-203,manufacturing.php,GET,/empleados/ordenes-asignadas/v1/{id_empleado},2758,1-GET-auto,PENDIENTE,,
+202,manufacturing.php,GET,/empleados/registrar-pago/{id_lotes_detalles},2738,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42601]: Syntax error: 7 ERROR:  syntax error at or near "")""
+LINE 1: ...tes_detalles, estatus, id_empleado) VALUES (1, 'aprobado', )
+                                                                      ^",2026-07-13 14:32:13
+203,manufacturing.php,GET,/empleados/ordenes-asignadas/v1/{id_empleado},2758,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:14
 204,manufacturing.php,POST,/pausas,2802,2-escritura-manual,PENDIENTE,,
-205,manufacturing.php,GET,/ordenes/proyeccion-entrega,2853,1-GET-auto,PENDIENTE,,
-206,manufacturing.php,GET,/empleados/mi-asignacion/{id_orden}/{id_empleado},2991,1-GET-auto,PENDIENTE,,
-207,manufacturing.php,GET,/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso},3093,1-GET-auto,PENDIENTE,,
-208,manufacturing.php,GET,/sse/empleados/ordenes-asignadas/{id_empleado},3359,1-GET-auto,PENDIENTE,,
-209,manufacturing.php,GET,/empleados-todos,3470,1-GET-auto,PENDIENTE,,
-210,manufacturing.php,GET,/reports/input-efficiency/{id_ordenes},3634,1-GET-auto,PENDIENTE,,
-211,manufacturing.php,GET,/reports/manufacturing-time,3745,1-GET-auto,PENDIENTE,,
+205,manufacturing.php,GET,/ordenes/proyeccion-entrega,2853,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:15
+206,manufacturing.php,GET,/empleados/mi-asignacion/{id_orden}/{id_empleado},2991,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:15
+207,manufacturing.php,GET,/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso},3093,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: integer = character varying
+LINE 20: ...              (SELECT nombre FROM sizes WHERE _id =  c.talla...
+                                                              ^
+HINT:  No operator matches th",2026-07-13 14:32:16
+208,manufacturing.php,GET,/sse/empleados/ordenes-asignadas/{id_empleado},3359,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:32:23
+209,manufacturing.php,GET,/empleados-todos,3470,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:24
+210,manufacturing.php,GET,/reports/input-efficiency/{id_ordenes},3634,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:25
+211,manufacturing.php,GET,/reports/manufacturing-time,3745,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:26
 212,manufacturing.php,POST,/reports/manufacturing-time,4092,2-escritura-manual,PENDIENTE,,
-213,manufacturing.php,GET,/empleados/terminadas-hoy/{id_empleado}/{id_departamento},4406,1-GET-auto,PENDIENTE,,
-214,manufacturing.php,GET,/empleados/unpaid-orders/{id_empleado}/{id_departamento},4436,1-GET-auto,PENDIENTE,,
-215,msg_service.php,GET,/internal/db-credentials/{id_empresa},28,1-GET-auto,PENDIENTE,,
-216,msg_service.php,GET,/internal/business-hours,168,1-GET-auto,PENDIENTE,,
-217,msg_service.php,GET,/internal/ping,350,1-GET-auto,PENDIENTE,,
-218,msg_service.php,GET,/internal/catalog-test,376,1-GET-auto,PENDIENTE,,
-219,msg_service.php,GET,/internal/catalog-test/{id},396,1-GET-auto,PENDIENTE,,
-220,msg_service.php,GET,/internal/catalog/{id_empresa},456,1-GET-auto,PENDIENTE,,
-221,msg_service.php,GET,/internal/cliente/{id_empresa}/by-phone,663,1-GET-auto,PENDIENTE,,
-222,msg_service.php,GET,/internal/ordenes/{id_empresa}/by-phone,779,1-GET-auto,PENDIENTE,,
+213,manufacturing.php,GET,/empleados/terminadas-hoy/{id_empleado}/{id_departamento},4406,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:26
+214,manufacturing.php,GET,/empleados/unpaid-orders/{id_empleado}/{id_departamento},4436,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:27
+215,msg_service.php,GET,/internal/db-credentials/{id_empresa},28,1-GET-auto,OK,"HTTP 401, sin error embebido",2026-07-13 14:32:28
+216,msg_service.php,GET,/internal/business-hours,168,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:28
+217,msg_service.php,GET,/internal/ping,350,1-GET-auto,OK,"HTTP 401, sin error embebido",2026-07-13 14:32:29
+218,msg_service.php,GET,/internal/catalog-test,376,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:30
+219,msg_service.php,GET,/internal/catalog-test/{id},396,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:31
+220,msg_service.php,GET,/internal/catalog/{id_empresa},456,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:31
+221,msg_service.php,GET,/internal/cliente/{id_empresa}/by-phone,663,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 14:32:32
+222,msg_service.php,GET,/internal/ordenes/{id_empresa}/by-phone,779,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 14:32:33
 223,msg_service.php,POST,/internal/cliente/{id_empresa},925,2-escritura-manual,PENDIENTE,,
 224,msg_service.php,PATCH,/internal/presupuesto/{id_presupuesto}/vendedor,1032,2-escritura-manual,PENDIENTE,,
-225,ordenes-sin-asignacion.php,GET,/ordenes-sin-asignar/{id_vendedor},10,1-GET-auto,PENDIENTE,,
+225,ordenes-sin-asignacion.php,GET,/ordenes-sin-asignar/{id_vendedor},10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:33
 226,orders.php,POST,/orden/editar,14,2-escritura-manual,PENDIENTE,,
 227,orders.php,POST,/orden/previa-cancelacion,118,2-escritura-manual,PENDIENTE,,
 228,orders.php,POST,/orden/actualizar-estado,158,2-escritura-manual,PENDIENTE,,
-229,orders.php,GET,/ordenes/abono/{id},361,1-GET-auto,PENDIENTE,,
-230,orders.php,GET,/ordenes/verificar-edición/{id},389,1-GET-auto,PENDIENTE,,
+229,orders.php,GET,/ordenes/abono/{id},361,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:34
+230,orders.php,GET,/ordenes/verificar-edición/{id},389,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:32:35
 231,orders.php,POST,/orden/abono,404,2-escritura-manual,PENDIENTE,,
 232,orders.php,POST,/orden/edit/obs,615,2-escritura-manual,PENDIENTE,,
-233,orders.php,GET,/ordenes/abono-detale/{id},632,1-GET-auto,PENDIENTE,,
-234,orders.php,GET,/reportes/resumen/disenadores/{id_empleado}/{id_departamento},790,1-GET-auto,PENDIENTE,,
-235,orders.php,GET,/reportes/resumen/empleados/{id_empleado}/{id_departamento},847,1-GET-auto,PENDIENTE,,
-236,orders.php,GET,/comercializacion/dashboard/{id_empleado}/{id_departamento},1457,1-GET-auto,PENDIENTE,,
-237,orders.php,GET,/ordenes/reporte/{id},1657,1-GET-auto,PENDIENTE,,
-238,orders.php,GET,/comercializacion/ordenes/reporte,1711,1-GET-auto,PENDIENTE,,
-239,orders.php,GET,/comercializacion/ordenes/reporte/terminadas/{rango},1743,1-GET-auto,PENDIENTE,,
-240,orders.php,GET,/comercializacion/ordenes/reporte/entregadas/{rango},1785,1-GET-auto,PENDIENTE,,
+233,orders.php,GET,/ordenes/abono-detale/{id},632,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:36
+234,orders.php,GET,/reportes/resumen/disenadores/{id_empleado}/{id_departamento},790,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:36
+235,orders.php,GET,/reportes/resumen/empleados/{id_empleado}/{id_departamento},847,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42P10]: Invalid column reference: 7 ERROR:  for SELECT DISTINCT, ORDER BY expressions must appear in select list
+LINE 31:             GROUP BY a.id_orden ORDER BY ofo.orden_fila ASC,...
+                                                  ^",2026-07-13 14:32:38
+236,orders.php,GET,/comercializacion/dashboard/{id_empleado}/{id_departamento},1457,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:38
+237,orders.php,GET,/ordenes/reporte/{id},1657,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:39
+238,orders.php,GET,/comercializacion/ordenes/reporte,1711,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:40
+239,orders.php,GET,/comercializacion/ordenes/reporte/terminadas/{rango},1743,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:41
+240,orders.php,GET,/comercializacion/ordenes/reporte/entregadas/{rango},1785,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:42
 241,orders.php,POST,/ordenes/nueva,1831,2-escritura-manual,PENDIENTE,,
 242,orders.php,POST,/presupuesto/nuevo,2149,2-escritura-manual,PENDIENTE,,
-243,orders.php,GET,/presupuestos/lista,2366,1-GET-auto,PENDIENTE,,
-244,orders.php,GET,/presupuesto/detalle/{id},2388,1-GET-auto,PENDIENTE,,
+243,orders.php,GET,/presupuestos/lista,2366,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:42
+244,orders.php,GET,/presupuesto/detalle/{id},2388,1-GET-auto,FALLO_RUTA,HTTP 404 (ruta no encontrada/metodo no permitido con params de prueba),2026-07-13 14:32:43
 245,orders.php,POST,/ordenes/actualizar-fila,2432,2-escritura-manual,PENDIENTE,,
 246,orders.php,POST,/ordenes/nueva/custom/edit,2451,2-escritura-manual,PENDIENTE,,
 247,orders.php,POST,/ordenes/nueva/custom,2799,2-escritura-manual,PENDIENTE,,
 248,orders.php,POST,/ordenes/nueva/sport,3457,2-escritura-manual,PENDIENTE,,
 249,orders.php,POST,/comercializacion/revisiones-estatus/{estatus}/{id_revision}/{id_orden},3744,2-escritura-manual,PENDIENTE,,
 250,orders.php,POST,/comercializacion/revisiones-detalles/{id_revision},3885,2-escritura-manual,PENDIENTE,,
-251,orders.php,GET,/comercializacion/revisiones/{id_empleado},3901,1-GET-auto,PENDIENTE,,
+251,orders.php,GET,/comercializacion/revisiones/{id_empleado},3901,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:44
 252,orders.php,POST,/reposiciones/actualizar-fila,3930,2-escritura-manual,PENDIENTE,,
-253,orders.php,GET,/ordenes-observaciones/{id_orden},3950,1-GET-auto,PENDIENTE,,
+253,orders.php,GET,/ordenes-observaciones/{id_orden},3950,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:44
 254,orders.php,POST,/ordenes/materiales-lote,3975,2-escritura-manual,PENDIENTE,,
 255,orders.php,POST,/ordenes/nueva/simple,4037,2-escritura-manual,PENDIENTE,,
 256,orders.php,POST,/ordenes/validar-stock,4421,2-escritura-manual,PENDIENTE,,
@@ -262,60 +303,70 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 261,payments.php,POST,/pagos/terminar-planilla,12,2-escritura-manual,PENDIENTE,,
 262,payments.php,POST,/pagos/pagar-a-empleados,52,2-escritura-manual,PENDIENTE,,
 263,payments.php,POST,/pagos/procesar-lote-pagos,222,2-escritura-manual,PENDIENTE,,
-264,payments.php,GET,/pagos/semana/disenadores,407,1-GET-auto,PENDIENTE,,
-265,payments.php,GET,/pagos/semana/empleados,630,1-GET-auto,PENDIENTE,,
-266,payments.php,GET,/pagos/semana/vendedores,1007,1-GET-auto,PENDIENTE,,
-267,payments.php,GET,/pagos/vendedor/{id_vendedoor},1118,1-GET-auto,PENDIENTE,,
-268,payments.php,GET,/pagos/reporte-empleado/{id_empleado},1210,1-GET-auto,PENDIENTE,,
-269,payments.php,GET,/pagos/historico/{semana},1368,1-GET-auto,PENDIENTE,,
+264,payments.php,GET,/pagos/semana/disenadores,407,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:45
+265,payments.php,GET,/pagos/semana/empleados,630,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:46
+266,payments.php,GET,/pagos/semana/vendedores,1007,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:47
+267,payments.php,GET,/pagos/vendedor/{id_vendedoor},1118,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:47
+268,payments.php,GET,/pagos/reporte-empleado/{id_empleado},1210,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:48
+269,payments.php,GET,/pagos/historico/{semana},1368,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:49
 270,payments.php,POST,/pagos/semana,1657,2-escritura-manual,PENDIENTE,,
 271,payments.php,POST,/pagos/semana/OLD,1821,2-escritura-manual,PENDIENTE,,
 272,printers.php,POST,/impresoras,10,2-escritura-manual,PENDIENTE,,
-273,printers.php,GET,/impresoras,66,1-GET-auto,PENDIENTE,,
-274,printers.php,GET,/impresoras-tintas-actual[/{id_impresora}],227,1-GET-auto,PENDIENTE,,
+273,printers.php,GET,/impresoras,66,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:50
+274,printers.php,GET,/impresoras-tintas-actual[/{id_impresora}],227,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:51
 275,printers.php,PUT,/impresoras/{id},366,2-escritura-manual,PENDIENTE,,
 276,printers.php,POST,/inventario-tintas,448,2-escritura-manual,PENDIENTE,,
 277,printers.php,DELETE,/impresoras/{id},520,2-escritura-manual,PENDIENTE,,
 278,production.php,POST,/ordenes/actualizar-filas-batch,15,2-escritura-manual,PENDIENTE,,
 279,production.php,POST,/reposiciones/actualizar-filas-batch,69,2-escritura-manual,PENDIENTE,,
-280,production.php,GET,/sse/produccion/ordenes-activas,123,1-GET-auto,PENDIENTE,,
-281,production.php,GET,/sse/produccion/check-version,173,1-GET-auto,PENDIENTE,,
-282,production.php,GET,/sse/produccion,198,1-GET-auto,PENDIENTE,,
-283,production.php,GET,/sse/produccion/corte/{id_empleado},666,1-GET-auto,PENDIENTE,,
-284,production.php,GET,/sse/diseno/{id_empleado},709,1-GET-auto,PENDIENTE,,
-285,production.php,GET,/sse/disenos-todo,796,1-GET-auto,PENDIENTE,,
-286,production.php,GET,/lotes/paso-actual/{id_orden},829,1-GET-auto,PENDIENTE,,
-287,production.php,GET,/reposiciones/{id_ordenes_productos}/{id_orden},854,1-GET-auto,PENDIENTE,,
-288,production.php,GET,/reposicion/{id_reposicion}/departamentos-cola,893,1-GET-auto,PENDIENTE,,
+280,production.php,GET,/sse/produccion/ordenes-activas,123,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:52
+281,production.php,GET,/sse/produccion/check-version,173,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:53
+282,production.php,GET,/sse/produccion,198,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:54
+283,production.php,GET,/sse/produccion/corte/{id_empleado},666,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:33:01
+284,production.php,GET,/sse/diseno/{id_empleado},709,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42803]: Grouping error: 7 ERROR:  column ""a.id_orden"" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 3:                     a.id_orden id,
+                            ^",2026-07-13 14:33:01
+285,production.php,GET,/sse/disenos-todo,796,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:33:08
+286,production.php,GET,/lotes/paso-actual/{id_orden},829,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:09
+287,production.php,GET,/reposiciones/{id_ordenes_productos}/{id_orden},854,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:10
+288,production.php,GET,/reposicion/{id_reposicion}/departamentos-cola,893,1-GET-auto,FALLO_RUTA,HTTP 404 (ruta no encontrada/metodo no permitido con params de prueba),2026-07-13 14:33:11
 289,production.php,POST,/reposicion/{id_reposicion}/excluir-departamento,962,2-escritura-manual,PENDIENTE,,
-290,production.php,GET,/reposiciones-reporte/{estatus_orden},1031,1-GET-auto,PENDIENTE,,
-291,production.php,GET,/reposicion-detalles/{id_reposicion},1200,1-GET-auto,PENDIENTE,,
+290,production.php,GET,/reposiciones-reporte/{estatus_orden},1031,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:11
+291,production.php,GET,/reposicion-detalles/{id_reposicion},1200,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:12
 292,production.php,POST,/produccion/reposicion,1380,2-escritura-manual,PENDIENTE,,
 293,production.php,POST,/produccion/reposicion/final,1542,2-escritura-manual,PENDIENTE,,
 294,production.php,POST,/produccion/reposicion/eliminar,1576,2-escritura-manual,PENDIENTE,,
 295,production.php,POST,/produccion/terminar/{id},1599,2-escritura-manual,PENDIENTE,,
 296,production.php,POST,/produccion/asignar-varias-ordenes-a-corte,1655,2-escritura-manual,PENDIENTE,,
 297,production.php,POST,/produccion/update/paso,1708,2-escritura-manual,PENDIENTE,,
-298,production.php,GET,/produccion/progressbar/{id_orden},1740,1-GET-auto,PENDIENTE,,
-299,production.php,GET,/lotes/detalles/v2/{id},1827,1-GET-auto,PENDIENTE,,
-300,production.php,GET,/produccion/verificar-asignacion-empleado/{departamento}/{id_orden}/{id_ordenes_productos},1851,1-GET-auto,PENDIENTE,,
-301,production.php,GET,/lotes/detalles/{id},1885,1-GET-auto,PENDIENTE,,
-302,production.php,GET,/ordenes/detalles/{id},1917,1-GET-auto,PENDIENTE,,
-303,production.php,GET,/ordenes/vinculadas/{id_orden_father},1934,1-GET-auto,PENDIENTE,,
-304,production.php,GET,/produccion/dashboard-stats,1956,1-GET-auto,PENDIENTE,,
+298,production.php,GET,/produccion/progressbar/{id_orden},1740,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {
+    ""statusCode"": 500,
+    ""error"": {
+        ""type"": ""SERVER_ERROR"",
+        ""description"": ""An internal error has occurred while processing your request.""
+    }
+}",2026-07-13 14:33:13
+299,production.php,GET,/lotes/detalles/v2/{id},1827,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:13
+300,production.php,GET,/produccion/verificar-asignacion-empleado/{departamento}/{id_orden}/{id_ordenes_productos},1851,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:14
+301,production.php,GET,/lotes/detalles/{id},1885,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:15
+302,production.php,GET,/ordenes/detalles/{id},1917,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column ""observaciones"" does not exist
+LINE 1: SELECT observaciones FROM ordenes WHERE _id = 1
+               ^",2026-07-13 14:33:16
+303,production.php,GET,/ordenes/vinculadas/{id_orden_father},1934,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:17
+304,production.php,GET,/produccion/dashboard-stats,1956,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:17
 305,production.php,POST,/production/corte/ajuste,2090,2-escritura-manual,PENDIENTE,,
 306,production.php,POST,/production/corte/crear-orden-stock-manual,2158,2-escritura-manual,PENDIENTE,,
 307,production.php,POST,/production/corte/finalizar-tarea,2198,2-escritura-manual,PENDIENTE,,
-308,production.php,GET,/production/corte/orden-detalles/{id},2259,1-GET-auto,PENDIENTE,,
-309,products.php,GET,/customer/create/nine,14,1-GET-auto,PENDIENTE,,
-310,products.php,GET,/products,24,1-GET-auto,PENDIENTE,,
+308,production.php,GET,/production/corte/orden-detalles/{id},2259,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:18
+309,products.php,GET,/customer/create/nine,14,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:33:38
+310,products.php,GET,/products,24,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:33:39
 311,products.php,POST,/products-attributes,33,2-escritura-manual,PENDIENTE,,
-312,products.php,GET,/products-attributes,55,1-GET-auto,PENDIENTE,,
+312,products.php,GET,/products-attributes,55,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:40
 313,products.php,POST,/products-attributes/editar,70,2-escritura-manual,PENDIENTE,,
 314,products.php,POST,/products-attributes/eliminar,89,2-escritura-manual,PENDIENTE,,
-315,products.php,GET,/products/categories/{id_category},107,1-GET-auto,PENDIENTE,,
-316,products.php,GET,/productos-asignados/{orden},117,1-GET-auto,PENDIENTE,,
-317,products.php,GET,/products/{id},132,1-GET-auto,PENDIENTE,,
+315,products.php,GET,/products/categories/{id_category},107,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:00
+316,products.php,GET,/productos-asignados/{orden},117,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:01
+317,products.php,GET,/products/{id},132,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:02
 318,products.php,POST,/products/{name}/{sku}/{price}/{stock_quantity}/{categories}/{sizes},142,2-escritura-manual,PENDIENTE,,
 319,products.php,POST,/products/lite,153,2-escritura-manual,PENDIENTE,,
 320,products.php,POST,/editar-producto,171,2-escritura-manual,PENDIENTE,,
@@ -325,63 +376,78 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 324,products.php,DELETE,/products/{id},288,2-escritura-manual,PENDIENTE,,
 325,products.php,POST,/product-set-comision-producto,307,2-escritura-manual,PENDIENTE,,
 326,products.php,POST,/product-set-comisiones-batch,399,2-escritura-manual,PENDIENTE,,
-327,products.php,GET,/product-set-comision/{id}/{comision},538,1-GET-auto,PENDIENTE,,
-328,products.php,GET,/atributos/comisiones,575,1-GET-auto,PENDIENTE,,
-329,products.php,GET,/wp/products,587,1-GET-auto,PENDIENTE,,
-330,products.php,GET,/wp/products/{id_product},598,1-GET-auto,PENDIENTE,,
+327,products.php,GET,/product-set-comision/{id}/{comision},538,1-GET-auto,ERROR_ENCONTRADO,Error al ejecutar la consulta: SQLSTATE[42601]: Syntax error: 7 ERROR:  cannot insert multiple commands into a prepared statement,2026-07-13 14:34:03
+328,products.php,GET,/atributos/comisiones,575,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:04
+329,products.php,GET,/wp/products,587,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:05
+330,products.php,GET,/wp/products/{id_product},598,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:05
 331,products.php,POST,/customers/eliminar,613,2-escritura-manual,PENDIENTE,,
-332,products.php,GET,/customers,625,1-GET-auto,PENDIENTE,,
-333,products.php,GET,/customers/optimize/{key}/{acc},639,1-GET-auto,PENDIENTE,,
-334,products.php,GET,/customers/orders/{id_customer},651,1-GET-auto,PENDIENTE,,
-335,products.php,GET,/wp/customers,661,1-GET-auto,PENDIENTE,,
-336,products.php,GET,/customers/orders-count/{customer_email}/{customer_id},671,1-GET-auto,PENDIENTE,,
-337,products.php,GET,/customers/{id},689,1-GET-auto,PENDIENTE,,
-338,products.php,GET,/customers/por-telefono/{phone},703,1-GET-auto,PENDIENTE,,
+332,products.php,GET,/customers,625,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:06
+333,products.php,GET,/customers/optimize/{key}/{acc},639,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:07
+334,products.php,GET,/customers/orders/{id_customer},651,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:07
+335,products.php,GET,/wp/customers,661,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:08
+336,products.php,GET,/customers/orders-count/{customer_email}/{customer_id},671,1-GET-auto,OMITIDO,requiere parametro no trivial (email u otro) para probar de forma segura,2026-07-13 14:34:08
+337,products.php,GET,/customers/{id},689,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: ` character varying
+LINE 10:         `address` billing_address_1, 
+                 ^
+HINT:  No operator matches the given name and argument type. You might need to add an explicit type cast.",2026-07-13 14:34:09
+338,products.php,GET,/customers/por-telefono/{phone},703,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:09
 339,products.php,POST,/customers/{first_name}/{last_name}/{cedula}/{phone}/{email}/{address},713,2-escritura-manual,PENDIENTE,,
 340,products.php,PUT,/customers/{id}/{first_name}/{last_name}/{cedula}/{phone}/{email}/{billing_address},756,2-escritura-manual,PENDIENTE,,
 341,products.php,POST,/customers/edit1,805,2-escritura-manual,PENDIENTE,,
 342,products.php,POST,/customers/nuevo,825,2-escritura-manual,PENDIENTE,,
 343,products.php,POST,/customers/reactivar,862,2-escritura-manual,PENDIENTE,,
-344,products.php,GET,/categories,897,1-GET-auto,PENDIENTE,,
-345,products.php,GET,/departamentos,907,1-GET-auto,PENDIENTE,,
-346,products.php,GET,/departamentos-empleado/{id_empleado},921,1-GET-auto,PENDIENTE,,
+344,products.php,GET,/categories,897,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42601]: Syntax error: 7 ERROR:  syntax error at or near ""FROM""
+LINE 1: SELECT _id id, nombre `name` FROM categories WHERE eliminado...
+                                     ^",2026-07-13 14:34:10
+345,products.php,GET,/departamentos,907,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:11
+346,products.php,GET,/departamentos-empleado/{id_empleado},921,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:12
 347,products.php,POST,/departamentos/nuevo,935,2-escritura-manual,PENDIENTE,,
 348,products.php,POST,/departamentos/editar,958,2-escritura-manual,PENDIENTE,,
 349,products.php,POST,/departamentos/editar/mensaje,976,2-escritura-manual,PENDIENTE,,
 350,products.php,DELETE,/departamentos/{id_departamento},992,2-escritura-manual,PENDIENTE,,
 351,products.php,POST,/departamentos/orden-paso,1007,2-escritura-manual,PENDIENTE,,
-352,products.php,GET,/attributes,1030,1-GET-auto,PENDIENTE,,
-353,products.php,GET,/sizes,1042,1-GET-auto,PENDIENTE,,
+352,products.php,GET,/attributes,1030,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Depende de integracion WooCommerce externa discontinuada (clase WooMe hace HTTP real a API externa) - falla/timeout igual en MySQL, no es un bug de PostgreSQL",2026-07-13 14:34:32
+353,products.php,GET,/sizes,1042,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42601]: Syntax error: 7 ERROR:  syntax error at or near "",""
+LINE 1: SELECT _id, nombre `name`, variation_percentage FROM sizes
+                                 ^",2026-07-13 14:34:33
 354,products.php,POST,/sizes,1057,2-escritura-manual,PENDIENTE,,
 355,products.php,POST,/sizes/editar,1079,2-escritura-manual,PENDIENTE,,
 356,products.php,POST,/sizes/eliminar,1099,2-escritura-manual,PENDIENTE,,
 357,products.php,POST,/categories,1120,2-escritura-manual,PENDIENTE,,
-358,products.php,GET,/empleado/asignado/{departamento}/{orden}/{item_id},1146,1-GET-auto,PENDIENTE,,
-359,products.php,GET,/lotes/en-proceso,1160,1-GET-auto,PENDIENTE,,
-360,products.php,GET,/lotes/verificar-cantidad-asignada/{id_ordenes_productos}/{departamento}/{id_orden},1254,1-GET-auto,PENDIENTE,,
-361,products.php,GET,/empleados/reposicion/{id_orden},1272,1-GET-auto,PENDIENTE,,
+358,products.php,GET,/empleado/asignado/{departamento}/{orden}/{item_id},1146,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:33
+359,products.php,GET,/lotes/en-proceso,1160,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:34
+360,products.php,GET,/lotes/verificar-cantidad-asignada/{id_ordenes_productos}/{departamento}/{id_orden},1254,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:35
+361,products.php,GET,/empleados/reposicion/{id_orden},1272,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:36
 362,products.php,POST,/lotes/empleados/reasignar,1365,2-escritura-manual,PENDIENTE,,
 363,products.php,POST,/lotes/empleados/reasignar-masiva,1441,2-escritura-manual,PENDIENTE,,
-364,products_reports.php,GET,/reportes/costos-productos,76,1-GET-auto,PENDIENTE,,
-365,products_reports.php,GET,/reportes/costos-productos/categorias,415,1-GET-auto,PENDIENTE,,
-366,products_reports.php,GET,/reportes/costos-productos/{id_producto}/detalle,773,1-GET-auto,PENDIENTE,,
-367,reports.php,GET,/reportes/costos-produccion/{inicio}/{fin},13,1-GET-auto,PENDIENTE,,
-368,reports.php,GET,/reportes/insumos-consumidos-por-orden/{id_orden},628,1-GET-auto,PENDIENTE,,
-369,reports.php,GET,/reportes/mano-obra-por-orden/{id_orden},666,1-GET-auto,PENDIENTE,,
-370,reports.php,GET,/reportes/gastos-de-fabricacion/{fecha},901,1-GET-auto,PENDIENTE,,
-371,reports.php,GET,/reportes/material-consumido-por-orden/{id_orden},928,1-GET-auto,PENDIENTE,,
-372,reports.php,GET,/reportes/semanal-detallado,955,1-GET-auto,PENDIENTE,,
-373,reports.php,GET,/reportes/employee-efficiency-global,1327,1-GET-auto,PENDIENTE,,
-374,tables.php,GET,/ordenes-reporte-semanal/{fecha},12,1-GET-auto,PENDIENTE,,
-375,tables.php,GET,/presupuestos/guardados,67,1-GET-auto,PENDIENTE,,
-376,tables.php,GET,/ordenes/guardadas,87,1-GET-auto,PENDIENTE,,
-377,tables.php,GET,/ordenes/observaciones/{id_orden}/{id_empleado}/{id_departamento},162,1-GET-auto,PENDIENTE,,
-378,tables.php,GET,/ordenes/notas-por-empleado/{id_orden},183,1-GET-auto,PENDIENTE,,
-379,tables.php,GET,/ordenes/borrador/reporte-semanal/{id_empleado}/{id_departamento},214,1-GET-auto,PENDIENTE,,
+364,products_reports.php,GET,/reportes/costos-productos,76,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:37
+365,products_reports.php,GET,/reportes/costos-productos/categorias,415,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:38
+366,products_reports.php,GET,/reportes/costos-productos/{id_producto}/detalle,773,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:39
+367,reports.php,GET,/reportes/costos-produccion/{inicio}/{fin},13,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {""error"":""Error en el reporte (Debug SQL Mode): Error en la consulta base del reporte: Error al ejecutar la consulta: SQLSTATE[22007]: Invalid datetime format: 7 ERROR:  invalid input syntax for type date: \""1\""\nCONTEXT:  unnamed portal parameter $1 = '...'""}",2026-07-13 14:34:40
+368,reports.php,GET,/reportes/insumos-consumidos-por-orden/{id_orden},628,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:40
+369,reports.php,GET,/reportes/mano-obra-por-orden/{id_orden},666,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:41
+370,reports.php,GET,/reportes/gastos-de-fabricacion/{fecha},901,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:42
+371,reports.php,GET,/reportes/material-consumido-por-orden/{id_orden},928,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:43
+372,reports.php,GET,/reportes/semanal-detallado,955,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 14:34:44
+373,reports.php,GET,/reportes/employee-efficiency-global,1327,1-GET-auto,OK,"HTTP 400, sin error embebido",2026-07-13 14:34:45
+374,tables.php,GET,/ordenes-reporte-semanal/{fecha},12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:46
+375,tables.php,GET,/presupuestos/guardados,67,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:47
+376,tables.php,GET,/ordenes/guardadas,87,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {
+    ""statusCode"": 500,
+    ""error"": {
+        ""type"": ""SERVER_ERROR"",
+        ""description"": ""An internal error has occurred while processing your request.""
+    }
+}",2026-07-13 14:34:48
+377,tables.php,GET,/ordenes/observaciones/{id_orden}/{id_empleado}/{id_departamento},162,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:48
+378,tables.php,GET,/ordenes/notas-por-empleado/{id_orden},183,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:49
+379,tables.php,GET,/ordenes/borrador/reporte-semanal/{id_empleado}/{id_departamento},214,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:50
 380,tables.php,POST,/ordenes/borrador,242,2-escritura-manual,PENDIENTE,,
 381,tables.php,POST,/ordenes/guardadas/eliminar,268,2-escritura-manual,PENDIENTE,,
 382,tables.php,POST,/orden/guardar,361,2-escritura-manual,PENDIENTE,,
-383,tables.php,GET,/table/ordenes-activas/{id_empleado},437,1-GET-auto,PENDIENTE,,
-384,tables.php,GET,/table/ordenes-todas,538,1-GET-auto,PENDIENTE,,
-385,tables.php,GET,/table/ordenes-con-deuda,634,1-GET-auto,PENDIENTE,,
+383,tables.php,GET,/table/ordenes-activas/{id_empleado},437,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:51
+384,tables.php,GET,/table/ordenes-todas,538,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:34:51
+385,tables.php,GET,/table/ordenes-con-deuda,634,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42803]: Grouping error: 7 ERROR:  column ""d.pago_total"" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 15:          d.pago_total - SUM(c.abono) - SUM(c.descuento) + SU...
+                  ^",2026-07-13 14:34:52
 386,upload.php,POST,/upload-order-detail-image,9,2-escritura-manual,PENDIENTE,,
