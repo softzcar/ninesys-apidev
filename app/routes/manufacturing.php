@@ -3315,6 +3315,10 @@ return function (App $app) {
             b.id_empleado = ' . $args['id_empleado'] . " AND (c.status LIKE 'En espera' OR c.status LIKE 'activa') AND b.id_departamento = {$args['id_departamento']}
     ORDER BY b.id_orden ASC"; */
 
+    // GROUP BY a._id: en MySQL, id_woo/id_orden/name/talla/cantidad/tela/corte son
+    // funcionalmente dependientes de la PK (a._id) y no requieren estar listados; PostgreSQL
+    // exige ademas las columnas de OTRAS tablas no agregadas (b, r, ch).
+    $groupByProductosV2 = DB_DRIVER === 'pgsql' ? 'GROUP BY a._id, b._id, r.terminada, r.unidades, r.detalle, ch.moment' : 'GROUP BY a._id';
     $sql = "SELECT
                 a._id id_ordenes_productos,
                 a.id_woo id_product,
@@ -3343,7 +3347,7 @@ return function (App $app) {
               AND ch.id_lotes_detalles_empleados_asigandos = b._id
             LEFT JOIN reposiciones r ON r.id_ordenes_productos = a._id AND r.id_empleado = b.id_empleado
             WHERE b.id_empleado = {$args['id_empleado']} AND b.id_departamento = {$args['id_departamento']} AND p.fisico > 0
-            GROUP BY a._id
+            $groupByProductosV2
         ";
 
     $object['productos'] = $localConnection->goQuery($sql);
