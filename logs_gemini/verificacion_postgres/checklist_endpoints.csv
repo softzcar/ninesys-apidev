@@ -179,7 +179,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 178,manufacturing.php,GET,/revision/trabajos,451,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:09
 179,manufacturing.php,GET,/revision/actualizar-estatus-de-pago/{estatus}/{id_pago},468,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:10
 180,manufacturing.php,POST,/empleados/tareas,487,2-escritura-manual,PENDIENTE,,
-181,manufacturing.php,POST,/empleados/tintas,538,2-escritura-manual,PENDIENTE,,
+181,manufacturing.php,POST,/empleados/tintas,538,2-escritura-manual,EN_PROGRESO,Investigando POST /empleados/tintas,2026-07-13 16:33:24
 182,manufacturing.php,POST,/insumos/rendimiento,574,2-escritura-manual,PENDIENTE,,
 183,manufacturing.php,POST,/registrar-paso-empleado,634,2-escritura-manual,CORREGIDO,"4 bugs: 3x IF() -> CASE WHEN universal, 1x multi-statement UPDATE separado en 2 llamadas. Verificado en vivo caminos 'inicio' y 'fin' (con calculo de comision fija/variable): 0 errores. Camino de reposicion (donde estaba el multi-statement) no se pudo probar con datos reales por falta de reposiciones de prueba en 194 dev, pero el fix es mecanicamente seguro (mismo query dividido en dos llamadas identicas).",2026-07-13 15:58:19
 184,manufacturing.php,POST,/lotes/empleados/eliminar,1181,2-escritura-manual,PENDIENTE,,
