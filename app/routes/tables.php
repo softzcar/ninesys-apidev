@@ -325,17 +325,44 @@ return function (App $app) {
     $localConnection->commit();
 
     // Recargar la lista
-    $sqlLoad = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (
+    if (DB_DRIVER === 'pgsql') {
+      // Equivalentes Postgres: form::jsonb ->> / -> en vez de JSON_UNQUOTE(JSON_EXTRACT());
+      // jsonb_agg(jsonb_build_object()) en vez de JSON_ARRAYAGG(JSON_OBJECT()).
+      $sqlLoad = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (
+                SELECT a._id, a.form, a.tipo, b.id_usuario AS id_empleado, b.nombre AS empleado,
+                       (a.form::jsonb ->> 'obs') as observaciones,
+                       (a.form::jsonb -> 'productos') as productos_json
+                FROM ordenes_tmp a
+                JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario
+                UNION ALL
+                SELECT p._id,
+                       CONCAT('{\"id_presupuesto_original\":', p._id, ',\"nombre\":\"', p.cliente_nombre, '\",\"cedula\":\"', p.cliente_cedula, '\",\"total\":', p.pago_total, ',\"presupuesto_emitido\":true}') as form,
+                       'Presupuesto Finalizado' as tipo,
+                       p.responsable as id_empleado,
+                       u.nombre as empleado,
+                       p.observaciones,
+                       (SELECT jsonb_agg(jsonb_build_object('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'corte', pp.corte, 'atributo', pa.attribute_name))
+                        FROM presupuestos_productos pp
+                        LEFT JOIN sizes s ON pp.id_size = s._id
+                        LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
+                        WHERE pp.id_orden = p._id) as productos_json
+                FROM presupuestos p
+                JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
+                WHERE p.status != 'Convertido'
+              ) as combined
+              ORDER BY _id DESC LIMIT 100";
+    } else {
+      $sqlLoad = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (
               SELECT a._id, a.form, a.tipo, b.id_usuario AS id_empleado, b.nombre AS empleado,
                      JSON_UNQUOTE(JSON_EXTRACT(a.form, '$.obs')) as observaciones,
                      JSON_EXTRACT(a.form, '$.productos') as productos_json
-              FROM ordenes_tmp a 
+              FROM ordenes_tmp a
               JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario
               UNION ALL
-              SELECT p._id, 
-                     CONCAT('{\"id_presupuesto_original\":', p._id, ',\"nombre\":\"', p.cliente_nombre, '\",\"cedula\":\"', p.cliente_cedula, '\",\"total\":', p.pago_total, ',\"presupuesto_emitido\":true}') as form, 
-                     'Presupuesto Finalizado' as tipo, 
-                     p.responsable as id_empleado, 
+              SELECT p._id,
+                     CONCAT('{\"id_presupuesto_original\":', p._id, ',\"nombre\":\"', p.cliente_nombre, '\",\"cedula\":\"', p.cliente_cedula, '\",\"total\":', p.pago_total, ',\"presupuesto_emitido\":true}') as form,
+                     'Presupuesto Finalizado' as tipo,
+                     p.responsable as id_empleado,
                      u.nombre as empleado,
                      p.observaciones,
                      (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'corte', pp.corte, 'atributo', pa.attribute_name))
@@ -348,6 +375,7 @@ return function (App $app) {
               WHERE p.status != 'Convertido'
             ) as combined
             ORDER BY _id DESC LIMIT 100";
+    }
 
     $results = $localConnection->goQuery($sqlLoad);
     foreach ($results as &$item) {
