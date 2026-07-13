@@ -90,33 +90,65 @@ return function (App $app) {
     // Consultamos borradores y presupuestos finalizados en una sola query
     // Para los borradores (ordenes_tmp), las observaciones están dentro del JSON 'form'
     // Para los presupuestos finalizados, están en la columna 'observaciones'
-    $sql = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (
-              SELECT a._id, 
-                     a.form, 
-                     a.tipo, 
-                     b.id_usuario AS id_empleado, 
-                     b.nombre AS empleado,
-                     JSON_UNQUOTE(JSON_EXTRACT(a.form, '$.obs')) as observaciones,
-                     JSON_EXTRACT(a.form, '$.productos') as productos_json
-              FROM ordenes_tmp a 
-              JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario
-              UNION ALL
-              SELECT p._id, 
-                     CONCAT('{\"id_presupuesto_original\":', p._id, ',\"nombre\":\"', p.cliente_nombre, '\",\"cedula\":\"', p.cliente_cedula, '\",\"total\":', p.pago_total, ',\"presupuesto_emitido\":true}') as form, 
-                     'Presupuesto Finalizado' as tipo, 
-                     p.responsable as id_empleado, 
-                     u.nombre as empleado,
-                     p.observaciones,
-                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'corte', pp.corte, 'atributo', pa.attribute_name))
-                      FROM presupuestos_productos pp
-                      LEFT JOIN sizes s ON pp.id_size = s._id
-                      LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
-                      WHERE pp.id_orden = p._id) as productos_json
-              FROM presupuestos p
-              JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
-              WHERE p.status != 'Convertido'
-            ) as combined
-            ORDER BY _id DESC LIMIT 100";
+    // "form" se guarda como texto; las funciones JSON_* de MySQL no existen en PostgreSQL
+    // (que usa ->/->> sobre json/jsonb), por eso esta consulta necesita rama por motor.
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (
+                SELECT a._id,
+                       a.form,
+                       a.tipo,
+                       b.id_usuario AS id_empleado,
+                       b.nombre AS empleado,
+                       (a.form::jsonb)->>'obs' as observaciones,
+                       (a.form::jsonb)->'productos' as productos_json
+                FROM ordenes_tmp a
+                JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario
+                UNION ALL
+                SELECT p._id,
+                       CONCAT('{\"id_presupuesto_original\":', p._id, ',\"nombre\":\"', p.cliente_nombre, '\",\"cedula\":\"', p.cliente_cedula, '\",\"total\":', p.pago_total, ',\"presupuesto_emitido\":true}') as form,
+                       'Presupuesto Finalizado' as tipo,
+                       p.responsable as id_empleado,
+                       u.nombre as empleado,
+                       p.observaciones,
+                       (SELECT json_agg(json_build_object('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'corte', pp.corte, 'atributo', pa.attribute_name))
+                        FROM presupuestos_productos pp
+                        LEFT JOIN sizes s ON pp.id_size = s._id
+                        LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
+                        WHERE pp.id_orden = p._id) as productos_json
+                FROM presupuestos p
+                JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
+                WHERE p.status != 'Convertido'
+              ) as combined
+              ORDER BY _id DESC LIMIT 100";
+    } else {
+      $sql = "SELECT _id, form, tipo, id_empleado, empleado, observaciones, productos_json FROM (
+                SELECT a._id,
+                       a.form,
+                       a.tipo,
+                       b.id_usuario AS id_empleado,
+                       b.nombre AS empleado,
+                       JSON_UNQUOTE(JSON_EXTRACT(a.form, '$.obs')) as observaciones,
+                       JSON_EXTRACT(a.form, '$.productos') as productos_json
+                FROM ordenes_tmp a
+                JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario
+                UNION ALL
+                SELECT p._id,
+                       CONCAT('{\"id_presupuesto_original\":', p._id, ',\"nombre\":\"', p.cliente_nombre, '\",\"cedula\":\"', p.cliente_cedula, '\",\"total\":', p.pago_total, ',\"presupuesto_emitido\":true}') as form,
+                       'Presupuesto Finalizado' as tipo,
+                       p.responsable as id_empleado,
+                       u.nombre as empleado,
+                       p.observaciones,
+                       (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'corte', pp.corte, 'atributo', pa.attribute_name))
+                        FROM presupuestos_productos pp
+                        LEFT JOIN sizes s ON pp.id_size = s._id
+                        LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
+                        WHERE pp.id_orden = p._id) as productos_json
+                FROM presupuestos p
+                JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
+                WHERE p.status != 'Convertido'
+              ) as combined
+              ORDER BY _id DESC LIMIT 100";
+    }
 
     $results = $localConnection->goQuery($sql);
 
@@ -636,6 +668,10 @@ ORDER BY ord._id DESC";
         ? "TO_CHAR(a.moment, 'DD/MM/YYYY')"
         : "DATE_FORMAT(a.moment, '%d/%m/%Y')";
 
+    // Subconsulta correlacionada: SUM() mezclado con d.pago_total (no agregado) sin GROUP BY.
+    // MySQL lo tolera (d.pago_total es constante por grupo via el JOIN 1:1); PostgreSQL exige
+    // que sea funcionalmente dependiente o este envuelto en un agregado.
+    $pagoTotalExpr = DB_DRIVER === 'pgsql' ? 'MAX(d.pago_total)' : 'd.pago_total';
     $sql = "SELECT
         a._id orden,
         a.responsable,
@@ -650,7 +686,7 @@ ORDER BY ord._id DESC";
         $fechaFormat AS fecha,
         (
          SELECT
-         d.pago_total - SUM(c.abono) - SUM(c.descuento) + SUM(c.nota_credito) AS total_deuda
+         $pagoTotalExpr - SUM(c.abono) - SUM(c.descuento) + SUM(c.nota_credito) AS total_deuda
          FROM abonos c
          JOIN ordenes d ON c.id_orden = d._id
          WHERE c.id_orden = a._id
@@ -659,7 +695,7 @@ ORDER BY ord._id DESC";
         WHERE a.status != 'cancelada'
         AND (
          SELECT
-         d.pago_total - SUM(c.abono) - SUM(c.descuento) + SUM(c.nota_credito) AS total_deuda
+         $pagoTotalExpr - SUM(c.abono) - SUM(c.descuento) + SUM(c.nota_credito) AS total_deuda
          FROM abonos c
          JOIN ordenes d ON c.id_orden = d._id
          WHERE c.id_orden = a._id) > 0
