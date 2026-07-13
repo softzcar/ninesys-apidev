@@ -2971,7 +2971,16 @@ return function (App $app) {
                 ordenes_fila_orden ofo ON ofo.id_orden = a.id_orden
             GROUP BY
                 a.id_orden,
-                d.id_departamento
+                d.id_departamento,
+                c.status,
+                c.fecha_entrega,
+                dep.departamento,
+                dep.orden_proceso,
+                ad.fecha_inicio_agregada,
+                ad.fecha_terminado_agregada,
+                ad.numero_de_empleados,
+                ot.total_unidades,
+                ofo.orden_fila
 
             UNION ALL
 
