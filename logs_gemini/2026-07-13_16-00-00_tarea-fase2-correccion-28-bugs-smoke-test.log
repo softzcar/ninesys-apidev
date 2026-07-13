@@ -1,0 +1,62 @@
+- **Solicitud del Usuario:** Tras la Fase 1 (smoke test automatizado de 199 endpoints GET contra Postgres, empresa 194 dev), el usuario preguntó si se había cubierto el 100% de las consultas de la API. Se explicó honestamente que no, y que el método de grep tiene un techo estructural (varios bugs de esta sesión solo se detectaron ejecutando las consultas de verdad, no leyendo código). El usuario confirmó que la empresa 194 de desarrollo es un entorno de pruebas restaurable, autorizó pruebas agresivas, y pidió explícitamente un control granular por archivo/endpoint/consulta con estado persistente, para poder retomar el trabajo con precisión ante cortes eléctricos (recurrentes en su contexto) sin perder de vista qué se había verificado y qué solución se estaba aplicando en cada punto. Tras confirmar la lista de 28 endpoints con problemas reales, el usuario autorizó: "Sí, empieza a corregirlos uno por uno".
+- **Fecha y Hora:** 2026-07-13 16:00:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - logs_gemini/verificacion_postgres/checklist_endpoints.csv (checklist maestro creado en esta tarea)
+  - app/routes/assignments.php, catalogs.php, employees.php, finance.php, inventory.php, manufacturing.php, orders.php, production.php, products.php, tables.php
+  - app/lib/woome.php
+  - public/model/create_new_company_api_emp_N.sql, create_new_company_api_emp_N_postgres.sql
+  - Base de datos real: ALTER TABLE catalogo_telas ADD COLUMN eliminado (empresa 194 dev, Postgres)
+- **Commits Relacionados (todos en feature/postgresql-support):**
+  - `f4d7bdb` checklist maestro inicial (386 endpoints)
+  - `5452ecf` catalogs.php (2) + employees.php (1) + templates de esquema
+  - `65c2688` finance.php (2 reales de 5 candidatos)
+  - `64a23e0` inventory.php (4)
+  - `52672d2` + `321ef4e` + `ab9e0ee` manufacturing.php (4, en 3 iteraciones)
+  - `21f9722` + `8cd5b72` orders.php (1 endpoint, 7 bugs distintos, en 2 iteraciones)
+  - `743be66` + `1ef50c7` production.php (3, en 2 iteraciones)
+  - `5e1e80d` products.php (4) + woome.php (backticks)
+  - `0e47ab1` + `f4f44ef` tables.php (2, en 2 iteraciones)
+  - `b0d42fa` cierre de checklist tras reverificación completa de regresión
+- **Acción Realizada:**
+  Se construyó `logs_gemini/verificacion_postgres/checklist_endpoints.csv`: lista de los 386 endpoints reales (199 GET, 187 de escritura) con columnas id/archivo/método/ruta/línea/fase/estado/detalle/fecha, commiteado antes de empezar cualquier corrección para garantizar resumibilidad.
+
+  Se corrigieron los 28 endpoints GET con problemas reales detectados en la Fase 1, archivo por archivo, marcando cada fila `EN_PROGRESO` antes de investigar y `CORREGIDO`/`CODIGO_MUERTO_CANDIDATO`/otro estado inmediatamente después de verificar en vivo. Categorías de bugs encontradas y corregidas:
+
+  1. **`GROUP BY` estricto de PostgreSQL** (la categoría más común, ~15 ocurrencias): columnas no agregadas de tablas JOINed, subconsultas correlacionadas referenciando columnas no agrupadas, `SUM()`/`string_agg()` mezclados con columnas bare sin agrupar. Corregido agregando las columnas faltantes al `GROUP BY` (o envolviendo en `MAX()`/`MIN()` cuando el valor es constante por grupo, para preservar "una fila por grupo").
+  2. **Comparación de tipos incompatibles**: `sizes._id`/`products_sizes_eficiencia.id_size` (integer) comparados contra `ordenes_productos.talla` (varchar) sin cast — MySQL coerciona implícitamente, PostgreSQL no. Apareció repetido en catalogs.php, inventory.php y manufacturing.php (mismo patrón, código probablemente copiado entre archivos).
+  3. **`LIKE` sobre columna `timestamp` sin cast** (finance.php, patrón `moment LIKE 'fecha%'`).
+  4. **`TO_CHAR`/funciones de fecha sobre columnas `varchar`** que en realidad no son fechas reales (`ordenes.fecha_entrega` es varchar(45), no date).
+  5. **`SELECT DISTINCT ... ORDER BY x`** donde `x` no aparece en el SELECT list (regla específica de PostgreSQL).
+  6. **`UNION`/`UNION ALL` entre tipos `json` y `jsonb` incompatibles** (tables.php, único caso de esta categoría).
+  7. **Funciones JSON exclusivas de MySQL** sin ninguna rama `DB_DRIVER` (`JSON_EXTRACT`, `JSON_UNQUOTE`, `JSON_ARRAYAGG`, `JSON_OBJECT`) — reescrito con operadores `->`/`->>` y `jsonb_agg`/`jsonb_build_object`.
+  8. **Múltiples sentencias SQL concatenadas en un solo `goQuery()`** (`UPDATE...; SELECT...`) — PDO de PostgreSQL rechaza multi-statement en un prepared statement; MySQL lo tolera. Separado en dos llamadas.
+  9. **Backticks alrededor de alias/identificadores** en `app/lib/woome.php` (clase `WooMe`, funciones que en realidad son consultas SQL locales, no llamadas reales a WooCommerce): `getAllCategories()`, `getSizes()`, `updateProduct()`, `getCustomerByIdWP()`.
+  10. **Condición de `JOIN` truncada**: `AND r.id_empleado` sin operador de comparación (manufacturing.php) — bug de SQL incompleta preexistente, no específico de motor, pero PostgreSQL es más estricto verificando tipos booleanos en `AND`.
+  11. **Bug de indexación de PHP puro**: `$miEmpleado['id_empleado']` en vez de `$miEmpleado[0]['id_empleado']` (manufacturing.php) — `goQuery()` devuelve un array de filas, no una fila directa. No específico de motor.
+  12. **Columnas que nunca existieron en ningún motor** (deuda preexistente, no causada por esta migración): `ordenes.observaciones` (movida a tabla dedicada `ordenes_observaciones`, corregido apuntando a la tabla correcta), `inventario_movimientos_historial.moment` (nombre real: `fecha_modificacion`, corregido).
+  13. **Columna faltante en esquema Postgres pero presente en MySQL producción real**: `catalogo_telas.eliminado`. Se agregó con `ALTER TABLE` directamente en la BD real de la empresa 194 dev (autorizado explícitamente por el usuario, entorno de pruebas restaurable) y se actualizaron AMBOS templates maestros (`create_new_company_api_emp_N.sql` y `..._postgres.sql`) para que futuras empresas no repitan el gap.
+  14. **Código muerto con columnas inexistentes en ningún motor** (mismo patrón que hallazgos previos de esta sesión): `assignments.php GET /asignacion/empleados/{orden}` (columnas `dep_*` en `ordenes`) y `manufacturing.php GET /lotes/fisicos` (`lotes_fisicos.id_inventario`). Verificado cero uso real (0 hits estáticos en los 3 consumidores, 0 hits en logs de producción) — NO se "arreglaron" inventando columnas inexistentes; se marcaron como candidatos a eliminar, pendientes de autorización explícita del usuario (mismo criterio que los 19 ya eliminados en esta sesión).
+
+  Tras completar los 28, se ejecutó una **reverificación completa de regresión**: se resetearon a `PENDIENTE` los 199 endpoints GET y se volvió a correr el smoke test completo desde cero, confirmando que ningún cambio (especialmente los de `woome.php`, código compartido por múltiples endpoints) introdujo una regresión nueva. Resultado: 177 OK directos; el resto son casos ya clasificados (falsos positivos conocidos del script de prueba con parámro fecha inválido, WooCommerce discontinuado, script de migración de una sola vez, 2 candidatos a código muerto, y 3 rutas con 404 real no relacionado a PostgreSQL que requieren investigación aparte de middleware/sesión).
+- **Inconvenientes y Desafíos:**
+  - Varios endpoints tenían MÚLTIPLES bugs independientes en la misma consulta o en el mismo endpoint (hasta 7 bugs distintos en `orders.php GET /reportes/resumen/empleados/{id}/{id}`, repartidos en 4 sub-consultas), requiriendo varias rondas de fix→deploy→verificar→encontrar el siguiente error antes de dar por cerrado cada endpoint. Esto confirma que un solo pase de "arreglar el primer error reportado" no es suficiente — hay que iterar hasta 0 errores reales.
+  - El propio script de smoke test tenía una limitación: los parámetros de ruta `{inicio}`/`{fin}` no estaban en la lista de nombres reconocidos como fecha, generando varios falsos positivos (finance.php, reports.php) que requirieron verificación manual con fechas reales para descartar.
+  - Algunos endpoints GET tienen efectos secundarios reales (INSERT/UPDATE) — el smoke test, al ejecutarlos, modificó datos de prueba en la empresa 194 dev (esperado y aceptado por el usuario, quien confirmó que ese entorno es restaurable).
+- **Decisión Final y Justificación:**
+  - Para bugs universales (no específicos de motor: bug de indexación PHP, columnas renombradas/movidas, JOIN truncado), se aplicó el fix sin rama `DB_DRIVER`, ya que el bug afecta a ambos motores por igual.
+  - Para el hallazgo de `catalogo_telas.eliminado`, se decidió corregir la BD real en vez de solo el código, ya que es la única forma de que la columna exista de verdad — se actualizaron también los templates maestros para prevenir que el gap se repita en futuras empresas, cumpliendo la regla de "Garantía de Esquema" del proyecto.
+  - Para los 2 nuevos candidatos a código muerto encontrados, se aplicó el mismo criterio de verificación (grep estático + logs de producción) ya establecido y validado en esta sesión, sin inventar columnas o relecturas de esquema que no existen.
+  - Se documentó cada corrección en el checklist CSV con suficiente detalle técnico (qué se encontró, qué solución se aplicó, resultado de la verificación) para que, ante una interrupción, cualquier persona (o agente) pueda entender el estado exacto sin depender de esta conversación.
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Write`, `Bash` (`php -l`, `git commit`, `ssh` a ambos VPS, `psql` directo para verificar esquemas y probar queries antes de desplegar, `curl` para verificación en vivo, scripts Python para el checklist y el smoke test)
+- **Resultado:** Éxito
+- **Verificación:** Cada uno de los 28 endpoints se verificó en vivo tras cada despliegue (respuesta HTTP + escaneo recursivo de error embebido), con hasta 3 iteraciones de fix→deploy→verificar en los casos con múltiples bugs. Al cierre, se corrió una reverificación completa de regresión sobre los 199 endpoints GET (no solo los 28 tocados) para confirmar que no se introdujeron regresiones en código compartido.
+- **Logro Conseguido:** Se elevó la cobertura de verificación real (no solo "sin sintaxis MySQL conocida", sino "probado contra Postgres y confirmado sin error") de ~20 endpoints de control a los 199 GET completos de la API. Se estableció y documentó un método de trabajo (checklist CSV granular, commit inmediato tras cada cambio de estado) que permite retomar el trabajo con precisión ante interrupciones, atendiendo directamente la preocupación operativa del usuario sobre cortes eléctricos en tareas largas. Queda pendiente la Fase 2 (187 endpoints de escritura: POST/PUT/PATCH/DELETE), que requiere una metodología distinta dado el riesgo de mutar datos reales al probarlos a ciegas.
+- **Pendiente para la siguiente sesión:**
+  1. Fase 2: revisar los 187 endpoints de escritura, priorizados por uso real (cruce contra logs de acceso, mismo método ya usado para detectar código muerto).
+  2. Decidir con el usuario si eliminar los 2 nuevos candidatos a código muerto (`assignments.php /asignacion/empleados/{orden}`, `manufacturing.php /lotes/fisicos`).
+  3. Investigar aparte (fuera del alcance de compatibilidad SQL) los 3 endpoints con 404 real: `/refresh-session/{id}`, `/presupuesto/detalle/{id}`, `/reposicion/{id_reposicion}/departamentos-cola`.
+  4. Revisar el resto de backticks pendientes en `woome.php` (líneas 62, 87, 480-482, 636-717, 737-805, 1183-1194) cuando se llegue a los endpoints de escritura que los usan.
+  5. Actualizar `postgresql_endpoints_status.md` con el resumen de esta Fase 2.
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude Code).
+- **Respuesta de Gemini:** N/A.
