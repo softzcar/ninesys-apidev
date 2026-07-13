@@ -627,12 +627,24 @@ return function (App $app) {
     $id_catalogo = intval($miInsumo['insumo']);
 
     // Verificar si ya existe un registro con la misma combinación
-    $sql_check = 'SELECT _id FROM product_insumos_asignados 
-                  WHERE id_product = ? 
-                    AND id_departamento = ? 
-                    AND id_catalogo_insumos_productos = ? 
-                    AND (id_talla = ? OR (id_talla IS NULL AND ? IS NULL))';
-    $check_params = [$id_product, $id_departamento, $id_catalogo, $id_talla, $id_talla];
+    // Nota: se evita repetir el mismo placeholder en un "? IS NULL" ambiguo, porque
+    // PostgreSQL con prepared statements nativos no puede inferir su tipo ahi
+    // (SQLSTATE 42P18 "Indeterminate datatype") cuando $id_talla es NULL.
+    if ($id_talla === null) {
+      $sql_check = 'SELECT _id FROM product_insumos_asignados
+                    WHERE id_product = ?
+                      AND id_departamento = ?
+                      AND id_catalogo_insumos_productos = ?
+                      AND id_talla IS NULL';
+      $check_params = [$id_product, $id_departamento, $id_catalogo];
+    } else {
+      $sql_check = 'SELECT _id FROM product_insumos_asignados
+                    WHERE id_product = ?
+                      AND id_departamento = ?
+                      AND id_catalogo_insumos_productos = ?
+                      AND id_talla = ?';
+      $check_params = [$id_product, $id_departamento, $id_catalogo, $id_talla];
+    }
     $existing = $localConnection->goQuery($sql_check, $check_params);
 
     if (!empty($existing)) {
