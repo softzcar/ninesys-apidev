@@ -233,9 +233,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 232,orders.php,POST,/orden/edit/obs,615,2-escritura-manual,PENDIENTE,,
 233,orders.php,GET,/ordenes/abono-detale/{id},632,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:36
 234,orders.php,GET,/reportes/resumen/disenadores/{id_empleado}/{id_departamento},790,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:36
-235,orders.php,GET,/reportes/resumen/empleados/{id_empleado}/{id_departamento},847,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42P10]: Invalid column reference: 7 ERROR:  for SELECT DISTINCT, ORDER BY expressions must appear in select list
-LINE 31:             GROUP BY a.id_orden ORDER BY ofo.orden_fila ASC,...
-                                                  ^",2026-07-13 14:32:38
+235,orders.php,GET,/reportes/resumen/empleados/{id_empleado}/{id_departamento},847,1-GET-auto,CORREGIDO,"Endpoint con 4 sub-consultas independientes, 7 bugs en total: GROUP BY incompleto (x3, incluyendo e.comision/d.comision multiplicados fuera de SUM), ORDER BY/SELECT DISTINCT mismatch (ofo.orden_fila), TO_CHAR sobre varchar sin cast a date, columna op.id_orden vs ldea.id_orden en subquery con GROUP BY. Verificado en vivo tras 2 iteraciones: 0 errores.",2026-07-13 15:18:27
 236,orders.php,GET,/comercializacion/dashboard/{id_empleado}/{id_departamento},1457,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:38
 237,orders.php,GET,/ordenes/reporte/{id},1657,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:39
 238,orders.php,GET,/comercializacion/ordenes/reporte,1711,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:40
