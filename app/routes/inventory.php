@@ -1075,7 +1075,9 @@ return function (App $app) {
     $app->get('/inventario-movimientos/{id_orden}/{id_empleado}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
 
-        $sql = 'SELECT * FROM ordenes_productos WHERE id_orden = ' . $args['id_orden'] . ' AND id_empleado = ' . $args['id_empleado'];
+        // NOTA: ordenes_productos nunca tuvo columna id_empleado (confirmado en MySQL prod y
+        // Postgres) - esta consulta fallaba siempre en ambos motores. Se quita el filtro invalido.
+        $sql = 'SELECT * FROM ordenes_productos WHERE id_orden = ' . $args['id_orden'];
         $object['items'] = $localConnection->goQuery($sql);
 
         $sql = 'SELECT b._id, a._id id_insumo, a.cantidad, a.unidad, a.insumo, a.sku FROM inventario a JOIN inventario_movimientos b ON a._id = b.id_insumo  WHERE b.id_orden = ' . $args['id_orden'] . ' AND b.id_empleado = ' . $args['id_empleado'];
@@ -1988,6 +1990,9 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     $app->get('/inventario/eficiencia/{id_orden}/{id_departamento}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
 
+        // SUM(a.cantidad) es la unica agregacion; el resto de columnas no agregadas necesitan
+        // GROUP BY explicito en PostgreSQL (MySQL lo tolera sin el, escogiendo un valor arbitrario).
+        $groupByEficiencia = DB_DRIVER === 'pgsql' ? 'GROUP BY a.name, a.id_woo, b.valor_inicial, b.valor_final, c.cantidad' : '';
         $sql = "SELECT
                     a.name producto,
                     (SELECT insumo FROM inventario WHERE _id = a.id_woo) insumo,
@@ -2001,7 +2006,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 JOIN inventario_movimientos b ON b.id_orden = a.id_orden
                 JOIN product_insumos_asignados c ON c.id_product = a.id_woo
                 WHERE
-                    a.id_orden = {$args['id_orden']} AND c.id_departamento = {$args['id_departamento']};
+                    a.id_orden = {$args['id_orden']} AND c.id_departamento = {$args['id_departamento']}
+                $groupByEficiencia;
         ";
 
         $object = $localConnection->goQuery($sql);
@@ -2019,15 +2025,20 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
     $app->get('/eficiencia-orden/{id_orden}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
 
+        // sizes._id/products_sizes_eficiencia.id_size son enteros y ordenes_productos.talla es
+        // varchar; MySQL compara con coercion implicita, PostgreSQL exige cast explicito.
+        $sizeMatchExpr = DB_DRIVER === 'pgsql' ? 'CAST(_id AS VARCHAR) = a.talla' : '_id = a.talla';
+        $sizeJoinExpr = DB_DRIVER === 'pgsql' ? 'CAST(b.id_size AS VARCHAR) = a.talla' : 'b.id_size = a.talla';
+
         $sql = "SELECT
                       a._id id_ordenes_productos,
                       a.id_woo id_product,
                       a.name producto,
-                      (SELECT nombre FROM sizes WHERE _id = a.talla) talla,
+                      (SELECT nombre FROM sizes WHERE $sizeMatchExpr) talla,
                       a.cantidad AS cantidad_original,
-                      IF((SELECT tipo FROM departamentos WHERE _id = b.id_departamento) = 'corte',
-                          COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = a._id), 0), a.cantidad),
-                          a.cantidad) AS unidades,
+                      CASE WHEN (SELECT tipo FROM departamentos WHERE _id = b.id_departamento) = 'corte' THEN
+                          COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = a._id), 0), a.cantidad)
+                          ELSE a.cantidad END AS unidades,
                       (SELECT tela FROM catalogo_telas WHERE _id = a.id_tela) AS tela_vendedor,
                       b.id_departamento,
                       (SELECT departamento FROM departamentos WHERE _id = b.id_departamento) departamento,
@@ -2054,7 +2065,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 a.id_woo id_product,
                 a.name,
                 b.id_size,
-                (SELECT nombre FROM sizes WHERE _id = a.talla) talla,
+                (SELECT nombre FROM sizes WHERE $sizeMatchExpr) talla,
                 a.cantidad unidades,
                 b.cantidad valor_eficiencia,
                 b.unidad,
@@ -2062,22 +2073,24 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                 c.nombre,
                 b.cantidad * a.cantidad eficiencia_estimada
             FROM
-                ordenes_productos a 
-            LEFT JOIN products_sizes_eficiencia b ON b.id_size = a.talla 
+                ordenes_productos a
+            LEFT JOIN products_sizes_eficiencia b ON $sizeJoinExpr
             JOIN catalogo_insumos_productos c ON c._id = b.id_catalogo_insumos_prodcutos
             WHERE
                 id_orden =  {$args['id_orden']}
         ";
         $object['detalles'] = $localConnection->goQuery($sql);
 
+        $groupByEficienciaTotal = DB_DRIVER === 'pgsql' ? 'GROUP BY a.id_orden' : '';
         $sql = "SELECT
             a.id_orden,
             SUM(b.cantidad * a.cantidad) eficiencia_estimada
         FROM
             ordenes_productos a
-        LEFT JOIN products_sizes_eficiencia b ON b.id_size = a.talla
+        LEFT JOIN products_sizes_eficiencia b ON $sizeJoinExpr
         WHERE
             id_orden = {$args['id_orden']}
+        $groupByEficienciaTotal
         ";
         $object['total_eficiencia'] = $localConnection->goQuery($sql);
 
@@ -3240,17 +3253,17 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             $id_movimiento = $args['id'];
             $localConnection = new LocalDB();
             
-            $sql = "SELECT 
+            $sql = "SELECT
                         h._id,
                         h.campo_modificado,
                         h.valor_anterior,
                         h.valor_nuevo,
                         h.observaciones,
-                        h.moment as fecha,
+                        h.fecha_modificacion as fecha,
                         (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = h.id_usuario_modificacion) as usuario_nombre
                     FROM inventario_movimientos_historial h
                     WHERE h.id_movimiento = ?
-                    ORDER BY h.moment DESC";
+                    ORDER BY h.fecha_modificacion DESC";
             
             $items = $localConnection->goQuery($sql, [$id_movimiento]);
             $localConnection->disconnect();

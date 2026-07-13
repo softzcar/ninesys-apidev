@@ -117,14 +117,11 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 116,finance.php,GET,/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}],13,1-GET-auto,OK_FALSO_POSITIVO,"Mi script de prueba uso '1' como parametro inicio/fin (no reconocidos como fecha). Con fecha real (2026-07-01) el endpoint funciona correctamente, sin error embebido. No requiere cambios de codigo.",2026-07-13 14:52:35
 117,finance.php,GET,/cierre-de-caja/{id_vendedor},331,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:41
 118,finance.php,POST,/cierre-de-caja-vendedor,391,2-escritura-manual,PENDIENTE,,
-119,finance.php,GET,/reporte-de-caja/{inicio}/{fin}/{id_vendedor},426,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: timestamp without time zone ~~ unknown
-LINE 7:               WHERE moment LIKE '1%'  AND id_empleado = 1 AN...
-                                   ^
-HINT:  No operator matches the given name and arg",2026-07-13 14:31:42
+119,finance.php,GET,/reporte-de-caja/{inicio}/{fin}/{id_vendedor},426,1-GET-auto,CORREGIDO,moment::text LIKE en rama pgsql (7 subconsultas afectadas via $whereBase). Verificado en vivo con fecha real: 0 errores embebidos.,2026-07-13 14:53:50
 120,finance.php,POST,/retiro,522,2-escritura-manual,PENDIENTE,,
 121,finance.php,POST,/otro-abono,620,2-escritura-manual,PENDIENTE,,
 122,finance.php,GET,/retiros/{inicio}/{fin}/{id_empleado},740,1-GET-auto,OK_FALSO_POSITIVO,"Mismo problema de parametro de prueba que id 116. Con fecha real funciona correctamente, sin error embebido.",2026-07-13 14:52:35
-123,finance.php,GET,/pagos-ordenes/{fecha},818,1-GET-auto,EN_PROGRESO,mismo patron: moment LIKE sobre timestamp sin cast,2026-07-13 14:51:49
+123,finance.php,GET,/pagos-ordenes/{fecha},818,1-GET-auto,CORREGIDO,moment::text LIKE en rama pgsql. Verificado en vivo: 0 errores embebidos.,2026-07-13 14:53:50
 124,finance.php,GET,/balance-de-cierres/{inicio}/{fin}/{id_vendedor},833,1-GET-auto,OK_FALSO_POSITIVO,"Mismo problema de parametro de prueba que id 116. Con fecha real funciona correctamente, sin error embebido.",2026-07-13 14:52:35
 125,geografia.php,GET,/catalogo-paises,10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:45
 126,geografia.php,GET,/catalogo-estados/{id_pais},595,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:45
@@ -140,9 +137,7 @@ HINT:  No operator matches the given name and arg",2026-07-13 14:31:42
 136,inventory.php,POST,/insumos/nuevo,925,2-escritura-manual,PENDIENTE,,
 137,inventory.php,POST,/insumos/editar,1011,2-escritura-manual,PENDIENTE,,
 138,inventory.php,POST,/insumos/eliminar,1057,2-escritura-manual,PENDIENTE,,
-139,inventory.php,GET,/inventario-movimientos/{id_orden}/{id_empleado},1075,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column ""id_empleado"" does not exist
-LINE 1: ...T * FROM ordenes_productos WHERE id_orden = 1 AND id_emplead...
-                                                             ^",2026-07-13 14:31:53
+139,inventory.php,GET,/inventario-movimientos/{id_orden}/{id_empleado},1075,1-GET-auto,EN_PROGRESO,investigando: column id_empleado does not exist,2026-07-13 14:53:57
 140,inventory.php,GET,/inventario/historial/{id_orden},1093,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:54
 141,inventory.php,POST,/inventario-movimientos/nuevo,1108,2-escritura-manual,PENDIENTE,,
 142,inventory.php,POST,/inventario-movimientos/piezas-cortadas,1171,2-escritura-manual,PENDIENTE,,
@@ -155,13 +150,8 @@ LINE 1: ...T * FROM ordenes_productos WHERE id_orden = 1 AND id_emplead...
 149,inventory.php,GET,/insumos/reporte/insumos/producto/{id_producto},1762,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:56
 150,inventory.php,GET,/inventario/{departamento},1852,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:56
 151,inventory.php,GET,/inventario-tintas,1953,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:31:57
-152,inventory.php,GET,/inventario/eficiencia/{id_orden}/{id_departamento},1988,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42803]: Grouping error: 7 ERROR:  column ""a.name"" must appear in the GROUP BY clause or be used in an aggregate function
-LINE 2:                     a.name producto,
-                            ^",2026-07-13 14:31:58
-153,inventory.php,GET,/eficiencia-orden/{id_orden},2019,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: integer = character varying
-LINE 5: ...              (SELECT nombre FROM sizes WHERE _id = a.talla)...
-                                                             ^
-HINT:  No operator matches the ",2026-07-13 14:31:59
+152,inventory.php,GET,/inventario/eficiencia/{id_orden}/{id_departamento},1988,1-GET-auto,EN_PROGRESO,investigando: column a.name must appear in GROUP BY + posible sizes._id vs talla varchar,2026-07-13 14:55:15
+153,inventory.php,GET,/eficiencia-orden/{id_orden},2019,1-GET-auto,EN_PROGRESO,investigando: operator does not exist integer = character varying (sizes._id vs talla),2026-07-13 14:55:15
 154,inventory.php,POST,/empleados/eficiencia,2094,2-escritura-manual,PENDIENTE,,
 155,inventory.php,GET,/inventario/consumo/{id_insumo},2145,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:00
 156,inventory.php,PATCH,/inventario/consumo/{id_movimiento},2227,2-escritura-manual,PENDIENTE,,
@@ -172,9 +162,7 @@ HINT:  No operator matches the ",2026-07-13 14:31:59
 161,inventory.php,GET,/inventario/reportes/movimientos,2761,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:02
 162,inventory.php,GET,/inventario/reportes/general,2838,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:03
 163,inventory.php,GET,/inventario/reportes/graficos-consumo,3157,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:04
-164,inventory.php,GET,/inventario/movimientos/{id}/historial,3238,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column h.moment does not exist
-LINE 7:                         h.moment as fecha,
-                                ^",2026-07-13 14:32:04
+164,inventory.php,GET,/inventario/movimientos/{id}/historial,3238,1-GET-auto,EN_PROGRESO,investigando: column h.moment does not exist,2026-07-13 14:57:37
 165,inventory.php,GET,/api/inventario/carga-directa,3273,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:32:05
 166,inventory.php,POST,/api/inventario/carga-directa,3839,2-escritura-manual,PENDIENTE,,
 167,machine_services.php,GET,/servicios-maquinas,13,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:06
