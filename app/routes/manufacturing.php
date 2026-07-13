@@ -3249,8 +3249,8 @@ return function (App $app) {
             AND y.fecha_terminado IS NULL -- Excluir tareas terminadas
         ORDER BY
             ofo.orden_fila ASC,
-            y.id_orden DESC,
-            y.progreso ASC; -- El orden del progreso ahora se basa en 'y'
+            a.id_orden DESC,
+            y.progreso ASC; -- El orden del progreso ahora se basa en 'y'; a.id_orden = y.id_orden (mismo join) y si esta en el SELECT (requerido por PostgreSQL en SELECT DISTINCT)
         ";
 
     $object['sql_ordenes'] = $sql;
@@ -3341,7 +3341,7 @@ return function (App $app) {
               AND ch.id_orden = a.id_orden 
               AND ch.id_departamento = b.id_departamento 
               AND ch.id_lotes_detalles_empleados_asigandos = b._id
-            LEFT JOIN reposiciones r ON r.id_ordenes_productos = a._id AND r.id_empleado
+            LEFT JOIN reposiciones r ON r.id_ordenes_productos = a._id AND r.id_empleado = b.id_empleado
             WHERE b.id_empleado = {$args['id_empleado']} AND b.id_departamento = {$args['id_departamento']} AND p.fisico > 0
             GROUP BY a._id
         ";
