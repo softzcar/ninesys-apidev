@@ -282,9 +282,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 281,production.php,GET,/sse/produccion/check-version,173,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:53
 282,production.php,GET,/sse/produccion,198,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:32:54
 283,production.php,GET,/sse/produccion/corte/{id_empleado},666,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:33:01
-284,production.php,GET,/sse/diseno/{id_empleado},709,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42803]: Grouping error: 7 ERROR:  column ""a.id_orden"" must appear in the GROUP BY clause or be used in an aggregate function
-LINE 3:                     a.id_orden id,
-                            ^",2026-07-13 14:33:01
+284,production.php,GET,/sse/diseno/{id_empleado},709,1-GET-auto,CORREGIDO,"GROUP BY c._id insuficiente (faltaban 9 columnas de tablas JOINed disenos/ordenes, incluyendo una en subquery correlacionada). Verificado en vivo tras 2 iteraciones: 0 errores.",2026-07-13 15:26:12
 285,production.php,GET,/sse/disenos-todo,796,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 14:33:08
 286,production.php,GET,/lotes/paso-actual/{id_orden},829,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:09
 287,production.php,GET,/reposiciones/{id_ordenes_productos}/{id_orden},854,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:10
@@ -298,19 +296,11 @@ LINE 3:                     a.id_orden id,
 295,production.php,POST,/produccion/terminar/{id},1599,2-escritura-manual,PENDIENTE,,
 296,production.php,POST,/produccion/asignar-varias-ordenes-a-corte,1655,2-escritura-manual,PENDIENTE,,
 297,production.php,POST,/produccion/update/paso,1708,2-escritura-manual,PENDIENTE,,
-298,production.php,GET,/produccion/progressbar/{id_orden},1740,1-GET-auto,FALLO_HTTP_500,"HTTP 500: {
-    ""statusCode"": 500,
-    ""error"": {
-        ""type"": ""SERVER_ERROR"",
-        ""description"": ""An internal error has occurred while processing your request.""
-    }
-}",2026-07-13 14:33:13
+298,production.php,GET,/produccion/progressbar/{id_orden},1740,1-GET-auto,CORREGIDO,"Causa raiz real: GROUP BY incompleto generaba error embebido que el foreach recorria como filas, causando el TypeError reportado. Corregido con MIN/MAX() para preservar una fila por departamento. Verificado en vivo: 0 errores.",2026-07-13 15:26:12
 299,production.php,GET,/lotes/detalles/v2/{id},1827,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:13
 300,production.php,GET,/produccion/verificar-asignacion-empleado/{departamento}/{id_orden}/{id_ordenes_productos},1851,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:14
 301,production.php,GET,/lotes/detalles/{id},1885,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:15
-302,production.php,GET,/ordenes/detalles/{id},1917,1-GET-auto,ERROR_ENCONTRADO,"Error al ejecutar la consulta: SQLSTATE[42703]: Undefined column: 7 ERROR:  column ""observaciones"" does not exist
-LINE 1: SELECT observaciones FROM ordenes WHERE _id = 1
-               ^",2026-07-13 14:33:16
+302,production.php,GET,/ordenes/detalles/{id},1917,1-GET-auto,CORREGIDO,"ordenes.observaciones no existe en ningun motor (nunca existio); se movio a tabla ordenes_observaciones (1 fila por orden, patron ya usado en orders.php). Bug universal preexistente. Verificado en vivo: 0 errores.",2026-07-13 15:26:12
 303,production.php,GET,/ordenes/vinculadas/{id_orden_father},1934,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:17
 304,production.php,GET,/produccion/dashboard-stats,1956,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 14:33:17
 305,production.php,POST,/production/corte/ajuste,2090,2-escritura-manual,PENDIENTE,,
