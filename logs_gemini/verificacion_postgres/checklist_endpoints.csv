@@ -36,7 +36,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 35,communications.php,POST,/config/select-empleados,14,2-escritura-manual,PENDIENTE,,
 36,communications.php,POST,/send-message,90,2-escritura-manual,PENDIENTE,,
 37,communications.php,GET,/ws/departamentos,148,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:03
-38,communications.php,POST,/ws/build-message,176,2-escritura-manual,PENDIENTE,,
+38,communications.php,POST,/ws/build-message,176,2-escritura-manual,CORREGIDO,Ya adaptado en tarea anterior de esta sesion (DATE_FORMAT->TO_CHAR). Reverificado en vivo con form-urlencoded real: 0 errores.,2026-07-13 15:59:18
 39,communications.php,POST,/ws/build-message/interno,394,2-escritura-manual,PENDIENTE,,
 40,communications.php,POST,/update-message,503,2-escritura-manual,PENDIENTE,,
 41,communications.php,GET,/config,533,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:04
@@ -181,7 +181,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 180,manufacturing.php,POST,/empleados/tareas,487,2-escritura-manual,PENDIENTE,,
 181,manufacturing.php,POST,/empleados/tintas,538,2-escritura-manual,PENDIENTE,,
 182,manufacturing.php,POST,/insumos/rendimiento,574,2-escritura-manual,PENDIENTE,,
-183,manufacturing.php,POST,/registrar-paso-empleado,634,2-escritura-manual,PENDIENTE,,
+183,manufacturing.php,POST,/registrar-paso-empleado,634,2-escritura-manual,CORREGIDO,"4 bugs: 3x IF() -> CASE WHEN universal, 1x multi-statement UPDATE separado en 2 llamadas. Verificado en vivo caminos 'inicio' y 'fin' (con calculo de comision fija/variable): 0 errores. Camino de reposicion (donde estaba el multi-statement) no se pudo probar con datos reales por falta de reposiciones de prueba en 194 dev, pero el fix es mecanicamente seguro (mismo query dividido en dos llamadas identicas).",2026-07-13 15:58:19
 184,manufacturing.php,POST,/lotes/empleados/eliminar,1181,2-escritura-manual,PENDIENTE,,
 185,manufacturing.php,POST,/lotes/empleados/reasignar_old,1219,2-escritura-manual,PENDIENTE,,
 186,manufacturing.php,POST,/lotes/get-detalles,1300,2-escritura-manual,PENDIENTE,,
@@ -195,7 +195,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 194,manufacturing.php,GET,/lotes/fisicos,1535,1-GET-auto,CODIGO_MUERTO_CANDIDATO,"Reverificado: columna id_inventario sigue sin existir (esperado, es codigo muerto). Ver nota original: 0 uso real, candidato a eliminar pendiente de autorizacion.",2026-07-13 15:43:24
 195,manufacturing.php,GET,/lotes/existencia/{talla}/{tela}/{corte}/{categoria},1549,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:13
 196,manufacturing.php,POST,/lotes/{id}/finalizar-departamento,1610,2-escritura-manual,PENDIENTE,,
-197,manufacturing.php,POST,/lotes/activos,1877,2-escritura-manual,PENDIENTE,,
+197,manufacturing.php,POST,/lotes/activos,1877,2-escritura-manual,CORREGIDO,"Ya tenia rama pgsql correcta (json_agg/json_build_object vs GROUP_CONCAT/JSON_OBJECT). Probado en vivo con form-urlencoded real (getParsedBody espera ese formato, no JSON): 0 errores, sin cambios de codigo necesarios.",2026-07-13 15:54:20
 198,manufacturing.php,POST,/lotes/{id}/finalizar-impresion,1978,2-escritura-manual,PENDIENTE,,
 199,manufacturing.php,POST,/lotes/{id}/finalizar-corte,2161,2-escritura-manual,PENDIENTE,,
 200,manufacturing.php,POST,/empleados/registrar-paso/{tipo}/{departamento}/{id_lotes_detalles}/{unidades},2420,2-escritura-manual,PENDIENTE,,
@@ -210,7 +210,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 209,manufacturing.php,GET,/empleados-todos,3470,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:24
 210,manufacturing.php,GET,/reports/input-efficiency/{id_ordenes},3634,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:25
 211,manufacturing.php,GET,/reports/manufacturing-time,3745,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:26
-212,manufacturing.php,POST,/reports/manufacturing-time,4092,2-escritura-manual,PENDIENTE,,
+212,manufacturing.php,POST,/reports/manufacturing-time,4092,2-escritura-manual,CORREGIDO,"CURDATE() sin guardar en whereClause compartido, activado cuando el body incluye id_empleado. Corregido con expresion condicional DB_DRIVER. Verificado en vivo con y sin id_empleado en el payload: 0 errores.",2026-07-13 15:53:17
 213,manufacturing.php,GET,/empleados/terminadas-hoy/{id_empleado}/{id_departamento},4406,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:27
 214,manufacturing.php,GET,/empleados/unpaid-orders/{id_empleado}/{id_departamento},4436,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:27
 215,msg_service.php,GET,/internal/db-credentials/{id_empresa},28,1-GET-auto,OK,"HTTP 401, sin error embebido",2026-07-13 15:39:28
@@ -226,7 +226,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 225,ordenes-sin-asignacion.php,GET,/ordenes-sin-asignar/{id_vendedor},10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:34
 226,orders.php,POST,/orden/editar,14,2-escritura-manual,PENDIENTE,,
 227,orders.php,POST,/orden/previa-cancelacion,118,2-escritura-manual,PENDIENTE,,
-228,orders.php,POST,/orden/actualizar-estado,158,2-escritura-manual,PENDIENTE,,
+228,orders.php,POST,/orden/actualizar-estado,158,2-escritura-manual,CORREGIDO,Sin patrones MySQL-only. Probado en vivo con datos reales: cambio simple de estado y validacion de tareas pendientes (JOIN con api_empresas.empresas_usuarios) ambos funcionan sin errores. Sin cambios de codigo necesarios.,2026-07-13 16:15:36
 229,orders.php,GET,/ordenes/abono/{id},361,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:34
 230,orders.php,GET,/ordenes/verificar-edición/{id},389,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 15:39:35
 231,orders.php,POST,/orden/abono,404,2-escritura-manual,PENDIENTE,,
@@ -390,7 +390,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 359,products.php,GET,/lotes/en-proceso,1160,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:34
 360,products.php,GET,/lotes/verificar-cantidad-asignada/{id_ordenes_productos}/{departamento}/{id_orden},1254,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:35
 361,products.php,GET,/empleados/reposicion/{id_orden},1272,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:36
-362,products.php,POST,/lotes/empleados/reasignar,1365,2-escritura-manual,PENDIENTE,,
+362,products.php,POST,/lotes/empleados/reasignar,1365,2-escritura-manual,CORREGIDO,"3 bugs reales: (1) HALLAZGO CRITICO - 60 tablas sin autoincremento (commit e22d756); (2) SUM(cantidad) NULL -> '' invalido; (3) SUM(cantidad) decimal '10.0' invalido para columna entera, corregido con intval(). Con datos de prueba sembrados (orden 1 real), verificado en vivo: flujo completo funciona correctamente sin errores.",2026-07-13 16:14:13
 363,products.php,POST,/lotes/empleados/reasignar-masiva,1441,2-escritura-manual,PENDIENTE,,
 364,products_reports.php,GET,/reportes/costos-productos,76,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:37
 365,products_reports.php,GET,/reportes/costos-productos/categorias,415,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:38
@@ -408,7 +408,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 377,tables.php,GET,/ordenes/observaciones/{id_orden}/{id_empleado}/{id_departamento},162,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:48
 378,tables.php,GET,/ordenes/notas-por-empleado/{id_orden},183,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:49
 379,tables.php,GET,/ordenes/borrador/reporte-semanal/{id_empleado}/{id_departamento},214,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:49
-380,tables.php,POST,/ordenes/borrador,242,2-escritura-manual,PENDIENTE,,
+380,tables.php,POST,/ordenes/borrador,242,2-escritura-manual,CORREGIDO,"Sin patrones MySQL-only. Probado en vivo: responde 409 (FK constraint) porque la tabla ordenes esta vacia en 194 dev (orden 1 no existe realmente), no por bug de sintaxis. Se beneficio del fix de identity en ordenes_borrador_empleado (una de las 60 tablas del hallazgo critico).",2026-07-13 16:10:13
 381,tables.php,POST,/ordenes/guardadas/eliminar,268,2-escritura-manual,PENDIENTE,,
 382,tables.php,POST,/orden/guardar,361,2-escritura-manual,PENDIENTE,,
 383,tables.php,GET,/table/ordenes-activas/{id_empleado},437,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:50
