@@ -138,22 +138,6 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // ACTUALIZAR PRECIOS DE PRODUCTOS (VAMOS A RECIBIR UN ARREGLO DE PRECIOS)
-  $app->post('/products-update-price', function (Request $request, Response $response, array $args) {
-    $data = $request->getParsedBody();
-    $localConnection = new LocalDB();
-
-    $sql = 'INSERT INTO `products_prices`(`id_product`, `price`, `descripcion`) VALUES (' . $data['id_product'] . ',' . $data['price'] . ",'" . $data['descripcion'] . "')";
-    $object['request'] = $localConnection->goQuery($sql);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   // Crear un nuevo producto
   $app->post('/products/{name}/{sku}/{price}/{stock_quantity}/{categories}/{sizes}', function (Request $request, Response $response, array $args) {
     $woo = new WooMe();

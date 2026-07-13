@@ -877,16 +877,6 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  $app->get('/ws-connect/{id_empresa}', function (Request $request, Response $response, array $args) {
-    $msgApi = new WhatsAppAPIClient(WS_API_URL . 'session-info/' . $args['id_empresa']);
-    $testResp = $msgApi->getWSSeesionInfo($args['id_empresa']);
-
-    $response->getBody()->write(json_encode($testResp, JSON_NUMERIC_CHECK));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   $app->get('/migracion/nineteencustom', function (Request $request, Response $response, array $args) {
     // Array para almacenar el reporte final de la ejecución 510530.Dev@Admin
     $log_report = [];
@@ -1001,38 +991,6 @@ return function (App $app) {
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus($status_code);
-  });
-
-  $app->get('/prueba-formato-mensaje/{id_orden}', function (Request $request, Response $response, array $args) {
-    // Obtener la respuesta con los datos de la orden
-    // $res = obtenerRespuestaBuscar($args['id_orden']);
-
-    /* $localConnection = new LocalDB();
-    $sql = 'SELECT * FROM ordenes_productos WHERE id_orden = ' . $args['id_orden'];
-    $data = $localConnection->goQuery($sql); */
-
-    $id_orden = $args['id_orden'];
-    $data = obtenerRespuestaBuscar($args['id_orden']);
-
-    // $localConnection->disconnect();
-
-    $msgApi = new WhatsAppAPIClient(WS_API_URL . 'send-message/' . $args['id_orden']);
-    $testResp = $msgApi->sendMessage(ID_EMPRESA, $args['id_orden'], 'welcome', $data);
-
-    /*  $datos['phone'] = '584147307169';
-     $datos['template'] = 'welcome';
-     $datos['name'] = 'Roxana';
-     $datos['message'] = 'Mensaje desde la api principal ahora de nuevo';
-     $datos['id_cliente'] = '123';
-     $datos['object'] = $res; */
-
-    // $response->getBody()->write(json_encode($testResp, JSON_NUMERIC_CHECK));
-    // $response->getBody()->write($testResp);
-    // return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-    $response->getBody()->write(json_encode($testResp, JSON_NUMERIC_CHECK));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
   });
 
   $app->delete('/disenos/images/{id_orden}/{image_name}', function (Request $request, Response $response, array $args) {

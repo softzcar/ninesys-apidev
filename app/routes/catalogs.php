@@ -540,59 +540,6 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  /** OBTENER TOTAL DE TIEMPOS DE PRODUCCIÓN */
-  $app->get('/tiempos-de-produccion-total', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB();
-    $sql = 'SELECT
-            a._id id_product,
-            a.product,
-            SUM(b.tiempo) total_tiempo,
-            CONCAT(
-                "[",
-                GROUP_CONCAT(
-                    JSON_OBJECT(
-                        "id_departamento",
-                        c._id,
-                        "departamento",
-                        c.departamento,
-                        "tiempo",
-                        b.tiempo,
-                        "usa_desperdicio",
-                        b.usa_desperdicio
-                    )
-                ),
-                "]"
-            ) AS departamentos
-        FROM
-            products a
-        JOIN products_tiempos_de_produccion b ON
-            b.id_product = a._id
-        LEFT JOIN departamentos c ON
-            c._id = b.id_departamento
-        GROUP BY
-            a._id
-        ORDER BY a.product ASC
-        ';
-    $products = $localConnection->goQuery($sql);
-    $localConnection->disconnect();
-
-    // PARSEAR RESULTADOS
-    $key = 0;
-    foreach ($products as $product) {
-      $data[$key]['id_product'] = intval($product['id_product']);
-      $data[$key]['product'] = $product['product'];
-      $data[$key]['total_tiempo'] = $product['total_tiempo'];
-      $data[$key]['tiempo_por_departamentos'] = json_decode($product['departamentos']);
-
-      $key++;
-    }
-
-    $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   /** NUEVO TIEMPO DE PRODUCCION */
   $app->post('/tiempos-de-produccion', function (Request $request, Response $response) {
     $miTiempo = $request->getParsedBody();

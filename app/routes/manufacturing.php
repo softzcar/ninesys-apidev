@@ -2793,57 +2793,6 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // OBTNERE DATOS DE RENDIMIENTOS (TIEMPOS E INSUMOS)
-  $app->get('/rendimiento-empleado/{id_orden}/{id_departamento}/{id_empleado}', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB();
-
-    if (DB_DRIVER === 'pgsql') {
-      $sql = "SELECT DISTINCT
-                  a._id id_lote_Detalles,
-                  a.id_orden,
-                  a.fecha_inicio,
-                  a.fecha_terminado,
-                  EXTRACT(EPOCH FROM (a.fecha_terminado - a.fecha_inicio)) AS tiempo_empleado,
-                  c.tiempo tiempo_estimado_de_produccion,
-                  (EXTRACT(EPOCH FROM (a.fecha_terminado - a.fecha_inicio)) - c.tiempo) rendimiento,
-                  b.id_woo id_producto,
-                  b.talla
-              FROM
-                  lotes_detalles_empleados_asignados a
-              JOIN ordenes_productos b ON b.id_orden = a.id_orden
-              JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
-              WHERE a.id_orden = {$args['id_orden']} AND a.id_empleado = {$args['id_empleado']}
-          ";
-    } else {
-      $sql = "SELECT DISTINCT
-                  a._id id_lote_Detalles,
-                  a.id_orden,
-                  a.fecha_inicio,
-                  a.fecha_terminado,
-                  TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) AS tiempo_empleado,
-                  c.tiempo tiempo_estimado_de_produccion,
-                  (TIMESTAMPDIFF(SECOND, fecha_inicio, fecha_terminado) - c.tiempo) rendimiento,
-                  b.id_woo id_producto,
-                  b.talla
-              FROM
-                  lotes_detalles_empleados_asignados a
-              JOIN ordenes_productos b ON b.id_orden = a.id_orden
-              JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
-              WHERE a.id_orden = {$args['id_orden']} AND a.id_empleado = {$args['id_empleado']}
-          ";
-    }
-
-    $rspRendimientoTiempo = $localConnection->goQuery($sql);
-    $object['rendimiento'] = $rspRendimientoTiempo;
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   // Registrar acciones de pausas
   $app->post('/pausas', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
@@ -3643,57 +3592,6 @@ return function (App $app) {
 
 
 
-  $app->get('/calculo-pago-real/{dias}', function (Request $request, Response $response, array $args) {
-    if (!isset($args['dias'])) {
-      $data['dias'] = $args['dias'];
-    } else {
-      $db = new LocalDB();
-
-      $sql = "SELECT 
-            AVG(tasa) as promedio_tasa
-          FROM metodos_de_pago
-          WHERE
-              moneda = 'Bolívares'
-              AND metodo_pago IN ('Pagomovil', 'Transferencia')
-              AND DATE(moment) = CURDATE()";
-
-      $resp = $db->goQuery($sql);
-
-      $precio_hora = 2.5;
-      $horas_por_dia = 8;
-      $porcentaje_ajuste = 20;
-
-      $ht = floatval($args['dias']) * $horas_por_dia;
-      $data['horas_trabajadas'] = $ht;
-
-      $data['dolares'] = $ht * $precio_hora;
-
-      $data['porcentaje_ajuste'] = $porcentaje_ajuste;
-
-      $tasa = floatval($resp[0]['promedio_tasa']);
-      $data['tasa_promedio'] = number_format($tasa, 2, '.', '');
-
-      $tasa_ajustada = ($tasa) * $porcentaje_ajuste / 100;
-
-      $ajuste = number_format($tasa_ajustada, 2, '.', '');
-
-      $data['monto_ajuste'] = number_format($tasa_ajustada, 2, '.', '');
-
-      $data['tasa_ajustada'] = number_format(($ajuste + $tasa), 2, '.', '');
-
-      // $total_pago = ($tasa * $ht) + (($tasa* $ht) * $porcentaje_ajuste / 100);
-      $total_pago = $data['dolares'] * $data['tasa_ajustada'];
-
-      // $data["bolivares_con descuento"] = number_format(($data['dolares'] * $data["tasa_promedio"]), 2, '.', '');
-      $data['bolivares_real'] = number_format($total_pago, 2, '.', '');
-
-      $db->disconnect();
-    }
-
-    $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
-    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-  });
-
   // POST /categories - Crear nueva categoría
   /* $app->post('/categories', function (Request $request, Response $response) {
       try {
@@ -3726,39 +3624,6 @@ return function (App $app) {
               return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
           }
     }); */
-
-  // --- DEBUG ENDPOINT ---
-  $app->get('/debug-efficiency', function (Request $request, Response $response) {
-    $localConnection = new LocalDB();
-    $params = $request->getQueryParams();
-    $id_orden = isset($params['id_orden']) ? intval($params['id_orden']) : 1;
-    $id_empleado = isset($params['id_empleado']) ? intval($params['id_empleado']) : 479;
-
-    $debugData = [];
-
-    // 1. Check Assignments
-    $sql = "SELECT * FROM lotes_detalles_empleados_asignados WHERE id_orden = $id_orden AND id_empleado = $id_empleado";
-    $debugData['assignments'] = $localConnection->goQuery($sql);
-
-    // 2. Check Departments linked to these assignments
-    $sql = "SELECT DISTINCT id_departamento FROM lotes_detalles_empleados_asignados WHERE id_orden = $id_orden AND id_empleado = $id_empleado";
-    $debugData['assigned_departments'] = $localConnection->goQuery($sql);
-
-    // 3. Check Standards for this order's products
-    $sql = "SELECT ptp.*, op.name as product_name 
-              FROM products_tiempos_de_produccion ptp
-              JOIN ordenes_productos op ON op.id_woo = ptp.id_product
-              WHERE op.id_orden = $id_orden";
-    $debugData['standards'] = $localConnection->goQuery($sql);
-
-    // 4. Check Lotes Detalles
-    $sql = "SELECT * FROM lotes_detalles WHERE id_ordenes_productos IN (SELECT _id FROM ordenes_productos WHERE id_orden = $id_orden)";
-    $debugData['lotes_detalles'] = $localConnection->goQuery($sql);
-
-    $localConnection->disconnect();
-    $response->getBody()->write(json_encode($debugData));
-    return $response->withHeader('Content-Type', 'application/json');
-  });
 
   // --- NUEVO ENDPOINT: Eficiencia de Insumos (Bulk & Cost-based) ---
   $app->get('/reports/input-efficiency/{id_ordenes}', function (Request $request, Response $response, array $args) {

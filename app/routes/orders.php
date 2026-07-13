@@ -385,18 +385,6 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // PASARELAS DE PAGO
-  $app->get('/metodos-de-pago', function (Request $request, Response $response, array $args) {
-    $woo = new WooMe();
-    $object['data'] = $woo->getPG();
-
-    $response->getBody()->write(json_encode($object));
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   // VERIFICAR SI LA ORDEN SE PUEDE EDITAR DESDE COMERCIALIZACION
   $app->get('/ordenes/verificar-edición/{id}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
@@ -1662,6 +1650,7 @@ return function (App $app) {
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
   });
+  */
 
   // BUSCAR ORDEN POR ID
 
@@ -1739,88 +1728,6 @@ return function (App $app) {
 
 
 
-
-  /*$app->get('/buscar_old/{id}[/{email}]', function (Request $request, Response $response, array $args) {
-        $localConnection = new LocalDB();
-        $id = $args["id"];
-        $object = array();
-
-//  Verificar existencia de la orden
-        $sql = "SELECT _id FROM ordenes WHERE _id=" . $id;
-        $resp = $localConnection->goQuery($sql);
-
-        if (!$resp) {
-            $object = $resp;
-            } else {
-// Buscar datos del cliente en Woocommerce ...
-                $sql = "SELECT id_wp FROM ordenes WHERE _id  = " . $id;
-                $id_wp = $localConnection->goQuery($sql);
-                $id_customer = $id_wp[0]["id_wp"];
-
-                $object["id_customer"] = $id_customer;
-
-                $woo = new WooMe();
-// Buscar datos del cliente
-// $object["customer"][0] = $woo->getCustomerById($id_customer);
-                $data = $woo->getCustomerById($id_customer);
-                $customer = json_decode(json_encode($data), true);
-
-                $object["customer"]["nombre"] = $customer["first_name"] . " " . $customer["last_name"];
-                $object["customer"]["direccion"] = $customer["billing"]["address_1"];
-                $object["customer"]["email"] = $customer["billing"]["email"];
-                $object["customer"]["cedula"] = $customer["billing"]["postcode"];
-                $object["customer"]["telefono"] = $customer["billing"]["phone"];
-
-// Buscar datos de la orden
-                $sql = "SELECT a._id, a.status, a.cliente_nombre, a.cliente_cedula, a.fecha_inicio, a.fecha_entrega, a.observaciones, a.pago_total, a.pago_abono, a.pago_descuento FROM ordenes a  WHERE _id =  " . $id;
-                $object["orden"] = $localConnection->goQuery($sql);
-
-// Buscar datos del diseño
-                $sql = "SELECT tipo FROM disenos WHERE id_orden =  " . $id;
-                $object['diseno'] = $localConnection->goQuery($sql);
-                if (empty($object['diseno'])) {
-                    $object['diseno'][]['tipo'] = "Ninguno";
-                }
-
-// Buscar datos de productos
-                $sql = "SELECT _id, name, id_woo cod, cantidad, talla, tela, corte, precio_unitario precio FROM ordenes_productos WHERE id_orden = " . $id;
-                $object['productos'] = $localConnection->goQuery($sql);
-
-// Crear estructura del email de bienvenida:
-                if (isset($args['email'])) {
-                    $emailCliente = new EmailClienteBienvenida($object);
-                    $email = $emailCliente->obtenerContenido();
-                    $object = $email;
-// $object = json_encode($email);
-                    $contentType = 'text/html';
-                    } else {
-                        $object = json_encode($object);
-                        $contentType = 'application/json';
-                    }
-                }
-
-                $localConnection->disconnect();
-
-                $response->getBody()->write(json_encode($object));
-                return $response
-                ->withHeader('Content-Type', $contentType)
-                ->withStatus(200);
-            });*/
-
-  $app->get('/ruta2', function (Request $request, Response $response, array $args) {
-    // Llamamos a la función que encapsula la lógica de /buscar
-    $resultBuscar = obtenerRespuestaBuscar(303, 'true');
-
-    // Modificamos la respuesta si es necesario
-    /* $resultBuscar['object'] = json_decode($resultBuscar['object'], true);
-        $resultBuscar['object']['modificado_en_ruta2'] = true;
-        $resultBuscar['object'] = json_encode($resultBuscar['object']); */
-
-    $response->getBody()->write($resultBuscar['object']);
-    return $response
-      ->withHeader('Content-Type', $resultBuscar['contentType'])
-      ->withStatus(200);
-  });
 
   // ORDENES ACTIVAS, TERMINADAS Y PAUSADAS
   $app->get('/comercializacion/ordenes/reporte', function (Request $request, Response $response, array $args) {
