@@ -1379,7 +1379,12 @@ return function (App $app) {
 
     // CALCULAR CANTIDAD DE UNIDADES SOLICITADAS
     $sql = "SELECT SUM(cantidad) total_cantidad FROM ordenes_productos WHERE id_orden = {$miEmpleado['id_orden']}";
-    $total_cantidad = $localConnection->goQuery($sql)[0]['total_cantidad'];
+    $total_cantidad = $localConnection->goQuery($sql)[0]['total_cantidad'] ?? 0;
+    // Si la orden no tiene productos, SUM() devuelve NULL. MySQL coerciona '' a 0 en una
+    // columna entera; PostgreSQL lo rechaza ("invalid input syntax for type integer").
+    if ($total_cantidad === null) {
+      $total_cantidad = 0;
+    }
 
     $values = "id_departamento ='" . $miEmpleado['id_departamento'] . "',";
     $values .= "departamento ='" . $nombreDepartamento . "',";
