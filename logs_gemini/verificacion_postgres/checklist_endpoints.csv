@@ -26,7 +26,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 25,catalogs.php,POST,/telas,381,2-escritura-manual,PENDIENTE,,
 26,catalogs.php,POST,/telas/{_id}/{tela},405,2-escritura-manual,CORREGIDO,"BUG encontrado y corregido: UPDATE catalogo_telas + SELECT * concatenados en una sola sentencia multi-statement, invalido en PDO PostgreSQL. Corregido separando en dos goQuery() independientes. Probado en vivo end-to-end contra 194 dev: POST /telas/1/Tela%20Actualizada -> tela actualizada correctamente y listado devuelto sin errores. Commit 4fff675.",2026-07-13 16:57:46
 27,catalogs.php,POST,/telas/eliminar,421,2-escritura-manual,PENDIENTE,,
-28,catalogs.php,DELETE,/insumos-productos-asignados/{id_insumo},438,2-escritura-manual,EN_PROGRESO,Investigando DELETE /insumos-productos-asignados/{id_insumo},2026-07-13 17:04:48
+28,catalogs.php,DELETE,/insumos-productos-asignados/{id_insumo},438,2-escritura-manual,OK,"Sin patrones MySQL-only, DELETE simple. Probado en vivo end-to-end contra 194 dev con fila de prueba desechable (_id=29) -> eliminada correctamente, verificado en BD.",2026-07-13 17:05:30
 29,catalogs.php,GET,/insumos-productos/{id_orden}/{id_departamento},452,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:00
 30,catalogs.php,GET,/insumos-productos-asignados,493,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:01
 31,catalogs.php,GET,/tiempos-de-produccion,526,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:02
