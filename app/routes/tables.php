@@ -110,7 +110,7 @@ return function (App $app) {
                        p.responsable as id_empleado,
                        u.nombre as empleado,
                        p.observaciones,
-                       (SELECT json_agg(json_build_object('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'corte', pp.corte, 'atributo', pa.attribute_name))
+                       (SELECT jsonb_agg(jsonb_build_object('name', pp.name, 'cantidad', pp.cantidad, 'talla', s.nombre, 'tela', pp.tela, 'corte', pp.corte, 'atributo', pa.attribute_name))
                         FROM presupuestos_productos pp
                         LEFT JOIN sizes s ON pp.id_size = s._id
                         LEFT JOIN products_attributes pa ON pp.id_products_attributes = pa._id
