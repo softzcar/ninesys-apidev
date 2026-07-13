@@ -245,7 +245,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 244,orders.php,GET,/presupuesto/detalle/{id},2388,1-GET-auto,REQUIERE_INVESTIGACION_APARTE,"HTTP 404 real, causa no relacionada con PostgreSQL identificada. Requiere investigacion aparte de middleware/routing, fuera del alcance de compatibilidad SQL.",2026-07-13 15:43:03
 245,orders.php,POST,/ordenes/actualizar-fila,2432,2-escritura-manual,PENDIENTE,,
 246,orders.php,POST,/ordenes/nueva/custom/edit,2451,2-escritura-manual,PENDIENTE,,
-247,orders.php,POST,/ordenes/nueva/custom,2799,2-escritura-manual,PENDIENTE,,
+247,orders.php,POST,/ordenes/nueva/custom,2799,2-escritura-manual,EN_PROGRESO,Investigando POST /ordenes/nueva/custom,2026-07-13 16:34:07
 248,orders.php,POST,/ordenes/nueva/sport,3457,2-escritura-manual,PENDIENTE,,
 249,orders.php,POST,/comercializacion/revisiones-estatus/{estatus}/{id_revision}/{id_orden},3744,2-escritura-manual,PENDIENTE,,
 250,orders.php,POST,/comercializacion/revisiones-detalles/{id_revision},3885,2-escritura-manual,PENDIENTE,,
