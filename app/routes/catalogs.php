@@ -407,7 +407,8 @@ return function (App $app) {
     $localConnection = new LocalDB();
     $values = "tela='" . $args['tela'] . "'";
     $sql = 'UPDATE catalogo_telas SET ' . $values . ' WHERE _id = ' . $args['_id'] . ';';
-    $sql .= 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
+    $localConnection->goQuery($sql);
+    $sql = 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
     $object['sql'] = $sql;
     $object['response'] = json_encode($localConnection->goQuery($sql));
     $localConnection->disconnect();
