@@ -80,7 +80,77 @@ class WooMe
         p._id, p.sku, p.product, p.stock_quantity, p.price;
     "; */
 
-    $sql = <<<SQL
+    if (DB_DRIVER === 'pgsql') {
+      // Equivalentes Postgres: jsonb_agg/jsonb_build_object en vez de
+      // CONCAT('[',GROUP_CONCAT(JSON_OBJECT(...)),']'); string_to_array en vez de
+      // FIND_IN_SET; comillas simples en vez de dobles como literal SQL. Sin
+      // GROUP BY externo porque cada subconsulta ya agrupa por id_product/product_id
+      // (a lo sumo 1 fila por p._id via LEFT JOIN, sin fan-out que agrupar).
+      $sql = <<<SQL
+        SELECT
+            p._id AS cod,
+            p.sku,
+            p.product AS name,
+            p.stock_quantity,
+            p.comision,
+            p.price,
+            p.fisico AS producto_fisico,
+            p.es_diseno,
+            COALESCE(pp_agg.prices_json, '[]'::jsonb) AS prices,
+            COALESCE(pc_agg.comisiones_json, '[]'::jsonb) AS comisiones,
+            COALESCE(cat_agg.categories_json, '[]'::jsonb) AS categories
+        FROM
+            products p
+        LEFT JOIN (
+            SELECT
+                pp_inner.id_product,
+                jsonb_agg(
+                    jsonb_build_object(
+                        'id', pp_inner._id,
+                        'price', pp_inner.price,
+                        'description', pp_inner.descripcion
+                    )
+                    ORDER BY pp_inner._id
+                ) AS prices_json
+            FROM
+                products_prices pp_inner
+            GROUP BY
+                pp_inner.id_product
+        ) pp_agg ON p._id = pp_agg.id_product
+        LEFT JOIN (
+            SELECT
+                pc_inner.id_product,
+                jsonb_agg(
+                    jsonb_build_object(
+                        'id_products_conisiones', pc_inner._id,
+                        'id_product', pc_inner.id_product,
+                        'comision', pc_inner.comision,
+                        'id_departamento', pc_inner.id_departamento
+                    )
+                    ORDER BY pc_inner._id
+                ) AS comisiones_json
+            FROM
+                products_comisiones pc_inner
+            GROUP BY
+                pc_inner.id_product
+        ) pc_agg ON p._id = pc_agg.id_product
+        LEFT JOIN (
+            SELECT
+                p_inner._id AS product_id,
+                jsonb_agg(
+                    jsonb_build_object('id', c_inner._id, 'name', c_inner.nombre)
+                    ORDER BY c_inner._id
+                ) AS categories_json
+            FROM
+                products p_inner
+            JOIN categories c_inner ON c_inner._id::text = ANY(string_to_array(p_inner.category_ids, ','))
+            GROUP BY
+                p_inner._id
+        ) cat_agg ON p._id = cat_agg.product_id
+        WHERE p.eliminado = 0;
+        SQL;
+    } else {
+      $sql = <<<SQL
         SELECT
             p._id AS cod,
             p.sku,
@@ -164,6 +234,7 @@ class WooMe
             p.fisico,
             p.es_diseno;
         SQL;
+    }
 
     $localConnection = new LocalDB();
     $products = $localConnection->goQuery($sql);
@@ -707,14 +778,14 @@ class WooMe
     $localConnection = new LocalDB();
 
     // ACTUALIZAR PRODUCTO
-    $sql = "UPDATE `products` SET
-                `product` = '" . $name . "',
-                `sku` = '" . $sku . "',
-                `category_ids` = '" . $category . "',
-                `fisico` = '" . $producto_fisico . "',
-                `es_diseno` = '" . $es_diseno . "',
-                `stock_quantity` = '" . $stock_quantity . "'
-            WHERE `_id` = " . $id;
+    $sql = "UPDATE products SET
+                product = '" . $name . "',
+                sku = '" . $sku . "',
+                category_ids = '" . $category . "',
+                fisico = '" . $producto_fisico . "',
+                es_diseno = '" . $es_diseno . "',
+                stock_quantity = '" . $stock_quantity . "'
+            WHERE _id = " . $id;
 
     $resp = $localConnection->goQuery($sql);
 
