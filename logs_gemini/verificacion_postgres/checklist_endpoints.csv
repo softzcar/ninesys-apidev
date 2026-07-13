@@ -169,7 +169,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 168,machine_services.php,POST,/servicios-maquinas,60,2-escritura-manual,PENDIENTE,,
 169,machine_services.php,PUT,/servicios-maquinas/{id},87,2-escritura-manual,PENDIENTE,,
 170,machine_services.php,DELETE,/servicios-maquinas/{id},112,2-escritura-manual,PENDIENTE,,
-171,manufacturing.php,POST,/lotes,20,2-escritura-manual,PENDIENTE,,
+171,manufacturing.php,POST,/lotes,20,2-escritura-manual,EN_PROGRESO,Investigando POST /lotes,2026-07-13 18:10:14
 172,manufacturing.php,POST,/lotes/{id}/iniciar,79,2-escritura-manual,PENDIENTE,,
 173,manufacturing.php,POST,/lotes/{id}/terminar,155,2-escritura-manual,PENDIENTE,,
 174,manufacturing.php,POST,/revision/nuevo,251,2-escritura-manual,PENDIENTE,,
