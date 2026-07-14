@@ -317,7 +317,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 316,products.php,GET,/productos-asignados/{orden},117,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:01
 317,products.php,GET,/products/{id},132,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:02
 318,products.php,POST,/products/{name}/{sku}/{price}/{stock_quantity}/{categories}/{sizes},142,2-escritura-manual,PENDIENTE,,
-319,products.php,POST,/products/lite,153,2-escritura-manual,PENDIENTE,,
+319,products.php,POST,/products/lite,153,2-escritura-manual,EN_PROGRESO,Investigando POST /products/lite,2026-07-14 08:32:45
 320,products.php,POST,/editar-producto,171,2-escritura-manual,CORREGIDO,"BUG encontrado y corregido: woome.php updateProductLite() usaba backticks alrededor de la tabla y todas las columnas en el UPDATE, invalido en PostgreSQL. Corregido removiendo los backticks. Probado en vivo end-to-end contra 194 dev: edicion de producto _id=3 (nombre, sku, stock_quantity) -> actualizado correctamente, verificado en BD. Nota: esta revision llevo al hallazgo mayor de getAllProducts() (ver id 310/328/329/330) en el mismo archivo. Commit 3d73e75 (incluido en el mismo commit del fix de getAllProducts).",2026-07-13 18:25:23
 321,products.php,POST,/editar-producto-precios,188,2-escritura-manual,PENDIENTE,,
 322,products.php,DELETE,/products-prices/{id},234,2-escritura-manual,PENDIENTE,,
