@@ -753,17 +753,6 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // OBTENER TODAS LAS ORDENES ASOCIADAS A UN CLIENTE
-  $app->get('/customers/orders/{id_customer}', function (Request $request, Response $response, array $args) {
-    $woo = new WooMe();
-    $object['data'] = $woo->getCustomerOrders($args['id_customer']);
-    $response->getBody()->write(json_encode($object));
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   $app->get('/wp/customers', function (Request $request, Response $response) {
     $woo = new WooMe();
     $object['data'] = json_decode($woo->getAllCustomesrs());
