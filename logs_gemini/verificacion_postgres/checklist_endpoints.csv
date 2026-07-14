@@ -352,10 +352,10 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 351,products.php,POST,/departamentos/orden-paso,1007,2-escritura-manual,CORREGIDO,"BUG: multi-statement (UPDATE + SELECT concatenados, ejecutados con un unico goQuery()), invalido en PDO pgsql. Ademas concatenacion cruda. Corregido: 2 goQuery() parametrizados independientes. Probado en vivo end-to-end: orden_proceso actualizado a 99, verificado en psql.",2026-07-14 12:29:35
 352,products.php,GET,/attributes,1030,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Timeout de 20s en el smoke test automatizado: el endpoint hace una llamada real a la API de WooCommerce (new Client($this->url,...) en woome.php), servicio externo no alcanzable/lento desde el entorno de dev. Mismo criterio ya establecido para otros endpoints de WooCommerce - no relacionado con PostgreSQL, fuera de alcance de esta migracion.",2026-07-13 18:31:16
 353,products.php,GET,/sizes,1042,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:33
-354,products.php,POST,/sizes,1057,2-escritura-manual,PENDIENTE,,
-355,products.php,POST,/sizes/editar,1079,2-escritura-manual,PENDIENTE,,
-356,products.php,POST,/sizes/eliminar,1099,2-escritura-manual,PENDIENTE,,
-357,products.php,POST,/categories,1120,2-escritura-manual,PENDIENTE,,
+354,products.php,POST,/sizes,1057,2-escritura-manual,OK,"Ya migrado correctamente, sin patrones MySQL-only, totalmente parametrizado. Probado en vivo: talla creada, verificado en psql.",2026-07-14 12:30:43
+355,products.php,POST,/sizes/editar,1079,2-escritura-manual,OK,"Ya migrado correctamente, sin patrones MySQL-only, totalmente parametrizado. Probado en vivo con exito.",2026-07-14 12:30:43
+356,products.php,POST,/sizes/eliminar,1099,2-escritura-manual,OK,"Ya migrado correctamente, sin patrones MySQL-only, totalmente parametrizado. Probado en vivo con exito.",2026-07-14 12:30:43
+357,products.php,POST,/categories,1120,2-escritura-manual,OK,"Ya migrado correctamente, sin patrones MySQL-only, totalmente parametrizado. Probado en vivo: categoria creada, verificado en psql (limpiada despues).",2026-07-14 12:30:43
 358,products.php,GET,/empleado/asignado/{departamento}/{orden}/{item_id},1146,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:34
 359,products.php,GET,/lotes/en-proceso,1160,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:34
 360,products.php,GET,/lotes/verificar-cantidad-asignada/{id_ordenes_productos}/{departamento}/{id_orden},1254,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:41:35
