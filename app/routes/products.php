@@ -1049,8 +1049,8 @@ return function (App $app) {
 
     $tipo = isset($data['tipo']) ? $data['tipo'] : 'general';
 
-    $sql = "INSERT INTO departamentos (orden_proceso, enviar_mensaje, id_modulo, asignar_numero_de_paso, departamento, tipo) VALUES ({$totalDepartamentos}, {$data['enviar_mensaje']}, {$data['modulo']}, {$data['asignar_paso']}, '{$data['departamento']}', '{$tipo}')";
-    $object['response'] = $localConnection->goQuery($sql);
+    $sql = 'INSERT INTO departamentos (orden_proceso, enviar_mensaje, id_modulo, asignar_numero_de_paso, departamento, tipo) VALUES (?, ?, ?, ?, ?, ?)';
+    $object['response'] = $localConnection->goQuery($sql, [$totalDepartamentos, $data['enviar_mensaje'], $data['modulo'], $data['asignar_paso'], $data['departamento'], $tipo]);
 
     $localConnection->disconnect();
 
@@ -1067,8 +1067,8 @@ return function (App $app) {
 
     $tipo = isset($data['tipo']) ? $data['tipo'] : 'general';
 
-    $sql = "UPDATE departamentos SET enviar_mensaje = {$data['enviar_mensaje']}, asignar_numero_de_paso = {$data['asignar_paso']}, id_modulo = {$data['modulo']}, departamento = '" . $data['departamento'] . "', tipo = '{$tipo}' WHERE _id = " . $data['id_departamento'];
-    $object['response'] = $localConnection->goQuery($sql);
+    $sql = 'UPDATE departamentos SET enviar_mensaje = ?, asignar_numero_de_paso = ?, id_modulo = ?, departamento = ?, tipo = ? WHERE _id = ?';
+    $object['response'] = $localConnection->goQuery($sql, [$data['enviar_mensaje'], $data['asignar_paso'], $data['modulo'], $data['departamento'], $tipo, $data['id_departamento']]);
 
     $localConnection->disconnect();
 
@@ -1083,8 +1083,8 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $sql = "UPDATE departamentos SET enviar_mensaje = {$data['enviar_mensaje']} WHERE _id = " . $data['id_departamento'];
-    $object['response'] = $localConnection->goQuery($sql);
+    $sql = 'UPDATE departamentos SET enviar_mensaje = ? WHERE _id = ?';
+    $object['response'] = $localConnection->goQuery($sql, [$data['enviar_mensaje'], $data['id_departamento']]);
 
     $localConnection->disconnect();
 
@@ -1098,8 +1098,8 @@ return function (App $app) {
   $app->delete('/departamentos/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "UPDATE departamentos SET eliminado = 1 WHERE _id = {$args['id_departamento']}";
-    $object['response'] = $localConnection->goQuery($sql);
+    $sql = 'UPDATE departamentos SET eliminado = 1 WHERE _id = ?';
+    $object['response'] = $localConnection->goQuery($sql, [$args['id_departamento']]);
 
     $localConnection->disconnect();
 
@@ -1117,10 +1117,10 @@ return function (App $app) {
 
     // ACTUALIZAR ORDEN DE DEPARTAMENTOS SIGUIENTES SUMANDO 1 AL ORDEN DEL DEPARTAMENTO
     // $sql = 'UPDATE departamentos SET orden_proceso = (orden_proceso + 1) WHERE orden_proceso > ' . $data['orden_proceso_cur'] . ';';
-    $sql = 'UPDATE departamentos SET orden_proceso = ' . $data['orden_proceso'] . ' WHERE _id = ' . $data['id_departamento'] . ';';
-    $sql .= 'SELECT _id, departamento, orden_proceso FROM departamentos WHERE _id = ' . $data['id_departamento'] . ' ORDER BY orden_proceso ASC';
+    $localConnection->goQuery('UPDATE departamentos SET orden_proceso = ? WHERE _id = ?', [$data['orden_proceso'], $data['id_departamento']]);
+    $sql = 'SELECT _id, departamento, orden_proceso FROM departamentos WHERE _id = ? ORDER BY orden_proceso ASC';
     $object['sql'] = $sql;
-    $object['response'] = $localConnection->goQuery($sql);
+    $object['response'] = $localConnection->goQuery($sql, [$data['id_departamento']]);
 
     $localConnection->disconnect();
 
