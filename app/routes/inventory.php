@@ -1058,9 +1058,9 @@ return function (App $app) {
         $miEmpleado = $request->getParsedBody();
         $localConnection = new LocalDB();
 
-        $sql = 'UPDATE inventario SET eliminado = 1 WHERE _id =  ' . $miEmpleado['id'];
+        $sql = 'UPDATE inventario SET eliminado = 1 WHERE _id = ?';
         $object['sql'] = $sql;
-        $object['response'] = json_encode($localConnection->goQuery($sql));
+        $object['response'] = json_encode($localConnection->goQuery($sql, [$miEmpleado['id']]));
 
         $localConnection->disconnect();
 
