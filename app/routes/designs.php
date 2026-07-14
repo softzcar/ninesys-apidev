@@ -216,7 +216,7 @@ return function (App $app) {
       $ajuste = false;
     }
 
-    $sql_tipo = "SELECT tipo FROM disenos_ajustes_y_personalizaciones WHERE tipo = 'personalización' AND id_diseno = ? ORDER BY tipo ASC";
+    $sql_tipo = "SELECT tipo FROM disenos_ajustes_y_personalizaciones WHERE tipo = 'personalizacion' AND id_diseno = ? ORDER BY tipo ASC";
     $dataRequest = $localConnection->goQuery($sql_tipo, [$data['id_diseno']]);
     $object['personalizacion'] = count($dataRequest);
     if (count($dataRequest) > 0) {
