@@ -1,0 +1,46 @@
+- **Solicitud del Usuario:** "Continua con los 125 restantes, uno por uno igual que siempre y luego consideramos la fase 2 sustamcialmente cerrada por ahora" — continuación exhaustiva de la Fase 2 de la migración PostgreSQL a través de los endpoints de escritura sin uso real reciente detectado.
+
+- **Fecha y Hora:** 2026-07-14 15:00:00 a 18:30:00 (aprox.)
+
+- **Proyecto(s):** Backend (ninesys-api, rama feature/postgresql-support)
+
+- **Archivos Involucrados:**
+    - app/routes/config.php, crm.php, designs.php, employees.php, finance.php, inventory.php, machine_services.php, manufacturing.php, msg_service.php, orders.php
+    - logs_gemini/verificacion_postgres/checklist_endpoints.csv
+    - Base de datos `api_empresas` y `api_emp_194` (correcciones de secuencias IDENTITY)
+
+- **Commits Relacionados:** ~55 commits individuales (uno por fix + uno por cada actualización de estado en el CSV), backend desplegado a Desarrollo (Contabo) tras cada cambio de código.
+
+- **Acción Realizada:**
+    Se completaron 10 archivos completos del checklist (config.php, crm.php, designs.php, employees.php, finance.php, inventory.php, machine_services.php, manufacturing.php, msg_service.php, orders.php), pasando el avance total de 261/386 (67.6%) a 349/386 (90.4%). Se encontraron y corrigieron decenas de bugs, incluyendo varios hallazgos de alta severidad:
+
+    1. **Secuencias IDENTITY desincronizadas (10 tablas, bases api_empresas y api_emp_194):** tras la migración masiva de datos desde MySQL, ninguna secuencia de Postgres fue sincronizada al MAX(id) real. Cualquier INSERT nuevo en `empresas`, `empresas_usuarios`, `empresas_usuarios_departamentos`, `modulos`, `salario_conceptos_nomina`, `salario_reglas_legales`, `catalogo_paises`, `catalogo_estados`, `catalogo_ciudades`, `wa_ai_agents` corría riesgo de colisionar con datos reales ya migrados. Corregido con `setval()` en las 10 tablas.
+    2. **DSN hardcodeado a MySQL** en 4 endpoints (`config.php` x3, `inventory.php` x1) que hacían `switchDatabase()` cross-DB a la empresa — rompía la conexión en empresas Postgres.
+    3. **Multi-statement acumulado en loops** (patrón recurrente, ~12 casos): variables `$sql` que acumulaban múltiples INSERT/UPDATE en un loop y se ejecutaban con un único `goQuery()`, inválido en PDO pgsql. El caso más severo: `manufacturing.php POST /empleados/registrar-paso-por-lotes/{departamento}` acumulaba TODAS las sentencias de TODOS los ítems de un array en una sola query. También en `orders.php POST /ordenes/nueva` (3 bloques: diseños, lotes_detalles x6 por producto, métodos de pago/caja x11).
+    4. **`ON DUPLICATE KEY UPDATE`** (sintaxis exclusiva de MySQL) en `manufacturing.php /lotes/{id}/finalizar-corte`, sin equivalente `ON CONFLICT` — además las columnas referenciadas ni siquiera existían en el esquema real.
+    5. **`addslashes()` no protege en Postgres:** Postgres no trata `\` como carácter de escape en literales estándar (`standard_conforming_strings=on`), a diferencia de MySQL. Encontrado en `msg_service.php /internal/cliente/{id_empresa}` (corrompía nombres con apóstrofe) y en varios INSERT ya parametrizados de `orders.php` donde además era contraproducente (insertaba backslashes literales en el dato).
+    6. **`REGEXP_REPLACE` sin bandera `'g'`** en Postgres solo reemplaza la primera coincidencia (MySQL reemplaza todas por defecto) — rompía la normalización de teléfonos en `msg_service.php`.
+    7. **Prepared statements nativos de pgsql rechazan bindear strings decimales en columnas integer** (ej. `"10.0"` → `SQLSTATE 22P02`), donde MySQL convertía implícitamente — requiere `intval()`/`floatval()` explícito antes de bindear. Encontrado en `manufacturing.php` y `orders.php`.
+    8. **Comparación de tipos incompatibles en JOIN** (`character varying = integer`) sin cast — tolerado por MySQL, rechazado por Postgres. Corregido comparando como texto para preservar el comportamiento original (el JOIN ya estaba semánticamente roto de antes).
+    9. **`HALLAZGO ESTRUCTURAL CRÍTICO (no-Postgres):** `orders.php POST /presupuesto/{id}/convertir-a-orden` estaba definido **fuera** del closure `return function($app) {...}` que envuelve las rutas del archivo — un `};` extraviado hacía que la ruta nunca se registrara en Slim (PHP detiene la ejecución del resto de un archivo tras un `return` de nivel superior). Confirmado con HTTP 405. Corregido moviendo la ruta dentro del closure — funcionalidad completa restaurada.
+    10. **`orders.php POST /ordenes/nueva`** roto desde su primer INSERT (columna `observaciones` inexistente en `ordenes` en ningún motor); superado por `/ordenes/nueva/custom`, `/simple`, `/sport` que sí funcionan.
+    11. **`orders.php POST /ordenes/validar-paso`** (flujo "crear orden por Chat IA"): el paso final `confirmarOrden()` usa un esquema de columnas totalmente ficticio (posible código generado por IA nunca probado contra el esquema real).
+
+- **Inconvenientes y Desafíos:**
+    - Varios falsos positivos de prueba por metodología (JSON crudo vs form-urlencoded, según lo que cada endpoint espera vía `getParsedBody()`).
+    - Se evitó ejecutar vía HTTP real dos endpoints que envían mensajes de WhatsApp incondicionalmente (`/ordenes/nueva`, `/crm/campanas/enviar`), verificando su SQL corregido con `EXPLAIN` en `psql` en su lugar.
+    - Varios bugs de negocio preexistentes (no relacionados a Postgres) se descubrieron incidentalmente durante las pruebas en vivo y se dejaron documentados sin corregir por requerir decisión de negocio: comparación de array con entero en PHP (siempre `true`), columnas de "rendimiento por departamento" que nunca existieron, placeholders `id_reposicion=0`/`id_lotes_fisicos=0` usados antes de resolverse a un id real (violan FK en su primer uso real).
+
+- **Decisión Final y Justificación:** Se mantiene el método de verificación en vivo (lectura de código + prueba real contra 194 dev + verificación directa en psql) como única fuente confiable — múltiples bugs de esta ronda (la secuencia desincronizada, el closure mal cerrado, las columnas ficticias) eran completamente invisibles a una revisión estática de código.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (`ssh`/`psql`, `curl`, `git`, bloques `DO $$...$$` en PL/pgSQL), script auxiliar `update_row.py`.
+
+- **Resultado:** Éxito — 10 archivos completos, avance de 67.6% a 90.4% del checklist total.
+
+- **Verificación:** Cada corrección se probó en vivo contra la empresa 194 en `vps-contabo-dev` tras cada deploy, con verificación directa en `psql` y limpieza de datos de prueba en cada caso.
+
+- **Logro Conseguido:** Avance mayor de una sola sesión en todo el proyecto de migración: 88 endpoints adicionales revisados/corregidos, más 2 hallazgos de infraestructura de alta severidad (secuencias desincronizadas, ruta nunca registrada) que trascienden el alcance original de "migración Postgres" y afectan la correctitud funcional del sistema independientemente del motor de base de datos.
+
+- **Observaciones de Claude:** Quedan 37 endpoints en 5 archivos (`payments.php`, `printers.php`, `production.php`, `products.php`, `tables.php`). El ritmo de hallazgos de bugs reales (no solo de sintaxis, sino de lógica y estructura) sugiere que vale la pena completar la ronda restante antes de considerar la Fase 2 cerrada.
+
+- **Respuesta de Claude:** Se completaron 10 archivos adicionales del checklist de migración Postgres (config.php a orders.php), llevando el avance de 67.6% a 90.4%. Se corrigieron decenas de bugs de sintaxis Postgres y se encontraron 2 hallazgos críticos de infraestructura no relacionados directamente a la migración: 10 secuencias de auto-incremento desincronizadas en las bases de datos de desarrollo, y una ruta completa (`/presupuesto/{id}/convertir-a-orden`) que nunca se registraba en el enrutador por un error de ubicación de código en el archivo. Continúa el trabajo con los 5 archivos restantes.
