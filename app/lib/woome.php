@@ -548,9 +548,9 @@ class WooMe
   public function updateOrderStatus($id, $status)
   {
     $sql = "UPDATE
-            `ordenes`
+            ordenes
         SET
-            `status` = '" . $status . "'
+            status = '" . $status . "'
         WHERE
             _id = " . $id . ';';
 
@@ -704,13 +704,13 @@ class WooMe
   public function createProductLite($name, $pricesDat, $category, $sku, $producto_fisico = 0, $es_diseno = 0, $stock_quantity = 0)
   {
     // CREAR EL NUEVO PRODUCTO
-    $sql = "INSERT INTO `products`(
-                `product`,
-                `sku`,
-                `category_ids`,
-                `fisico`,
-                `es_diseno`,
-                `stock_quantity`
+    $sql = "INSERT INTO products(
+                product,
+                sku,
+                category_ids,
+                fisico,
+                es_diseno,
+                stock_quantity
             )
             VALUES(
                 '" . $name . "',
@@ -728,7 +728,7 @@ class WooMe
     // ASIGNAR PRECIOS
     $prices = json_decode($pricesDat, true);
     if (!empty($prices)) {
-      $sql = 'INSERT INTO products_prices (id_product, price, `descripcion`) VALUES ';
+      $sql = 'INSERT INTO products_prices (id_product, price, descripcion) VALUES ';
       $values = [];
       foreach ($prices as $price) {
         $values[] = "($newID, {$price['price']}, '{$price['description']}')";
@@ -871,9 +871,9 @@ class WooMe
   public function updateProductQuantity($id, $stock_quantity)
   {
     $sql = 'UPDATE
-            `products`
-        SET   
-            `stock_quantity` = ' . $stock_quantity . '
+            products
+        SET
+            stock_quantity = ' . $stock_quantity . '
         WHERE
             _id = ' . $id;
 
