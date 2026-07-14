@@ -44,8 +44,8 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 43,communications.php,POST,/send-message-produccion,667,2-escritura-manual,CORREGIDO,"Sin patrones MySQL-only. Las 2 consultas SELECT del endpoint (departamentos.enviar_mensaje y JOIN ordenes/customers) verificadas directamente en psql: 0 errores. El resto del endpoint depende de WS_API_URL (servicio externo de WhatsApp) no alcanzable desde el entorno de dev, igual que /send-message y /ws/build-message - fuera de alcance de la migracion Postgres.",2026-07-13 16:51:12
 44,communications.php,GET,/next-id-order,803,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:05
 45,communications.php,GET,/next-id-budget,824,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:05
-46,config.php,POST,/configuracion/admin/{id},11,2-escritura-manual,EN_PROGRESO,Investigando,2026-07-14 09:12:45
-47,config.php,POST,/configuracion/empresa/{id},56,2-escritura-manual,EN_PROGRESO,Investigando,2026-07-14 09:12:45
+46,config.php,POST,/configuracion/admin/{id},11,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE dinamico totalmente parametrizado. Probado en vivo: actualizacion de usuario admin exitosa.",2026-07-14 09:12:59
+47,config.php,POST,/configuracion/empresa/{id},56,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE dinamico totalmente parametrizado. Probado en vivo: actualizacion de datos de empresa exitosa.",2026-07-14 09:12:59
 48,config.php,POST,/configuracion/monedas,137,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado con placeholders '?'. Probado en vivo end-to-end contra empresa 194: POST con id_empleado=3 y array de monedas -> actualizado correctamente en empresas.tipos_de_monedas (base central api_empresas), verificado con SELECT directo.",2026-07-13 17:04:41
 49,config.php,POST,/configuracion/horario,211,2-escritura-manual,PENDIENTE,,
 50,config.php,POST,/configuracion/personalizacion,291,2-escritura-manual,PENDIENTE,,
