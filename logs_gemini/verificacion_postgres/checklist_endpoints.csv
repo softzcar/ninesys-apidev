@@ -47,7 +47,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 46,config.php,POST,/configuracion/admin/{id},11,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE dinamico totalmente parametrizado. Probado en vivo: actualizacion de usuario admin exitosa.",2026-07-14 09:12:59
 47,config.php,POST,/configuracion/empresa/{id},56,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE dinamico totalmente parametrizado. Probado en vivo: actualizacion de datos de empresa exitosa.",2026-07-14 09:12:59
 48,config.php,POST,/configuracion/monedas,137,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado con placeholders '?'. Probado en vivo end-to-end contra empresa 194: POST con id_empleado=3 y array de monedas -> actualizado correctamente en empresas.tipos_de_monedas (base central api_empresas), verificado con SELECT directo.",2026-07-13 17:04:41
-49,config.php,POST,/configuracion/horario,211,2-escritura-manual,PENDIENTE,,
+49,config.php,POST,/configuracion/horario,211,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE parametrizado con JSON. Probado en vivo: guardado de horario laboral exitoso.",2026-07-14 09:16:11
 50,config.php,POST,/configuracion/personalizacion,291,2-escritura-manual,PENDIENTE,,
 51,config.php,POST,/configuracion/gastos,388,2-escritura-manual,PENDIENTE,,
 52,config.php,GET,/gastos,496,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:06
