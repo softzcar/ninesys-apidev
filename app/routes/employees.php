@@ -397,16 +397,13 @@ return function (App $app) {
         // Insertar nuevas asiganciones de departamentos
         $misDeps = explode(',', $miEmpleado['departamentos']);
 
-        if (count($misDeps) > 0) {
-            $sql = '';
-            // if ($dep != 0) {
-            foreach ($misDeps as $id_dep) {
-                $sql .= "INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES ({$miEmpleado['_id']}, {$id_dep});";
-            }
-            // }
+        $object['sql_update'] = [];
+        $object['response_update'] = [];
+        foreach ($misDeps as $id_dep) {
+            $sql = "INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES ({$miEmpleado['_id']}, {$id_dep});";
+            $object['sql_update'][] = $sql;
+            $object['response_update'][] = json_encode($localConnection->goQuery($sql));
         }
-        $object['sql_update'] = $sql;
-        $object['response_update'] = json_encode($localConnection->goQuery($sql));
 
         $localConnection = new LocalDB();
 
