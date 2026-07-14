@@ -1668,14 +1668,14 @@ return function (App $app) {
         $where = 'WEEK(e.moment, 1) = ? AND e.fecha_pago IS NULL';
       }
       $paramsWhere[] = $data['numero_semana'];
-      $whereEmpleados = 'b.fecha_terminado LIKE ? AND a.fecha_pago IS NULL ';
+      $whereEmpleados = DB_DRIVER === 'pgsql' ? 'b.fecha_terminado::text LIKE ? AND a.fecha_pago IS NULL ' : 'b.fecha_terminado LIKE ? AND a.fecha_pago IS NULL ';
       $paramsWhereEmpleados[] = $data['fecha_inicio'] . '%';
     }
 
     if ($data['fecha_inicio'] === $data['fecha_fin']) {
-      $where = 'e.moment LIKE ? AND e.fecha_pago IS NULL';
+      $where = DB_DRIVER === 'pgsql' ? 'e.moment::text LIKE ? AND e.fecha_pago IS NULL' : 'e.moment LIKE ? AND e.fecha_pago IS NULL';
       $paramsWhere = [$data['fecha_inicio'] . '%'];
-      $whereEmpleados = 'b.fecha_terminado LIKE ? AND a.fecha_pago IS NULL ';
+      $whereEmpleados = DB_DRIVER === 'pgsql' ? 'b.fecha_terminado::text LIKE ? AND a.fecha_pago IS NULL ' : 'b.fecha_terminado LIKE ? AND a.fecha_pago IS NULL ';
       $paramsWhereEmpleados = [$data['fecha_inicio'] . '%'];
     } else {
       if (DB_DRIVER === 'pgsql') {
@@ -1833,9 +1833,9 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     if ($data['fecha_inicio'] === $data['fecha_fin']) {
-      $where = 'e.moment LIKE ? AND e.fecha_pago IS NULL';
+      $where = DB_DRIVER === 'pgsql' ? 'e.moment::text LIKE ? AND e.fecha_pago IS NULL' : 'e.moment LIKE ? AND e.fecha_pago IS NULL';
       $paramsWhere = [$data['fecha_inicio'] . '%'];
-      $whereEmpleados = 'b.fecha_terminado LIKE ? AND a.fecha_pago IS NULL ';
+      $whereEmpleados = DB_DRIVER === 'pgsql' ? 'b.fecha_terminado::text LIKE ? AND a.fecha_pago IS NULL ' : 'b.fecha_terminado LIKE ? AND a.fecha_pago IS NULL ';
       $paramsWhereEmpleados = [$data['fecha_inicio'] . '%'];
     } else {
       if (DB_DRIVER === 'pgsql') {
