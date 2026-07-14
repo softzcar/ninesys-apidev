@@ -66,13 +66,23 @@ return function (App $app) {
       $object['orden'] = $localConnection->goQuery($sql_orden);
 
       // --- INICIO: CÁLCULO DE ABONOS Y DESCUENTOS ACTUALIZADOS ---
-      $sql_abonos = "SELECT 
-                        SUM(abono) AS total_abonos, 
-                        SUM(descuento) AS total_descuentos,
-                        SUM(nota_credito) AS total_notas_credito,
-                        GROUP_CONCAT(CASE WHEN descuento > 0 THEN detalle ELSE NULL END SEPARATOR ', ') AS descuento_detalle
-                     FROM abonos 
-                     WHERE id_orden = " . $id;
+      if (DB_DRIVER === 'pgsql') {
+        $sql_abonos = "SELECT
+                          SUM(abono) AS total_abonos,
+                          SUM(descuento) AS total_descuentos,
+                          SUM(nota_credito) AS total_notas_credito,
+                          STRING_AGG(CASE WHEN descuento > 0 THEN detalle ELSE NULL END, ', ') AS descuento_detalle
+                       FROM abonos
+                       WHERE id_orden = " . $id;
+      } else {
+        $sql_abonos = "SELECT
+                          SUM(abono) AS total_abonos,
+                          SUM(descuento) AS total_descuentos,
+                          SUM(nota_credito) AS total_notas_credito,
+                          GROUP_CONCAT(CASE WHEN descuento > 0 THEN detalle ELSE NULL END SEPARATOR ', ') AS descuento_detalle
+                       FROM abonos
+                       WHERE id_orden = " . $id;
+      }
       $totales_abonos = $localConnection->goQuery($sql_abonos);
 
       if (isset($object['orden'][0])) {
@@ -159,6 +169,43 @@ return function (App $app) {
       }
 
       // Buscar datos de productos
+      if (DB_DRIVER === 'pgsql') {
+        $sqlPricesJoin = "LEFT JOIN (
+            -- Subconsulta derivada para agrupar los precios por producto
+            SELECT
+              pp.id_product AS product_id,
+              json_agg(json_build_object('id', pp._id, 'price', pp.price, 'description', pp.descripcion)) AS prices
+            FROM
+              products_prices pp
+            GROUP BY
+              pp.id_product
+          ) AS prices_json ON prices_json.product_id = pr._id -- Unir con la tabla de productos";
+      } else {
+        $sqlPricesJoin = 'LEFT JOIN (
+            -- Subconsulta derivada para agrupar los precios por producto
+            SELECT
+              pp.id_product AS product_id,
+              CONCAT(
+                "[",
+                GROUP_CONCAT(
+                  JSON_OBJECT(
+                    "id",
+                    pp._id,
+                    "price",
+                    pp.price,
+                    "description",
+                    pp.descripcion
+                  )
+                ),
+                "]"
+              ) AS prices
+            FROM
+              products_prices pp
+            GROUP BY
+              pp.id_product
+          ) AS prices_json ON prices_json.product_id = pr._id -- Unir con la tabla de productos';
+      }
+
       $sql = 'SELECT
             op._id,
             op.name,
@@ -183,29 +230,7 @@ return function (App $app) {
             products pr ON pr._id = op.id_woo
           LEFT JOIN
             sizes s ON s._id = op.id_size -- Unir directamente con sizes para la talla
-          LEFT JOIN (
-            -- Subconsulta derivada para agrupar los precios por producto
-            SELECT
-              pp.id_product AS product_id,
-              CONCAT(
-                "[",
-                GROUP_CONCAT(
-                  JSON_OBJECT(
-                    "id",
-                    pp._id,
-                    "price",
-                    pp.price,
-                    "description",
-                    pp.descripcion
-                  )
-                ),
-                "]"
-              ) AS prices
-            FROM
-              products_prices pp
-            GROUP BY
-              pp.id_product
-          ) AS prices_json ON prices_json.product_id = pr._id -- Unir con la tabla de productos
+          ' . $sqlPricesJoin . '
           WHERE
             op.id_orden = ' . $id;
 
