@@ -2214,17 +2214,28 @@ $object['sales_commission_ISSET'][] = false;
 
     // Validar id_wp
     $id_wp_val = $arr['id_wp'];
-    $id_wp_sql = "NULL";
-    if (!empty($id_wp_val) && is_numeric($id_wp_val)) {
-      $id_wp_sql = "'" . $id_wp_val . "'";
-    }
+    $id_wp_param = (!empty($id_wp_val) && is_numeric($id_wp_val)) ? $id_wp_val : null;
 
     /* Craer orden en nunesys */
-    $sql = 'INSERT INTO presupuestos (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql . ", '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
+    $sql = 'INSERT INTO presupuestos (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
     $localConnection->beginTransaction();
     try {
-    $insertPresupResult = $localConnection->goQuery($sql);
+    $insertPresupResult = $localConnection->goQuery($sql, [
+      $newJson['responsable'],
+      $now,
+      $arr['descuento'],
+      $arr['abono'],
+      $id_wp_param,
+      $arr['cedula'],
+      $newJson['obs'] ?? '',
+      $newJson['total'],
+      $cliente,
+      date('Y-m-d'),
+      $newJson['fechaEntrega'],
+      date('Y-m-d'),
+      'En espera',
+    ]);
     $object['nuevo_presupuesto_response'] = json_encode($insertPresupResult);
 
     // ID del presupuesto recién insertado (evita race condition de SELECT MAX)
@@ -2263,8 +2274,6 @@ $object['sales_commission_ISSET'][] = false;
          $object['miDiseno'] = json_encode($localConnection->goQuery($sql_diseno)); */
 
     // GUARDAR PRODUCTOS ASOCIADOS AL PRESUPUESTO
-    $sql = 'SELECT _id';
-
     for ($i = 0; $i <= $count; $i++) {
       if (isset($misProductos[$i])) {
         // PREPARAR FECHAS
@@ -2274,54 +2283,36 @@ $object['sales_commission_ISSET'][] = false;
         $decodedObj = $misProductos[$i];
 
         $cat_name = 'Uncatagorized';
-
-        $values = "'" . $now . "',";
-        $values .= $decodedObj['precio'] . ',';
-        $values .= "'" . ($decodedObj['precioWoo'] ?? $decodedObj['precio']) . "',";
-        $values .= "'" . $decodedObj['producto'] . "',";
-        $values .= $last_id . ',';
-        $values .= $decodedObj['cod'] . ',';
-        $values .= $decodedObj['cantidad'] . ',';
         $id_categoria = (isset($decodedObj['categoria']) && !empty($decodedObj['categoria'])) ? intval($decodedObj['categoria']) : 0;
-        $values .= $id_categoria . ',';
-        $values .= "'" . $cat_name . "',";
-        // $values .= "'" . $tmp["->name"] . "',";
-
-        if (isset($decodedObj['talla'])) {
-          $values .= "'" . $decodedObj['talla'] . "',";
-        } else {
-          $values .= "'',";
-        }
-
-        if (isset($decodedObj['corte'])) {
-          $values .= "'" . $decodedObj['corte'] . "',";
-        } else {
-          $values .= "'',";
-        }
-
-        if (isset($decodedObj['tela'])) {
-          $values .= "'" . $decodedObj['tela'] . "',";
-        } else {
-          $values .= "'',";
-        }
 
         // Nuevos campos: id_products_attributes, id_size, id_tela
-        $id_attr = "NULL";
+        $id_attr = null;
         if (!empty($decodedObj['atributos_seleccionados']) && is_array($decodedObj['atributos_seleccionados'])) {
-          $id_attr = $decodedObj['atributos_seleccionados'][0]['value'] ?? "NULL";
+          $id_attr = $decodedObj['atributos_seleccionados'][0]['value'] ?? null;
         }
-        $values .= $id_attr . ",";
 
-        $id_size = (isset($decodedObj['talla']) && is_numeric($decodedObj['talla'])) ? $decodedObj['talla'] : "NULL";
-        $values .= $id_size . ",";
+        $id_size = (isset($decodedObj['talla']) && is_numeric($decodedObj['talla'])) ? $decodedObj['talla'] : null;
+        $id_tela = (isset($decodedObj['tela']) && is_numeric($decodedObj['tela'])) ? $decodedObj['tela'] : null;
 
-        $id_tela = (isset($decodedObj['tela']) && is_numeric($decodedObj['tela'])) ? $decodedObj['tela'] : "NULL";
-        $values .= $id_tela;
-
-
-        $sql2 = 'INSERT INTO presupuestos_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela, id_products_attributes, id_size, id_tela) VALUES (' . $values . ')';
+        $sql2 = 'INSERT INTO presupuestos_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela, id_products_attributes, id_size, id_tela) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $object['sql_presupuestos_productos'] = $sql2;
-        $object['producto_detalle'][] = $localConnection->goQuery($sql2);
+        $object['producto_detalle'][] = $localConnection->goQuery($sql2, [
+          $now,
+          $decodedObj['precio'],
+          $decodedObj['precioWoo'] ?? $decodedObj['precio'],
+          $decodedObj['producto'],
+          $last_id,
+          $decodedObj['cod'],
+          $decodedObj['cantidad'],
+          $id_categoria,
+          $cat_name,
+          $decodedObj['talla'] ?? '',
+          $decodedObj['corte'] ?? '',
+          $decodedObj['tela'] ?? '',
+          $id_attr,
+          $id_size,
+          $id_tela,
+        ]);
       }
     }
 
@@ -2426,8 +2417,8 @@ $object['sales_commission_ISSET'][] = false;
     $data = $request->getParsedBody();
     $localConnection = new localDB();
 
-    $sql = 'UPDATE ordenes_fila_orden SET orden_fila = ' . $data['orden_fila'] . ' WHERE id_orden = ' . $data['id_orden'] . ';';
-    $localConnection->goQuery($sql);
+    $sql = 'UPDATE ordenes_fila_orden SET orden_fila = ? WHERE id_orden = ?';
+    $localConnection->goQuery($sql, [$data['orden_fila'], $data['id_orden']]);
 
     $sql = 'SELECT * FROM ordenes_fila_orden ORDER BY orden_fila ASC';
     $object = $localConnection->goQuery($sql);
