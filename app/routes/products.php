@@ -1573,8 +1573,8 @@ return function (App $app) {
         $id_orden = intval($id_orden);
 
         // 1. CALCULAR CANTIDAD DE UNIDADES SOLICITADAS (una vez por orden)
-        $sqlCant = "SELECT SUM(cantidad) total_cantidad FROM ordenes_productos WHERE id_orden = {$id_orden}";
-        $total_cantidad_res = $localConnection->goQuery($sqlCant);
+        $sqlCant = 'SELECT SUM(cantidad) total_cantidad FROM ordenes_productos WHERE id_orden = ?';
+        $total_cantidad_res = $localConnection->goQuery($sqlCant, [$id_orden]);
         $total_cantidad = $total_cantidad_res[0]['total_cantidad'] ?? 0;
 
         foreach ($asignaciones as $asig) {
@@ -1582,8 +1582,8 @@ return function (App $app) {
           $empleados = $asig['empleados'];
 
           if (!isset($deptCache[$id_departamento])) {
-            $sqlDep = "SELECT departamento, orden_proceso FROM departamentos WHERE _id = {$id_departamento}";
-            $respDep = $localConnection->goQuery($sqlDep);
+            $sqlDep = 'SELECT departamento, orden_proceso FROM departamentos WHERE _id = ?';
+            $respDep = $localConnection->goQuery($sqlDep, [$id_departamento]);
             if (empty($respDep)) {
               throw new Exception("Departamento no encontrado: {$id_departamento}");
             }
@@ -1597,46 +1597,46 @@ return function (App $app) {
           $nuevo_orden_proceso = $deptCache[$id_departamento]['orden'];
 
           // 2. ACTUALIZAR O INSERTAR REGISTRO EN lotes_detalles
-          $sqlCheckDetail = "SELECT _id FROM lotes_detalles WHERE id_departamento = '{$id_departamento}' AND id_orden = {$id_orden}";
-          $detailExists = $localConnection->goQuery($sqlCheckDetail);
+          $sqlCheckDetail = 'SELECT _id FROM lotes_detalles WHERE id_departamento = ? AND id_orden = ?';
+          $detailExists = $localConnection->goQuery($sqlCheckDetail, [$id_departamento, $id_orden]);
 
           if (empty($detailExists)) {
-            $sqlInsDetail = "INSERT INTO lotes_detalles (id_orden, id_departamento, departamento, unidades_solicitadas, estatus) 
-                             VALUES ({$id_orden}, '{$id_departamento}', '{$nombreDepartamento}', '{$total_cantidad}', 'por iniciar')";
-            $localConnection->goQuery($sqlInsDetail);
+            $sqlInsDetail = "INSERT INTO lotes_detalles (id_orden, id_departamento, departamento, unidades_solicitadas, estatus)
+                             VALUES (?, ?, ?, ?, 'por iniciar')";
+            $localConnection->goQuery($sqlInsDetail, [$id_orden, $id_departamento, $nombreDepartamento, $total_cantidad]);
           } else {
-            $sqlUpLote = "UPDATE lotes_detalles SET departamento = '{$nombreDepartamento}', unidades_solicitadas = '{$total_cantidad}' 
-                          WHERE id_departamento = '{$id_departamento}' AND id_orden = {$id_orden}";
-            $localConnection->goQuery($sqlUpLote);
+            $sqlUpLote = 'UPDATE lotes_detalles SET departamento = ?, unidades_solicitadas = ?
+                          WHERE id_departamento = ? AND id_orden = ?';
+            $localConnection->goQuery($sqlUpLote, [$nombreDepartamento, $total_cantidad, $id_departamento, $id_orden]);
           }
 
           // 3. ASIGNAR EMPLEADOS
-          $sqlDel = "DELETE FROM lotes_detalles_empleados_asignados WHERE id_orden = {$id_orden} AND id_departamento = {$id_departamento}";
-          $localConnection->goQuery($sqlDel);
+          $sqlDel = 'DELETE FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND id_departamento = ?';
+          $localConnection->goQuery($sqlDel, [$id_orden, $id_departamento]);
 
           foreach ($empleados as $emp) {
             $id_emp = intval($emp['id_empleado']);
             $porcentaje = floatval($emp['porcentaje']);
 
-            $sqlIns = "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_departamento, id_empleado, procentaje_comision) 
-                       VALUES ({$id_orden}, {$id_departamento}, {$id_emp}, {$porcentaje})";
-            $localConnection->goQuery($sqlIns);
+            $sqlIns = 'INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_departamento, id_empleado, procentaje_comision)
+                       VALUES (?, ?, ?, ?)';
+            $localConnection->goQuery($sqlIns, [$id_orden, $id_departamento, $id_emp, $porcentaje]);
           }
 
           // 4. ACTUALIZAR id_departamento_actual EN LOTES (si corresponde)
-          $sql_check = "SELECT id_departamento_actual FROM lotes WHERE id_orden = {$id_orden}";
-          $current_dept_res = $localConnection->goQuery($sql_check);
+          $sql_check = 'SELECT id_departamento_actual FROM lotes WHERE id_orden = ?';
+          $current_dept_res = $localConnection->goQuery($sql_check, [$id_orden]);
 
           if (!empty($current_dept_res)) {
             $current_dept_id = $current_dept_res[0]['id_departamento_actual'];
 
             if ($current_dept_id === null || $current_dept_id === 0 || $current_dept_id === '0') {
-              $sql_update_lote = "UPDATE lotes SET id_departamento_actual = {$id_departamento}, paso = '{$nombreDepartamento}' WHERE id_orden = {$id_orden}";
-              $localConnection->goQuery($sql_update_lote);
+              $sql_update_lote = 'UPDATE lotes SET id_departamento_actual = ?, paso = ? WHERE id_orden = ?';
+              $localConnection->goQuery($sql_update_lote, [$id_departamento, $nombreDepartamento, $id_orden]);
             } else {
               if (!isset($deptCache[$current_dept_id])) {
-                $sql_orden_comp = "SELECT departamento, orden_proceso FROM departamentos WHERE _id = {$current_dept_id}";
-                $actual_orden_res = $localConnection->goQuery($sql_orden_comp);
+                $sql_orden_comp = 'SELECT departamento, orden_proceso FROM departamentos WHERE _id = ?';
+                $actual_orden_res = $localConnection->goQuery($sql_orden_comp, [$current_dept_id]);
                 if (!empty($actual_orden_res)) {
                   $deptCache[$current_dept_id] = [
                     'nombre' => $actual_orden_res[0]['departamento'],
@@ -1648,8 +1648,8 @@ return function (App $app) {
               if (isset($deptCache[$current_dept_id])) {
                 $actual_orden = $deptCache[$current_dept_id]['orden'];
                 if ($nuevo_orden_proceso <= $actual_orden) {
-                  $sql_update_lote = "UPDATE lotes SET id_departamento_actual = {$id_departamento}, paso = '{$nombreDepartamento}' WHERE id_orden = {$id_orden}";
-                  $localConnection->goQuery($sql_update_lote);
+                  $sql_update_lote = 'UPDATE lotes SET id_departamento_actual = ?, paso = ? WHERE id_orden = ?';
+                  $localConnection->goQuery($sql_update_lote, [$id_departamento, $nombreDepartamento, $id_orden]);
                 }
               }
             }
