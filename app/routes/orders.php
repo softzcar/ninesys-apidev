@@ -5479,9 +5479,8 @@ $object['sales_commission_ISSET'][] = false;
 
   /** FIN ORDENES */
 
-}; // Fin de la función que envuelve las rutas
-// CONVERTIR PRESUPUESTO A ORDEN
-$app->post('/presupuesto/{id}/convertir-a-orden', function (Request $request, Response $response, $args) {
+  // CONVERTIR PRESUPUESTO A ORDEN
+  $app->post('/presupuesto/{id}/convertir-a-orden', function (Request $request, Response $response, $args) {
   $id_presupuesto = intval($args['id']);
   $data = $request->getParsedBody();
   $localConnection = new LocalDB();
@@ -5677,4 +5676,5 @@ id_products_attributes, id_size, id_tela, moment
     $response->getBody()->write(json_encode($object));
     return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
   }
-});
+  });
+}; // Fin de la función que envuelve las rutas
