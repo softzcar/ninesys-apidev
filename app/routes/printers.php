@@ -394,7 +394,7 @@ return function (App $app) {
 
       foreach ($data as $key => $value) {
         if (in_array($key, $allowed_fields)) {
-          $fields[] = "`{$key}` = ?";
+          $fields[] = "{$key} = ?";
           if ($value === 'null' || $value === '') {
             $params[] = null;
           } else {
