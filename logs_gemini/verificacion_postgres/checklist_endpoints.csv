@@ -53,7 +53,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 52,config.php,GET,/gastos,496,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:06
 53,config.php,POST,/gastos,520,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado. Se verifico que LocalDB::getLastID() (usa $this->pdo->lastInsertId()) funciona correctamente en Postgres. Probado en vivo end-to-end contra 194 dev: creacion de plantilla de gasto -> insertada correctamente (_id=1 devuelto coincide con BD).",2026-07-14 08:16:56
 54,config.php,PUT,/gastos/{id},561,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE dinamico totalmente parametrizado (construido con placeholders '?' por cada campo). Probado en vivo end-to-end contra 194 dev: edicion de plantilla de gasto _id=1 (nombre y monto) -> actualizado correctamente, verificado en BD.",2026-07-14 08:27:02
-55,config.php,DELETE,/gastos/{id},597,2-escritura-manual,PENDIENTE,,
+55,config.php,DELETE,/gastos/{id},597,2-escritura-manual,OK,"Sin patrones MySQL-only, DELETE parametrizado simple. Probado en vivo: creado y eliminado gasto de prueba (id 2) exitosamente.",2026-07-14 09:19:44
 56,config.php,GET,/gastos/registros,619,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:07
 57,config.php,POST,/gastos/registros,663,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado. Probado en vivo end-to-end contra 194 dev: registro de gasto (nombre, monto 50.50, fecha 2026-07-14) -> insertado correctamente con periodo calculado 2026-07, verificado en BD.",2026-07-14 08:12:01
 58,config.php,PUT,/gastos/registros/{id},712,2-escritura-manual,PENDIENTE,,
