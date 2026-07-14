@@ -159,7 +159,7 @@ return function (App $app) {
     try {
       $localConnection->beginTransaction();
       // 1. Actualizar el estado del lote a 'terminado'
-      $sql_update_lote = "UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_terminado = NOW() WHERE _id = ? AND estado = 'pendiente'";
+      $sql_update_lote = "UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = NOW() WHERE _id = ? AND estado = 'pendiente'";
       $localConnection->goQuery($sql_update_lote, [$id_lote]);
 
       // 2. Obtener todas las órdenes del lote
