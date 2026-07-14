@@ -273,17 +273,6 @@ return function (App $app) {
     }
   });
 
-  // Actualizar Stock
-  $app->put('/products/stock/{id}/{stock_quantity}', function (Request $request, Response $response, array $args) {
-    $woo = new WooMe();
-
-    $response->getBody()->write($woo->updateProductStock($args['id'], $args['stock_quantity']));
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   // Eliminar Producto (Usamos el metodo `options` porque noo acepta metodo `delete`  da ERROR 405)
   $app->delete('/products/{id}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();

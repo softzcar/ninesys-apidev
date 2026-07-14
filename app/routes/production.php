@@ -2196,68 +2196,6 @@ return function (App $app) {
   });
 
   /**
-   * POST /production/corte/finalizar-tarea
-   * Finaliza la tarea de corte, registrando las piezas físicas en inventario_corte.
-   */
-  $app->post('/production/corte/finalizar-tarea', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
-    $localConnection = new LocalDB();
-    $now = date('Y-m-d H:i:s');
-
-    // Atomicidad FK: inventario_corte + marcado de tarea (LDEA) en una transacción
-    $localConnection->beginTransaction();
-
-    // Data esperada: id_orden, id_lotes_detalles, id_ordenes_productos, id_empleado, cantidad_cortada, ...
-
-    // 1. Insertar en inventario_corte
-    // Nota: Recibimos un array de cortes o uno por uno? Asumiremos uno por uno o un array "cortes".
-    // Si es uno por uno:
-    $sqlInv = "INSERT INTO inventario_corte (id_orden, id_ordenes_productos, id_empleado_corte, cantidad, talla, tela, corte, fecha_corte, estado, moment)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'disponible', ?)";
-
-    $paramsInv = [
-      $data['id_orden'],
-      $data['id_ordenes_productos'],
-      $data['id_empleado'],
-      $data['cantidad_cortada'],
-      $data['talla'],
-      $data['tela'],
-      $data['corte'], // Tipo de corte
-      $now,
-      $now
-    ];
-    $localConnection->goQuery($sqlInv, $paramsInv);
-
-    // 2. Marcar tarea como terminada en lotes_detalles_empleados_asignados
-    // Reutilizamos la lógica existente o llamamos al endpoint existente internamente?
-    // Mejor hacemos el UPDATE directo aquí para asegurar atomicidad o consistencia con este flujo.
-
-    // Buscar si existe asignación
-    $sqlFindAssign = "SELECT _id FROM lotes_detalles_empleados_asignados 
-                      WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND (progreso = 'en curso' OR progreso = 'por iniciar')";
-    // Necesitamos saber el ID departamento de Corte. Asumimos que viene en $data o lo buscamos.
-    $id_depto_corte = $data['id_departamento'];
-
-    $assign = $localConnection->goQuery($sqlFindAssign, [$data['id_orden'], $data['id_empleado'], $id_depto_corte]);
-
-    if (!empty($assign)) {
-      $sqlUpdate = "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = ? WHERE _id = ?";
-      $localConnection->goQuery($sqlUpdate, [$now, $assign[0]['_id']]);
-    }
-
-    // 3. Verificar si todos los items de la orden en Corte están listos para avanzar el Lote?
-    // Esta logica ya suele estar en "registrar-paso-empleado". 
-    // Por ahora solo registramos el inventario y terminamos la tarea individual. 
-    // El frontend podría llamar luego a verificar el estado global o usamos la misma logica de "registrar-paso-empleado" si se requiere.
-    // Para simplificar, asumimos que este endpoint es solo para el registro físico y tarea individual.
-
-    $localConnection->commit();
-    $localConnection->disconnect();
-    $response->getBody()->write(json_encode(['status' => 'success', 'message' => 'Corte registrado e inventario actualizado.']));
-    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-  });
-
-  /**
    * Obtener detalles de productos de una orden para Corte
    */
   $app->get('/production/corte/orden-detalles/{id}', function (Request $request, Response $response, array $args) {

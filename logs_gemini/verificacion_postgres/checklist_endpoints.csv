@@ -269,7 +269,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 268,payments.php,GET,/pagos/reporte-empleado/{id_empleado},1210,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:49
 269,payments.php,GET,/pagos/historico/{semana},1368,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:49
 270,payments.php,POST,/pagos/semana,1657,2-escritura-manual,PENDIENTE,,
-271,payments.php,POST,/pagos/semana/OLD,1821,2-escritura-manual,PENDIENTE,,
+271,payments.php,POST,/pagos/semana/OLD,1821,2-escritura-manual,CODIGO_MUERTO_CANDIDATO,"ELIMINADO: confirmado sin ninguna referencia en app_multi (grep exhaustivo, todo tipo de archivo). Endpoint superado por /pagos/semana (no-OLD), que tiene la misma funcionalidad y SI esta enlazado desde PagosEmpleados.vue y PagosEmpleadosDetallado.vue. Codigo completo del bloque eliminado del archivo (era ~180 lineas).",2026-07-14 12:10:55
 272,printers.php,POST,/impresoras,10,2-escritura-manual,PENDIENTE,,
 273,printers.php,GET,/impresoras,66,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:50
 274,printers.php,GET,/impresoras-tintas-actual[/{id_impresora}],227,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:51
@@ -305,7 +305,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 304,production.php,GET,/produccion/dashboard-stats,1956,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:17
 305,production.php,POST,/production/corte/ajuste,2090,2-escritura-manual,PENDIENTE,,
 306,production.php,POST,/production/corte/crear-orden-stock-manual,2158,2-escritura-manual,PENDIENTE,,
-307,production.php,POST,/production/corte/finalizar-tarea,2198,2-escritura-manual,PENDIENTE,,
+307,production.php,POST,/production/corte/finalizar-tarea,2198,2-escritura-manual,CODIGO_MUERTO_CANDIDATO,"ELIMINADO: confirmado sin ninguna referencia en app_multi (grep exhaustivo, todo tipo de archivo, incluyendo variantes de nombre finalizarTarea). El propio codigo tenia comentarios indicando incertidumbre sobre si estaba completamente integrado al flujo del frontend ('El frontend podria llamar luego...'). Bloque completo eliminado.",2026-07-14 12:10:55
 308,production.php,GET,/production/corte/orden-detalles/{id},2259,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:40:18
 309,products.php,GET,/customer/create/nine,14,1-GET-auto,NO_APLICA_WOOCOMMERCE,"Timeout de 20s en el smoke test automatizado: el endpoint hace una llamada real a la API de WooCommerce (new Client($this->url,...) en woome.php), servicio externo no alcanzable/lento desde el entorno de dev. Mismo criterio ya establecido para otros endpoints de WooCommerce - no relacionado con PostgreSQL, fuera de alcance de esta migracion.",2026-07-13 18:31:16
 310,products.php,GET,/products,24,1-GET-auto,CORREGIDO,"BUG MAYOR encontrado y corregido durante Fase 2 (revision incidental al revisar /editar-producto): woome.php getAllProducts() usaba backtick como alias de columna (AS `name`) ademas de GROUP_CONCAT/JSON_OBJECT/FIND_IN_SET (funciones MySQL-only) y comillas dobles como literal SQL - TODO invalido en PostgreSQL. Esto rompia este endpoint (y otros 3 que comparten la misma funcion) desde la Fase 1, donde quedo marcado FALLO_HTTP_500 sin diagnostico especifico por ser un error generico. Corregido con reescritura completa usando rama DB_DRIVER: jsonb_agg(jsonb_build_object(...)) en vez de CONCAT(GROUP_CONCAT(JSON_OBJECT(...))), string_to_array()/ANY() en vez de FIND_IN_SET, comillas simples, sin alias con backtick, y sin GROUP BY externo (innecesario, cada subconsulta ya agrega 1:1). Probado en vivo end-to-end contra 194 dev: HTTP 200 con JSON completo y correcto (productos, precios, comisiones, categorias todos poblados). Commit 3d73e75.",2026-07-13 18:24:53
@@ -321,7 +321,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 320,products.php,POST,/editar-producto,171,2-escritura-manual,CORREGIDO,"BUG encontrado y corregido: woome.php updateProductLite() usaba backticks alrededor de la tabla y todas las columnas en el UPDATE, invalido en PostgreSQL. Corregido removiendo los backticks. Probado en vivo end-to-end contra 194 dev: edicion de producto _id=3 (nombre, sku, stock_quantity) -> actualizado correctamente, verificado en BD. Nota: esta revision llevo al hallazgo mayor de getAllProducts() (ver id 310/328/329/330) en el mismo archivo. Commit 3d73e75 (incluido en el mismo commit del fix de getAllProducts).",2026-07-13 18:25:23
 321,products.php,POST,/editar-producto-precios,188,2-escritura-manual,PENDIENTE,,
 322,products.php,DELETE,/products-prices/{id},234,2-escritura-manual,PENDIENTE,,
-323,products.php,PUT,/products/stock/{id}/{stock_quantity},277,2-escritura-manual,PENDIENTE,,
+323,products.php,PUT,/products/stock/{id}/{stock_quantity},277,2-escritura-manual,CODIGO_MUERTO_CANDIDATO,"ELIMINADO: confirmado sin ninguna referencia en app_multi (grep exhaustivo). No contenia SQL directo (delegaba a WooMe::updateProductStock(), integracion WooCommerce), por lo que tampoco era relevante para la migracion Postgres. Bloque completo eliminado.",2026-07-14 12:10:55
 324,products.php,DELETE,/products/{id},288,2-escritura-manual,PENDIENTE,,
 325,products.php,POST,/product-set-comision-producto,307,2-escritura-manual,PENDIENTE,,
 326,products.php,POST,/product-set-comisiones-batch,399,2-escritura-manual,PENDIENTE,,
