@@ -113,11 +113,6 @@ return function (App $app) {
             }
             $finalResponse['costo_hora_empleado'] = $salariosData;
 
-            // --- 3. Obtener Costo de Tinta (api_empresas.tintas_recargas) ---
-            $tintaSql = "SELECT precio_litro FROM api_empresas.tintas_recargas WHERE id_empresa = :id_empresa ORDER BY fecha DESC LIMIT 1";
-            $tintaData = $dbEmpresas->goQuery($tintaSql, ['id_empresa' => $id_empresa]);
-            $costo_tinta_litro = $tintaData[0]['precio_litro'] ?? 0;
-
             $whereClause = (isset($whereConditions) && !empty($whereConditions)) ? ' WHERE ' . implode(' AND ', $whereConditions) : '';
 
             // 1. Obtener Órdenes (Consulta Base)
