@@ -1259,7 +1259,7 @@ return function (App $app) {
       if (empty($verificacion)) {
         // BUSCAR CANTIDAD EN `ordenes_productos`
         $sql = 'SELECT cantidad FROM ordenes_productos WHERE _id = ?';
-        $cantidad_orden = $localConnection->goQuery($sql, [$miEmpleado['id_ordenes_productos']])[0]['cantidad'];
+        $cantidad_orden = intval($localConnection->goQuery($sql, [$miEmpleado['id_ordenes_productos']])[0]['cantidad']);
 
         $myDate = new CustomTime();
         $now = $myDate->today();
