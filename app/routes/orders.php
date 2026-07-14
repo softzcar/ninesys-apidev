@@ -27,48 +27,54 @@ return function (App $app) {
     // Atomicidad FK: la edición puede tocar ordenes_productos y ordenes en pasos separados
     $localConnection->beginTransaction();
 
+    $params = [];
     switch ($data['accion']) {
       case 'editar-cantidad':
-        $sql = 'UPDATE ordenes_productos SET cantidad = ' . $data['cantidad'] . ' WHERE _id = ' . $data['id'];
-        $resp = $localConnection->goQuery($sql);
+        $sql = 'UPDATE ordenes_productos SET cantidad = ? WHERE _id = ?';
+        $resp = $localConnection->goQuery($sql, [$data['cantidad'], $data['id']]);
 
         // Recalcular nuevo pago_total de la orden
-        $sql = 'SELECT SUM(cantidad*precio_unitario) AS total FROM ordenes_productos WHERE id_orden = ' . $data['id_orden'];
+        $sql = 'SELECT SUM(cantidad*precio_unitario) AS total FROM ordenes_productos WHERE id_orden = ?';
 
-        $resp = $localConnection->goQuery($sql);
+        $resp = $localConnection->goQuery($sql, [$data['id_orden']]);
         $object['total_sql'] = $sql;
         $nuevototal = $resp[0]['total'];
 
-        $sql = "UPDATE ordenes SET pago_total = '" . $nuevototal . "' WHERE _id = " . $data['id_orden'];
+        $sql = 'UPDATE ordenes SET pago_total = ? WHERE _id = ?';
+        $params = [$nuevototal, $data['id_orden']];
         break;
 
       case 'editar-talla':
         // Guardar nuevos datos
-        $sql = "UPDATE ordenes_productos SET precio_unitario = '" . $data['precio'] . "', talla = '" . $data['cantidad'] . "' WHERE _id = " . $data['id'] . ';';
-        $resp = $localConnection->goQuery($sql);
+        $sql = 'UPDATE ordenes_productos SET precio_unitario = ?, talla = ? WHERE _id = ?';
+        $resp = $localConnection->goQuery($sql, [$data['precio'], $data['cantidad'], $data['id']]);
 
         // Recalcular nuevo pago_total de la orden
-        $sql = 'SELECT SUM(cantidad*precio_unitario) AS total FROM ordenes_productos WHERE id_orden = ' . $data['id_orden'];
+        $sql = 'SELECT SUM(cantidad*precio_unitario) AS total FROM ordenes_productos WHERE id_orden = ?';
 
-        $resp = $localConnection->goQuery($sql);
+        $resp = $localConnection->goQuery($sql, [$data['id_orden']]);
         $object['total_sql'] = $sql;
         $nuevototal = $resp[0]['total'];
 
         // Guardar nuevo pago_total de la orden
-        $sql = "UPDATE ordenes SET pago_total = '" . $nuevototal . "' WHERE _id = " . $data['id_orden'];
+        $sql = 'UPDATE ordenes SET pago_total = ? WHERE _id = ?';
+        $params = [$nuevototal, $data['id_orden']];
         break;
 
       case 'editar-corte':
-        $sql = "UPDATE ordenes_productos SET corte = '" . $data['cantidad'] . "' WHERE _id = " . $data['id'];
+        $sql = 'UPDATE ordenes_productos SET corte = ? WHERE _id = ?';
+        $params = [$data['cantidad'], $data['id']];
         break;
 
       case 'eliminar-producto':
-        $sql = 'DELETE FROM ordenes_productos WHERE _id = ' . $data['id'];
+        $sql = 'DELETE FROM ordenes_productos WHERE _id = ?';
+        $params = [$data['id']];
         break;
 
       case 'editar-tela':
         // Guardar cambios
-        $sql = "UPDATE ordenes_productos SET tela = '" . $data['cantidad'] . "' WHERE _id = " . $data['id'] . ';';
+        $sql = 'UPDATE ordenes_productos SET tela = ? WHERE _id = ?';
+        $params = [$data['cantidad'], $data['id']];
         break;
 
       case 'nuevo-producto':
@@ -78,19 +84,19 @@ return function (App $app) {
         $myDate = new CustomTime();
         $now = $myDate->today();
 
-        $values = '(';
-        $values .= "'" . $now . "',";
-        $values .= '' . $data['id_orden'] . ',';
-        $values .= '' . $data['id_woo'] . ',';
-        $values .= '' . $data['precio_woo'] . ',';
-        $values .= "'" . $data['name'] . "',";
-        $values .= '' . $data['cantidad'] . ',';
-        $values .= "'" . $data['talla'] . "',";
-        $values .= "'" . $data['corte'] . "',";
-        $values .= "'" . $data['tela'] . "',";
-        $values .= '' . $data['precio_unitario'] . ')';
-
-        $sql = 'INSERT INTO ordenes_productos ' . $campos . ' VALUES ' . $values;
+        $sql = 'INSERT INTO ordenes_productos ' . $campos . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $params = [
+          $now,
+          $data['id_orden'],
+          $data['id_woo'],
+          $data['precio_woo'],
+          $data['name'],
+          $data['cantidad'],
+          $data['talla'],
+          $data['corte'],
+          $data['tela'],
+          $data['precio_unitario'],
+        ];
         break;
 
       default:
@@ -98,7 +104,7 @@ return function (App $app) {
         break;
     }
 
-    $resp = $localConnection->goQuery($sql);
+    $resp = $localConnection->goQuery($sql, $params);
 
     $localConnection->commit();
     $localConnection->disconnect();
@@ -616,9 +622,8 @@ return function (App $app) {
     $datosObs = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    // $sql = "UPDATE ordenes SET observaciones = '" . $datosObs["obs"] . "'  WHERE _id = " . $datosObs["id"];
-    $sql = "UPDATE ordenes SET observaciones = 'Editada sin concentimiento por " . $datosObs['empleado'] . "'  WHERE _id = " . $datosObs['id'];
-    $data = $localConnection->goQuery($sql);
+    $sql = "UPDATE ordenes SET observaciones = CONCAT('Editada sin concentimiento por ', ?) WHERE _id = ?";
+    $data = $localConnection->goQuery($sql, [$datosObs['empleado'], $datosObs['id']]);
 
     $localConnection->disconnect();
 
@@ -1912,11 +1917,25 @@ return function (App $app) {
     // $woo->sendMail($orderWC->id, 'Mensaje de confirmacion de cracion de orden para el cliente'); // Reemplaza "enviarCorreoElectronico" con la función real
 
     /* Craer orden en nunesys */
-    $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql . ", '" . $arr['cedula'] . "', '" . addslashes($newJson['obs'] ?? '') . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
+    $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
     $localConnection->beginTransaction();
     try {
-    $insertOrdenResult = $localConnection->goQuery($sql);
+    $insertOrdenResult = $localConnection->goQuery($sql, [
+      $newJson['responsable'],
+      $now,
+      $arr['descuento'],
+      $arr['abono'],
+      $id_wp_val,
+      $arr['cedula'],
+      $newJson['obs'] ?? '',
+      $newJson['total'],
+      $cliente,
+      date('Y-m-d'),
+      $newJson['fechaEntrega'],
+      date('Y-m-d'),
+      'En espera',
+    ]);
     $object['nueva_oreden_response'] = json_encode($insertOrdenResult);
 
     // ID de la orden recién insertada (evita race condition de SELECT MAX)
@@ -1925,13 +1944,13 @@ return function (App $app) {
 
     // Guardar orden vinculada
     if ($arr['vinculada'] != 0 || $arr['vinculada'] != '0') {
-      $sql = "INSERT INTO ordenes_vinculadas (moment, id_father, id_child) VALUES ('" . $now . "', " . $arr['vinculada'] . ', ' . $last_id . ')';
-      $object['response_orden_vinculada'] = json_encode($localConnection->goQuery($sql));
+      $sql = 'INSERT INTO ordenes_vinculadas (moment, id_father, id_child) VALUES (?, ?, ?)';
+      $object['response_orden_vinculada'] = json_encode($localConnection->goQuery($sql, [$now, $arr['vinculada'], $last_id]));
     }
 
     // Crear abono inicial de la orden
-    $sql = "INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento) VALUES ('" . $now . "', '" . $last_id . "',  '" . $newJson['responsable'] . "', '" . $newJson['abono'] . "', '" . $newJson['descuento'] . "');";
-    $object['response_primer_abono'] = json_encode($localConnection->goQuery($sql));
+    $sql = 'INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento) VALUES (?, ?, ?, ?, ?)';
+    $object['response_primer_abono'] = json_encode($localConnection->goQuery($sql, [$now, $last_id, $newJson['responsable'], $newJson['abono'], $newJson['descuento']]));
 
     // CALCULAMOE ES PORCENTAJE DEL VENDEDOR
     // if (isset($arg["sales_commission"])) { // sales_comission no llega en el Payload vamoa a validar el valor de abono
@@ -1939,8 +1958,8 @@ return function (App $app) {
       // $object['sales_commission_ISSET'][] = $arg["sales_commission"];
       $pago_vendedor = floatval($newJson['abono']) * 5 / 100;
       $pago_vendedor = number_format($pago_vendedor, 2);
-      $sql = "INSERT INTO pagos (moment, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES ('" . $now . "', '" . $last_id . "',  '" . $newJson['responsable'] . "', '" . $pago_vendedor . "', 'Comercialización', 'aprobado')";
-      $object['resultado_abono'] = json_encode($localConnection->goQuery($sql));
+      $sql = "INSERT INTO pagos (moment, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES (?, ?, ?, ?, 'Comercialización', 'aprobado')";
+      $object['resultado_abono'] = json_encode($localConnection->goQuery($sql, [$now, $last_id, $newJson['responsable'], $pago_vendedor]));
       $object['pago a vendedor'] = 'SI hubo comisión, cliente normal';
       /* if ($arg["sales_commission"] === true) {
                             $object['sales_commission_ISSET'][] = true;
@@ -1952,23 +1971,24 @@ $object['sales_commission_ISSET'][] = false;
 } */
 
     // GUARDAR DATOS DE DISEÑO
-    $sql_diseno = '';
+    $sql_diseno = "INSERT INTO disenos (moment, id_orden, tipo, id_empleado) VALUES (?, ?, ?, 0)";
+    $disenos_resultados = [];
     if ($newJson['diseno_grafico'] == 'true') {
       for ($i = 0; $i < intval($newJson['diseno_grafico_cantidad']); $i++) {
-        $sql_diseno .= "INSERT INTO disenos (moment, id_orden, tipo, id_empleado) VALUES ('" . $now . "', " . $last_id . ", 'gráfico', 0);";
+        $disenos_resultados[] = $localConnection->goQuery($sql_diseno, [$now, $last_id, 'gráfico']);
       }
     }
 
     if ($newJson['diseno_modas'] == 'true') {
       for ($i = 0; $i < intval($newJson['diseno_modas_cantidad']); $i++) {
-        $sql_diseno .= "INSERT INTO disenos (moment, id_orden, tipo, id_empleado) VALUES ('" . $now . "', " . $last_id . ", 'modas', 0);";
+        $disenos_resultados[] = $localConnection->goQuery($sql_diseno, [$now, $last_id, 'modas']);
       }
     }
 
-    $object['miDiseno'] = json_encode($localConnection->goQuery($sql_diseno));
+    $object['miDiseno'] = json_encode($disenos_resultados);
 
     // GUARDAR PRODUCTOS ASOCIADOS A LA ORDEN
-    $sql = 'SELECT _id';
+    $sql_lote_detalles_tpl = 'INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES (?, ?, ?, ?, ?)';
 
     for ($i = 0; $i <= $count; $i++) {
       if (isset($misProductos[$i])) {
@@ -1978,56 +1998,31 @@ $object['sales_commission_ISSET'][] = false;
 
         $decodedObj = $misProductos[$i];
 
-        /* $woo = new WooMe();
-                $data_category = $woo->getCategoryById(intval($decodedObj['categoria']));
-                $tmp = json_decode($data_category);
-                $cat_name = $tmp->name; */
-        /* if ($tmp->statusCode === 500) {
-                    $cat_name = "Uncatagorized";
-                    } else {
-                    } */
-
         $cat_name = 'Uncatagorized';
-
-        $values = "'" . $now . "',";
-        $values .= $decodedObj['precio'] . ',';
-        $values .= "'" . $decodedObj['precioWoo'] . "',";
-        $values .= "'" . $decodedObj['producto'] . "',";
-        $values .= $last_id . ',';
-        $values .= $decodedObj['cod'] . ',';
-        $values .= $decodedObj['cantidad'] . ',';
         $id_categoria = (isset($decodedObj['categoria']) && !empty($decodedObj['categoria'])) ? intval($decodedObj['categoria']) : 0;
-        $values .= $id_categoria . ',';
-        $values .= "'" . $cat_name . "',";
-        // $values .= "'" . $tmp["->name"] . "',";
 
-        if (isset($decodedObj['talla'])) {
-          $values .= "'" . $decodedObj['talla'] . "',";
-        } else {
-          $values .= "'',";
-        }
-
-        if (isset($decodedObj['corte'])) {
-          $values .= "'" . $decodedObj['corte'] . "',";
-        } else {
-          $values .= "'',";
-        }
-
-        if (isset($decodedObj['tela'])) {
-          $values .= "'" . $decodedObj['tela'] . "'";
-        } else {
-          $values .= "''";
-        }
-
-        $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela) VALUES (' . $values . ')';
+        $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $object['sql_ordenes_productos'] = $sql2;
-        $insertProdResult = $localConnection->goQuery($sql2);
+        $insertProdResult = $localConnection->goQuery($sql2, [
+          $now,
+          $decodedObj['precio'],
+          $decodedObj['precioWoo'],
+          $decodedObj['producto'],
+          $last_id,
+          $decodedObj['cod'],
+          $decodedObj['cantidad'],
+          $id_categoria,
+          $cat_name,
+          $decodedObj['talla'] ?? '',
+          $decodedObj['corte'] ?? '',
+          $decodedObj['tela'] ?? '',
+        ]);
         $object['producto_detalle'][] = $insertProdResult;
 
         // BUSCAR EMPLEADOS Y GUARDARLOS EN UN VECTOR PARA ASIGANR A CASDA UNO ...
         if ($misProductos[$i] != '') {
-          $sql_order = 'SELECT * FROM ordenes WHERE _id = ' . $last_id;
-          $myOrder = $localConnection->goQuery($sql_order);
+          $sql_order = 'SELECT * FROM ordenes WHERE _id = ?';
+          $myOrder = $localConnection->goQuery($sql_order, [$last_id]);
           $object['myOrder_sql'] = $sql_order;
           $object['myOrder'] = $myOrder;
 
@@ -2041,17 +2036,12 @@ $object['sales_commission_ISSET'][] = false;
           // FILTRAR DISEñOS POR `id_woo` PARA EVITAR INCUIRLOS COMO PRODUCTOS EN EL LOTE PORQUE EL CONTROL DE DISEÑOS DE LLEVA EN LA TABLA `disenos`
           $myWooId = intval($decodedObj['cod']);
           if ($myWooId != 11 && $myWooId != 12 && $myWooId != 13 && $myWooId != 14 && $myWooId != 15 && $myWooId != 16 && $myWooId != 112 && $myWooId != 113 && $myWooId != 168 && $myWooId != 169 && $myWooId != 170 && $myWooId != 171 && $myWooId != 172 && $myWooId != 173) {
-            $sql_lote_detalles = '';
-            // $sql_lote_detalles = "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Responsable');";
-            // $sql_lote_detalles .= "INSERT INTO lotes_detalles (`moment`, `id_orden`, `id_ordenes_productos`, `id_woo`, `departamento`) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Diseño');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Corte');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Impresión');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Estampado');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Costura');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Limpieza');";
-            $sql_lote_detalles .= "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', 'Revisión');";
-            $object['sql_lotes_detalles'][$i] = $sql_lote_detalles;
-            $object['lote_detalles'][$i] = $localConnection->goQuery($sql_lote_detalles);
+            $departamentos_lote = ['Corte', 'Impresión', 'Estampado', 'Costura', 'Limpieza', 'Revisión'];
+            $lote_detalles_result = [];
+            foreach ($departamentos_lote as $dep_lote) {
+              $lote_detalles_result[] = $localConnection->goQuery($sql_lote_detalles_tpl, [$now, $last_id, $last_id_ordenes_productos, $decodedObj['cod'], $dep_lote]);
+            }
+            $object['lote_detalles'][$i] = $lote_detalles_result;
           }
         }
       }
@@ -2060,8 +2050,8 @@ $object['sales_commission_ISSET'][] = false;
     // GUARDAR LOTE
 
     // -> VERIFICAR SI LA ORDEN ES SOLO DE DISEÑO NO CREAR EL LOTE
-    $sql_verify = 'SELECT category_name FROM ordenes_productos WHERE id_orden = ' . $last_id;
-    $resultVerify = $localConnection->goQuery($sql_verify);
+    $sql_verify = 'SELECT category_name FROM ordenes_productos WHERE id_orden = ?';
+    $resultVerify = $localConnection->goQuery($sql_verify, [$last_id]);
 
     $guardarLote = true;
     if (!empty($resultVerify)) {
@@ -2074,54 +2064,55 @@ $object['sales_commission_ISSET'][] = false;
     $object['guardar_en_lote'] = $guardarLote;
 
     if ($guardarLote) {
-      $sql_lote = "INSERT INTO lotes (moment, fecha, id_orden, lote, paso) VALUES ('" . $now . "', '" . date('Y-m-d') . "', " . $last_id . ', ' . $last_id . ", 'producción')";
-      $object['miLote'] = json_encode($localConnection->goQuery($sql_lote));
+      $sql_lote = "INSERT INTO lotes (moment, fecha, id_orden, lote, paso) VALUES (?, ?, ?, ?, 'producción')";
+      $object['miLote'] = json_encode($localConnection->goQuery($sql_lote, [$now, date('Y-m-d'), $last_id, $last_id]));
     }
 
     // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
-    $sql_metodos_pago = '';
+    $sql_metodo_pago_tpl = 'INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES (?, ?, ?, ?, ?, ?)';
+    $sql_caja_tpl = 'INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?)';
+    $metodos_pago_resultados = [];
 
     if (intval($arr['montoDolaresEfectivo']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Efectivo', '" . $arr['montoDolaresEfectivo'] . "', '1', 'Nueva Orden');";
-      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoDolaresEfectivo'] . "', 'Dólares', 1, 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_metodo_pago_tpl, [$last_id, 'Dólares', 'Efectivo', $arr['montoDolaresEfectivo'], 1, 'Nueva Orden']);
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_caja_tpl, [$arr['montoDolaresEfectivo'], 'Dólares', 1, 'orden_nueva', $newJson['responsable'], 'Nueva Orden']);
     }
 
     if (intval($arr['montoDolaresZelle']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Zelle', '" . $arr['montoDolaresZelle'] . "', '1', 'Nueva Orden');";
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_metodo_pago_tpl, [$last_id, 'Dólares', 'Zelle', $arr['montoDolaresZelle'], 1, 'Nueva Orden']);
     }
 
     if (intval($arr['montoDolaresPanama']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Dólares', 'Panamá', '" . $arr['montoDolaresPanama'] . "', '1', 'Nueva Orden');";
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_metodo_pago_tpl, [$last_id, 'Dólares', 'Panamá', $arr['montoDolaresPanama'], 1, 'Nueva Orden']);
     }
 
     if (intval($arr['montoPesosEfectivo']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Pesos', 'Efectivo', '" . $arr['montoPesosEfectivo'] . "', '" . $arr['tasa_peso'] . "', 'Nueva Orden');";
-      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoPesosEfectivo'] . "', 'Pesos', '" . $arr['tasa_peso'] . "', 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_metodo_pago_tpl, [$last_id, 'Pesos', 'Efectivo', $arr['montoPesosEfectivo'], $arr['tasa_peso'], 'Nueva Orden']);
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_caja_tpl, [$arr['montoPesosEfectivo'], 'Pesos', $arr['tasa_peso'], 'orden_nueva', $newJson['responsable'], 'Nueva Orden']);
     }
 
     if (intval($arr['montoPesosTransferencia']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Pesos', 'Transferencia', '" . $arr['montoPesosTransferencia'] . "', '" . $arr['tasa_peso'] . "', 'Nueva Orden');";
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_metodo_pago_tpl, [$last_id, 'Pesos', 'Transferencia', $arr['montoPesosTransferencia'], $arr['tasa_peso'], 'Nueva Orden']);
     }
 
     if (intval($arr['montoBolivaresEfectivo']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Efectivo', '" . $arr['montoBolivaresEfectivo'] . "', '" . $arr['tasa_dolar'] . "', 'Nueva Orden');";
-
-      $sql_metodos_pago .= "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . $arr['montoBolivaresEfectivo'] . "', 'Bolívares', '" . $arr['tasa_dolar'] . "', 'orden_nueva', '" . $newJson['responsable'] . "', 'Nueva Orden');";
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_metodo_pago_tpl, [$last_id, 'Bolívares', 'Efectivo', $arr['montoBolivaresEfectivo'], $arr['tasa_dolar'], 'Nueva Orden']);
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_caja_tpl, [$arr['montoBolivaresEfectivo'], 'Bolívares', $arr['tasa_dolar'], 'orden_nueva', $newJson['responsable'], 'Nueva Orden']);
     }
 
     if (intval($arr['montoBolivaresPunto']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Punto', '" . $arr['montoBolivaresPunto'] . "', '" . $arr['tasa_dolar'] . "', 'Nueva Orden');";
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_metodo_pago_tpl, [$last_id, 'Bolívares', 'Punto', $arr['montoBolivaresPunto'], $arr['tasa_dolar'], 'Nueva Orden']);
     }
 
     if (intval($arr['montoBolivaresPagomovil']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Pagomovil', '" . $arr['montoBolivaresPagomovil'] . "', '" . $arr['tasa_dolar'] . "', 'Nueva Orden');";
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_metodo_pago_tpl, [$last_id, 'Bolívares', 'Pagomovil', $arr['montoBolivaresPagomovil'], $arr['tasa_dolar'], 'Nueva Orden']);
     }
 
     if (intval($arr['montoBolivaresTransferencia']) > 0) {
-      $sql_metodos_pago .= "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Transferencia', '" . $arr['montoBolivaresTransferencia'] . "', '" . $arr['tasa_dolar'] . "', 'Nueva Orden');";
+      $metodos_pago_resultados[] = $localConnection->goQuery($sql_metodo_pago_tpl, [$last_id, 'Bolívares', 'Transferencia', $arr['montoBolivaresTransferencia'], $arr['tasa_dolar'], 'Nueva Orden']);
     }
 
-    $object['metodos_pago'][$i] = $localConnection->goQuery($sql_metodos_pago);
+    $object['metodos_pago'][$i] = $metodos_pago_resultados;
 
     $localConnection->commit();
     } catch (\Throwable $e) {
