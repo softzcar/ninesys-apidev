@@ -9,20 +9,35 @@
  * @package NineSys\AI
  */
 
-return [
-    'prompt_sql' => "Eres un asistente de consultas para una empresa de confección y manufactura textil llamada Nineteen Custom.
-Tu objetivo es responder preguntas sobre órdenes de producción, productos, inventario, clientes, pagos, empleados y estado de fabricación.
-Debes generar consultas SQL SELECT basándote en las tablas disponibles.
-Siempre responde en español de forma clara y profesional.
-
-IMPORTANTE: La base de datos es MySQL. Usa la sintaxis de MySQL, NO SQLite.
+// El motor real varia por empresa (dual MySQL/PostgreSQL) - las instrucciones de
+// sintaxis de fecha que se le dan a Gemini deben coincidir, o el SQL que genere
+// fallara siempre en las empresas que corren sobre Postgres.
+$esPostgres = defined('DB_DRIVER') && DB_DRIVER === 'pgsql';
+$instruccionesFecha = $esPostgres
+    ? "IMPORTANTE: La base de datos es PostgreSQL. Usa la sintaxis de PostgreSQL.
+Para fechas usa las funciones de PostgreSQL:
+- EXTRACT(MONTH FROM campo) en lugar de MONTH(campo)
+- EXTRACT(YEAR FROM campo) en lugar de YEAR(campo)
+- campo::date para extraer solo la fecha (en vez de DATE(campo))
+- NOW() o CURRENT_DATE para fecha actual (NO uses CURDATE(), no existe en PostgreSQL)
+- Para filtrar por mes y año: WHERE EXTRACT(MONTH FROM fecha_inicio) = 12 AND EXTRACT(YEAR FROM fecha_inicio) = 2025
+- Para rango de fechas: WHERE fecha_inicio BETWEEN '2025-12-01' AND '2025-12-31'"
+    : "IMPORTANTE: La base de datos es MySQL. Usa la sintaxis de MySQL, NO SQLite.
 Para fechas usa las funciones de MySQL:
 - MONTH(campo) en lugar de strftime('%m', campo)
 - YEAR(campo) en lugar de strftime('%Y', campo)
 - DATE(campo) para extraer solo la fecha
 - NOW() o CURDATE() para fecha actual
 - Para filtrar por mes y año: WHERE MONTH(fecha_inicio) = 12 AND YEAR(fecha_inicio) = 2025
-- Para rango de fechas: WHERE fecha_inicio BETWEEN '2025-12-01' AND '2025-12-31'
+- Para rango de fechas: WHERE fecha_inicio BETWEEN '2025-12-01' AND '2025-12-31'";
+
+$geminiSchema = [
+    'prompt_sql' => "Eres un asistente de consultas para una empresa de confección y manufactura textil llamada Nineteen Custom.
+Tu objetivo es responder preguntas sobre órdenes de producción, productos, inventario, clientes, pagos, empleados y estado de fabricación.
+Debes generar consultas SQL SELECT basándote en las tablas disponibles.
+Siempre responde en español de forma clara y profesional.
+
+{$instruccionesFecha}
 
 IMPORTANTE SOBRE EMPLEADOS:
 Los datos de empleados están en una base de datos diferente llamada 'api_empresas'.
@@ -269,7 +284,7 @@ La fecha de hoy es " . date('Y-m-d') . ".",
 
         // ==================== COMISIONES Y PAGOS A EMPLEADOS ====================
         'Comisiones pendientes de un empleado por nombre' => "SELECT SUM(p.monto_pago) as total FROM pagos p JOIN api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario WHERE eu.nombre LIKE '%{NOMBRE}%' AND eu.id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND p.estatus = 'aprobado' AND p.fecha_pago IS NULL",
-        'Empleados con comisiones pendientes' => "SELECT eu.nombre, SUM(p.monto_pago) as total_pendiente FROM pagos p JOIN api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario WHERE eu.id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND p.estatus = 'aprobado' AND p.fecha_pago IS NULL GROUP BY eu.id_usuario, eu.nombre HAVING total_pendiente > 0 ORDER BY total_pendiente DESC",
+        'Empleados con comisiones pendientes' => "SELECT eu.nombre, SUM(p.monto_pago) as total_pendiente FROM pagos p JOIN api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario WHERE eu.id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND p.estatus = 'aprobado' AND p.fecha_pago IS NULL GROUP BY eu.id_usuario, eu.nombre HAVING SUM(p.monto_pago) > 0 ORDER BY total_pendiente DESC",
         'Buscar empleado por nombre' => "SELECT id_usuario, nombre, departamento, comision FROM api_empresas.empresas_usuarios WHERE nombre LIKE '%{NOMBRE}%' AND id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND activo = 1",
         'Lista de empleados activos' => "SELECT id_usuario, nombre, departamento, comision, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND activo = 1 ORDER BY nombre",
         'Pagos realizados a empleados este mes' => "SELECT eu.nombre, SUM(p.monto_pago) as total_pagado FROM pagos p JOIN api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario WHERE eu.id_empresa = " . (defined('ID_EMPRESA') ? ID_EMPRESA : 163) . " AND p.fecha_pago IS NOT NULL AND MONTH(p.fecha_pago) = MONTH(CURDATE()) GROUP BY eu.id_usuario, eu.nombre ORDER BY total_pagado DESC",
@@ -994,3 +1009,59 @@ La fecha de hoy es " . date('Y-m-d') . ".",
         'Tareas con nombre del empleado asignado' => "SELECT ld.id_orden, ld.departamento, eu.nombre as empleado FROM lotes_detalles ld JOIN api_empresas.empresas_usuarios eu ON ld.id_empleado = eu.id_usuario WHERE ld.terminado = 0",
     ]
 ];
+
+if ($esPostgres) {
+    // Traduce los patrones de fecha MySQL de las consultas de ejemplo (few-shot
+    // para Gemini) a su equivalente PostgreSQL. Se hace por transformacion en vez
+    // de duplicar manualmente las ~40 consultas de sql_recipes/examples.
+    $traducirSqlMysqlAPostgres = function (string $sql): string {
+        // TIMESTAMPDIFF(SECOND, inicio, fin) -> EXTRACT(EPOCH FROM (fin - inicio))
+        $sql = preg_replace(
+            '/TIMESTAMPDIFF\(SECOND,\s*([a-zA-Z0-9_.]+),\s*([a-zA-Z0-9_.]+)\)/',
+            'EXTRACT(EPOCH FROM ($2 - $1))',
+            $sql
+        );
+        // DATE_FORMAT(campo, '%Y-%m') -> TO_CHAR(campo, 'YYYY-MM')
+        $sql = preg_replace_callback(
+            '/DATE_FORMAT\(([a-zA-Z0-9_.]+),\s*\'([^\']+)\'\)/',
+            function ($m) {
+                $fmtPg = str_replace(['%Y', '%m', '%d', '%H', '%i', '%s'], ['YYYY', 'MM', 'DD', 'HH24', 'MI', 'SS'], $m[2]);
+                return "TO_CHAR({$m[1]}, '{$fmtPg}')";
+            },
+            $sql
+        );
+        // DATE_SUB(CURDATE(), INTERVAL N UNIT) -> (CURRENT_DATE - INTERVAL 'N unit')
+        $sql = preg_replace_callback(
+            '/DATE_SUB\(CURDATE\(\),\s*INTERVAL\s+(\d+)\s+(\w+)\)/i',
+            function ($m) {
+                return "(CURRENT_DATE - INTERVAL '{$m[1]} {$m[2]}')";
+            },
+            $sql
+        );
+        // YEARWEEK(campo, 1) = YEARWEEK(CURDATE(), 1)  ->  comparar truncado a semana
+        $sql = preg_replace(
+            '/YEARWEEK\(([a-zA-Z0-9_.]+),\s*1\)\s*=\s*YEARWEEK\(CURDATE\(\),\s*1\)/',
+            "DATE_TRUNC('week', $1) = DATE_TRUNC('week', CURRENT_DATE)",
+            $sql
+        );
+        // CURDATE() -> CURRENT_DATE
+        $sql = preg_replace('/\bCURDATE\(\)/', 'CURRENT_DATE', $sql);
+        // MONTH(campo) -> EXTRACT(MONTH FROM campo)
+        $sql = preg_replace('/\bMONTH\(([a-zA-Z0-9_.]+)\)/', 'EXTRACT(MONTH FROM $1)', $sql);
+        // YEAR(campo) -> EXTRACT(YEAR FROM campo)
+        $sql = preg_replace('/\bYEAR\(([a-zA-Z0-9_.]+)\)/', 'EXTRACT(YEAR FROM $1)', $sql);
+        // DATE(campo) -> campo::date (evitar tocar CURRENT_DATE ya reemplazado)
+        $sql = preg_replace('/\bDATE\(([a-zA-Z0-9_.]+)\)/', '$1::date', $sql);
+        return $sql;
+    };
+
+    foreach (['sql_recipes', 'examples'] as $seccion) {
+        if (isset($geminiSchema[$seccion]) && is_array($geminiSchema[$seccion])) {
+            foreach ($geminiSchema[$seccion] as $clave => $sqlEjemplo) {
+                $geminiSchema[$seccion][$clave] = $traducirSqlMysqlAPostgres($sqlEjemplo);
+            }
+        }
+    }
+}
+
+return $geminiSchema;
