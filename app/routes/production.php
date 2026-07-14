@@ -1711,9 +1711,9 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     // VERIFCAR SI EXISTE PERSONAL ASIGNADO APR ESTE PRODUCTO EN EL LOTE
-    $sql = 'SELECT COUNT(*) cuenta FROM lotes_detalles WHERE id_orden = ' . $data['id_orden'] . " AND departamento = '" . $data['paso'] . "'";
+    $sql = 'SELECT COUNT(*) cuenta FROM lotes_detalles WHERE id_orden = ? AND departamento = ?';
     $object['sql_empty'] = $sql;
-    $cuenta = $localConnection->goQuery($sql);
+    $cuenta = $localConnection->goQuery($sql, [$data['id_orden'], $data['paso']]);
 
     $asignados = $cuenta[0]['cuenta'];
     $object['asignados'] = $cuenta[0]['cuenta'];
@@ -1723,8 +1723,8 @@ return function (App $app) {
       $object['nodata'] = true;
     } else {
       // TODO buscar datos para el calculo de pagos
-      $sql = "UPDATE lotes SET paso = '" . $data['paso'] . "' WHERE _id = '" . $data['id_orden'] . "'";
-      $object['response_orden'] = json_encode($localConnection->goQuery($sql));
+      $sql = 'UPDATE lotes SET paso = ? WHERE _id = ?';
+      $object['response_orden'] = json_encode($localConnection->goQuery($sql, [$data['paso'], $data['id_orden']]));
       $object['nodata'] = false;
     }
 
