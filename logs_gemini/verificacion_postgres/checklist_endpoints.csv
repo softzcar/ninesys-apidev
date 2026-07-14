@@ -104,7 +104,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 103,designs.php,DELETE,/disenos/images/{id_orden}/{image_name},996,2-escritura-manual,PENDIENTE,,
 104,designs.php,POST,/disenos/imagen/{id_orden}/{id_diseno},1016,2-escritura-manual,PENDIENTE,,
 105,employees.php,GET,/empleados,11,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:33
-106,employees.php,POST,/empleados/activacion,222,2-escritura-manual,EN_PROGRESO,Investigando POST /empleados/activacion,2026-07-14 08:17:06
+106,employees.php,POST,/empleados/activacion,222,2-escritura-manual,OK,"Sin bugs. Investigacion interesante: el prefijo 'api_empresas.' funciona correctamente incluso cuando la conexion ya apunta directo a la BD central api_empresas (via EMPRESAS_DNS), porque existe un esquema 'api_empresas' DENTRO de esa misma BD con vistas espejo de cada tabla real (en el esquema 'public') - diseñado deliberadamente para que el prefijo funcione igual sin importar si la conexion es directa a la BD central o via FDW desde una empresa. Se confirmo que las vistas son actualizables (UPDATE a traves de vista funciono correctamente). Probado en vivo end-to-end contra 194 dev: activacion/desactivacion del empleado 3 -> ambos cambios de estado verificados correctamente en BD (y restaurado a activo=1 al finalizar la prueba).",2026-07-14 08:21:36
 107,employees.php,POST,/empleados/nuevo,240,2-escritura-manual,PENDIENTE,,
 108,employees.php,POST,/empleados/editar,345,2-escritura-manual,PENDIENTE,,
 109,employees.php,POST,/empleados/eliminar,448,2-escritura-manual,PENDIENTE,,
