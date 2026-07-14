@@ -104,7 +104,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 103,designs.php,DELETE,/disenos/images/{id_orden}/{image_name},996,2-escritura-manual,PENDIENTE,,
 104,designs.php,POST,/disenos/imagen/{id_orden}/{id_diseno},1016,2-escritura-manual,PENDIENTE,,
 105,employees.php,GET,/empleados,11,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:33
-106,employees.php,POST,/empleados/activacion,222,2-escritura-manual,PENDIENTE,,
+106,employees.php,POST,/empleados/activacion,222,2-escritura-manual,EN_PROGRESO,Investigando POST /empleados/activacion,2026-07-14 08:17:06
 107,employees.php,POST,/empleados/nuevo,240,2-escritura-manual,PENDIENTE,,
 108,employees.php,POST,/empleados/editar,345,2-escritura-manual,PENDIENTE,,
 109,employees.php,POST,/empleados/eliminar,448,2-escritura-manual,PENDIENTE,,
