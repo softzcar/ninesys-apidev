@@ -3615,10 +3615,10 @@ $object['sales_commission_ISSET'][] = false;
             $params2[] = '';
           }
 
-          if (isset($decodedObj['tela'])) {
+          if (isset($decodedObj['tela']) && !is_null($decodedObj['tela']) && $decodedObj['tela'] !== '') {
             $id_tela_prod = intval($decodedObj['tela']);
             $values .= '?, (SELECT tela FROM catalogo_telas WHERE _id = ?)';
-            $params2[] = $decodedObj['tela'];
+            $params2[] = $id_tela_prod;
             $params2[] = $id_tela_prod;
           } else {
             $values .= "NULL, ?";
