@@ -38,9 +38,9 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 37,communications.php,GET,/ws/departamentos,148,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:03
 38,communications.php,POST,/ws/build-message,176,2-escritura-manual,CORREGIDO,Ya adaptado en tarea anterior de esta sesion (DATE_FORMAT->TO_CHAR). Reverificado en vivo con form-urlencoded real: 0 errores.,2026-07-13 15:59:18
 39,communications.php,POST,/ws/build-message/interno,394,2-escritura-manual,CORREGIDO,"Sin patrones MySQL-only, ambas consultas SQL verificadas directamente en psql: 0 errores. El envio real depende de WhatsAppAPIClient (WS_API_URL, servicio externo) - mismo criterio que otros endpoints de WhatsApp, fuera de alcance.",2026-07-14 09:11:01
-40,communications.php,POST,/update-message,503,2-escritura-manual,EN_PROGRESO,Investigando,2026-07-14 09:11:34
+40,communications.php,POST,/update-message,503,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE simple. Probado en vivo: msg_welcome actualizado correctamente.",2026-07-14 09:11:54
 41,communications.php,GET,/config,533,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:04
-42,communications.php,POST,/departamentos/editar/settings,574,2-escritura-manual,EN_PROGRESO,Investigando,2026-07-14 09:11:34
+42,communications.php,POST,/departamentos/editar/settings,574,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado. Probado en vivo: configuracion de mensaje de departamento actualizada correctamente.",2026-07-14 09:11:54
 43,communications.php,POST,/send-message-produccion,667,2-escritura-manual,CORREGIDO,"Sin patrones MySQL-only. Las 2 consultas SELECT del endpoint (departamentos.enviar_mensaje y JOIN ordenes/customers) verificadas directamente en psql: 0 errores. El resto del endpoint depende de WS_API_URL (servicio externo de WhatsApp) no alcanzable desde el entorno de dev, igual que /send-message y /ws/build-message - fuera de alcance de la migracion Postgres.",2026-07-13 16:51:12
 44,communications.php,GET,/next-id-order,803,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:05
 45,communications.php,GET,/next-id-budget,824,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:05
