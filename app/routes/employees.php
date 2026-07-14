@@ -251,8 +251,8 @@ return function (App $app) {
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
         // Validar que el email no exista
-        $checkEmailSql = "SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE email = '" . $miEmpleado['email'] . "'";
-        $emailCheck = $localConnection->goQuery($checkEmailSql);
+        $checkEmailSql = 'SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE email = ?';
+        $emailCheck = $localConnection->goQuery($checkEmailSql, [$miEmpleado['email']]);
 
         if (isset($emailCheck[0]['count']) && $emailCheck[0]['count'] > 0) {
             $localConnection->disconnect();
@@ -276,38 +276,37 @@ return function (App $app) {
         }
         // Para 'variable' no se actualiza ningún campo de comisión
 
-        $values = '(';
-        $values .= "'" . $now . "',";
-        $values .= "'" . $miEmpleado['acceso'] . "',";
-        $values .= "'" . $comision . "',";
-        $values .= "'" . $miEmpleado['comsion_tipo'] . "',";
-        $values .= "'" . $comision_porcentaje . "',";
-        $values .= "'" . $miEmpleado['email'] . "',";
-        $values .= "'" . $miEmpleado['telefono'] . "',";
-        $values .= "'" . $miEmpleado['nombre'] . "',";
-        $values .= "'" . ID_EMPRESA . "',";
-        $values .= "'" . $miEmpleado['password'] . "',";
-        $values .= "'" . $miEmpleado['salario_tipo'] . "',";
-        $values .= "'" . $miEmpleado['salario'] . "',";
-        $values .= "'" . $miEmpleado['periodo_pago'] . "',";
-        $values .= "'" . $miEmpleado['id_legal'] . "',";
-        $values .= "'" . $miEmpleado['fecha_ingreso'] . "',";
-        $values .= "'" . $miEmpleado['id_seguridad_social'] . "')";
-
-        $sql = 'INSERT INTO api_empresas.empresas_usuarios (moment, acceso, comision, comision_tipo, comision_porcentaje, email, telefono, nombre, id_empresa, password, salario_tipo, salario_monto, salario_periodo, dni, fecha_ingreso, id_seguridad_social) VALUES ' . $values;
-        $object['response'] = $localConnection->goQuery($sql);
+        $sql = 'INSERT INTO api_empresas.empresas_usuarios (moment, acceso, comision, comision_tipo, comision_porcentaje, email, telefono, nombre, id_empresa, password, salario_tipo, salario_monto, salario_periodo, dni, fecha_ingreso, id_seguridad_social) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $object['response'] = $localConnection->goQuery($sql, [
+            $now,
+            $miEmpleado['acceso'],
+            $comision,
+            $miEmpleado['comsion_tipo'],
+            $comision_porcentaje,
+            $miEmpleado['email'],
+            $miEmpleado['telefono'],
+            $miEmpleado['nombre'],
+            ID_EMPRESA,
+            $miEmpleado['password'],
+            $miEmpleado['salario_tipo'],
+            $miEmpleado['salario'],
+            $miEmpleado['periodo_pago'],
+            $miEmpleado['id_legal'],
+            $miEmpleado['fecha_ingreso'],
+            $miEmpleado['id_seguridad_social'],
+        ]);
         $lastInsert = $object['response']['insert_id'];
 
         // Guardar departamentos asignados al empleado
-        $sql = 'DELETE FROM api_empresas.empresas_usuarios_departamentos WHERE id_empleado = ' . $lastInsert;
-        $object['response_delete'] = $localConnection->goQuery($sql);
+        $sql = 'DELETE FROM api_empresas.empresas_usuarios_departamentos WHERE id_empleado = ?';
+        $object['response_delete'] = $localConnection->goQuery($sql, [$lastInsert]);
 
         $departamentos = explode(',', $miEmpleado['departamentos']);
-        $sql = '';
+        $object['response_deps'] = [];
         foreach ($departamentos as $id) {
-            $sql .= "INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES ({$lastInsert}, {$id});";
+            $sqlDep = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES (?, ?)';
+            $object['response_deps'][] = $localConnection->goQuery($sqlDep, [$lastInsert, $id]);
         }
-        $object['response_deps'] = $localConnection->goQuery($sql);
 
         // Procesar carga familiar si existe
         if (isset($miEmpleado['dependientes_json']) && !empty($miEmpleado['dependientes_json'])) {
@@ -318,16 +317,15 @@ return function (App $app) {
             if (is_array($dependientes) && count($dependientes) > 0) {
                 // Insertar cada dependiente en la tabla salario_carga_familiar
                 foreach ($dependientes as $dependiente) {
-                    $dep_values = '(';
-                    $dep_values .= "'" . $lastInsert . "',";  // id_usuario
-                    $dep_values .= "'" . $dependiente['nombre_completo'] . "',";
-                    $dep_values .= "'" . $dependiente['cedula_o_id'] . "',";
-                    $dep_values .= "'" . $dependiente['parentesco'] . "',";
-                    $dep_values .= "'" . $dependiente['fecha_nacimiento'] . "',";
-                    $dep_values .= "'" . ($dependiente['es_deducible'] ? 1 : 0) . "')";
-
-                    $sql_dep = 'INSERT INTO salario_carga_familiar (id_usuario, nombre_completo, cedula_o_id, parentesco, fecha_nacimiento, es_deducible) VALUES ' . $dep_values;
-                    $object['response_dependientes'][] = $localConnection->goQuery($sql_dep);
+                    $sql_dep = 'INSERT INTO salario_carga_familiar (id_usuario, nombre_completo, cedula_o_id, parentesco, fecha_nacimiento, es_deducible) VALUES (?, ?, ?, ?, ?, ?)';
+                    $object['response_dependientes'][] = $localConnection->goQuery($sql_dep, [
+                        $lastInsert,
+                        $dependiente['nombre_completo'],
+                        $dependiente['cedula_o_id'],
+                        $dependiente['parentesco'],
+                        $dependiente['fecha_nacimiento'],
+                        $dependiente['es_deducible'] ? 1 : 0,
+                    ]);
                 }
             }
         }
@@ -452,12 +450,12 @@ return function (App $app) {
         // 1. SOLO DESVINCULAR EMPLEADO (No borrar ni desactivar)
 
         // Eliminar asignación de tareas 
-        $sql = "UPDATE lotes_detalles_empleados_asignados SET id_empleado = NULL WHERE id_empleado = {$miEmpleado['id']}";
-        $object['response_lotes_detalles'] = json_encode($localConnection->goQuery($sql));
+        $sql = 'UPDATE lotes_detalles_empleados_asignados SET id_empleado = NULL WHERE id_empleado = ?';
+        $object['response_lotes_detalles'] = json_encode($localConnection->goQuery($sql, [$miEmpleado['id']]));
 
         // Eliminar de departamentos del usuario
-        $sql = 'DELETE FROM empresas_usuarios_departamentos WHERE id_empleado = ' . $miEmpleado['id'] . ';';
-        $object['response_departamentos'] = json_encode($localConnection2->goQuery($sql));
+        $sql = 'DELETE FROM empresas_usuarios_departamentos WHERE id_empleado = ?';
+        $object['response_departamentos'] = json_encode($localConnection2->goQuery($sql, [$miEmpleado['id']]));
 
         // Ya no se toca la tabla empresas_usuarios ni física ni lógicamente
 
@@ -501,8 +499,8 @@ return function (App $app) {
         $data = $request->getParsedBody();
         $localConnection = new LocalDB();
 
-        $sql = 'INSERT INTO asistencias(id_empleado, registro, moment) VALUES (' . $data['id_empleado'] . ",'" . $data['registro'] . "','" . $data['moment'] . "')";
-        $object['response'] = json_encode($localConnection->goQuery($sql));
+        $sql = 'INSERT INTO asistencias(id_empleado, registro, moment) VALUES (?, ?, ?)';
+        $object['response'] = json_encode($localConnection->goQuery($sql, [$data['id_empleado'], $data['registro'], $data['moment']]));
 
         $localConnection->disconnect();
 
