@@ -2169,7 +2169,7 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                         b.unidad
                     FROM
                         ordenes_productos a
-                    LEFT JOIN products_sizes_eficiencia b on a.talla = b.id_size
+                    LEFT JOIN products_sizes_eficiencia b on a.talla = b.id_size::text
                     WHERE a.id_orden = ?';
         $object['productos'] = $localConnection->goQuery($sql, [$data['id_orden']]);
 
