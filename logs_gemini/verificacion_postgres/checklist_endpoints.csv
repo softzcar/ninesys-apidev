@@ -72,7 +72,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 71,crm.php,GET,/crm/soporte/{id_customer},300,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:13
 72,crm.php,POST,/crm/soporte/nueva,323,2-escritura-manual,OK,"Sin patrones MySQL-only, INSERT parametrizado simple. Probado en vivo, verificado en psql.",2026-07-14 09:22:12
 73,crm.php,PUT,/crm/soporte/estado,353,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE parametrizado simple. Probado en vivo, verificado en psql.",2026-07-14 09:22:12
-74,crm.php,POST,/crm/campanas/enviar,380,2-escritura-manual,PENDIENTE,,
+74,crm.php,POST,/crm/campanas/enviar,380,2-escritura-manual,OK,"Sin patrones MySQL-only (IN() construido con intval, sin backticks/JSON MySQL-only). No se probo via HTTP para evitar envio real de mensajes WhatsApp a clientes reales de 194. Las 4 sentencias SQL (INSERT campana, SELECT clientes con/sin filtro, INSERT envio) verificadas validas en Postgres via EXPLAIN directo en psql.",2026-07-14 09:23:53
 75,crm.php,GET,/crm/reports/dashboard,476,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:14
 76,crm.php,GET,/crm/clientes-por-producto/{id_product},578,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:15
 77,designs.php,GET,/diseno/revisiones,12,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:15
