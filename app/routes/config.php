@@ -329,7 +329,13 @@ return function (App $app) {
                 return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
             }
 
-            $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
+            $driverPersonalizacion = getenv('DB_DRIVER') ?: 'mysql';
+            if ($driverPersonalizacion === 'pgsql') {
+                $portPersonalizacion = getenv('DB_PORT') ?: '5432';
+                $companyDsn = 'pgsql:host=' . $connectionDetails['db_host'] . ';port=' . $portPersonalizacion . ';dbname=' . $connectionDetails['db_name'];
+            } else {
+                $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
+            }
             $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
 
             $existingConfig = $localConnection->goQuery('SELECT * FROM config WHERE _id = 1');
@@ -442,7 +448,13 @@ return function (App $app) {
             // 2. ACTUALIZAR TAMBIÉN EN LA BASE DE DATOS LOCAL DE LA EMPRESA (tabla gastos)
             $connectionDetails = $localConnection->getConnectionDetails($id_empresa);
             if ($connectionDetails) {
-                $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
+                $driverGastos = getenv('DB_DRIVER') ?: 'mysql';
+                if ($driverGastos === 'pgsql') {
+                    $portGastos = getenv('DB_PORT') ?: '5432';
+                    $companyDsn = 'pgsql:host=' . $connectionDetails['db_host'] . ';port=' . $portGastos . ';dbname=' . $connectionDetails['db_name'];
+                } else {
+                    $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
+                }
                 $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
 
                 // Atomicidad: reemplazo de gastos fijos locales en una transacción
@@ -942,7 +954,13 @@ return function (App $app) {
                 return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
             }
 
-            $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
+            $driverMult = getenv('DB_DRIVER') ?: 'mysql';
+            if ($driverMult === 'pgsql') {
+                $portMult = getenv('DB_PORT') ?: '5432';
+                $companyDsn = 'pgsql:host=' . $connectionDetails['db_host'] . ';port=' . $portMult . ';dbname=' . $connectionDetails['db_name'];
+            } else {
+                $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
+            }
             $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
 
             $sql = 'UPDATE config SET multiplicador_precio = ? WHERE _id = 1';
