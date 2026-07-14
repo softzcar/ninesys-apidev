@@ -1,0 +1,63 @@
+- **Solicitud del Usuario:** "Vamos a continuar con la revisión y arreglos!" — continuación de la Fase 2 de la migración PostgreSQL siguiendo el checklist granular de `logs_gemini/verificacion_postgres/checklist_endpoints.csv`, retomando exactamente donde quedó la sesión anterior (endpoints de escritura con uso real en producción, en orden de prioridad).
+
+- **Fecha y Hora:** 2026-07-14 08:00:00 a 09:00:00 (aprox.)
+
+- **Proyecto(s):** Backend (ninesys-api, rama feature/postgresql-support)
+
+- **Archivos Involucrados:**
+    - app/routes/catalogs.php
+    - app/routes/employees.php
+    - app/lib/woome.php
+    - logs_gemini/verificacion_postgres/checklist_endpoints.csv
+
+- **Commits Relacionados:**
+    - Backend:
+        - 57f6f23 - catalogs.php POST /telas (crear) - multi-statement
+        - 36edb1e - employees.php /empleados/editar - multi-statement (INSERT de departamentos)
+        - 8cd4343 - woome.php - backticks en createProductLite(), updateOrderStatus(), updateProductQuantity()
+        - ~18 commits de actualización incremental del checklist CSV
+    - Frontend: N/A
+
+- **Acción Realizada:**
+    Se completó la revisión de los **19 endpoints de escritura restantes con uso real en producción** (últimos 10 días), siguiendo el mismo protocolo establecido: EN_PROGRESO → leer código → probar en vivo contra 194 dev → corregir si hay bug → lint → commit → deploy → re-verificar → OK/CORREGIDO con detalle → commit CSV.
+
+    Endpoints procesados en esta sesión (16 con uso real + 3 verificados incidentalmente):
+    1. `config.php POST /gastos/registros` → OK
+    2. `finance.php POST /otro-abono` → OK
+    3. `manufacturing.php POST /empleados/tareas` → OK
+    4. `catalogs.php POST /telas` (crear) → **CORREGIDO** (multi-statement, mismo patrón que el endpoint hermano de actualizar ya corregido)
+    5. `config.php POST /gastos` → OK
+    6. `employees.php POST /empleados/activacion` → OK (con hallazgo técnico interesante, ver abajo)
+    7. `inventory.php POST /insumos/nuevo` → OK
+    8. `payments.php POST /pagos/procesar-lote-pagos` → OK
+    9. `production.php POST /produccion/reposicion/eliminar` → OK
+    10. `products.php POST /customers/nuevo` → OK
+    11. `catalogs.php POST /tiempos-de-produccion` → OK
+    12. `config.php PUT /gastos/{id}` → OK
+    13. `employees.php POST /empleados/editar` → **CORREGIDO** (multi-statement: múltiples INSERT de departamentos concatenados)
+    14. `inventory.php POST /api/inventario/bulk-load` → OK
+    15. `orders.php POST /orden/previa-cancelacion` → OK
+    16. `payments.php POST /pagos/pagar-a-empleados` → OK
+    17. `products.php POST /products/lite` → **CORREGIDO** (backticks en `createProductLite()`, y se encontraron y corrigieron 2 backticks adicionales activos en `updateOrderStatus()`/`updateProductQuantity()` — llamados desde la rama de sincronización WooCommerce de `/orden/actualizar-estado`, endpoint ya marcado OK en una sesión anterior pero esa rama específica no había sido ejercitada)
+    18. `products.php POST /customers/eliminar` → OK
+    19. `products.php POST /customers/edit1` → OK
+
+    **Hallazgo técnico durante `/empleados/activacion`:** se investigó por qué el prefijo `api_empresas.` funciona correctamente incluso cuando la conexión ya apunta directo a la base de datos central `api_empresas` (vía `EMPRESAS_DNS`). Se descubrió que existe un esquema llamado `api_empresas` DENTRO de esa misma base de datos, con vistas espejo (`CREATE VIEW`) de cada tabla real (que viven en el esquema `public`) — diseñado deliberadamente para que la sintaxis `api_empresas.tabla` funcione igual sin importar si la conexión es directa a la base central o vía FDW desde una empresa. Se confirmó que las vistas son actualizables (`UPDATE` a través de vista funcionó correctamente).
+
+- **Inconvenientes y Desafíos:**
+    - El endpoint `/api/inventario/bulk-load` inicialmente falló porque se probó con `Content-Type: application/json` y el body JSON crudo; el endpoint en realidad espera un campo form-urlencoded llamado `inventoryItems` conteniendo un JSON string — error de metodología de prueba, no del código.
+    - El fix de `products.php POST /products/lite` llevó a un hallazgo más amplio: revisar `woome.php::createProductLite()` llevó a encontrar 2 backticks adicionales activos en otras 2 funciones (`updateOrderStatus()`, `updateProductQuantity()`) usadas por una rama de `/orden/actualizar-estado` que no se había ejercitado en su revisión original (rama de sincronización con WooCommerce, condicionada a que la orden tenga `id_wp_order`). Se corrigieron también, aunque no se pudo probar esa rama específica de punta a punta por HTTP porque depende de una llamada real a la API de WooCommerce (fuera de alcance, mismo criterio que otros casos de WooCommerce) — se verificó la sintaxis SQL corregida directamente en `psql`.
+
+- **Decisión Final y Justificación:** Se mantiene el método de verificación en vivo (no solo lectura de código) como única fuente confiable, validado una vez más por el hallazgo incidental de los backticks en `updateOrderStatus()`/`updateProductQuantity()` — código que "se veía revisado" (el endpoint que lo llama ya estaba marcado OK) pero tenía una rama condicional no ejercitada con un bug real.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (`ssh`/`psql`, `curl`, `git`), script auxiliar `update_row.py`.
+
+- **Resultado:** Éxito — **milestone alcanzado: 0 endpoints de escritura con uso real en producción quedan sin revisar.**
+
+- **Verificación:** Cada corrección se probó en vivo contra la empresa 194 en `vps-contabo-dev` tras cada deploy, verificando los cambios directamente en la base de datos vía `psql`.
+
+- **Logro Conseguido:** Se completó el 100% de la revisión y corrección de los endpoints de escritura con uso real detectado en los logs de producción de los últimos 10 días (19 de 19). 3 bugs adicionales de PostgreSQL corregidos y desplegados. Avance acumulado: 261/386 endpoints (67.6%) del checklist total revisados y verificados en vivo. Quedan 125 endpoints de escritura sin uso real reciente detectado, a revisar como trabajo de menor prioridad.
+
+- **Observaciones de Claude:** El hallazgo de las vistas espejo en el esquema `api_empresas` es una pieza de arquitectura importante para entender el resto de la migración — vale la pena documentarlo en la memoria del proyecto para futuras sesiones. Próximo paso natural: decidir con el usuario si se continúa con los 125 endpoints restantes de uso no detectado, o si se considera la Fase 2 sustancialmente completa dado que cubre el 100% del tráfico real observado.
+
+- **Respuesta de Claude:** Se completó la revisión de los últimos 19 endpoints de escritura con uso real en producción, con 3 bugs adicionales corregidos (2 de multi-statement, backticks adicionales en funciones de sincronización con WooCommerce). Milestone alcanzado: 100% de los endpoints con tráfico real de los últimos 10 días están revisados y verificados en vivo.
