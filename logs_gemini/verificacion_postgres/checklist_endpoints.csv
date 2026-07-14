@@ -56,8 +56,8 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 55,config.php,DELETE,/gastos/{id},597,2-escritura-manual,OK,"Sin patrones MySQL-only, DELETE parametrizado simple. Probado en vivo: creado y eliminado gasto de prueba (id 2) exitosamente.",2026-07-14 09:19:44
 56,config.php,GET,/gastos/registros,619,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:07
 57,config.php,POST,/gastos/registros,663,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado. Probado en vivo end-to-end contra 194 dev: registro de gasto (nombre, monto 50.50, fecha 2026-07-14) -> insertado correctamente con periodo calculado 2026-07, verificado en BD.",2026-07-14 08:12:01
-58,config.php,PUT,/gastos/registros/{id},712,2-escritura-manual,PENDIENTE,,
-59,config.php,DELETE,/gastos/registros/{id},777,2-escritura-manual,PENDIENTE,,
+58,config.php,PUT,/gastos/registros/{id},712,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE dinamico parametrizado + transaccion + auditoria. Probado en vivo: crear/actualizar/eliminar registro de prueba exitoso.",2026-07-14 09:20:13
+59,config.php,DELETE,/gastos/registros/{id},777,2-escritura-manual,OK,"Sin patrones MySQL-only, DELETE parametrizado + auditoria. Probado en vivo con exito.",2026-07-14 09:20:13
 60,config.php,GET,/gastos/auditoria,826,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:07
 61,config.php,GET,/gastos/auditoria/{id_registro},864,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:08
 62,config.php,GET,/gastos/pendientes,882,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:09
