@@ -4320,11 +4320,11 @@ $object['sales_commission_ISSET'][] = false;
       // CREAR PRODUCTOS DE LA ORDEN
       // ==========================================================
       foreach ($productos_procesados as $prod) {
-        $sql_producto = "INSERT INTO ordenes_productos 
-                         (moment, precio_unitario, precio_woo, name, id_orden, id_woo, 
-                          cantidad, id_category, category_name, id_size, talla, 
-                          corte, id_tela, tela) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)";
+        $sql_producto = "INSERT INTO ordenes_productos
+                         (moment, precio_unitario, precio_woo, name, id_orden, id_woo,
+                          cantidad, id_category, category_name, id_size, talla,
+                          corte, id_tela, tela)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         // DEBUG: Log valores antes de INSERT
         error_log('/ordenes/nueva/simple - Insertando producto: ' . json_encode([
@@ -4342,6 +4342,7 @@ $object['sales_commission_ISSET'][] = false;
           $orden_id,
           $prod['producto_id'],
           $prod['cantidad'],
+          null,
           $prod['categoria'] ?? 'Sin categoría',
           $prod['talla_id'] ?? null,
           $prod['talla_nombre'] ?? null,
