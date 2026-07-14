@@ -622,8 +622,18 @@ return function (App $app) {
     $datosObs = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $sql = "UPDATE ordenes SET observaciones = CONCAT('Editada sin concentimiento por ', ?) WHERE _id = ?";
-    $data = $localConnection->goQuery($sql, [$datosObs['empleado'], $datosObs['id']]);
+    // Las observaciones se guardan en la tabla dedicada ordenes_observaciones
+    // (patron upsert: una fila por orden), ya que la columna ordenes.observaciones ya no existe.
+    $sql_check = 'SELECT _id FROM ordenes_observaciones WHERE id_orden = ?';
+    $existente = $localConnection->goQuery($sql_check, [$datosObs['id']]);
+
+    if (empty($existente)) {
+      $sql = 'INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)';
+      $data = $localConnection->goQuery($sql, [$datosObs['id'], $datosObs['obs']]);
+    } else {
+      $sql = 'UPDATE ordenes_observaciones SET observaciones = ? WHERE id_orden = ?';
+      $data = $localConnection->goQuery($sql, [$datosObs['obs'], $datosObs['id']]);
+    }
 
     $localConnection->disconnect();
 
