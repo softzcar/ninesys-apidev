@@ -1668,14 +1668,14 @@ return function (App $app) {
         $where = 'WEEK(e.moment, 1) = ? AND e.fecha_pago IS NULL';
       }
       $paramsWhere[] = $data['numero_semana'];
-      $whereEmpleados = 'b.fecha_terminado LIKE ? AND e.fecha_pago IS NULL ';
+      $whereEmpleados = 'b.fecha_terminado LIKE ? AND a.fecha_pago IS NULL ';
       $paramsWhereEmpleados[] = $data['fecha_inicio'] . '%';
     }
 
     if ($data['fecha_inicio'] === $data['fecha_fin']) {
       $where = 'e.moment LIKE ? AND e.fecha_pago IS NULL';
       $paramsWhere = [$data['fecha_inicio'] . '%'];
-      $whereEmpleados = 'b.fecha_terminado LIKE ? AND e.fecha_pago IS NULL ';
+      $whereEmpleados = 'b.fecha_terminado LIKE ? AND a.fecha_pago IS NULL ';
       $paramsWhereEmpleados = [$data['fecha_inicio'] . '%'];
     } else {
       if (DB_DRIVER === 'pgsql') {
@@ -1835,18 +1835,18 @@ return function (App $app) {
     if ($data['fecha_inicio'] === $data['fecha_fin']) {
       $where = 'e.moment LIKE ? AND e.fecha_pago IS NULL';
       $paramsWhere = [$data['fecha_inicio'] . '%'];
-      $whereEmpleados = 'b.fecha_terminado LIKE ? AND e.fecha_pago IS NULL ';
+      $whereEmpleados = 'b.fecha_terminado LIKE ? AND a.fecha_pago IS NULL ';
       $paramsWhereEmpleados = [$data['fecha_inicio'] . '%'];
     } else {
       if (DB_DRIVER === 'pgsql') {
         $where = '(e.moment::date BETWEEN ? AND ?) ';
         $paramsWhere = [$data['fecha_inicio'], $data['fecha_fin']];
-        $whereEmpleados = 'b.fecha_terminado::date BETWEEN ? AND ? AND e.fecha_pago IS NULL ';
+        $whereEmpleados = 'b.fecha_terminado::date BETWEEN ? AND ? AND a.fecha_pago IS NULL ';
         $paramsWhereEmpleados = [$data['fecha_inicio'], $data['fecha_fin']];
       } else {
         $where = '(DATE(e.moment) BETWEEN ? AND ?) ';
         $paramsWhere = [$data['fecha_inicio'], $data['fecha_fin']];
-        $whereEmpleados = 'b.fecha_terminado BETWEEN ? AND ? AND e.fecha_pago IS NULL ';
+        $whereEmpleados = 'b.fecha_terminado BETWEEN ? AND ? AND a.fecha_pago IS NULL ';
         $paramsWhereEmpleados = [$data['fecha_inicio'] . '%', $data['fecha_fin']];
       }
     }
