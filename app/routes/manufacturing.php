@@ -1454,7 +1454,7 @@ return function (App $app) {
         lotes_fisicos
         ORDER BY tela ASC, corte ASC, talla ASC, piezas_actuales ASC';
     } else {
-      $sql = "SELECT
+      $sql = 'SELECT
         categoria categoria_tienda,
         tela,
         corte,
@@ -1465,11 +1465,11 @@ return function (App $app) {
         _id eliminar
         FROM
         lotes_fisicos
-        WHERE tela = '" . $data['tela'] . "'
-        ORDER BY tela ASC, corte ASC, talla ASC, piezas_actuales ASC";
+        WHERE tela = ?
+        ORDER BY tela ASC, corte ASC, talla ASC, piezas_actuales ASC';
     }
 
-    $object['items'] = $localConnection->goQuery($sql);
+    $object['items'] = $localConnection->goQuery($sql, $data['tela'] === 'all' ? [] : [$data['tela']]);
 
     $sql = 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
     $object['telas'] = $localConnection->goQuery($sql);
@@ -1491,10 +1491,10 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     $object['miEmpleado'] = $miEmpleado;
-    $sql = 'DELETE FROM lotes_fisicos WHERE _id =  ' . $miEmpleado['id'];
+    $sql = 'DELETE FROM lotes_fisicos WHERE _id = ?';
     $object['sql'] = $sql;
 
-    $object['response'] = json_encode($localConnection->goQuery($sql));
+    $object['response'] = json_encode($localConnection->goQuery($sql, [$miEmpleado['id']]));
 
     $localConnection->disconnect();
 
@@ -1509,10 +1509,10 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $sql = "UPDATE lotes_fisicos SET piezas_actuales = '" . $data['cantidad'] . "' WHERE _id = '" . $data['id_lote'] . "'";
+    $sql = 'UPDATE lotes_fisicos SET piezas_actuales = ? WHERE _id = ?';
 
     $object['sql'] = $sql;
-    $object['response_orden'] = json_encode($localConnection->goQuery($sql));
+    $object['response_orden'] = json_encode($localConnection->goQuery($sql, [$data['cantidad'], $data['id_lote']]));
 
     $localConnection->disconnect();
 
@@ -2246,8 +2246,8 @@ return function (App $app) {
 
             // Distribuir y registrar desperdicio en la tabla `rendimiento`
             $desperdicio_estimado = $desperdicio_total * $proporcion;
-            $sql_rendimiento = 'INSERT INTO rendimiento (id_orden, id_empleado_corte, desperdicio, id_insumo, metros) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE desperdicio = desperdicio + VALUES(desperdicio), metros = metros + VALUES(metros);';
-            $localConnection->goQuery($sql_rendimiento, [$id_orden_actual, $id_empleado, $desperdicio_estimado, $id_insumo_actual, $consumo_estimado]);
+            $sql_rendimiento = 'INSERT INTO rendimiento (id_orden, id_empleado, desperdicio, id_insumo, cantidad, id_departamento) VALUES (?, ?, ?, ?, ?, ?)';
+            $localConnection->goQuery($sql_rendimiento, [$id_orden_actual, $id_empleado, $desperdicio_estimado, $id_insumo_actual, $consumo_estimado, $id_departamento]);
           }
         }
       }
