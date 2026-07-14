@@ -48,8 +48,8 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 47,config.php,POST,/configuracion/empresa/{id},56,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE dinamico totalmente parametrizado. Probado en vivo: actualizacion de datos de empresa exitosa.",2026-07-14 09:12:59
 48,config.php,POST,/configuracion/monedas,137,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado con placeholders '?'. Probado en vivo end-to-end contra empresa 194: POST con id_empleado=3 y array de monedas -> actualizado correctamente en empresas.tipos_de_monedas (base central api_empresas), verificado con SELECT directo.",2026-07-13 17:04:41
 49,config.php,POST,/configuracion/horario,211,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE parametrizado con JSON. Probado en vivo: guardado de horario laboral exitoso.",2026-07-14 09:16:11
-50,config.php,POST,/configuracion/personalizacion,291,2-escritura-manual,PENDIENTE,,
-51,config.php,POST,/configuracion/gastos,388,2-escritura-manual,PENDIENTE,,
+50,config.php,POST,/configuracion/personalizacion,291,2-escritura-manual,CORREGIDO,"Bug real: DSN hardcodeado a 'mysql:host=...' para conexion cross-DB a la empresa (switchDatabase), sin importar DB_DRIVER. Rompia conexion en empresas pgsql (194). Corregido con branch DB_DRIVER->pgsql:host=...;port=...;dbname=. Probado en vivo y verificado en psql que persiste en api_emp_194.",2026-07-14 09:19:03
+51,config.php,POST,/configuracion/gastos,388,2-escritura-manual,CORREGIDO,Mismo bug de DSN hardcodeado a mysql en la sincronizacion local de gastos fijos. Corregido igual que id50. Probado en vivo con exito.,2026-07-14 09:19:03
 52,config.php,GET,/gastos,496,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:06
 53,config.php,POST,/gastos,520,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado. Se verifico que LocalDB::getLastID() (usa $this->pdo->lastInsertId()) funciona correctamente en Postgres. Probado en vivo end-to-end contra 194 dev: creacion de plantilla de gasto -> insertada correctamente (_id=1 devuelto coincide con BD).",2026-07-14 08:16:56
 54,config.php,PUT,/gastos/{id},561,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE dinamico totalmente parametrizado (construido con placeholders '?' por cada campo). Probado en vivo end-to-end contra 194 dev: edicion de plantilla de gasto _id=1 (nombre y monto) -> actualizado correctamente, verificado en BD.",2026-07-14 08:27:02
@@ -61,7 +61,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 60,config.php,GET,/gastos/auditoria,826,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:07
 61,config.php,GET,/gastos/auditoria/{id_registro},864,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:08
 62,config.php,GET,/gastos/pendientes,882,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:09
-63,config.php,POST,/config/multiplicador-precio,911,2-escritura-manual,PENDIENTE,,
+63,config.php,POST,/config/multiplicador-precio,911,2-escritura-manual,CORREGIDO,Mismo bug de DSN hardcodeado a mysql. Corregido igual que id50/51. Probado en vivo: multiplicador_precio actualizado y verificado en psql (1.05).,2026-07-14 09:19:03
 64,crm.php,GET,/crm/oportunidades,10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:10
 65,crm.php,POST,/crm/oportunidades/nueva,63,2-escritura-manual,PENDIENTE,,
 66,crm.php,PUT,/crm/oportunidades/estado,109,2-escritura-manual,PENDIENTE,,
