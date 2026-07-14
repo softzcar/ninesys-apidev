@@ -129,7 +129,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 128,inventory.php,GET,/api/inventario/template-excel,13,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:47
 129,inventory.php,GET,/api/products/template-excel-test,245,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:48
 130,inventory.php,POST,/api/products/bulk-load,277,2-escritura-manual,PENDIENTE,,
-131,inventory.php,POST,/api/inventario/bulk-load,380,2-escritura-manual,PENDIENTE,,
+131,inventory.php,POST,/api/inventario/bulk-load,380,2-escritura-manual,EN_PROGRESO,Investigando POST /api/inventario/bulk-load,2026-07-14 08:29:17
 132,inventory.php,GET,/api/products/template-excel,511,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:49
 133,inventory.php,GET,/reporte/insumos-cosumidos-por-orden[/{id_orden}[/{fecha_inicio}[/{fecha_fin}]]],669,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:50
 134,inventory.php,GET,/insumos,893,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:51
