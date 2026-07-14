@@ -398,19 +398,30 @@ return function (App $app) {
     // $object['response_DB'] = $localConnection;
 
     // Guardamos el cierre
-    $sql = ' INSERT INTO caja_cierres (dolares, pesos, bolivares, id_empleado) VALUES (' . $datosCierre['cierreDolaresEfectivo'] . ', ' . $datosCierre['cierrePesosEfectivo'] . ', ' . $datosCierre['cierreBolivaresEfectivo'] . ', ' . $datosCierre['id_empleado'] . ');';
-    $responseCierreCaja = $localConnection->goQuery($sql);
+    $sql = 'INSERT INTO caja_cierres (dolares, pesos, bolivares, id_empleado) VALUES (?, ?, ?, ?)';
+    $responseCierreCaja = $localConnection->goQuery($sql, [
+      $datosCierre['cierreDolaresEfectivo'],
+      $datosCierre['cierrePesosEfectivo'],
+      $datosCierre['cierreBolivaresEfectivo'],
+      $datosCierre['id_empleado'],
+    ]);
 
     // Identificamos el ID del INSERT
     $insertID = $responseCierreCaja['insert_id'];
 
     // Insertamos caja_fondos
-    $sql = "INSERT INTO caja_fondos (id_empleado, dolares, id_caja_cierres, pesos, bolivares) VALUES ({$datosCierre['id_empleado']}, {$datosCierre['fondoDolares']}, $insertID, {$datosCierre['fondoPesos']}, {$datosCierre['fondoBolivares']})";
-    $object['response_insert_caja_fondos'] = $localConnection->goQuery($sql);
+    $sql = 'INSERT INTO caja_fondos (id_empleado, dolares, id_caja_cierres, pesos, bolivares) VALUES (?, ?, ?, ?, ?)';
+    $object['response_insert_caja_fondos'] = $localConnection->goQuery($sql, [
+      $datosCierre['id_empleado'],
+      $datosCierre['fondoDolares'],
+      $insertID,
+      $datosCierre['fondoPesos'],
+      $datosCierre['fondoBolivares'],
+    ]);
 
     // Actualizamos caja para los registros cerrados
-    $sql = "UPDATE caja SET id_caja_cierres = $insertID WHERE id_empleado = {$datosCierre['id_empleado']} AND id_caja_cierres IS NULL";
-    $object['response_update_caja'] = $localConnection->goQuery($sql);
+    $sql = 'UPDATE caja SET id_caja_cierres = ? WHERE id_empleado = ? AND id_caja_cierres IS NULL';
+    $object['response_update_caja'] = $localConnection->goQuery($sql, [$insertID, $datosCierre['id_empleado']]);
 
     $localConnection->commit();
     $localConnection->disconnect();
