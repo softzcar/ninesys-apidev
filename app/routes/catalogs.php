@@ -389,9 +389,10 @@ return function (App $app) {
     $values .= "'" . $miTela['tela'] . "')";
 
     $sql = 'INSERT INTO catalogo_telas (tela) VALUES ' . $values . ';';
-    $sql .= 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
 
     $localConnection = new LocalDB();
+    $localConnection->goQuery($sql);
+    $sql = 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
     $object['response'] = json_encode($localConnection->goQuery($sql));
     $localConnection->disconnect();
 
