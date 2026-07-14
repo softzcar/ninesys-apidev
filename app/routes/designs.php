@@ -336,8 +336,8 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $sql = "UPDATE disenos SET codigo_diseno = '" . $data['cod'] . "' WHERE id_orden = " . $data['id'];
-    $data = $localConnection->goQuery($sql);
+    $sql = 'UPDATE disenos SET codigo_diseno = ? WHERE id_orden = ?';
+    $data = $localConnection->goQuery($sql, [$data['cod'], $data['id']]);
 
     $localConnection->disconnect();
 
