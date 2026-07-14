@@ -252,9 +252,8 @@ return function (App $app) {
     $miRevision = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT MAX(revision) revision FROM revisiones WHERE id_diseno = ' . $miRevision['id_diseno'] . ' AND id_orden = ' . $miRevision['id_orden'];
-    // $object['sql_MAX_REVIEW'] = $sql;
-    $tmpRevID = $localConnection->goQuery($sql);
+    $sql = 'SELECT MAX(revision) revision FROM revisiones WHERE id_diseno = ? AND id_orden = ?';
+    $tmpRevID = $localConnection->goQuery($sql, [$miRevision['id_diseno'], $miRevision['id_orden']]);
 
     if ($tmpRevID[0]['revision'] === null) {
       $currID = 1;
@@ -263,20 +262,16 @@ return function (App $app) {
     }
 
     // CREAR REVISION
-    $values = '(';
-    $values .= "'" . $miRevision['id_diseno'] . "',";
-    $values .= "'" . $miRevision['id_orden'] . "',";
-    $values .= "'" . $miRevision['id_empleado'] . "',";
-    $values .= "'" . $currID . "')";
+    $sql = 'INSERT INTO revisiones (id_diseno, id_orden, id_empleado, revision) VALUES (?, ?, ?, ?)';
+    $object['response_insert'] = json_encode($localConnection->goQuery($sql, [
+      $miRevision['id_diseno'],
+      $miRevision['id_orden'],
+      $miRevision['id_empleado'],
+      $currID,
+    ]));
 
-    $sql = 'INSERT INTO revisiones (id_diseno, id_orden, id_empleado, revision) VALUES ' . $values;
-    $object['response_insert'] = json_encode($localConnection->goQuery($sql));
-
-    $object['sql_insert'] = $sql;
-
-    $sql =
-      'SELECT * FROM revisiones WHERE id_diseno = ' . $miRevision['id_diseno'] . ' AND id_orden = ' . $miRevision['id_orden'] . ' AND id_empleado = ' . $miRevision['id_empleado'];
-    $tmpRevision = $localConnection->goQuery($sql);
+    $sql = 'SELECT * FROM revisiones WHERE id_diseno = ? AND id_orden = ? AND id_empleado = ?';
+    $tmpRevision = $localConnection->goQuery($sql, [$miRevision['id_diseno'], $miRevision['id_orden'], $miRevision['id_empleado']]);
 
     if (count($tmpRevision) > 0) {
       $object['revision'] = $tmpRevision[0];
@@ -284,17 +279,13 @@ return function (App $app) {
       $object['revision'] = $tmpRevision;
     }
 
-    $object['sql_get_review'] = $sql;
-
     // obtener numero de la última revision
-    $sql = 'SELECT MAX(revision) revision FROM revisiones WHERE id_diseno = ' . $miRevision['id_diseno'] . ' AND id_orden = ' . $miRevision['id_orden'] . ' AND id_empleado = ' . $miRevision['id_empleado'];
-
-    // $object['sql_MAX_REVIEW'] = $sql;
-    $object['lastId'] = $localConnection->goQuery($sql);
+    $sql = 'SELECT MAX(revision) revision FROM revisiones WHERE id_diseno = ? AND id_orden = ? AND id_empleado = ?';
+    $object['lastId'] = $localConnection->goQuery($sql, [$miRevision['id_diseno'], $miRevision['id_orden'], $miRevision['id_empleado']]);
 
     $object['image_name'] = $miRevision['id_orden'] . '-' . $miRevision['id_diseno'] . '-' . $object['lastId'][0]['revision'];
 
-    $sql = 'SELECT
+    $sql = "SELECT
             a.id_orden imagen,
             a.id_orden vinculadas,
             a.tipo,
@@ -306,10 +297,9 @@ return function (App $app) {
         JOIN ordenes b ON
             b._id = a.id_orden
         WHERE
-            a.id_empleado = ' . $miRevision['id_empleado'] . " AND a.tipo NOT LIKE 'no' AND(
+            a.id_empleado = ? AND a.tipo NOT LIKE 'no' AND(
                 a.terminado = 0 AND b.status NOT LIKE 'entregada' AND b.status != 'cancelada' AND b.status NOT LIKE 'terminado')";
-    // $object['sql_new_data'] = $sql;
-    $object['new_data'] = $localConnection->goQuery($sql);
+    $object['new_data'] = $localConnection->goQuery($sql, [$miRevision['id_empleado']]);
 
     $localConnection->disconnect();
 
@@ -582,12 +572,12 @@ return function (App $app) {
     // 0- Preparar datos
     $tipo = 'general';
     if (isset($data['id_departamento'])) {
-      $deptRow = $localConnection->goQuery("SELECT tipo FROM departamentos WHERE _id = " . intval($data['id_departamento']));
+      $deptRow = $localConnection->goQuery('SELECT tipo FROM departamentos WHERE _id = ?', [intval($data['id_departamento'])]);
       if (!empty($deptRow)) {
         $tipo = $deptRow[0]['tipo'];
       }
     } else if (isset($data['departamento'])) {
-      $deptRow = $localConnection->goQuery("SELECT tipo FROM departamentos WHERE departamento = '" . $data['departamento'] . "'");
+      $deptRow = $localConnection->goQuery('SELECT tipo FROM departamentos WHERE departamento = ?', [$data['departamento']]);
       if (!empty($deptRow)) {
         $tipo = $deptRow[0]['tipo'];
       }
@@ -607,17 +597,16 @@ return function (App $app) {
     }
 
     // 1- Determinar si el registro existe (INSERT o UPDATE)
-    $sql = 'SELECT COUNT(id_orden) FROM rendimiento WHERE id_orden = ' . $data['id_orden'];
-    $exist = $localConnection->goQuery($sql);
+    $sql = 'SELECT COUNT(id_orden) FROM rendimiento WHERE id_orden = ?';
+    $exist = $localConnection->goQuery($sql, [$data['id_orden']]);
 
     if ($exist > 0) {
-      // $sql = "INSERT INTO rendimiento (id_orden, id_insumo, " . $campo_empleado . ", " . $campo_valor . ") VALUES (" . $data["id_orden"] . ", " . $data["id_insumo"] . ", " . $data["id_empleado"] . ", " . $data["valor"] . ");";
-      $sql = 'INSERT INTO rendimiento (id_orden, ' . $campo_empleado . ', ' . $campo_valor . ') VALUES (' . $data['id_orden'] . ', ' . $data['id_empleado'] . ', ' . $data['valor'] . ');';
+      $sql = 'INSERT INTO rendimiento (id_orden, ' . $campo_empleado . ', ' . $campo_valor . ') VALUES (?, ?, ?)';
+      $object['response'] = json_encode($localConnection->goQuery($sql, [$data['id_orden'], $data['id_empleado'], $data['valor']]));
     } else {
-      $sql = 'UPDATE rendimiento SET ' . $campo_empleado . ' = ' . $data['id_empleado'] . ', ' . $campo_valor . ' = ' . $data['valor'] . ' WHERE id_orden = ' . $data['id_orden'] . ';';
+      $sql = 'UPDATE rendimiento SET ' . $campo_empleado . ' = ?, ' . $campo_valor . ' = ? WHERE id_orden = ?';
+      $object['response'] = json_encode($localConnection->goQuery($sql, [$data['id_empleado'], $data['valor'], $data['id_orden']]));
     }
-
-    $object['response'] = json_encode($localConnection->goQuery($sql));
 
     $localConnection->disconnect();
 
@@ -1223,66 +1212,84 @@ return function (App $app) {
     $object['parsed_body'] = $miEmpleado;
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT _id, unidades_solicitadas FROM lotes_detalles WHERE id_ordenes_productos  = ' . $miEmpleado['id_ordenes_productos'] . " AND departamento = '" . $miEmpleado['departamento'] . "' AND id_orden = " . $miEmpleado['id_orden'];
-    $exist = $localConnection->goQuery($sql);
+    $sql = 'SELECT _id, unidades_solicitadas FROM lotes_detalles WHERE id_ordenes_productos = ? AND departamento = ? AND id_orden = ?';
+    $exist = $localConnection->goQuery($sql, [$miEmpleado['id_ordenes_productos'], $miEmpleado['departamento'], $miEmpleado['id_orden']]);
 
     $object['sql_count'] = $sql;
     $object['count'] = count($exist);
 
     if ($object['count']) {
       // BUSCAR NOMBRE DEL DEPARTAMENTO
-      $sql = "SELECT departamento FROM departamentos WHERE _id = {$miEmpleado['id_departamento']}";
-      $respDep = $localConnection->goQuery($sql);
+      $sql = 'SELECT departamento FROM departamentos WHERE _id = ?';
+      $respDep = $localConnection->goQuery($sql, [$miEmpleado['id_departamento']]);
       $nombreDepartamento = $respDep[0]['departamento'];
 
       if ($miEmpleado['departamento'] === 'Corte') {
         $nuevaCantiadSolicitada = intval($miEmpleado['cantidad']) + intval($exist[0]['unidades_solicitadas']);
 
-        $values = "id_empleado ='" . $miEmpleado['id_empleado'] . "',";
-        $values .= "id_ordenes_productos ='" . $miEmpleado['id_ordenes_productos'] . "',";
-        $values .= "id_departamento ='" . $miEmpleado['id_departamento'] . "',";
-        $values .= "departamento ='" . $nombreDepartamento . "',";
-        $values .= "unidades_solicitadas ='" . $nuevaCantiadSolicitada . "'";
+        $sql = 'UPDATE lotes_detalles SET id_empleado = ?, id_ordenes_productos = ?, id_departamento = ?, departamento = ?, unidades_solicitadas = ? WHERE id_departamento = ? AND id_orden = ? AND id_ordenes_productos = ?';
+        $params = [
+          $miEmpleado['id_empleado'],
+          $miEmpleado['id_ordenes_productos'],
+          $miEmpleado['id_departamento'],
+          $nombreDepartamento,
+          $nuevaCantiadSolicitada,
+          $miEmpleado['id_departamento'],
+          $miEmpleado['id_orden'],
+          $miEmpleado['id_ordenes_productos'],
+        ];
       } else {
-        $values = "id_empleado ='" . $miEmpleado['id_empleado'] . "',";
-        $values .= "id_ordenes_productos ='" . $miEmpleado['id_ordenes_productos'] . "',";
-        $values .= "unidades_solicitadas ='" . $miEmpleado['cantidad_orden'] . "'";
+        $sql = 'UPDATE lotes_detalles SET id_empleado = ?, id_ordenes_productos = ?, unidades_solicitadas = ? WHERE id_departamento = ? AND id_orden = ? AND id_ordenes_productos = ?';
+        $params = [
+          $miEmpleado['id_empleado'],
+          $miEmpleado['id_ordenes_productos'],
+          $miEmpleado['cantidad_orden'],
+          $miEmpleado['id_departamento'],
+          $miEmpleado['id_orden'],
+          $miEmpleado['id_ordenes_productos'],
+        ];
       }
-
-      $sql = 'UPDATE lotes_detalles SET ' . $values . " WHERE id_departamento = '" . $miEmpleado['id_departamento'] . "' AND id_orden = " . $miEmpleado['id_orden'] . ' AND id_ordenes_productos = ' . $miEmpleado['id_ordenes_productos'];
     } else {
       // TODO Verificar si ya hay una asignacion para hacer un `UPDATE` de lo contrario hacer un `INSERT`
-      $sql = 'SELECT _id FROM lotes_detalles WHERE id_orden = ' . $miEmpleado['id_orden'] . ' AND id_ordenes_productos = ' . $miEmpleado['id_ordenes_productos'] . " AND departamento = '" . $miEmpleado['departamento'] . "'";
+      $sql = 'SELECT _id FROM lotes_detalles WHERE id_orden = ? AND id_ordenes_productos = ? AND departamento = ?';
 
-      $verificacion = $localConnection->goQuery($sql);
+      $verificacion = $localConnection->goQuery($sql, [$miEmpleado['id_orden'], $miEmpleado['id_ordenes_productos'], $miEmpleado['departamento']]);
       $object['verificacion'] = $verificacion;
 
       if (empty($verificacion)) {
         // BUSCAR CANTIDAD EN `ordenes_productos`
-        $sql = 'SELECT cantidad FROM ordenes_productos WHERE _id = ' . $miEmpleado['id_ordenes_productos'];
-        $cantidad_orden = $localConnection->goQuery($sql)[0]['cantidad'];
+        $sql = 'SELECT cantidad FROM ordenes_productos WHERE _id = ?';
+        $cantidad_orden = $localConnection->goQuery($sql, [$miEmpleado['id_ordenes_productos']])[0]['cantidad'];
 
         $myDate = new CustomTime();
         $now = $myDate->today();
 
         // ASIGNAR EMPLEADO
-        $values = "'" . $now . "',";
-        $values .= "'" . $miEmpleado['id_woo'] . "',";
-        $values .= "'" . $cantidad_orden . "',";
-        $values .= "'" . $miEmpleado['id_orden'] . "',";
-        $values .= "'" . $miEmpleado['id_ordenes_productos'] . "',";
-        $values .= "'" . $miEmpleado['id_empleado'] . "',";
-        $values .= "'" . $miEmpleado['departamento'] . "'";
-
-        $sql = 'INSERT INTO lotes_detalles (moment, id_woo, unidades_solicitadas, id_orden, id_ordenes_productos, id_empleado, departamento) VALUES (' . $values . ')';
+        $sql = 'INSERT INTO lotes_detalles (moment, id_woo, unidades_solicitadas, id_orden, id_ordenes_productos, id_empleado, departamento) VALUES (?, ?, ?, ?, ?, ?, ?)';
+        $params = [
+          $now,
+          $miEmpleado['id_woo'],
+          $cantidad_orden,
+          $miEmpleado['id_orden'],
+          $miEmpleado['id_ordenes_productos'],
+          $miEmpleado['id_empleado'],
+          $miEmpleado['departamento'],
+        ];
       } else {
         // Hacer un UPDATE
-        $sql = 'UPDATE lotes_detalles SET unidades_solicitadas = ' . $miEmpleado['cantidad'] . ', id_empleado = ' . $miEmpleado['id_empleado'] . ' WHERE id_orden = ' . $miEmpleado['id_orden'] . ' AND id_ordenes_productos = ' . $miEmpleado['id_ordenes_productos'] . " AND departamento = '" . $miEmpleado['departamento'] . "'";
+        $sql = 'UPDATE lotes_detalles SET unidades_solicitadas = ?, id_empleado = ? WHERE id_orden = ? AND id_ordenes_productos = ? AND departamento = ?';
+        $params = [
+          $miEmpleado['cantidad'],
+          $miEmpleado['id_empleado'],
+          $miEmpleado['id_orden'],
+          $miEmpleado['id_ordenes_productos'],
+          $miEmpleado['departamento'],
+        ];
       }
     }
     $object['sql_asignacion'] = $sql;
 
-    $object['asigancion'] = json_encode($localConnection->goQuery($sql));
+    $object['asigancion'] = json_encode($localConnection->goQuery($sql, $params));
 
     $localConnection->disconnect();
 
@@ -1303,9 +1310,9 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT id_orden, id_woo, category_name, name, cantidad, talla, corte, tela, moment FROM ordenes_productos WHERE id_woo = ' . $data['id_woo'] . ' AND talla =  ' . $data['talla'];
+    $sql = 'SELECT id_orden, id_woo, category_name, name, cantidad, talla, corte, tela, moment FROM ordenes_productos WHERE id_woo = ? AND talla = ?';
 
-    $object['items'] = $localConnection->goQuery($sql);
+    $object['items'] = $localConnection->goQuery($sql, [$data['id_woo'], $data['talla']]);
 
     $localConnection->disconnect();
 
@@ -1323,26 +1330,26 @@ return function (App $app) {
     $object['request'] = $data;
 
     // -> -> VERIFICAR SI EL REGISTRO EXISTE EN `lotes_fisicos`
-    $sql = "SELECT _id,  piezas_actuales FROM lotes_fisicos WHERE tela = '" . $data['tela'] . "' AND talla = '" . $data['talla'] . "' AND corte = '" . $data['corte'] . "' AND categoria = '" . $data['id_category'] . "'";
+    $sql = 'SELECT _id, piezas_actuales FROM lotes_fisicos WHERE tela = ? AND talla = ? AND corte = ? AND categoria = ?';
 
     $object['sql_count_lotes_fisicos'] = $sql;
-    $cantidad_lotes_fisicos = $localConnection->goQuery($sql);
+    $cantidad_lotes_fisicos = $localConnection->goQuery($sql, [$data['tela'], $data['talla'], $data['corte'], $data['id_category']]);
     $object['response_lotes_fisicos'] = $cantidad_lotes_fisicos;
 
     $last_id_lotes_fisicos = 0;
 
     if ($cantidad_a_cortar > 0) {
       // GUARDAR EN HISTORICO SOLICITADAS
-      $sql = 'INSERT INTO lotes_historico_solicitadas (id_orden, id_lotes_fisicos, unidades_produccion) VALUES (' . $data['id_orden'] . ', ' . $last_id_lotes_fisicos . ', ' . $cantidad_a_cortar . ')';
-      $object['response_insert_historico_solicitadas'] = $localConnection->goQuery($sql);
+      $sql = 'INSERT INTO lotes_historico_solicitadas (id_orden, id_lotes_fisicos, unidades_produccion) VALUES (?, ?, ?)';
+      $object['response_insert_historico_solicitadas'] = $localConnection->goQuery($sql, [$data['id_orden'], $last_id_lotes_fisicos, $cantidad_a_cortar]);
     }
 
     if (empty($cantidad_lotes_fisicos)) {
       $cantidad_unidades = $cantidad_a_cortar - $cantidad_orden;
       $object['dataResp'] = $cantidad_unidades;
 
-      $sql = 'INSERT INTO lotes_fisicos (id_orden, id_woo, tela, talla, corte, categoria, piezas_actuales) VALUES (' . $data['id_orden'] . ', ' . $data['id_woo'] . ", '" . $data['tela'] . "', '" . $data['talla'] . "', '" . $data['corte'] . "', '" . $data['id_category'] . "', '" . $cantidad_unidades . "');";
-      // $object['response_insert_lotes_fidicos'] = $localConnection->goQuery($sql);
+      $sql = 'INSERT INTO lotes_fisicos (id_orden, id_woo, tela, talla, corte, categoria, piezas_actuales) VALUES (?, ?, ?, ?, ?, ?, ?)';
+      // $object['response_insert_lotes_fidicos'] = $localConnection->goQuery($sql, [$data['id_orden'], $data['id_woo'], $data['tela'], $data['talla'], $data['corte'], $data['id_category'], $cantidad_unidades]);
 
       // OBTENER EL ULTIMO ID DE lotes_fisicos
       $last_prod = $localConnection->goQuery('SELECT MAX(_id) id FROM lotes_fisicos');
@@ -1353,8 +1360,8 @@ return function (App $app) {
       $cantidad_unidades = (intval($data['cantidad_existencia']) - $cantidad_orden) + $cantidad_a_cortar;
       // $cantidad_unidades = intval($data["cantidad_existencia"]) + $cantidad_a_cortar;
 
-      $sql = "UPDATE lotes_fisicos SET piezas_actuales = '" . $cantidad_unidades . "', id_woo = " . $data['id_woo'] . ' , id_orden = ' . $data['id_orden'] . ' WHERE _id = ' . $cantidad_lotes_fisicos[0]['_id'];
-      // $object['response_get_lotes_fisicos'] = $localConnection->goQuery($sql);
+      $sql = 'UPDATE lotes_fisicos SET piezas_actuales = ?, id_woo = ?, id_orden = ? WHERE _id = ?';
+      // $object['response_get_lotes_fisicos'] = $localConnection->goQuery($sql, [$cantidad_unidades, $data['id_woo'], $data['id_orden'], $cantidad_lotes_fisicos[0]['_id']]);
       $object['dataResp'] = $object['response_lotes_fisicos'][0]['piezas_actuales'];
     }
 
@@ -1362,8 +1369,8 @@ return function (App $app) {
     if ($last_id_lotes_fisicos > 0) {
       // $last_id_lotes_fisicos = intval($cantidad_lotes_fisicos[0]["_id"]);
     }
-    $sql = 'SELECT piezas_actuales FROM lotes_fisicos WHERE _id = ' . $last_id_lotes_fisicos;
-    $cantidad_piezas = $localConnection->goQuery($sql);
+    $sql = 'SELECT piezas_actuales FROM lotes_fisicos WHERE _id = ?';
+    $cantidad_piezas = $localConnection->goQuery($sql, [$last_id_lotes_fisicos]);
     $object['cantidad_piezas'] = $cantidad_piezas;
 
     $sql = 'SELECT _id id_lotes_fisicos, piezas_actuales, tela, talla, corte, categoria, moment FROM lotes_fisicos';
@@ -1382,10 +1389,10 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $sql = "UPDATE lotes SET prioridad = '" . $data['prioridad'] . "' WHERE _id = '" . $data['id'] . "'";
+    $sql = 'UPDATE lotes SET prioridad = ? WHERE _id = ?';
 
     $object['sql'] = $sql;
-    $object['response_orden'] = json_encode($localConnection->goQuery($sql));
+    $object['response_orden'] = json_encode($localConnection->goQuery($sql, [$data['prioridad'], $data['id']]));
 
     $localConnection->disconnect();
 
