@@ -3596,14 +3596,15 @@ $object['sales_commission_ISSET'][] = false;
           $id_categoria = (isset($decodedObj['categoria']) && !empty($decodedObj['categoria'])) ? intval($decodedObj['categoria']) : 0;
           $params2[] = $id_categoria;
           $params2[] = $cat_name;
+          $values_prefix = '?, ?, ?, ?, ?, ?, ?, ?, ?, ';
 
           if (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '') {
             $id_talla = intval($decodedObj['talla']);
-            $values = '?, (SELECT nombre FROM sizes WHERE _id = ?),';
+            $values = $values_prefix . '?, (SELECT nombre FROM sizes WHERE _id = ?),';
             $params2[] = $id_talla;
             $params2[] = $id_talla;
           } else {
-            $values = 'NULL, NULL,';
+            $values = $values_prefix . 'NULL, NULL,';
           }
 
           if (isset($decodedObj['corte'])) {
