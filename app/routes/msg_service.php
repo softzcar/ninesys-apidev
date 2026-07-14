@@ -935,12 +935,12 @@ return function (App $app) {
         }
 
         $body = json_decode((string) $request->getBody(), true) ?? [];
-        $nombre    = addslashes(trim($body['nombre']    ?? ''));
-        $apellido  = addslashes(trim($body['apellido']  ?? ''));
-        $cedula    = addslashes(trim($body['cedula']    ?? ''));
-        $telefono  = addslashes(trim($body['telefono']  ?? ''));
-        $email     = addslashes(strtolower(trim($body['email']    ?? '')));
-        $direccion = addslashes(trim($body['direccion'] ?? ''));
+        $nombre    = trim($body['nombre']    ?? '');
+        $apellido  = trim($body['apellido']  ?? '');
+        $cedula    = trim($body['cedula']    ?? '');
+        $telefono  = trim($body['telefono']  ?? '');
+        $email     = strtolower(trim($body['email']    ?? ''));
+        $direccion = trim($body['direccion'] ?? '');
 
         if ($nombre === '' || $telefono === '') {
             return $respondJson(['error' => 'bad_request', 'message' => 'nombre y telefono son requeridos.'], 400);
@@ -975,27 +975,36 @@ return function (App $app) {
             $tenantConnection = new LocalDB();
 
             $conditions = [];
+            $condParams = [];
             $digits = preg_replace('/\D/', '', $telefono);
+            $regexpReplaceExpr = DB_DRIVER === 'pgsql'
+                ? "REGEXP_REPLACE(phone, '[^0-9]', '', 'g')"
+                : "REGEXP_REPLACE(phone, '[^0-9]', '')";
             if (strlen($digits) >= 7) {
                 $last10 = substr($digits, -10);
-                $conditions[] = "REGEXP_REPLACE(phone, '[^0-9]', '') LIKE '%" . $last10 . "'";
+                $conditions[] = "{$regexpReplaceExpr} LIKE ?";
+                $condParams[] = '%' . $last10;
             } else {
-                $conditions[] = "phone = '$telefono'";
+                $conditions[] = 'phone = ?';
+                $condParams[] = $telefono;
             }
             if ($cedula !== '' && $cedula !== 'none') {
-                $conditions[] = "cedula = '$cedula'";
+                $conditions[] = 'cedula = ?';
+                $condParams[] = $cedula;
             }
             $existingRows = $tenantConnection->goQuery(
-                "SELECT _id FROM {$dbName}customers WHERE (" . implode(' OR ', $conditions) . ") LIMIT 1"
+                "SELECT _id FROM {$dbName}customers WHERE (" . implode(' OR ', $conditions) . ') LIMIT 1',
+                $condParams
             );
 
             if (!empty($existingRows) && !isset($existingRows['status'])) {
                 $customerId = (int) $existingRows[0]['_id'];
                 $tenantConnection->goQuery(
                     "UPDATE {$dbName}customers
-                     SET first_name = '$nombre', last_name = '$apellido', cedula = '$cedula',
-                         phone = '$telefono', email = '$email', address = '$direccion'
-                     WHERE _id = $customerId"
+                     SET first_name = ?, last_name = ?, cedula = ?,
+                         phone = ?, email = ?, address = ?
+                     WHERE _id = ?",
+                    [$nombre, $apellido, $cedula, $telefono, $email, $direccion, $customerId]
                 );
                 $tenantConnection->disconnect();
                 return $respondJson(['id_customer' => $customerId, 'upserted' => true], 200);
@@ -1003,7 +1012,8 @@ return function (App $app) {
 
             $createResult = $tenantConnection->goQuery(
                 "INSERT INTO {$dbName}customers (first_name, last_name, cedula, phone, email, address)
-                 VALUES ('$nombre', '$apellido', '$cedula', '$telefono', '$email', '$direccion')"
+                 VALUES (?, ?, ?, ?, ?, ?)",
+                [$nombre, $apellido, $cedula, $telefono, $email, $direccion]
             );
             $tenantConnection->disconnect();
 
