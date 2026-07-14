@@ -1789,11 +1789,11 @@ return function (App $app) {
             $total_monto_pago = 0;
 
           // 4. Registrar Pago
-          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = 0 LIMIT 1";
+          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion IS NULL LIMIT 1";
           $check_pago = $localConnection->goQuery($sql_check_pago, [$id_orden_actual, $id_emp_asignado, $id_departamento]);
 
           if (empty($check_pago)) {
-            $sql_pago = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, 0, ?, ?, ?, ?, ?, 'aprobado', ?, ?, ?)";
+            $sql_pago = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, 'aprobado', ?, ?, ?)";
             $localConnection->goQuery($sql_pago, [$id_orden_actual, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
           }
 
@@ -2071,7 +2071,7 @@ return function (App $app) {
         if (!empty($resp_comision)) {
           $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
           $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-          $params_pago = [$id_orden_actual, 0, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
+          $params_pago = [$id_orden_actual, null, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
           $localConnection->goQuery($sql_pago, $params_pago);
         }
 
@@ -2281,12 +2281,12 @@ return function (App $app) {
           if ($salario_tipo === 'Salario')
             $total_monto_pago = 0;
 
-          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = 0 LIMIT 1";
+          $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion IS NULL LIMIT 1";
           $check_pago = $localConnection->goQuery($sql_check_pago, [$id_orden_actual, $id_emp_asignado, $id_departamento]);
 
           if (empty($check_pago)) {
             $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-            $localConnection->goQuery($sql_pago, [$id_orden_actual, 0, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, 'aprobado', $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
+            $localConnection->goQuery($sql_pago, [$id_orden_actual, null, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, 'aprobado', $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
           }
 
           // EXCEDENTES CORTE (Todos los tipos de comisión: variable, fija, porcentaje)
@@ -2323,10 +2323,10 @@ return function (App $app) {
             if ($salario_tipo === 'Salario')
               $monto_exc = 0;
 
-            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = ? AND id_reposicion = 0 AND id_empleado = ? AND id_departamento = ? AND id_lotes_detalles = ? AND detalle = 'Corte-Excedente' LIMIT 1";
+            $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = ? AND id_reposicion IS NULL AND id_empleado = ? AND id_departamento = ? AND id_lotes_detalles = ? AND detalle = 'Corte-Excedente' LIMIT 1";
             $checkExc = $localConnection->goQuery($sqlCheckExc, [$id_orden_actual, $id_emp_asignado, $id_departamento, $id_lotes_detalles]);
             if (empty($checkExc)) {
-              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, 0, ?, ?, ?, ?, ?, 'aprobado', ?, ?, 'Corte-Excedente')";
+              $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, 'aprobado', ?, ?, 'Corte-Excedente')";
               $localConnection->goQuery($sqlExcIns, [$id_orden_actual, $id_departamento, $comision_exc, $comision_tipo, $excedente_piezas, $id_lotes_detalles, $monto_exc, $id_emp_asignado]);
             }
           }
