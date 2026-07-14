@@ -225,7 +225,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 224,msg_service.php,PATCH,/internal/presupuesto/{id_presupuesto}/vendedor,1032,2-escritura-manual,PENDIENTE,,
 225,ordenes-sin-asignacion.php,GET,/ordenes-sin-asignar/{id_vendedor},10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:34
 226,orders.php,POST,/orden/editar,14,2-escritura-manual,PENDIENTE,,
-227,orders.php,POST,/orden/previa-cancelacion,118,2-escritura-manual,PENDIENTE,,
+227,orders.php,POST,/orden/previa-cancelacion,118,2-escritura-manual,EN_PROGRESO,Investigando POST /orden/previa-cancelacion,2026-07-14 08:30:58
 228,orders.php,POST,/orden/actualizar-estado,158,2-escritura-manual,CORREGIDO,Sin patrones MySQL-only. Probado en vivo con datos reales: cambio simple de estado y validacion de tareas pendientes (JOIN con api_empresas.empresas_usuarios) ambos funcionan sin errores. Sin cambios de codigo necesarios.,2026-07-13 16:15:36
 229,orders.php,GET,/ordenes/abono/{id},361,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:39:34
 230,orders.php,GET,/ordenes/verificar-edición/{id},389,1-GET-auto,OK,"HTTP 200, respuesta no-JSON (revisar manualmente si es esperado)",2026-07-13 15:39:35
