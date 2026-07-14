@@ -1174,9 +1174,15 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         $miPieza = $request->getParsedBody();
         $localConnection = new LocalDB();
 
-        $sql = 'INSERT INTO piezas_cortadas (peso, id_orden, id_inventario, id_ordenes_productos, id_empleado) VALUES (' . $miPieza['peso'] . ', ' . $miPieza['id_orden'] . ', ' . $miPieza['id_inventario'] . ', ' . $miPieza['id_ordenes_productos'] . ', ' . $miPieza['id_empleado'] . ')';
+        $sql = 'INSERT INTO piezas_cortadas (peso, id_orden, id_inventario, id_ordenes_productos, id_empleado) VALUES (?, ?, ?, ?, ?)';
         $object['sql'] = $sql;
-        $object['response'] = json_encode($localConnection->goQuery($sql));
+        $object['response'] = json_encode($localConnection->goQuery($sql, [
+            $miPieza['peso'],
+            $miPieza['id_orden'],
+            $miPieza['id_inventario'],
+            $miPieza['id_ordenes_productos'],
+            $miPieza['id_empleado'],
+        ]));
 
         $localConnection->disconnect();
 
@@ -1596,52 +1602,72 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
 
         $arrayOrdenes = explode(',', $miInsumo['ordenes']);
         $object['count_Array'] = count($arrayOrdenes);
-        $sql = "UPDATE inventario SET cantidad = '" . $miInsumo['cantidad_final'] . "' WHERE _id =  " . $miInsumo['id_insumo'] . ';';
 
+        // Atomicidad FK: UPDATE inventario + movimientos en una transacción
+        $localConnection->beginTransaction();
+
+        $localConnection->goQuery(
+            'UPDATE inventario SET cantidad = ? WHERE _id = ?',
+            [$miInsumo['cantidad_final'], $miInsumo['id_insumo']]
+        );
+
+        $responses = [];
         foreach ($arrayOrdenes as $key => $orden) {
-            $sql_check = 'SELECT _id existe FROM inventario_movimientos WHERE id_orden = ' . $orden . ' AND id_empleado = ' . $miInsumo['id_empleado'] . ' AND id_insumo = ' . $miInsumo['id_insumo'] . " AND departamento = '" . $miInsumo['departamento'] . "';";
-            $respuesta = $localConnection->goQuery($sql_check);
+            $sql_check = 'SELECT _id existe FROM inventario_movimientos WHERE id_orden = ? AND id_empleado = ? AND id_insumo = ? AND departamento = ?';
+            $respuesta = $localConnection->goQuery($sql_check, [$orden, $miInsumo['id_empleado'], $miInsumo['id_insumo'], $miInsumo['departamento']]);
             $object['respuesta_check'][$key] = $respuesta;
 
             if (count($respuesta) > 0) {
-                $sql .= '
-            UPDATE inventario_movimientos 
-            SET id_orden = ' . $orden . ', 
-            id_empleado = ' . $miInsumo['id_empleado'] . ', 
-            id_insumo = ' . $miInsumo['id_insumo'] . ", 
-            id_departamento = '" . $miInsumo['id_departamento'] . "', 
-            departamento = '" . $miInsumo['departamento'] . "', 
-            valor_inicial = " . $miInsumo['cantidad_inicial'] . ', 
-            valor_final = ' . $miInsumo['cantidad_final'] . ' 
-            WHERE id_orden = ' . $orden . ' AND id_empleado = ' . $miInsumo['id_empleado'] . ' AND id_insumo = ' . $miInsumo['id_insumo'] . " AND departamento = '" . $miInsumo['departamento'] . "';";
+                $responses[] = $localConnection->goQuery(
+                    'UPDATE inventario_movimientos
+                    SET id_orden = ?,
+                    id_empleado = ?,
+                    id_insumo = ?,
+                    id_departamento = ?,
+                    departamento = ?,
+                    valor_inicial = ?,
+                    valor_final = ?
+                    WHERE id_orden = ? AND id_empleado = ? AND id_insumo = ? AND departamento = ?',
+                    [
+                        $orden,
+                        $miInsumo['id_empleado'],
+                        $miInsumo['id_insumo'],
+                        $miInsumo['id_departamento'],
+                        $miInsumo['departamento'],
+                        $miInsumo['cantidad_inicial'],
+                        $miInsumo['cantidad_final'],
+                        $orden,
+                        $miInsumo['id_empleado'],
+                        $miInsumo['id_insumo'],
+                        $miInsumo['departamento'],
+                    ]
+                );
             } else {
-                $sql .= '
-            INSERT INTO inventario_movimientos 
-            (
-             id_orden, 
-             id_empleado, 
-             id_insumo, 
-             id_departamento, 
-             departamento, 
-             valor_inicial, 
-             valor_final)
-            VALUES (
-                    ' . $orden . ',
-                    ' . $miInsumo['id_empleado'] . ',
-                    ' . $miInsumo['id_insumo'] . ",
-                    '" . $miInsumo['id_departamento'] . "',
-                    '" . $miInsumo['departamento'] . "',
-                    " . $miInsumo['cantidad_inicial'] . ',
-                    ' . $miInsumo['cantidad_final'] . '
-                    );
-            ';
+                $responses[] = $localConnection->goQuery(
+                    'INSERT INTO inventario_movimientos
+                    (
+                     id_orden,
+                     id_empleado,
+                     id_insumo,
+                     id_departamento,
+                     departamento,
+                     valor_inicial,
+                     valor_final)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    [
+                        $orden,
+                        $miInsumo['id_empleado'],
+                        $miInsumo['id_insumo'],
+                        $miInsumo['id_departamento'],
+                        $miInsumo['departamento'],
+                        $miInsumo['cantidad_inicial'],
+                        $miInsumo['cantidad_final'],
+                    ]
+                );
             }
         }
 
-        $object['sql'] = $sql;
-        // Atomicidad FK: UPDATE inventario + movimientos (multi-sentencia) en una transacción
-        $localConnection->beginTransaction();
-        $object['response'] = json_encode($localConnection->goQuery($sql));
+        $object['response'] = json_encode($responses);
         $localConnection->commit();
 
         $localConnection->disconnect();
@@ -1676,8 +1702,8 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         $data = $request->getParsedBody();
         $localConnection = new LocalDB();
 
-        $sql = 'DELETE FROM inventario_movimientos WHERE _id = ' . $data['id'];
-        $object['response'] = json_encode($localConnection->goQuery($sql));
+        $sql = 'DELETE FROM inventario_movimientos WHERE _id = ?';
+        $object['response'] = json_encode($localConnection->goQuery($sql, [$data['id']]));
 
         $localConnection->disconnect();
 
@@ -2119,22 +2145,21 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
         $data = $request->getParsedBody();
         $localConnection = new LocalDB();
 
-        $sql = "SELECT
+        $sql = 'SELECT
                     a._id id_insumo,
                     a.insumo nombre_inusmo,
                     a.sku,
                     a.rendimiento,
                     a.cantidad cantidad_insumo,
-                    (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = {$data['id_orden']}) total_productos                    
+                    (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = ?) total_productos
                 FROM
                     inventario a
                 WHERE
-                    a._id = {$data['id_insumo']};
-        ";
+                    a._id = ?';
 
-        $object['insumos'] = $localConnection->goQuery($sql);
+        $object['insumos'] = $localConnection->goQuery($sql, [$data['id_orden'], $data['id_insumo']]);
 
-        $sql = "SELECT
+        $sql = 'SELECT
                     a.id_woo id_product,
                         a.name,
                         a.cantidad,
@@ -2143,11 +2168,10 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
                         b.cantidad rendimiento_talla,
                         b.unidad
                     FROM
-                        ordenes_productos a 
+                        ordenes_productos a
                     LEFT JOIN products_sizes_eficiencia b on a.talla = b.id_size
-                    WHERE a.id_orden =  {$data['id_orden']}
-        ";
-        $object['productos'] = $localConnection->goQuery($sql);
+                    WHERE a.id_orden = ?';
+        $object['productos'] = $localConnection->goQuery($sql, [$data['id_orden']]);
 
         $localConnection->disconnect();
 
@@ -3866,7 +3890,13 @@ $object['insert'] = json_encode($localConnection->goQuery($sql));
             return $response->withHeader('Content-Type', 'text/html')->withStatus(400);
         }
 
-        $companyDsn = 'mysql:host=' . $conn_details['db_host'] . ';dbname=' . $conn_details['db_name'];
+        $driverCargaDirecta = getenv('DB_DRIVER') ?: 'mysql';
+        if ($driverCargaDirecta === 'pgsql') {
+            $portCargaDirecta = getenv('DB_PORT') ?: '5432';
+            $companyDsn = 'pgsql:host=' . $conn_details['db_host'] . ';port=' . $portCargaDirecta . ';dbname=' . $conn_details['db_name'];
+        } else {
+            $companyDsn = 'mysql:host=' . $conn_details['db_host'] . ';dbname=' . $conn_details['db_name'];
+        }
         $db->switchDatabase($companyDsn, $conn_details['db_user'], $conn_details['db_password']);
         $companyName = $conn_details['nombre'] ?? 'Empresa ' . $empresa_id;
 
