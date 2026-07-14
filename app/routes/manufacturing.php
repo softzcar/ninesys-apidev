@@ -2436,55 +2436,58 @@ return function (App $app) {
     $object['tipo'] = $args['tipo'];
 
     // BUSCAR ID DEL EMPLEADO
-    $sqlxxx = 'SELECT id_empleado FROM lotes_detalles WHERE _id = ' . $args['id_lotes_detalles'];
-    $miEmpleado = $localConnection->goQuery($sqlxxx);
+    $sqlxxx = 'SELECT id_empleado FROM lotes_detalles WHERE _id = ?';
+    $miEmpleado = $localConnection->goQuery($sqlxxx, [$args['id_lotes_detalles']]);
 
     // REGISTRAR EL PASO ACTUAL EN lotes
-    $sql = 'SELECT id_orden FROM lotes_detalles WHERE _id = ' . $args['id_lotes_detalles'] . ';';
+    $sql = 'SELECT id_orden FROM lotes_detalles WHERE _id = ?';
     $object['sql_total_pendientes'] = $sql;
-    $id_orden = $localConnection->goQuery($sql)[0]['id_orden'];
+    $id_orden = $localConnection->goQuery($sql, [$args['id_lotes_detalles']])[0]['id_orden'];
     $object['id_orden'] = $id_orden;
 
     // Atomicidad FK: registrar el paso (lotes + pago + lotes_detalles) en una transacción
     $localConnection->beginTransaction();
 
+    $sql_pago = null;
+    $params_pago = [];
+
     if ($args['tipo'] === 'inicio') {
       $campo = 'fecha_inicio';
       $progreso = 'en curso';
 
-      $sqln = "UPDATE lotes SET paso = '" . $args['departamento'] . "' WHERE id_orden = " . $object['id_orden'];
+      $sqln = 'UPDATE lotes SET paso = ? WHERE id_orden = ?';
       $object['sql_update_lotes'] = $sqln;
-      $response_update = $localConnection->goQuery($sqln);
+      $response_update = $localConnection->goQuery($sqln, [$args['departamento'], $object['id_orden']]);
       $object['response_update'] = $response_update;
     }
 
     if ($args['tipo'] === 'fin') {
-      $sqle = 'SELECT unidades_solicitadas unidades, id_empleado FROM lotes_detalles WHERE _id = ' . $args['id_lotes_detalles'];
-      $respLotesDetalles = $localConnection->goQuery($sqle);
+      $sqle = 'SELECT unidades_solicitadas unidades, id_empleado FROM lotes_detalles WHERE _id = ?';
+      $respLotesDetalles = $localConnection->goQuery($sqle, [$args['id_lotes_detalles']]);
 
       $object['resp'] = $respLotesDetalles;
 
       // BUSCAR TIPO DE COMISION DEL EMPLEADO
       // BUSCAR COMISION DEL VENDEDOR
-      $sql = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $miEmpleado[0]['id_empleado'];
-      $respComision = $localConnection->goQuery($sql);
+      $sql = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+      $respComision = $localConnection->goQuery($sql, [$miEmpleado[0]['id_empleado']]);
       $object['rsp_empleados'] = $respComision;
       $comisionTipo = $respComision[0]['comision_tipo'];
 
       // DETERMINAR TIPO DE COMISION
       if ($comisionTipo === 'variable') {
         // Obtener ID del departamento
-        $sqlDep = "SELECT _id FROM departamentos WHERE departamento = '" . $args['departamento'] . "'";
-        $resDep = $localConnection->goQuery($sqlDep);
+        $sqlDep = 'SELECT _id FROM departamentos WHERE departamento = ?';
+        $resDep = $localConnection->goQuery($sqlDep, [$args['departamento']]);
         $id_dep_actual = $resDep[0]['_id'] ?? 0;
 
         // Buscar comision en el producto (por departamento)
-        $sqlc = "SELECT COALESCE(pc.comision, 0) AS comision 
-                 FROM lotes_detalles a 
-                 LEFT JOIN products_comisiones pc ON pc.id_product = a.id_woo AND pc.id_departamento = $id_dep_actual
-                 WHERE a._id = " . $args['id_lotes_detalles'];
+        $sqlc = 'SELECT COALESCE(pc.comision, 0) AS comision
+                 FROM lotes_detalles a
+                 LEFT JOIN products_comisiones pc ON pc.id_product = a.id_woo AND pc.id_departamento = ?
+                 WHERE a._id = ?';
         $object['sql_comision_variable'] = $sqlc;
-        $comisionEmpleado = $localConnection->goQuery($sqlc);
+        $comisionEmpleado = $localConnection->goQuery($sqlc, [$id_dep_actual, $args['id_lotes_detalles']]);
         $miComision = $comisionEmpleado[0]['comision'];
       } elseif ($comisionTipo === 'porcentaje') {
         $miComision = floatval($respComision[0]['comision_porcentaje']);
@@ -2558,19 +2561,34 @@ return function (App $app) {
       $object['monto_pago'] = $monto_pago; */
 
       // GUARDAR PAGO
-      $sql = 'INSERT INTO pagos(id_orden, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) 
-        VALUES (' . $object['id_orden'] . ', ' . $miComision . ", '" . $comisionTipo . "', " . $args['unidades'] . ', ' . $args['id_lotes_detalles'] . ", 'aprobado', " . $monto_pago . ', ' . $miEmpleado[0]['id_empleado'] . ", '" . $args['departamento'] . "');";
+      $sql_pago = 'INSERT INTO pagos(id_orden, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+      $params_pago = [
+        $object['id_orden'],
+        $miComision,
+        $comisionTipo,
+        $args['unidades'],
+        $args['id_lotes_detalles'],
+        'aprobado',
+        $monto_pago,
+        $miEmpleado[0]['id_empleado'],
+        $args['departamento'],
+      ];
 
       $campo = 'fecha_terminado';
 
       $progreso = 'terminada';
     }
 
+    if ($sql_pago !== null) {
+      $object['response_insert_pago'] = $localConnection->goQuery($sql_pago, $params_pago);
+    }
+
     // ACTUALIZAR DATOS DE INICIO DE TAREA
-    $sql .= 'UPDATE lotes_detalles SET ' . $campo . " = '" . $now . "', progreso = '" . $progreso . "' WHERE _id = " . $args['id_lotes_detalles'];
+    $sql = 'UPDATE lotes_detalles SET ' . $campo . ' = ?, progreso = ? WHERE _id = ?';
     $object['sql'] = $sql;
     $object['sql_update_pagos'] = $sql;
-    $object['items'] = $localConnection->goQuery($sql);
+    $object['items'] = $localConnection->goQuery($sql, [$now, $progreso, $args['id_lotes_detalles']]);
 
     $localConnection->commit();
     $localConnection->disconnect();
@@ -2590,9 +2608,12 @@ return function (App $app) {
 
     $myDate = new CustomTime();
     $now = $myDate->today();
-    $sql = '';
     $tipo_fecha = '';
     $progreso = '';
+
+    // Atomicidad FK: todas las escrituras del lote (lotes + pagos + lotes_detalles) en una transacción
+    $localConnection->beginTransaction();
+    $results = [];
 
     foreach ($object['request'] as $key => $value) {
       $object['foreach'][$key] = $value->id_lotes_detalles;
@@ -2602,18 +2623,18 @@ return function (App $app) {
       if ($value->progreso === 'por iniciar') {
         $tipo_fecha = 'fecha_inicio';
         $progreso = 'en curso';
-        $sql .= "UPDATE lotes SET paso = '" . $args['departamento'] . "' WHERE id_orden = " . $id_orden . ';';
+        $results[] = $localConnection->goQuery('UPDATE lotes SET paso = ? WHERE id_orden = ?', [$args['departamento'], $id_orden]);
       } else if ($value->progreso === 'en curso') {
         $tipo_fecha = 'fecha_terminado';
         $progreso = 'terminado';
-        $sql .= "UPDATE lotes SET paso = '" . $args['departamento'] . "' WHERE id_orden = " . $id_orden . ';';
+        $results[] = $localConnection->goQuery('UPDATE lotes SET paso = ? WHERE id_orden = ?', [$args['departamento'], $id_orden]);
 
-        $sqle = 'SELECT unidades_solicitadas unidades, id_empleado FROM lotes_detalles WHERE _id = ' . $value->id_lotes_detalles;
-        $respLotesDetalles = $localConnection->goQuery($sqle);
+        $sqle = 'SELECT unidades_solicitadas unidades, id_empleado FROM lotes_detalles WHERE _id = ?';
+        $respLotesDetalles = $localConnection->goQuery($sqle, [$value->id_lotes_detalles]);
 
         if ($args['departamento'] === 'Costura') {
-          $sqlpr = 'SELECT id_woo FROM lotes_detalles WHERE _id = ' . $value->id_lotes_detalles;
-          $res_lotes_detalles = $localConnection->goQuery($sqlpr)[0]['id_woo'];
+          $sqlpr = 'SELECT id_woo FROM lotes_detalles WHERE _id = ?';
+          $res_lotes_detalles = $localConnection->goQuery($sqlpr, [$value->id_lotes_detalles])[0]['id_woo'];
 
           $id_prod = intval($res_lotes_detalles);
           $woo = new WooMe();
@@ -2642,8 +2663,8 @@ return function (App $app) {
         } else {
           // CALCULAR MONTO DEL PAGO
 
-          $sqlc = 'SELECT comision FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $respLotesDetalles[0]['id_empleado'];
-          $comisionEmpleado = $localConnection->goQuery($sqlc);
+          $sqlc = 'SELECT comision FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+          $comisionEmpleado = $localConnection->goQuery($sqlc, [$respLotesDetalles[0]['id_empleado']]);
           $object['comision'] = $respLotesDetalles;
 
           $calculo_pago = floatval($comisionEmpleado[0]['comision']) * floatval($respLotesDetalles[0]['unidades']);
@@ -2653,23 +2674,31 @@ return function (App $app) {
         }
 
         // GUARDAR PAGO
-        $sqlxxx = 'SELECT id_empleado FROM lotes_detalles WHERE _id = ' . $value->id_lotes_detalles;
-        $miEmpleado = $localConnection->goQuery($sqlxxx);
+        $sqlxxx = 'SELECT id_empleado FROM lotes_detalles WHERE _id = ?';
+        $miEmpleado = $localConnection->goQuery($sqlxxx, [$value->id_lotes_detalles]);
 
-        $sql .= 'INSERT INTO pagos(id_orden, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $id_orden . ', ' . $respLotesDetalles[0]['unidades'] . ', ' . $value->id_lotes_detalles . ", 'aprobado' , " . $monto_pago . ', ' . $miEmpleado[0]['id_empleado'] . ", '" . $args['departamento'] . "');";
+        $sql_pago = 'INSERT INTO pagos(id_orden, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?)';
+        $results[] = $localConnection->goQuery($sql_pago, [
+          $id_orden,
+          $respLotesDetalles[0]['unidades'],
+          $value->id_lotes_detalles,
+          'aprobado',
+          $monto_pago,
+          $miEmpleado[0]['id_empleado'],
+          $args['departamento'],
+        ]);
         $tipo_fecha = 'fecha_terminado';
         $progreso = 'terminada';
       }
 
-      $sql .= 'UPDATE lotes_detalles SET ' . $tipo_fecha . " = '" . $now . "', progreso = '" . $progreso . "' WHERE _id = " . $value->id_lotes_detalles . ';';
+      $results[] = $localConnection->goQuery(
+        'UPDATE lotes_detalles SET ' . $tipo_fecha . ' = ?, progreso = ? WHERE _id = ?',
+        [$now, $progreso, $value->id_lotes_detalles]
+      );
     }
 
-    $object['sql'] = $sql;
-    // Atomicidad FK: todas las escrituras del lote (lotes + pagos + lotes_detalles) en una transacción
-    $localConnection->beginTransaction();
-    $result_sql = $localConnection->goQuery($sql);
     $localConnection->commit();
-    $object['result_sql'] = $result_sql;
+    $object['result_sql'] = $results;
 
     $localConnection->disconnect();
 
