@@ -1484,20 +1484,6 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  $app->get('/lotes/fisicos', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB();
-
-    $sql = 'SELECT a.unidades FROM lotes_fisicos a JOIN inventario b ON a.id_inventario = b._id';
-    $object['lotes'] = $localConnection->goQuery($sql);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   $app->get('/lotes/existencia/{talla}/{tela}/{corte}/{categoria}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
