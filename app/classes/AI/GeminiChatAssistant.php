@@ -601,13 +601,13 @@ class GeminiChatAssistant extends GeminiAssistant
     {
         $nombre = trim($query);
         $sql = "SELECT _id as id, 
-                       CONCAT(first_name, ' ', IFNULL(last_name, '')) as nombre_completo,
+                       CONCAT(first_name, ' ', COALESCE(last_name, '')) as nombre_completo,
                        cedula,
                        phone as telefono
                 FROM customers 
                 WHERE first_name LIKE ? 
                    OR last_name LIKE ? 
-                   OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+                   OR CONCAT(first_name, ' ', COALESCE(last_name, '')) LIKE ?
                 ORDER BY first_name ASC
                 LIMIT 10";
 
@@ -710,7 +710,8 @@ class GeminiChatAssistant extends GeminiAssistant
     {
         // DEBUG: Loguear conexión y ejecución
         try {
-            $dbNameQuery = $db->goQuery("SELECT DATABASE() as db", []);
+            $dbNameFn = defined('DB_DRIVER') && DB_DRIVER === 'pgsql' ? 'current_database()' : 'DATABASE()';
+            $dbNameQuery = $db->goQuery("SELECT {$dbNameFn} as db", []);
             $currentDb = $dbNameQuery[0]['db'] ?? 'unknown';
             $logMsg = date('[Y-m-d H:i:s] ') . "handleObtenerTelas called using DB: $currentDb\n";
             file_put_contents('/tmp/gemini_debug_v2.log', $logMsg, FILE_APPEND);
@@ -757,13 +758,13 @@ class GeminiChatAssistant extends GeminiAssistant
         if (isset($ordenData['cliente'])) {
             $clienteNombre = $ordenData['cliente'];
             $sql = "SELECT _id as id, 
-                           CONCAT(first_name, ' ', IFNULL(last_name, '')) as nombre_completo,
+                           CONCAT(first_name, ' ', COALESCE(last_name, '')) as nombre_completo,
                            cedula,
                            phone as telefono
                     FROM customers 
                     WHERE first_name LIKE ? 
                        OR last_name LIKE ? 
-                       OR CONCAT(first_name, ' ', IFNULL(last_name, '')) LIKE ?
+                       OR CONCAT(first_name, ' ', COALESCE(last_name, '')) LIKE ?
                     LIMIT 5";
 
             $clientes = $db->goQuery($sql, ["%{$clienteNombre}%", "%{$clienteNombre}%", "%{$clienteNombre}%"]);
@@ -920,7 +921,7 @@ class GeminiChatAssistant extends GeminiAssistant
             $abono = $args['pago_abono'] ?? 0;
 
             // 1. Obtener datos del cliente
-            $clienteData = $db->goQuery("SELECT CONCAT(first_name, ' ', IFNULL(last_name, '')) as nombre, cedula FROM customers WHERE _id = ?", [$idCliente]);
+            $clienteData = $db->goQuery("SELECT CONCAT(first_name, ' ', COALESCE(last_name, '')) as nombre, cedula FROM customers WHERE _id = ?", [$idCliente]);
             $clienteNombre = !empty($clienteData) && !isset($clienteData['status']) ? $clienteData[0]['nombre'] : 'Cliente Desconocido';
             $clienteCedula = !empty($clienteData) && !isset($clienteData['status']) ? $clienteData[0]['cedula'] : '';
 
