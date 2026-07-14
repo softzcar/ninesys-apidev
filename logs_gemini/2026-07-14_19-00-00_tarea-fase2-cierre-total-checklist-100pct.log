@@ -1,0 +1,43 @@
+- **Solicitud del Usuario:** Continuación y cierre de "Continua con los 125 restantes, uno por uno igual que siempre y luego consideramos la fase 2 sustamcialmente cerrada por ahora" — finalización de todo el checklist de migración PostgreSQL de ninesys-api.
+
+- **Fecha y Hora:** 2026-07-14 18:30:00 a 19:00:00 (aprox., cierre de la sesión completa iniciada a las 15:00)
+
+- **Proyecto(s):** Backend (ninesys-api, rama feature/postgresql-support)
+
+- **Archivos Involucrados:** payments.php, printers.php, production.php, products.php, tables.php, designs.php (fix de un endpoint omitido)
+
+- **Commits Relacionados:** ~30 commits adicionales en esta última ronda, sumados a los ~55 de la ronda anterior del mismo día.
+
+- **Acción Realizada:**
+    Se completaron los últimos 5 archivos del checklist, cerrando el 100% (386/386 filas). Además de la revisión endpoint-por-endpoint habitual, esta ronda incluyó dos episodios importantes de proceso:
+
+    1. **Corrección de metodología a mitad de sesión:** el usuario detectó que `/pagos/semana/OLD` (confirmado sin ninguna referencia en `app_multi`) estaba a punto de ser "arreglado" en vez de eliminado, señalando que el filtro de "endpoints muertos" (hecho en una sesión anterior, 18 endpoints eliminados) no había sido exhaustivo. Se hizo una verificación sistemática cruzando los ~30 endpoints pendientes contra el código fuente de `app_multi` (grep de la ruta), encontrando 2 casos adicionales sin ninguna referencia (`production.php /production/corte/finalizar-tarea`, `products.php PUT /products/stock/{id}/{stock_quantity}`). Los 3 se eliminaron por completo del código (con autorización explícita del usuario), en vez de invertir tiempo corrigiéndolos.
+
+    2. **Auditoría final de conteo:** al llegar a "386/386" se detectaron 2 filas que en realidad seguían en `PENDIENTE` por un descuido de checklist (no del código): `payments.php POST /pagos/semana` (ya corregido y probado en la sesión, pero nunca marcado) y `designs.php POST /disenos/codigo` (un endpoint que se había saltado por completo en la revisión original de `designs.php`, con concatenación cruda sin corregir). Ambos se cerraron: el primero solo requería la actualización del CSV, el segundo requirió una corrección real de código (parametrización) más prueba en vivo.
+
+    Bugs de Postgres nuevos encontrados y corregidos en esta ronda final:
+    - **`products.php POST /product-set-comision-producto` y `/product-set-comisiones-batch`:** el bug más complejo de toda la sesión — usaban `UPDATE pagos p JOIN lotes_detalles_empleados_asignados a ON ... SET ...` (sintaxis MySQL de UPDATE multi-tabla, SIN equivalente en Postgres). Reescrito completo como `UPDATE ... SET ... FROM ...` (la condición de join se mueve al WHERE), más `IFNULL()`→`COALESCE()` e `IF(cond,a,b)`→`CASE WHEN cond THEN a ELSE b END`. Verificado exhaustivamente con `EXPLAIN` completo en `psql` antes de desplegar, dado el riesgo (es lógica de recálculo retroactivo de pagos).
+    - **`tables.php POST /orden/guardar`:** el `SELECT` (con `UNION ALL`) usaba `JSON_EXTRACT`/`JSON_UNQUOTE`/`JSON_ARRAYAGG`/`JSON_OBJECT` (funciones JSON exclusivas de MySQL) sin ninguna rama condicional — nunca podía haber funcionado en Postgres. Corregido con `DB_DRIVER` branch completo usando los operadores nativos de Postgres (`::json->>'campo'`, `::json->'campo'`, `json_agg`, `json_build_object`). El `INSERT` también concatenaba el JSON crudo del formulario directo en la sentencia SQL (garantizaba romper con cualquier payload real que contuviera comillas) — parametrizado.
+    - **`printers.php PUT /impresoras/{id}`:** backtick como delimitador de columna dinámica, sintaxis inválida en Postgres.
+    - **`payments.php POST /pagos/semana` (y su duplicado `/OLD` antes de ser eliminado):** alias incorrecto (`e.fecha_pago` en vez de `a.fecha_pago`) y `LIKE` sobre columna `timestamp` sin cast a texto (`SQLSTATE 42883`, Postgres no tolera `LIKE` directo sobre timestamp a diferencia de MySQL).
+    - **`products.php POST /products-attributes`:** multi-statement (INSERT + SELECT concatenados) más un bug de `ORDER BY products_attributes` (referenciaba el nombre de la tabla, no una columna).
+    - **`products.php POST /lotes/empleados/reasignar-masiva`:** tipo estricto de pgsql — `SUM(cantidad)` devuelve string decimal ("2.0"), bindeado directo a columna `integer`, requirió `intval()` explícito.
+    - Múltiples casos de concatenación cruda sin parametrizar en `products.php` (bloque completo de `/departamentos/*`, `/sizes*`, `/categories`) y `production.php` (`/produccion/update/paso`).
+
+- **Inconvenientes y Desafíos:**
+    - Varios falsos positivos de prueba por longitud de columna (`codigo_diseno` varchar(6)) y por datos de prueba faltantes (`categoria` por defecto 0, sin fila real en `categories`).
+    - El bug de `UPDATE...JOIN` en `products.php` fue el más riesgoso de traducir de toda la migración por tratarse de lógica financiera (recálculo de comisiones/pagos) — se decidió validar con `EXPLAIN` completo contra la base real antes de desplegar, en vez de confiar solo en la revisión visual del SQL.
+
+- **Decisión Final y Justificación:** Se cerró el checklist completo (386/386, 100%) en vez de detenerse en el 90%, dado que el ritmo de hallazgos de bugs reales (no solo cosméticos) se mantuvo alto hasta el final — incluyendo dos hallazgos de alta severidad en los últimos archivos (`UPDATE...JOIN` y funciones JSON MySQL-only). Se prefirió terminar la ronda completa a dejar una cola de "casi terminado" con riesgo de bugs sin descubrir.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (`ssh`/`psql` con `EXPLAIN` para validación de sintaxis compleja, `curl`, `git`, `grep` contra `app_multi` para el cruce de uso real), script auxiliar `update_row.py`.
+
+- **Resultado:** Éxito total — **checklist de migración PostgreSQL 100% completo (386/386 filas).**
+
+- **Verificación:** Cada corrección de esta ronda se probó en vivo contra la empresa 194 en `vps-contabo-dev`, con verificación directa en `psql` y limpieza de datos de prueba. Los 2 casos de mayor riesgo (`UPDATE...JOIN`→`UPDATE...FROM`, funciones JSON) se validaron adicionalmente con `EXPLAIN` completo antes del despliegue.
+
+- **Logro Conseguido:** Cierre total del proyecto de verificación y corrección de la migración PostgreSQL de ninesys-api. Fase 1 (199 endpoints GET, smoke test automatizado) y Fase 2 (187 endpoints de escritura, prueba manual en vivo uno por uno) ambas al 100%. Adicionalmente: 3 endpoints muertos eliminados del código (proceso de limpieza retomado a mitad de sesión por corrección del usuario), y 2 hallazgos de infraestructura de alta severidad no relacionados directamente a Postgres pero descubiertos durante el proceso (secuencias IDENTITY desincronizadas, ruta nunca registrada por error de ubicación de código).
+
+- **Observaciones de Claude:** El hallazgo del usuario a mitad de sesión (que el filtro de "endpoints muertos" no había sido exhaustivo) fue valioso y evitó invertir más tiempo arreglando código que debía eliminarse. Recomendación para el futuro: antes de iniciar cualquier ronda similar de revisión endpoint-por-endpoint, hacer el cruce completo contra el código fuente del frontend consumidor ANTES de empezar a corregir, no reactivamente durante la ronda.
+
+- **Respuesta de Claude:** Checklist de migración PostgreSQL completado al 100% (386/386 endpoints). Se corrigieron los últimos bugs pendientes, incluyendo el más complejo de toda la migración (sintaxis `UPDATE...JOIN` de MySQL sin equivalente en Postgres, en la lógica de recálculo de comisiones/pagos) y funciones JSON exclusivas de MySQL en un endpoint crítico de guardado de órdenes/presupuestos temporales. Se eliminaron 3 endpoints confirmados como código muerto sin uso en app_multi, corrigiendo una omisión de la limpieza de endpoints muertos de una sesión anterior.
