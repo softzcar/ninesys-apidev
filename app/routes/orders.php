@@ -3008,10 +3008,9 @@ $object['sales_commission_ISSET'][] = false;
 
       // NUEVO: Guardar las observaciones en la tabla dedicada
       if (!empty($newJson['obs'])) {
-        $observaciones = addslashes($newJson['obs'] ?? '');
-        $sql_obs = "INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES ({$last_id}, '{$observaciones}')";
+        $sql_obs = 'INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)';
         $object['sql_observaciones'] = $sql_obs;
-        $localConnection->goQuery($sql_obs);
+        $localConnection->goQuery($sql_obs, [$last_id, $newJson['obs']]);
       }
 
       // Crear registro en la fila de producción
@@ -3551,13 +3550,23 @@ $object['sales_commission_ISSET'][] = false;
       $orderWC = 0;
 
       // Validar id_wp para evitar error SQL de entero vacío
-      $id_wp_val = (is_numeric($arr['id_wp']) && $arr['id_wp'] > 0) ? $arr['id_wp'] : "NULL";
-      // Si es NULL, no ponemos comillas. Si es número, tampoco (o sí, MySQL lo acepta). Pero NULL no va entre comillas.
-      $id_wp_sql_val = ($id_wp_val === "NULL") ? "NULL" : "'" . $id_wp_val . "'";
+      $id_wp_param = (is_numeric($arr['id_wp']) && $arr['id_wp'] > 0) ? $arr['id_wp'] : null;
 
-      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status, tipo ) VALUES (' . $newJson['responsable'] . ", '" . $now . "', " . $arr['descuento'] . ', ' . $arr['abono'] . ",  " . $id_wp_sql_val . ", '" . $arr['cedula'] . "', " . $newJson['total'] . ",' " . $cliente . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'entregada', 'sport')";
+      $sql = "INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status, tipo ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'entregada', 'sport')";
 
-      $nueva_oreden_response = $localConnection->goQuery($sql);
+      $nueva_oreden_response = $localConnection->goQuery($sql, [
+        $newJson['responsable'],
+        $now,
+        $arr['descuento'],
+        $arr['abono'],
+        $id_wp_param,
+        $arr['cedula'],
+        $newJson['total'],
+        $cliente,
+        date('Y-m-d'),
+        $newJson['fechaEntrega'],
+        date('Y-m-d'),
+      ]);
       $object['nueva_oreden_sql'] = $sql;
 
       if (isset($nueva_oreden_response['status']) && $nueva_oreden_response['status'] === 'error') {
@@ -3572,10 +3581,9 @@ $object['sales_commission_ISSET'][] = false;
       $object['orden_creada'] = true;
 
       if (!empty($newJson['obs'])) {
-        $observaciones = addslashes($newJson['obs'] ?? '');
-        $sql_obs = "INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES ({$last_id}, '{$observaciones}')";
+        $sql_obs = 'INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)';
         $object['sql_observaciones'] = $sql_obs;
-        $localConnection->goQuery($sql_obs);
+        $localConnection->goQuery($sql_obs, [$last_id, $newJson['obs']]);
       }
 
       // GUARDAR PRODUCTOS ASOCIADOS A LA ORDEN
@@ -3584,46 +3592,47 @@ $object['sales_commission_ISSET'][] = false;
           $decodedObj = $misProductos[$i];
           $cat_name = 'Uncatagorized';
 
-          $values = "'" . $now . "',";
-          $values .= $decodedObj['precio'] . ',';
-          $values .= "'" . $decodedObj['precio'] . "',";
-          $values .= "'" . $decodedObj['producto'] . "',";
-          $values .= $last_id . ',';
-          $values .= $decodedObj['cod'] . ',';
-          $values .= $decodedObj['cantidad'] . ',';
+          $params2 = [$now, $decodedObj['precio'], $decodedObj['precio'], $decodedObj['producto'], $last_id, $decodedObj['cod'], $decodedObj['cantidad']];
           $id_categoria = (isset($decodedObj['categoria']) && !empty($decodedObj['categoria'])) ? intval($decodedObj['categoria']) : 0;
-          $values .= $id_categoria . ',';
-          $values .= "'" . $cat_name . "',";
+          $params2[] = $id_categoria;
+          $params2[] = $cat_name;
 
           if (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '') {
             $id_talla = intval($decodedObj['talla']);
-            $values .= $id_talla . ',';
-            $values .= "(SELECT nombre FROM sizes WHERE _id = {$id_talla}),";
+            $values = '?, (SELECT nombre FROM sizes WHERE _id = ?),';
+            $params2[] = $id_talla;
+            $params2[] = $id_talla;
           } else {
-            $values .= 'NULL, NULL,';
+            $values = 'NULL, NULL,';
           }
 
           if (isset($decodedObj['corte'])) {
-            $values .= "'" . $decodedObj['corte'] . "',";
+            $values .= '?,';
+            $params2[] = $decodedObj['corte'];
           } else {
-            $values .= "'',";
+            $values .= '?,';
+            $params2[] = '';
           }
 
           if (isset($decodedObj['tela'])) {
-            $values .= "'" . $decodedObj['tela'] . "',";
-            $values .= '(SELECT tela FROM catalogo_telas WHERE _id = ' . intval($decodedObj['tela']) . ')';
+            $id_tela_prod = intval($decodedObj['tela']);
+            $values .= '?, (SELECT tela FROM catalogo_telas WHERE _id = ?)';
+            $params2[] = $decodedObj['tela'];
+            $params2[] = $id_tela_prod;
           } else {
-            $values .= "NULL, ''";
+            $values .= "NULL, ?";
+            $params2[] = '';
           }
 
-          $id_products_attributes = 'NULL';
+          $id_products_attributes = null;
           if (isset($decodedObj['atributo']) && !is_null($decodedObj['atributo']) && $decodedObj['atributo'] !== '') {
             $id_products_attributes = intval($decodedObj['atributo']);
           }
+          $params2[] = $id_products_attributes;
 
-          $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes) VALUES (' . $values . ', ' . $id_products_attributes . ')';
+          $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes) VALUES (' . $values . ', ?)';
           $object['sql_ordenes_productos'] = $sql2;
-          $producto_detalle_response = $localConnection->goQuery($sql2);
+          $producto_detalle_response = $localConnection->goQuery($sql2, $params2);
           $object['producto_detalle'][] = $producto_detalle_response;
 
           // Verificar error en inserción de producto
@@ -3676,8 +3685,8 @@ $object['sales_commission_ISSET'][] = false;
         $product_id = intval($producto['cod']);
         $quantity = intval($producto['cantidad']);
 
-        $sql_fisico = "SELECT fisico FROM products WHERE _id = {$product_id}";
-        $res_f = $localConnection->goQuery($sql_fisico);
+        $sql_fisico = 'SELECT fisico FROM products WHERE _id = ?';
+        $res_f = $localConnection->goQuery($sql_fisico, [$product_id]);
         if (!empty($res_f) && !isset($res_f['status']) && intval($res_f[0]['fisico']) === 1) {
           if (isset($stock_deductions[$product_id])) {
             $stock_deductions[$product_id] += $quantity;
@@ -3687,20 +3696,22 @@ $object['sales_commission_ISSET'][] = false;
         }
       }
 
-      $sql_stock_update = '';
+      $stock_update_responses = [];
       foreach ($stock_deductions as $product_id => $total_quantity) {
-        $sql_stock_update .= "UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - {$total_quantity}) WHERE _id = {$product_id};";
+        $stock_update_responses[] = $localConnection->goQuery(
+          'UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE _id = ?',
+          [$total_quantity, $product_id]
+        );
       }
 
-      if (!empty($sql_stock_update)) {
-        $object['stock_update_sql'] = $sql_stock_update;
-        $object['stock_update_response'] = $localConnection->goQuery($sql_stock_update);
+      if (!empty($stock_update_responses)) {
+        $object['stock_update_response'] = $stock_update_responses;
       }
 
       // COMISIÓN VENDEDORES
       if (floatval($newJson['abono']) > 0 && !(isset($newJson['guardar_stock']) && filter_var($newJson['guardar_stock'], FILTER_VALIDATE_BOOLEAN))) {
-        $sql_comision = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $newJson['responsable'];
-        $respComisionArr = $localConnection->goQuery($sql_comision);
+        $sql_comision = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+        $respComisionArr = $localConnection->goQuery($sql_comision, [$newJson['responsable']]);
 
         if (!empty($respComisionArr)) {
           $respComision = $respComisionArr[0];
@@ -3716,8 +3727,8 @@ $object['sales_commission_ISSET'][] = false;
           $pago_vendedor = floatval($newJson['abono']) * $comision / 100;
           $pago_vendedor = number_format($pago_vendedor, 2);
 
-          $sql_pago = "INSERT INTO pagos (moment, comision, comision_tipo, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES ('" . $now . "', " . $comision . ", '" . $comisionTipo . "', '" . $last_id . "',  '" . $newJson['responsable'] . "', '" . $pago_vendedor . "', 'Comercialización', 'aprobado')";
-          $object['resultado_abono'] = $localConnection->goQuery($sql_pago);
+          $sql_pago = "INSERT INTO pagos (moment, comision, comision_tipo, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES (?, ?, ?, ?, ?, ?, 'Comercialización', 'aprobado')";
+          $object['resultado_abono'] = $localConnection->goQuery($sql_pago, [$now, $comision, $comisionTipo, $last_id, $newJson['responsable'], $pago_vendedor]);
           $object['pago_a_vendedor'] = 'SI hubo comisión, cliente normal';
         } else {
           $object['pago_a_vendedor'] = 'NO se encontró información de comisión para el vendedor.';
