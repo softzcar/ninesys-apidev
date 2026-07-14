@@ -14,13 +14,13 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 13,buscar.php,GET,/buscar/{id}[/{email}],260,1-GET-auto,OMITIDO,requiere parametro no trivial (email u otro) para probar de forma segura,2026-07-13 15:37:56
 14,catalogs.php,GET,/telas,11,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:37:57
 15,catalogs.php,GET,/catalogo-tintas,24,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:37:58
-16,catalogs.php,POST,/catalogo-tintas,208,2-escritura-manual,EN_PROGRESO,Investigando endpoint catalogo-tintas/catalogo-colores-tintas,2026-07-14 09:06:50
-17,catalogs.php,POST,/catalogo-tintas/{_id}/{nombre},232,2-escritura-manual,EN_PROGRESO,Investigando endpoint catalogo-tintas/catalogo-colores-tintas,2026-07-14 09:06:50
-18,catalogs.php,POST,/catalogo-tintas/eliminar,248,2-escritura-manual,EN_PROGRESO,Investigando endpoint catalogo-tintas/catalogo-colores-tintas,2026-07-14 09:06:50
+16,catalogs.php,POST,/catalogo-tintas,208,2-escritura-manual,OK,"Sin patrones MySQL-only, 2 goQuery() separados (INSERT + SELECT via getLastID, sin multi-statement). Probado en vivo: crear tinta -> insertada correctamente (_id=21).",2026-07-14 09:07:45
+17,catalogs.php,POST,/catalogo-tintas/{_id}/{nombre},232,2-escritura-manual,OK,"Sin patrones MySQL-only, 2 goQuery() separados. Probado en vivo: editar tinta _id=1 -> actualizada correctamente, listado devuelto.",2026-07-14 09:07:45
+18,catalogs.php,POST,/catalogo-tintas/eliminar,248,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE simple. Probado en vivo: eliminar tinta _id=21 -> eliminado=1.",2026-07-14 09:07:45
 19,catalogs.php,GET,/catalogo-colores-tintas,265,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:37:59
-20,catalogs.php,POST,/catalogo-colores-tintas,277,2-escritura-manual,EN_PROGRESO,Investigando endpoint catalogo-tintas/catalogo-colores-tintas,2026-07-14 09:06:50
-21,catalogs.php,POST,/catalogo-colores-tintas/eliminar,303,2-escritura-manual,EN_PROGRESO,Investigando endpoint catalogo-tintas/catalogo-colores-tintas,2026-07-14 09:06:50
-22,catalogs.php,POST,/catalogo-colores-tintas/{_id},319,2-escritura-manual,EN_PROGRESO,Investigando endpoint catalogo-tintas/catalogo-colores-tintas,2026-07-14 09:06:50
+20,catalogs.php,POST,/catalogo-colores-tintas,277,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado, 2 goQuery() separados. Probado en vivo: crear color -> insertado correctamente (_id=13, luego 14).",2026-07-14 09:07:45
+21,catalogs.php,POST,/catalogo-colores-tintas/eliminar,303,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado. Probado en vivo: eliminar color _id=13 -> eliminado=1.",2026-07-14 09:07:45
+22,catalogs.php,POST,/catalogo-colores-tintas/{_id},319,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado, 2 goQuery() separados. Probado en vivo: editar color _id=14 -> actualizado correctamente, listado devuelto.",2026-07-14 09:07:45
 23,catalogs.php,GET,/catalogo-insumos-productos,341,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:37:59
 24,catalogs.php,POST,/catalogo-insumos-productos,353,2-escritura-manual,PENDIENTE,,
 25,catalogs.php,POST,/telas,381,2-escritura-manual,CORREGIDO,BUG encontrado y corregido: INSERT INTO catalogo_telas + SELECT * concatenados en una sola sentencia multi-statement (mismo patron que /telas/{_id}/{tela} ya corregido). Corregido separando en dos goQuery() independientes. Probado en vivo end-to-end contra 194 dev: creacion de tela nueva ('Tela Nueva de Prueba') -> insertada correctamente (_id=2) y listado completo devuelto sin error. Commit 57f6f23.,2026-07-14 08:15:59
