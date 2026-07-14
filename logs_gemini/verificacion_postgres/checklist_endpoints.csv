@@ -51,7 +51,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 50,config.php,POST,/configuracion/personalizacion,291,2-escritura-manual,PENDIENTE,,
 51,config.php,POST,/configuracion/gastos,388,2-escritura-manual,PENDIENTE,,
 52,config.php,GET,/gastos,496,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:06
-53,config.php,POST,/gastos,520,2-escritura-manual,EN_PROGRESO,Investigando POST /gastos,2026-07-14 08:16:10
+53,config.php,POST,/gastos,520,2-escritura-manual,OK,"Sin patrones MySQL-only, totalmente parametrizado. Se verifico que LocalDB::getLastID() (usa $this->pdo->lastInsertId()) funciona correctamente en Postgres. Probado en vivo end-to-end contra 194 dev: creacion de plantilla de gasto -> insertada correctamente (_id=1 devuelto coincide con BD).",2026-07-14 08:16:56
 54,config.php,PUT,/gastos/{id},561,2-escritura-manual,PENDIENTE,,
 55,config.php,DELETE,/gastos/{id},597,2-escritura-manual,PENDIENTE,,
 56,config.php,GET,/gastos/registros,619,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:07
