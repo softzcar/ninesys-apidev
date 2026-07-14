@@ -63,8 +63,8 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 62,config.php,GET,/gastos/pendientes,882,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:09
 63,config.php,POST,/config/multiplicador-precio,911,2-escritura-manual,CORREGIDO,Mismo bug de DSN hardcodeado a mysql. Corregido igual que id50/51. Probado en vivo: multiplicador_precio actualizado y verificado en psql (1.05).,2026-07-14 09:19:03
 64,crm.php,GET,/crm/oportunidades,10,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:10
-65,crm.php,POST,/crm/oportunidades/nueva,63,2-escritura-manual,PENDIENTE,,
-66,crm.php,PUT,/crm/oportunidades/estado,109,2-escritura-manual,PENDIENTE,,
+65,crm.php,POST,/crm/oportunidades/nueva,63,2-escritura-manual,OK,"Sin patrones MySQL-only, INSERT parametrizado + transaccion. Probado en vivo: creacion de oportunidad exitosa, verificada en psql.",2026-07-14 09:21:02
+66,crm.php,PUT,/crm/oportunidades/estado,109,2-escritura-manual,OK,"Sin patrones MySQL-only, UPDATE parametrizado simple. Probado en vivo: cambio de estado exitoso, verificado en psql.",2026-07-14 09:21:02
 67,crm.php,GET,/customers/orders-local/{id_customer},137,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:11
 68,crm.php,GET,/customers/presupuestos-local/{id_customer},186,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:11
 69,crm.php,GET,/crm/notas/{id_customer},233,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:12
