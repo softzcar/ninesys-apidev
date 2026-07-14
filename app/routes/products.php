@@ -33,16 +33,9 @@ return function (App $app) {
   $app->post('/products-attributes', function (Request $request, Response $response) {
     $miAtributo = $request->getParsedBody();
 
-    // Crear estructura de valores para insertar nuevo atributo de producto
-    $values = '(';
-    $values .= "'" . $miAtributo['nombre'] . "',";
-    $values .= "'" . $miAtributo['precio'] . "')";
-
-    $sql = 'INSERT INTO products_attributes (attribute_name, precio) VALUES ' . $values . ';';
-    $sql .= 'SELECT * FROM products_attributes ORDER BY products_attributes';
-
     $localConnection = new LocalDB();
-    $object['response'] = json_encode($localConnection->goQuery($sql));
+    $localConnection->goQuery('INSERT INTO products_attributes (attribute_name, precio) VALUES (?, ?)', [$miAtributo['nombre'], $miAtributo['precio']]);
+    $object['response'] = json_encode($localConnection->goQuery('SELECT * FROM products_attributes ORDER BY attribute_name'));
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
@@ -277,8 +270,8 @@ return function (App $app) {
   $app->delete('/products/{id}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'UPDATE products SET eliminado = 1 WHERE _id = ' . $args['id'];
-    $object['response'] = json_encode($localConnection->goQuery($sql));
+    $sql = 'UPDATE products SET eliminado = 1 WHERE _id = ?';
+    $object['response'] = json_encode($localConnection->goQuery($sql, [$args['id']]));
 
     $localConnection->disconnect();
     $response->getBody()->write(json_encode($object), JSON_NUMERIC_CHECK);
@@ -300,25 +293,86 @@ return function (App $app) {
     // Atomicidad FK: comisión del producto + recálculo retroactivo de pagos en una transacción
     $tmpConnection->beginTransaction();
 
-    $sql = "SELECT _id FROM products_comisiones WHERE id_product = {$data['id_product']} AND id_departamento = {$data['id_departamento']}";
-    $object['response_verify'] = $tmpConnection->goQuery($sql);
+    $sql = 'SELECT _id FROM products_comisiones WHERE id_product = ? AND id_departamento = ?';
+    $object['response_verify'] = $tmpConnection->goQuery($sql, [$data['id_product'], $data['id_departamento']]);
 
     if (empty($object['response_verify'])) {
-      $sql = 'INSERT INTO products_comisiones (comision, id_product, id_departamento) VALUES (' . $data['comision'] . ', ' . $data['id_product'] . ", '" . $data['id_departamento'] . "');";
+      $sql = 'INSERT INTO products_comisiones (comision, id_product, id_departamento) VALUES (?, ?, ?)';
+      $sqlParams = [$data['comision'], $data['id_product'], $data['id_departamento']];
     } else {
-      $sql = "UPDATE products_comisiones SET comision = {$data['comision']} WHERE id_product = {$data['id_product']} AND id_departamento = {$data['id_departamento']}";
+      $sql = 'UPDATE products_comisiones SET comision = ? WHERE id_product = ? AND id_departamento = ?';
+      $sqlParams = [$data['comision'], $data['id_product'], $data['id_departamento']];
     }
 
     $object['sql'] = $sql;
 
-    $object['response'] = $tmpConnection->goQuery($sql);
+    $object['response'] = $tmpConnection->goQuery($sql, $sqlParams);
 
     // Recálculo retroactivo en pagos (para lotes no pagados)
     $comisionVal = floatval($data['comision']);
     $idProductVal = intval($data['id_product']);
     $idDeptoVal = intval($data['id_departamento']);
 
-    $sqlUpdatePagos = "UPDATE pagos p
+    if (DB_DRIVER === 'pgsql') {
+      // Postgres no soporta UPDATE...JOIN...SET (sintaxis MySQL); se usa UPDATE...SET...FROM,
+      // con la condicion de join movida al WHERE. IFNULL()->COALESCE(), IF()->CASE WHEN.
+      $sqlUpdatePagos = 'UPDATE pagos p
+        SET monto_pago = (
+              SELECT SUM(
+                  COALESCE(pc.comision, 0) *
+                  ( CASE WHEN a.id_departamento = 3
+                      THEN COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op._id), 0), op.cantidad)
+                      ELSE op.cantidad
+                    END ) *
+                  (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END / 100)
+              )
+              FROM ordenes_productos op
+              JOIN products p_woo ON op.id_woo = p_woo._id
+              LEFT JOIN products_comisiones pc ON pc.id_product = op.id_woo AND pc.id_departamento = a.id_departamento
+              WHERE op.id_orden = a.id_orden
+                AND (p_woo.fisico = 1 OR p_woo.fisico IS NULL)
+                AND (p_woo.es_diseno = 0 OR p_woo.es_diseno IS NULL)
+          ),
+          comision = (
+              SELECT MAX(COALESCE(pc2.comision, 0))
+              FROM ordenes_productos op2
+              JOIN products p_woo2 ON op2.id_woo = p_woo2._id
+              LEFT JOIN products_comisiones pc2 ON pc2.id_product = op2.id_woo AND pc2.id_departamento = a.id_departamento
+              WHERE op2.id_orden = a.id_orden
+                AND (p_woo2.fisico = 1 OR p_woo2.fisico IS NULL)
+                AND (p_woo2.es_diseno = 0 OR p_woo2.es_diseno IS NULL)
+          ),
+          cantidad = (
+              SELECT SUM(
+                  ( CASE WHEN a.id_departamento = 3
+                      THEN COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op3._id), 0), op3.cantidad)
+                      ELSE op3.cantidad
+                    END ) *
+                  (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END / 100)
+              )
+              FROM ordenes_productos op3
+              JOIN products p_woo3 ON op3.id_woo = p_woo3._id
+              WHERE op3.id_orden = a.id_orden
+                AND (p_woo3.fisico = 1 OR p_woo3.fisico IS NULL)
+                AND (p_woo3.es_diseno = 0 OR p_woo3.es_diseno IS NULL)
+          )
+        FROM lotes_detalles_empleados_asignados a
+        WHERE p.id_lotes_detalles = a._id
+          AND p.fecha_pago IS NULL
+          AND p.comision_tipo = \'variable\'
+          AND a.id_departamento = ?
+          AND p.detalle != \'Corte-Excedente\'
+          AND EXISTS (
+              SELECT 1 FROM ordenes_productos op_ex
+              WHERE op_ex.id_orden = a.id_orden AND op_ex.id_woo = ?
+          )
+          AND (
+              SELECT eu.salario_tipo
+              FROM api_empresas.empresas_usuarios eu
+              WHERE eu.id_usuario = a.id_empleado
+          ) != \'Salario\'';
+    } else {
+      $sqlUpdatePagos = "UPDATE pagos p
         JOIN lotes_detalles_empleados_asignados a ON p.id_lotes_detalles = a._id
         SET p.monto_pago = (
               SELECT SUM(
@@ -361,19 +415,20 @@ return function (App $app) {
           )
         WHERE p.fecha_pago IS NULL
           AND p.comision_tipo = 'variable'
-          AND a.id_departamento = {$idDeptoVal}
+          AND a.id_departamento = ?
           AND p.detalle != 'Corte-Excedente'
           AND EXISTS (
               SELECT 1 FROM ordenes_productos op_ex
-              WHERE op_ex.id_orden = a.id_orden AND op_ex.id_woo = {$idProductVal}
+              WHERE op_ex.id_orden = a.id_orden AND op_ex.id_woo = ?
           )
           AND (
               SELECT eu.salario_tipo
               FROM api_empresas.empresas_usuarios eu
               WHERE eu.id_usuario = a.id_empleado
           ) != 'Salario'";
+    }
 
-    $tmpConnection->goQuery($sqlUpdatePagos);
+    $tmpConnection->goQuery($sqlUpdatePagos, [$idDeptoVal, $idProductVal]);
 
     $tmpConnection->commit();
     $tmpConnection->disconnect();
