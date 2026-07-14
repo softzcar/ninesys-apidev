@@ -2701,26 +2701,6 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // Resgistrar pago del empleado en el momento que indica que ha terminado su tarea
-  $app->get('/empleados/registrar-pago/{id_lotes_detalles}', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB();
-
-    $sql = 'SELECT id_empleado FROM lotes_detalles WHERE _id = ' . $args['id_lotes_detalles'];
-    $miEmpleado = $localConnection->goQuery($sql);
-
-    $sql = 'INSERT INTO pagos(id_lotes_detalles, estatus, id_empleado) VALUES (' . $args['id_lotes_detalles'] . ", 'aprobado', " . $miEmpleado[0]['id_empleado'] . ')';
-    $object['sql'] = $sql;
-    $object['items'] = $localConnection->goQuery($sql);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   // Obtener ordenes asociadas a los empleados
   $app->get('/empleados/ordenes-asignadas/v1/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
