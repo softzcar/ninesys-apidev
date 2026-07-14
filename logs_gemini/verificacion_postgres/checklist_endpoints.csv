@@ -119,7 +119,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 118,finance.php,POST,/cierre-de-caja-vendedor,391,2-escritura-manual,PENDIENTE,,
 119,finance.php,GET,/reporte-de-caja/{inicio}/{fin}/{id_vendedor},426,1-GET-auto,OK_FALSO_POSITIVO_REVERIFICADO,Reverificacion de regresion uso '1' en vez de fecha real para inicio/fin (limitacion conocida del script de prueba). Ya verificado con fecha real anteriormente sin errores.,2026-07-13 15:43:24
 120,finance.php,POST,/retiro,522,2-escritura-manual,PENDIENTE,,
-121,finance.php,POST,/otro-abono,620,2-escritura-manual,PENDIENTE,,
+121,finance.php,POST,/otro-abono,620,2-escritura-manual,EN_PROGRESO,Investigando POST /otro-abono,2026-07-14 08:12:09
 122,finance.php,GET,/retiros/{inicio}/{fin}/{id_empleado},740,1-GET-auto,OK_FALSO_POSITIVO_REVERIFICADO,Reverificacion de regresion uso '1' en vez de fecha real para inicio/fin (limitacion conocida del script de prueba). Ya verificado con fecha real anteriormente sin errores.,2026-07-13 15:43:24
 123,finance.php,GET,/pagos-ordenes/{fecha},818,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:43
 124,finance.php,GET,/balance-de-cierres/{inicio}/{fin}/{id_vendedor},833,1-GET-auto,OK_FALSO_POSITIVO_REVERIFICADO,Reverificacion de regresion uso '1' en vez de fecha real para inicio/fin (limitacion conocida del script de prueba). Ya verificado con fecha real anteriormente sin errores.,2026-07-13 15:43:24
