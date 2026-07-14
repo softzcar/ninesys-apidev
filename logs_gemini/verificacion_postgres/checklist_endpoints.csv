@@ -55,7 +55,7 @@ id,archivo,metodo,ruta,linea,fase,estado,detalle,fecha_verificacion
 54,config.php,PUT,/gastos/{id},561,2-escritura-manual,PENDIENTE,,
 55,config.php,DELETE,/gastos/{id},597,2-escritura-manual,PENDIENTE,,
 56,config.php,GET,/gastos/registros,619,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:07
-57,config.php,POST,/gastos/registros,663,2-escritura-manual,PENDIENTE,,
+57,config.php,POST,/gastos/registros,663,2-escritura-manual,EN_PROGRESO,Investigando POST /gastos/registros,2026-07-14 08:11:31
 58,config.php,PUT,/gastos/registros/{id},712,2-escritura-manual,PENDIENTE,,
 59,config.php,DELETE,/gastos/registros/{id},777,2-escritura-manual,PENDIENTE,,
 60,config.php,GET,/gastos/auditoria,826,1-GET-auto,OK,"HTTP 200, sin error embebido",2026-07-13 15:38:07
