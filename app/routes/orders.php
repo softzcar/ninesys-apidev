@@ -3908,8 +3908,8 @@ $object['sales_commission_ISSET'][] = false;
     $data = $request->getParsedBody();
     $localConnection = new localDB();
 
-    $sql = "UPDATE revisiones SET detalles = '" . htmlspecialchars($data['detalles']) . "' WHERE _id = " . $args['id_revision'];
-    $object['revisiones'] = $localConnection->goQuery($sql);
+    $sql = 'UPDATE revisiones SET detalles = ? WHERE _id = ?';
+    $object['revisiones'] = $localConnection->goQuery($sql, [htmlspecialchars($data['detalles']), $args['id_revision']]);
 
     $localConnection->disconnect();
 
@@ -3959,9 +3959,9 @@ $object['sales_commission_ISSET'][] = false;
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
-    $sql = 'UPDATE ordenes_fila_reposiciones SET orden_fila = ' . intval($data['orden_fila']) . ' WHERE id_reposicion = ' . intval($data['id_reposicion']) . ';';
+    $sql = 'UPDATE ordenes_fila_reposiciones SET orden_fila = ? WHERE id_reposicion = ?';
     $object['sql_update_fila_reposicion'] = $sql;
-    $object['response'] = $localConnection->goQuery($sql);
+    $object['response'] = $localConnection->goQuery($sql, [intval($data['orden_fila']), intval($data['id_reposicion'])]);
 
     $localConnection->disconnect();
 
@@ -4267,8 +4267,8 @@ $object['sales_commission_ISSET'][] = false;
       // ==========================================================
       $myDate = new CustomTime();
       $now = $myDate->today();
-      $observaciones = addslashes($data['observaciones'] ?? '');
-      $cliente_nombre_completo = addslashes($cliente['nombre']);
+      $observaciones = $data['observaciones'] ?? '';
+      $cliente_nombre_completo = $cliente['nombre'];
 
       $localConnection->beginTransaction();
       $sql_orden = "INSERT INTO ordenes 
