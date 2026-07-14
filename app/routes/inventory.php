@@ -1113,53 +1113,36 @@ return function (App $app) {
         $object['body'] = $miInsumo;
 
         // Verificar existencia del registro
-        $sql = 'SELECT _id FROM inventario_movimientos WHERE id_orden = ' . $miInsumo['id_orden'] . ' AND id_empleado = ' . $miInsumo['id_empleado'] . ' AND id_producto = ' . $miInsumo['id_producto'] . ' AND id_insumo = ' . $miInsumo['id_insumo'] . " AND departamento = '" . $miInsumo['departamento'] . "'";
-        $object['miinsumo'] = json_encode($localConnection->goQuery($sql));
-        // $object['id_insumo'] = $object['miinsumo']->_id;
+        $sql = 'SELECT _id FROM inventario_movimientos WHERE id_orden = ? AND id_empleado = ? AND id_producto = ? AND id_insumo = ? AND departamento = ?';
+        $object['miinsumo'] = json_encode($localConnection->goQuery($sql, [
+            $miInsumo['id_orden'],
+            $miInsumo['id_empleado'],
+            $miInsumo['id_producto'],
+            $miInsumo['id_insumo'],
+            $miInsumo['departamento'],
+        ]));
 
         if (empty(json_decode($object['miinsumo']))) {
-            $sql = 'SELECT cantidad, insumo, unidad, sku FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
-            $cantidad = $localConnection->goQuery($sql);
+            $sql = 'SELECT cantidad, insumo, unidad, sku FROM inventario WHERE _id = ?';
+            $cantidad = $localConnection->goQuery($sql, [$miInsumo['id_insumo']]);
             $object['cantidad_Recuperada'] = $cantidad;
 
             // PREPARAR FECHAS
             $myDate = new CustomTime();
             $now = $myDate->today();
 
-            $values = "'" . $now . "',";
-            $values .= "'" . $miInsumo['departamento'] . "',";
-            // $values .= $miInsumo["id_empleado"] . ",";
-            $values .= $miInsumo['id_insumo'] . ',';
-            $values .= "'" . $cantidad[0]['cantidad'] . "',";
-            $values .= $miInsumo['id_producto'];
-
-            $array_ordenes = explode(',', $miInsumo['ordenes']);
-
-            foreach ($array_ordenes as $key => $value) {
-                $sql = 'INSERT INTO inventario_movimientos (moment, departamento, id_empleado, id_insumo, id_orden, valor_inicial, id_producto) VALUES (' . $values . ');';
-            }
-            $result = json_encode($localConnection->goQuery($sql));
-
-            $sql = '';
-            // El código anterior parece ser un borrador o estar incompleto. 
-            // Se elimina la llamada a count() sobre un string para evitar errores de linter.
-
-            // $sql = "INSERT INTO inventario_movimientos (moment, departamento, id_empleado, id_insumo, id_orden, valor_inicial, id_producto) VALUES (" . $values . ");";
+            $sql = 'INSERT INTO inventario_movimientos (moment, departamento, id_empleado, id_insumo, id_orden, valor_inicial, id_producto) VALUES (?, ?, ?, ?, ?, ?, ?)';
             $object['sql'] = $sql;
-            $object['insert'] = json_encode($localConnection->goQuery($sql));
-        }  /*else {
-$arrayOrdenes = explode(',', $miInsumo['ordenes'])
-$sql = "";
-foreach ($arrayOrdenes as $key => $orden) {
-$sal .= "UPDATE inventario_movimientos SET id_orden = " $orden . " WHERE id_empleado = " . $miInsumo['id_empleado'];
-}
-
-// UPDATE
-// $sql = "INSERT INTO inventario_movimientos (moment, departamento, id_empleado, id_insumo, id_orden, valor_inicial, id_producto) VALUES (" . $values . ")";
-$ql = "UPDATE inventario_movimientos SET ";
-$object["sql"] = $sql;
-$object['insert'] = json_encode($localConnection->goQuery($sql));
-}*/
+            $object['insert'] = json_encode($localConnection->goQuery($sql, [
+                $now,
+                $miInsumo['departamento'],
+                $miInsumo['id_empleado'],
+                $miInsumo['id_insumo'],
+                $miInsumo['id_orden'],
+                $cantidad[0]['cantidad'],
+                $miInsumo['id_producto'],
+            ]));
+        }
 
         $localConnection->disconnect();
 
