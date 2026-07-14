@@ -1658,26 +1658,36 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
+    $paramsWhere = [];
+    $paramsWhereEmpleados = [];
+
     if (isset($data['numero_semana'])) {
       if (DB_DRIVER === 'pgsql') {
-        $where = 'EXTRACT(WEEK FROM e.moment) = ' . $data['numero_semana'] . " AND e.fecha_pago IS NULL";
+        $where = 'EXTRACT(WEEK FROM e.moment) = ? AND e.fecha_pago IS NULL';
       } else {
-        $where = 'WEEK(e.moment, 1) = ' . $data['numero_semana'] . " AND e.fecha_pago IS NULL";
+        $where = 'WEEK(e.moment, 1) = ? AND e.fecha_pago IS NULL';
       }
-      $whereEmpleados = "b.fecha_terminado LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL ";
-    } else {
+      $paramsWhere[] = $data['numero_semana'];
+      $whereEmpleados = 'b.fecha_terminado LIKE ? AND e.fecha_pago IS NULL ';
+      $paramsWhereEmpleados[] = $data['fecha_inicio'] . '%';
     }
 
     if ($data['fecha_inicio'] === $data['fecha_fin']) {
-      $where = "e.moment LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL";
-      $whereEmpleados = "b.fecha_terminado LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL ";
+      $where = 'e.moment LIKE ? AND e.fecha_pago IS NULL';
+      $paramsWhere = [$data['fecha_inicio'] . '%'];
+      $whereEmpleados = 'b.fecha_terminado LIKE ? AND e.fecha_pago IS NULL ';
+      $paramsWhereEmpleados = [$data['fecha_inicio'] . '%'];
     } else {
       if (DB_DRIVER === 'pgsql') {
-        $where = "(e.moment::date BETWEEN '" . $data['fecha_inicio'] . "' AND '" . $data['fecha_fin'] . "') ";
-        $whereEmpleados = "b.fecha_inicio >= '" . $data['fecha_inicio'] . "' AND (b.fecha_terminado - INTERVAL '1 day')::date <= '" . $data['fecha_fin'] . "' ";
+        $where = "(e.moment::date BETWEEN ? AND ?) ";
+        $paramsWhere = [$data['fecha_inicio'], $data['fecha_fin']];
+        $whereEmpleados = "b.fecha_inicio >= ? AND (b.fecha_terminado - INTERVAL '1 day')::date <= ? ";
+        $paramsWhereEmpleados = [$data['fecha_inicio'], $data['fecha_fin']];
       } else {
-        $where = "(DATE(e.moment) BETWEEN '" . $data['fecha_inicio'] . "'AND '" . $data['fecha_fin'] . "') ";
-        $whereEmpleados = "b.fecha_inicio >= '" . $data['fecha_inicio'] . "' AND DATE_ADD(b.fecha_terminado, INTERVAL -1 DAY) <= '" . $data['fecha_fin'] . "' ";
+        $where = '(DATE(e.moment) BETWEEN ? AND ?) ';
+        $paramsWhere = [$data['fecha_inicio'], $data['fecha_fin']];
+        $whereEmpleados = 'b.fecha_inicio >= ? AND DATE_ADD(b.fecha_terminado, INTERVAL -1 DAY) <= ? ';
+        $paramsWhereEmpleados = [$data['fecha_inicio'], $data['fecha_fin']];
       }
     }
 
@@ -1686,7 +1696,7 @@ return function (App $app) {
     } else {
       $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
     }
-    $object['data']['vendedores'] = $localConnection->goQuery($sql);
+    $object['data']['vendedores'] = $localConnection->goQuery($sql, $paramsWhere);
     // FIN BUSCAR PAGOS DE VENDEDORES
 
     // OBTENER PAGOS DE EMPLEADOS
@@ -1753,35 +1763,35 @@ return function (App $app) {
     }
 
     $object['sql']['empleados'] = $sql;
-    $object['data']['empleados'] = $localConnection->goQuery($sql);
+    $object['data']['empleados'] = $localConnection->goQuery($sql, $paramsWhereEmpleados);
     // FIN PAGOS EMPLEADOS
 
     // OBTENER INFORMACION DE DISEÑADORES
-    $sql = "SELECT 
+    $sql = "SELECT
         e._id id_pago,
-        e.id_orden, 
+        e.id_orden,
         e.id_empleado,
         e.detalle detalle_pago,
-        a._id id_diseno, 
-        b.nombre nombre, 
-        b.departamento, 
+        a._id id_diseno,
+        b.nombre nombre,
+        b.departamento,
         e.monto_pago pago,
         e.cantidad,
-        c.name producto 
-        FROM pagos e   
+        c.name producto
+        FROM pagos e
         JOIN disenos a ON a.id_empleado = e.id_empleado AND a.id_orden = e.id_orden
-        JOIN api_empresas.empresas_usuarios b 
-        ON b.id_usuario = e.id_empleado 
-        JOIN ordenes_productos c 
+        JOIN api_empresas.empresas_usuarios b
+        ON b.id_usuario = e.id_empleado
+        JOIN ordenes_productos c
         ON e.id_orden = c.id_orden AND c.category_name = 'Diseños'
         WHERE " . $where . ' AND e.monto_pago > 0 AND e.fecha_pago IS NULL';
     $object['sql']['diseno'] = $sql;
-    $object['data']['diseno'] = $localConnection->goQuery($sql);
+    $object['data']['diseno'] = $localConnection->goQuery($sql, $paramsWhere);
 
     foreach ($object['data']['diseno'] as $key => $value) {
       // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
-      $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ' . $value['id_orden'];
-      $tmpResp = $localConnection->goQuery($sqlTMP);
+      $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ?';
+      $tmpResp = $localConnection->goQuery($sqlTMP, [$value['id_orden']]);
       if (!empty($tmpResp)) {
         foreach ($tmpResp as $key2 => $value2) {
           $object['data']['trabajos_adicionales'][] = $value2;
@@ -1823,15 +1833,21 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     if ($data['fecha_inicio'] === $data['fecha_fin']) {
-      $where = "e.moment LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL";
-      $whereEmpleados = "b.fecha_terminado LIKE '" . $data['fecha_inicio'] . "%' AND e.fecha_pago IS NULL ";
+      $where = 'e.moment LIKE ? AND e.fecha_pago IS NULL';
+      $paramsWhere = [$data['fecha_inicio'] . '%'];
+      $whereEmpleados = 'b.fecha_terminado LIKE ? AND e.fecha_pago IS NULL ';
+      $paramsWhereEmpleados = [$data['fecha_inicio'] . '%'];
     } else {
       if (DB_DRIVER === 'pgsql') {
-        $where = "(e.moment::date BETWEEN '" . $data['fecha_inicio'] . "' AND '" . $data['fecha_fin'] . "') ";
-        $whereEmpleados = "b.fecha_terminado::date BETWEEN '" . $data['fecha_inicio'] . "' AND '" . $data['fecha_fin'] . "' AND e.fecha_pago IS NULL ";
+        $where = '(e.moment::date BETWEEN ? AND ?) ';
+        $paramsWhere = [$data['fecha_inicio'], $data['fecha_fin']];
+        $whereEmpleados = 'b.fecha_terminado::date BETWEEN ? AND ? AND e.fecha_pago IS NULL ';
+        $paramsWhereEmpleados = [$data['fecha_inicio'], $data['fecha_fin']];
       } else {
-        $where = "(DATE(e.moment) BETWEEN '" . $data['fecha_inicio'] . "'AND '" . $data['fecha_fin'] . "') ";
-        $whereEmpleados = "b.fecha_terminado BETWEEN '" . $data['fecha_inicio'] . "%' AND '" . $data['fecha_fin'] . "' AND e.fecha_pago IS NULL ";
+        $where = '(DATE(e.moment) BETWEEN ? AND ?) ';
+        $paramsWhere = [$data['fecha_inicio'], $data['fecha_fin']];
+        $whereEmpleados = 'b.fecha_terminado BETWEEN ? AND ? AND e.fecha_pago IS NULL ';
+        $paramsWhereEmpleados = [$data['fecha_inicio'] . '%', $data['fecha_fin']];
       }
     }
 
@@ -1840,7 +1856,7 @@ return function (App $app) {
     } else {
       $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
     }
-    $object['data']['vendedores'] = $localConnection->goQuery($sql);
+    $object['data']['vendedores'] = $localConnection->goQuery($sql, $paramsWhere);
     // FIN BUSCAR PAGOS DE VENDEDORES
 
     // OBTENER PAGOS DE EMPLEADOS
@@ -1905,7 +1921,7 @@ return function (App $app) {
     }
 
     $object['sql']['empleados'] = $sql;
-    $object['data']['empleados'] = $localConnection->goQuery($sql);
+    $object['data']['empleados'] = $localConnection->goQuery($sql, $paramsWhereEmpleados);
     // FIN PAGOS EMPLEADOS
 
     // OBTENER INFORMACION DE DISEÑADORES
@@ -1949,14 +1965,13 @@ return function (App $app) {
           WHERE " . $where . ' AND e.monto_pago > 0 AND e.fecha_pago IS NULL';
     }
     $object['sql']['diseno'] = $sql;
-    $object['data']['diseno'] = $localConnection->goQuery($sql);
+    $object['data']['diseno'] = $localConnection->goQuery($sql, $paramsWhere);
     if (isset($object['data']['diseno']['status']) && $object['data']['diseno']['status'] === 'error') { $object['data']['diseno'] = []; }
 
 
     foreach ($object['data']['diseno'] as $key => $value) {
-      // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
-      $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ' . $value['id_orden'];
-      $tmpResp = $localConnection->goQuery($sqlTMP);
+      $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ?';
+      $tmpResp = $localConnection->goQuery($sqlTMP, [$value['id_orden']]);
       if (!empty($tmpResp)) {
         foreach ($tmpResp as $key2 => $value2) {
           $object['data']['trabajos_adicionales'][] = $value2;
