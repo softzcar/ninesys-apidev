@@ -1,0 +1,57 @@
+- **Solicitud del Usuario:** "Continua con los 125 restantes, uno por uno igual que siempre y luego consideramos la fase 2 sustamcialmente cerrada por ahora" — continuación de la revisión endpoint por endpoint de la Fase 2 de la migración PostgreSQL (endpoints de escritura sin uso real reciente detectado en producción).
+
+- **Fecha y Hora:** 2026-07-14 15:00:00 a 15:50:00 (aprox.)
+
+- **Proyecto(s):** Backend (ninesys-api, rama feature/postgresql-support)
+
+- **Archivos Involucrados:**
+    - app/routes/config.php
+    - app/routes/crm.php
+    - app/routes/designs.php
+    - app/routes/employees.php
+    - logs_gemini/verificacion_postgres/checklist_endpoints.csv
+    - Base de datos `api_empresas` (central, dev) — corrección de secuencias
+    - Base de datos `api_emp_194` (empresa piloto, dev) — corrección de secuencias
+
+- **Commits Relacionados:**
+    - Backend:
+        - b8150b7 - config.php: DSN hardcodeado a mysql en 3 endpoints (personalizacion, gastos, multiplicador-precio)
+        - 06b0bcc - designs.php: concatenacion cruda/multi-statement en 4 endpoints (link, parobacion-de-cliente, ajustes-y-personalizaciones, close)
+        - 1bfeece - employees.php: concatenacion cruda/multi-statement en 3 endpoints (nuevo, eliminar, asistencias)
+        - ~15 commits de actualización incremental del checklist CSV
+    - Frontend: N/A
+
+- **Acción Realizada:**
+    Se continuó la revisión uno por uno de los endpoints de escritura sin uso real reciente, cubriendo el resto de `config.php` (ids 46,47,49,50,51,55,58,59,63), `crm.php` completo (ids 64-76) y parte de `designs.php` y `employees.php`.
+
+    Bugs de Postgres encontrados y corregidos:
+    1. `config.php`: 3 endpoints (`/configuracion/personalizacion`, `/configuracion/gastos`, `/config/multiplicador-precio`) construían el DSN de conexión cross-DB a la empresa con `'mysql:host=...'` hardcodeado sin importar `DB_DRIVER`, rompiendo la conexión en empresas Postgres. Corregido con branch condicional `DB_DRIVER === 'pgsql'` → `pgsql:host=...;port=...;dbname=...`.
+    2. `designs.php`: 4 endpoints con concatenación cruda de SQL sin parametrizar (`/disenos/link`, `/disenos/close`) y multi-statement (`/disenos/parobacion-de-cliente`, `/diseno/ajustes-y-personalizaciones` con 2 multi-statement cada uno) — todos corregidos a consultas parametrizadas con `goQuery()` individual por sentencia.
+    3. `employees.php`: 3 endpoints (`/empleados/nuevo`, `/empleados/eliminar`, `/asistencias`) con concatenación cruda extensa (todo el INSERT de empleado, dependientes, y el loop de departamentos como multi-statement) — corregido completamente a parametrizado.
+
+    **HALLAZGO CRÍTICO (el más significativo de la sesión):** al probar `/empleados/nuevo` en vivo, el INSERT del nuevo empleado se ejecutó con `id_usuario=1`, cuando en realidad existían 758 empleados reales con ids mayores. Se investigó y se descubrió que la secuencia IDENTITY de `empresas_usuarios.id_usuario` en la base central `api_empresas` (dev) estaba en 1, completamente desincronizada del `MAX(id_usuario)` real (758) — probablemente porque los datos fueron migrados desde MySQL con ids explícitos sin nunca ajustar la secuencia de Postgres al valor máximo tras la carga masiva.
+
+    Se realizó un escaneo sistemático de TODAS las columnas `IDENTITY` del schema `public` en ambas bases de datos de dev (`api_empresas` y `api_emp_194`) comparando el valor de cada secuencia contra el `MAX()` real de su columna. Resultado: **10 secuencias desincronizadas en total**:
+    - `api_empresas`: `empresas.id_empresa` (seq=1, max=195), `empresas_usuarios.id_usuario` (seq=1, max=758), `empresas_usuarios_departamentos._id` (seq=5, max=1474), `modulos._id` (seq=1, max=6), `salario_conceptos_nomina.id_concepto` (seq=1, max=11), `salario_reglas_legales.id_regla` (seq=1, max=7).
+    - `api_emp_194`: `catalogo_paises._id` (seq=1, max=193), `catalogo_estados._id` (seq=1, max=24), `catalogo_ciudades._id` (seq=1, max=274), `wa_ai_agents.id` (seq=1, max=2).
+
+    Las 10 secuencias fueron corregidas con `SELECT setval(secuencia, (SELECT MAX(columna) FROM tabla))` — operación segura e idempotente que no modifica ni borra ningún dato existente, solo avanza el contador interno de la secuencia al valor correcto.
+
+- **Inconvenientes y Desafíos:**
+    - El bug de secuencias no fue detectado por ninguna revisión de código anterior porque es un problema de **estado de los datos**, no de sintaxis SQL — el código de los endpoints era sintácticamente válido en ambos motores; el problema era que Postgres nunca había sido informado del valor real más alto ya insertado en cada tabla.
+    - Sin este hallazgo, cualquier endpoint que insertara en `empresas` (crear empresa nueva) o `empresas_usuarios` (crear empleado nuevo) habría fallado con `SQLSTATE 23505 Unique violation` en producción tan pronto como la secuencia alcanzara un id ya ocupado — o peor, en el caso de `empresas_usuarios_departamentos`, el primer intento de insertar ya colisionaba de inmediato (seq en 5, pero ids 4 y 5 ya ocupados por datos reales).
+    - Ya existía un antecedente de este mismo tipo de bug (documentado en memoria del proyecto): 60 tablas por-empresa habían sido corregidas previamente por no tener `GENERATED BY DEFAULT AS IDENTITY`, pero ese fix cubría la ausencia de la propiedad IDENTITY en sí, no la sincronización posterior del valor de la secuencia tras una carga masiva de datos migrados. Este hallazgo es un problema relacionado pero distinto y no había sido cubierto por el fix anterior, ni en la base central `api_empresas` ni en algunas tablas de catálogo de `api_emp_194`.
+
+- **Decisión Final y Justificación:** Se corrigieron las 10 secuencias directamente en las bases de datos de desarrollo (`vps-contabo-dev`), dado que: (1) es una operación segura y no destructiva (`setval` no borra ni modifica filas existentes), (2) el usuario ya autorizó de forma permanente mutar/restaurar libremente los datos de la empresa 194 en dev para estas pruebas, y (3) dejar las secuencias rotas habría invalidado la verificación en vivo de cualquier endpoint de escritura restante que inserte en esas tablas. Se recomienda al usuario replicar esta misma corrección en el servidor de PRODUCCIÓN cuando se realice la migración real de una empresa a Postgres (actualmente ninguna empresa de producción usa Postgres, por lo que no hay impacto inmediato en producción).
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (`ssh`/`psql` con bloques `DO $$ ... $$` en PL/pgSQL para escaneo automatizado de secuencias, `curl`, `git`), script auxiliar `update_row.py`.
+
+- **Resultado:** Éxito — 10 bugs de Postgres corregidos en config.php/designs.php/employees.php, más el hallazgo y corrección de un problema sistémico de mayor severidad (secuencias IDENTITY desincronizadas) que afectaba potencialmente a la creación de empresas y empleados en cualquier endpoint, no solo en los revisados hoy.
+
+- **Verificación:** Cada corrección de código se probó en vivo contra la empresa 194 en `vps-contabo-dev` tras cada deploy. Las secuencias se verificaron con un segundo escaneo completo tras la corrección, confirmando "ninguna secuencia desincronizada" en ambas bases de datos. El flujo completo de `/empleados/nuevo` se re-probó de punta a punta tras el fix de secuencias, confirmando inserción correcta con ids consistentes (759, 1475, 1476) sin colisiones.
+
+- **Logro Conseguido:** Se completó la revisión de `config.php` (100%) y `crm.php` (100%), y se avanzó significativamente en `designs.php` y `employees.php`, con 10 bugs de código corregidos. Se identificó y corrigió proactivamente un problema de infraestructura de base de datos de severidad alta que no estaba relacionado con ningún endpoint específico sino con el estado general de la base de datos de desarrollo tras la migración masiva de datos.
+
+- **Observaciones de Claude:** Este hallazgo refuerza el valor del método de "probar en vivo, no solo leer código" que el usuario estableció explícitamente: un bug de este tipo (secuencia desincronizada) es completamente invisible en una revisión estática de código, porque el código SQL en sí es correcto — solo se manifiesta al ejecutar un INSERT real contra datos reales. Vale la pena que el usuario tenga presente este hallazgo para el día en que se planifique la migración de una empresa de producción real a Postgres: el proceso de migración de datos debe incluir, como paso obligatorio, la sincronización de todas las secuencias IDENTITY al valor MAX() de cada tabla after la carga masiva.
+
+- **Respuesta de Claude:** Se corrigieron 10 bugs de código en 3 archivos (config.php, designs.php, employees.php) relacionados con DSN hardcodeado, concatenación insegura y sentencias multi-statement. Adicionalmente, se descubrió y corrigió un problema crítico no relacionado a ningún endpoint específico: 10 secuencias de auto-incremento (IDENTITY) en las bases de datos de desarrollo estaban desincronizadas de los datos reales tras la migración masiva desde MySQL, lo cual habría causado fallos de "clave duplicada" (o peor, colisiones silenciosas) en cualquier intento futuro de crear una empresa o empleado nuevo vía Postgres. Todas las secuencias fueron corregidas de forma segura.
