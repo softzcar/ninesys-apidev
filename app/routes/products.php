@@ -1575,7 +1575,7 @@ return function (App $app) {
         // 1. CALCULAR CANTIDAD DE UNIDADES SOLICITADAS (una vez por orden)
         $sqlCant = 'SELECT SUM(cantidad) total_cantidad FROM ordenes_productos WHERE id_orden = ?';
         $total_cantidad_res = $localConnection->goQuery($sqlCant, [$id_orden]);
-        $total_cantidad = $total_cantidad_res[0]['total_cantidad'] ?? 0;
+        $total_cantidad = intval($total_cantidad_res[0]['total_cantidad'] ?? 0);
 
         foreach ($asignaciones as $asig) {
           $id_departamento = intval($asig['id_departamento']);
