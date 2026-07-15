@@ -539,6 +539,48 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  // Reporte granular de transacciones de caja (movimientos de efectivo uno por uno)
+  $app->get('/reporte-de-caja-transacciones/{inicio}/{fin}/{id_vendedor}', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+
+    $id_vendedor = (int)$args['id_vendedor'];
+    $inicio = $args['inicio'];
+    $fin = $args['fin'];
+
+    $whereFecha = DB_DRIVER === 'pgsql' ? "c.moment::date BETWEEN ? AND ?" : "DATE(c.moment) BETWEEN ? AND ?";
+    $params = [$inicio, $fin];
+
+    $filterVendedor = '';
+    if ($id_vendedor !== 0) {
+      $filterVendedor = ' AND c.id_empleado = ?';
+      $params[] = $id_vendedor;
+    }
+
+    $sql = "SELECT
+              c._id,
+              c.moment,
+              c.monto,
+              c.moneda,
+              c.tasa,
+              c.tipo,
+              c.detalle,
+              c.id_empleado,
+              emp.nombre AS empleado
+            FROM caja c
+            LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = c.id_empleado
+            WHERE $whereFecha $filterVendedor
+            ORDER BY c.moment DESC";
+
+    $object['data']['transacciones'] = $localConnection->goQuery($sql, $params);
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   // Guardar nuevo retiro
   $app->post('/retiro', function (Request $request, Response $response) {
     try {
