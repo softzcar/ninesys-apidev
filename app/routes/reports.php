@@ -1149,7 +1149,7 @@ return function (App $app) {
                     lotes_detalles_empleados_asignados ldea
                 JOIN departamentos dep ON dep._id = ldea.id_departamento
                 WHERE ldea.id_orden IN ($idsString)
-                GROUP BY ldea.id_orden, ldea.id_departamento
+                GROUP BY ldea.id_orden, ldea.id_departamento, dep.departamento, dep.orden_proceso
                 ORDER BY ldea.id_orden, dep.orden_proceso ASC";
             } else {
                 $sqlTasks = "SELECT
