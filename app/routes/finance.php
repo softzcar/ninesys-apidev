@@ -13,7 +13,9 @@ return function (App $app) {
   $app->get('/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}]', function (Request $request, Response $response, array $args) {
     /** FONDO */
     $localConnection = new LocalDB();
-    $localConnection->goQuery('SET group_concat_max_len = 1000000;');
+    if (DB_DRIVER !== 'pgsql') {
+      $localConnection->goQuery('SET group_concat_max_len = 1000000;');
+    }
     $inicio = isset($args['inicio']) ? $args['inicio'] : null;
     $fin = isset($args['fin']) ? $args['fin'] : null;
     $vendedor = isset($args['id_vendedor']) ? $args['id_vendedor'] : null;
