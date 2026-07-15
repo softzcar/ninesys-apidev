@@ -1447,7 +1447,11 @@ ALTER TABLE lotes_fisicos ADD CONSTRAINT lotes_fis_ibfk_1 FOREIGN KEY (id_orden)
 ALTER TABLE lotes_historico_solicitadas ADD CONSTRAINT lotes_hist_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT lotes_hist_ibfk_2 FOREIGN KEY (id_lotes_fisicos) REFERENCES lotes_fisicos (_id) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- metodos_de_pago
-ALTER TABLE metodos_de_pago ADD CONSTRAINT met_pago_ibfk_1 FOREIGN KEY (id_orden) REFERENCES ordenes (_id) ON DELETE CASCADE ON UPDATE CASCADE, ADD CONSTRAINT met_pago_ibfk_2 FOREIGN KEY (id_caja_cierres) REFERENCES caja_cierres (_id) ON DELETE SET NULL ON UPDATE CASCADE;
+-- NOTA: NO se agrega FK en id_orden -> ordenes(_id). En MySQL producción esa columna
+-- nunca tuvo esa restricción (es un índice libre); el valor 0 se usa deliberadamente
+-- como sentinela de "sin orden asociada" para movimientos de caja no ligados a una
+-- venta (ej. /otro-abono). Agregarla aquí rompía ese caso de uso real.
+ALTER TABLE metodos_de_pago ADD CONSTRAINT met_pago_ibfk_2 FOREIGN KEY (id_caja_cierres) REFERENCES caja_cierres (_id) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ordenes
 ALTER TABLE ordenes ADD CONSTRAINT ordenes_ibfk_1 FOREIGN KEY (id_wp) REFERENCES customers (_id) ON DELETE SET NULL ON UPDATE CASCADE;
