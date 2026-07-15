@@ -1,0 +1,29 @@
+- **Solicitud del Usuario:** Continuación de la revisión del módulo Administración: sección "Relación de Pagos" (agregar nombre de cliente y método de pago real, con filtros) y sección "Caja" completa (Retiros, Otros Abonos, Cierre de Caja, Reporte de Caja, Balance de Pagos y Abonos, Balance de Cierres).
+- **Fecha y Hora:** 2026-07-15 16:00:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+  - app/routes/payments.php
+  - app/routes/finance.php
+  - app/routes/orders.php
+  - public/model/create_new_company_api_emp_N_postgres.sql
+- **Commits Relacionados:**
+    - Backend: e872b4e, 91d2214, 6fbbcd9, 7226b27, f044eee, 1024aa4, 0fc0421, b9bc1d1, 0c31391, 1340c27
+    - Frontend: bed8618, e896d9e (en app_multi)
+- **Acción Realizada:**
+  1. `/pagos/vendedor/{id}` no exponía `cliente_nombre` ni el método de pago real (Efectivo/Zelle/Pagomovil/etc, distinto de `tipo_de_pago` que solo indica el contexto de la transacción). Se agregaron ambos al SELECT.
+  2. `/reporte-de-pagos` fallaba con 500: ejecutaba `SET group_concat_max_len` (parámetro exclusivo de MySQL) sin importar el motor. Se condicionó a `DB_DRIVER !== 'pgsql'`.
+  3. `/cierre-de-caja-vendedor` nunca actualizaba `retiros.cierre_caja` (solo se leía en el código, nunca se escribía), causando que retiros ya cerrados se siguieran restando del saldo disponible indefinidamente, pudiendo llevarlo a negativo. Se agregó el UPDATE correspondiente, replicando el patrón ya usado para la tabla `caja`.
+  4. `POST /retiro`: la validación de saldo disponible usaba un `LEFT JOIN` entre `caja` y `retiros` sin relación real entre ambas tablas, generando un producto cartesiano que multiplicaba ambas sumas (ej. 175 filas de caja x 2 de retiros duplicaban el total), produciendo saldos negativos falsos. Reemplazado por subconsultas independientes; se agregó también el filtro `cierre_caja = 0` y el fondo de Dólares que faltaban.
+  5. `POST /otro-abono` (inyección de efectivo sin orden asociada) fallaba con violación de FK: `metodos_de_pago.id_orden` tenía una restricción `met_pago_ibfk_1 -> ordenes(_id)` que **nunca existió en MySQL producción** (confirmado con `SHOW CREATE TABLE`); el valor 0 se usa deliberadamente ahí como "sin orden". Se eliminó la FK tanto en la base de datos real de desarrollo como en la plantilla de esquema Postgres para nuevas empresas.
+  6. Los INSERT a `caja` en `/otro-abono` no guardaban el campo `detalle` pese a que la columna existe y el usuario lo escribe en el formulario. Se agregó.
+  7. Se creó un nuevo endpoint `GET /reporte-de-caja-transacciones/{inicio}/{fin}/{id_vendedor}` que expone los movimientos de `caja` uno por uno (no solo sumas agregadas como los reportes existentes), para dar soporte a una nueva página de "Transacciones de Caja" en el frontend.
+  8. Los valores de `caja.tipo` eran inconsistentes y crípticos (`abono`, `Abono a orden`, `Abono Orden`, `abono_orden`, `orden_nueva`). Se normalizaron a 3 nombres descriptivos: "Otro Abono", "Abono a Orden" (unificando dos variantes que representaban lo mismo desde distintos endpoints) y "Orden Nueva". Se actualizaron también los ~2000 registros históricos vía UPDATE directo en la base de datos de desarrollo.
+  9. `/reporte-de-caja`, sección "digital" (Zelle/Pagomovil/Punto/Transferencia): usaba `INNER JOIN` con `ordenes`, excluyendo silenciosamente cualquier pago sin orden asociada (ej. Otro Abono vía método no-efectivo). Cambiado a `LEFT JOIN`.
+- **Inconvenientes y Desafíos:** El bug del `LEFT JOIN` cartesiano en `/retiro` (punto 4) fue el más sutil: el saldo negativo resultante (-359.56) coincidía numéricamente con el producto real de las filas involucradas, lo que permitió confirmar la causa exacta antes de corregir.
+- **Decisión Final y Justificación:** El punto 5 (FK inexistente en `metodos_de_pago.id_orden`) es un caso de sobre-restricción introducida durante la migración a Postgres, no presente en el diseño original de MySQL; se corrigió eliminando la restricción en vez de forzar una orden ficticia con id=0, preservando el comportamiento original del negocio (efectivo movimientos de caja sin orden asociada).
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (ssh, psql, curl), AskUserQuestion (para confirmar normalización de nombres de tipo y alcance de correcciones de datos históricos).
+- **Resultado:** Éxito
+- **Verificación:** Cada endpoint se probó en vivo con curl/psql tras cada despliegue, incluyendo pruebas de extremo a extremo (crear orden, hacer abono, hacer retiro, cerrar caja) con datos reales clonados de producción.
+- **Logro Conseguido:** Sección Caja completa (6 páginas) y Relación de Pagos verificadas y funcionando correctamente contra PostgreSQL, con datos reales y consistentes.
+- **Observaciones de Claude:** Se identificó de paso que no existía ningún reporte de transacciones de caja línea por línea (solo agregados); se construyó uno nuevo (`/reporte-de-caja-transacciones`) a solicitud del usuario tras detectar que el detalle de un abono se perdía sin dejar rastro visible.
+- **Respuesta de Claude:** Reportado y corregido en tiempo real, endpoint por endpoint, junto con el usuario.

@@ -1,0 +1,23 @@
+- **Solicitud del Usuario:** Revisión sistemática del módulo de Administración de `app_multi` contra PostgreSQL (empresa 194 dev), siguiendo un checklist en `docs/revision_postgre_modulo_administracion.md`. Reportó Error 500 en la página Inicio (`/reportes/semanal-detallado`) y varios bugs durante la prueba de Nueva Orden / Nuevo Presupuesto.
+- **Fecha y Hora:** 2026-07-15 14:00:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+  - app/routes/reports.php
+  - app/routes/orders.php
+- **Commits Relacionados:**
+    - Backend: bb8cd06, ccc927f, c640500, e872b4e (parcial), d38f638, a0d77ad
+    - Frontend: N/A
+- **Acción Realizada:**
+  1. `/reportes/semanal-detallado` fallaba con 500 genérico. Se ubicó el error real en el log de Postgres (`SQLSTATE[42803]: Grouping error`): el GROUP BY de la consulta de tareas por departamento no incluía `dep.departamento` ni `dep.orden_proceso`, algo que MySQL tolera por dependencia funcional implícita pero Postgres exige explícitamente. Se agregaron ambas columnas al GROUP BY.
+  2. Segundo error en el mismo endpoint: un alias `` `real` `` con backticks (sintaxis MySQL) en una subconsulta de eficiencia de material sin branch `DB_DRIVER`. Se quitaron los backticks (alias sin comillas válido en ambos motores).
+  3. Al crear una orden nueva desde un presupuesto importado (`/ordenes/nueva/custom`), el backend insertaba `id_category=0` cuando el producto no traía `categoria` en el payload (presupuesto.vue nunca envía ese campo), violando la FK `ord_prod_ibfk_5`. Se agregó resolución server-side de la categoría real desde `products.category_ids` antes de insertar.
+  4. Comisión del vendedor en `/ordenes/nueva/custom` quedaba sin `id_metodos_de_pago` (huérfana) porque se insertaba antes de registrar los métodos de pago de la orden. Se capturó el ID de la comisión y se enlazó después de insertar los métodos de pago, replicando el patrón ya usado en `/orden/abono`.
+  5. Al cancelar una orden con tareas de empleados pendientes, `/orden/actualizar-estado` fallaba con columna inexistente `id_asignacion` al borrar pausas; el nombre real es `id_lotes_detalles_empleados_asignados` (confirmado igual en MySQL producción). Corregido el nombre de columna.
+- **Inconvenientes y Desafíos:** El mensaje de error devuelto al cliente es siempre genérico (`Error interno al ejecutar una operación de base de datos`) por diseño de `LocalDB::goQuery()`; fue necesario revisar los logs de Postgres en el servidor (`/usr/local/lsws/logs/error.log`) para obtener el SQLSTATE y la consulta real que falló en cada caso.
+- **Decisión Final y Justificación:** Todos los bugs eran reales (no específicos de la migración): el `id_category=0` y el nombre de columna de pausas también habrían fallado en MySQL producción bajo las mismas condiciones; simplemente nunca se habían dado esas condiciones exactas en producción. Se corrigieron en el código fuente, no con parches puntuales de datos.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (ssh a vps-contabo-dev y vps-contabo-prod para comparar logs y esquemas), curl para verificación en vivo.
+- **Resultado:** Éxito
+- **Verificación:** Cada fix se probó en vivo contra `https://api.nineteengreen.com` (empresa 194 dev) con curl reproduciendo el payload exacto reportado, confirmando HTTP 200 y los datos esperados antes de continuar.
+- **Logro Conseguido:** Página Inicio y flujo completo de Nueva Orden / Nuevo Presupuesto verificados y funcionando correctamente contra PostgreSQL.
+- **Observaciones de Claude:** Estos bugs no habían aparecido en la verificación automatizada previa (smoke tests) porque requerían datos reales y flujos de usuario específicos (presupuesto con producto sin categoría, orden con tareas pendientes al cancelar) que los datos sintéticos no ejercitaban.
+- **Respuesta de Claude:** Se reportaron y corrigieron uno por uno en tiempo real junto con el usuario durante su prueba manual del checklist.
