@@ -487,8 +487,8 @@ return function (App $app) {
                 SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
                 a.moneda, 
                 '$metodo' metodo_pago
-              FROM metodos_de_pago AS a 
-              JOIN ordenes AS o ON a.id_orden = o._id
+              FROM metodos_de_pago AS a
+              LEFT JOIN ordenes AS o ON a.id_orden = o._id
               WHERE a.metodo_pago = '$metodo' AND a.$whereBase $filterUserOrdenes
               GROUP BY a.tasa, a.moneda";
       $object['data']['digital'][$metodoKey] = $localConnection->goQuery($sql);
