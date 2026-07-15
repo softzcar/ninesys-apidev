@@ -2835,8 +2835,22 @@ $object['sales_commission_ISSET'][] = false;
           $values .= $decodedObj['cod'] . ',';
           $values .= $decodedObj['cantidad'] . ',';
           $id_categoria = (isset($decodedObj['categoria']) && !empty($decodedObj['categoria'])) ? intval($decodedObj['categoria']) : 0;
+          // El frontend no siempre envía 'categoria' (ej. al importar un presupuesto).
+          // Si no llegó, se resuelve desde la categoría real del producto en vez de
+          // insertar 0, que viola la FK ord_prod_ibfk_5 (no existe categoría _id=0).
+          if ($id_categoria <= 0 && !empty($decodedObj['cod'])) {
+            $prodCat = $localConnection->goQuery('SELECT category_ids FROM products WHERE _id = ' . intval($decodedObj['cod']));
+            $firstCatId = !empty($prodCat[0]['category_ids']) ? intval(explode(',', $prodCat[0]['category_ids'])[0]) : 0;
+            if ($firstCatId > 0) {
+              $catRow = $localConnection->goQuery('SELECT nombre FROM categories WHERE _id = ' . $firstCatId);
+              if (!empty($catRow[0]['nombre'])) {
+                $id_categoria = $firstCatId;
+                $cat_name = $catRow[0]['nombre'];
+              }
+            }
+          }
           $values .= $id_categoria . ',';
-          $values .= "'" . $cat_name . "',";
+          $values .= "'" . addslashes($cat_name) . "',";
           // $values .= "'" . $tmp["->name"] . "',";
 
           // --- INICIO: Corrección para guardar ID y Nombre de la Talla ---
