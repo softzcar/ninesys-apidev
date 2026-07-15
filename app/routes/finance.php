@@ -725,7 +725,7 @@ return function (App $app) {
         $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Dólares', 'Efectivo', ?, ?, '1')";
         $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoDolaresEfectivo'], $arr['detalle'] ?? '']);
 
-        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES (?, 'Dólares', 1, 'abono', ?, ?)";
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES (?, 'Dólares', 1, 'Otro Abono', ?, ?)";
         $localConnection->goQuery($sql, [$arr['montoDolaresEfectivo'], $arr['id_empleado'] ?? 0, $arr['detalle'] ?? '']);
         $metodosRegistrados++;
       }
@@ -746,7 +746,7 @@ return function (App $app) {
         $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Pesos', 'Efectivo', ?, ?, ?)";
         $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoPesosEfectivo'], $arr['detalle'] ?? '', $arr['tasa_peso'] ?? 1]);
 
-        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES (?, 'Pesos', ?, 'abono', ?, ?)";
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES (?, 'Pesos', ?, 'Otro Abono', ?, ?)";
         $localConnection->goQuery($sql, [$arr['montoPesosEfectivo'], $arr['tasa_peso'] ?? 1, $arr['id_empleado'] ?? 0, $arr['detalle'] ?? '']);
         $metodosRegistrados++;
       }
@@ -761,7 +761,7 @@ return function (App $app) {
         $sql = "INSERT INTO metodos_de_pago (id_orden, tipo_de_pago, moneda, metodo_pago, monto, detalle, tasa) VALUES (?, ?, 'Bolívares', 'Efectivo', ?, ?, ?)";
         $localConnection->goQuery($sql, [$id_orden_abono, $arr['tipoAbono'] ?? '', $arr['montoBolivaresEfectivo'], $arr['detalle'] ?? '', $arr['tasa_dolar'] ?? 1]);
 
-        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES (?, 'Bolívares', ?, 'abono', ?, ?)";
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES (?, 'Bolívares', ?, 'Otro Abono', ?, ?)";
         $localConnection->goQuery($sql, [$arr['montoBolivaresEfectivo'], $arr['tasa_dolar'] ?? 1, $arr['id_empleado'] ?? 0, $arr['detalle'] ?? '']);
         $metodosRegistrados++;
       }
