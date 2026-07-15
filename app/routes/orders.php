@@ -229,8 +229,8 @@ return function (App $app) {
           $idsStr = implode(',', $idsArray);
 
           // 4b. Eliminar pausas de las asignaciones que serán eliminadas
-          $sqlDeletePausas = "DELETE FROM lotes_detalles_empleados_asignados_pausas 
-                              WHERE id_asignacion IN ($idsStr)";
+          $sqlDeletePausas = "DELETE FROM lotes_detalles_empleados_asignados_pausas
+                              WHERE id_lotes_detalles_empleados_asignados IN ($idsStr)";
           $localConnection->goQuery($sqlDeletePausas);
         }
       }
