@@ -1191,7 +1191,7 @@ return function (App $app) {
                         FROM inventario_movimientos im_sub
                         LEFT JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
                         WHERE im_sub.id_orden = op.id_orden
-                    ), 0) AS `real`
+                    ), 0) AS real
                 FROM ordenes_productos op
                 JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
                 WHERE op.id_orden IN ($idsString)
