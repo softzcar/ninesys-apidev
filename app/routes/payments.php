@@ -1130,12 +1130,16 @@ return function (App $app) {
                   a.comision,
                   a.comision_tipo,
                   c.nombre,
+                  d.cliente_nombre,
                   d.pago_abono monto_abonado,
                   e.monto monto_abonado_abono,
                   d.status,
                   e.tipo_de_pago,
+                  e.metodo_pago,
+                  e.moneda,
                   a.fecha_pago,
                   TO_CHAR(a.moment, 'DD/MM/YYYY') fecha_de_pago,
+                  a.moment AS moment_raw,
                   (SELECT CASE WHEN a.id_reposicion > 0 THEN (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion) ELSE (SELECT COALESCE(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = a.id_orden) END) as cantidad_productos
               FROM
                   pagos a
@@ -1150,7 +1154,7 @@ return function (App $app) {
                   a.id_empleado = {$args['id_vendedoor']} AND
                   a.fecha_pago IS NULL
               GROUP BY
-                  a._id, c.nombre, d.pago_abono, e.monto, d.status, e.tipo_de_pago, d._id
+                  a._id, c.nombre, d.cliente_nombre, d.pago_abono, e.monto, d.status, e.tipo_de_pago, e.metodo_pago, e.moneda, d._id
               ORDER BY
                   d._id ASC,
                   a._id DESC";
@@ -1166,12 +1170,16 @@ return function (App $app) {
                   a.comision,
                   a.comision_tipo,
                   c.nombre,
+                  d.cliente_nombre,
                   d.pago_abono monto_abonado,
                   e.monto monto_abonado_abono,
                   d.status,
                   e.tipo_de_pago,
+                  e.metodo_pago,
+                  e.moneda,
                   a.fecha_pago,
                   DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago,
+                  a.moment AS moment_raw,
                   (SELECT IF(a.id_reposicion > 0, (SELECT unidades FROM reposiciones WHERE _id = a.id_reposicion), (SELECT IFNULL(SUM(cantidad), 0) FROM ordenes_productos op WHERE op.id_orden = a.id_orden))) as cantidad_productos
               FROM
                   pagos a
@@ -1183,7 +1191,7 @@ return function (App $app) {
               LEFT JOIN metodos_de_pago e ON
                   e._id = a.id_metodos_de_pago
               WHERE
-                  a.id_empleado = {$args['id_vendedoor']} AND 
+                  a.id_empleado = {$args['id_vendedoor']} AND
                   a.fecha_pago IS NULL
               GROUP BY
                   a._id
