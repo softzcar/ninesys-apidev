@@ -2740,6 +2740,7 @@ return function (App $app) {
 
       // CALCULAMOE ES PORCENTAJE DEL VENDEDOR
       // if (isset($arg["sales_commission"])) { // sales_comission no llega en el Payload vamoa a validar el valor de abono
+      $comisionPagoId = null;
       if (floatval($newJson['abono']) > 0 && !$guardar_stock) {
         // $object['sales_commission_ISSET'][] = $arg["sales_commission"];
 
@@ -2763,7 +2764,9 @@ return function (App $app) {
         $pago_vendedor = number_format($pago_vendedor, 2);
 
         $sql = "INSERT INTO pagos (moment, comision, comision_tipo, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES ('" . $now . "', " . $comision . ", '" . $comisionTipo . "', '" . $last_id . "',  '" . $newJson['responsable'] . "', '" . $pago_vendedor . "', 'Comercialización', 'aprobado')";
-        $object['resultado_abono'] = json_encode($localConnection->goQuery($sql));
+        $comisionPagoResult = $localConnection->goQuery($sql);
+        $comisionPagoId = $comisionPagoResult['insert_id'] ?? null;
+        $object['resultado_abono'] = json_encode($comisionPagoResult);
         $object['pago a vendedor'] = 'SI hubo comisión, cliente normal';
         /* if ($arg["sales_commission"] === true) {
                   $object['sales_commission_ISSET'][] = true;
@@ -3111,6 +3114,18 @@ $object['sales_commission_ISSET'][] = false;
         $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle) VALUES ('" . $last_id . "', 'Bolívares', 'Transferencia', '" . $arr['montoBolivaresTransferencia'] . "', '" . $arr['tasa_dolar'] . "', '" . addslashes($arr['montoBolivaresTransferenciaDetalle'] ?? '') . "');";
         $object['sql_metodos_pago'][] = $sql_metodos_pago;
         $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
+      }
+
+      // Vincular la comisión del vendedor con el método de pago recién registrado.
+      // El pago de comisión se inserta ANTES de conocer los métodos de pago usados,
+      // así que se enlaza aquí (mismo patrón ya usado en /orden/abono más arriba).
+      if (!empty($comisionPagoId)) {
+        $sqlMaxMetodo = "SELECT MAX(_id) AS last_id FROM metodos_de_pago WHERE id_orden = " . intval($last_id);
+        $resMaxMetodo = $localConnection->goQuery($sqlMaxMetodo);
+        $idMetodoPagoComision = !empty($resMaxMetodo[0]['last_id']) ? intval($resMaxMetodo[0]['last_id']) : null;
+        if ($idMetodoPagoComision) {
+          $localConnection->goQuery('UPDATE pagos SET id_metodos_de_pago = ' . $idMetodoPagoComision . ' WHERE _id = ' . intval($comisionPagoId));
+        }
       }
 
       // ========== CONFIRMAR TRANSACCIÓN ==========
