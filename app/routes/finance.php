@@ -561,14 +561,22 @@ return function (App $app) {
       $monedas = ['Dólares', 'Pesos', 'Bolívares'];
       foreach ($monedas as $moneda) {
         $extraFondo = 0;
+        if ($moneda === 'Dólares') $extraFondo = $fondo['dolares'];
         if ($moneda === 'Pesos') $extraFondo = $fondo['pesos'];
         if ($moneda === 'Bolívares') $extraFondo = $fondo['bolivares'];
 
-        $sqlSaldo = "SELECT (COALESCE(SUM(c.monto), 0) + $extraFondo - COALESCE(SUM(a.monto), 0)) AS saldo 
-                     FROM caja c 
-                     LEFT JOIN retiros a ON c.id_empleado = a.id_empleado AND a.moneda = ? 
-                     WHERE c.moneda = ? AND c.id_caja_cierres IS NULL AND c.id_empleado = ?";
-        $res = $localConnection->goQuery($sqlSaldo, [$moneda, $moneda, $id_empleado]);
+        // Subconsultas independientes (NO un JOIN entre caja y retiros: al no
+        // existir relación 1:1 entre ambas tablas, el JOIN generaba un producto
+        // cartesiano que multiplicaba ambas sumas -- ej. 175 filas de caja x 2
+        // de retiros duplicaban el total varias veces, dando saldos negativos
+        // falsos). También se filtra cierre_caja = 0 para no restar retiros que
+        // ya quedaron contabilizados en un cierre de caja anterior.
+        $sqlSaldo = "SELECT (
+                       (SELECT COALESCE(SUM(monto), 0) FROM caja WHERE moneda = ? AND id_caja_cierres IS NULL AND id_empleado = ?)
+                       + $extraFondo
+                       - (SELECT COALESCE(SUM(monto), 0) FROM retiros WHERE moneda = ? AND cierre_caja = 0 AND id_empleado = ?)
+                     ) AS saldo";
+        $res = $localConnection->goQuery($sqlSaldo, [$moneda, $id_empleado, $moneda, $id_empleado]);
         $saldos[$moneda] = !empty($res) ? floatval($res[0]['saldo']) : 0;
       }
 
