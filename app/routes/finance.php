@@ -425,6 +425,12 @@ return function (App $app) {
     $sql = 'UPDATE caja SET id_caja_cierres = ? WHERE id_empleado = ? AND id_caja_cierres IS NULL';
     $object['response_update_caja'] = $localConnection->goQuery($sql, [$insertID, $datosCierre['id_empleado']]);
 
+    // Marcamos como cerrados los retiros pendientes (mismo criterio que caja arriba).
+    // Sin esto, retiros de cierres anteriores se siguen restando del saldo disponible
+    // indefinidamente (cierre_caja nunca se actualizaba desde su valor por defecto 0).
+    $sql = 'UPDATE retiros SET cierre_caja = 1 WHERE id_empleado = ? AND cierre_caja = 0';
+    $object['response_update_retiros'] = $localConnection->goQuery($sql, [$datosCierre['id_empleado']]);
+
     $localConnection->commit();
     $localConnection->disconnect();
 
