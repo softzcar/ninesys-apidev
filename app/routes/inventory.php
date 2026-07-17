@@ -2867,40 +2867,79 @@ return function (App $app) {
             $limiteGrafico = isset($params['limiteGrafico']) ? intval($params['limiteGrafico']) : 5;
             // Filtro por tipo de tinta (viene del catálogo). 'Todas' = sin filtro
             $tipoTinta = $params['tipoTinta'] ?? 'Todas';
+            $fechaDesde = $params['fechaDesde'] ?? null;
+            $fechaHasta = $params['fechaHasta'] ?? null;
 
             $localConnection = new LocalDB();
-            
-            $conditions = ["eliminado = 0"];
-            $queryParams = [];
-            
-            // Filtro por departamento
-            if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') {
-                $conditions[] = "departamento = ?";
-                $queryParams[] = $departamento;
-            }
 
-            // Filtro por disponibilidad
-            if ($filtroStock === 'enStock') {
-                $conditions[] = "cantidad > 0";
-            } else if ($filtroStock === 'terminados') {
-                $conditions[] = "(cantidad_inicial - cantidad) > 0";
-            }
-
-            // Filtro por tipo de tinta: solo aplica sobre registros tipo 'tinta'
             $tipoTintaId = null;
             if ($tipoTinta !== 'Todas' && is_numeric($tipoTinta)) {
                 $tipoTintaId = intval($tipoTinta);
-                $conditions[] = "(tipo_insumo != 'tinta' OR id_catalogo_tintas = {$tipoTintaId})";
             }
 
-            $where = !empty($conditions) ? " WHERE " . implode(" AND ", $conditions) : "";
+            // Material Consumido + rango de fechas explícito: antes esta tabla
+            // ignoraba por completo el rango (mostraba el consumo histórico total
+            // de siempre), a diferencia de los gráficos de la misma página, que sí
+            // lo respetaban -- se recalcula cantidad_consumida acotada al período
+            // (suma de movimientos en el rango) igual que el gráfico "materiales".
+            $hasFechaFiltro = $filtroStock === 'terminados' && $fechaDesde && $fechaHasta;
 
-            $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, tipo_insumo, cantidad, cantidad_inicial, (cantidad_inicial - cantidad) as cantidad_consumida, color, departamento, moment 
-                    FROM inventario 
-                    {$where} 
-                    ORDER BY insumo ASC";
-            
-            $items = $localConnection->goQuery($sql, $queryParams);
+            if ($hasFechaFiltro) {
+                $conditions = ["i.eliminado = 0", "im.moment >= ?", "im.moment <= ?", "(im.valor_inicial - im.valor_final) > 0"];
+                $queryParams = [$fechaDesde . ' 00:00:00', $fechaHasta . ' 23:59:59'];
+
+                if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') {
+                    $conditions[] = "i.departamento = ?";
+                    $queryParams[] = $departamento;
+                }
+                if ($tipoTintaId !== null) {
+                    $conditions[] = "(i.tipo_insumo != 'tinta' OR i.id_catalogo_tintas = {$tipoTintaId})";
+                }
+
+                $where = " WHERE " . implode(" AND ", $conditions);
+
+                $sql = "SELECT i._id, i.sku, i.insumo, i.unidad, i.costo, i.rendimiento, i.tipo_insumo,
+                                i.cantidad, i.cantidad_inicial,
+                                ROUND(SUM(im.valor_inicial - im.valor_final), 2) as cantidad_consumida,
+                                i.color, i.departamento, i.moment
+                        FROM inventario_movimientos im
+                        JOIN inventario i ON im.id_insumo = i._id
+                        {$where}
+                        GROUP BY i._id, i.sku, i.insumo, i.unidad, i.costo, i.rendimiento, i.tipo_insumo, i.cantidad, i.cantidad_inicial, i.color, i.departamento, i.moment
+                        ORDER BY i.insumo ASC";
+
+                $items = $localConnection->goQuery($sql, $queryParams);
+            } else {
+                $conditions = ["eliminado = 0"];
+                $queryParams = [];
+
+                // Filtro por departamento
+                if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') {
+                    $conditions[] = "departamento = ?";
+                    $queryParams[] = $departamento;
+                }
+
+                // Filtro por disponibilidad
+                if ($filtroStock === 'enStock') {
+                    $conditions[] = "cantidad > 0";
+                } else if ($filtroStock === 'terminados') {
+                    $conditions[] = "(cantidad_inicial - cantidad) > 0";
+                }
+
+                // Filtro por tipo de tinta: solo aplica sobre registros tipo 'tinta'
+                if ($tipoTintaId !== null) {
+                    $conditions[] = "(tipo_insumo != 'tinta' OR id_catalogo_tintas = {$tipoTintaId})";
+                }
+
+                $where = !empty($conditions) ? " WHERE " . implode(" AND ", $conditions) : "";
+
+                $sql = "SELECT _id, sku, insumo, unidad, costo, rendimiento, tipo_insumo, cantidad, cantidad_inicial, (cantidad_inicial - cantidad) as cantidad_consumida, color, departamento, moment
+                        FROM inventario
+                        {$where}
+                        ORDER BY insumo ASC";
+
+                $items = $localConnection->goQuery($sql, $queryParams);
+            }
 
             // Obtener lista dinámica de departamentos que tienen stock o consumo
             $sqlDeps = "SELECT DISTINCT departamento FROM inventario WHERE cantidad > 0 AND departamento IS NOT NULL AND departamento != '' ORDER BY departamento ASC";
@@ -2937,8 +2976,7 @@ return function (App $app) {
                 : "";
 
             // Rango de fechas para gráficos (por defecto últimos 30días)
-            $fechaDesde = $params['fechaDesde'] ?? null;
-            $fechaHasta = $params['fechaHasta'] ?? null;
+            // $fechaDesde/$fechaHasta ya se extrajeron arriba (también usados por la tabla de ítems)
             if ($fechaDesde && $fechaHasta) {
                 $fechaWhere = "im.moment >= '" . addslashes($fechaDesde) . " 00:00:00' AND im.moment <= '" . addslashes($fechaHasta) . " 23:59:59'";
                 $fechaWhereTintas = "t.moment >= '" . addslashes($fechaDesde) . " 00:00:00' AND t.moment <= '" . addslashes($fechaHasta) . " 23:59:59'";
