@@ -354,18 +354,34 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $nombre = $data['insumo']; // The payload uses 'insumo' for the name
-    $id_product = isset($data['id_product']) ? intval($data['id_product']) : 0;
-    $id_departamento = isset($data['id_departamento']) ? intval($data['id_departamento']) : 0;
+    // Compatibilidad: distintos formularios del frontend han usado 'nombre' o 'insumo'.
+    $nombre = trim($data['nombre'] ?? $data['insumo'] ?? '');
+    if ($nombre === '') {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode([
+        'status' => 'error',
+        'message' => 'El nombre del insumo es requerido.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
 
-    $sql = "INSERT INTO catalogo_insumos_productos (nombre, id_product, id_departamento) VALUES ('$nombre', $id_product, $id_departamento)";
+    $sql = 'INSERT INTO catalogo_insumos_productos (nombre) VALUES (?)';
+    $result = $localConnection->goQuery($sql, [$nombre]);
 
-    $result = $localConnection->goQuery($sql);
+    if (isset($result['status']) && $result['status'] === 'error') {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode([
+        'status' => 'error',
+        'message' => 'Ya existe un insumo del catálogo con ese nombre.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+    }
+
     $lastId = $localConnection->getLastID();
 
     // Fetch the newly created item to return it
-    $sqlNew = "SELECT * FROM catalogo_insumos_productos WHERE _id = $lastId";
-    $newItem = $localConnection->goQuery($sqlNew);
+    $sqlNew = 'SELECT * FROM catalogo_insumos_productos WHERE _id = ?';
+    $newItem = $localConnection->goQuery($sqlNew, [$lastId]);
 
     $object['response'] = $result;
     $object['data'] = $newItem;
@@ -373,6 +389,97 @@ return function (App $app) {
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->post('/catalogo-insumos-productos/editar', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    $id = isset($data['id']) ? intval($data['id']) : 0;
+    $nombre = trim($data['nombre'] ?? '');
+
+    if ($id <= 0 || $nombre === '') {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode([
+        'status' => 'error',
+        'message' => 'Datos incompletos: se requiere id y nombre.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $sql = 'UPDATE catalogo_insumos_productos SET nombre = ? WHERE _id = ?';
+    $result = $localConnection->goQuery($sql, [$nombre, $id]);
+
+    if (isset($result['status']) && $result['status'] === 'error') {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode([
+        'status' => 'error',
+        'message' => 'Ya existe un insumo del catálogo con ese nombre.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+    }
+
+    $sqlNew = 'SELECT * FROM catalogo_insumos_productos WHERE _id = ?';
+    $updated = $localConnection->goQuery($sqlNew, [$id]);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode(['status' => 'ok', 'data' => $updated]));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  $app->post('/catalogo-insumos-productos/eliminar', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $localConnection = new LocalDB();
+
+    $id = isset($data['id']) ? intval($data['id']) : 0;
+    if ($id <= 0) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode([
+        'status' => 'error',
+        'message' => 'ID inválido.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    // Verificación de uso ANTES de eliminar: product_insumos_asignados y
+    // products_sizes_eficiencia tienen ON DELETE CASCADE hacia esta tabla,
+    // así que la FK no protege nada por sí sola -- un DELETE aquí borraría en
+    // silencio las asignaciones reales de insumo-a-producto que dependan de
+    // este item del catálogo. inventario no tiene FK formal pero también se
+    // revisa porque referencia el catálogo por id_catalogo.
+    $sqlUso = 'SELECT
+                (SELECT COUNT(*) FROM product_insumos_asignados WHERE id_catalogo_insumos_productos = ?) AS asignaciones,
+                (SELECT COUNT(*) FROM products_sizes_eficiencia WHERE id_catalogo_insumos_prodcutos = ?) AS eficiencias,
+                (SELECT COUNT(*) FROM inventario WHERE id_catalogo = ?) AS inventario';
+    $uso = $localConnection->goQuery($sqlUso, [$id, $id, $id]);
+    $usoRow = $uso[0] ?? [];
+    $asignaciones = (int) ($usoRow['asignaciones'] ?? 0);
+    $eficiencias = (int) ($usoRow['eficiencias'] ?? 0);
+    $inventario = (int) ($usoRow['inventario'] ?? 0);
+
+    if ($asignaciones > 0 || $eficiencias > 0 || $inventario > 0) {
+      $localConnection->disconnect();
+      $partes = [];
+      if ($asignaciones > 0) $partes[] = "$asignaciones asignación(es) a producto";
+      if ($eficiencias > 0) $partes[] = "$eficiencias registro(s) de eficiencia";
+      if ($inventario > 0) $partes[] = "$inventario lote(s) de inventario";
+      $response->getBody()->write(json_encode([
+        'status' => 'error',
+        'message' => 'No se puede eliminar: este insumo del catálogo está en uso (' . implode(', ', $partes) . ').',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+    }
+
+    $sql = 'DELETE FROM catalogo_insumos_productos WHERE _id = ?';
+    $result = $localConnection->goQuery($sql, [$id]);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode(['status' => 'ok', 'response' => $result]));
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);

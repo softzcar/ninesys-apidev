@@ -120,19 +120,17 @@ INSERT INTO `impresoras_colores` (`id_catalogo_impresora`, `id_color_tinta`) VAL
 CREATE TABLE `catalogo_insumos_productos` (
   `_id` int(11) NOT NULL COMMENT 'ID único del catálogo',
   `nombre` varchar(128) NOT NULL COMMENT 'Nombre del tipo de insumo',
-  `id_product` bigint(20) UNSIGNED NOT NULL COMMENT 'ID del producto (FK a products._id)',
-  `id_departamento` int(11) NOT NULL COMMENT 'ID del departamento',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo maestro de tipos de insumos para producción. Define categorías de materiales (telas, tintas, botones, etc.) que se asignan a productos.';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo maestro de tipos de insumos para producción. Define categorías de materiales (telas, tintas, botones, etc.) reutilizables entre productos; la relación real producto->insumo vive en product_insumos_asignados.';
 
-INSERT INTO `catalogo_insumos_productos` (`_id`, `nombre`, `id_product`, `id_departamento`) VALUES
-(1, 'Papel para sublimación', 1, 1),
-(2, 'Tela Atlética', 1, 3),
-(3, 'Botones', 1, 4),
-(4, 'Tinta', 1, 1),
-(5, 'Tela Licra', 1, 3),
-(6, 'Tela Algodón', 1, 3),
-(7, 'Diseño Gráfico', 2, 7);
+INSERT INTO `catalogo_insumos_productos` (`_id`, `nombre`) VALUES
+(1, 'Papel para sublimación'),
+(2, 'Tela Atlética'),
+(3, 'Botones'),
+(4, 'Tinta'),
+(5, 'Tela Licra'),
+(6, 'Tela Algodón'),
+(7, 'Diseño Gráfico');
 
 CREATE TABLE `catalogo_telas` (
   `_id` int(11) NOT NULL COMMENT 'Identificador unico de la tabla',
@@ -1348,9 +1346,7 @@ ADD PRIMARY KEY (`_id`),
 ALTER TABLE `catalogo_insumos_productos`
 ADD PRIMARY KEY (`_id`),
   ADD UNIQUE KEY `nombre` (`nombre`),
-  ADD UNIQUE KEY `nombre_2` (`nombre`),
-  ADD KEY `id_product` (`id_product`),
-  ADD KEY `id_departamento` (`id_departamento`);
+  ADD UNIQUE KEY `nombre_2` (`nombre`);
 ALTER TABLE `catalogo_telas`
 ADD PRIMARY KEY (`_id`),
   ADD UNIQUE KEY `_id` (`_id`);
@@ -1703,11 +1699,6 @@ ADD CONSTRAINT `caja_ibfk_1` FOREIGN KEY (`id_caja_cierres`) REFERENCES `caja_ci
 -- caja_fondos
 ALTER TABLE `caja_fondos`
 ADD CONSTRAINT `caja_fondos_ibfk_1` FOREIGN KEY (`id_caja_cierres`) REFERENCES `caja_cierres` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
--- catalogo_insumos_productos
-ALTER TABLE `catalogo_insumos_productos`
-ADD CONSTRAINT `cat_ins_prod_ibfk_1` FOREIGN KEY (`id_product`) REFERENCES `products` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-ADD CONSTRAINT `cat_ins_prod_ibfk_2` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- check_tareas
 ALTER TABLE `check_tareas`
