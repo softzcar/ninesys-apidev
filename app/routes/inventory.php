@@ -2877,16 +2877,38 @@ return function (App $app) {
                 $tipoTintaId = intval($tipoTinta);
             }
 
-            // Material Consumido + rango de fechas explícito: antes esta tabla
-            // ignoraba por completo el rango (mostraba el consumo histórico total
-            // de siempre), a diferencia de los gráficos de la misma página, que sí
-            // lo respetaban -- se recalcula cantidad_consumida acotada al período
-            // (suma de movimientos en el rango) igual que el gráfico "materiales".
-            $hasFechaFiltro = $filtroStock === 'terminados' && $fechaDesde && $fechaHasta;
+            // Rango de fechas: si no se especifica, se asume "últimos 30 días",
+            // igual para la tabla de ítems que para los 3 gráficos de abajo (todos
+            // deben reflejar exactamente el mismo período). Se arman varias
+            // variantes porque las distintas queries de este endpoint alternan
+            // entre alias 'i'/'im'/'t' o van sin alias sobre 'inventario' directo.
+            if ($fechaDesde && $fechaHasta) {
+                $fechaDesdeSql = addslashes($fechaDesde) . ' 00:00:00';
+                $fechaHastaSql = addslashes($fechaHasta) . ' 23:59:59';
+                $fechaWhere = "im.moment >= '{$fechaDesdeSql}' AND im.moment <= '{$fechaHastaSql}'";
+                $fechaWhereTintas = "t.moment >= '{$fechaDesdeSql}' AND t.moment <= '{$fechaHastaSql}'";
+                $fechaWhereStock = "i.moment >= '{$fechaDesdeSql}' AND i.moment <= '{$fechaHastaSql}'";
+                $fechaWhereStockDirect = "moment >= '{$fechaDesdeSql}' AND moment <= '{$fechaHastaSql}'";
+            } else {
+                $ultimos30Dias = DB_DRIVER === 'pgsql' ? "CURRENT_TIMESTAMP - INTERVAL '30 days'" : 'DATE_SUB(NOW(), INTERVAL 30 DAY)';
+                $fechaWhere = "im.moment >= $ultimos30Dias";
+                $fechaWhereTintas = "t.moment >= $ultimos30Dias";
+                $fechaWhereStock = "i.moment >= $ultimos30Dias";
+                $fechaWhereStockDirect = "moment >= $ultimos30Dias";
+            }
 
-            if ($hasFechaFiltro) {
-                $conditions = ["i.eliminado = 0", "im.moment >= ?", "im.moment <= ?", "(im.valor_inicial - im.valor_final) > 0"];
-                $queryParams = [$fechaDesde . ' 00:00:00', $fechaHasta . ' 23:59:59'];
+            // Tabla de ítems: antes ignoraba el rango de fechas por completo
+            // (mostraba siempre el total histórico/stock actual sin importar el
+            // filtro), a diferencia de los gráficos, que sí lo respetaban.
+            // - terminados: recalcula cantidad_consumida como la suma de
+            //   movimientos dentro del rango (igual que el gráfico "materiales").
+            // - enStock: filtra por inventario.moment (fecha en que el lote
+            //   entró a stock) -- este modelo de datos no reconstruye "stock a
+            //   una fecha pasada", así que se interpreta como "lotes que
+            //   ingresaron en este período y siguen con stock".
+            if ($filtroStock === 'terminados') {
+                $conditions = ["i.eliminado = 0", $fechaWhere, "(im.valor_inicial - im.valor_final) > 0"];
+                $queryParams = [];
 
                 if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') {
                     $conditions[] = "i.departamento = ?";
@@ -2919,11 +2941,11 @@ return function (App $app) {
                     $queryParams[] = $departamento;
                 }
 
-                // Filtro por disponibilidad
+                // Filtro por disponibilidad (solo enStock cae en esta rama; el
+                // valor 'terminados' se maneja arriba)
                 if ($filtroStock === 'enStock') {
                     $conditions[] = "cantidad > 0";
-                } else if ($filtroStock === 'terminados') {
-                    $conditions[] = "(cantidad_inicial - cantidad) > 0";
+                    $conditions[] = $fechaWhereStockDirect;
                 }
 
                 // Filtro por tipo de tinta: solo aplica sobre registros tipo 'tinta'
@@ -2975,16 +2997,8 @@ return function (App $app) {
                 ? "AND ct._id = {$tipoTintaId}"
                 : "";
 
-            // Rango de fechas para gráficos (por defecto últimos 30días)
-            // $fechaDesde/$fechaHasta ya se extrajeron arriba (también usados por la tabla de ítems)
-            if ($fechaDesde && $fechaHasta) {
-                $fechaWhere = "im.moment >= '" . addslashes($fechaDesde) . " 00:00:00' AND im.moment <= '" . addslashes($fechaHasta) . " 23:59:59'";
-                $fechaWhereTintas = "t.moment >= '" . addslashes($fechaDesde) . " 00:00:00' AND t.moment <= '" . addslashes($fechaHasta) . " 23:59:59'";
-            } else {
-                $ultimos30Dias = DB_DRIVER === 'pgsql' ? "CURRENT_TIMESTAMP - INTERVAL '30 days'" : 'DATE_SUB(NOW(), INTERVAL 30 DAY)';
-                $fechaWhere = "im.moment >= $ultimos30Dias";
-                $fechaWhereTintas = "t.moment >= $ultimos30Dias";
-            }
+            // $fechaWhere / $fechaWhereTintas / $fechaWhereStock / $fechaWhereStockDirect
+            // ya se calcularon arriba, junto con la tabla de ítems.
 
             // 1. Telas e Insumos
             $limitSql = $limiteGrafico > 0 ? " LIMIT " . $limiteGrafico : "";
@@ -2997,6 +3011,7 @@ return function (App $app) {
                                     CASE WHEN tipo_insumo = 'tela' THEN 'Mts' ELSE unidad END as unidad
                                 FROM inventario
                                 WHERE cantidad > 0
+                                  AND {$fechaWhereStockDirect}
                                   {$deptWhereDirect}
                                 GROUP BY {$groupByMateriales1}
                                 ORDER BY value DESC
@@ -3032,6 +3047,7 @@ return function (App $app) {
                             LEFT JOIN catalogo_tintas ct ON ct._id = i.id_catalogo_tintas
                             WHERE i.tipo_insumo = 'tinta'
                               AND i.cantidad > 0
+                              AND {$fechaWhereStock}
                               {$deptWhereDirect}
                               {$tipoTintaJoinWhere}";
                 $tintasResult = $localConnection->goQuery($sqlTintas);
@@ -3082,12 +3098,13 @@ return function (App $app) {
 
             // 3. Consumo de Papel / Stock de Papel
             if ($filtroStock === 'enStock') {
-                $sqlPapel = "SELECT 
-                                insumo as label, 
-                                ROUND(SUM(cantidad), 2) as value 
-                            FROM inventario 
+                $sqlPapel = "SELECT
+                                insumo as label,
+                                ROUND(SUM(cantidad), 2) as value
+                            FROM inventario
                             WHERE (tipo_insumo = 'papel' OR insumo LIKE '%Papel%')
                               AND cantidad > 0
+                              AND {$fechaWhereStockDirect}
                               {$deptWhereDirect}
                             GROUP BY sku, insumo
                             ORDER BY value DESC
