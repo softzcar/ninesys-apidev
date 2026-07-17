@@ -66,6 +66,13 @@ return function (App $app) {
   $app->get('/impresoras', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
     try {
+      // Por defecto se excluyen las impresoras marcadas 'eliminada' (soft
+      // delete) -- no deben aparecer en selectores de recarga/servicio ni en
+      // dashboards de estado actual. La pantalla de Gestión de Impresoras SÍ
+      // las pide explícitamente (?incluirEliminadas=1) para poder reactivarlas.
+      $incluirEliminadas = filter_var($request->getQueryParams()['incluirEliminadas'] ?? false, FILTER_VALIDATE_BOOLEAN);
+      $estadoWhere = $incluirEliminadas ? '' : "WHERE ci.estado != 'eliminada'";
+
       if (DB_DRIVER === 'pgsql') {
         $canalesColoresExpr = "(
                         SELECT (json_agg(json_build_object('id_color', ic.id_color_tinta, 'codigo', cct.codigo, 'nombre', cct.nombre, 'color_hex', cct.color_hex)))::text
@@ -128,11 +135,12 @@ return function (App $app) {
                     catalogo_tintas ctt ON ci.id_catalogo_tintas = ctt._id
                 LEFT JOIN 
                     tintas_recargas tr ON ci._id = tr.id_catalogo_impresora
-                LEFT JOIN 
+                LEFT JOIN
                     catalogo_colores_tintas cct_tr ON tr.id_color_tinta = cct_tr._id
-                GROUP BY 
+                {$estadoWhere}
+                GROUP BY
                     ci._id, ci.codigo_interno, ci.marca, ci.modelo, ci.capacidad_contenedor, ci.ubicacion, ci.tipo_tecnologia, ci.id_catalogo_tintas, ctt.nombre, ci.estado, ci.notas, ci.moment
-                ORDER BY 
+                ORDER BY
                     ci._id DESC";
       $data = $localConnection->goQuery($sql);
 
@@ -228,7 +236,9 @@ return function (App $app) {
     $localConnection = new LocalDB();
     try {
       $id_impresora = $args['id_impresora'] ?? null;
-      $whereClause = $id_impresora ? "WHERE ci._id = " . intval($id_impresora) : "";
+      $whereClause = $id_impresora
+        ? "WHERE ci._id = " . intval($id_impresora) . " AND ci.estado != 'eliminada'"
+        : "WHERE ci.estado != 'eliminada'";
 
       $sql = <<<SQL
         -- Usamos Common Table Expressions (CTEs) para organizar la lógica en pasos.
@@ -530,7 +540,14 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(404);  // Not Found
       }
 
-      $sql = 'DELETE FROM catalogo_impresoras WHERE _id = ?';
+      // Soft delete: 'tintas' y 'tintas_recargas' guardan el histórico real de
+      // consumo/recarga por impresora, usado por el reporte de costos de
+      // producción (reports.php) para calcular el costo de tinta por orden.
+      // Un DELETE físico (con ON DELETE SET NULL en esas FK) no rompe nada a
+      // nivel de base de datos, pero degrada en silencio la precisión de
+      // reportes de costos históricos (pierde el costo real por impresora y
+      // cae a un promedio genérico). Se marca 'eliminada' en vez de borrar.
+      $sql = "UPDATE catalogo_impresoras SET estado = 'eliminada' WHERE _id = ?";
       $localConnection->goQuery($sql, [$id_impresora]);
 
       $response->getBody()->write(json_encode(['message' => 'Impresora eliminada exitosamente.']));
