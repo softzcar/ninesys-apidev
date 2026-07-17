@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** "Me da la impresión que cuando aplico el filtro de fechas a pesar que aparece recargar los datos no muestra los datos filtrados, sigue mostrando toda la información o más información de la que se le está solicitando" — en `/inventario/reportes/general/reporte/`, modo "Material Consumido".
+- **Fecha y Hora:** 2026-07-17 15:00:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+  - app/routes/inventory.php
+  - pages/inventario/reportes/general/reporte.vue (solo lectura/diagnóstico)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: 06f414a
+- **Acción Realizada:**
+  1. Se confirmó que el frontend sí envía `fechaDesde`/`fechaHasta` correctamente al backend en cada recarga.
+  2. Se revisó el endpoint `GET /inventario/reportes/general` completo: los 3 gráficos (materiales, tintas, papel) SÍ aplican `$fechaWhere`/`$fechaWhereTintas` cuando `filtroStock=terminados`, pero la tabla de ítems principal (la que alimenta "N Ítems encontrados", debajo de los gráficos) se construía con una query completamente distinta sobre `inventario` que NUNCA incorporaba el rango de fechas — solo filtraba por `eliminado`, `departamento`, `filtroStock` (stock/terminados) y `tipoTinta`, mostrando siempre `(cantidad_inicial - cantidad)` histórico total sin importar las fechas elegidas.
+  3. El control de "Rango de fechas" en el frontend está visualmente en la misma barra que "Ver" y "Departamento" (filtros que sí afectan la tabla), por lo que el usuario esperaba razonablemente que también acotara la tabla — expectativa válida, no un malentendido de UX.
+  4. Se corrigió: cuando `filtroStock=terminados` Y se envía un rango de fechas explícito, la tabla de ítems ahora se arma con `JOIN inventario_movimientos` acotado a ese rango (mismo patrón ya usado por el gráfico "materiales" en modo terminados), recalculando `cantidad_consumida` como la suma de movimientos dentro del período (no el histórico total) y mostrando solo lotes con consumo neto positivo en ese rango. Sin fechas explícitas, o en modo `enStock` (donde el concepto de "rango de fechas" no aplica al stock actual), el comportamiento se dejó exactamente igual que antes, para no alterar el default de usuarios que no tocan el filtro.
+- **Inconvenientes y Desafíos:** La extracción de `$fechaDesde`/`$fechaHasta` estaba originalmente DESPUÉS de la construcción de la query de ítems (usada solo por los gráficos, más abajo en el archivo) — se movió arriba para poder usarla también en la tabla, eliminando la extracción duplicada que quedaba más abajo.
+- **Decisión Final y Justificación:** Se optó por reconstruir la tabla como una query separada (JOIN a movimientos) solo quando aplica el filtro de fecha, en vez de intentar unificar ambas rutas en una sola query condicional compleja — mantiene cada rama simple y fácil de verificar independientemente, seguí el patrón ya usado en el mismo archivo para el gráfico "materiales" (que resuelve el mismo problema de "stock actual" vs "consumo histórico en rango" de forma idéntica).
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (curl comparando conteo de ítems con y sin filtro de fecha), php -l.
+- **Resultado:** Éxito
+- **Verificación:** Sin fechas: 279 ítems (histórico completo, comportamiento preservado). Con rango 2026-07-01 a 2026-07-05: 23 ítems, con `cantidad_consumida` recalculada al período (ej. un lote con consumo histórico total de varias unidades muestra solo lo consumido en esos 5 días específicos).
+- **Logro Conseguido:** El filtro de rango de fechas del Reporte de Inventario ahora acota consistentemente TODA la pantalla (gráficos y tabla), no solo los gráficos.
+- **Observaciones de Claude:** N/A
+- **Respuesta de Claude:** Corregido, desplegado a Contabo Dev y verificado en vivo comparando conteos con/sin filtro de fecha.
