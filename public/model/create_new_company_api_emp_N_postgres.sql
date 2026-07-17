@@ -112,7 +112,8 @@ INSERT INTO catalogo_colores_tintas (_id, codigo, nombre, color_hex) VALUES
 
 CREATE TABLE impresoras_colores (
   id_catalogo_impresora INTEGER NOT NULL ,
-  id_color_tinta INTEGER NOT NULL
+  id_color_tinta INTEGER NOT NULL ,
+  PRIMARY KEY (id_catalogo_impresora, id_color_tinta)
 );
 
 INSERT INTO impresoras_colores (id_catalogo_impresora, id_color_tinta) VALUES

@@ -265,9 +265,18 @@ class LocalDB
       $res = $this->pdo->prepare($sql);
       $res->execute($params);
 
-      // Si la consulta es un INSERT, obtener el ID generado
+      // Si la consulta es un INSERT, obtener el ID generado. En Postgres,
+      // lastInsertId() ejecuta lastval(), que lanza SQLSTATE[55000] si la
+      // tabla no tiene columna serial/identity (ej. tablas de relación con
+      // PK compuesta como impresoras_colores) y ninguna secuencia se tocó
+      // aún en esta sesión -- no es un error real, solo "esta tabla no
+      // genera ID autoincremental", así que no debe tumbar la petición.
       if (preg_match('/^\s*INSERT\s+/i', $sql)) {
-        $mat['insert_id'] = $this->pdo->lastInsertId();
+        try {
+          $mat['insert_id'] = $this->pdo->lastInsertId();
+        } catch (PDOException $e) {
+          $mat['insert_id'] = null;
+        }
       } else {
         $data = $res->fetchAll(PDO::FETCH_ASSOC);
         $mat = $data;
