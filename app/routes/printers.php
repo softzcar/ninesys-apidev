@@ -478,6 +478,28 @@ return function (App $app) {
       $myDate = new CustomTime();
       $now = $myDate->today();
 
+      // Validar stock ANTES de escribir nada: el frontend ya bloquea esto,
+      // pero es una validación de cliente -- sin este chequeo en el backend,
+      // una llamada directa a la API (o un bug futuro del frontend) podía
+      // dejar 'inventario.cantidad' en negativo sin ningún aviso.
+      $sql_get_cantidad = 'SELECT cantidad FROM inventario WHERE _id = ?';
+      $current_cantidad_result = $localConnection->goQuery($sql_get_cantidad, [$data['id_insumo']]);
+
+      if (!is_array($current_cantidad_result) || empty($current_cantidad_result) || !isset($current_cantidad_result[0]['cantidad'])) {
+        $response->getBody()->write(json_encode(['error' => 'Insumo no encontrado o cantidad no disponible en inventario.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+      }
+
+      $current_cantidad = (float) $current_cantidad_result[0]['cantidad'];
+      $mililitros_a_restar = (float) $data['mililitros'];
+
+      if ($mililitros_a_restar > $current_cantidad) {
+        $response->getBody()->write(json_encode([
+          'error' => "La cantidad a recargar ({$mililitros_a_restar} ml) excede el stock disponible del insumo ({$current_cantidad} ml).",
+        ]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(422);
+      }
+
       // Atomicidad FK: recarga (tintas_recargas + UPDATE inventario) en una transacción
       $localConnection->beginTransaction();
 
@@ -495,22 +517,9 @@ return function (App $app) {
       $localConnection->goQuery($sql, $params);
       $new_id = $localConnection->getLastID();
 
-      // Obtener la cantidad actual del insumo en inventario
-      $sql_get_cantidad = 'SELECT cantidad FROM inventario WHERE _id = ?';
-      $current_cantidad_result = $localConnection->goQuery($sql_get_cantidad, [$data['id_insumo']]);
-
-      if (is_array($current_cantidad_result) && !empty($current_cantidad_result) && isset($current_cantidad_result[0]['cantidad'])) {
-        $current_cantidad = (float) $current_cantidad_result[0]['cantidad'];
-        $mililitros_a_restar = (float) $data['mililitros'];
-        $new_cantidad = $current_cantidad - $mililitros_a_restar;
-
-        // Actualizar la cantidad en la tabla inventario
-        $sql_update_inventario = 'UPDATE inventario SET cantidad = ? WHERE _id = ?';
-        $localConnection->goQuery($sql_update_inventario, [$new_cantidad, $data['id_insumo']]);
-      } else {
-        // Manejar el caso donde el insumo no se encuentra o no tiene cantidad
-        throw new Exception('Insumo no encontrado o cantidad no disponible en inventario.');
-      }
+      $new_cantidad = $current_cantidad - $mililitros_a_restar;
+      $sql_update_inventario = 'UPDATE inventario SET cantidad = ? WHERE _id = ?';
+      $localConnection->goQuery($sql_update_inventario, [$new_cantidad, $data['id_insumo']]);
 
       $localConnection->commit();
       $response->getBody()->write(json_encode(['message' => 'Recarga de tinta registrada exitosamente y cantidad de insumo actualizada.', 'id' => $new_id]));
