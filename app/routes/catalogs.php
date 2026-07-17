@@ -284,6 +284,16 @@ return function (App $app) {
 
     $sql = "INSERT INTO catalogo_colores_tintas (codigo, nombre, color_hex) VALUES (?, ?, ?)";
     $result = $localConnection->goQuery($sql, [$codigo, $nombre, $color_hex]);
+
+    if (isset($result['status']) && $result['status'] === 'error') {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode([
+        'status' => 'error',
+        'message' => "Ya existe un color/canal con el código \"{$codigo}\".",
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+    }
+
     $lastId = $localConnection->getLastID();
 
     $sqlNew = "SELECT * FROM catalogo_colores_tintas WHERE _id = ?";
@@ -325,7 +335,16 @@ return function (App $app) {
     $color_hex = $data['color_hex'] ?? '#808080';
 
     $sql = 'UPDATE catalogo_colores_tintas SET codigo = ?, nombre = ?, color_hex = ? WHERE _id = ?';
-    $localConnection->goQuery($sql, [$codigo, $nombre, $color_hex, $args['_id']]);
+    $result = $localConnection->goQuery($sql, [$codigo, $nombre, $color_hex, $args['_id']]);
+
+    if (isset($result['status']) && $result['status'] === 'error') {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode([
+        'status' => 'error',
+        'message' => "Ya existe un color/canal con el código \"{$codigo}\".",
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+    }
 
     $sqlAll = 'SELECT * FROM catalogo_colores_tintas WHERE eliminado = 0 ORDER BY nombre';
     $object['data'] = $localConnection->goQuery($sqlAll);
