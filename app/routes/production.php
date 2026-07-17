@@ -492,7 +492,7 @@ return function (App $app) {
           LEFT JOIN departamentos dep ON dep._id = a.id_departamento
           JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
           WHERE
-              a.aprobada = 1 AND a.terminada = 0 AND a.id_empleado IS NOT NULL AND a.id_empleado <> '' AND a.id_empleado <> 0 AND a.eliminada = 0
+              a.aprobada = 1 AND a.terminada = 0 AND a.id_empleado IS NOT NULL AND a.id_empleado <> 0 AND a.eliminada = 0
           ORDER BY d.orden_fila ASC;
           ";
       } else {
@@ -522,7 +522,7 @@ return function (App $app) {
           LEFT JOIN departamentos dep ON dep._id = a.id_departamento
           JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
           WHERE
-              a.aprobada = 1 AND a.terminada = 0 AND a.id_empleado IS NOT NULL AND a.id_empleado <> '' AND a.id_empleado <> 0 AND a.eliminada = 0
+              a.aprobada = 1 AND a.terminada = 0 AND a.id_empleado IS NOT NULL AND a.id_empleado <> 0 AND a.eliminada = 0
           ORDER BY d.orden_fila ASC;
           ";
       }
