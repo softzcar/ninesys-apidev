@@ -1,0 +1,26 @@
+- **Solicitud del Usuario:** Tras descubrir que la página `/test` (reachable solo vía `SidebarProduccion.vue`, no vía el sidebar de Administración usado durante toda la revisión previa) quedó rota por la eliminación de un componente frontend supuestamente "huérfano", el usuario pidió una auditoría completa y retroactiva de TODO el código (frontend y backend) eliminado como "código muerto" durante este proyecto de migración a Postgres, esta vez cruzando contra los 6 menús/sidebars reales de la aplicación (Admin, Comercialización, Producción, Diseño, Empleado, Revisión), no solo Administración.
+- **Fecha y Hora:** 2026-07-17 09:00:00
+- **Proyecto(s):** Backend / Frontend
+- **Archivos Involucrados:**
+  - app/routes/production.php (restauración)
+  - components/produccionsse/controlDeProduccionPro.vue (restauración, previa a este log)
+- **Commits Relacionados:**
+    - Backend: a5d71c8* (nota: commit en app_multi), 0b23d09
+    - Frontend: a5d71c8
+- **Acción Realizada:**
+  1. Se identificaron los 6 sidebars reales de la app (`SidebarAdmin`, `SidebarComercializacion`, `SidebarProduccion`, `SidebarDiseno`, `SidebarEmpleado`, `SidebarRevision`) y se confirmó que `pages/test/index.vue` es una página real, enlazada desde `SidebarProduccion.vue` ("Control de Producción").
+  2. Se restauró `components/produccionsse/controlDeProduccionPro.vue` (eliminado por error en el commit `5eac21b` del 14 jul).
+  3. Se extrajeron todos los commits de eliminación de código "huérfano" desde el inicio del proyecto (2026-07-01): 1 commit frontend (`5eac21b`, 5 archivos, ya cubierto) y 32 endpoints backend eliminados en distintos commits ("Fase 2"/"Checklist"/"Limpieza"). Se delegó a un agente la verificación exhaustiva de los 32 endpoints (confirmar ausencia actual + grep de cualquier referencia real en TODO `app_multi` y `msg_ninesys`, sin restricción de sidebar).
+  4. Resultado del agente: 26 endpoints confirmados correctamente eliminados (sin ningún caller), 3 nunca habían sido eliminados realmente (ruido de la extracción del historial, siguen activos y funcionando), y 3 marcados como posibles falsos positivos.
+  5. Cada posible falso positivo se re-verificó manualmente (no solo por coincidencia de texto, sino confirmando que el MÉTODO que contiene la llamada realmente se invoca desde un template o desde otro método):
+     - `GET /reposicion/{id}/departamentos-cola`: confirmado falso positivo real. Su llamador, `showRepDetalle()` en `controlDeProduccionPro.vue`, está enlazado a un botón real (`@click`) en el template. Restaurado en `production.php`.
+     - `POST /insumos/rendimiento`: descartado como falso positivo tras verificación más profunda. Su único llamador de texto, `postForm()` en `disenosse/asignacionDisenadores.vue`, no se invoca desde ningún template ni otro método -- código muerto dentro de un archivo vivo. Se mantiene eliminado (la eliminación original era correcta).
+     - `GET /empleados/registrar-pago/{id_lotes_detalles}`: se mantiene eliminado, ya investigado a fondo en una sesión previa con datos reales clonados de producción (caller huérfano `OrdenesAsignadas_open.vue` + columna `id_empleado` 100% NULL en 55,375 filas reales -- el endpoint siempre habría fallado con 500 aunque se restaurara).
+- **Inconvenientes y Desafíos:** El propio agente de auditoría cometió el mismo tipo de error que se estaba corrigiendo: reportó `/insumos/rendimiento` como falso positivo basándose solo en la presencia textual de la URL en un archivo vivo, sin verificar si el método contenedor era realmente alcanzable. Se detectó y corrigió con una segunda pasada manual antes de restaurar nada.
+- **Decisión Final y Justificación:** La lección clave documentada para el futuro: verificar la existencia de un componente/endpoint en el árbol de archivos NO es suficiente ni verificar que su URL aparece como texto en algún archivo -- hace falta confirmar la cadena completa: componente vivo -> alcanzable desde una página real -> página enlazada desde ALGÚN sidebar (de los 6, no solo uno) -> Y, para métodos específicos dentro de un archivo, que el método en cuestión esté realmente enlazado a un evento de UI o invocado por otro método alcanzable.
+- **Herramienta(s) Utilizada(s):** Bash (git log, git show, grep, ssh/psql/curl para verificación en vivo), Agent (subagente Explore para la auditoría mecánica de 32 endpoints).
+- **Resultado:** Éxito
+- **Verificación:** `GET /reposicion/72/departamentos-cola` probado en vivo contra datos reales de producción clonados, retornando la cadena de departamentos correcta.
+- **Logro Conseguido:** Cerrada una brecha metodológica real en el proceso de limpieza de código muerto de todo el proyecto; restaurados los 2 únicos casos (de 33 endpoints + 5 componentes auditados) que realmente habían sido eliminados por error.
+- **Observaciones de Claude:** Se recomienda para futuras limpiezas de "código muerto" verificar explícitamente contra los 6 sidebars de la app, no asumir que el menú usado durante la sesión de pruebas actual representa toda la superficie navegable de la aplicación.
+- **Respuesta de Claude:** Auditoría completa reportada al usuario con el detalle de cada hallazgo antes de restaurar nada, dado el carácter sensible de reintroducir código previamente marcado como muerto.
