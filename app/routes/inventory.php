@@ -2941,11 +2941,11 @@ return function (App $app) {
             $fechaHasta = $params['fechaHasta'] ?? null;
             if ($fechaDesde && $fechaHasta) {
                 $fechaWhere = "im.moment >= '" . addslashes($fechaDesde) . " 00:00:00' AND im.moment <= '" . addslashes($fechaHasta) . " 23:59:59'";
-                $fechaWhereTintas = "moment >= '" . addslashes($fechaDesde) . " 00:00:00' AND moment <= '" . addslashes($fechaHasta) . " 23:59:59'";
+                $fechaWhereTintas = "t.moment >= '" . addslashes($fechaDesde) . " 00:00:00' AND t.moment <= '" . addslashes($fechaHasta) . " 23:59:59'";
             } else {
                 $ultimos30Dias = DB_DRIVER === 'pgsql' ? "CURRENT_TIMESTAMP - INTERVAL '30 days'" : 'DATE_SUB(NOW(), INTERVAL 30 DAY)';
                 $fechaWhere = "im.moment >= $ultimos30Dias";
-                $fechaWhereTintas = "moment >= $ultimos30Dias";
+                $fechaWhereTintas = "t.moment >= $ultimos30Dias";
             }
 
             // 1. Telas e Insumos
