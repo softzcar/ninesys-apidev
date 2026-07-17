@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** Al editar un empleado desde `/empleados/gestion`, el endpoint `POST /empleados/editar` devolvía 500 (`{"statusCode":500,"error":{"type":"SERVER_ERROR",...}}`) con el payload real del formulario de edición.
+- **Fecha y Hora:** 2026-07-18 02:00:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+  - app/routes/employees.php
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: dc58f5b
+- **Acción Realizada:**
+  1. Se reprodujo el 500 con curl usando el payload exacto reportado, y se revisó `/usr/local/lsws/logs/error.log` en `vps-contabo-dev`, encontrando: `SQLSTATE[42703]: Undefined column: 7 ERROR: column "id_usuario" does not exist. LINE 1: DELETE FROM salario_carga_familiar WHERE id_usuario = 605` en `employees.php:412`.
+  2. Se confirmó en el esquema real (ambas plantillas, MySQL y Postgres) que la tabla `salario_carga_familiar` usa `id_empleado` (no `id_usuario`), `tipo_relacion` (no `parentesco`) y `es_deducible_impuesto` (no `es_deducible`). Es un bug PREEXISTENTE, no introducido por la migración a Postgres: en MySQL production este mismo código también habría fallado con "Unknown column 'id_usuario' in 'where clause'" -- MySQL no es más tolerante que Postgres ante una columna que directamente no existe con ese nombre en ninguna versión del esquema.
+  3. Se verificó que las consultas SELECT de listado de empleados (2 ocurrencias, ramas Postgres y MySQL) YA usaban los nombres de columna correctos (`d.id_empleado`, `d.tipo_relacion`, `d.es_deducible_impuesto`), aliasándolos de vuelta hacia los nombres que espera el frontend (`parentesco`, `es_deducible`) al construir el JSON de `carga_familiar` -- solo los INSERT/DELETE tenían los nombres crudos de columna equivocados.
+  4. Se corrigió tanto en `POST /empleados/editar` (el caso reportado) como en `POST /empleados/nuevo` (creación), que tenía exactamente el mismo bug en su propio INSERT a la misma tabla.
+  5. Aprovechando que se estaban reescribiendo estas líneas, se reemplazó la concatenación directa de SQL sin escapar (`"'" . $dependiente['nombre_completo'] . "',"`) por parámetros preparados (`goQuery($sql, [...])`), cerrando un riesgo de inyección SQL que traían ambos bloques desde su creación.
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** Se corrigió también el flujo de creación (`/empleados/nuevo`), no solo el de edición reportado, porque es exactamente el mismo bug en el mismo INSERT hacia la misma tabla -- dejarlo sin corregir habría significado que crear un empleado CON dependientes desde cero fallaría con el mismo error 500 tan pronto se probara ese flujo.
+- **Herramienta(s) Utilizada(s):** Bash (curl para reproducir y verificar con el payload exacto del usuario, ssh/error.log para diagnóstico, grep para localizar todas las referencias a la tabla y confirmar cuáles estaban mal), Read/Edit, php -l.
+- **Resultado:** Éxito
+- **Verificación:** `POST /empleados/editar` con el payload exacto reportado por el usuario → HTTP 200, con `response_delete_dependientes` ejecutándose sin error (antes: 500 inmediato).
+- **Logro Conseguido:** Corregido un bug bloqueante que impedía editar (y crear) empleados desde la interfaz, presente en ambos motores de base de datos desde su creación original, no solo en el ambiente Postgres bajo revisión.
+- **Observaciones de Claude:** El comentario inline `// id_usuario` junto al primer valor del INSERT original sugiere que quien escribió este código originalmente SÍ pensaba que la columna se llamaba `id_usuario` -- probablemente una confusión con la convención de nombres usada en `api_empresas.empresas_usuarios` (que sí usa `id_usuario` como PK), aplicada por error a esta tabla de un dominio distinto.
+- **Respuesta de Claude:** Corregido en ambos flujos (crear/editar), desplegado a Contabo Dev y verificado en vivo con el payload exacto reportado por el usuario.
