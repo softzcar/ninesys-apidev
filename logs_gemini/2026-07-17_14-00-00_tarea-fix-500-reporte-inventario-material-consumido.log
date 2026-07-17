@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** Al revisar "Inventario -> Reporte de inventario" (`/inventario/reportes/general/reporte/`), la carga inicial funcionaba correctamente, pero al aplicar el filtro "Material Consumido" el endpoint `GET /inventario/reportes/general?departamento=Todas&filtroStock=terminados&limiteGrafico=5&tipoTinta=Todas` devolvía 500: `{"success":false,"message":"Error al generar reporte de inventario","error":"Error interno al ejecutar una operación de base de datos."}`.
+- **Fecha y Hora:** 2026-07-17 14:00:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+  - app/routes/inventory.php
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: a1c567b
+- **Acción Realizada:**
+  1. Se reprodujo el 500 con curl y se revisó `/usr/local/lsws/logs/error.log` en `vps-contabo-dev`, encontrando `SQLSTATE[42702]: Ambiguous column: 7 ERROR: column reference "moment" is ambiguous` en la query de consumo de tintas (gráfico CMYKW) dentro de `/inventario/reportes/general`.
+  2. Causa raíz: la query `FROM tintas t LEFT JOIN catalogo_colores_tintas cct ...` usa la variable `$fechaWhereTintas` en su WHERE, la cual se arma como `"moment >= ..."` sin calificar con alias de tabla. Tanto `tintas` como `catalogo_colores_tintas` tienen columna `moment`, por lo que la referencia es ambigua. MySQL lo toleraba (resuelve la ambigüedad en silencio); Postgres la rechaza.
+  3. Se corrigieron las 2 ramas donde se construye `$fechaWhereTintas` (con rango de fechas explícito y con el default de "últimos 30 días") para calificar la columna como `t.moment`. Es la única query que usa esta variable, así que no afecta otros flujos.
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** Se calificó con `t.moment` (la tabla `tintas`, alias `t`) en vez de `cct.moment`, ya que semánticamente el filtro de fecha busca tintas registradas en el rango, no el momento de creación del catálogo de colores.
+- **Herramienta(s) Utilizada(s):** Bash (curl para reproducir/verificar, ssh/error.log para diagnóstico), Read/Edit, php -l.
+- **Resultado:** Éxito
+- **Verificación:** `curl .../inventario/reportes/general?departamento=Todas&filtroStock=terminados&limiteGrafico=5&tipoTinta=Todas` → HTTP 200 con JSON de items reales (telas/insumos consumidos).
+- **Logro Conseguido:** Corregido el filtro "Material Consumido" del Reporte de Inventario, bloqueante para continuar la revisión de esa sección.
+- **Observaciones de Claude:** N/A
+- **Respuesta de Claude:** Corregido, desplegado a Contabo Dev y verificado en vivo.
