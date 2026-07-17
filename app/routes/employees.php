@@ -316,8 +316,10 @@ return function (App $app) {
 
             if (is_array($dependientes) && count($dependientes) > 0) {
                 // Insertar cada dependiente en la tabla salario_carga_familiar
+                // (id_empleado, tipo_relacion, es_deducible_impuesto son los
+                // nombres reales de columna; ver mismo fix en /empleados/editar)
                 foreach ($dependientes as $dependiente) {
-                    $sql_dep = 'INSERT INTO salario_carga_familiar (id_usuario, nombre_completo, cedula_o_id, parentesco, fecha_nacimiento, es_deducible) VALUES (?, ?, ?, ?, ?, ?)';
+                    $sql_dep = 'INSERT INTO salario_carga_familiar (id_empleado, nombre_completo, cedula_o_id, tipo_relacion, fecha_nacimiento, es_deducible_impuesto) VALUES (?, ?, ?, ?, ?, ?)';
                     $object['response_dependientes'][] = $localConnection->goQuery($sql_dep, [
                         $lastInsert,
                         $dependiente['nombre_completo'],
@@ -407,24 +409,28 @@ return function (App $app) {
 
         // Procesar carga familiar - Eliminar registros anteriores y agregar nuevos
         if (isset($miEmpleado['dependientes_json'])) {
-            // Eliminar dependientes anteriores
-            $sql_delete_dep = "DELETE FROM salario_carga_familiar WHERE id_usuario = {$miEmpleado['_id']}";
-            $object['response_delete_dependientes'] = $localConnection->goQuery($sql_delete_dep);
+            // Eliminar dependientes anteriores. La tabla es salario_carga_familiar
+            // (id_empleado, tipo_relacion, es_deducible_impuesto) -- el código
+            // usaba id_usuario/parentesco/es_deducible, nombres que nunca
+            // existieron en el esquema (ni en MySQL ni en Postgres), rompiendo
+            // esta sección del formulario de edición de empleado desde siempre.
+            $sql_delete_dep = "DELETE FROM salario_carga_familiar WHERE id_empleado = ?";
+            $object['response_delete_dependientes'] = $localConnection->goQuery($sql_delete_dep, [$miEmpleado['_id']]);
 
             // Agregar dependientes nuevos si existen
             $dependientes = json_decode($miEmpleado['dependientes_json'], true);
             if (is_array($dependientes) && count($dependientes) > 0) {
                 foreach ($dependientes as $dependiente) {
-                    $dep_values = '(';
-                    $dep_values .= "'" . $miEmpleado['_id'] . "',";  // id_usuario
-                    $dep_values .= "'" . $dependiente['nombre_completo'] . "',";
-                    $dep_values .= "'" . $dependiente['cedula_o_id'] . "',";
-                    $dep_values .= "'" . $dependiente['parentesco'] . "',";
-                    $dep_values .= "'" . $dependiente['fecha_nacimiento'] . "',";
-                    $dep_values .= "'" . ($dependiente['es_deducible'] ? 1 : 0) . "')";
-
-                    $sql_dep = 'INSERT INTO salario_carga_familiar (id_usuario, nombre_completo, cedula_o_id, parentesco, fecha_nacimiento, es_deducible) VALUES ' . $dep_values;
-                    $object['response_dependientes'][] = $localConnection->goQuery($sql_dep);
+                    $sql_dep = 'INSERT INTO salario_carga_familiar (id_empleado, nombre_completo, cedula_o_id, tipo_relacion, fecha_nacimiento, es_deducible_impuesto) VALUES (?, ?, ?, ?, ?, ?)';
+                    $params_dep = [
+                        $miEmpleado['_id'],
+                        $dependiente['nombre_completo'],
+                        $dependiente['cedula_o_id'],
+                        $dependiente['parentesco'],
+                        $dependiente['fecha_nacimiento'],
+                        $dependiente['es_deducible'] ? 1 : 0,
+                    ];
+                    $object['response_dependientes'][] = $localConnection->goQuery($sql_dep, $params_dep);
                 }
             }
         }
