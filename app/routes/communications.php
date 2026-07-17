@@ -33,7 +33,7 @@ return function (App $app) {
     }
 
     // Consultar el nombre del departamento
-    $sql_dept = "SELECT departamento FROM departamentos WHERE _id = " . intval($id_departamento);
+    $sql_dept = "SELECT departamento, tipo FROM departamentos WHERE _id = " . intval($id_departamento);
     $dept_data = $localConnection->goQuery($sql_dept);
 
     if (empty($dept_data)) {
@@ -46,6 +46,11 @@ return function (App $app) {
     }
 
     $departamento = $dept_data[0]['departamento'];
+    // tipo='corte' reconoce cualquier departamento con comportamiento Corte
+    // (ej. "Corte Láser"), no solo el que se llama literalmente "Corte".
+    if ($dept_data[0]['tipo'] === 'corte') {
+      $departamento = 'Corte';
+    }
 
     // DETERMINAR QUE CAMPO ACTUALIZAR SEGÚN EL NOMBRE DEL DEPARTAMENTO
     switch ($departamento) {

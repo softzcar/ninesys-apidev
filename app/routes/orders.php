@@ -863,9 +863,10 @@ return function (App $app) {
   $app->get('/reportes/resumen/empleados/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT departamento FROM departamentos WHERE _id = ' . $args['id_departamento'];
+    $sql = 'SELECT departamento, tipo FROM departamentos WHERE _id = ' . $args['id_departamento'];
     $departamento = $localConnection->goQuery($sql);
     $object['departamento'] = $departamento[0]['departamento'];
+    $departamentoTipo = $departamento[0]['tipo'] ?? null;
 
     // Obtener datos salariales del empleado
     $sqlEmpleado = "SELECT salario_tipo, salario_monto, salario_periodo, comision, comision_tipo 
@@ -1358,7 +1359,13 @@ return function (App $app) {
         $object['ordenes_semana'] = $tmpOrdenes;
     }
 
-    if ($departamento === 'Corte' || $departamento === 'Estampado' || $departamento === 'Limpieza' || $departamento === 'Revisión' || $departamento === 'Impresión') {
+    // NOTA: $departamento es el array crudo de goQuery(), no un string -- estas
+    // condiciones nunca eran ciertas para NINGÚN departamento antes de este fix
+    // (bug preexistente, no introducido por la migración a Postgres). Se usa
+    // $object['departamento'] (el nombre ya extraído) y se agrega el chequeo de
+    // $departamentoTipo para reconocer cualquier departamento con
+    // comportamiento "corte", no solo el que se llama literalmente "Corte".
+    if ($departamentoTipo === 'corte' || $object['departamento'] === 'Corte' || $object['departamento'] === 'Estampado' || $object['departamento'] === 'Limpieza' || $object['departamento'] === 'Revisión' || $object['departamento'] === 'Impresión') {
         // REporte todo lo no pagado
         $sql = "SELECT
             a._id id_lotes_detalles,
@@ -1423,7 +1430,7 @@ return function (App $app) {
         $object['ordenes_semana'] = $ordenes;
     }
 
-    if ($departamento === 'Comercialización' || $departamento === 'Administración') {
+    if ($object['departamento'] === 'Comercialización' || $object['departamento'] === 'Administración') {
         $sql = "SELECT
             a._id id_pagos,
             a.id_orden,
@@ -1439,7 +1446,7 @@ return function (App $app) {
         $object['ordenes_semana'] = $ordenes;
     }
 
-    if ($departamento === 'Diseño') {
+    if ($object['departamento'] === 'Diseño') {
         $sql = "SELECT
             a._id id_pago,
             a.id_orden,

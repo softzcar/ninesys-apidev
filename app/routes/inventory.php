@@ -1277,6 +1277,13 @@ return function (App $app) {
             $miInsumo['id_departamento'] = !empty($res_id_dep) ? $res_id_dep[0]['_id'] : 0;
         }
 
+        // "tipo" es el comportamiento configurado del departamento (permite tener
+        // varios departamentos que se comporten como Corte, ej. "Corte Láser",
+        // "Corte Manual", no solo el departamento literalmente llamado "Corte").
+        $sql_tipo_dep = "SELECT tipo FROM departamentos WHERE _id = " . intval($miInsumo['id_departamento']);
+        $res_tipo_dep = $localConnection->goQuery($sql_tipo_dep);
+        $departamentoTipo = !empty($res_tipo_dep) ? $res_tipo_dep[0]['tipo'] : null;
+
         $miInsumo['id_orden'] = $miInsumo['id_orden'] ?? null;
         $miInsumo['id_producto'] = $miInsumo['id_producto'] ?? null;
         $miInsumo['es_reposicion'] = $miInsumo['es_reposicion'] ?? 0;
@@ -1346,7 +1353,7 @@ return function (App $app) {
             $object['update_success'] = !empty($update_cantidad_inventario);
 
 
-        } elseif ($miInsumo['departamento'] === 'Corte' && $tipo_insumo !== 'tela') {
+        } elseif (($departamentoTipo === 'corte' || $miInsumo['departamento'] === 'Corte') && $tipo_insumo !== 'tela') {
             // Para Corte (si no es tela, por ej. hilos o algo raro), se mantiene la lógica original
             $cantidad_consumida_kg = floatval($miInsumo['cantidad_consumida']);
             $cantidad_consumida = floatval($cantidad_inicial) - $cantidad_consumida_kg;

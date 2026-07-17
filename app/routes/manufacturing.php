@@ -1163,11 +1163,14 @@ return function (App $app) {
 
     if ($object['count']) {
       // BUSCAR NOMBRE DEL DEPARTAMENTO
-      $sql = 'SELECT departamento FROM departamentos WHERE _id = ?';
+      $sql = 'SELECT departamento, tipo FROM departamentos WHERE _id = ?';
       $respDep = $localConnection->goQuery($sql, [$miEmpleado['id_departamento']]);
       $nombreDepartamento = $respDep[0]['departamento'];
+      $tipoDepartamento = $respDep[0]['tipo'] ?? null;
 
-      if ($miEmpleado['departamento'] === 'Corte') {
+      // tipo='corte' reconoce cualquier departamento con comportamiento Corte,
+      // no solo el que se llama literalmente "Corte".
+      if ($tipoDepartamento === 'corte' || $miEmpleado['departamento'] === 'Corte') {
         $nuevaCantiadSolicitada = intval($miEmpleado['cantidad']) + intval($exist[0]['unidades_solicitadas']);
 
         $sql = 'UPDATE lotes_detalles SET id_empleado = ?, id_ordenes_productos = ?, id_departamento = ?, departamento = ?, unidades_solicitadas = ? WHERE id_departamento = ? AND id_orden = ? AND id_ordenes_productos = ?';
@@ -2135,7 +2138,14 @@ return function (App $app) {
       }
 
       $now = date('Y-m-d H:i:s');
-      $nombre_departamento = 'Corte';
+      // Se usa el nombre REAL del departamento (no un literal 'Corte' fijo):
+      // este endpoint puede ser invocado por cualquier departamento con
+      // comportamiento tipo='corte', no solo el que se llama literalmente
+      // "Corte" -- con el literal fijo, los movimientos/pagos de un
+      // departamento como "Corte Láser" quedarían mal etiquetados como "Corte".
+      $sql_nombre_dep = 'SELECT departamento FROM departamentos WHERE _id = ?';
+      $resp_nombre_dep = $localConnection->goQuery($sql_nombre_dep, [$id_departamento]);
+      $nombre_departamento = $resp_nombre_dep[0]['departamento'] ?? 'Corte';
 
       // Atomicidad FK: todas las escrituras de la finalización van en una transacción
       $localConnection->beginTransaction();
@@ -2978,7 +2988,8 @@ return function (App $app) {
         AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
     $productos = $localConnection->goQuery($sqlProductos);
 
-    // Si es Corte (ID 3), buscar cantidad real cortada en inventario_corte
+    // Si el departamento tiene comportamiento tipo='corte' (no solo el ID 3
+    // original), buscar cantidad real cortada en inventario_corte.
     // El excedente = cantidad_real_cortada - cantidad_solicitada
     $excedentesMap = [];
     $deptTipo = 'general';
