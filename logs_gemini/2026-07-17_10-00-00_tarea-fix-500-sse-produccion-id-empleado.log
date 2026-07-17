@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** "OK, continuemos. He desplegado de nuevo app_multi, en la pagina `/test` el endpoint `GET https://api.nineteengreen.com/sse/produccion` retorna error 500". Reporte encontrado durante la revisión de la sección "Control de Producción" del checklist de migración a Postgres, ahora que la página `/test` (restaurada en la sesión anterior) es alcanzable de nuevo desde `SidebarProduccion.vue`.
+- **Fecha y Hora:** 2026-07-17 10:00:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+  - app/routes/production.php
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: 7e1cf8a
+- **Acción Realizada:**
+  1. Se reprodujo el error: `curl -s "https://api.nineteengreen.com/sse/produccion" -H "Authorization: 194"` devolvía 500.
+  2. Se revisó `/usr/local/lsws/logs/error.log` en `vps-contabo-dev`, encontrando `SQLSTATE[22P02]: Invalid text representation: invalid input syntax for type integer: ""` en `app/routes/production.php:529`.
+  3. Causa raíz: la consulta de "reposiciones_en_curso" tenía la condición `a.id_empleado <> ''` (comparando una columna entera contra un string vacío) en 2 sitios idénticos (líneas 495 y 525). MySQL tolera esta comparación (coerción implícita de `''` a `0`); Postgres la rechaza.
+  4. La condición era además redundante: la misma cláusula ya incluía `a.id_empleado IS NOT NULL AND a.id_empleado <> 0`, que cubre el mismo caso sin necesitar comparar contra `''`. Se eliminó `AND a.id_empleado <> ''` de ambos sitios vía `sed`.
+  5. Verificado `php -l app/routes/production.php` sin errores de sintaxis.
+- **Inconvenientes y Desafíos:** Ninguno — el bug ya había sido root-causeado antes del corte de contexto de la sesión; este segmento fue únicamente commit + deploy + verificación en vivo.
+- **Decisión Final y Justificación:** Se optó por eliminar la condición redundante en vez de convertirla en `a.id_empleado::text <> ''` o similar, porque `IS NOT NULL AND <> 0` ya es semánticamente equivalente y más correcto (evita depender de una comparación de tipo débil incluso en MySQL a futuro).
+- **Herramienta(s) Utilizada(s):** Bash (curl para reproducir y verificar, ssh/error.log para diagnóstico, sed para el fix, php -l para lint), git (commit), `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo).
+- **Resultado:** Éxito
+- **Verificación:** `curl -s -o /tmp/sse_test.json -w "HTTP_CODE:%{http_code}" "https://api.nineteengreen.com/sse/produccion" -H "Authorization: 194"` → `HTTP_CODE:200`, con JSON válido conteniendo asignaciones reales de empleados/departamentos por orden.
+- **Logro Conseguido:** Corregido el último bug bloqueante conocido de la sección "Control de Producción" (página `/test`), permitiendo continuar la revisión manual de esta sección del checklist.
+- **Observaciones de Claude:** Mismo patrón de bug MySQL-tolerante/Postgres-estricto detectado repetidamente a lo largo de esta migración (comparación de columna entera contra `''`). Vale la pena, en una futura pasada de limpieza, grep global de `<> ''` y `= ''` contra columnas conocidas como enteras en todo el backend, para adelantarse a casos similares aún no reportados.
+- **Respuesta de Claude:** Corregido, desplegado a Contabo Dev y verificado en vivo — `/sse/produccion` ya responde 200 con datos reales. Listo para continuar la revisión de "Control de Producción".
