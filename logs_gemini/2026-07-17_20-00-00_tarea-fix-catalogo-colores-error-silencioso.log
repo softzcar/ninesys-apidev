@@ -1,0 +1,21 @@
+- **Solicitud del Usuario:** En `/impresoras/colores/`, al intentar crear un color "K" (Negro) que ya existía en el catálogo, la aplicación mostraba el toast de éxito ("registrado con éxito") pero el nuevo color no aparecía en la tabla al recargar. El usuario preguntó si esto se debía a que ya existía un código "K".
+- **Fecha y Hora:** 2026-07-17 20:00:00
+- **Proyecto(s):** Backend (ver log espejo en app_multi para el detalle de frontend)
+- **Archivos Involucrados:**
+  - app/routes/catalogs.php
+- **Commits Relacionados:**
+    - Backend: 433fe25
+    - Frontend: 87e2d57 (ver log en app_multi)
+- **Acción Realizada:**
+  1. Se confirmó que `catalogo_colores_tintas.codigo` tiene un índice único (`uq_catalogo_colores_tintas_uk_codigo_color`) — la hipótesis del usuario era correcta.
+  2. Se reprodujo en vivo: `POST /catalogo-colores-tintas` con `codigo=K` (duplicado) devolvía HTTP 200 con el cuerpo `{"response":{"status":"error","message":"...duplicate key value violates unique constraint..."},"data":null}` — es decir, `goQuery()` ya captura la violación de índice único como un "error suave" (no lanza excepción, solo lo indica en el array de retorno), pero el endpoint `POST /catalogo-colores-tintas` (y su gemelo de edición `POST /catalogo-colores-tintas/{_id}`) ignoraban por completo ese resultado y siempre respondían HTTP 200, sin verificar `$result['status']`.
+  3. El frontend, al no recibir un código HTTP de error, nunca entraba a su bloque `catch` — mostraba el toast de éxito incondicionalmente y no insertaba/actualizaba nada realmente. Coincide exactamente con el síntoma reportado: "dice que sí lo ha creado" pero "no lo muestra".
+  4. Se corrigieron ambos endpoints (crear y editar) para verificar `$result['status'] === 'error'` y devolver HTTP 409 con un mensaje claro ("Ya existe un color/canal con el código \"X\"") en vez de fingir éxito.
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** Se aplicó el mismo patrón ya usado en sesiones anteriores para `catalogo-insumos-productos` (verificar `status==='error'` del resultado de `goQuery()` y traducirlo a un código HTTP real) — consistencia con el resto del backend en cómo se comunican errores suaves de índice único al frontend.
+- **Herramienta(s) Utilizada(s):** Bash (curl para reproducir el bug exacto y verificar el fix con un duplicado real y una creación válida), Read/Edit, php -l.
+- **Resultado:** Éxito
+- **Verificación:** `POST /catalogo-colores-tintas` con `codigo=K` (duplicado) → HTTP 409 con mensaje claro. `POST /catalogo-colores-tintas` con `codigo=TESTQA` (nuevo) → HTTP 200, insertado correctamente (verificado y luego eliminado como limpieza de la prueba).
+- **Logro Conseguido:** Corregido un bug de "falso éxito" que ocultaba un error real de validación (código duplicado), dejando al usuario sin ninguna pista de por qué su acción no tenía efecto.
+- **Observaciones de Claude:** Este es el mismo patrón de bug (goQuery devuelve error suave, el endpoint lo ignora, el frontend asume éxito) encontrado previamente en `catalogo-insumos-productos`. Vale la pena, en una futura pasada dedicada, auditar sistemáticamente TODOS los endpoints POST/PUT de `catalogs.php` (y posiblemente otros archivos de rutas) por el mismo patrón, en vez de ir corrigiéndolo uno por uno según se van reportando.
+- **Respuesta de Claude:** Corregido, desplegado a Contabo Dev y verificado en vivo reproduciendo el escenario exacto reportado (código K duplicado).
