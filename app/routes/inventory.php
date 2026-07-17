@@ -2210,10 +2210,10 @@ return function (App $app) {
             ) AS material_estimado
         FROM
             inventario inv
-        JOIN inventario_movimientos imo ON imo.id_insumo = inv._id 
-        JOIN departamentos dep ON dep._id = imo.id_departamento 
-        JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = imo.id_empleado 
-        JOIN ordenes ord ON ord._id = imo.id_orden
+        JOIN inventario_movimientos imo ON imo.id_insumo = inv._id
+        LEFT JOIN departamentos dep ON dep._id = imo.id_departamento
+        LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = imo.id_empleado
+        LEFT JOIN ordenes ord ON ord._id = imo.id_orden
         WHERE
             imo.id_insumo = ?
         ORDER BY imo.moment ASC";
