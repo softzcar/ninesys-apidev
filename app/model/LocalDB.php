@@ -270,12 +270,27 @@ class LocalDB
       // tabla no tiene columna serial/identity (ej. tablas de relación con
       // PK compuesta como impresoras_colores) y ninguna secuencia se tocó
       // aún en esta sesión -- no es un error real, solo "esta tabla no
-      // genera ID autoincremental", así que no debe tumbar la petición.
+      // genera ID autoincremental". Dentro de una transacción explícita,
+      // Postgres marca TODA la transacción como abortada en cuanto lastval()
+      // falla (aunque PHP capture la excepción), así que además hay que
+      // aislar el intento con un SAVEPOINT descartable para no arrastrar ese
+      // error a las siguientes queries de la misma transacción.
       if (preg_match('/^\s*INSERT\s+/i', $sql)) {
-        try {
-          $mat['insert_id'] = $this->pdo->lastInsertId();
-        } catch (PDOException $e) {
-          $mat['insert_id'] = null;
+        if (DB_DRIVER === 'pgsql' && $this->pdo->inTransaction()) {
+          try {
+            $this->pdo->exec('SAVEPOINT goquery_lastid');
+            $mat['insert_id'] = $this->pdo->lastInsertId();
+            $this->pdo->exec('RELEASE SAVEPOINT goquery_lastid');
+          } catch (PDOException $e) {
+            $this->pdo->exec('ROLLBACK TO SAVEPOINT goquery_lastid');
+            $mat['insert_id'] = null;
+          }
+        } else {
+          try {
+            $mat['insert_id'] = $this->pdo->lastInsertId();
+          } catch (PDOException $e) {
+            $mat['insert_id'] = null;
+          }
         }
       } else {
         $data = $res->fetchAll(PDO::FETCH_ASSOC);
