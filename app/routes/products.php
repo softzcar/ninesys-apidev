@@ -1031,15 +1031,53 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    // Buscar último número de orden_proceso
-    $sql = 'SELECT COUNT(*) + 1 total_departamentos FROM departamentos;';
-    $resTotal = $localConnection->goQuery($sql);
-    $totalDepartamentos = intval($resTotal[0]['total_departamentos']);
-
+    $nombreTrim = trim($data['departamento']);
+    $reactivarId = (isset($data['reactivar_id']) && $data['reactivar_id'] !== '') ? intval($data['reactivar_id']) : null;
     $tipo = isset($data['tipo']) ? $data['tipo'] : 'general';
 
-    $sql = 'INSERT INTO departamentos (orden_proceso, enviar_mensaje, id_modulo, asignar_numero_de_paso, departamento, tipo) VALUES (?, ?, ?, ?, ?, ?)';
-    $object['response'] = $localConnection->goQuery($sql, [$totalDepartamentos, $data['enviar_mensaje'], $data['modulo'], $data['asignar_paso'], $data['departamento'], $tipo]);
+    // Si no se pidió explícitamente reactivar un departamento puntual, buscar
+    // coincidencia por nombre (sin importar mayúsculas/minúsculas ni espacios)
+    // contra CUALQUIER departamento, activo o eliminado -- para no crear un
+    // duplicado silencioso ni perder el historial (pagos, lotes_detalles, etc.)
+    // ya asociado al departamento original si estaba solo soft-deleted.
+    if (!$reactivarId) {
+        $sqlCheck = 'SELECT _id, departamento, eliminado FROM departamentos WHERE LOWER(TRIM(departamento)) = LOWER(?)';
+        $checkRes = $localConnection->goQuery($sqlCheck, [$nombreTrim]);
+
+        if (!empty($checkRes)) {
+            $match = $checkRes[0];
+            if (intval($match['eliminado']) === 0) {
+                $localConnection->disconnect();
+                $response->getBody()->write(json_encode(['error' => 'Ya existe un departamento activo llamado "' . $match['departamento'] . '".']));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            }
+
+            // Existe pero está eliminado (soft-delete): no crear un duplicado.
+            // Se informa al frontend para que el usuario decida si reactivarlo.
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode([
+                'eliminado_existente' => true,
+                'id_departamento' => intval($match['_id']),
+                'departamento' => $match['departamento'],
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+        }
+    }
+
+    if ($reactivarId) {
+        // Reactivar el departamento existente, aplicando la configuración
+        // indicada en el formulario (puede haber cambiado respecto al original).
+        $sql = 'UPDATE departamentos SET eliminado = 0, enviar_mensaje = ?, id_modulo = ?, asignar_numero_de_paso = ?, departamento = ?, tipo = ? WHERE _id = ?';
+        $object['response'] = $localConnection->goQuery($sql, [$data['enviar_mensaje'], $data['modulo'], $data['asignar_paso'], $nombreTrim, $tipo, $reactivarId]);
+    } else {
+        // Buscar último número de orden_proceso
+        $sql = 'SELECT COUNT(*) + 1 total_departamentos FROM departamentos;';
+        $resTotal = $localConnection->goQuery($sql);
+        $totalDepartamentos = intval($resTotal[0]['total_departamentos']);
+
+        $sql = 'INSERT INTO departamentos (orden_proceso, enviar_mensaje, id_modulo, asignar_numero_de_paso, departamento, tipo) VALUES (?, ?, ?, ?, ?, ?)';
+        $object['response'] = $localConnection->goQuery($sql, [$totalDepartamentos, $data['enviar_mensaje'], $data['modulo'], $data['asignar_paso'], $nombreTrim, $tipo]);
+    }
 
     $localConnection->disconnect();
 
