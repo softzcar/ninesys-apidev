@@ -1312,9 +1312,61 @@ return function (App $app) {
   // Crear una nueva categoría
   $app->post('/categories', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
+    $nombre = $data['name'];
+    $reactivar_id = $data['reactivar_id'] ?? null;
+
     $localConnection = new LocalDB();
+
+    if ($reactivar_id) {
+      // Reactivar una categoría previamente eliminada: se volvió a crear con
+      // el mismo nombre (normalizado), así que se reutiliza el registro en
+      // vez de crear uno duplicado.
+      $localConnection->goQuery('UPDATE categories SET nombre = ?, eliminado = 0 WHERE _id = ?', [$nombre, $reactivar_id]);
+      $localConnection->disconnect();
+
+      $responseData = [
+        'message' => 'Categoría reactivada exitosamente.',
+        'id' => $reactivar_id,
+      ];
+      $response->getBody()->write(json_encode($responseData, JSON_NUMERIC_CHECK));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+    }
+
+    // Verificar si ya existe una categoría con el mismo nombre (sin importar
+    // mayúsculas/espacios), esté activa o eliminada.
+    $existing = $localConnection->goQuery(
+      'SELECT _id, nombre, eliminado FROM categories WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?))',
+      [$nombre]
+    );
+
+    if ($existing) {
+      $match = $existing[0];
+
+      if ((int) $match['eliminado'] === 1) {
+        $localConnection->disconnect();
+        $object = [
+          'eliminado_existente' => true,
+          'id' => $match['_id'],
+          'name' => $match['nombre'],
+        ];
+        $response->getBody()->write(json_encode($object));
+        return $response
+          ->withHeader('Content-Type', 'application/json')
+          ->withStatus(409);
+      }
+
+      $localConnection->disconnect();
+      $object = ['error' => 'Ya existe una categoría activa llamada "' . $match['nombre'] . '"'];
+      $response->getBody()->write(json_encode($object));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(400);
+    }
+
     $sql = 'INSERT INTO categories (nombre) VALUES (?)';
-    $result = $localConnection->goQuery($sql, [$data['name']]);
+    $result = $localConnection->goQuery($sql, [$nombre]);
     $newId = $result['insert_id'] ?? null;
     $localConnection->disconnect();
 

@@ -441,8 +441,10 @@ return function (App $app) {
         return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
       }
 
-      // Verificar si ya existe otra categoría con el mismo nombre
-      $duplicateCategory = $localConnection->goQuery('SELECT _id FROM categories WHERE nombre = ? AND _id != ?', [$nombre, $id]);
+      // Verificar si ya existe otra categoría ACTIVA con el mismo nombre
+      // (normalizado); una coincidencia con una categoría eliminada no debe
+      // bloquear el renombrado.
+      $duplicateCategory = $localConnection->goQuery('SELECT _id FROM categories WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?)) AND _id != ? AND eliminado = 0', [$nombre, $id]);
 
       if (!empty($duplicateCategory)) {
         $response->getBody()->write(json_encode([
@@ -485,8 +487,8 @@ return function (App $app) {
   $app->delete('/categories/{id}', function (Request $request, Response $response, $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'UPDATE categories SET eliminado = 1 WHERE _id =  ' . $args['id'];
-    $object = $localConnection->goQuery($sql);
+    $sql = 'UPDATE categories SET eliminado = 1 WHERE _id = ?';
+    $object = $localConnection->goQuery($sql, [$args['id']]);
 
     $localConnection->disconnect();
 
