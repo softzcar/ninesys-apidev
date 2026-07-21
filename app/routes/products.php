@@ -32,10 +32,62 @@ return function (App $app) {
 
   $app->post('/products-attributes', function (Request $request, Response $response) {
     $miAtributo = $request->getParsedBody();
+    $nombre = $miAtributo['nombre'];
+    $precio = $miAtributo['precio'];
+    $reactivar_id = $miAtributo['reactivar_id'] ?? null;
 
     $localConnection = new LocalDB();
-    $localConnection->goQuery('INSERT INTO products_attributes (attribute_name, precio) VALUES (?, ?)', [$miAtributo['nombre'], $miAtributo['precio']]);
-    $object['response'] = json_encode($localConnection->goQuery('SELECT * FROM products_attributes ORDER BY attribute_name'));
+
+    if ($reactivar_id) {
+      // Reactivar un atributo previamente eliminado: se volvió a crear con el
+      // mismo nombre (normalizado), así que se reutiliza el registro en vez
+      // de crear uno duplicado.
+      $localConnection->goQuery(
+        'UPDATE products_attributes SET attribute_name = ?, precio = ?, eliminado = 0 WHERE _id = ?',
+        [$nombre, $precio, $reactivar_id]
+      );
+      $object['response'] = json_encode($localConnection->goQuery('SELECT * FROM products_attributes WHERE eliminado = 0 ORDER BY attribute_name'));
+      $localConnection->disconnect();
+
+      $response->getBody()->write(json_encode($object));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+    }
+
+    // Verificar si ya existe un atributo con el mismo nombre (sin importar
+    // mayúsculas/espacios), esté activo o eliminado.
+    $existing = $localConnection->goQuery(
+      'SELECT _id, attribute_name, eliminado FROM products_attributes WHERE LOWER(TRIM(attribute_name)) = LOWER(TRIM(?))',
+      [$nombre]
+    );
+
+    if ($existing) {
+      $match = $existing[0];
+
+      if ((int) $match['eliminado'] === 1) {
+        $localConnection->disconnect();
+        $object = [
+          'eliminado_existente' => true,
+          'id' => $match['_id'],
+          'name' => $match['attribute_name'],
+        ];
+        $response->getBody()->write(json_encode($object));
+        return $response
+          ->withHeader('Content-Type', 'application/json')
+          ->withStatus(409);
+      }
+
+      $localConnection->disconnect();
+      $object = ['error' => 'Ya existe un atributo activo llamado "' . $match['attribute_name'] . '"'];
+      $response->getBody()->write(json_encode($object));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(400);
+    }
+
+    $localConnection->goQuery('INSERT INTO products_attributes (attribute_name, precio) VALUES (?, ?)', [$nombre, $precio]);
+    $object['response'] = json_encode($localConnection->goQuery('SELECT * FROM products_attributes WHERE eliminado = 0 ORDER BY attribute_name'));
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
@@ -47,7 +99,7 @@ return function (App $app) {
 
   $app->get('/products-attributes', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
-    $sql = 'SELECT precio, attribute_name as name, _id FROM products_attributes ORDER BY name ASC';
+    $sql = 'SELECT precio, attribute_name as name, _id FROM products_attributes WHERE eliminado = 0 ORDER BY name ASC';
     $attributes = $localConnection->goQuery($sql);
     $localConnection->disconnect();
 
@@ -78,11 +130,13 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // Eliminar un atributo de producto
+  // Eliminar un atributo de producto (soft-delete: antes era DELETE físico,
+  // lo que arrastraba en cascada products_attributes_values -- ahora se
+  // marca como eliminado para preservar el histórico y permitir reactivarlo).
   $app->post('/products-attributes/eliminar', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
-    $sql = 'DELETE FROM products_attributes WHERE _id = ?';
+    $sql = 'UPDATE products_attributes SET eliminado = 1 WHERE _id = ?';
     $result = $localConnection->goQuery($sql, [$data['id']]);
     $localConnection->disconnect();
 

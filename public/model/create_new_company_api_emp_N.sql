@@ -1059,7 +1059,8 @@ VALUES (
 CREATE TABLE `products_attributes` (
   `_id` int(11) NOT NULL,
   `attribute_name` varchar(255) NOT NULL COMMENT 'Nombre del atributo',
-  `precio` decimal(5, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio del atributo'
+  `precio` decimal(5, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio del atributo',
+  `eliminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Borrado lógico: 0 = activo, 1 = eliminado/oculto'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de atributos para productos';
 INSERT INTO `products_attributes` (`_id`, `attribute_name`, `precio`)
 VALUES (1, 'Atributo de pruebas', 5.00);
