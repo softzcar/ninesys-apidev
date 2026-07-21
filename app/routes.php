@@ -386,19 +386,18 @@ return function (App $app) {
   // PUT /categories/{id} - Actualizar categoría
   $app->put('/categories/{id}', function (Request $request, Response $response, $args) {
     try {
-      $json = $request->getBody()->getContents();
-      $data = json_decode($json, true);
-
-      if (json_last_error() !== JSON_ERROR_NONE) {
-        $response->getBody()->write(json_encode([
-          'success' => false,
-          'message' => 'JSON inválido'
-        ]));
-        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
-      }
+      // El frontend envía form-urlencoded (igual que el resto de la API),
+      // no JSON crudo -- antes este endpoint intentaba json_decode() sobre
+      // ese body y siempre fallaba con "JSON inválido". Además abría su
+      // propia conexión vía EMPRESA_ID (constante que nunca se define en el
+      // flujo real de la app, que usa el header Authorization + LocalDB()),
+      // así que aunque el JSON hubiera sido válido, igual habría fallado
+      // con "No se pudo identificar la empresa". Se unifica con el patrón
+      // simple (LocalDB(), getParsedBody()) usado en el resto de rutas.
+      $data = $request->getParsedBody();
 
       $id = $args['id'];
-      $nombre = trim($data['nombre'] ?? '');
+      $nombre = trim($data['name'] ?? '');
 
       if (empty($nombre)) {
         $response->getBody()->write(json_encode([
@@ -408,27 +407,7 @@ return function (App $app) {
         return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
       }
 
-      if (!defined('EMPRESA_ID')) {
-        $response->getBody()->write(json_encode([
-          'success' => false,
-          'message' => 'No se pudo identificar la empresa'
-        ]));
-        return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
-      }
-
-      $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
-      $connectionDetails = $localConnection->getConnectionDetails(EMPRESA_ID);
-
-      if (!$connectionDetails) {
-        $response->getBody()->write(json_encode([
-          'success' => false,
-          'message' => 'No se pudieron obtener los detalles de conexión de la empresa'
-        ]));
-        return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
-      }
-
-      $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
-      $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
+      $localConnection = new LocalDB();
 
       // Verificar si existe la categoría
       $existingCategory = $localConnection->goQuery('SELECT _id FROM categories WHERE _id = ?', [$id]);
