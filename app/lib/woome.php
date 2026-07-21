@@ -701,10 +701,57 @@ class WooMe
     return json_encode($this->woocommerce->post('products', $data));
   }
 
-  public function createProductLite($name, $pricesDat, $category, $sku, $producto_fisico = 0, $es_diseno = 0, $stock_quantity = 0)
+  public function createProductLite($name, $pricesDat, $category, $sku, $producto_fisico = 0, $es_diseno = 0, $stock_quantity = 0, $reactivar_id = null)
   {
-    // CREAR EL NUEVO PRODUCTO
-    $sql = "INSERT INTO products(
+    $localConnection = new LocalDB();
+
+    $nombreTrim = trim($name);
+    $skuTrim = trim((string) $sku);
+
+    // Si no se pidió explícitamente reactivar un producto puntual, buscar
+    // coincidencia por nombre o SKU (sin importar mayúsculas/espacios) contra
+    // CUALQUIER producto, activo o eliminado -- para no crear un duplicado
+    // silencioso ni perder el historial (precios, comisiones, órdenes) ya
+    // asociado al producto original si estaba solo soft-deleted.
+    if (!$reactivar_id) {
+      $sqlCheck = 'SELECT _id, product, sku, eliminado FROM products WHERE LOWER(TRIM(product)) = LOWER(?)';
+      $checkParams = [$nombreTrim];
+      if ($skuTrim !== '') {
+        $sqlCheck .= " OR (TRIM(sku) <> '' AND LOWER(TRIM(sku)) = LOWER(?))";
+        $checkParams[] = $skuTrim;
+      }
+      $sqlCheck .= ' LIMIT 1';
+      $checkRes = $localConnection->goQuery($sqlCheck, $checkParams);
+
+      if (!empty($checkRes)) {
+        $match = $checkRes[0];
+        if (intval($match['eliminado']) === 0) {
+          $localConnection->disconnect();
+          return ['error' => 'Ya existe un producto activo llamado "' . $match['product'] . '"' . (!empty($match['sku']) ? ' (SKU: ' . $match['sku'] . ')' : '') . '.'];
+        }
+
+        // Existe pero está eliminado (soft-delete): no crear un duplicado.
+        // Se informa al frontend para que el usuario decida si reactivarlo.
+        $localConnection->disconnect();
+        return [
+          'eliminado_existente' => true,
+          'id_product' => intval($match['_id']),
+          'product' => $match['product'],
+        ];
+      }
+    }
+
+    if ($reactivar_id) {
+      // Reactivar el producto existente, aplicando la configuración indicada
+      // en el formulario (puede haber cambiado respecto al original).
+      $sql = 'UPDATE products SET product = ?, sku = ?, category_ids = ?, fisico = ?, es_diseno = ?, stock_quantity = ?, eliminado = 0 WHERE _id = ?';
+      $localConnection->goQuery($sql, [$nombreTrim, $skuTrim, $category, $producto_fisico, $es_diseno, $stock_quantity, $reactivar_id]);
+      $newID = $reactivar_id;
+      // Reemplazar precios anteriores por los indicados ahora en el formulario
+      $localConnection->goQuery('DELETE FROM products_prices WHERE id_product = ?', [$newID]);
+    } else {
+      // CREAR EL NUEVO PRODUCTO
+      $sql = "INSERT INTO products(
                 product,
                 sku,
                 category_ids,
@@ -713,18 +760,18 @@ class WooMe
                 stock_quantity
             )
             VALUES(
-                '" . $name . "',
-                '" . $sku . "',
+                '" . $nombreTrim . "',
+                '" . $skuTrim . "',
                 '" . $category . "',
                 '" . $producto_fisico . "',
                 '" . $es_diseno . "',
                 '" . $stock_quantity . "'
             );";
-    $localConnection = new LocalDB();
-    $localConnection->goQuery($sql);
-    $sql = 'SELECT MAX(_id) id from products';
-    $requestNewProduct['product'] = $localConnection->goQuery($sql);
-    $newID = $requestNewProduct['product'][0]['id'];
+      $localConnection->goQuery($sql);
+      $sql = 'SELECT MAX(_id) id from products';
+      $requestNewProduct['product'] = $localConnection->goQuery($sql);
+      $newID = $requestNewProduct['product'][0]['id'];
+    }
     // ASIGNAR PRECIOS
     $prices = json_decode($pricesDat, true);
     if (!empty($prices)) {
