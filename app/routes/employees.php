@@ -260,6 +260,16 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
+        // Validar que el teléfono no exista
+        $checkTelefonoSql = 'SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE telefono = ?';
+        $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, [$miEmpleado['telefono']]);
+
+        if (isset($telefonoCheck[0]['count']) && $telefonoCheck[0]['count'] > 0) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'El teléfono ya se encuentra registrado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
         // PREPARAR FECHAS
         $myDate = new CustomTime();
         $now = $myDate->today();
@@ -352,12 +362,24 @@ return function (App $app) {
 
         // Validar que el email no exista en otro usuario
         if (isset($miEmpleado['email']) && !empty($miEmpleado['email'])) {
-            $checkEmailSql = "SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE email = '" . $miEmpleado['email'] . "' AND id_usuario != " . $miEmpleado['_id'];
-            $emailCheck = $localConnection->goQuery($checkEmailSql);
+            $checkEmailSql = "SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE email = ? AND id_usuario != ?";
+            $emailCheck = $localConnection->goQuery($checkEmailSql, [$miEmpleado['email'], $miEmpleado['_id']]);
 
             if (isset($emailCheck[0]['count']) && $emailCheck[0]['count'] > 0) {
                 $localConnection->disconnect();
                 $response->getBody()->write(json_encode(['error' => 'El email ya se encuentra registrado en otro usuario.']));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            }
+        }
+
+        // Validar que el teléfono no exista en otro usuario
+        if (isset($miEmpleado['telefono']) && !empty($miEmpleado['telefono'])) {
+            $checkTelefonoSql = "SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE telefono = ? AND id_usuario != ?";
+            $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, [$miEmpleado['telefono'], $miEmpleado['_id']]);
+
+            if (isset($telefonoCheck[0]['count']) && $telefonoCheck[0]['count'] > 0) {
+                $localConnection->disconnect();
+                $response->getBody()->write(json_encode(['error' => 'El teléfono ya se encuentra registrado en otro usuario.']));
                 return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
             }
         }
