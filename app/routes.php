@@ -392,9 +392,15 @@ return function (App $app) {
       // propia conexión vía EMPRESA_ID (constante que nunca se define en el
       // flujo real de la app, que usa el header Authorization + LocalDB()),
       // así que aunque el JSON hubiera sido válido, igual habría fallado
-      // con "No se pudo identificar la empresa". Se unifica con el patrón
-      // simple (LocalDB(), getParsedBody()) usado en el resto de rutas.
-      $data = $request->getParsedBody();
+      // con "No se pudo identificar la empresa".
+      //
+      // getParsedBody() tampoco sirve aquí: Slim solo auto-parsea
+      // application/x-www-form-urlencoded para método POST (vía $_POST en
+      // ServerRequestFactory::createFromGlobals()); para PUT hay que
+      // parsear el body crudo a mano, mismo patrón ya usado en otras rutas
+      // PUT del proyecto (ej. /gastos/{id} en config.php).
+      $put_body = $request->getBody()->getContents();
+      parse_str($put_body, $data);
 
       $id = $args['id'];
       $nombre = trim($data['name'] ?? '');
