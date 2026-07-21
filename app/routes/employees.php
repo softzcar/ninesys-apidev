@@ -260,9 +260,21 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
-        // Validar que el teléfono no exista
-        $checkTelefonoSql = 'SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE telefono = ?';
-        $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, [$miEmpleado['telefono']]);
+        // Validar que el teléfono no exista (comparando los últimos 10 dígitos,
+        // para reconocer el mismo número aunque tenga distinto formato/prefijo,
+        // igual que la validación de teléfono de clientes en woome.php)
+        $telefonoDigits = preg_replace('/\D/', '', $miEmpleado['telefono']);
+        if (strlen($telefonoDigits) >= 7) {
+            $telefonoLast10 = substr($telefonoDigits, -10);
+            $regexpReplaceExpr = DB_DRIVER === 'pgsql'
+                ? "REGEXP_REPLACE(telefono, '[^0-9]', '', 'g')"
+                : "REGEXP_REPLACE(telefono, '[^0-9]', '')";
+            $checkTelefonoSql = "SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE {$regexpReplaceExpr} LIKE ?";
+            $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, ['%' . $telefonoLast10]);
+        } else {
+            $checkTelefonoSql = 'SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE telefono = ?';
+            $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, [$miEmpleado['telefono']]);
+        }
 
         if (isset($telefonoCheck[0]['count']) && $telefonoCheck[0]['count'] > 0) {
             $localConnection->disconnect();
@@ -372,10 +384,21 @@ return function (App $app) {
             }
         }
 
-        // Validar que el teléfono no exista en otro usuario
+        // Validar que el teléfono no exista en otro usuario (comparando los
+        // últimos 10 dígitos, igual que en /empleados/nuevo)
         if (isset($miEmpleado['telefono']) && !empty($miEmpleado['telefono'])) {
-            $checkTelefonoSql = "SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE telefono = ? AND id_usuario != ?";
-            $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, [$miEmpleado['telefono'], $miEmpleado['_id']]);
+            $telefonoDigits = preg_replace('/\D/', '', $miEmpleado['telefono']);
+            if (strlen($telefonoDigits) >= 7) {
+                $telefonoLast10 = substr($telefonoDigits, -10);
+                $regexpReplaceExpr = DB_DRIVER === 'pgsql'
+                    ? "REGEXP_REPLACE(telefono, '[^0-9]', '', 'g')"
+                    : "REGEXP_REPLACE(telefono, '[^0-9]', '')";
+                $checkTelefonoSql = "SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE {$regexpReplaceExpr} LIKE ? AND id_usuario != ?";
+                $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, ['%' . $telefonoLast10, $miEmpleado['_id']]);
+            } else {
+                $checkTelefonoSql = "SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE telefono = ? AND id_usuario != ?";
+                $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, [$miEmpleado['telefono'], $miEmpleado['_id']]);
+            }
 
             if (isset($telefonoCheck[0]['count']) && $telefonoCheck[0]['count'] > 0) {
                 $localConnection->disconnect();
