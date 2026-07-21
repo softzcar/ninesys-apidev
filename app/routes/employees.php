@@ -453,9 +453,9 @@ return function (App $app) {
 
         // 1. VERIFICAR ASIGNACIÓN DE EMPLEADOS `Si ya tiene registrado pagos no se puede eliminar`
 
-        // 1. SOLO DESVINCULAR EMPLEADO (No borrar ni desactivar)
+        // 1. DESVINCULAR EMPLEADO Y DESACTIVARLO (No se borra físicamente)
 
-        // Eliminar asignación de tareas 
+        // Eliminar asignación de tareas
         $sql = 'UPDATE lotes_detalles_empleados_asignados SET id_empleado = NULL WHERE id_empleado = ?';
         $object['response_lotes_detalles'] = json_encode($localConnection->goQuery($sql, [$miEmpleado['id']]));
 
@@ -463,9 +463,14 @@ return function (App $app) {
         $sql = 'DELETE FROM empresas_usuarios_departamentos WHERE id_empleado = ?';
         $object['response_departamentos'] = json_encode($localConnection2->goQuery($sql, [$miEmpleado['id']]));
 
-        // Ya no se toca la tabla empresas_usuarios ni física ni lógicamente
+        // Desactivar al empleado (misma lógica que POST /empleados/activacion con activo=0),
+        // para que deje de listarse como activo en Gestión de Empleados y en el resto del sistema.
+        $sql = 'UPDATE api_empresas.empresas_usuarios SET activo = 0 WHERE id_usuario = ?';
+        $object['response_desactivacion'] = json_encode($localConnection2->goQuery($sql, [$miEmpleado['id']]));
 
-        $object['message'] = "El empleado ha sido desvinculado de tareas y departamentos. El registro de usuario permanece intacto.";
+        // Ya no se toca la tabla empresas_usuarios de forma física, solo se desactiva
+
+        $object['message'] = "El empleado ha sido desvinculado de tareas y departamentos, y ha sido desactivado. El registro de usuario permanece intacto y puede reactivarse desde 'Activación de Empleados'.";
         $eliminado = false;
         $object['eliminado'] = $eliminado;
 
