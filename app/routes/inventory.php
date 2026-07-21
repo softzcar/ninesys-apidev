@@ -311,16 +311,23 @@ return function (App $app) {
                 $category_name = $product['Categoría'] ?? null;
                 $category_id = $category_map[$category_name] ?? null;
 
-                // 3. Verificar si el producto ya existe por SKU
-                $check_sql = 'SELECT _id FROM products WHERE sku = ?';
+                // 3. Verificar si el producto ya existe por SKU (sin importar
+                // mayúsculas/espacios, y sin importar si está eliminado --
+                // buscarlo entre TODOS los productos, no solo los activos)
+                $check_sql = 'SELECT _id, eliminado FROM products WHERE LOWER(TRIM(sku)) = LOWER(TRIM(?))';
                 $existing_product = $db->goQuery($check_sql, [$sku]);
 
                 $product_id = null;
 
                 if ($existing_product) {
-                    // Lógica de ACTUALIZACIÓN
+                    // Lógica de ACTUALIZACIÓN. Si el producto encontrado estaba
+                    // eliminado (soft-delete), se reactiva: volver a subirlo en
+                    // la planilla es intención suficiente en un flujo de carga
+                    // masiva, que no tiene forma de pedir confirmación fila por
+                    // fila. Antes esto actualizaba el registro eliminado sin
+                    // reactivarlo, dejándolo invisible pese al mensaje de éxito.
                     $product_id = $existing_product[0]['_id'];
-                    $update_sql = 'UPDATE products SET product = ?, category_ids = ? WHERE _id = ?';
+                    $update_sql = 'UPDATE products SET product = ?, category_ids = ?, eliminado = 0 WHERE _id = ?';
                     $db->goQuery($update_sql, [
                         $product['Nombre'] ?? 'Sin Nombre',
                         $category_id,
