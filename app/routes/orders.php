@@ -1366,13 +1366,23 @@ return function (App $app) {
     // que quedó muerto tras el `return` de arriba (usaba la tabla legada
     // lotes_detalles en vez de lotes_detalles_empleados_asignados, que es la
     // fuente vigente de fecha_inicio/fecha_terminado por empleado).
+    // NOTA sobre el JOIN con pagos: pagos.id_lotes_detalles almacena, en la
+    // practica, el _id propio de lotes_detalles_empleados_asignados (no el de
+    // la tabla legada lotes_detalles a la que apunta el FK declarado en el
+    // esquema -- ya usado asi mas arriba en este mismo endpoint, linea
+    // ~922-923, y verificado con datos reales). Esto da un join 1:1 exacto
+    // por tarea, sin la ambiguedad de unir solo por orden+empleado+departamento.
     if (DB_DRIVER === 'pgsql') {
       $sqlHoras = "SELECT
                 ldea.id_orden,
                 ldea.fecha_inicio,
                 ldea.fecha_terminado,
-                EXTRACT(EPOCH FROM (ldea.fecha_terminado::timestamp - ldea.fecha_inicio::timestamp))::int AS tiempo_transcurrido
+                EXTRACT(EPOCH FROM (ldea.fecha_terminado::timestamp - ldea.fecha_inicio::timestamp))::int AS tiempo_transcurrido,
+                p.monto_pago,
+                p.fecha_pago,
+                p.estatus AS estatus_pago
             FROM lotes_detalles_empleados_asignados ldea
+            LEFT JOIN pagos p ON p.id_lotes_detalles = ldea._id
             WHERE ldea.id_empleado = {$args['id_empleado']}
               AND ldea.id_departamento = {$args['id_departamento']}
               AND ldea.progreso = 'terminada'
@@ -1384,8 +1394,12 @@ return function (App $app) {
                 ldea.id_orden,
                 ldea.fecha_inicio,
                 ldea.fecha_terminado,
-                TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, ldea.fecha_terminado) AS tiempo_transcurrido
+                TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, ldea.fecha_terminado) AS tiempo_transcurrido,
+                p.monto_pago,
+                p.fecha_pago,
+                p.estatus AS estatus_pago
             FROM lotes_detalles_empleados_asignados ldea
+            LEFT JOIN pagos p ON p.id_lotes_detalles = ldea._id
             WHERE ldea.id_empleado = {$args['id_empleado']}
               AND ldea.id_departamento = {$args['id_departamento']}
               AND ldea.progreso = 'terminada'
