@@ -1239,7 +1239,15 @@ return function (App $app) {
                     im.id_orden,
                     im.id_departamento,
                     im.id_empleado,
-                    im.id_catalogo_insumos_prodcutos,
+                    -- id_catalogo_insumos_prodcutos casi nunca se guarda en el movimiento
+                    -- (2908 de 4204 filas en NULL, verificado en Postgres Dev): se usa
+                    -- inv.id_catalogo como respaldo, que SIEMPRE esta poblado en
+                    -- inventario. Antes esto rompia el JOIN con la subconsulta est para
+                    -- casi todo el historico, forzando N/A en EFICIENCIA INSUMOS aunque
+                    -- si hubiera consumo real registrado (ej. departamento Corte, empleado
+                    -- 588: 14 de 16 movimientos con id_catalogo_insumos_prodcutos NULL).
+                    -- Mismo criterio ya usado en /reports/input-efficiency (manufacturing.php).
+                    COALESCE(im.id_catalogo_insumos_prodcutos, inv.id_catalogo) AS id_catalogo_insumos_prodcutos,
                     -- Mismo criterio ya corregido en /reports/input-efficiency (manufacturing.php):
                     -- ABS() en vez de resta directa (evita valores negativos en correcciones de
                     -- inventario), y el rendimiento solo se aplica si la UNIDAD DEL ITEM es Kg --
@@ -1254,7 +1262,7 @@ return function (App $app) {
                     im.id_empleado = {$args['id_empleado']}
                     AND im.id_departamento = {$args['id_departamento']}
                 GROUP BY
-                    im.id_orden, im.id_departamento, im.id_empleado, im.id_catalogo_insumos_prodcutos
+                    im.id_orden, im.id_departamento, im.id_empleado, COALESCE(im.id_catalogo_insumos_prodcutos, inv.id_catalogo)
             ) AS consumo_r ON est.id_orden = consumo_r.id_orden
                           AND est.id_departamento = consumo_r.id_departamento
                           AND est.id_empleado = consumo_r.id_empleado
@@ -1316,7 +1324,15 @@ return function (App $app) {
                     im.id_orden,
                     im.id_departamento,
                     im.id_empleado,
-                    im.id_catalogo_insumos_prodcutos,
+                    -- id_catalogo_insumos_prodcutos casi nunca se guarda en el movimiento
+                    -- (2908 de 4204 filas en NULL, verificado en Postgres Dev): se usa
+                    -- inv.id_catalogo como respaldo, que SIEMPRE esta poblado en
+                    -- inventario. Antes esto rompia el JOIN con la subconsulta est para
+                    -- casi todo el historico, forzando N/A en EFICIENCIA INSUMOS aunque
+                    -- si hubiera consumo real registrado (ej. departamento Corte, empleado
+                    -- 588: 14 de 16 movimientos con id_catalogo_insumos_prodcutos NULL).
+                    -- Mismo criterio ya usado en /reports/input-efficiency (manufacturing.php).
+                    COALESCE(im.id_catalogo_insumos_prodcutos, inv.id_catalogo) AS id_catalogo_insumos_prodcutos,
                     -- Mismo criterio ya corregido en /reports/input-efficiency (manufacturing.php):
                     -- ABS() en vez de resta directa (evita valores negativos en correcciones de
                     -- inventario), y el rendimiento solo se aplica si la UNIDAD DEL ITEM es Kg --
@@ -1331,7 +1347,7 @@ return function (App $app) {
                     im.id_empleado = {$args['id_empleado']}
                     AND im.id_departamento = {$args['id_departamento']}
                 GROUP BY
-                    im.id_orden, im.id_departamento, im.id_empleado, im.id_catalogo_insumos_prodcutos
+                    im.id_orden, im.id_departamento, im.id_empleado, COALESCE(im.id_catalogo_insumos_prodcutos, inv.id_catalogo)
             ) AS consumo_r ON est.id_orden = consumo_r.id_orden
                           AND est.id_departamento = consumo_r.id_departamento
                           AND est.id_empleado = consumo_r.id_empleado
