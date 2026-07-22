@@ -1007,10 +1007,16 @@ return function (App $app) {
                 e.product,
                 b.talla,
                 ofo.orden_fila,
-                ((SUM(b.cantidad) * e.comision)) AS total_comision_variable,
-                ((SUM(b.cantidad) * d.comision)) AS total_comision_fija
-                -- ((SUM(b.cantidad) * e.comision) * a.procentaje_comision / 100) AS total_comision_variable,
-                -- ((SUM(b.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_fija
+                -- procentaje_comision reparte la comision entre varios empleados
+                -- asignados al mismo lote (0 = aun no asignado -> tratar como 100,
+                -- mismo criterio ya usado en manufacturing.php y products.php para
+                -- este mismo campo). Antes se ignoraba por completo, lo que
+                -- duplicaria el monto PENDIENTE mostrado a cada empleado el dia
+                -- que un lote pendiente tenga mas de un empleado asignado
+                -- (verificado: no ocurre en los datos actuales, pero si en 130
+                -- asignaciones historicas ya terminadas con reparto real).
+                ((SUM(b.cantidad) * e.comision) * (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_variable,
+                ((SUM(b.cantidad) * d.comision) * (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_fija
             FROM
                 lotes_detalles_empleados_asignados a
             JOIN ordenes ord ON ord._id = a.id_orden
@@ -1041,8 +1047,10 @@ return function (App $app) {
                 b.id_woo id_producto,
                 e.product,
                 b.talla,
-                ((SUM(b.cantidad) * e.comision)) AS total_comision_variable,
-                ((SUM(b.cantidad) * d.comision)) AS total_comision_fija
+                -- Mismo criterio de la rama pgsql (ver comentario arriba): 0 en
+                -- procentaje_comision significa aun no asignado, se trata como 100.
+                ((SUM(b.cantidad) * e.comision) * (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_variable,
+                ((SUM(b.cantidad) * d.comision) * (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_fija
             FROM
                 lotes_detalles_empleados_asignados a
             JOIN ordenes ord ON ord._id = a.id_orden
