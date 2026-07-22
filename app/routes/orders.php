@@ -1358,186 +1358,50 @@ return function (App $app) {
     $object['sql_eficiencia_insumos'] = $sql;
     $object['eficiencia_insumos'] = $reficiencia_insumos;
 
+    // HORAS TRABAJADAS: tiempo real de tareas terminadas, independientemente
+    // de si ya se pagaron o no (evita que el historial pagado "desaparezca"
+    // de la caja de horas, que era el efecto de filtrar por fecha_pago IS NULL
+    // como hacia el bloque legado que reemplaza este query -- ver bitácora
+    // 2026-07-22 para el análisis completo). Reemplaza el bloque comentado
+    // que quedó muerto tras el `return` de arriba (usaba la tabla legada
+    // lotes_detalles en vez de lotes_detalles_empleados_asignados, que es la
+    // fuente vigente de fecha_inicio/fecha_terminado por empleado).
+    if (DB_DRIVER === 'pgsql') {
+      $sqlHoras = "SELECT
+                ldea.id_orden,
+                ldea.fecha_inicio,
+                ldea.fecha_terminado,
+                EXTRACT(EPOCH FROM (ldea.fecha_terminado::timestamp - ldea.fecha_inicio::timestamp))::int AS tiempo_transcurrido
+            FROM lotes_detalles_empleados_asignados ldea
+            WHERE ldea.id_empleado = {$args['id_empleado']}
+              AND ldea.id_departamento = {$args['id_departamento']}
+              AND ldea.progreso = 'terminada'
+              AND ldea.fecha_terminado IS NOT NULL
+            ORDER BY ldea.fecha_terminado DESC
+        ";
+    } else {
+      $sqlHoras = "SELECT
+                ldea.id_orden,
+                ldea.fecha_inicio,
+                ldea.fecha_terminado,
+                TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, ldea.fecha_terminado) AS tiempo_transcurrido
+            FROM lotes_detalles_empleados_asignados ldea
+            WHERE ldea.id_empleado = {$args['id_empleado']}
+              AND ldea.id_departamento = {$args['id_departamento']}
+              AND ldea.progreso = 'terminada'
+              AND ldea.fecha_terminado IS NOT NULL
+            ORDER BY ldea.fecha_terminado DESC
+        ";
+    }
+    $object['sql_ordenes_semana'] = $sqlHoras;
+    $object['ordenes_semana'] = $localConnection->goQuery($sqlHoras);
+
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
-    /* if ($departamento === 'Costura') {
-    $sql = "SELECT
-        a._id id_lote_detalles,
-        a.id_orden,
-        a.id_woo,
-        a.id_orden detalle,
-        a.fecha_inicio fecha_inicio_ts,
-        a.fecha_terminado fecha_terminado_ts,
-        DATE_FORMAT(a.fecha_inicio, '%d/%m/%Y') fecha_inicio,
-        DATE_FORMAT(a.fecha_inicio, '%h:%i %p') hora_inicio,
-        DATE_FORMAT(a.fecha_terminado, '%d/%m/%Y') fecha_terminado,
-        DATE_FORMAT(a.fecha_terminado, '%h:%i %p') hora_terminado,
-        TIMEDIFF(fecha_terminado, fecha_inicio) tiempo_transcurrido,
-        b.departamento,
-        a.progreso,
-        c.name producto,
-        c.talla,
-        c.corte,
-        c.tela,
-        c.cantidad,
-        b.comision,
-        d.fecha_pago,
-        d.monto_pago,
-        0 calculo_pago
-        FROM
-        lotes_detalles a
-        LEFT JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado
-        JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
-        LEFT JOIN pagos d ON d.id_lotes_detalles = a._id
-        WHERE
-        d.fecha_pago IS NULL AND
-        d.id_empleado = " . $args['id_empleado'] . ' ORDER BY a.id_orden ASC';
-
-        $ordenes = $localConnection->goQuery($sql);
-        $object['ordenes'] = $ordenes;
-
-        // Buscar comision de productos en woocommerce y recalcular `calculo_pago`
-        $tmpOrdenes = null;
-        foreach ($object['ordenes'] as $key => $orden) {
-            $tmpOrdenes[$key] = $orden;
-            $idwc = intval($orden['id_woo']);
-            $woo = new WooMe();
-            $producto = $woo->getProductById($idwc);
-
-            if (isset($producto->attributes[0]->options)) {
-                $comision = $producto->attributes[0]->options[0];
-                $tmpOrdenes[$key]['comision'] = $producto->attributes[0]->options[0];
-                $comision = floatval($comision) * intval($orden['cantidad']);
-                $tmpOrdenes[$key]['calculo_pago'] = $comision;
-            } else {
-                $comision = 0;
-            }
-        }
-        $object['ordenes'] = $tmpOrdenes;
-        $object['ordenes_semana'] = $tmpOrdenes;
-    }
-
-    // NOTA: $departamento es el array crudo de goQuery(), no un string -- estas
-    // condiciones nunca eran ciertas para NINGÚN departamento antes de este fix
-    // (bug preexistente, no introducido por la migración a Postgres). Se usa
-    // $object['departamento'] (el nombre ya extraído) y se agrega el chequeo de
-    // $departamentoTipo para reconocer cualquier departamento con
-    // comportamiento "corte", no solo el que se llama literalmente "Corte".
-    if ($departamentoTipo === 'corte' || $object['departamento'] === 'Corte' || $object['departamento'] === 'Estampado' || $object['departamento'] === 'Limpieza' || $object['departamento'] === 'Revisión' || $object['departamento'] === 'Impresión') {
-        // REporte todo lo no pagado
-        $sql = "SELECT
-            a._id id_lotes_detalles,
-            a.id_orden,
-            a.id_orden detalle,
-            a.fecha_inicio fecha_inicio_ts,
-            a.fecha_terminado fecha_terminado_ts,
-            DATE_FORMAT(a.fecha_inicio, '%d/%m/%Y') fecha_inicio,
-            DATE_FORMAT(a.fecha_inicio, '%h:%i %p') hora_inicio,
-            DATE_FORMAT(a.fecha_terminado, '%d/%m/%Y') fecha_terminado,
-            DATE_FORMAT(a.fecha_terminado, '%h:%i %p') hora_terminado,
-            TIMEDIFF(fecha_terminado, fecha_inicio) tiempo_transcurrido,
-            a.unidades_solicitadas cantidad,
-            b.name producto,
-            FORMAT(b.cantidad * c.comision, 2) AS calculo_pago
-            FROM
-            lotes_detalles a
-            JOIN api_empresas.empresas_usuarios c ON
-            a.id_empleado = c.id_usuario
-            JOIN ordenes_productos b ON
-            a.id_ordenes_productos = b._id
-            JOIN pagos d ON
-            d.id_lotes_detalles = a._id
-            WHERE  d.fecha_pago IS NULL AND
-            a.id_empleado = " . $args['id_empleado'] . ' ORDER BY a.id_orden ASC';
-
-        $ordenes = $localConnection->goQuery($sql);
-        $object['ordenes'] = $ordenes;
-
-        $sql = "SELECT
-            a._id id_lote_detalles,
-            a.id_orden,
-            a.id_orden detalle,
-            a.fecha_inicio fecha_inicio_ts,
-            a.fecha_terminado fecha_terminado_ts,
-            DATE_FORMAT(a.fecha_inicio, '%d/%m/%Y') fecha_inicio,
-            DATE_FORMAT(a.fecha_inicio, '%h:%i %p') hora_inicio,
-            DATE_FORMAT(a.fecha_terminado, '%d/%m/%Y') fecha_terminado,
-            DATE_FORMAT(a.fecha_terminado, '%h:%i %p') hora_terminado,
-            TIMEDIFF(fecha_terminado, fecha_inicio) tiempo_transcurrido,
-            b.departamento,
-            a.progreso,
-            c.name producto,
-            c.talla,
-            c.corte,
-            c.tela,
-            c.cantidad,
-            b.comision,
-            d.fecha_pago,
-            d.monto_pago,
-            FORMAT(c.cantidad * b.comision, 2) AS calculo_pago
-
-            FROM
-            pagos d
-            LEFT JOIN lotes_detalles a ON d.id_lotes_detalles = a._id
-            JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado
-            JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
-            WHERE
-            b.id_usuario = " . $args['id_empleado'] . ' AND  d.fecha_pago IS NULL ORDER BY a.id_orden ASC
-        ';
-        $ordenes = $localConnection->goQuery($sql);
-        $object['ordenes_semana'] = $ordenes;
-    }
-
-    if ($object['departamento'] === 'Comercialización' || $object['departamento'] === 'Administración') {
-        $sql = "SELECT
-            a._id id_pagos,
-            a.id_orden,
-            DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago,
-            b.tipo_de_pago,
-            a.monto_pago monto_pago
-            FROM pagos a
-            LEFT JOIN metodos_de_pago b ON b._id = a.id_metodos_de_pago
-            WHERE a.id_empleado = " . $args['id_empleado'] . ' AND a.fecha_pago IS NULL
-        ';
-
-        $ordenes = $localConnection->goQuery($sql);
-        $object['ordenes_semana'] = $ordenes;
-    }
-
-    if ($object['departamento'] === 'Diseño') {
-        $sql = "SELECT
-            a._id id_pago,
-            a.id_orden,
-            a.cantidad,
-            a.fecha_pago fecha_terminado,
-            a.detalle producto,
-            b.tipo tipo_arreglo,
-            a.monto_pago calculo_pago,
-            CASE
-            WHEN b.tipo IS NOT NULL THEN b.tipo
-            ELSE 'Diseño'
-            END AS tipo
-            FROM
-            pagos a
-            LEFT JOIN disenos_ajustes_y_personalizaciones b
-            ON b.id_orden = a.id_orden
-            WHERE
-            a.fecha_pago IS NULL AND a.id_empleado = " . $args['id_empleado'] . '
-            GROUP BY a._id
-            ORDER BY
-            a._id
-            DESC;
-        ';
-
-        $ordenes = $localConnection->goQuery($sql);
-
-        $object['ordenes'] = $ordenes;
-        $object['ordenes_semana'] = $ordenes;
-    } */
   });
 
   // DASHBOARD COMERCIALIZACIÓN
