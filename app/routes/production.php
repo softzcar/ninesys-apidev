@@ -1620,6 +1620,43 @@ return function (App $app) {
         throw new \Exception('La orden no existe');
       }
 
+      // Misma regla que ya existe en POST /orden/actualizar-estado: una orden
+      // cancelada no puede pasar directo a terminada (debe reactivarse primero).
+      if ($orden[0]['status'] === 'cancelada') {
+        $localConnection->rollback();
+        $localConnection->disconnect();
+        return ApiResponse::validationError($response, 'No se puede marcar como terminada una orden cancelada. Si desea completar esta orden, reactívela primero.');
+      }
+
+      // Misma validación que ya existe en POST /orden/actualizar-estado: no
+      // permitir terminar una orden con tareas de empleados asignados sin
+      // cerrar -- este endpoint (botón "TERMINAR" de Producción) era una
+      // segunda vía manual para marcar status='terminada' que no la tenía,
+      // dejando un bypass real de la regla de negocio.
+      $sqlPendientes = "
+          SELECT
+              dep.departamento,
+              eu.nombre as empleado,
+              CASE
+                  WHEN ldea.fecha_inicio IS NULL THEN 'Por iniciar'
+                  ELSE 'En curso'
+              END as status_tarea
+          FROM lotes_detalles_empleados_asignados ldea
+          JOIN departamentos dep ON ldea.id_departamento = dep._id
+          JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
+          WHERE ldea.id_orden = ?
+            AND ldea.fecha_terminado IS NULL
+      ";
+      $tareasPendientes = $localConnection->goQuery($sqlPendientes, [$id]);
+
+      if (!empty($tareasPendientes)) {
+        $localConnection->rollback();
+        $localConnection->disconnect();
+        return ApiResponse::error($response, 'Existen tareas asignadas inconclusas. Se deben terminar primero o eliminar la asignación.', 400, [
+          'tareas_pendientes' => $tareasPendientes
+        ]);
+      }
+
       $depCheck = $localConnection->goQuery("SELECT COUNT(*) cnt FROM inventario_movimientos WHERE id_orden = ?", [$id]);
       $hasMovs = intval($depCheck[0]['cnt'] ?? 0) > 0;
       $metaCheck = $localConnection->goQuery("SELECT COUNT(*) cnt FROM product_insumos_asignados pia JOIN ordenes_productos op ON op.id_woo = pia.id_product AND op.id_size = pia.id_talla WHERE op.id_orden = ?", [$id]);

@@ -214,6 +214,40 @@ return function (App $app) {
       }
     }
 
+    // 3b. VALIDACIÓN "TERMINADA/ENTREGADA → ESTADO PREVIO DE PRODUCCIÓN" (Bloquear retroceso ilógico)
+    // Una orden que ya se dio por terminada o entregada no puede "retroceder"
+    // a un estado que en el flujo normal ocurre ANTES de terminarla -- esos
+    // pasos ya quedaron atrás. Si de verdad hay que reprocesarla, el camino
+    // es cancelarla y reactivarla (que ya tiene su propio flujo/advertencia),
+    // no saltar directo hacia atrás desde este selector. Debe ir ANTES de la
+    // lógica de "cancelada" de abajo, que borra asignaciones pendientes --
+    // si el destino fuera cancelada no aplicaría aquí, pero si en el futuro
+    // se agregan más estados de retroceso conviene mantener el orden.
+    $estadosPreProduccion = ['En espera', 'activa', 'pausada'];
+    if (in_array($estadoActual, ['terminada', 'entregada'], true) && in_array($order['estado'], $estadosPreProduccion, true)) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode([
+        'success' => false,
+        'message' => 'No se puede regresar una orden ya "' . $estadoActual . '" a un estado previo de producción ("' . $order['estado'] . '"). Si necesita reprocesarla, cancele la orden y reactívela, o contacte a un administrador.'
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    // 3c. VALIDACIÓN "ENTREGADA → CANCELADA" (No se puede cancelar algo que ya está en manos del cliente)
+    // Debe ir ANTES de la lógica de "cancelada" de abajo: esa lógica borra
+    // asignaciones pendientes en cuanto detecta estado='cancelada', sin
+    // importar el estado actual -- si este bloqueo fuera después, el borrado
+    // ya habría ocurrido (aunque la transacción se revertiría al hacer
+    // disconnect() sin commit, es más limpio no llegar a ejecutarlo siquiera).
+    if ($estadoActual === 'entregada' && $order['estado'] === 'cancelada') {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode([
+        'success' => false,
+        'message' => 'No se puede cancelar una orden ya entregada al cliente. Si hubo un problema con la entrega, gestiónelo por otro medio (reposición, devolución), no cambiando el estado aquí.'
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
     // 4. LÓGICA "CANCELADA" (Eliminar asignaciones pendientes antes de cancelar)
     $eliminadas = 0;
     if ($order['estado'] === 'cancelada') {
@@ -3538,7 +3572,13 @@ $object['sales_commission_ISSET'][] = false;
       $sql = 'UPDATE disenos SET terminado = ' . $estatusTerminado . ' WHERE id_orden = ' . $miDiseno[0]['id_orden'] . ';';
       $miRevision = $localConnection->goQuery($sql);
       $object['sql_revision'] = $sql;
-      $sql = "UPDATE ordenes SET status = 'activa' WHERE _id = " . $args['id_orden'] . ';';
+      // Guard: no reactivar una orden que ya está terminada/entregada como
+      // efecto secundario de aprobar una revisión de diseño -- este UPDATE
+      // no validaba el estado actual en absoluto, así que una aprobación
+      // tardía o fuera de orden podía "resucitar" una orden ya cerrada
+      // silenciosamente (mismo riesgo que ya se bloqueó explícitamente en
+      // POST /orden/actualizar-estado).
+      $sql = "UPDATE ordenes SET status = 'activa' WHERE _id = " . $args['id_orden'] . " AND status NOT IN ('terminada', 'entregada');";
       $miRevision = $localConnection->goQuery($sql);
       $object['sql_orden'] = $sql;
 
