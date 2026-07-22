@@ -3679,9 +3679,22 @@ return function (App $app) {
                 -- Rendimiento fijo a 1 porque la conversión ya está aplicada en cantidad_estandar y cantidad_real.
                 1.0 AS rendimiento,
 
-                -- Consumo Real: ya viene multiplicado por rendimiento desde el inventario (Kg→Mt).
+                -- Consumo Real: aplicar rendimiento (Kg->Mt) solo cuando LA UNIDAD DEL
+                -- ITEM DE INVENTARIO DE ESE MOVIMIENTO (inv_sub.unidad) es Kg -- no la
+                -- unidad de la receta (pia.unidad), porque un mismo insumo del catalogo
+                -- puede tener movimientos contra varios items fisicos con unidades
+                -- distintas (ej. Tela mezclando un rollo medido en Mts con otro en Kg
+                -- que si necesita convertirse). Antes se multiplicaba SIEMPRE que el
+                -- item tuviera un rendimiento cargado, sin mirar su propia unidad,
+                -- inflando el consumo real reportado cuando el rendimiento no era 1
+                -- pese a que el movimiento ya estaba en la unidad final (caso real:
+                -- orden 6293, Papel SUBLIMACION, 28.20 Mt reportados como 310.20).
                 COALESCE((
-                    SELECT SUM(ABS(im_sub.valor_final - im_sub.valor_inicial) * COALESCE(inv_sub.rendimiento, 1))
+                    SELECT SUM(ABS(im_sub.valor_final - im_sub.valor_inicial) *
+                        CASE WHEN inv_sub.unidad = 'Kg' AND inv_sub.rendimiento IS NOT NULL
+                             THEN inv_sub.rendimiento
+                             ELSE 1
+                        END)
                     FROM inventario_movimientos im_sub
                     LEFT JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
                     WHERE im_sub.id_orden IN ($idsString)
