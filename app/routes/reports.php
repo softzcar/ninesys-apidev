@@ -1281,21 +1281,25 @@ return function (App $app) {
                 $order['tareas'] = $orderTasks;
                 unset($t);
 
-                // Eficiencia Material
+                // Eficiencia Material: si no hay consumo real registrado (real <= 0,
+                // incluyendo el caso real < 0 por datos inconsistentes), no hay con qué
+                // comparar la meta -- antes esto se mostraba como "100% eficiencia"
+                // (perfecto), enmascarando que en realidad no se registró nada.
                 $matMatch = array_filter($matEff, function($me) use ($currentId) { return (string)$me['id_orden'] === $currentId; });
                 if (!empty($matMatch)) {
                     $mVal = array_values($matMatch)[0];
-                    $order['eficiencia_material'] = ($mVal['real'] > 0) ? round(($mVal['meta'] / $mVal['real']) * 100, 2) : 100;
-                    if ($mVal['meta'] == 0 && $mVal['real'] == 0) $order['eficiencia_material'] = 'N/A';
+                    $order['eficiencia_material'] = ($mVal['real'] > 0) ? round(($mVal['meta'] / $mVal['real']) * 100, 2) : 'N/A';
                 } else {
                     $order['eficiencia_material'] = 'N/A';
                 }
 
-                // Eficiencia Tiempo
+                // Eficiencia Tiempo: mismo criterio -- sin tiempo real registrado
+                // (o negativo, por una fecha_terminado anterior a fecha_inicio) no se
+                // puede calcular una eficiencia real, se marca N/A en vez de 100%.
                 $timeMatch = array_filter($timeEff, function($te) use ($currentId) { return (string)$te['id_orden'] === $currentId; });
                 if (!empty($timeMatch)) {
                     $tVal = array_values($timeMatch)[0];
-                    $order['eficiencia_tiempo'] = ($tVal['real'] > 0) ? round(($tVal['projected'] / $tVal['real']) * 100, 2) : 100;
+                    $order['eficiencia_tiempo'] = ($tVal['real'] > 0) ? round(($tVal['projected'] / $tVal['real']) * 100, 2) : 'N/A';
                 } else {
                     $order['eficiencia_tiempo'] = 'N/A';
                 }
