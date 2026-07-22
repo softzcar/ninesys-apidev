@@ -3659,7 +3659,6 @@ return function (App $app) {
                 ), (SELECT MAX(_id) FROM inventario WHERE id_catalogo = cip._id)) AS id_insumo,
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
-                cip.id_departamento,
 
                 -- Consumo Estándar (Meta): para Corte usa piezas de inventario_corte; otros usan op.cantidad.
                 -- Aplicar rendimiento (Kg→Mt) SOLO cuando pia.unidad es Kg; si ya está en Mt, no convertir.
@@ -3709,10 +3708,8 @@ return function (App $app) {
             ) inv_rend ON inv_rend.id_catalogo = cip._id
 
             WHERE op.id_orden IN ($idsString)
-            GROUP BY cip._id, cip.nombre, cip.id_departamento
+            GROUP BY cip._id, cip.nombre
         ";
-
-    file_put_contents('debug_sql_error.log', "SQL Query:\n" . $sql . "\n", FILE_APPEND);
 
     $data = $localConnection->goQuery($sql);
     $localConnection->disconnect();
