@@ -1628,6 +1628,15 @@ return function (App $app) {
         return ApiResponse::validationError($response, 'No se puede marcar como terminada una orden cancelada. Si desea completar esta orden, reactívela primero.');
       }
 
+      // Una orden ya entregada no puede "retroceder" a terminada por este
+      // botón -- sin este guard, volver a pulsar "TERMINAR" sobre una orden
+      // ya entregada la downgradeaba silenciosamente.
+      if ($orden[0]['status'] === 'entregada') {
+        $localConnection->rollback();
+        $localConnection->disconnect();
+        return ApiResponse::validationError($response, 'Esta orden ya fue entregada al cliente; no se puede regresar a "terminada" desde aquí.');
+      }
+
       // Misma validación que ya existe en POST /orden/actualizar-estado: no
       // permitir terminar una orden con tareas de empleados asignados sin
       // cerrar -- este endpoint (botón "TERMINAR" de Producción) era una
