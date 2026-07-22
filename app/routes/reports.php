@@ -945,9 +945,11 @@ return function (App $app) {
     });
     
     // =================================================================
-    // REPORTE SEMANAL DETALLADO (Para Reporte de Eficiencia)
+    // REPORTE GENERAL DE EFICIENCIA (antes "semanal", ahora admite
+    // cualquier rango de fechas -- renombrado para que coincida con el
+    // nombre real de la página que lo consume)
     // =================================================================
-    $app->get('/reportes/semanal-detallado', function (Request $request, Response $response) {
+    $app->get('/reportes/general-eficiencia-detallado', function (Request $request, Response $response) {
         $params = $request->getQueryParams();
         $inicio = $params['inicio'] ?? null;
         $fin = $params['fin'] ?? null;
