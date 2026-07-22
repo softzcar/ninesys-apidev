@@ -1240,7 +1240,13 @@ return function (App $app) {
                     im.id_departamento,
                     im.id_empleado,
                     im.id_catalogo_insumos_prodcutos,
-                    SUM((im.valor_inicial - im.valor_final) * COALESCE(inv.rendimiento, 1)) AS consumo_real_total
+                    -- Mismo criterio ya corregido en /reports/input-efficiency (manufacturing.php):
+                    -- ABS() en vez de resta directa (evita valores negativos en correcciones de
+                    -- inventario), y el rendimiento solo se aplica si la UNIDAD DEL ITEM es Kg --
+                    -- no siempre que tenga uno cargado. Antes esto inflaba consumo_real_total hasta
+                    -- 11x para insumos ya registrados en Mt con rendimiento residual (ej. Papel de
+                    -- sublimacion 40gsm, confirmado en ordenes 6018 y 6028).
+                    SUM(ABS(im.valor_final - im.valor_inicial) * CASE WHEN inv.unidad = 'Kg' AND inv.rendimiento IS NOT NULL THEN inv.rendimiento ELSE 1 END) AS consumo_real_total
                 FROM
                     inventario_movimientos im
                 LEFT JOIN inventario inv ON im.id_insumo = inv._id
@@ -1311,7 +1317,13 @@ return function (App $app) {
                     im.id_departamento,
                     im.id_empleado,
                     im.id_catalogo_insumos_prodcutos,
-                    SUM((im.valor_inicial - im.valor_final) * COALESCE(inv.rendimiento, 1)) AS consumo_real_total
+                    -- Mismo criterio ya corregido en /reports/input-efficiency (manufacturing.php):
+                    -- ABS() en vez de resta directa (evita valores negativos en correcciones de
+                    -- inventario), y el rendimiento solo se aplica si la UNIDAD DEL ITEM es Kg --
+                    -- no siempre que tenga uno cargado. Antes esto inflaba consumo_real_total hasta
+                    -- 11x para insumos ya registrados en Mt con rendimiento residual (ej. Papel de
+                    -- sublimacion 40gsm, confirmado en ordenes 6018 y 6028).
+                    SUM(ABS(im.valor_final - im.valor_inicial) * CASE WHEN inv.unidad = 'Kg' AND inv.rendimiento IS NOT NULL THEN inv.rendimiento ELSE 1 END) AS consumo_real_total
                 FROM
                     inventario_movimientos im
                 LEFT JOIN inventario inv ON im.id_insumo = inv._id
