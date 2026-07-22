@@ -112,10 +112,14 @@ return function (App $app) {
 
       if (!empty($ordenes_del_lote)) {
         // 4. Si hay órdenes en el lote, iniciar cada una de sus tareas de empleado
+        // (nunca una tarea que ya tenga fecha_terminado -- reabrirla pisaría
+        // fecha_inicio con NOW(), que quedaría DESPUÉS de la fecha_terminado
+        // vieja y corrompería el cálculo de eficiencia de tiempo con un
+        // resultado negativo; confirmado en producción con varias órdenes)
         foreach ($ordenes_del_lote as $orden) {
           $id_orden_actual = $orden['id_orden'];
           $sql_iniciar_tarea = "UPDATE lotes_detalles_empleados_asignados SET fecha_inicio = NOW(), progreso = 'en curso'
-                        WHERE id_orden = ? AND id_departamento = ?";
+                        WHERE id_orden = ? AND id_departamento = ? AND fecha_terminado IS NULL";
           $localConnection->goQuery($sql_iniciar_tarea, [$id_orden_actual, $id_departamento_actual]);
         }
       }
@@ -681,7 +685,8 @@ return function (App $app) {
         $check = $localConnection->goQuery("SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$id_repo}");
 
         if (!empty($check) && isset($check[0])) {
-          $sqlUpdateTracking = "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE _id = {$check[0]['_id']};";
+          // No reabrir si ya tiene fecha_terminado -- ver nota en el bloque "else" de abajo.
+          $sqlUpdateTracking = "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE _id = {$check[0]['_id']} AND fecha_terminado IS NULL;";
           $localConnection->goQuery($sqlUpdateTracking);
         } else {
           $sqlInsertTracking = "INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_empleado, id_departamento, progreso, fecha_inicio, procentaje_comision, id_reposicion) VALUES ({$miEmpleado['id_orden']}, {$miEmpleado['id_empleado']}, {$miEmpleado['id_departamento']}, 'en curso', '{$now}', 0, {$id_repo});";
@@ -692,8 +697,11 @@ return function (App $app) {
         $sqlUpdateRepoEmployee = "UPDATE reposiciones SET id_empleado = {$miEmpleado['id_empleado']} WHERE _id = {$id_repo};";
         $localConnection->goQuery($sqlUpdateRepoEmployee);
       } else {
-        // Regular Order logic: original behavior
-        $sqlUpdateTracking = "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . " AND id_departamento = " . $miEmpleado['id_departamento'] . ";";
+        // Regular Order logic: original behavior. No reabrir una tarea que ya
+        // tenga fecha_terminado -- pisaría fecha_inicio con NOW(), que
+        // quedaría DESPUÉS de la fecha_terminado vieja y corrompería el
+        // cálculo de eficiencia de tiempo con un resultado negativo.
+        $sqlUpdateTracking = "UPDATE lotes_detalles_empleados_asignados SET `progreso` = 'en curso', `fecha_inicio` = '{$now}' WHERE id_orden = " . $miEmpleado['id_orden'] . " AND id_empleado = " . $miEmpleado['id_empleado'] . " AND id_departamento = " . $miEmpleado['id_departamento'] . " AND fecha_terminado IS NULL;";
         $localConnection->goQuery($sqlUpdateTracking);
       }
       // Actualizar status de la orden a 'activa' al iniciar primer paso
