@@ -4,6 +4,69 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
 
+// Port de calcularHorasLaboradasReales (app_multi/mixins/mixin-time.js) --
+// horas realmente laboradas entre dos timestamps, contando solo la porción
+// que cae dentro del horario laboral de la empresa (mañana/tarde) en días
+// laborales, no la diferencia cruda entre fecha_inicio y fecha_terminado.
+// Necesario porque una tarea puede quedar "abierta" varios días sin cerrarse
+// de inmediato (verificado con datos reales: empleado con una sola tarea de
+// 271 horas crudas transcurridas, equivalente a $101.86 de salario si se
+// contara sin filtrar horario laboral -- absurdamente inflado).
+function calcularHorasLaboradasReales($fechaInicioStr, $fechaTerminadoStr, $horarioLaboral) {
+    if (empty($fechaInicioStr) || empty($fechaTerminadoStr) || empty($horarioLaboral) || empty($horarioLaboral['diasLaborales'])) {
+        return 0;
+    }
+
+    $fechaInicio = new DateTime($fechaInicioStr);
+    $fechaTerminado = new DateTime($fechaTerminadoStr);
+
+    if ($fechaInicio >= $fechaTerminado) {
+        return 0;
+    }
+
+    $horasTotales = 0.0;
+    $fechaActual = clone $fechaInicio;
+    $diasLaborales = array_map('intval', $horarioLaboral['diasLaborales']);
+
+    $horaInicioManana = (float)($horarioLaboral['horaInicioManana'] ?? 0);
+    $horaFinManana = (float)($horarioLaboral['horaFinManana'] ?? 0);
+    $horaInicioTarde = (float)($horarioLaboral['horaInicioTarde'] ?? 0);
+    $horaFinTarde = (float)($horarioLaboral['horaFinTarde'] ?? 0);
+
+    while ($fechaActual < $fechaTerminado) {
+        $diaSemana = (int)$fechaActual->format('w'); // 0=domingo...6=sábado, igual que JS getDay()
+
+        if (in_array($diaSemana, $diasLaborales, true)) {
+            $inicioManana = clone $fechaActual;
+            $inicioManana->setTime((int)floor($horaInicioManana), (int)round(fmod($horaInicioManana, 1) * 60), 0);
+            $finManana = clone $fechaActual;
+            $finManana->setTime((int)floor($horaFinManana), (int)round(fmod($horaFinManana, 1) * 60), 0);
+
+            $inicioTrabajoManana = max($fechaInicio, $inicioManana);
+            $finTrabajoManana = min($fechaTerminado, $finManana);
+            if ($inicioTrabajoManana < $finTrabajoManana) {
+                $horasTotales += ($finTrabajoManana->getTimestamp() - $inicioTrabajoManana->getTimestamp()) / 3600;
+            }
+
+            $inicioTarde = clone $fechaActual;
+            $inicioTarde->setTime((int)floor($horaInicioTarde), (int)round(fmod($horaInicioTarde, 1) * 60), 0);
+            $finTarde = clone $fechaActual;
+            $finTarde->setTime((int)floor($horaFinTarde), (int)round(fmod($horaFinTarde, 1) * 60), 0);
+
+            $inicioTrabajoTarde = max($fechaInicio, $inicioTarde);
+            $finTrabajoTarde = min($fechaTerminado, $finTarde);
+            if ($inicioTrabajoTarde < $finTrabajoTarde) {
+                $horasTotales += ($finTrabajoTarde->getTimestamp() - $inicioTrabajoTarde->getTimestamp()) / 3600;
+            }
+        }
+
+        $fechaActual->modify('+1 day');
+        $fechaActual->setTime(0, 0, 0);
+    }
+
+    return round($horasTotales, 2);
+}
+
 return function (App $app) {
 
 
@@ -764,37 +827,51 @@ return function (App $app) {
         $horasSemana = max(0, $horasDia) * max(0, $diasSemana);
         $dbEmpresas->disconnect();
 
-        // Salary employees who worked on this order (from task records)
-        if (DB_DRIVER === 'pgsql') {
-            $sqlSalarios = "SELECT
-                                ldea.id_empleado,
-                                eu.nombre AS nombre_empleado,
-                                eu.salario_monto,
-                                eu.salario_periodo,
-                                SUM(EXTRACT(EPOCH FROM (COALESCE(ldea.fecha_terminado, NOW())::timestamp - ldea.fecha_inicio::timestamp)) / 3600) AS horas_trabajadas
-                            FROM lotes_detalles_empleados_asignados ldea
-                            JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
-                            WHERE ldea.id_orden = ?
-                            AND ldea.fecha_inicio IS NOT NULL
-                            AND eu.salario_tipo IN ('Salario', 'Salario más Comisión')
-                            GROUP BY ldea.id_empleado, eu.nombre, eu.salario_monto, eu.salario_periodo";
-        } else {
-            $sqlSalarios = "SELECT
-                                ldea.id_empleado,
-                                eu.nombre AS nombre_empleado,
-                                eu.salario_monto,
-                                eu.salario_periodo,
-                                SUM(TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, COALESCE(ldea.fecha_terminado, NOW())) / 3600) AS horas_trabajadas
-                            FROM lotes_detalles_empleados_asignados ldea
-                            JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
-                            WHERE ldea.id_orden = ?
-                            AND ldea.fecha_inicio IS NOT NULL
-                            AND eu.salario_tipo IN ('Salario', 'Salario más Comisión')
-                            GROUP BY ldea.id_empleado, eu.nombre, eu.salario_monto, eu.salario_periodo";
-        }
+        // Salary employees who worked on this order (from task records).
+        // Se trae una fila POR TAREA (sin SUM/GROUP BY en SQL) porque las
+        // horas trabajadas se calculan en PHP con calcularHorasLaboradasReales()
+        // -- filtrando por horario laboral real de la empresa, no la resta
+        // cruda de fecha_terminado - fecha_inicio (que infla el costo cuando
+        // una tarea queda "abierta" varios días sin cerrarse de inmediato).
+        $sqlSalarios = "SELECT
+                            ldea.id_empleado,
+                            eu.nombre AS nombre_empleado,
+                            eu.salario_monto,
+                            eu.salario_periodo,
+                            ldea.fecha_inicio,
+                            ldea.fecha_terminado
+                        FROM lotes_detalles_empleados_asignados ldea
+                        JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                        WHERE ldea.id_orden = ?
+                        AND ldea.fecha_inicio IS NOT NULL
+                        AND eu.salario_tipo IN ('Salario', 'Salario más Comisión')";
 
-        $salariosRaw = $db->goQuery($sqlSalarios, [$id_orden]);
+        $tareasRaw = $db->goQuery($sqlSalarios, [$id_orden]);
         $db->disconnect();
+
+        $ahora = (new DateTime())->format('Y-m-d H:i:s');
+        $salariosRaw = [];
+        if (is_array($tareasRaw)) {
+            foreach ($tareasRaw as $tarea) {
+                $idEmp = $tarea['id_empleado'];
+                $horasTarea = calcularHorasLaboradasReales(
+                    $tarea['fecha_inicio'],
+                    $tarea['fecha_terminado'] ?: $ahora,
+                    $horarioObj
+                );
+                if (!isset($salariosRaw[$idEmp])) {
+                    $salariosRaw[$idEmp] = [
+                        'id_empleado' => $idEmp,
+                        'nombre_empleado' => $tarea['nombre_empleado'],
+                        'salario_monto' => $tarea['salario_monto'],
+                        'salario_periodo' => $tarea['salario_periodo'],
+                        'horas_trabajadas' => 0,
+                    ];
+                }
+                $salariosRaw[$idEmp]['horas_trabajadas'] += $horasTarea;
+            }
+        }
+        $salariosRaw = array_values($salariosRaw);
 
         $salariosData = [];
         if (is_array($salariosRaw)) {
