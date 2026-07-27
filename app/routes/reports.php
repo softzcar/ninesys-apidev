@@ -188,6 +188,68 @@ return function (App $app) {
                     }
                 }
 
+                // 6b. BATCH: Eficiencia de Insumos (Estimado vs Real, por orden)
+                // Adaptado de GET /reports/input-efficiency (manufacturing.php), agrupando
+                // por id_orden en vez de por insumo -- mismos criterios ya verificados y
+                // corregidos esta semana en ese endpoint: rendimiento (Kg->Mt) aplicado solo
+                // cuando la unidad del insumo/receta es Kg (no siempre que tenga uno
+                // cargado), ABS() en el consumo real para no restar en negativo ante
+                // correcciones de inventario, y fallback por inv.id_catalogo cuando el
+                // movimiento no tiene id_catalogo_insumos_prodcutos guardado. Sin la
+                // ventana de 7 días de ese endpoint (aquí ya se acota por el conjunto
+                // fijo de órdenes del reporte, no por un catálogo sin acotar).
+                $insumosEficienciaMap = [];
+                if (!empty($orderIds)) {
+                    $sqlEficienciaInsumos = "SELECT
+                            det.id_orden,
+                            SUM(det.cantidad_estandar) AS consumo_estimado,
+                            SUM(det.cantidad_real) AS consumo_real
+                        FROM (
+                            SELECT
+                                op.id_orden,
+                                cip._id AS id_insumo_catalogo,
+                                SUM(op.cantidad * pia.cantidad *
+                                    CASE WHEN pia.unidad = 'Kg' AND ir.rendimiento IS NOT NULL
+                                         THEN ir.rendimiento ELSE 1 END
+                                ) AS cantidad_estandar,
+                                COALESCE((
+                                    SELECT SUM(ABS(im_sub.valor_final - im_sub.valor_inicial) *
+                                        CASE WHEN inv_sub.unidad = 'Kg' AND inv_sub.rendimiento IS NOT NULL
+                                             THEN inv_sub.rendimiento ELSE 1 END)
+                                    FROM $companyDB.inventario_movimientos im_sub
+                                    LEFT JOIN $companyDB.inventario inv_sub ON inv_sub._id = im_sub.id_insumo
+                                    WHERE im_sub.id_orden = op.id_orden
+                                      AND (inv_sub.id_catalogo = cip._id OR im_sub.id_catalogo_insumos_prodcutos = cip._id)
+                                ), 0) AS cantidad_real
+                            FROM $companyDB.ordenes_productos op
+                            JOIN (
+                                SELECT id_product, id_talla, id_catalogo_insumos_productos,
+                                       MAX(cantidad) AS cantidad, MAX(unidad) AS unidad
+                                FROM $companyDB.product_insumos_asignados
+                                GROUP BY id_product, id_talla, id_catalogo_insumos_productos
+                            ) pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
+                            JOIN $companyDB.catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
+                            LEFT JOIN (
+                                SELECT id_catalogo, MAX(rendimiento) AS rendimiento
+                                FROM $companyDB.inventario
+                                WHERE rendimiento > 1
+                                GROUP BY id_catalogo
+                            ) ir ON ir.id_catalogo = cip._id
+                            WHERE op.id_orden IN ($orderIdsStr)
+                            GROUP BY op.id_orden, cip._id
+                        ) det
+                        GROUP BY det.id_orden";
+                    $insumosEficienciaRaw = $dbEmpresas->goQuery($sqlEficienciaInsumos);
+                    if (is_array($insumosEficienciaRaw) && !isset($insumosEficienciaRaw['status'])) {
+                        foreach ($insumosEficienciaRaw as $ie) {
+                            $insumosEficienciaMap[$ie['id_orden']] = [
+                                'consumo_estimado' => (float)$ie['consumo_estimado'],
+                                'consumo_real' => (float)$ie['consumo_real'],
+                            ];
+                        }
+                    }
+                }
+
                 $debugMaps = [];
                 if (false) {
                     $debugMaps = [
@@ -379,6 +441,8 @@ return function (App $app) {
                     $row['tiempo_de_produccion'] = $tiempoMap[$id] ?? 0;
                     $row['empleados_asignados'] = $empAsigMap[$id] ?? '';
                     $row['reposiciones'] = $reposMap[$id] ?? 0;
+                    $row['consumo_estimado_insumos'] = $insumosEficienciaMap[$id]['consumo_estimado'] ?? 0;
+                    $row['consumo_real_insumos'] = $insumosEficienciaMap[$id]['consumo_real'] ?? 0;
                     if (false) {
                         $row['debug_movimientos_insumos'] = $debugMaps['movs'][$id] ?? 0;
                         $row['debug_pagos'] = $debugMaps['pagos'][$id] ?? 0;
@@ -398,11 +462,6 @@ return function (App $app) {
                         'fin' => $fin,
                         'orders' => count($orderIds),
                     ];
-                }
-
-                // Integrar eficiencia como 0 por compatibilidad
-                foreach ($reporteData as &$row) {
-                    $row['eficiencia_insumos'] = 0;
                 }
 
                 $finalResponse['insumos_resumen'] = [];
