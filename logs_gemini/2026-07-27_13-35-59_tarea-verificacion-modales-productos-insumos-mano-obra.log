@@ -1,0 +1,43 @@
+- **Solicitud del Usuario:** "Ok ahora pasemos a la tabla. En las columnas Productos, Costos Insumos, Costo M.O tenemos componentes que abren un modal, vamos a verificar que el monto que se muestra en el link para abrir los modales es correcto y que los datos que se muestran en el modal también." (parte final de la auditoría del Reporte de Costos de Producción, tras cerrar las 4 fases previas).
+- **Fecha y Hora:** 2026-07-27 13:35:59
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/reports.php` (`GET /reportes/costos-produccion/{inicio}/{fin}`, `GET /reportes/mano-obra-por-orden/{id_orden}`)
+    - `app/routes/products.php` (`GET /productos-asignados/{orden}`, solo lectura -- no modificado, se ajustó el otro lado)
+    - `app/routes/inventory.php` (`GET /reporte/insumos-cosumidos-por-orden`, solo lectura -- usado como referencia de comportamiento correcto)
+- **Commits Relacionados:**
+    - Backend: `b878192` (Costo M.O., horario laboral real), `742124d` (Productos/Diseños + truncamiento de color de tintas)
+- **Acción Realizada:**
+    Se investigaron las 3 columnas de la tabla principal que abren un modal de detalle, comparando el valor mostrado en el link (calculado por el reporte principal) contra los datos mostrados dentro de cada modal (calculados por un endpoint independiente):
+
+    1. **Costo M.O.:** el link (`costo_mano_de_obra_total`) y el modal (`/reportes/mano-obra-por-orden/{id_orden}`) usaban horas RAW (diferencia cruda de timestamps) en vez de horas filtradas por horario laboral real, inflando drásticamente el costo en tareas dejadas abiertas varios días (orden 4744: 271.62h crudas vs. 77.07h reales). Se portó `calcularHorasLaboradasReales` de `mixins/mixin-time.js` (frontend) a una función PHP global en `reports.php`, reescribiendo `$sqlSalarios` para traer filas sin agregar y procesar las horas en PHP. Verificado con Python independiente (77.07h/$28.90 esperado) y en vivo contra la orden 6301 (sin cambio, 0.05h/$0.02) y visualmente en el navegador (modal mostrando "$0.29 + $0.61 = $0.90" coincidiendo exactamente con el link, sin la advertencia de "Diferencia de ajuste").
+
+    2. **Productos:** se confirmó que `/productos-asignados/{orden}` (usado por el modal) filtra `category_name != 'Diseños'`, mientras que `total_productos` (usado por el link, en `reports.php` línea 215) no aplicaba ese filtro -- inconsistencia real detectada por inspección de código y datos (41 órdenes históricas con productos categoría "Diseños"). Antes de tocar el endpoint compartido `/productos-asignados`, se verificó su uso en las otras 4 páginas que lo consumen (`reposicion.vue` x2, `editarProductos.vue`, `editarProductos2.vue`) -- todas páginas de gestión/reposición de producto físico donde excluir "Diseños" es el comportamiento correcto e intencional. Por eso se decidió NO tocar el endpoint compartido, sino agregar el mismo filtro `AND category_name != 'Diseños'` a la consulta `total_productos` del reporte principal, alineándola con el comportamiento ya correcto del modal.
+
+    3. **Costo Insumos:** se verificó con datos reales (orden 6293) que el cálculo de insumos (sin tintas) del link (`costos_de_insumos`) y del modal (`/reporte/insumos-cosumidos-por-orden`, suma de `total_insumo`) son matemáticamente equivalentes y coinciden exactamente ($49.11 en ambos) -- las fórmulas se ven distintas en SQL pero el factor `rendimiento` se cancela algebraicamente entre `costo` y `cantidad_utilizada`. Sin embargo, se detectó que el cálculo de costo de TINTAS del reporte principal truncaba el código de color a 1 solo carácter (`substr($code, 0, 1)`) al buscar el costo por ml en `$costMap`/`$fallbackMap`, mientras que el mismo cálculo en el endpoint del modal usaba el código completo. La empresa tiene colores con códigos de más de 1 letra (`BRNZ`, `LC`, `LM`, `OR`, `GR`, `RD`, `BL`), y el truncamiento causaba colisiones potenciales (`BRNZ`/`BL` ambos truncaban a "B"; `LC`/`LM` ambos truncaban a "L"). Se corrigieron las 3 ocurrencias de `substr(trim($x), 0, 1)` en `reports.php`, usando el código completo igual que el modal.
+
+- **Inconvenientes y Desafíos:**
+    Al verificar el fix de Productos con datos reales, se descubrió que ninguna de las 41 órdenes históricas con productos categoría "Diseños" tiene tareas con `fecha_terminado` registrado en `lotes_detalles` -- por lo tanto ninguna de ellas aparece nunca en el Reporte de Costos de Producción (que filtra por `fecha_terminado`), independientemente del filtro de categoría. El fix es correcto y de bajo riesgo (alinea la consulta con el comportamiento ya establecido del endpoint del modal), pero actualmente no tiene impacto observable en ninguna orden alcanzable por este reporte -- queda como corrección preventiva/de consistencia, no como corrección de un bug visible hoy.
+
+    Al verificar el fix de tintas con la orden real 6095 (que sí usa colores especiales BRNZ y RD), se confirmó que el link y el modal ahora coinciden exactamente ($2.00 en ambos, antes y después del fix -- porque en los datos actuales "B" nunca colisionaba con otro código de costo real, solo BRNZ tiene costo cargado entre los códigos truncables a "B"). El fix elimina el riesgo latente sin alterar los totales actuales, confirmado explícitamente comparando link vs. modal en vivo tras el despliegue.
+
+- **Decisión Final y Justificación:**
+    Se aplicaron los 3 fixes (Costo M.O., Productos, tintas/color) porque las 3 discrepancias eran reales a nivel de código (confirmadas por lectura + datos), de bajo riesgo, y consistentes con el patrón ya establecido en esta sesión de mantener el LINK y el MODAL de cada columna alineados a la misma fuente de verdad. Se decidió específicamente NO tocar el endpoint compartido `/productos-asignados` (que ya tenía el comportamiento correcto) y en su lugar ajustar el reporte principal, evitando romper otras 4 páginas que dependen de ese endpoint con su filtro actual.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (`grep` para localizar usos cruzados del endpoint compartido antes de decidir dónde aplicar el fix, `ssh`/`psql` para verificar cada hipótesis con datos reales antes y después del cambio, `git diff`/`commit`, `curl` para verificación en vivo post-despliegue), `php -l`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Tras el despliegue, se verificó vía `curl` contra la API real:
+    - Orden 6095 (colores especiales BRNZ+RD): link `total_tinta_costo=2`, modal `total_tinta_costo=2` -- coinciden exactamente.
+    - Orden 6293 (CMYK estándar): sin cambio, `total_tinta_costo=3.99` en ambos -- confirma que el fix no alteró el caso normal.
+    - Orden 6293, insumos sin tintas: `costos_de_insumos=49.11` (link) vs. suma de `total_insumo` del modal = `49.11` -- coinciden exactamente.
+    - Se confirmó vía `psql` que aplicar el filtro `category_name != 'Diseños'` a las órdenes 53/63 (ejemplo concreto de productos 100% "Diseño Gráfico") produce 0 filas, igual que ya hacía el modal.
+
+- **Logro Conseguido:**
+    Se completó la auditoría de las 3 columnas de la tabla del Reporte de Costos de Producción que abren modal de detalle (Productos, Costo Insumos, Costo M.O.), corrigiendo 3 inconsistencias de código entre el valor mostrado en el link y los datos mostrados en el modal correspondiente -- Costo M.O. con impacto real verificado en datos actuales, Productos y color de tintas como correcciones preventivas de consistencia sin impacto visible hoy pero que eliminan un riesgo real de divergencia futura.
+
+- **Observaciones:** Con esto se completa la auditoría íntegra del Reporte de Costos de Producción iniciada al comienzo de esta sesión (4 fases + esta verificación adicional de columnas con modal).
+
+- **Respuesta de Claude:** Se verificaron las 3 columnas con modal (Productos, Costo Insumos, Costo M.O.). Costo M.O. tenía un bug real con impacto visible (horas crudas vs. horario laboral real) -- corregido y verificado. Se encontraron además 2 inconsistencias latentes de menor impacto (filtro de categoría "Diseños" inconsistente entre el link y el modal de Productos; truncamiento de código de color a 1 letra en el cálculo de tintas del link) -- ambas corregidas y verificadas en vivo, confirmando que el link y el modal ahora coinciden exactamente en todos los casos probados.
