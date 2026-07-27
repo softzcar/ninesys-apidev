@@ -212,7 +212,7 @@ return function (App $app) {
                 // 3. BATCH: Total Productos (Solo si hay órdenes)
                 $productosMap = [];
                 if (!empty($orderIds)) {
-                    $productosSql = "SELECT id_orden, SUM(cantidad) as total FROM $companyDB.ordenes_productos WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden";
+                    $productosSql = "SELECT id_orden, SUM(cantidad) as total FROM $companyDB.ordenes_productos WHERE id_orden IN ($orderIdsStr) AND category_name != 'Diseños' GROUP BY id_orden";
                     $productosRaw = $dbEmpresas->goQuery($productosSql);
                     if (is_array($productosRaw) && !isset($productosRaw['status'])) {
                         foreach ($productosRaw as $p) $productosMap[$p['id_orden']] = $p['total'];
@@ -389,7 +389,7 @@ return function (App $app) {
                 $costMap = [];
                 if (is_array($recargasRaw) && !isset($recargasRaw['status'])) {
                     foreach ($recargasRaw as $r) {
-                        $colKey = strtoupper(substr(trim($r['color'] ?? ''), 0, 1));
+                        $colKey = strtoupper(trim($r['color'] ?? ''));
                         if ($colKey && !isset($costMap[$r['id_catalogo_impresora']][$colKey])) {
                             $costMap[$r['id_catalogo_impresora']][$colKey] = $r['cost_ml'];
                         }
@@ -404,7 +404,7 @@ return function (App $app) {
                 $fallbackMap = [];
                 if (is_array($fallbackRaw) && !isset($fallbackRaw['status'])) {
                     foreach ($fallbackRaw as $fr) {
-                        $colKey = strtoupper(substr(trim($fr['color'] ?? ''), 0, 1));
+                        $colKey = strtoupper(trim($fr['color'] ?? ''));
                         if ($colKey) $fallbackMap[$colKey] = $fr['cost_ml'];
                     }
                 }
@@ -415,7 +415,7 @@ return function (App $app) {
                     foreach ($tintasRaw as $t) {
                         $id = $t['id_orden'];
                         $ml = (float)($t['cantidad'] ?? 0);
-                        $colKey = strtoupper(substr(trim($t['color_code'] ?? ''), 0, 1));
+                        $colKey = strtoupper(trim($t['color_code'] ?? ''));
                         $costMl = $costMap[$t['id_catalogo_impresoras']][$colKey] ?? ($fallbackMap[$colKey] ?? 0);
                         $cost_total = ($ml * $costMl);
 
