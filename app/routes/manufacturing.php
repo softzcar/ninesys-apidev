@@ -831,7 +831,12 @@ return function (App $app) {
               $sqlLote = "UPDATE lotes SET paso = 'terminado', id_departamento_actual = 0 WHERE id_orden = ?;";
               $localConnection->goQuery($sqlLote, [$miEmpleado['id_orden']]);
 
-              $sqlOrden = "UPDATE ordenes SET `status` = 'terminada' WHERE _id = ?;";
+              // Guard: no marcar terminada una orden que ya fue cancelada o
+              // entregada -- esta es la finalización automática que dispara
+              // el último empleado al cerrar el último paso, y no validaba
+              // el estado actual (riesgo de sobreescribir una cancelación
+              // hecha en paralelo).
+              $sqlOrden = "UPDATE ordenes SET `status` = 'terminada' WHERE _id = ? AND `status` NOT IN ('cancelada', 'entregada');";
               $localConnection->goQuery($sqlOrden, [$miEmpleado['id_orden']]);
 
               $localConnection->commit();
