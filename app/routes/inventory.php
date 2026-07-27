@@ -1791,6 +1791,12 @@ return function (App $app) {
     $app->get('/insumos/reporte/insumos/producto/{id_producto}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
 
+        // id_producto viene de la URL (route param) y se concatenaba crudo en
+        // el SQL sin sanitizar -- se envuelve en intval() para cerrar el
+        // vector de inyección SQL, sin cambiar el comportamiento (siempre fue
+        // un código numérico de producto).
+        $idProducto = intval($args['id_producto']);
+
         if (DB_DRIVER === 'pgsql') {
             $sql = "SELECT
     a.id_orden,
@@ -1799,8 +1805,7 @@ return function (App $app) {
     b.id_insumo,
     d.insumo,
     d.sku,
-    b.valor_inicial,
-    b.valor_final,
+    ROUND(ABS(b.valor_final - b.valor_inicial), 2) AS material_consumido,
     c.nombre,
     b.departamento,
     TO_CHAR(b.moment, 'DD/MM/YYYY') moment
@@ -1810,8 +1815,8 @@ return function (App $app) {
     JOIN inventario_movimientos b ON b.id_orden = a.id_orden
     JOIN inventario d ON b.id_insumo = d._id
     JOIN api_empresas.empresas_usuarios c ON c.id_usuario = b.id_empleado
-    WHERE a.id_woo =" . $args['id_producto'] . ' ORDER BY a.category_name
-    ';
+    WHERE a.id_woo = $idProducto ORDER BY a.category_name
+    ";
         } else {
             $sql = "SELECT
     a.id_orden,
@@ -1820,8 +1825,7 @@ return function (App $app) {
     b.id_insumo,
     d.insumo,
     d.sku,
-    b.valor_inicial,
-    b.valor_final,
+    ROUND(ABS(b.valor_final - b.valor_inicial), 2) AS material_consumido,
     c.nombre,
     b.departamento,
     DATE_FORMAT(b.moment, '%d/%m/%Y')moment
@@ -1831,8 +1835,8 @@ return function (App $app) {
     JOIN inventario_movimientos b ON b.id_orden = a.id_orden
     JOIN inventario d ON b.id_insumo = d._id
     JOIN empleados c ON c._id = b.id_empleado
-    WHERE a.id_woo =" . $args['id_producto'] . ' ORDER BY a.category_name
-    ';
+    WHERE a.id_woo = $idProducto ORDER BY a.category_name
+    ";
         }
 
         $object['sql'] = $sql;
@@ -1840,33 +1844,19 @@ return function (App $app) {
 
         $localConnection->disconnect();
 
-        $object['fields'][0]['key'] = 'id_orden';
-        $object['fields'][0]['label'] = 'Orden';
-
-        $object['fields'][1]['key'] = 'producto';
-        $object['fields'][1]['label'] = 'Producto';
-
-        $object['fields'][2]['key'] = 'id_insumo';
-        $object['fields'][2]['label'] = 'ID insumo';
-
-        $object['fields'][3]['key'] = 'insumo';
-        $object['fields'][3]['label'] = 'Insumo';
-        // $object['fields'][0]['sortable'] = true;
-        $object['fields'][4]['key'] = 'valor_inicial';
-        $object['fields'][4]['label'] = 'Valor Inicial';
-        // $object['fields'][1]['sortable'] = true;
-        $object['fields'][5]['key'] = 'valor_final';
-        $object['fields'][5]['label'] = 'Valor Final';
-        // $object['fields'][2]['sortable'] = true;
-        $object['fields'][6]['key'] = 'nombre';
-        $object['fields'][6]['label'] = 'Empleado';
-
-        $object['fields'][7]['key'] = 'moment';
-        $object['fields'][7]['label'] = 'Fecha';
-
-        $object['fields'][8]['key'] = 'moment';
-        $object['fields'][8]['label'] = 'Fecha';
-        // $object['fields'][3]['sortable'] = true;
+        // NOTA: reemplaza el bloque anterior de asignación por índice (con
+        // sortable comentado y un campo 'moment'/'Fecha' duplicado por error
+        // de copiar/pegar en el índice 8) por un array literal -- más claro
+        // y sin el riesgo de desalinear índices al agregar/quitar columnas.
+        $object['fields'] = [
+            ['key' => 'id_orden', 'label' => 'Orden', 'sortable' => true],
+            ['key' => 'producto', 'label' => 'Producto', 'sortable' => true],
+            ['key' => 'id_insumo', 'label' => 'ID insumo', 'sortable' => true],
+            ['key' => 'insumo', 'label' => 'Insumo', 'sortable' => true],
+            ['key' => 'material_consumido', 'label' => 'Material Consumido'],
+            ['key' => 'nombre', 'label' => 'Empleado', 'sortable' => true],
+            ['key' => 'moment', 'label' => 'Fecha', 'sortable' => true],
+        ];
 
         $response->getBody()->write(json_encode($object));
         return $response
