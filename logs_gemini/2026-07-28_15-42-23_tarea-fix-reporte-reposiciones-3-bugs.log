@@ -1,0 +1,36 @@
+- **Solicitud del Usuario:** "Sigamos con Reporte de Reposiciones, este reporte no muestra información, empecemos como venimos haciendo primero verificando que la api muestre resultados reales, una vez lo consigamos tendremos datos que mostrar en la app para evaluar el estado de este reporte" -- inicio de la auditoría del Reporte de Reposiciones (`/produccion/reporte-reposiciones`), siguiendo la misma metodología del resto de la sesión.
+- **Fecha y Hora:** 2026-07-28 15:42:23
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/production.php` (`GET /reposiciones-reporte/{estatus_orden}`, `GET /reposicion-detalles/{id_reposicion}`)
+- **Commits Relacionados:**
+    - Backend: `b75a959`
+- **Acción Realizada:**
+    Se investigaron ambos endpoints del reporte y se encontraron 3 bugs independientes que, combinados, hacían que el reporte pareciera no tener datos:
+
+    1. **Filtro de estatus con mayúsculas que no coinciden con los datos reales:** la consulta comparaba `ord.status = 'Activa'` (y variantes capitalizadas: 'Pausada', 'En espera', 'Terminada'), pero los valores reales en la tabla `ordenes` están en minúsculas ('activa', 'entregada', 'terminada'), con incluso variantes inconsistentes entre sí ('cancelada' en 146 filas vs. 'Cancelada' en 4). Postgres compara strings de forma sensible a mayúsculas -- el filtro por defecto ('activa', el que carga la página al abrir) siempre devolvía 0 filas sin importar el rango de fechas. Corregido con `LOWER(ord.status) IN (...)`/`LOWER(ord.status) = ?`.
+
+    2. **JOIN de insumos apuntando a la columna equivocada:** `LEFT/INNER JOIN inventario inv ON inv._id = inm.id_producto` en vez de `inm.id_insumo`. Se confirmó vía el constraint de FK de la tabla (`inventario_movimientos.id_producto` referencia `products`, no `inventario`; `id_insumo` sí referencia `inventario`) y con datos reales: uniendo por `id_producto=140` no había ningún match; uniendo por `id_insumo=701/926` sí aparecían insumos reales con nombre y costo ("microfibra ligth blanco 1.5m", "dryfit blanco 1,6m"). En el reporte principal esto dejaba el componente de insumos de `material_consumido` silenciosamente en $0 (enmascarado por `COALESCE`). En el modal de detalle (`INNER JOIN`, no `LEFT JOIN`) hacía desaparecer POR COMPLETO las líneas de consumo de material, mostrando solo tintas y mano de obra. Corregido en los 4 lugares (2 endpoints x 2 ramas MySQL/Postgres).
+
+    3. **Interpolación directa de parámetros sin sanitizar:** `estatus_orden` (URL) se concatenaba directo en el WHERE; `id_reposicion`/`id_orden`/`id_empleado` se interpolaban directo en múltiples sub-consultas de una UNION grande en `/reposicion-detalles`. Se parametrizó `estatus_orden` con bind (`?` + `goQuery($sql, $params)`); se casteó a entero `id_reposicion`/`id_orden`/`id_empleado` (usados en contexto puramente numérico dentro de la UNION -- el cast a int neutraliza la inyección sin tener que reescribir toda la consulta a placeholders, dado que ya no puede contener sintaxis SQL).
+
+- **Inconvenientes y Desafíos:** Ninguno técnico grave. Durante la verificación con datos reales se detectó que la mayoría de las `inventario_movimientos` vinculadas a reposiciones NO tienen `id_reposicion` seteado directamente (0 de 5 casos de prueba revisados) -- dependen enteramente del fallback por ventana de tiempo (`id_orden` + rango `[moment_reposicion, moment_siguiente_reposicion)`), ya implementado en la consulta original y no modificado en esta tarea.
+
+    **Hubo un corte eléctrico** durante la implementación del fix de frontend complementario (commit ya creado localmente pero sin pushear/desplegar) -- se retomó la sesión, se verificó que el commit local seguía intacto, y se completó el push + despliegue sin pérdida de trabajo.
+
+- **Decisión Final y Justificación:**
+    Se usó `LOWER()` en ambos lados de la comparación de status en vez de normalizar los datos existentes en la tabla `ordenes` (ej. un `UPDATE` masivo a minúsculas) -- la query defensiva es menos invasiva, no requiere tocar datos históricos, y sigue funcionando aunque vuelva a aparecer una variante de mayúsculas distinta en el futuro (dato ya demostrado ser inconsistente).
+
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (verificación exhaustiva de cada uno de los 3 bugs con datos reales ANTES de tocar código: conteo de filas con el filtro viejo vs. nuevo, comparación directa del JOIN roto vs. corregido con un caso real trazable), `Read`, `Edit`, `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` para verificación en vivo de ambos endpoints tras el despliegue.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Antes del fix: `SELECT COUNT(*) ... WHERE (ord.status = 'Activa' OR ...)` = 0 filas. Con `LOWER()`: 12 filas. Comparación directa del JOIN para la reposición real más reciente (orden 6293): con `id_producto` (bug) = sin match; con `id_insumo` (corregido) = 2 insumos reales, $7.72 + $34.05 = $41.78. Tras desplegar, verificado vía `curl`: `/reposiciones-reporte/activa` (sin fechas) devuelve 12 filas reales; la reposición de la orden 6293 muestra `material_consumido: "41.778892002037697360"` (coincide exacto); `/reposicion-detalles/83` devuelve las 2 líneas de insumo real con nombre, cantidad, costo unitario y total.
+
+- **Logro Conseguido:**
+    Se identificaron y corrigieron los 3 bugs de backend que hacían que el Reporte de Reposiciones pareciera no tener información -- el reporte pasa de mostrar 0 filas y $0 de material consumido a mostrar 12 reposiciones reales con costos de insumos correctos, tanto en el listado principal como en el desglose detallado por reposición.
+
+- **Observaciones:** Ver bitácora complementaria en `app_multi/logs_gemini/` para el fix de frontend (comportamiento de fecha por defecto en la vista "Activas"). Continúa evaluando el resto del reporte (columnas de la tabla, filtros de fecha/estatus explícitos) ahora que la API ya devuelve datos reales.
+
+- **Respuesta de Claude:** Se encontraron y corrigieron 3 bugs independientes en el Reporte de Reposiciones: un filtro de estatus con mayúsculas que nunca coincidía con los datos reales (dejaba el reporte en 0 filas por defecto), un JOIN de insumos apuntando a la columna equivocada (dejaba el costo de material en $0 y las líneas de insumo invisibles en el modal), y parámetros sin sanitizar. Verificado con datos reales antes y después: el reporte pasa de 0 filas a 12 reposiciones reales con costos correctos.
