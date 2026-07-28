@@ -1080,14 +1080,14 @@ return function (App $app) {
                   re.unidades unidades,
                   em_emisor.nombre empleado_emisor,
                   em_asignado.nombre empleado_asignado,
-                  re.detalle detalle_emisor,
-                  re.detalle detalle_encargado,                
+                  re.detalle_emisor detalle_emisor,
+                  re.detalle detalle_encargado,
                   COALESCE(
                     SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
-                  ) + 
+                  ) +
                   COALESCE(
                     (SELECT SUM(
-                      t.cantidad * CASE 
+                      t.cantidad * CASE
                         WHEN t.id_color_tinta = 1 THEN (ic.costo / NULLIF(ic.cantidad_inicial, 0))
                         WHEN t.id_color_tinta = 2 THEN (im.costo / NULLIF(im.cantidad_inicial, 0))
                         WHEN t.id_color_tinta = 3 THEN (iy.costo / NULLIF(iy.cantidad_inicial, 0))
@@ -1127,7 +1127,7 @@ return function (App $app) {
               LEFT JOIN inventario_movimientos inm ON (inm.id_reposicion = re._id) OR (inm.id_reposicion IS NULL AND inm.id_orden = re.id_orden AND inm.moment >= re.moment AND inm.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = re.id_orden AND re_next.moment > re.moment AND re_next.eliminada = 0), '9999-12-31 23:59:59'))
               LEFT JOIN inventario inv ON inv._id = inm.id_insumo
               {$whereParams}
-              GROUP BY re._id, re.id_orden, re.id_empleado, re.id_empleado_emisor, re.id_ordenes_productos, op.id_woo, ord.status, op.name, op.talla, op.corte, op.tela, re.unidades, em_emisor.nombre, em_asignado.nombre, re.detalle, re.moment
+              GROUP BY re._id, re.id_orden, re.id_empleado, re.id_empleado_emisor, re.id_ordenes_productos, op.id_woo, ord.status, op.name, op.talla, op.corte, op.tela, re.unidades, em_emisor.nombre, em_asignado.nombre, re.detalle_emisor, re.detalle, re.moment
               ORDER BY re.id_orden ASC, re._id ASC;";
     } else {
       $sql = "SELECT
@@ -1145,11 +1145,11 @@ return function (App $app) {
                   re.unidades unidades,
                   em_emisor.nombre empleado_emisor,
                   em_asignado.nombre empleado_asignado,
-                  re.detalle detalle_emisor,
-                  re.detalle detalle_encargado,                
+                  re.detalle_emisor detalle_emisor,
+                  re.detalle detalle_encargado,
                   COALESCE(
                     SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
-                  ) + 
+                  ) +
                   COALESCE(
                     (SELECT SUM(
                       (t.c * (ic.costo / NULLIF(ic.cantidad_inicial, 0))) +
