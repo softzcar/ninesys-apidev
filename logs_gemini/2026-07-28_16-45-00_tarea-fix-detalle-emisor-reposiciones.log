@@ -1,0 +1,25 @@
+- **Solicitud del Usuario:** "Necesitamos implementar un modal similar [al de Control de Producción] que se abra con un botón y que solo muestre los detalles de la reposición, sin acciones. Únicamente vamos a asegurarnos que la información que mostremos incluya los dos detalles que puede contener una reposición, el detalle del emisor de la reposición y el detalle del jefe de producción que la aprueba." -- al investigar los datos disponibles para construir ese modal en el Reporte de Reposiciones, se encontró que el endpoint que alimenta el reporte tenía un bug que impedía cumplir este requisito.
+- **Fecha y Hora:** 2026-07-28 16:45:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/production.php` (`GET /reposiciones-reporte/{estatus_orden}`)
+- **Commits Relacionados:**
+    - Backend: `99f594f`
+- **Acción Realizada:**
+    El SELECT de `/reposiciones-reporte/{estatus_orden}` (ambas ramas MySQL/Postgres) aliaseaba la misma columna `re.detalle` dos veces: `re.detalle detalle_emisor` y `re.detalle detalle_encargado`. Esto significaba que el campo `detalle_emisor` devuelto por la API nunca contenía la nota original del emisor de la reposición -- siempre devolvía una copia exacta del campo `detalle` (la nota del jefe de producción que aprueba). Se corrigió a `re.detalle_emisor detalle_emisor` (la columna correcta de la tabla `reposiciones`, ya usada correctamente en otros endpoints como `/sse/produccion`). En la rama Postgres también se agregó `re.detalle_emisor` al `GROUP BY` (requerido por Postgres para cualquier columna no agregada en el SELECT).
+
+- **Inconvenientes y Desafíos:** Ninguno. Bug silencioso -- no producía error, solo dato incorrecto (indistinguible de un dato legítimo a simple vista, ya que en muchos casos el jefe de producción reescribe/repite el texto del emisor casi textualmente).
+
+- **Decisión Final y Justificación:** Corrección directa de la columna fuente, sin cambios adicionales -- el bug era un simple alias erróneo, ya existía la columna correcta (`detalle_emisor`) en la tabla y el patrón correcto ya estaba en uso en otro endpoint del mismo archivo.
+
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (verificación con datos reales de reposiciones con notas de emisor y de aprobación genuinamente distintas, ej. id 79: emisor "se dañaron al salir de la calandra" vs. aprobación " se dañaron al salir de la calandra 10 metros"), `Read`, `Edit`, `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` para verificación en vivo post-despliegue.
+
+- **Resultado:** Éxito
+
+- **Verificación:** Verificado con datos reales ANTES del fix vía `psql` (`detalle_emisor` y `detalle` con contenido distinto en la tabla `reposiciones` para múltiples reposiciones). Tras el despliegue, verificado vía `curl -H "Authorization: 194" .../reposiciones-reporte/todas`: la reposición 83 (orden 6293) ahora devuelve `detalle_emisor: "espalda L lujios y repuestos MB\nSALIO CON UN PUNTO BLACO"` y `detalle_encargado: "espalda L lujios y repuestos MB SALIO CON UN PUNTO BLACO"` -- dos valores distintos, coincidiendo exactamente con los datos crudos de la tabla. Confirmado también visualmente en el navegador vía el nuevo modal de detalle del frontend.
+
+- **Logro Conseguido:** El Reporte de Reposiciones ahora puede mostrar de forma confiable tanto la nota original del emisor como la del jefe de producción que aprueba -- requisito explícito del usuario para el nuevo modal de detalle, que sin este fix habría mostrado el mismo texto en ambos campos.
+
+- **Observaciones:** Ver bitácora complementaria en `app_multi/logs_gemini/` para las mejoras de frontend (badge de estado + modal de detalle) que dependen de este fix.
+
+- **Respuesta de Claude:** Se encontró y corrigió un bug donde `detalle_emisor` en la API del Reporte de Reposiciones era en realidad una copia del campo `detalle` (nota del jefe de producción), por un alias SQL incorrecto. Verificado con datos reales que ahora ambos campos muestran contenido genuinamente distinto, habilitando el nuevo modal de detalle solicitado.
