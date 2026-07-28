@@ -1,0 +1,30 @@
+- **Solicitud del Usuario:** "Sí, avancemos con la Fase 4!" (Reporte de Desviación de Costos: tabla principal + modal "Tallas").
+- **Fecha y Hora:** 2026-07-28 14:46:01
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/products_reports.php` (endpoint `GET /reportes/costos-productos/{id_producto}/detalle`)
+- **Commits Relacionados:**
+    - Backend: `1dad731`
+- **Acción Realizada:**
+    Se leyó `ReporteCostosProductosDetalleModal.vue` para entender la fuente de datos del modal "Tallas" (mismo endpoint `/reportes/costos-productos/{id}/detalle` ya intervenido varias veces hoy). Se comparó una fila de la tabla ("Franela Sublimada", id 38) contra su modal de detalle: `labor_estimado`/`tiempo_estimado` coinciden exactos entre la fila y TODAS las tallas del modal (correcto, no varían por talla en este modelo de datos). Sin embargo, se detectó que `insumos_real` mostraba el mismo valor ($0.91) en TODAS las tallas por igual, **incluidas 5 tallas con `unidades_fabricadas: 0`** (nunca producidas en el rango) -- mientras `labor_real`/`tiempo_real` sí mostraban correctamente $0/0s para esas mismas tallas.
+
+    Se rastreó la causa: el cálculo de `costoRealConsumidoTalla` (consumo real de insumos prorrateado por talla) se aplicaba incondicionalmente siempre que `$unidadesTotalesFabricadas > 0` (el producto completo tuvo producción), sin verificar `$cantTalla > 0` (que ESTA talla específica tuvo producción) -- a diferencia de `labor_real`/`tiempo_real`, que sí tenían ese guardia (`if ($cantTalla > 0) {...}`). Se agregó la misma condición al bloque de insumos.
+
+- **Inconvenientes y Desafíos:** Al probar el botón "Tallas" haciendo clic en la UI real, el modal no abría visualmente en los primeros 2 intentos (probablemente coordenadas de clic imprecisas sobre un botón pequeño). Se optó por invocar `openDetailModal()` directamente sobre la instancia Vue vía `javascript_tool` para una verificación más confiable, lo que sí permitió confirmar visualmente el modal completo y el fix aplicado.
+
+- **Decisión Final y Justificación:**
+    Se aplicó la misma condición `$cantTalla > 0` ya usada para labor/tiempo, en vez de, por ejemplo, ocultar la fila de la talla directamente -- las tallas con 0 unidades reales igual deben listarse en el modal (para que el usuario vea el detalle completo de tallas configuradas en la Ficha Técnica), pero sus costos reales deben reflejar honestamente que no hubo producción, consistente con el criterio de "N/A/0 sobre valores engañosos" ya aplicado varias veces esta semana en otros reportes.
+
+- **Herramienta(s) Utilizada(s):** `Read` (componente del modal), `curl` (comparación fila de tabla vs. modal, verificación antes/después del fix), `Edit`, `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `mcp__claude-in-chrome__javascript_tool` (invocación directa de `openDetailModal()` para verificación visual confiable), `mcp__claude-in-chrome__computer` (captura de pantalla del modal corregido).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Antes del fix: `curl` al endpoint de detalle mostraba `insumos_real=0.91` para las tallas 4, "Única", XL5, XL6 y XL7 (todas con `unidades_fabricadas=0`), idéntico al de las tallas SÍ producidas. Tras desplegar, las mismas 5 tallas devuelven `insumos_real=0`, `costo_total_real=0`. Verificado visualmente en el navegador (invocando el modal en vivo sobre el producto real "Franela Sublimada"): "Talla: 4 -- 0 fabricadas -- Costo Total: $0.00 -100.0%", consistente con las demás métricas de esa talla.
+
+- **Logro Conseguido:**
+    Se completó la Fase 4 (última fase acordada) de la auditoría del Reporte de Desviación de Costos, cerrando con un séptimo bug corregido: una inconsistencia interna del modal "Tallas" donde el costo de insumos ignoraba si la talla específica había sido realmente fabricada. Con esto se da por completa la auditoría de las 4 fases acordadas al inicio para este reporte (datos de la API, cards/gráficos, filtros, tabla/modal), con 7 bugs encontrados y corregidos en total durante los días 2026-07-28.
+
+- **Observaciones:** Queda pendiente actualizar `docs/revision_postgre_modulo_administracion.md` marcando "Desviación de Costos" como auditado, y decidir con el usuario cuál es el siguiente reporte/módulo a revisar.
+
+- **Respuesta de Claude:** Se completó la Fase 4: se encontró y corrigió un bug donde el modal "Tallas" mostraba un costo de insumos no-cero para tallas que nunca se fabricaron en el rango (mismo valor que las tallas sí producidas), mientras mano de obra y tiempo sí mostraban correctamente $0. Corregido para que las 3 métricas sean consistentes. Verificado en vivo abriendo el modal real: la talla con 0 unidades ahora muestra "Costo Total: $0.00" en vez de un valor engañoso. Con esto se cierra la auditoría completa del Reporte de Desviación de Costos.
