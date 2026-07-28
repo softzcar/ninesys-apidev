@@ -1,0 +1,34 @@
+- **Solicitud del Usuario:** "¿Revisaste los valores que se muestran dentro del modal que se abre con el botón de la columna 'Consumido'?" -- seguido de la confirmación explícita "Sí, corrígelo replicando la lógica de reports.php" tras reportar el hallazgo.
+- **Fecha y Hora:** 2026-07-28 17:30:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/production.php` (`GET /reposiciones-reporte/{estatus_orden}`, `GET /reposicion-detalles/{id_reposicion}`, nuevas funciones globales `buildTintaCostMaps()` y `resolveTintaCostMl()`)
+- **Commits Relacionados:**
+    - Backend: `b950469`
+- **Acción Realizada:**
+    Al auditar línea por línea los valores del modal "Desglose de Costos de Reposición" (a pedido explícito del usuario), se encontró que el costeo de tinta (Cyan/Magenta/Yellow/Black) en ambos endpoints unía `inventario._id = 3/4/5/6` -- IDs fijos asumiendo que esas filas específicas eran las tintas CMYK. Verificado con datos reales: en la empresa 194 (Postgres dev) el rango real de `inventario._id` es 355-1436 -- no existe ningún `_id` entre 1 y 10, por lo que el JOIN nunca matcheaba nada y el costo de tinta era silenciosamente $0 en el 100% de los casos, tanto en la columna "Consumido" del listado como en las 4 líneas de tinta del modal. Adicionalmente, el filtro `WHERE t.id_color_tinta IN (1,2,3,4)` ignoraba por completo otros colores reales en uso (5=Blanco con 1219 registros, 6=Barniz, 11=Rojo).
+
+    Se reemplazó por la misma arquitectura ya validada en `reports.php` (Reporte de Costos de Producción): dos funciones globales nuevas al inicio de `production.php` (reusables por ambos endpoints, siguiendo el mismo patrón de `calcularHorasLaboradasReales`):
+    - `buildTintaCostMaps($localConnection)`: construye un mapa de costo por ML `[id_impresora][color] => costo`, con prioridad a la recarga más reciente en `tintas_recargas` (join a `inventario`/`catalogo_colores_tintas`), y un mapa de respaldo `[color] => costo` promedio general vía `inventario.id_color_tinta`.
+    - `resolveTintaCostMl(...)`: resuelve el costo aplicando el respaldo si no hay recarga específica para esa impresora+color.
+
+    El cálculo se hace en PHP (no como JOIN directo en SQL) porque hay múltiples filas de `inventario` para el mismo color (ej. 10 filas de "tinta dtf uv barniz" con `id_color_tinta=6`) -- un JOIN directo por color multiplicaría el costo por cada fila duplicada.
+
+    - En `/reposiciones-reporte`: se quitó la subconsulta de tinta rota del SQL (ambas ramas), se agregó `re.moment` crudo al SELECT, y tras obtener los resultados se calcula en PHP el costo de tinta por reposición (respetando la misma ventana `[moment, siguiente_moment)` que ya usaba el JOIN de insumos) y se suma a `material_consumido`.
+    - En `/reposicion-detalles/{id}`: se quitaron los 4 bloques `UNION ALL` de tinta hardcodeados y se reemplazaron por líneas generadas en PHP (una por cada aplicación real de tinta en la ventana de esa reposición, usando `catalogo_colores_tintas.nombre` para la etiqueta), reordenando el array final por `id_catalogo` para mantener el agrupamiento visual (insumos, tintas, mano de obra).
+
+- **Inconvenientes y Desafíos:** Ninguno grave. Se detectó que este patrón hardcodeado solo existía en `production.php` (no en `reports.php`/`products_reports.php`, ya auditados), por lo que no fue necesario revisar de nuevo los otros reportes ya cerrados.
+
+- **Decisión Final y Justificación:** Se replicó exactamente la arquitectura de `reports.php` (cálculo en PHP con mapa de costos + respaldo) en vez de intentar una solución 100% SQL con `DISTINCT ON`/`ROW_NUMBER()`, porque esas funciones no son portables entre Postgres y MySQL (este archivo aún mantiene ambas ramas para las empresas que no han migrado), mientras que el patrón PHP ya está probado y auditado en este mismo repositorio.
+
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (confirmar rango real de `inventario._id`, confirmar reposiciones reales con tinta consumida dentro de su ventana, obtener costo real por ML desde `tintas_recargas`), cálculo independiente en Python del valor esperado ANTES de desplegar, `Read`, `Edit`, `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` y navegador para verificación en vivo post-despliegue.
+
+- **Resultado:** Éxito
+
+- **Verificación:** Predicción independiente ANTES del despliegue para la reposición 82 (orden 6181, "Bandera 2 Metros"): tinta esperada = 6.49×$0.015(C) + 1.22×$0.015(M) + 6.98×$0.015(Y) + 0.49×$0.015(K) = $0.2277; `material_consumido` esperado = $1.9267 (valor previo, solo materiales+labor) + $0.2277 = $2.1544. Tras desplegar, la API devolvió `material_consumido: 2.1543666666666668` -- coincidencia exacta. El detalle (`/reposicion-detalles/82`) mostró las 4 líneas de tinta con costo_unitario=$0.015 cada una y costo_total exacto, más "Papel de sublimación" ($1.27) y "Mano de Obra" ($0.66), sumando exactamente el total. Confirmado también visualmente en el navegador: el modal "Desglose de Costos de Reposición" para la orden 6181 muestra las 6 líneas correctas.
+
+- **Logro Conseguido:** El costo de tinta, que era $0 en el 100% de las reposiciones de la empresa 194 (un componente de costo real y no trivial: más de 5,000 registros de tinta en la tabla, muchos dentro de ventanas de reposición), ahora se calcula correctamente usando la misma lógica ya validada del Reporte de Costos de Producción, y de paso corrige una segunda omisión (colores fuera de CMYK que nunca se consideraban).
+
+- **Observaciones:** Este hallazgo surgió de una revisión proactiva pedida por el usuario ("¿revisaste los valores del modal?") después de dar por completado el fix anterior de JOIN de insumos -- refuerza que conviene auditar cada componente de un cálculo compuesto (insumos + tintas + labor) por separado, no solo verificar que el total "se vea razonable".
+
+- **Respuesta de Claude:** Se encontró que el costo de tinta en el Reporte de Reposiciones estaba hardcodeado a IDs de inventario (3,4,5,6) que no existen en la empresa 194, dejándolo siempre en $0 y además ignorando colores no-CMYK. Se corrigió replicando la lógica ya validada de `reports.php` (mapa de costo por impresora+color con respaldo). Verificado con una predicción independiente antes de desplegar que coincidió exactamente: la reposición 82 pasó de $1.93 a $2.15, con las 4 líneas de tinta ahora visibles en el modal de detalle.
