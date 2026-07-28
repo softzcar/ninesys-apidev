@@ -104,7 +104,10 @@ return function (App $app) {
             }
 
             // 3. Obtener costos unitarios promedio actuales de inventario
-            $invCostRaw = $db->goQuery("SELECT id_catalogo, AVG(costo / NULLIF(cantidad_inicial, 0)) AS costo_unitario FROM inventario GROUP BY id_catalogo");
+            // El costo se normaliza a "por Mt" dividiendo por el rendimiento (Mt por Kg) SOLO cuando
+            // el insumo se compra por Kg -- la Ficha Técnica (product_insumos_asignados) especifica
+            // la tela en metros, mismo criterio de conversión Kg->Mt ya usado en reports.php/manufacturing.php.
+            $invCostRaw = $db->goQuery("SELECT id_catalogo, AVG((costo / NULLIF(cantidad_inicial, 0)) / CASE WHEN unidad = 'Kg' AND rendimiento IS NOT NULL THEN rendimiento ELSE 1 END) AS costo_unitario FROM inventario GROUP BY id_catalogo");
             $invCostMap = [];
             if (is_array($invCostRaw)) {
                 foreach ($invCostRaw as $ic) {
@@ -456,7 +459,10 @@ return function (App $app) {
             }
 
             // Mapas temporales de costos
-            $invCostRaw = $db->goQuery("SELECT id_catalogo, AVG(costo / NULLIF(cantidad_inicial, 0)) AS costo_unitario FROM inventario GROUP BY id_catalogo");
+            // El costo se normaliza a "por Mt" dividiendo por el rendimiento (Mt por Kg) SOLO cuando
+            // el insumo se compra por Kg -- la Ficha Técnica (product_insumos_asignados) especifica
+            // la tela en metros, mismo criterio de conversión Kg->Mt ya usado en reports.php/manufacturing.php.
+            $invCostRaw = $db->goQuery("SELECT id_catalogo, AVG((costo / NULLIF(cantidad_inicial, 0)) / CASE WHEN unidad = 'Kg' AND rendimiento IS NOT NULL THEN rendimiento ELSE 1 END) AS costo_unitario FROM inventario GROUP BY id_catalogo");
             $invCostMap = [];
             if (is_array($invCostRaw)) {
                 foreach ($invCostRaw as $ic) {
@@ -804,7 +810,10 @@ return function (App $app) {
             }
 
             // 3. Obtener costos de inventario
-            $invCostRaw = $db->goQuery("SELECT id_catalogo, AVG(costo / NULLIF(cantidad_inicial, 0)) AS costo_unitario FROM inventario GROUP BY id_catalogo");
+            // El costo se normaliza a "por Mt" dividiendo por el rendimiento (Mt por Kg) SOLO cuando
+            // el insumo se compra por Kg -- la Ficha Técnica (product_insumos_asignados) especifica
+            // la tela en metros, mismo criterio de conversión Kg->Mt ya usado en reports.php/manufacturing.php.
+            $invCostRaw = $db->goQuery("SELECT id_catalogo, AVG((costo / NULLIF(cantidad_inicial, 0)) / CASE WHEN unidad = 'Kg' AND rendimiento IS NOT NULL THEN rendimiento ELSE 1 END) AS costo_unitario FROM inventario GROUP BY id_catalogo");
             $invCostMap = [];
             if (is_array($invCostRaw)) {
                 foreach ($invCostRaw as $ic) {
