@@ -71,9 +71,25 @@ return function (App $app) {
     };
 
     // =================================================================
+    // HELPER: OBTENER HORARIO LABORAL (para calcularHorasLaboradasReales(),
+    // definida globalmente en reports.php -- ambos archivos se cargan en
+    // cada request vía app/routes.php, la función ya está disponible aquí)
+    // =================================================================
+    $getHorarioLaboral = function($dbEmpresas, $id_empresa) {
+        if (DB_DRIVER === 'pgsql') {
+            $horarioQuery = "SELECT horario_laboral FROM api_empresas.empresas WHERE id_empresa = ?";
+        } else {
+            $horarioQuery = "SELECT horario_laboral FROM empresas WHERE id_empresa = ?";
+        }
+        $horarioResult = $dbEmpresas->goQuery($horarioQuery, [$id_empresa]);
+        $horario_laboral = (!empty($horarioResult) && isset($horarioResult[0]['horario_laboral'])) ? $horarioResult[0]['horario_laboral'] : null;
+        return $horario_laboral ? json_decode($horario_laboral, true) : null;
+    };
+
+    // =================================================================
     // ENDPOINT: LISTADO CONSOLIDADO POR PRODUCTO (REAL VS ESTIMADO)
     // =================================================================
-    $app->get('/reportes/costos-productos', function (Request $request, Response $response) use ($getSalarios) {
+    $app->get('/reportes/costos-productos', function (Request $request, Response $response) use ($getSalarios, $getHorarioLaboral) {
         $queryParams = $request->getQueryParams();
         $fecha_inicio = !empty($queryParams['fecha_inicio']) ? $queryParams['fecha_inicio'] : null;
         $fecha_fin = !empty($queryParams['fecha_fin']) ? $queryParams['fecha_fin'] : null;
@@ -159,12 +175,6 @@ return function (App $app) {
             $fechaCierreExpr = DB_DRIVER === 'pgsql'
                 ? "COALESCE(ldea.fecha_terminado, NULLIF(o.fecha_entrega, '')::date, o.fecha_creacion, o.moment::date)"
                 : "COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment))";
-            $tiempoSegundosExpr = DB_DRIVER === 'pgsql'
-                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)))"
-                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr))";
-            $tiempoHorasExpr = DB_DRIVER === 'pgsql'
-                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)) / 3600)"
-                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr) / 3600)";
 
             $params = [];
             $dateCond = "";
@@ -172,18 +182,6 @@ return function (App $app) {
                 $dateCond = " AND $momentDateExpr BETWEEN :fecha_inicio AND :fecha_fin ";
                 $params['fecha_inicio'] = $fecha_inicio;
                 $params['fecha_fin'] = $fecha_fin;
-            }
-
-            $paramsUnion = [];
-            $dateCond1 = "";
-            $dateCond2 = "";
-            if ($fecha_inicio && $fecha_fin) {
-                $dateCond1 = " AND $momentDateExpr BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
-                $dateCond2 = " AND $momentDateExpr BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
-                $paramsUnion['fecha_inicio_1'] = $fecha_inicio;
-                $paramsUnion['fecha_fin_1'] = $fecha_fin;
-                $paramsUnion['fecha_inicio_2'] = $fecha_inicio;
-                $paramsUnion['fecha_fin_2'] = $fecha_fin;
             }
 
             // 7. Cantidad total de piezas reales producidas por producto
@@ -289,64 +287,88 @@ return function (App $app) {
 
             // 10. Tiempos reales laborados (segundos) — atribuidos a los productos REALES de la orden
             //     (ordenes_productos) que pasan por ese departamento, ponderando por tiempo teórico
-            //     (products_tiempos_de_produccion) x cantidad. Sin lotes_detalles. Los registros LDEA
-            //     abiertos (sin fecha_terminado) se cierran con la fecha estimada de la orden
-            //     (fecha_entrega), no con NOW(), para no inflar el tiempo.
-            $tiempoRealRaw = $db->goQuery("
-                SELECT id_producto, SUM(total_tiempo) AS total_tiempo
-                FROM (
-                    SELECT op.id_woo AS id_producto,
-                           $tiempoSegundosExpr
-                           * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
-                           / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_tiempo
-                    FROM lotes_detalles_empleados_asignados ldea
-                    JOIN ordenes o ON ldea.id_orden = o._id
-                    JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
-                    LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
-                    WHERE o.status IN ('terminada', 'entregada') $dateCond
-                ) as combined
-                GROUP BY id_producto
+            //     (products_tiempos_de_produccion) x cantidad. Sin lotes_detalles. Las horas se calculan
+            //     con calcularHorasLaboradasReales() (filtrando por horario laboral real de la empresa),
+            //     no con la resta cruda de fecha_terminado - fecha_inicio -- 66 de 899 tareas del último
+            //     mes tienen brechas de más de 8h (tareas dejadas abiertas varios días sin cerrarse de
+            //     inmediato), inflando el tiempo hasta ~150h para fabricar una sola unidad en un caso real.
+            //     Los registros LDEA abiertos (sin fecha_terminado) se cierran con la fecha estimada de
+            //     la orden (fecha_entrega), no con NOW(), para no inflar el tiempo de tareas viejas.
+            $horarioObj = $getHorarioLaboral($dbEmpresas, $id_empresa);
+            $ldeaRaw = $db->goQuery("
+                SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre,
+                       op.id_woo AS id_producto, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                FROM lotes_detalles_empleados_asignados ldea
+                JOIN ordenes o ON ldea.id_orden = o._id
+                JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
+                LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
+                WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL $dateCond
             ", $params);
+
             $realTiempoMap = [];
-            if (is_array($tiempoRealRaw)) {
-                foreach ($tiempoRealRaw as $r) {
-                    $realTiempoMap[$r['id_producto']] = (float)$r['total_tiempo'];
+            if (is_array($ldeaRaw)) {
+                $porLdea = [];
+                foreach ($ldeaRaw as $row) {
+                    $lId = $row['id_ldea'];
+                    $porLdea[$lId]['fecha_inicio'] = $row['fecha_inicio'];
+                    $porLdea[$lId]['fecha_cierre'] = $row['fecha_cierre'];
+                    $porLdea[$lId]['lineas'][] = [
+                        'id_producto' => $row['id_producto'],
+                        'peso' => ((float)$row['tiempo_teorico'] * (float)$row['cantidad']) + 0.0001
+                    ];
+                }
+                foreach ($porLdea as $data) {
+                    $segundosReales = calcularHorasLaboradasReales($data['fecha_inicio'], $data['fecha_cierre'], $horarioObj) * 3600;
+                    $pesoTotal = array_sum(array_column($data['lineas'], 'peso'));
+                    foreach ($data['lineas'] as $linea) {
+                        $share = $pesoTotal > 0 ? ($segundosReales * $linea['peso'] / $pesoTotal) : 0.0;
+                        $prodId = $linea['id_producto'];
+                        if (!isset($realTiempoMap[$prodId])) $realTiempoMap[$prodId] = 0.0;
+                        $realTiempoMap[$prodId] += $share;
+                    }
                 }
             }
 
             // 11. Salarios proporcionales por horas de empleados fijos — misma atribución que el tiempo
-            //     (ordenes_productos + departamento, ponderado por tiempo teórico x cantidad; cierre de
-            //     registros abiertos con la fecha estimada de la orden). Sin lotes_detalles.
+            //     (ordenes_productos + departamento, ponderado por tiempo teórico x cantidad; horas
+            //     reales vía calcularHorasLaboradasReales(), mismo motivo que el punto 10). Sin lotes_detalles.
             $costoHoraMap = $getSalarios($db, $dbEmpresas, $id_empresa);
-            $salariosHorasRaw = $db->goQuery("
-                SELECT id_producto, id_empleado, SUM(total_horas) AS total_horas
-                FROM (
-                    SELECT op.id_woo AS id_producto, ldea.id_empleado,
-                           $tiempoHorasExpr
-                           * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
-                           / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_horas
-                    FROM lotes_detalles_empleados_asignados ldea
-                    JOIN ordenes o ON ldea.id_orden = o._id
-                    JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
-                    LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
-                    JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
-                    WHERE o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond
-                ) as combined
-                GROUP BY id_producto, id_empleado
+            $ldeaSalarioRaw = $db->goQuery("
+                SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre, ldea.id_empleado,
+                       op.id_woo AS id_producto, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                FROM lotes_detalles_empleados_asignados ldea
+                JOIN ordenes o ON ldea.id_orden = o._id
+                JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
+                LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
+                JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL
+                  AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond
             ", $params);
-            
+
             $realSalarioFijoMap = [];
-            if (is_array($salariosHorasRaw)) {
-                foreach ($salariosHorasRaw as $sh) {
-                    $prodId = $sh['id_producto'];
-                    $empId = $sh['id_empleado'];
-                    $horas = (float)$sh['total_horas'];
-                    $costoHora = $costoHoraMap[$empId] ?? 0.0;
-                    
-                    if (!isset($realSalarioFijoMap[$prodId])) {
-                        $realSalarioFijoMap[$prodId] = 0.0;
+            if (is_array($ldeaSalarioRaw)) {
+                $porLdea = [];
+                foreach ($ldeaSalarioRaw as $row) {
+                    $lId = $row['id_ldea'];
+                    $porLdea[$lId]['fecha_inicio'] = $row['fecha_inicio'];
+                    $porLdea[$lId]['fecha_cierre'] = $row['fecha_cierre'];
+                    $porLdea[$lId]['id_empleado'] = $row['id_empleado'];
+                    $porLdea[$lId]['lineas'][] = [
+                        'id_producto' => $row['id_producto'],
+                        'peso' => ((float)$row['tiempo_teorico'] * (float)$row['cantidad']) + 0.0001
+                    ];
+                }
+                foreach ($porLdea as $data) {
+                    $horasReales = calcularHorasLaboradasReales($data['fecha_inicio'], $data['fecha_cierre'], $horarioObj);
+                    $costoHora = $costoHoraMap[$data['id_empleado']] ?? 0.0;
+                    $costoTotalTarea = $horasReales * $costoHora;
+                    $pesoTotal = array_sum(array_column($data['lineas'], 'peso'));
+                    foreach ($data['lineas'] as $linea) {
+                        $share = $pesoTotal > 0 ? ($costoTotalTarea * $linea['peso'] / $pesoTotal) : 0.0;
+                        $prodId = $linea['id_producto'];
+                        if (!isset($realSalarioFijoMap[$prodId])) $realSalarioFijoMap[$prodId] = 0.0;
+                        $realSalarioFijoMap[$prodId] += $share;
                     }
-                    $realSalarioFijoMap[$prodId] += ($horas * $costoHora);
                 }
             }
 
@@ -454,7 +476,7 @@ return function (App $app) {
     // =================================================================
     // ENDPOINT: CONSOLIDADO POR CATEGORÍA
     // =================================================================
-    $app->get('/reportes/costos-productos/categorias', function (Request $request, Response $response) use ($getSalarios) {
+    $app->get('/reportes/costos-productos/categorias', function (Request $request, Response $response) use ($getSalarios, $getHorarioLaboral) {
         $queryParams = $request->getQueryParams();
         $fecha_inicio = !empty($queryParams['fecha_inicio']) ? $queryParams['fecha_inicio'] : null;
         $fecha_fin = !empty($queryParams['fecha_fin']) ? $queryParams['fecha_fin'] : null;
@@ -550,31 +572,12 @@ return function (App $app) {
             $fechaCierreExpr = DB_DRIVER === 'pgsql'
                 ? "COALESCE(ldea.fecha_terminado, NULLIF(o.fecha_entrega, '')::date, o.fecha_creacion, o.moment::date)"
                 : "COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment))";
-            $tiempoSegundosExpr = DB_DRIVER === 'pgsql'
-                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)))"
-                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr))";
-            $tiempoHorasExpr = DB_DRIVER === 'pgsql'
-                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)) / 3600)"
-                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr) / 3600)";
-
             $params = [];
             $dateCond = "";
             if ($fecha_inicio && $fecha_fin) {
                 $dateCond = " AND $momentDateExpr BETWEEN :fecha_inicio AND :fecha_fin ";
                 $params['fecha_inicio'] = $fecha_inicio;
                 $params['fecha_fin'] = $fecha_fin;
-            }
-
-            $paramsUnion = [];
-            $dateCond1 = "";
-            $dateCond2 = "";
-            if ($fecha_inicio && $fecha_fin) {
-                $dateCond1 = " AND $momentDateExpr BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
-                $dateCond2 = " AND $momentDateExpr BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
-                $paramsUnion['fecha_inicio_1'] = $fecha_inicio;
-                $paramsUnion['fecha_fin_1'] = $fecha_fin;
-                $paramsUnion['fecha_inicio_2'] = $fecha_inicio;
-                $paramsUnion['fecha_fin_2'] = $fecha_fin;
             }
 
             $cantRealRaw = $db->goQuery("
@@ -667,61 +670,83 @@ return function (App $app) {
             }
 
             // Tiempos reales por producto para el rollup de categorías — misma atribución por
-            // ordenes_productos + departamento (tiempo teórico x cantidad; cierre con fecha estimada).
-            $tiempoRealRaw = $db->goQuery("
-                SELECT id_producto, SUM(total_tiempo) AS total_tiempo
-                FROM (
-                    SELECT op.id_woo AS id_producto,
-                           $tiempoSegundosExpr
-                           * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
-                           / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_tiempo
-                    FROM lotes_detalles_empleados_asignados ldea
-                    JOIN ordenes o ON ldea.id_orden = o._id
-                    JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
-                    LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
-                    WHERE o.status IN ('terminada', 'entregada') $dateCond
-                ) as combined
-                GROUP BY id_producto
+            // ordenes_productos + departamento (tiempo teórico x cantidad). Horas vía
+            // calcularHorasLaboradasReales(), ver detalle en el endpoint de productos.
+            $horarioObj = $getHorarioLaboral($dbEmpresas, $id_empresa);
+            $ldeaRaw = $db->goQuery("
+                SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre,
+                       op.id_woo AS id_producto, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                FROM lotes_detalles_empleados_asignados ldea
+                JOIN ordenes o ON ldea.id_orden = o._id
+                JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
+                LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
+                WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL $dateCond
             ", $params);
+
             $realTiempoMap = [];
-            if (is_array($tiempoRealRaw)) {
-                foreach ($tiempoRealRaw as $r) {
-                    $realTiempoMap[$r['id_producto']] = (float)$r['total_tiempo'];
+            if (is_array($ldeaRaw)) {
+                $porLdea = [];
+                foreach ($ldeaRaw as $row) {
+                    $lId = $row['id_ldea'];
+                    $porLdea[$lId]['fecha_inicio'] = $row['fecha_inicio'];
+                    $porLdea[$lId]['fecha_cierre'] = $row['fecha_cierre'];
+                    $porLdea[$lId]['lineas'][] = [
+                        'id_producto' => $row['id_producto'],
+                        'peso' => ((float)$row['tiempo_teorico'] * (float)$row['cantidad']) + 0.0001
+                    ];
+                }
+                foreach ($porLdea as $data) {
+                    $segundosReales = calcularHorasLaboradasReales($data['fecha_inicio'], $data['fecha_cierre'], $horarioObj) * 3600;
+                    $pesoTotal = array_sum(array_column($data['lineas'], 'peso'));
+                    foreach ($data['lineas'] as $linea) {
+                        $share = $pesoTotal > 0 ? ($segundosReales * $linea['peso'] / $pesoTotal) : 0.0;
+                        $prodId = $linea['id_producto'];
+                        if (!isset($realTiempoMap[$prodId])) $realTiempoMap[$prodId] = 0.0;
+                        $realTiempoMap[$prodId] += $share;
+                    }
                 }
             }
 
             // Salario fijo por horas para el rollup de categorías — misma atribución por
-            // ordenes_productos + departamento (tiempo teórico x cantidad; cierre con fecha estimada).
+            // ordenes_productos + departamento (tiempo teórico x cantidad). Horas vía
+            // calcularHorasLaboradasReales(), ver detalle en el endpoint de productos.
             $costoHoraMap = $getSalarios($db, $dbEmpresas, $id_empresa);
-            $salariosHorasRaw = $db->goQuery("
-                SELECT id_producto, id_empleado, SUM(total_horas) AS total_horas
-                FROM (
-                    SELECT op.id_woo AS id_producto, ldea.id_empleado,
-                           $tiempoHorasExpr
-                           * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
-                           / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_horas
-                    FROM lotes_detalles_empleados_asignados ldea
-                    JOIN ordenes o ON ldea.id_orden = o._id
-                    JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
-                    LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
-                    JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
-                    WHERE o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond
-                ) as combined
-                GROUP BY id_producto, id_empleado
+            $ldeaSalarioRaw = $db->goQuery("
+                SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre, ldea.id_empleado,
+                       op.id_woo AS id_producto, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                FROM lotes_detalles_empleados_asignados ldea
+                JOIN ordenes o ON ldea.id_orden = o._id
+                JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
+                LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
+                JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL
+                  AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond
             ", $params);
-            
+
             $realSalarioFijoMap = [];
-            if (is_array($salariosHorasRaw)) {
-                foreach ($salariosHorasRaw as $sh) {
-                    $prodId = $sh['id_producto'];
-                    $empId = $sh['id_empleado'];
-                    $horas = (float)$sh['total_horas'];
-                    $costoHora = $costoHoraMap[$empId] ?? 0.0;
-                    
-                    if (!isset($realSalarioFijoMap[$prodId])) {
-                        $realSalarioFijoMap[$prodId] = 0.0;
+            if (is_array($ldeaSalarioRaw)) {
+                $porLdea = [];
+                foreach ($ldeaSalarioRaw as $row) {
+                    $lId = $row['id_ldea'];
+                    $porLdea[$lId]['fecha_inicio'] = $row['fecha_inicio'];
+                    $porLdea[$lId]['fecha_cierre'] = $row['fecha_cierre'];
+                    $porLdea[$lId]['id_empleado'] = $row['id_empleado'];
+                    $porLdea[$lId]['lineas'][] = [
+                        'id_producto' => $row['id_producto'],
+                        'peso' => ((float)$row['tiempo_teorico'] * (float)$row['cantidad']) + 0.0001
+                    ];
+                }
+                foreach ($porLdea as $data) {
+                    $horasReales = calcularHorasLaboradasReales($data['fecha_inicio'], $data['fecha_cierre'], $horarioObj);
+                    $costoHora = $costoHoraMap[$data['id_empleado']] ?? 0.0;
+                    $costoTotalTarea = $horasReales * $costoHora;
+                    $pesoTotal = array_sum(array_column($data['lineas'], 'peso'));
+                    foreach ($data['lineas'] as $linea) {
+                        $share = $pesoTotal > 0 ? ($costoTotalTarea * $linea['peso'] / $pesoTotal) : 0.0;
+                        $prodId = $linea['id_producto'];
+                        if (!isset($realSalarioFijoMap[$prodId])) $realSalarioFijoMap[$prodId] = 0.0;
+                        $realSalarioFijoMap[$prodId] += $share;
                     }
-                    $realSalarioFijoMap[$prodId] += ($horas * $costoHora);
                 }
             }
 
@@ -847,7 +872,7 @@ return function (App $app) {
     // =================================================================
     // ENDPOINT: DETALLE DE PRODUCTO POR TALLAS
     // =================================================================
-    $app->get('/reportes/costos-productos/{id_producto}/detalle', function (Request $request, Response $response, array $args) use ($getSalarios) {
+    $app->get('/reportes/costos-productos/{id_producto}/detalle', function (Request $request, Response $response, array $args) use ($getSalarios, $getHorarioLaboral) {
         $id_producto = (int)$args['id_producto'];
         $queryParams = $request->getQueryParams();
         $fecha_inicio = !empty($queryParams['fecha_inicio']) ? $queryParams['fecha_inicio'] : null;
@@ -942,31 +967,12 @@ return function (App $app) {
             $fechaCierreExpr = DB_DRIVER === 'pgsql'
                 ? "COALESCE(ldea.fecha_terminado, NULLIF(o.fecha_entrega, '')::date, o.fecha_creacion, o.moment::date)"
                 : "COALESCE(ldea.fecha_terminado, STR_TO_DATE(NULLIF(o.fecha_entrega, ''), '%Y-%m-%d'), o.fecha_creacion, DATE(o.moment))";
-            $tiempoSegundosExpr = DB_DRIVER === 'pgsql'
-                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)))"
-                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr))";
-            $tiempoHorasExpr = DB_DRIVER === 'pgsql'
-                ? "GREATEST(0, EXTRACT(EPOCH FROM ($fechaCierreExpr::timestamp - ldea.fecha_inicio::timestamp)) / 3600)"
-                : "GREATEST(0, TIMESTAMPDIFF(SECOND, ldea.fecha_inicio, $fechaCierreExpr) / 3600)";
-
             $params = [':id_producto' => $id_producto];
             $dateCond = "";
             if ($fecha_inicio && $fecha_fin) {
                 $dateCond = " AND $momentDateExpr BETWEEN :fecha_inicio AND :fecha_fin ";
                 $params['fecha_inicio'] = $fecha_inicio;
                 $params['fecha_fin'] = $fecha_fin;
-            }
-
-            $paramsUnion = [':id_producto' => $id_producto];
-            $dateCond1 = "";
-            $dateCond2 = "";
-            if ($fecha_inicio && $fecha_fin) {
-                $dateCond1 = " AND $momentDateExpr BETWEEN :fecha_inicio_1 AND :fecha_fin_1 ";
-                $dateCond2 = " AND $momentDateExpr BETWEEN :fecha_inicio_2 AND :fecha_fin_2 ";
-                $paramsUnion['fecha_inicio_1'] = $fecha_inicio;
-                $paramsUnion['fecha_fin_1'] = $fecha_fin;
-                $paramsUnion['fecha_inicio_2'] = $fecha_inicio;
-                $paramsUnion['fecha_fin_2'] = $fecha_fin;
             }
 
             // 7. Cantidad producida por talla
@@ -986,29 +992,44 @@ return function (App $app) {
             }
 
             // 8. Tiempos reales laborados por talla — misma atribución por ordenes_productos + departamento
-            //    (tiempo teórico x cantidad, cierre con fecha estimada, sin lotes_detalles); se distribuye
-            //    cada registro sobre las líneas de su orden y luego se filtra al producto agrupando por talla.
-            $tiempoRealRaw = $db->goQuery("
-                SELECT id_talla, SUM(total_tiempo) AS total_tiempo
-                FROM (
-                    SELECT op.id_woo, op.id_size AS id_talla,
-                           $tiempoSegundosExpr
-                           * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
-                           / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_tiempo
-                    FROM lotes_detalles_empleados_asignados ldea
-                    JOIN ordenes o ON ldea.id_orden = o._id
-                    JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
-                    LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
-                    WHERE o.status IN ('terminada', 'entregada') $dateCond
-                ) t
-                WHERE id_woo = :id_producto
-                GROUP BY id_talla
+            //    (tiempo teórico x cantidad); se distribuye cada tarea sobre TODAS las líneas de su
+            //    orden (para el peso correcto) y luego se filtra a este producto, agrupando por talla.
+            //    Horas vía calcularHorasLaboradasReales(), ver detalle en el endpoint de productos.
+            $horarioObj = $getHorarioLaboral($dbEmpresas, $id_empresa);
+            $ldeaRaw = $db->goQuery("
+                SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre,
+                       op.id_woo, op.id_size AS id_talla, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                FROM lotes_detalles_empleados_asignados ldea
+                JOIN ordenes o ON ldea.id_orden = o._id
+                JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
+                LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
+                WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL $dateCond
+                  AND ldea.id_orden IN (SELECT id_orden FROM ordenes_productos WHERE id_woo = :id_producto)
             ", $params);
-            
+
             $realTiempoMap = [];
-            if (is_array($tiempoRealRaw)) {
-                foreach ($tiempoRealRaw as $r) {
-                    $realTiempoMap[(int)$r['id_talla']] = (float)$r['total_tiempo'];
+            if (is_array($ldeaRaw)) {
+                $porLdea = [];
+                foreach ($ldeaRaw as $row) {
+                    $lId = $row['id_ldea'];
+                    $porLdea[$lId]['fecha_inicio'] = $row['fecha_inicio'];
+                    $porLdea[$lId]['fecha_cierre'] = $row['fecha_cierre'];
+                    $porLdea[$lId]['lineas'][] = [
+                        'id_woo' => $row['id_woo'],
+                        'id_talla' => $row['id_talla'],
+                        'peso' => ((float)$row['tiempo_teorico'] * (float)$row['cantidad']) + 0.0001
+                    ];
+                }
+                foreach ($porLdea as $data) {
+                    $segundosReales = calcularHorasLaboradasReales($data['fecha_inicio'], $data['fecha_cierre'], $horarioObj) * 3600;
+                    $pesoTotal = array_sum(array_column($data['lineas'], 'peso'));
+                    foreach ($data['lineas'] as $linea) {
+                        if ((int)$linea['id_woo'] !== (int)$id_producto) continue;
+                        $share = $pesoTotal > 0 ? ($segundosReales * $linea['peso'] / $pesoTotal) : 0.0;
+                        $tId = (int)$linea['id_talla'];
+                        if (!isset($realTiempoMap[$tId])) $realTiempoMap[$tId] = 0.0;
+                        $realTiempoMap[$tId] += $share;
+                    }
                 }
             }
 
@@ -1041,38 +1062,48 @@ return function (App $app) {
             }
 
             // 10. Salarios por hora y horas por talla — misma atribución por ordenes_productos + departamento
-            //     (tiempo teórico x cantidad, cierre con fecha estimada, sin lotes_detalles).
+            //     (tiempo teórico x cantidad). Horas vía calcularHorasLaboradasReales(), ver detalle
+            //     en el endpoint de productos.
             $costoHoraMap = $getSalarios($db, $dbEmpresas, $id_empresa);
-            $salariosHorasRaw = $db->goQuery("
-                SELECT id_talla, id_empleado, SUM(total_horas) AS total_horas
-                FROM (
-                    SELECT op.id_woo, op.id_size AS id_talla, ldea.id_empleado,
-                           $tiempoHorasExpr
-                           * (COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001)
-                           / SUM(COALESCE(pt.tiempo, 0) * op.cantidad + 0.0001) OVER (PARTITION BY ldea._id) AS total_horas
-                    FROM lotes_detalles_empleados_asignados ldea
-                    JOIN ordenes o ON ldea.id_orden = o._id
-                    JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
-                    LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
-                    JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
-                    WHERE o.status IN ('terminada', 'entregada') AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond
-                ) t
-                WHERE id_woo = :id_producto
-                GROUP BY id_talla, id_empleado
+            $ldeaSalarioRaw = $db->goQuery("
+                SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre, ldea.id_empleado,
+                       op.id_woo, op.id_size AS id_talla, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                FROM lotes_detalles_empleados_asignados ldea
+                JOIN ordenes o ON ldea.id_orden = o._id
+                JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
+                LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
+                JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL
+                  AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond
+                  AND ldea.id_orden IN (SELECT id_orden FROM ordenes_productos WHERE id_woo = :id_producto)
             ", $params);
-            
+
             $realSalarioFijoMap = [];
-            if (is_array($salariosHorasRaw)) {
-                foreach ($salariosHorasRaw as $sh) {
-                    $tId = (int)$sh['id_talla'];
-                    $empId = $sh['id_empleado'];
-                    $horas = (float)$sh['total_horas'];
-                    $costoHora = $costoHoraMap[$empId] ?? 0.0;
-                    
-                    if (!isset($realSalarioFijoMap[$tId])) {
-                        $realSalarioFijoMap[$tId] = 0.0;
+            if (is_array($ldeaSalarioRaw)) {
+                $porLdea = [];
+                foreach ($ldeaSalarioRaw as $row) {
+                    $lId = $row['id_ldea'];
+                    $porLdea[$lId]['fecha_inicio'] = $row['fecha_inicio'];
+                    $porLdea[$lId]['fecha_cierre'] = $row['fecha_cierre'];
+                    $porLdea[$lId]['id_empleado'] = $row['id_empleado'];
+                    $porLdea[$lId]['lineas'][] = [
+                        'id_woo' => $row['id_woo'],
+                        'id_talla' => $row['id_talla'],
+                        'peso' => ((float)$row['tiempo_teorico'] * (float)$row['cantidad']) + 0.0001
+                    ];
+                }
+                foreach ($porLdea as $data) {
+                    $horasReales = calcularHorasLaboradasReales($data['fecha_inicio'], $data['fecha_cierre'], $horarioObj);
+                    $costoHora = $costoHoraMap[$data['id_empleado']] ?? 0.0;
+                    $costoTotalTarea = $horasReales * $costoHora;
+                    $pesoTotal = array_sum(array_column($data['lineas'], 'peso'));
+                    foreach ($data['lineas'] as $linea) {
+                        if ((int)$linea['id_woo'] !== (int)$id_producto) continue;
+                        $share = $pesoTotal > 0 ? ($costoTotalTarea * $linea['peso'] / $pesoTotal) : 0.0;
+                        $tId = (int)$linea['id_talla'];
+                        if (!isset($realSalarioFijoMap[$tId])) $realSalarioFijoMap[$tId] = 0.0;
+                        $realSalarioFijoMap[$tId] += $share;
                     }
-                    $realSalarioFijoMap[$tId] += ($horas * $costoHora);
                 }
             }
 
