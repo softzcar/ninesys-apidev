@@ -1,0 +1,42 @@
+- **Solicitud del Usuario:** "OK vamos a dejar todo esta cuestión del price legacy lista. Pienso que el paso siguiente es eliminar la columna de la tabla `products` en postgre, luego tenemos que atender el problema principal que esto acarrea y es que en la empresa 194 del servidor de producción todavía existe esta columna, entonces necesitamos adecuar nuestro sistema de migración de datos de la empresa de producción a nuestra empresa de desarrollo de ser necesario."
+- **Fecha y Hora:** 2026-07-28 12:15:10
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/orders.php` (5 ubicaciones)
+    - `app/routes/products_reports.php` (3 endpoints)
+    - `app/routes/inventory.php` (`/api/products/template-excel`)
+    - `app/lib/woome.php` (`getAllProducts()`, rama Postgres)
+    - `public/model/create_new_company_api_emp_N_postgres.sql` (plantilla de nuevas empresas)
+    - `ninesys-hub/bin/lib/clone_194_postgres_etl.php` (solo lectura/verificación, sin cambios)
+    - Base de datos: `api_emp_194` en Postgres Dev (`vps-contabo-dev`) -- `ALTER TABLE products DROP COLUMN price;`
+- **Commits Relacionados:**
+    - Backend: `f2e067f` (limpieza de código), `ef6ce1a` (plantilla)
+- **Acción Realizada:**
+    **Paso 1 -- Limpieza de código (previo a esta tarea, mismo día):** se eliminaron todas las referencias activas a `products.price` en la rama Postgres del backend (detalladas en la bitácora anterior de hoy), dejando la columna sin ninguna consulta que dependiera de ella.
+
+    **Paso 2 -- Verificación del sistema de migración:** se leyó el código de `clone_194_postgres_etl.php` (el ETL que clona datos reales de MySQL producción hacia Postgres Dev, usado el 14 y 22 de julio según los logs en `ninesys-hub/bin/logs_migracion_postgres/`). Se confirmó que la función `resolveTableColumns()` construye la lista de columnas a copiar iterando ÚNICAMENTE las columnas de Postgres (`getPgColumns()`, que consulta `information_schema.columns` en vivo vía SSH, sin caché persistente entre corridas) y valida que cada una tenga equivalente en MySQL -- pero NUNCA revisa la dirección contraria (columnas de MySQL sin equivalente en Postgres). Esto significa que el script ya es robusto por diseño ante este escenario exacto: si Postgres tiene MENOS columnas que MySQL, el script simplemente no copia esas columnas de más, sin error. No se requirió ningún cambio de código en el ETL ni en `clone_194_prod_to_dev_postgres.sh`.
+
+    **Paso 3 -- Actualización de la plantilla (Garantía de Esquema, regla de `CLAUDE.md`):** se quitó `price decimal(20,2)` de la definición de `CREATE TABLE products` en `create_new_company_api_emp_N_postgres.sql`, junto con la columna y los 3 valores correspondientes en el `INSERT INTO products` de datos de prueba (productos 1, 2 y 3 -- que ya tienen sus precios reales sembrados en `products_prices` más abajo en el mismo archivo, sin depender de `products.price`). La plantilla MySQL (`create_new_company_api_emp_N.sql`) se dejó intacta.
+
+    **Paso 4 -- Backup y eliminación de la columna:** se respaldó la tabla completa (`pg_dump -Fc -t public.products`) antes de la operación destructiva, guardado en `/tmp/products_pre_drop_price_20260728_121338.dump` en `vps-contabo-dev` (no se borró, queda como red de seguridad). Se ejecutó `ALTER TABLE products DROP COLUMN price;` sobre `api_emp_194` en Postgres Dev.
+
+- **Inconvenientes y Desafíos:**
+    El mayor riesgo de esta tarea era que las consultas del Paso 1 (limpieza de código, aplicada horas antes) NO estuvieran realmente completas -- si hubiera quedado alguna referencia viva a `p.price`/`products.price` sin detectar, el `DROP COLUMN` habría roto esa consulta con un error SQL duro ("column does not exist") en cuanto se ejecutara. Por eso se verificaron 6 endpoints en vivo INMEDIATAMENTE antes y después del `DROP COLUMN` (no solo antes): `/products`, `/reportes/costos-productos` (los 3), `/ordenes/contexto-ia` (búsqueda de productos), y `/api/products/template-excel` -- todos con `success:true`/200 en ambos momentos, confirmando que la limpieza previa fue exhaustiva.
+
+- **Decisión Final y Justificación:**
+    Se decidió NO modificar el ETL de clonación pese a que en un principio se asumía que necesitaría adaptación -- la verificación por lectura de código demostró que ya maneja este caso correctamente por construcción (columnas de destino como fuente de verdad). Modificarlo sin necesidad habría sido un cambio no solicitado y un riesgo innecesario sobre un script ya probado en 2 corridas reales contra producción.
+
+- **Herramienta(s) Utilizada(s):** `Bash`/`Read` (lectura exhaustiva del ETL para verificar su comportamiento ante columnas de MySQL sin equivalente en Postgres), `Edit` (limpieza de 4 archivos backend + plantilla), `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `ssh`/`psql` (backup, `ALTER TABLE`, verificación de `information_schema`), `curl` (verificación en vivo de 6 endpoints antes y después del `DROP COLUMN`).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Antes del `DROP COLUMN`: los 6 endpoints probados respondieron correctamente con la columna todavía presente (incluyendo un bug preexistente y no relacionado detectado y corregido de paso: `GROUP BY` incompleto en Postgres en la búsqueda de productos de `/ordenes/contexto-ia`, que daba error 500 antes de esta tarea).
+    Después del `DROP COLUMN`: se repitieron las mismas 6 verificaciones, todas exitosas -- `/products` devolvió 155 productos, `/reportes/costos-productos` mantuvo `precio_venta=25` para el producto de prueba, `/ordenes/contexto-ia` devolvió `precio: "30.00"` para "Alas", `/api/products/template-excel` devolvió 200.
+
+- **Logro Conseguido:**
+    Se completó de punta a punta la migración del sistema de precios de productos: desde el hallazgo original (97% de productos con margen mostrado en 0% por depender de un campo abandonado) hasta la eliminación física de la columna legacy del esquema de Postgres, pasando por la limpieza de 4 archivos de backend, 3 componentes de frontend, y la verificación de que el propio sistema de migración de datos prod->dev ya estaba preparado para este cambio sin requerir ajustes. `api_emp_194` en Postgres Dev queda con un esquema más limpio y fiel a cómo realmente opera el negocio hoy.
+
+- **Observaciones:** MySQL producción (`vps-contabo-prod`, empresa 194 real) conserva la columna `price` sin cambios -- fuera de alcance y explícitamente no tocada, tal como exige la política de protección de producción. Si en el futuro se decide eliminarla también de MySQL, es una decisión y tarea completamente aparte.
+
+- **Respuesta de Claude:** Se completó la eliminación del campo legacy `products.price`: limpiado de todo el backend (rama Postgres), verificado que el script de clonación de datos prod->dev ya es robusto ante este cambio (no requirió modificaciones), actualizada la plantilla de nuevas empresas en Postgres, respaldada la tabla, y ejecutado el `DROP COLUMN` sobre `api_emp_194` en Desarrollo Contabo. Verificados 6 endpoints en vivo antes y después del cambio, todos funcionando correctamente. MySQL producción no fue tocado.
