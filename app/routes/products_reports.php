@@ -1130,6 +1130,21 @@ return function (App $app) {
             // Suma de unidades totales fabricadas de este producto
             $unidadesTotalesFabricadas = array_sum($realCantidadMap);
 
+            // Peso total por insumo, para repartir su consumo real ENTRE TALLAS de forma
+            // proporcional a lo que cada talla debería consumir según su propia Ficha Técnica
+            // (product_insumos_asignados ya registra la cantidad por talla -- ver pantalla
+            // "Insumos Asignados"), en vez de dividir el consumo real a partes iguales por
+            // unidad. peso_talla = cantidad_estimada_de_esa_talla * unidades_reales_de_esa_talla.
+            $pesoTotalPorInsumo = [];
+            foreach ($piaRaw as $pia) {
+                $tId2 = (int)$pia['id_talla'];
+                $catId2 = (int)$pia['id_catalogo_insumos_productos'];
+                $unidadesRealesTalla = $realCantidadMap[$tId2] ?? 0.0;
+                if ($unidadesRealesTalla <= 0) continue;
+                if (!isset($pesoTotalPorInsumo[$catId2])) $pesoTotalPorInsumo[$catId2] = 0.0;
+                $pesoTotalPorInsumo[$catId2] += (float)$pia['cantidad'] * $unidadesRealesTalla;
+            }
+
             // 12. Consolidar el detalle final por talla
             $tallasDetallesList = [];
             foreach ($sizesMap as $tId => $tName) {
@@ -1164,7 +1179,11 @@ return function (App $app) {
 
                 // Mapear insumos consumidos reales para esta talla
                 // Como los movimientos de inventario no se registran por talla sino por producto,
-                // prorateamos la cantidad total consumida del producto en base a las unidades de esta talla
+                // se reparte el consumo real total del insumo entre las tallas producidas de forma
+                // PROPORCIONAL a la cantidad que cada una debería consumir según su propia Ficha
+                // Técnica (pesoTotalPorInsumo, ver arriba) -- una talla más grande (más tela
+                // estimada) recibe una porción mayor del consumo real, en vez de repartirlo a
+                // partes iguales por unidad como antes.
                 foreach ($insumosTeoricosList as $it) {
                     // Buscar en el consumo total real del producto
                     $catId = null;
@@ -1178,18 +1197,23 @@ return function (App $app) {
                     $cantRealConsumidaTalla = 0.0;
                     $costoRealConsumidoTalla = 0.0;
 
-                    // Solo se asigna el promedio si esta talla específica tuvo unidades reales
-                    // fabricadas en el rango -- antes se aplicaba el promedio del producto a TODAS
-                    // las tallas por igual, incluidas las que nunca se produjeron (mismas 0 unidades
-                    // que ya dejan labor_real/tiempo_real en 0, pero insumos_real mostraba un costo
-                    // no-cero engañoso).
-                    if ($catId && isset($insumosRealProdMap[$catId]) && $unidadesTotalesFabricadas > 0 && $cantTalla > 0) {
-                        // Consumo real promedio por prenda * prendas fabricadas de esta talla
-                        $promedioPrendaCant = $insumosRealProdMap[$catId]['cantidad'] / $unidadesTotalesFabricadas;
-                        $promedioPrendaCosto = $insumosRealProdMap[$catId]['costo'] / $unidadesTotalesFabricadas;
-
-                        $cantRealConsumidaTalla = $promedioPrendaCant;
-                        $costoRealConsumidoTalla = $promedioPrendaCosto;
+                    // Solo se asigna consumo real si esta talla específica tuvo unidades reales
+                    // fabricadas en el rango -- una talla con 0 unidades no consumió insumos.
+                    if ($catId && isset($insumosRealProdMap[$catId]) && $cantTalla > 0) {
+                        $pesoTotal = $pesoTotalPorInsumo[$catId] ?? 0.0;
+                        if ($pesoTotal > 0) {
+                            // Costo/cantidad real por unidad de ESTA talla = consumo real total del
+                            // insumo x (estimado de esta talla / suma ponderada de todas las tallas
+                            // producidas). El factor de unidades de esta talla se cancela: el
+                            // resultado es un valor por unidad, comparable con cantidad_estimada.
+                            $cantRealConsumidaTalla = $insumosRealProdMap[$catId]['cantidad'] * $it['cantidad_estimada'] / $pesoTotal;
+                            $costoRealConsumidoTalla = $insumosRealProdMap[$catId]['costo'] * $it['cantidad_estimada'] / $pesoTotal;
+                        } elseif ($unidadesTotalesFabricadas > 0) {
+                            // Respaldo: sin ninguna talla con estimado configurado y producción real
+                            // simultánea para este insumo -- promedio simple del producto completo.
+                            $cantRealConsumidaTalla = $insumosRealProdMap[$catId]['cantidad'] / $unidadesTotalesFabricadas;
+                            $costoRealConsumidoTalla = $insumosRealProdMap[$catId]['costo'] / $unidadesTotalesFabricadas;
+                        }
                     }
 
                     $costoInsumosReal += $costoRealConsumidoTalla;
