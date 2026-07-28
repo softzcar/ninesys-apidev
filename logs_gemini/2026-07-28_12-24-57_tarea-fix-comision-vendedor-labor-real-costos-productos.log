@@ -1,0 +1,33 @@
+- **Solicitud del Usuario:** "Si, retomemos al resto de la fase 1" (continuación de la auditoría de datos de la API del Reporte de Desviación de Costos, tras cerrar los 2 hallazgos anteriores del día -- rendimiento y precio_venta legacy).
+- **Fecha y Hora:** 2026-07-28 12:24:57
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/products_reports.php` (3 endpoints, query `realPagosMap`)
+- **Commits Relacionados:**
+    - Backend: `877d28a`
+- **Acción Realizada:**
+    Continuando la revisión de campos aún no verificados con datos reales, se validaron primero `tiempo_estimado` y `labor_estimado` para el producto 4 (Bandera 1 Metro Doble Cara) contra `products_tiempos_de_produccion`/`products_comisiones` directamente en `psql` -- coincidieron exactos (660s, $0.50). Al intentar verificar `labor_real` con un caso trazable a mano (orden 3964, único producto, 2 registros LDEA + 3 pagos), se detectó un tercer pago sin `id_departamento` (`detalle='Comercialización'`) pagado al mismo empleado que `ordenes.responsable` -- el vendedor de la orden, no un trabajador de producción.
+
+    Se cuantificó el alcance real con consultas agregadas: `Comercialización` (5972 pagos) y `Abono a orden` (44 pagos) coinciden con el vendedor de la orden en 99.97% y 100% de los casos respectivamente, mientras que `Diseño` (551 pagos, también sin `id_departamento`) NUNCA coincide con el vendedor (0%) -- confirmando que es labor real de un diseñador, no comisión de venta. `Pago Nomina` (32 registros) tiene `id_orden` NULL, por lo que ya queda excluido naturalmente por el `JOIN ordenes` de la query.
+
+    Se agregó `AND p.detalle NOT IN ('Comercialización', 'Abono a orden')` al `WHERE` de la subconsulta `realPagosMap` en los 3 endpoints (productos, categorías, detalle por talla) -- todas comparten la misma consulta base.
+
+- **Inconvenientes y Desafíos:**
+    El caso de prueba manual elegido inicialmente (orden 421) no tenía ni LDEA ni pagos asociados, por lo que no sirvió para trazar la fórmula; se cambió a la orden 3964, que sí permitió detectar la inconsistencia al ver un tercer pago con `id_departamento` vacío que no encajaba con los 2 registros LDEA de producción esperados.
+
+- **Decisión Final y Justificación:**
+    Se optó por excluir por `detalle` (valor explícito y verificado, en vez de excluir todo `id_departamento IS NULL`) para no descartar de paso los pagos de `Diseño`, que sí representan mano de obra real de producción para productos de esa categoría (confirmado 0% de coincidencia con el vendedor en 551 registros) -- el usuario eligió esta opción explícitamente entre las 2 presentadas.
+
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (trazado manual de una orden real, cuantificación del impacto agregado con `SUM(share) FILTER (WHERE ...)`, verificación de correlación `id_empleado = ordenes.responsable` por cada valor de `detalle`), `Edit`, `php -l`, `AskUserQuestion`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` para verificación en vivo.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Antes del fix: `SUM(share)` agregado de "labor_real" en todo el reporte = $24,478.18, de los cuales $12,740.62 (52%) eran comisión de vendedor. Tras el fix, verificado en `psql` que el total para el producto 4 baja de $100.38 a $58.35 (consistente con excluir la comisión de venta). Tras el despliegue, verificado vía `curl`: producto 4 pasó de `labor_real=0.83` a `labor_real=0.56` (y de forma consistente en el endpoint de detalle por talla, también 0.56), con `margen_real_pct` subiendo de 96.1% a 97.2% (menos costo real = más margen real, coherente).
+
+- **Logro Conseguido:**
+    Se corrigió el tercer bug de datos de la Fase 1 -- el más grave en términos de magnitud agregada (52% del "labor_real" total del reporte era en realidad comisión de venta), que distorsionaba sistemáticamente la comparación Estimado vs. Real (el propósito central del reporte) para prácticamente todos los productos.
+
+- **Observaciones:** Continúa la Fase 1 -- quedan por verificar `tiempo_real` (atribución por LDEA ponderada, no verificado a fondo con un caso trazable) y la metodología de promedio simple (no ponderado por mezcla real de tallas producidas) en `teoricoInsumosMap`, detectada como una posible fuente de desviación artificial pero de impacto modesto (~5% en el ejemplo revisado), sin decidir aún si amerita corrección.
+
+- **Respuesta de Claude:** Se encontró y corrigió un tercer bug crítico: el costo real de mano de obra incluía las comisiones de venta del vendedor (52% del total agregado del reporte), no solo la mano de obra de producción. Corregido excluyendo esos 2 tipos de pago específicos, verificado que no afecta los pagos de diseño (que sí son producción real). Desplegado y verificado en vivo en los 3 endpoints.
