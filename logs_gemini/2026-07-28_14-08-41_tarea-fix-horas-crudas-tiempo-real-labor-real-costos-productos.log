@@ -1,0 +1,31 @@
+- **Solicitud del Usuario:** "Sigamos con la fase 2" (cards/gráficos del Reporte de Desviación de Costos). Durante la verificación en vivo de las tarjetas KPI se detectó un valor extremo ("+4193.2% Desviación global" en Tiempo de Fabricación) que llevó a investigar y corregir un cuarto bug de datos antes de continuar con la Fase 2 propiamente dicha.
+- **Fecha y Hora:** 2026-07-28 14:08:41
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/products_reports.php` (3 endpoints: productos, categorías, detalle por talla)
+- **Commits Relacionados:**
+    - Backend: `c5e262b`
+- **Acción Realizada:**
+    Al inspeccionar la tarjeta KPI "Tiempo de Fabricación" (7.8h reales vs. 11m estimado, +4193.2% de desviación) se identificó el producto "Pañoleta" con `tiempo_real=154.4 horas` para fabricar 1 sola unidad. Se rastreó la causa a `lotes_detalles_empleados_asignados`: tareas con `fecha_inicio`/`fecha_terminado` separados por días completos (ej. tarea iniciada el 14/07 14:49 y cerrada el 17/07 18:01 -- 3 días corridos), porque `tiempoSegundosExpr`/`tiempoHorasExpr` calculaban la resta cruda de timestamps en SQL, sin filtrar por el horario laboral real de la empresa. Se cuantificó el alcance: 66 de 899 tareas (7.3%) del último mes tienen brechas de más de 8 horas.
+
+    Es el mismo patrón de bug ya corregido dos veces esta semana (Costo M.O. en el Reporte de Costos de Producción, Eficiencia de Empleados). Se reescribieron las 2 consultas afectadas (tiempo real y salario por hora de empleados fijos) en los 3 endpoints: en vez de calcular las horas con funciones de ventana en SQL, se traen las filas de `lotes_detalles_empleados_asignados` sin agregar (incluyendo TODAS las líneas de la orden, no solo el producto/talla consultado, para preservar el peso correcto de la ponderación), se calculan las horas reales en PHP con `calcularHorasLaboradasReales()` (función global ya definida en `reports.php`, reutilizada sin duplicar -- confirmado que todas las rutas se cargan en cada request vía `app/routes.php`, por lo que la función ya está disponible), y se reparte el resultado entre los productos/tallas de cada tarea ponderando por tiempo teórico x cantidad (misma lógica de reparto preexistente, solo cambia la fuente de las horas). Se agregó el helper `$getHorarioLaboral` (mismo patrón que `$getSalarios` ya existente) y se eliminó código muerto (`$paramsUnion`/`$dateCond1`/`$dateCond2`, sin ninguna referencia en el archivo).
+
+- **Inconvenientes y Desafíos:**
+    El endpoint de detalle por talla filtra `WHERE id_woo = :id_producto` DESPUÉS de calcular la ponderación sobre la orden completa (para no perder el peso de otros productos en la misma tarea) -- se replicó ese mismo comportamiento en PHP, calculando `calcularHorasLaboradasReales()` una vez por tarea (LDEA) sobre TODAS sus líneas, y solo acumulando en el mapa de resultado las líneas que coinciden con el producto/talla consultado, para no alterar la ponderación total de la tarea.
+
+- **Decisión Final y Justificación:**
+    Se decidió reutilizar `calcularHorasLaboradasReales()` de `reports.php` en vez de reimplementar la lógica -- ya estaba probada y verificada esta semana en 2 contextos distintos, y como todos los archivos de rutas se cargan en cada request, no había necesidad de duplicar código ni de un include manual.
+
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (obtención del horario laboral configurado, extracción de las filas LDEA reales de un caso de prueba), script Python independiente replicando `calcularHorasLaboradasReales()` para verificar el resultado esperado ANTES de desplegar (metodología de verificación cruzada ya usada varias veces esta semana), `Edit`, `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` y `mcp__claude-in-chrome__javascript_tool` para verificación en vivo post-despliegue.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Se escribió un script Python que replica exactamente `calcularHorasLaboradasReales()` y lo corrió contra los datos reales de la orden 6028 (producto "Pañoleta"), prediciendo `tiempo_real=201608.14 segundos` ANTES de tocar el código PHP. Tras desplegar, se verificó vía `curl` que el endpoint real devuelve `tiempo_real: 201608` -- coincidencia exacta. Se verificó consistencia entre el endpoint principal y el de detalle por talla (ambos: 201608s / $4.53 labor_real). Se verificó en el navegador que la tarjeta KPI "Tiempo de Fabricación" bajó de +4193.2% a +1476.4% de desviación global (el promedio real por unidad bajó de 7.8h a 2.9h) -- la desviación restante ya refleja producción real más lenta que lo estimado en la Ficha Técnica, no un error de cálculo.
+
+- **Logro Conseguido:**
+    Se corrigió el cuarto bug crítico del Reporte de Desviación de Costos, eliminando una fuente de inflación masiva (hasta 43x en casos extremos) en `tiempo_real` y `labor_real` (salario de empleados fijos) causada por tareas dejadas abiertas varios días sin cerrarse de inmediato -- afectaba tanto las columnas de la tabla como las tarjetas KPI y los 3 gráficos del reporte (que consumen `chartData`/`globalKpis`, derivados de estos mismos campos).
+
+- **Observaciones:** La desviación de tiempo restante (~1476% global) es ahora un hallazgo de negocio legítimo (los tiempos configurados en `products_tiempos_de_produccion` podrían estar desactualizados/optimistas frente a la realidad del taller), no un bug del reporte -- se deja anotado para que el usuario lo evalúe si lo considera relevante, pero no se toca en esta tarea. Continúa la Fase 2 (verificación de cards/gráficos con "Por Productos"/"Por Categorías").
+
+- **Respuesta de Claude:** Se encontró y corrigió un cuarto bug crítico durante la verificación de las tarjetas KPI: `tiempo_real` y `labor_real` (salario de empleados fijos) usaban horas crudas sin filtrar por horario laboral, igual que ya corregimos en otros 2 reportes esta semana -- un caso real llegaba a 154 horas para fabricar 1 unidad. Corregido, verificado con un script Python independiente antes de desplegar (coincidencia exacta: 201608 segundos), y confirmado en vivo que la desviación de tiempo global bajó de +4193% a +1476% (la desviación restante ya es un hallazgo real de negocio, no un error de datos).
