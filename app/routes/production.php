@@ -1035,11 +1035,18 @@ return function (App $app) {
     $fechaInicio = $queryParams['fecha_inicio'] ?? null;
     $fechaFin = $queryParams['fecha_fin'] ?? null;
 
+    // El status de ordenes NO tiene una convención de mayúsculas consistente
+    // ('activa', 'cancelada' Y 'Cancelada', 'En espera' -- verificado con datos
+    // reales). Comparar con LOWER() en ambos lados evita que el filtro por
+    // defecto ('activa') deje de matchear silenciosamente.
+    $estatusOrdenParam = strtolower((string)$args['estatus_orden']);
+    $sqlParams = [];
     $whereConditions = [];
-    if ($args['estatus_orden'] === 'activa') {
-      $whereConditions[] = "(ord.status = 'Activa' OR ord.status = 'Pausada' OR ord.status = 'En espera' OR ord.status = 'Terminada')";
-    } elseif ($args['estatus_orden'] !== 'todas') {
-      $whereConditions[] = "ord.status = '" . $args['estatus_orden'] . "'";
+    if ($estatusOrdenParam === 'activa') {
+      $whereConditions[] = "LOWER(ord.status) IN ('activa', 'pausada', 'en espera', 'terminada')";
+    } elseif ($estatusOrdenParam !== 'todas') {
+      $whereConditions[] = "LOWER(ord.status) = ?";
+      $sqlParams[] = $estatusOrdenParam;
     }
 
     if (DB_DRIVER === 'pgsql') {
@@ -1118,7 +1125,7 @@ return function (App $app) {
               JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
               JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
               LEFT JOIN inventario_movimientos inm ON (inm.id_reposicion = re._id) OR (inm.id_reposicion IS NULL AND inm.id_orden = re.id_orden AND inm.moment >= re.moment AND inm.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = re.id_orden AND re_next.moment > re.moment AND re_next.eliminada = 0), '9999-12-31 23:59:59'))
-              LEFT JOIN inventario inv ON inv._id = inm.id_producto
+              LEFT JOIN inventario inv ON inv._id = inm.id_insumo
               {$whereParams}
               GROUP BY re._id, re.id_orden, re.id_empleado, re.id_empleado_emisor, re.id_ordenes_productos, op.id_woo, ord.status, op.name, op.talla, op.corte, op.tela, re.unidades, em_emisor.nombre, em_asignado.nombre, re.detalle, re.moment
               ORDER BY re.id_orden ASC, re._id ASC;";
@@ -1180,13 +1187,13 @@ return function (App $app) {
               JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
               JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
               LEFT JOIN inventario_movimientos inm ON (inm.id_reposicion = re._id) OR (inm.id_reposicion IS NULL AND inm.id_orden = re.id_orden AND inm.moment >= re.moment AND inm.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = re.id_orden AND re_next.moment > re.moment AND re_next.eliminada = 0), '9999-12-31 23:59:59'))
-              LEFT JOIN inventario inv ON inv._id = inm.id_producto
+              LEFT JOIN inventario inv ON inv._id = inm.id_insumo
               {$whereParams}
               GROUP BY re._id
               ORDER BY re.id_orden ASC, re._id ASC;";
     }
 
-    $object = $localConnection->goQuery($sql);
+    $object = $localConnection->goQuery($sql, $sqlParams);
 
     $localConnection->disconnect();
 
@@ -1199,7 +1206,12 @@ return function (App $app) {
 
   $app->get('/reposicion-detalles/{id_reposicion}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
-    $id_reposicion = $args['id_reposicion'];
+    // Casteado a entero: el valor se interpola directo en varias sub-consultas
+    // de una UNION grande más abajo (no factible convertir todas a placeholders
+    // sin reescribir la consulta completa) -- el cast a int neutraliza cualquier
+    // intento de inyección igual de efectivo que un bind, dado que solo se usa
+    // en contexto numérico.
+    $id_reposicion = (int)$args['id_reposicion'];
 
     // 1. Obtener datos clave de la reposición
     $sqlRepo = "SELECT id_orden, id_empleado FROM reposiciones WHERE _id = {$id_reposicion}";
@@ -1210,8 +1222,8 @@ return function (App $app) {
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     }
 
-    $id_orden = $repoData[0]['id_orden'];
-    $id_empleado = $repoData[0]['id_empleado'];
+    $id_orden = (int)$repoData[0]['id_orden'];
+    $id_empleado = (int)$repoData[0]['id_empleado'];
 
     if (DB_DRIVER === 'pgsql') {
       $fechaFormatInm = "TO_CHAR(inm.moment, 'DD/MM/YYYY HH12:MI AM')";
@@ -1237,7 +1249,7 @@ return function (App $app) {
                 inv.color,
                 COALESCE(inv.id_catalogo, 0) as id_catalogo
               FROM inventario_movimientos inm
-              JOIN inventario inv ON inv._id = inm.id_producto
+              JOIN inventario inv ON inv._id = inm.id_insumo
               WHERE 
                 (inm.id_reposicion = {$id_reposicion}) 
                 OR 
@@ -1308,7 +1320,7 @@ return function (App $app) {
                 inv.color,
                 COALESCE(inv.id_catalogo, 0) as id_catalogo
               FROM inventario_movimientos inm
-              JOIN inventario inv ON inv._id = inm.id_producto
+              JOIN inventario inv ON inv._id = inm.id_insumo
               WHERE 
                 (inm.id_reposicion = {$id_reposicion}) 
                 OR 
