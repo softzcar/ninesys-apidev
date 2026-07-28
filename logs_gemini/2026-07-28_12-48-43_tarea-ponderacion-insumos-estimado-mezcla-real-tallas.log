@@ -1,0 +1,30 @@
+- **Solicitud del Usuario:** "Mejor vamos a robustecer `insumos_estimado` para que promedie mas exactamente" -- el usuario reconsideró su decisión anterior (dejarlo como estaba) y pidió corregir el promedio simple entre tallas por uno ponderado por la mezcla real de producción.
+- **Fecha y Hora:** 2026-07-28 12:48:43
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/products_reports.php` (endpoints de productos y categorías -- el de detalle por talla no requería cambios)
+- **Commits Relacionados:**
+    - Backend: `9f0a6f5`
+- **Acción Realizada:**
+    Se reemplazó el promedio simple entre las tallas configuradas en la Ficha Técnica (`array_sum($tallas) / count($tallas)`) por un promedio ponderado por la cantidad real producida de cada talla en el rango de fechas. Se agregó una nueva consulta `cantRealPorTallaRaw` (agrupando `ordenes_productos` por `id_woo` + `id_size`, mismo filtro `status IN ('terminada','entregada')` y `$dateCond` ya usados en el resto del endpoint) y se recalculó `teoricoInsumosMap` como `SUM(costo_talla * unidades_reales_talla) / SUM(unidades_reales_talla)`, con respaldo al promedio simple anterior para productos sin ninguna unidad real de las tallas configuradas (ej. producto nunca fabricado en el rango, donde no hay mezcla real que ponderar).
+
+    Aplicado en los 2 endpoints que agregan por producto/categoría (`/reportes/costos-productos` y `/reportes/costos-productos/categorias`); el endpoint `/reportes/costos-productos/{id}/detalle` no requería cambios porque ya muestra cada talla individualmente, sin promediar entre ellas.
+
+- **Inconvenientes y Desafíos:** El primer producto elegido para verificar en vivo tras el despliegue ("Camisa Carnicero", id 15) no apareció en la respuesta de la API -- se determinó que es porque no tiene `sku` cargado (`WHERE sku IS NOT NULL AND sku <> ''` en la consulta base del endpoint, comportamiento preexistente y correcto, no relacionado con este cambio). Se cambió a "Franela Sublimada" (id 38, sí tiene sku y es el producto de mayor volumen del catálogo) para la verificación final.
+
+- **Decisión Final y Justificación:**
+    Se calculó el peso ponderando por talla en vez de, por ejemplo, ponderar por el costo teórico de mano de obra u otro proxy -- la cantidad real de unidades producidas por talla es la métrica más directa y ya disponible (mismo patrón de `op.id_size` ya usado y validado en el endpoint de detalle por talla). El respaldo a promedio simple para productos sin producción real de ninguna talla configurada evita que `insumos_estimado` quede en 0 para productos nuevos o poco vendidos, preservando el comportamiento anterior solo para ese caso límite.
+
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (verificación de la fórmula ponderada con datos reales ANTES de tocar código, para 2 productos distintos), `Edit`, `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` para verificación en vivo post-despliegue.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Verificado en `psql` antes de tocar código para 2 productos con múltiples tallas: "Camisa Carnicero" (19 tallas configuradas, 6 producidas realmente) pasa de $2.05 (promedio simple) a $2.16 (ponderado); "Franela Sublimada" (19 tallas configuradas, producto de mayor volumen del catálogo) pasa de $2.80 a $2.65. Tras el despliegue, se verificó vía `curl` contra la API real que "Franela Sublimada" devuelve exactamente `insumos_estimado: 2.65` -- coincidiendo con el cálculo ponderado, no el simple.
+
+- **Logro Conseguido:**
+    Se refinó la precisión del costo estimado de insumos para que refleje la mezcla real de tallas que efectivamente se fabrican, en vez de tratar por igual una talla que se vende miles de veces y una que nunca se produjo -- mejora la fidelidad de la comparación Estimado vs. Real, el propósito central de este reporte, especialmente para productos con rangos de tallas amplios (hasta 19 configuradas) donde el consumo de tela varía sustancialmente entre tallas.
+
+- **Observaciones:** Con esto se completa la Fase 1 (datos de la API) de la auditoría del Reporte de Desviación de Costos -- 4 correcciones aplicadas en total hoy (rendimiento en insumos estimado, precio_venta desde products_prices + eliminación de la columna legacy, exclusión de comisión de vendedor en labor_real, y esta ponderación por mezcla real de tallas). Sigue Fase 2 (cards/gráficos "Por Productos"/"Por Categorías").
+
+- **Respuesta de Claude:** Se corrigió `insumos_estimado` para ponderar por la cantidad real de cada talla producida, en vez de promediar todas las tallas configuradas por igual. Verificado con datos reales antes y después del despliegue: "Franela Sublimada" (el producto de mayor volumen) pasó de $2.80 a $2.65, coincidiendo exacto con el cálculo esperado. Con esto queda completa la Fase 1 de la auditoría de este reporte.
