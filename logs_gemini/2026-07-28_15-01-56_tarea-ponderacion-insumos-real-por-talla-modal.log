@@ -1,0 +1,30 @@
+- **Solicitud del Usuario:** Tras confirmarle que `insumos_real` en el modal "Tallas" era el mismo valor plano para todas las tallas (limitación conocida, no un bug), el usuario compartió una captura de la pantalla `/insumos-productos` mostrando que `product_insumos_asignados` SÍ registra la cantidad de material por talla de forma granular ("no tiene sentido promediarlo si en realidad está cargada la información granular por talla"), pidiendo investigar cómo usar esa información para repartir el consumo real de forma correcta.
+- **Fecha y Hora:** 2026-07-28 15:01:56
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/products_reports.php` (endpoint `GET /reportes/costos-productos/{id_producto}/detalle`)
+- **Commits Relacionados:**
+    - Backend: `bf3674a`
+- **Acción Realizada:**
+    Se confirmó que `product_insumos_asignados` (la tabla detrás de la pantalla "Insumos Asignados" mostrada por el usuario) ya se usaba para `insumos_estimado` por talla (genuinamente granular), pero NO se aprovechaba para repartir `insumos_real` -- que se calculaba como un promedio plano del producto completo aplicado por igual a todas las tallas.
+
+    Se implementó un reparto ponderado: en vez de dividir el consumo real total del insumo entre las unidades totales del producto, se distribuye proporcionalmente a cuánto debería consumir cada talla según su propia Ficha Técnica. Fórmula: `costo_real_por_unidad_de_talla = costo_real_total_del_insumo × (cantidad_estimada_de_esta_talla / suma_ponderada_de_todas_las_tallas_producidas)`, donde la suma ponderada es `Σ(cantidad_estimada_talla × unidades_reales_talla)` sobre todas las tallas con producción real. El factor de unidades de la talla se cancela algebraicamente en la fórmula final, dando un resultado por unidad directamente comparable con `cantidad_estimada`. Se mantiene un respaldo a promedio simple si ninguna talla con producción real tiene estimado configurado para ese insumo específico (denominador ponderado = 0).
+
+- **Inconvenientes y Desafíos:** Ninguno significativo. El mayor cuidado fue derivar correctamente la fórmula por unidad (evitar calcular primero un total por talla y luego dividir por sus unidades, que habría sido matemáticamente equivalente pero más propenso a errores de signo/orden) -- se verificó algebraicamente que el factor de cantidad de la talla se cancela, simplificando la implementación a una sola multiplicación/división por talla.
+
+- **Decisión Final y Justificación:**
+    Se ponderó por `cantidad_estimada × unidades_reales` (no solo por `unidades_reales`, que habría sido el promedio plano actual, ni solo por `cantidad_estimada`, que ignoraría cuántas unidades reales se hicieron de cada talla) -- este es el mismo patrón de ponderación ya usado en el resto de la sesión (`realTiempoMap`/`realSalarioFijoMap` ponderan por `tiempo_teorico × cantidad`; `teoricoInsumosMap` a nivel de producto pondera por `unidades_reales_por_talla`), manteniendo consistencia metodológica en todo el archivo.
+
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (extracción de cantidad_estimada por talla, unidades reales por talla, y consumo real total por catálogo de insumo para el caso de prueba), script Python independiente para predecir el resultado esperado ANTES de tocar código (metodología ya establecida esta sesión), `Edit`, `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` y `mcp__claude-in-chrome__javascript_tool` para verificación en vivo.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Se calculó a mano (y con un script Python) el resultado esperado para 4 tallas del producto "Franela Sublimada" (id 38) usando los datos reales extraídos de `psql`: talla 02 (menos tela)=$0.41, talla M=$0.86, talla L=$0.98, talla XL4 (más tela)=$1.41. Tras desplegar, se verificó vía `curl` que el endpoint real devuelve exactamente esos 4 valores para esas tallas, con una progresión monótona y sensata para las 14 tallas con producción real (de $0.41 en la talla más chica a $1.41 en la más grande, en vez de $0.91 fijo para todas). Se verificó además visualmente en el navegador, invocando el modal en vivo: "Talla: 2" muestra "Tela: 0.540 Mt est / 0.297 Mt real / $1.02 est / $0.41 real" -- coincidiendo exacto.
+
+- **Logro Conseguido:**
+    Se mejoró sustancialmente la precisión del modal "Tallas", pasando de un promedio plano sin sentido (mismo costo real para una talla 02 y una XL4) a un reparto proporcional que refleja la realidad física de que las tallas más grandes consumen más material -- usando datos que la empresa YA carga en el sistema (Ficha Técnica por talla) pero que el reporte no aprovechaba. Esta mejora surgió de una observación directa del usuario sobre una pantalla no relacionada (`/insumos-productos`), demostrando que la información granular existía y solo faltaba conectarla.
+
+- **Observaciones:** Este fix complementa el Hallazgo #6 de hoy (insumos_real=0 para tallas sin producción real) -- juntos dejan el desglose de insumos por talla del modal genuinamente diferenciado y confiable, cerrando la última limitación conocida de la auditoría del Reporte de Desviación de Costos.
+
+- **Respuesta de Claude:** A partir de tu observación sobre la pantalla de "Insumos Asignados", se corrigió el reparto de `insumos_real` por talla: ahora se distribuye proporcionalmente a la cantidad de material que cada talla debería consumir según su propia Ficha Técnica, en vez de aplicar el mismo promedio a todas por igual. Verificado con datos reales antes y después del despliegue: la talla más chica (02) ahora muestra $0.41 y la más grande (XL4) $1.41, en vez de $0.91 fijo para todas.
