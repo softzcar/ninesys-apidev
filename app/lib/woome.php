@@ -93,7 +93,6 @@ class WooMe
             p.product AS name,
             p.stock_quantity,
             p.comision,
-            p.price,
             p.fisico AS producto_fisico,
             p.es_diseno,
             COALESCE(pp_agg.prices_json, '[]'::jsonb) AS prices,

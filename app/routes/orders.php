@@ -3878,7 +3878,7 @@ $object['sales_commission_ISSET'][] = false;
           // ============================================================
           // Buscar producto por nombre (flujo antiguo sin modal)
           // ============================================================
-          $sql_prod = "SELECT _id, product, category_ids, price FROM products 
+          $sql_prod = "SELECT _id, product, category_ids FROM products
                        WHERE product LIKE ? LIMIT 1";
           $producto_result = $localConnection->goQuery($sql_prod, ["%{$prod['nombre']}%"]);
 
@@ -3890,7 +3890,8 @@ $object['sales_commission_ISSET'][] = false;
           $producto_info['producto_id'] = $producto_result[0]['_id'] ?? null;
           $producto_info['producto_nombre'] = $producto_result[0]['product'] ?? 'Sin nombre';
           $producto_info['categoria'] = $producto_result[0]['category_ids'] ?? 'Sin categoría';
-          $producto_info['precio'] = floatval($producto_result[0]['price'] ?? 0);
+          // Precio inicial en 0 -- se sobrescribe abajo con products_prices si existe.
+          $producto_info['precio'] = 0;
 
           if ($producto_info['producto_id'] === null) {
             $errores_productos[] = "Producto '{$prod['nombre']}' sin ID válido";
@@ -4323,7 +4324,7 @@ $object['sales_commission_ISSET'][] = false;
         ];
 
         // Buscar producto
-        $sql_prod = "SELECT _id, product, category_ids, price FROM products 
+        $sql_prod = "SELECT _id, product, category_ids FROM products
                      WHERE product LIKE ? LIMIT 5";
         $producto_result = $localConnection->goQuery($sql_prod, ["%{$prod['nombre']}%"]);
 
@@ -4350,15 +4351,6 @@ $object['sales_commission_ISSET'][] = false;
                 'descripcion' => $p['descripcion']
               ];
             }
-          }
-
-          // Si no hay precios en products_prices, usar el precio base
-          if (empty($precios_lista) && !empty($pr['price'])) {
-            $precios_lista[] = [
-              'id' => null,
-              'precio' => floatval($pr['price']),
-              'descripcion' => 'Precio base'
-            ];
           }
 
           $productos_encontrados[] = [
@@ -4493,12 +4485,10 @@ $object['sales_commission_ISSET'][] = false;
         // Normalizar plurales
         $nombreSingular = preg_replace('/(es|s)$/i', '', $nombre);
 
-        $sql = "SELECT p._id as id, p.product as nombre, 
-                       COALESCE(pp.price, p.price) as precio
+        $sql = "SELECT p._id as id, p.product as nombre,
+                       COALESCE((SELECT price FROM products_prices WHERE id_product = p._id ORDER BY _id ASC LIMIT 1), 0) as precio
                 FROM products p
-                LEFT JOIN products_prices pp ON pp.id_product = p._id
                 WHERE p.product LIKE ? OR p.product LIKE ?
-                GROUP BY p._id
                 ORDER BY p.product ASC
                 LIMIT 15";
         $productos = $localConnection->goQuery($sql, ["%{$nombre}%", "%{$nombreSingular}%"]);
@@ -4671,13 +4661,13 @@ $object['sales_commission_ISSET'][] = false;
 
       // Si ya viene con ID (selección previa)
       if ($producto_id) {
-        $sql = "SELECT _id, product, price FROM products WHERE _id = ?";
+        $sql = "SELECT _id, product FROM products WHERE _id = ?";
         $prod = $db->goQuery($sql, [$producto_id]);
         if (!empty($prod) && !isset($prod['status'])) {
           // Obtener precios del producto
           $sql_precios = "SELECT _id, price, descripcion FROM products_prices WHERE id_product = ? ORDER BY _id ASC";
           $precios = $db->goQuery($sql_precios, [$producto_id]);
-          $precio_base = !empty($precios) && !isset($precios['status']) ? floatval($precios[0]['price']) : floatval($prod[0]['price']);
+          $precio_base = !empty($precios) && !isset($precios['status']) ? floatval($precios[0]['price']) : 0;
 
           $productos_validados[] = [
             'index' => $idx,
@@ -4704,8 +4694,8 @@ $object['sales_commission_ISSET'][] = false;
       }
 
       // Buscar con el nombre original y con el singular
-      $sql = "SELECT _id, product, price FROM products 
-              WHERE product LIKE ? OR product LIKE ? 
+      $sql = "SELECT _id, product FROM products
+              WHERE product LIKE ? OR product LIKE ?
               ORDER BY product ASC LIMIT 10";
       $productos = $db->goQuery($sql, ["%{$nombre}%", "%{$nombreSingular}%"]);
 
