@@ -4,6 +4,52 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
 
+// Construye los mapas de costo por ML de tinta (impresora+color, con respaldo
+// solo por color) a partir de tintas_recargas/inventario, igual que
+// reports.php. No depende de IDs de inventario fijos -- esos IDs varían por
+// empresa/clon y estaban hardcodeados (3,4,5,6) en versiones anteriores de
+// este archivo, lo que dejaba el costo de tinta silenciosamente en $0 cuando
+// esos IDs no existían.
+function buildTintaCostMaps($localConnection) {
+  $recargasSql = "SELECT tr.id_catalogo_impresora, cct.codigo AS color,
+                          (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) as cost_ml
+                   FROM tintas_recargas tr
+                   JOIN inventario inv ON tr.id_insumo = inv._id
+                   JOIN catalogo_colores_tintas cct ON tr.id_color_tinta = cct._id
+                   ORDER BY tr.fecha_recarga DESC";
+  $recargasRaw = $localConnection->goQuery($recargasSql);
+  $costMap = [];
+  if (is_array($recargasRaw) && !isset($recargasRaw['status'])) {
+    foreach ($recargasRaw as $r) {
+      $colKey = strtoupper(trim($r['color'] ?? ''));
+      if ($colKey && !isset($costMap[$r['id_catalogo_impresora']][$colKey])) {
+        $costMap[$r['id_catalogo_impresora']][$colKey] = (float)$r['cost_ml'];
+      }
+    }
+  }
+
+  $fallbackSql = "SELECT cct.codigo AS color,
+                          (COALESCE(inv.costo, 0) / COALESCE(NULLIF(inv.cantidad_inicial, 0), NULLIF(inv.cantidad, 0), 1)) as cost_ml
+                   FROM inventario inv
+                   JOIN catalogo_colores_tintas cct ON inv.id_color_tinta = cct._id
+                   WHERE inv.id_color_tinta IS NOT NULL";
+  $fallbackRaw = $localConnection->goQuery($fallbackSql);
+  $fallbackMap = [];
+  if (is_array($fallbackRaw) && !isset($fallbackRaw['status'])) {
+    foreach ($fallbackRaw as $fr) {
+      $colKey = strtoupper(trim($fr['color'] ?? ''));
+      if ($colKey && !isset($fallbackMap[$colKey])) $fallbackMap[$colKey] = (float)$fr['cost_ml'];
+    }
+  }
+
+  return [$costMap, $fallbackMap];
+}
+
+function resolveTintaCostMl($costMap, $fallbackMap, $idImpresora, $colorCode) {
+  $colKey = strtoupper(trim($colorCode ?? ''));
+  return $costMap[$idImpresora][$colKey] ?? ($fallbackMap[$colKey] ?? 0.0);
+}
+
 return function (App $app) {
 
 
@@ -1082,35 +1128,9 @@ return function (App $app) {
                   em_asignado.nombre empleado_asignado,
                   re.detalle_emisor detalle_emisor,
                   re.detalle detalle_encargado,
+                  re.moment moment_raw,
                   COALESCE(
                     SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
-                  ) +
-                  COALESCE(
-                    (SELECT SUM(
-                      t.cantidad * CASE
-                        WHEN t.id_color_tinta = 1 THEN (ic.costo / NULLIF(ic.cantidad_inicial, 0))
-                        WHEN t.id_color_tinta = 2 THEN (im.costo / NULLIF(im.cantidad_inicial, 0))
-                        WHEN t.id_color_tinta = 3 THEN (iy.costo / NULLIF(iy.cantidad_inicial, 0))
-                        WHEN t.id_color_tinta = 4 THEN (ik.costo / NULLIF(ik.cantidad_inicial, 0))
-                        ELSE 0
-                      END
-                    )
-                    FROM tintas t
-                    LEFT JOIN inventario ic ON ic._id = 3
-                    LEFT JOIN inventario im ON im._id = 4
-                    LEFT JOIN inventario iy ON iy._id = 5
-                    LEFT JOIN inventario ik ON ik._id = 6
-                    WHERE t.id_orden = re.id_orden 
-                      AND t.moment >= re.moment 
-                      AND t.moment < COALESCE(
-                        (SELECT MIN(re_next.moment) 
-                         FROM reposiciones re_next 
-                         WHERE re_next.id_orden = re.id_orden 
-                           AND re_next.moment > re.moment
-                           AND re_next.eliminada = 0), 
-                        '9999-12-31 23:59:59'
-                      )
-                    ), 0
                   ) +
                   COALESCE(
                     (SELECT SUM(monto_pago) FROM pagos WHERE id_reposicion = re._id), 0
@@ -1147,32 +1167,9 @@ return function (App $app) {
                   em_asignado.nombre empleado_asignado,
                   re.detalle_emisor detalle_emisor,
                   re.detalle detalle_encargado,
+                  re.moment moment_raw,
                   COALESCE(
                     SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
-                  ) +
-                  COALESCE(
-                    (SELECT SUM(
-                      (t.c * (ic.costo / NULLIF(ic.cantidad_inicial, 0))) +
-                      (t.m * (im.costo / NULLIF(im.cantidad_inicial, 0))) +
-                      (t.y * (iy.costo / NULLIF(iy.cantidad_inicial, 0))) +
-                      (t.k * (ik.costo / NULLIF(ik.cantidad_inicial, 0)))
-                    )
-                    FROM tintas t
-                    LEFT JOIN inventario ic ON ic._id = 3
-                    LEFT JOIN inventario im ON im._id = 4
-                    LEFT JOIN inventario iy ON iy._id = 5
-                    LEFT JOIN inventario ik ON ik._id = 6
-                    WHERE t.id_orden = re.id_orden 
-                      AND t.moment >= re.moment 
-                      AND t.moment < COALESCE(
-                        (SELECT MIN(re_next.moment) 
-                         FROM reposiciones re_next 
-                         WHERE re_next.id_orden = re.id_orden 
-                           AND re_next.moment > re.moment
-                           AND re_next.eliminada = 0), 
-                        '9999-12-31 23:59:59'
-                      )
-                    ), 0
                   ) +
                   COALESCE(
                     (SELECT SUM(monto_pago) FROM pagos WHERE id_reposicion = re._id), 0
@@ -1195,6 +1192,70 @@ return function (App $app) {
 
     $object = $localConnection->goQuery($sql, $sqlParams);
 
+    // Sumar costo de tinta a material_consumido (calculado en PHP, no en SQL
+    // -- ver buildTintaCostMaps: un JOIN directo por id_color_tinta duplicaría
+    // el costo porque hay varias filas de inventario por color).
+    if (is_array($object) && !isset($object['status']) && !empty($object)) {
+      $idsOrdenReposiciones = array_values(array_unique(array_map(function ($row) {
+        return (int)$row['id_orden'];
+      }, $object)));
+
+      if (!empty($idsOrdenReposiciones)) {
+        $idsOrdenStr = implode(',', $idsOrdenReposiciones);
+
+        // Todas las reposiciones (no solo las filtradas) para calcular la
+        // ventana [moment, siguiente_moment) de cada una, igual que el JOIN
+        // de insumos de esta misma consulta.
+        $todasRepos = $localConnection->goQuery(
+          "SELECT id_orden, moment FROM reposiciones WHERE id_orden IN ({$idsOrdenStr}) AND eliminada = 0 ORDER BY id_orden ASC, moment ASC"
+        );
+        $momentosPorOrden = [];
+        if (is_array($todasRepos) && !isset($todasRepos['status'])) {
+          foreach ($todasRepos as $tr) {
+            $momentosPorOrden[$tr['id_orden']][] = $tr['moment'];
+          }
+        }
+
+        $tintasRaw = $localConnection->goQuery(
+          "SELECT t.id_orden, t.moment, cct.codigo AS color_code, t.cantidad, t.id_catalogo_impresoras
+           FROM tintas t
+           JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id
+           WHERE t.id_orden IN ({$idsOrdenStr})"
+        );
+        $tintasPorOrden = [];
+        if (is_array($tintasRaw) && !isset($tintasRaw['status'])) {
+          foreach ($tintasRaw as $t) {
+            $tintasPorOrden[$t['id_orden']][] = $t;
+          }
+        }
+
+        list($costMap, $fallbackMap) = buildTintaCostMaps($localConnection);
+
+        foreach ($object as &$row) {
+          $idOrden = $row['id_orden'];
+          $momentInicio = $row['moment_raw'];
+          $momentFin = '9999-12-31 23:59:59';
+          foreach ($momentosPorOrden[$idOrden] ?? [] as $m) {
+            if ($m > $momentInicio && ($momentFin === '9999-12-31 23:59:59' || $m < $momentFin)) {
+              $momentFin = $m;
+            }
+          }
+
+          $costoTinta = 0.0;
+          foreach ($tintasPorOrden[$idOrden] ?? [] as $t) {
+            if ($t['moment'] >= $momentInicio && $t['moment'] < $momentFin) {
+              $costMl = resolveTintaCostMl($costMap, $fallbackMap, $t['id_catalogo_impresoras'], $t['color_code']);
+              $costoTinta += (float)$t['cantidad'] * $costMl;
+            }
+          }
+
+          $row['material_consumido'] = (float)$row['material_consumido'] + $costoTinta;
+          unset($row['moment_raw']);
+        }
+        unset($row);
+      }
+    }
+
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
@@ -1214,7 +1275,7 @@ return function (App $app) {
     $id_reposicion = (int)$args['id_reposicion'];
 
     // 1. Obtener datos clave de la reposición
-    $sqlRepo = "SELECT id_orden, id_empleado FROM reposiciones WHERE _id = {$id_reposicion}";
+    $sqlRepo = "SELECT id_orden, id_empleado, moment FROM reposiciones WHERE _id = {$id_reposicion}";
     $repoData = $localConnection->goQuery($sqlRepo);
 
     if (empty($repoData)) {
@@ -1224,14 +1285,13 @@ return function (App $app) {
 
     $id_orden = (int)$repoData[0]['id_orden'];
     $id_empleado = (int)$repoData[0]['id_empleado'];
+    $momentInicio = $repoData[0]['moment'];
 
     if (DB_DRIVER === 'pgsql') {
       $fechaFormatInm = "TO_CHAR(inm.moment, 'DD/MM/YYYY HH12:MI AM')";
-      $fechaFormatT = "TO_CHAR(t.moment, 'DD/MM/YYYY HH12:MI AM')";
       $fechaFormatP = "TO_CHAR(p.moment, 'DD/MM/YYYY HH12:MI AM')";
     } else {
       $fechaFormatInm = "DATE_FORMAT(inm.moment, '%d/%m/%Y %h:%i %p')";
-      $fechaFormatT = "DATE_FORMAT(t.moment, '%d/%m/%Y %h:%i %p')";
       $fechaFormatP = "DATE_FORMAT(p.moment, '%d/%m/%Y %h:%i %p')";
     }
 
@@ -1267,31 +1327,7 @@ return function (App $app) {
               
               UNION ALL
 
-              SELECT 
-                'Tinta Cyan' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.cantidad as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.cantidad * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'CYAN' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-              FROM tintas t JOIN inventario i ON i._id = 3 WHERE t.id_color_tinta = 1 AND t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
-
-              UNION ALL
-
-              SELECT 
-                'Tinta Magenta' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.cantidad as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.cantidad * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'MAGENTA' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-              FROM tintas t JOIN inventario i ON i._id = 4 WHERE t.id_color_tinta = 2 AND t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
-
-              UNION ALL
-
-              SELECT 
-                'Tinta Yellow' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.cantidad as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.cantidad * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'YELLOW' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-              FROM tintas t JOIN inventario i ON i._id = 5 WHERE t.id_color_tinta = 3 AND t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
-
-              UNION ALL
-
-              SELECT 
-                'Tinta Black' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.cantidad as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.cantidad * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'BLACK' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-              FROM tintas t JOIN inventario i ON i._id = 6 WHERE t.id_color_tinta = 4 AND t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
-
-              UNION ALL
-
-              SELECT 
+              SELECT
                   CONCAT('Mano de Obra - ', u.nombre) as insumo,
                   'UND' as unidad,
                   0 as valor_inicial,
@@ -1305,7 +1341,7 @@ return function (App $app) {
               FROM pagos p
               JOIN api_empresas.empresas_usuarios u ON u.id_usuario = p.id_empleado
               WHERE p.id_reposicion = {$id_reposicion} AND p.monto_pago > 0
-              
+
               ORDER BY id_catalogo ASC, fecha DESC";
     } else {
       $sql = "SELECT 
@@ -1338,31 +1374,7 @@ return function (App $app) {
               
               UNION ALL
 
-              SELECT 
-                'Tinta Cyan' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.c as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.c * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'CYAN' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-              FROM tintas t JOIN inventario i ON i._id = 3 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
-
-              UNION ALL
-
-              SELECT 
-                'Tinta Magenta' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.m as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.m * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'MAGENTA' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-              FROM tintas t JOIN inventario i ON i._id = 4 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
-
-              UNION ALL
-
-              SELECT 
-                'Tinta Yellow' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.y as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.y * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'YELLOW' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-              FROM tintas t JOIN inventario i ON i._id = 5 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
-
-              UNION ALL
-
-              SELECT 
-                'Tinta Black' as insumo, 'ML' as unidad, 0 as valor_inicial, 0 as valor_final, t.k as cantidad_consumida, (i.costo / NULLIF(i.cantidad_inicial, 0)) as costo_unitario, (t.k * (i.costo / NULLIF(i.cantidad_inicial, 0))) as costo_total, $fechaFormatT as fecha, 'BLACK' as color, COALESCE(i.id_catalogo, 0) as id_catalogo
-              FROM tintas t JOIN inventario i ON i._id = 6 WHERE t.id_orden = {$id_orden} AND t.moment >= (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND t.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = {$id_orden} AND re_next.moment > (SELECT moment FROM reposiciones WHERE _id = {$id_reposicion}) AND re_next.eliminada = 0), '9999-12-31 23:59:59')
-
-              UNION ALL
-
-              SELECT 
+              SELECT
                   CONCAT('Mano de Obra - ', u.nombre) as insumo,
                   'UND' as unidad,
                   0 as valor_inicial,
@@ -1376,11 +1388,59 @@ return function (App $app) {
               FROM pagos p
               JOIN api_empresas.empresas_usuarios u ON u.id_usuario = p.id_empleado
               WHERE p.id_reposicion = {$id_reposicion} AND p.monto_pago > 0
-              
+
               ORDER BY id_catalogo ASC, fecha DESC";
     }
 
     $items = $localConnection->goQuery($sql);
+
+    // Costo de tinta calculado en PHP (ver buildTintaCostMaps) y agregado
+    // como líneas propias, una por cada aplicación real de tinta dentro de
+    // la ventana de esta reposición -- reemplaza los 4 bloques UNION ALL con
+    // IDs de inventario hardcodeados (3,4,5,6) que no existían en esta
+    // empresa y además ignoraban colores fuera de CMYK (blanco, barniz, etc).
+    $momentFin = '9999-12-31 23:59:59';
+    $siguienteRepo = $localConnection->goQuery(
+      "SELECT MIN(moment) as moment FROM reposiciones WHERE id_orden = {$id_orden} AND moment > '{$momentInicio}' AND eliminada = 0"
+    );
+    if (is_array($siguienteRepo) && !empty($siguienteRepo[0]['moment'])) {
+      $momentFin = $siguienteRepo[0]['moment'];
+    }
+
+    $tintasRaw = $localConnection->goQuery(
+      "SELECT t.moment, cct.codigo AS color_code, cct.nombre AS color_nombre, t.cantidad, t.id_catalogo_impresoras
+       FROM tintas t
+       JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id
+       WHERE t.id_orden = {$id_orden} AND t.moment >= '{$momentInicio}' AND t.moment < '{$momentFin}'"
+    );
+
+    if (is_array($tintasRaw) && !isset($tintasRaw['status']) && !empty($tintasRaw)) {
+      list($costMap, $fallbackMap) = buildTintaCostMaps($localConnection);
+
+      foreach ($tintasRaw as $t) {
+        $costMl = resolveTintaCostMl($costMap, $fallbackMap, $t['id_catalogo_impresoras'], $t['color_code']);
+        $cantidad = (float)$t['cantidad'];
+        $items[] = [
+          'insumo' => 'Tinta ' . ($t['color_nombre'] ?: $t['color_code']),
+          'unidad' => 'ML',
+          'valor_inicial' => 0,
+          'valor_final' => 0,
+          'cantidad_consumida' => $cantidad,
+          'costo_unitario' => $costMl,
+          'costo_total' => $cantidad * $costMl,
+          'fecha' => date('d/m/Y h:i A', strtotime($t['moment'])),
+          'color' => $t['color_code'],
+          'id_catalogo' => 5000,
+        ];
+      }
+
+      // Reordenar (id_catalogo ASC) ya que las líneas de tinta se agregan
+      // en PHP después de la consulta SQL que ya traía insumos+labor ordenados.
+      usort($items, function ($a, $b) {
+        return ($a['id_catalogo'] ?? 0) <=> ($b['id_catalogo'] ?? 0);
+      });
+    }
+
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($items));
