@@ -89,7 +89,10 @@ return function (App $app) {
             }
 
             // 1. Obtener todos los productos físicos (o con sku)
-            $productsRaw = $db->goQuery("SELECT _id, product as nombre, sku, price as precio_venta, category_ids FROM products WHERE sku IS NOT NULL AND sku <> ''");
+            // precio_venta viene de products_prices (primer registro por _id, mismo criterio
+            // ya usado en WooMe::getAllProducts()/orders.php) -- products.price es un campo
+            // legacy que la app ya no usa para fijar precios reales, solo queda como respaldo.
+            $productsRaw = $db->goQuery("SELECT p._id, p.product as nombre, p.sku, COALESCE((SELECT price FROM products_prices WHERE id_product = p._id ORDER BY _id ASC LIMIT 1), p.price) as precio_venta, p.category_ids FROM products p WHERE p.sku IS NOT NULL AND p.sku <> ''");
             if (isset($productsRaw['status']) && $productsRaw['status'] === 'error') {
                 throw new Exception('Error al consultar productos: ' . $productsRaw['message']);
             }
@@ -431,7 +434,10 @@ return function (App $app) {
             }
 
             // Reusar toda la lógica agregada a nivel de producto
-            $productsRaw = $db->goQuery("SELECT _id, product as nombre, sku, price as precio_venta, category_ids FROM products WHERE sku IS NOT NULL AND sku <> ''");
+            // precio_venta viene de products_prices (primer registro por _id, mismo criterio
+            // ya usado en WooMe::getAllProducts()/orders.php) -- products.price es un campo
+            // legacy que la app ya no usa para fijar precios reales, solo queda como respaldo.
+            $productsRaw = $db->goQuery("SELECT p._id, p.product as nombre, p.sku, COALESCE((SELECT price FROM products_prices WHERE id_product = p._id ORDER BY _id ASC LIMIT 1), p.price) as precio_venta, p.category_ids FROM products p WHERE p.sku IS NOT NULL AND p.sku <> ''");
             $categoriesRaw = $db->goQuery("SELECT _id, nombre FROM categories");
             
             $categoriesMap = [];
@@ -793,7 +799,7 @@ return function (App $app) {
             }
 
             // 1. Obtener detalles básicos del producto
-            $productRaw = $db->goQuery("SELECT _id, product as nombre, sku, price as precio_venta FROM products WHERE _id = ?", [$id_producto]);
+            $productRaw = $db->goQuery("SELECT p._id, p.product as nombre, p.sku, COALESCE((SELECT price FROM products_prices WHERE id_product = p._id ORDER BY _id ASC LIMIT 1), p.price) as precio_venta FROM products p WHERE p._id = ?", [$id_producto]);
             if (empty($productRaw)) {
                 $response->getBody()->write(json_encode(['success' => false, 'message' => 'Producto no encontrado']));
                 return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
