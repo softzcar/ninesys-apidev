@@ -229,6 +229,9 @@ return function (App $app) {
             //    orden (ordenes_productos), ponderando por comisión estimada x cantidad. NO se usa
             //    lotes_detalles: su enlace pago->producto está roto (id_lotes_detalles apunta a lotes
             //    de otras órdenes en ~99% de los casos, inflando la mano de obra de productos sueltos).
+            //    Se excluyen los pagos de comisión de VENDEDOR (detalle='Comercialización'/'Abono a
+            //    orden', siempre pagados al responsable de la orden, confirmado en 5969/5971 y 41/41
+            //    registros) -- no son mano de obra de producción, inflaban labor_real ~2x.
             $pagosRealRaw = $db->goQuery("
                 SELECT id_woo AS id_producto, SUM(share) AS total_pagos
                 FROM (
@@ -240,7 +243,8 @@ return function (App $app) {
                     JOIN ordenes_productos op ON op.id_orden = p.id_orden
                     LEFT JOIN (SELECT id_product, SUM(comision) w FROM products_comisiones GROUP BY id_product) peso
                         ON peso.id_product = op.id_woo
-                    WHERE o.status IN ('terminada', 'entregada') $dateCond
+                    WHERE o.status IN ('terminada', 'entregada')
+                      AND p.detalle NOT IN ('Comercialización', 'Abono a orden') $dateCond
                 ) t
                 GROUP BY id_woo
             ", $params);
@@ -578,7 +582,8 @@ return function (App $app) {
             }
 
             // Comisiones reales (pagos) por producto para el rollup de categorías — mismo reparto
-            // por orden->ordenes_productos (comisión x cantidad), sin lotes_detalles.
+            // por orden->ordenes_productos (comisión x cantidad), sin lotes_detalles. Excluye comisión
+            // de vendedor (Comercialización/Abono a orden), ver detalle en el endpoint de productos.
             $pagosRealRaw = $db->goQuery("
                 SELECT id_woo AS id_producto, SUM(share) AS total_pagos
                 FROM (
@@ -590,7 +595,8 @@ return function (App $app) {
                     JOIN ordenes_productos op ON op.id_orden = p.id_orden
                     LEFT JOIN (SELECT id_product, SUM(comision) w FROM products_comisiones GROUP BY id_product) peso
                         ON peso.id_product = op.id_woo
-                    WHERE o.status IN ('terminada', 'entregada') $dateCond
+                    WHERE o.status IN ('terminada', 'entregada')
+                      AND p.detalle NOT IN ('Comercialización', 'Abono a orden') $dateCond
                 ) t
                 GROUP BY id_woo
             ", $params);
@@ -949,7 +955,8 @@ return function (App $app) {
 
             // 9. Comisiones reales pagadas (pagos) por talla — mismo reparto por orden->ordenes_productos
             //    (comisión x cantidad, sin lotes_detalles); se distribuye cada pago sobre TODAS las líneas
-            //    de su orden y luego se filtra al producto y se agrupa por talla (id_size).
+            //    de su orden y luego se filtra al producto y se agrupa por talla (id_size). Excluye
+            //    comisión de vendedor (Comercialización/Abono a orden), ver detalle en el endpoint de productos.
             $pagosRealRaw = $db->goQuery("
                 SELECT id_talla, SUM(share) AS total_pagos
                 FROM (
@@ -961,7 +968,8 @@ return function (App $app) {
                     JOIN ordenes_productos op ON op.id_orden = p.id_orden
                     LEFT JOIN (SELECT id_product, SUM(comision) w FROM products_comisiones GROUP BY id_product) peso
                         ON peso.id_product = op.id_woo
-                    WHERE o.status IN ('terminada', 'entregada') $dateCond
+                    WHERE o.status IN ('terminada', 'entregada')
+                      AND p.detalle NOT IN ('Comercialización', 'Abono a orden') $dateCond
                 ) t
                 WHERE id_woo = :id_producto
                 GROUP BY id_talla
