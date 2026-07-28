@@ -1161,9 +1161,9 @@ return function (App $app) {
                 // Estimar costos reales
                 $costoInsumosReal = 0.0;
                 $insumosRealesList = [];
-                
+
                 // Mapear insumos consumidos reales para esta talla
-                // Como los movimientos de inventario no se registran por talla sino por producto, 
+                // Como los movimientos de inventario no se registran por talla sino por producto,
                 // prorateamos la cantidad total consumida del producto en base a las unidades de esta talla
                 foreach ($insumosTeoricosList as $it) {
                     // Buscar en el consumo total real del producto
@@ -1178,11 +1178,16 @@ return function (App $app) {
                     $cantRealConsumidaTalla = 0.0;
                     $costoRealConsumidoTalla = 0.0;
 
-                    if ($catId && isset($insumosRealProdMap[$catId]) && $unidadesTotalesFabricadas > 0) {
+                    // Solo se asigna el promedio si esta talla específica tuvo unidades reales
+                    // fabricadas en el rango -- antes se aplicaba el promedio del producto a TODAS
+                    // las tallas por igual, incluidas las que nunca se produjeron (mismas 0 unidades
+                    // que ya dejan labor_real/tiempo_real en 0, pero insumos_real mostraba un costo
+                    // no-cero engañoso).
+                    if ($catId && isset($insumosRealProdMap[$catId]) && $unidadesTotalesFabricadas > 0 && $cantTalla > 0) {
                         // Consumo real promedio por prenda * prendas fabricadas de esta talla
                         $promedioPrendaCant = $insumosRealProdMap[$catId]['cantidad'] / $unidadesTotalesFabricadas;
                         $promedioPrendaCosto = $insumosRealProdMap[$catId]['costo'] / $unidadesTotalesFabricadas;
-                        
+
                         $cantRealConsumidaTalla = $promedioPrendaCant;
                         $costoRealConsumidoTalla = $promedioPrendaCosto;
                     }
