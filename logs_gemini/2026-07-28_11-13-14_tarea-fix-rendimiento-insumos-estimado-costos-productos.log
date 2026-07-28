@@ -1,0 +1,41 @@
+- **Solicitud del Usuario:** "si dale corrígelo" (confirmación para aplicar el fix del bug crítico encontrado el día anterior durante la Fase 1 -- verificación de datos de la API -- del Reporte de Desviación de Costos).
+- **Fecha y Hora:** 2026-07-28 11:13:14
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/products_reports.php` (3 endpoints: `GET /reportes/costos-productos`, `GET /reportes/costos-productos/categorias`, `GET /reportes/costos-productos/{id_producto}/detalle`)
+- **Commits Relacionados:**
+    - Backend: `c386916`
+- **Acción Realizada:**
+    Se corrigió la consulta `$invCostRaw` (idéntica en los 3 endpoints, ubicada en las líneas ~107, ~459 y ~807 antes del fix) que calculaba el costo unitario promedio de cada insumo del catálogo (`AVG(costo / NULLIF(cantidad_inicial, 0))`) sin considerar que algunos insumos (principalmente "Tela", `id_catalogo=2`) se compran por Kg en inventario pero se especifican en metros en la Ficha Técnica (`product_insumos_asignados.unidad = 'Mt'`, 2529 de 2589 filas). Se agregó la división por `rendimiento` (metros por Kg) condicionada a que la unidad de esa fila específica de inventario sea 'Kg' -- mismo criterio de conversión Kg->Mt ya usado en `reports.php` y `manufacturing.php` esta semana:
+
+    ```sql
+    SELECT id_catalogo,
+        AVG((costo / NULLIF(cantidad_inicial, 0)) / CASE WHEN unidad = 'Kg' AND rendimiento IS NOT NULL THEN rendimiento ELSE 1 END) AS costo_unitario
+    FROM inventario GROUP BY id_catalogo
+    ```
+
+    La normalización se hace ANTES de promediar (se divide cada fila por su propio rendimiento y luego se promedia el resultado), no promediando primero el rendimiento y dividiendo después -- para no introducir un sesgo adicional al mezclar lotes con distinto rendimiento.
+
+- **Inconvenientes y Desafíos:** Se detectó que el catálogo "Tela" tiene 2 filas con la unidad escrita como "Kilos" (en vez de "Kg") que no calzan con la condición `unidad = 'Kg'` y por lo tanto no reciben la conversión. Se decidió NO tratar este caso especial, siguiendo exactamente el mismo criterio (`unidad = 'Kg'` literal, sin variantes) ya usado en las otras 3 ubicaciones del código que hacen esta misma conversión -- ampliar la condición ahí también habría sido inconsistente con el patrón establecido, y es un caso marginal (2 de 138 filas del catálogo).
+
+- **Decisión Final y Justificación:**
+    Se aplicó el fix en la capa de `invCostMap` (el mapa de costo unitario por catálogo compartido por los 3 endpoints) en vez de tocar cada uno de los 3 lugares donde se consume ese mapa, porque las 3 consultas SQL de origen son textualmente idénticas -- corregirlas en un solo patrón de `Edit` con `replace_all` garantiza que los 3 endpoints queden sincronizados sin riesgo de que uno quede desactualizado.
+
+- **Herramienta(s) Utilizada(s):** `Bash` (`ssh`/`psql` para verificar la fórmula corregida con datos reales ANTES de tocar código, comparando manualmente producto por producto; `git diff`/`commit`; `curl` para verificación en vivo post-despliegue), `Edit` (con `replace_all` sobre las 3 ocurrencias idénticas), `php -l`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Antes de tocar código, se verificó en `psql` que el nuevo cálculo para el catálogo "Tela" (`id_catalogo=2`) da $1.886/Mt (vs. $5.38/Mt con el bug), y para "Papel SUBLIMACION" (`id_catalogo=1`, sin conversión necesaria) da $0.398/Mt sin cambios.
+
+    Tras el despliegue, se verificó vía `curl` contra los 3 endpoints reales para el producto "Bandera 1 Metro Doble Cara" (id 4, talla única, 1 Mt de Papel + 1 Mt de Tela):
+    - `/reportes/costos-productos`: `insumos_estimado = 2.28` (= 0.398 + 1.886, calculado manualmente).
+    - `/reportes/costos-productos/4/detalle`: desglose por talla muestra `Papel SUBLIMACION: $0.40` + `Tela: $1.89` = `$2.29` (coincide, diferencia de redondeo de un centavo).
+    - `/reportes/costos-productos/categorias`: valores de `insumos_estimado` por categoría también reflejan el nuevo costo corregido.
+
+- **Logro Conseguido:**
+    Se corrigió un bug que sobrestimaba el costo estimado de insumos hasta ~3.7x en 78 de los 105 productos con Ficha Técnica cargada (todos los que usan tela comprada por Kg), restaurando el valor real de la comparación "Estimado vs. Real" que es el propósito central del Reporte de Desviación de Costos -- antes de este fix, prácticamente todos los productos de tela mostraban una desviación de insumos falsamente negativa (aparentando estar "por debajo del presupuesto" cuando en realidad el presupuesto mismo estaba mal calculado).
+
+- **Observaciones:** Continúa la Fase 1 (datos de la API) de la auditoría del Reporte de Desviación de Costos -- este era el hallazgo principal encontrado hasta ahora, pero falta terminar de revisar el resto de los campos antes de pasar a la Fase 2 (cards/gráficos con los switches "Por Productos"/"Por Categorías").
+
+- **Respuesta de Claude:** Se corrigió el bug del costo estimado de insumos: ahora aplica correctamente el factor de rendimiento (Kg->Mt) para telas, en los 3 endpoints del reporte. Verificado con datos reales antes y después del despliegue -- el producto de ejemplo "Bandera 1 Metro Doble Cara" pasó de mostrar $5.38/Mt (con el bug) a $1.89/Mt (correcto) en el insumo "Tela", y el total de insumos estimados del producto coincide exacto entre los 3 endpoints ($2.28-$2.29).
