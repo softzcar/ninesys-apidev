@@ -136,14 +136,6 @@ return function (App $app) {
                 }
             }
 
-            // Promediar el costo teórico de insumos entre las tallas disponibles por producto
-            $teoricoInsumosMap = [];
-            foreach ($piaEstimados as $prodId => $tallas) {
-                $total = array_sum($tallas);
-                $cnt = count($tallas);
-                $teoricoInsumosMap[$prodId] = $cnt > 0 ? round($total / $cnt, 2) : 0.0;
-            }
-
             // 5. Mano de Obra Estimada (Comisiones teóricas)
             $comisionesRaw = $db->goQuery("SELECT id_product, SUM(comision) AS total_comision FROM products_comisiones GROUP BY id_product");
             $teoricoLaborMap = [];
@@ -206,6 +198,46 @@ return function (App $app) {
             if (is_array($cantRealRaw)) {
                 foreach ($cantRealRaw as $r) {
                     $realCantidadMap[$r['id_producto']] = (float)$r['total_cantidad'];
+                }
+            }
+
+            // 7b. Cantidad real producida por producto Y talla, para ponderar el costo estimado
+            //     de insumos por la mezcla real de tallas fabricadas (en vez de un promedio simple
+            //     entre las tallas configuradas en la Ficha Técnica, que puede incluir tallas nunca
+            //     producidas en el rango y distorsionar el estimado).
+            $cantRealPorTallaRaw = $db->goQuery("
+                SELECT op.id_woo as id_producto, op.id_size as id_talla, SUM(op.cantidad) AS total_cantidad
+                FROM ordenes_productos op
+                JOIN ordenes o ON op.id_orden = o._id
+                WHERE o.status IN ('terminada', 'entregada') $dateCond
+                GROUP BY op.id_woo, op.id_size
+            ", $params);
+            $realCantidadPorTallaMap = [];
+            if (is_array($cantRealPorTallaRaw)) {
+                foreach ($cantRealPorTallaRaw as $r) {
+                    $realCantidadPorTallaMap[$r['id_producto']][$r['id_talla']] = (float)$r['total_cantidad'];
+                }
+            }
+
+            // Costo teórico de insumos ponderado por la mezcla real de tallas producidas en el
+            // rango. Si el producto no tiene ninguna unidad real de las tallas configuradas
+            // (ej. producto nunca fabricado en el rango), se usa un promedio simple entre las
+            // tallas de la ficha técnica como respaldo.
+            $teoricoInsumosMap = [];
+            foreach ($piaEstimados as $prodId => $tallas) {
+                $pesoTotal = 0.0;
+                $sumaPonderada = 0.0;
+                foreach ($tallas as $tallaId => $costoTalla) {
+                    $peso = $realCantidadPorTallaMap[$prodId][$tallaId] ?? 0.0;
+                    $sumaPonderada += $costoTalla * $peso;
+                    $pesoTotal += $peso;
+                }
+                if ($pesoTotal > 0) {
+                    $teoricoInsumosMap[$prodId] = round($sumaPonderada / $pesoTotal, 2);
+                } else {
+                    $total = array_sum($tallas);
+                    $cnt = count($tallas);
+                    $teoricoInsumosMap[$prodId] = $cnt > 0 ? round($total / $cnt, 2) : 0.0;
                 }
             }
 
@@ -497,13 +529,6 @@ return function (App $app) {
                 }
             }
 
-            $teoricoInsumosMap = [];
-            foreach ($piaEstimados as $prodId => $tallas) {
-                $total = array_sum($tallas);
-                $cnt = count($tallas);
-                $teoricoInsumosMap[$prodId] = $cnt > 0 ? $total / $cnt : 0.0;
-            }
-
             $comisionesRaw = $db->goQuery("SELECT id_product, SUM(comision) AS total_comision FROM products_comisiones GROUP BY id_product");
             $teoricoLaborMap = [];
             if (is_array($comisionesRaw)) {
@@ -563,6 +588,40 @@ return function (App $app) {
             if (is_array($cantRealRaw)) {
                 foreach ($cantRealRaw as $r) {
                     $realCantidadMap[$r['id_producto']] = (float)$r['total_cantidad'];
+                }
+            }
+
+            // Cantidad real por producto y talla, para ponderar el costo estimado de insumos por
+            // la mezcla real de tallas producidas -- mismo criterio que el endpoint de productos.
+            $cantRealPorTallaRaw = $db->goQuery("
+                SELECT op.id_woo as id_producto, op.id_size as id_talla, SUM(op.cantidad) AS total_cantidad
+                FROM ordenes_productos op
+                JOIN ordenes o ON op.id_orden = o._id
+                WHERE o.status IN ('terminada', 'entregada') $dateCond
+                GROUP BY op.id_woo, op.id_size
+            ", $params);
+            $realCantidadPorTallaMap = [];
+            if (is_array($cantRealPorTallaRaw)) {
+                foreach ($cantRealPorTallaRaw as $r) {
+                    $realCantidadPorTallaMap[$r['id_producto']][$r['id_talla']] = (float)$r['total_cantidad'];
+                }
+            }
+
+            $teoricoInsumosMap = [];
+            foreach ($piaEstimados as $prodId => $tallas) {
+                $pesoTotal = 0.0;
+                $sumaPonderada = 0.0;
+                foreach ($tallas as $tallaId => $costoTalla) {
+                    $peso = $realCantidadPorTallaMap[$prodId][$tallaId] ?? 0.0;
+                    $sumaPonderada += $costoTalla * $peso;
+                    $pesoTotal += $peso;
+                }
+                if ($pesoTotal > 0) {
+                    $teoricoInsumosMap[$prodId] = $sumaPonderada / $pesoTotal;
+                } else {
+                    $total = array_sum($tallas);
+                    $cnt = count($tallas);
+                    $teoricoInsumosMap[$prodId] = $cnt > 0 ? $total / $cnt : 0.0;
                 }
             }
 
