@@ -1,0 +1,42 @@
+- **Solicitud del Usuario:** "ok aplica el fix y veamos la posibilidad de eliminar el campo `products.price` de la nueva estructura de datos de postgre, debemos entonces verificar los endpoints de la API que no estén usando este campo en las consultas para que no se rompan" -- tras confirmar que `products.price` es un campo legacy y `products_prices` es la fuente real de precios (aclaración del usuario).
+- **Fecha y Hora:** 2026-07-28 11:59:16
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/products_reports.php` (los 3 endpoints de costos de productos -- fix aplicado)
+    - `app/routes/orders.php` (5 ubicaciones -- solo auditadas, sin cambios, ya seguras)
+    - `app/routes/inventory.php` (`/api/products/template-excel` -- solo auditado, sin cambios, columna leída pero no usada)
+    - `app/lib/woome.php` (`getAllProducts()`, `createProductLite()`, `updateProductLite()` -- solo auditados)
+    - `app/routes/inventory.php` (`/api/products/bulk-load`, Carga Masiva -- solo auditado)
+- **Commits Relacionados:**
+    - Backend: `adcdd3d`
+- **Acción Realizada:**
+    **Parte 1 -- Fix:** se corrigió `precio_venta` en los 3 endpoints de `products_reports.php` para que se obtenga de `products_prices` (primer registro por `_id` ascendente, mismo criterio ya usado en `orders.php` y `WooMe::getAllProducts()`) en vez de `products.price`, con `COALESCE` hacia `products.price` solo como respaldo si el producto no tiene ningún registro en `products_prices`:
+    ```sql
+    SELECT p._id, p.product as nombre, p.sku,
+        COALESCE((SELECT price FROM products_prices WHERE id_product = p._id ORDER BY _id ASC LIMIT 1), p.price) as precio_venta,
+        p.category_ids
+    FROM products p WHERE p.sku IS NOT NULL AND p.sku <> ''
+    ```
+
+    **Parte 2 -- Auditoría de `products.price` para evaluar su eliminación del esquema:** se rastrearon TODAS las consultas del backend que tocan la columna `price` de la tabla `products` (lectura y escritura):
+    - **Escritura:** ningún flujo activo escribe en `products.price`. `createProductLite()`, `updateProductLite()` y `/api/products/bulk-load` (Carga Masiva) escriben exclusivamente en `products_prices`. El único código que sí escribía `products.price` (`createProduct()`/`updateProduct_wc()`, integración vieja con WooCommerce vía `Client` de la API REST de WooCommerce) no está referenciado desde ninguna ruta del frontend -- código muerto.
+    - **Lectura:** `orders.php` (5 lugares) ya usa `products_prices` primero con `products.price` solo de respaldo, o ni siquiera usa el valor obtenido (columna leída pero descartada). `inventory.php` (`/api/products/template-excel`) selecciona `price` pero nunca lo escribe en el Excel generado. `WooMe::getAllProducts()` (el endpoint `GET /products`, usado por toda la app para poblar el catálogo) sí devuelve `price` en el payload junto con el array `prices` correcto -- este es el único punto con consumo real en el frontend, resuelto en la tarea de frontend complementaria (ver bitácora de `app_multi`).
+
+- **Inconvenientes y Desafíos:** Ninguno técnico. El mayor cuidado fue no asumir que "ningún INSERT/UPDATE toca la columna" bastaba para confirmar que era segura de eliminar -- había que rastrear también el lado de lectura hasta el frontend, donde se encontró el único consumo real (`product.price` en 3 componentes de creación de orden/presupuesto/stock), corregido en la tarea complementaria antes de considerar el DROP de la columna.
+
+- **Decisión Final y Justificación:**
+    Se decidió NO eliminar la columna `products.price` en esta tarea -- solo dejarla verificablemente huérfana (sin escritura activa, sin lectura funcional una vez corregido el frontend). La eliminación del esquema es una operación destructiva e irreversible que requiere confirmación explícita y separada del usuario, además de actualizar la plantilla `create_new_company_api_emp_N.sql` (Garantía de Esquema) y coordinar el cambio en MySQL producción (163) y Postgres Dev (194) por separado.
+
+- **Herramienta(s) Utilizada(s):** `Bash` (`grep`/`sed` exhaustivo sobre todas las rutas del backend para rastrear cada uso de `price` ligado a `products`; `ssh`/`psql` para verificar con datos reales antes y después del fix), `Edit`, `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` para verificación en vivo post-despliegue.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Antes del fix: 60 de 62 productos con ventas reales en el histórico tenían `precio_venta=0` (margen siempre 0%). Verificado en `psql` que `COALESCE(...)` da el resultado esperado para 5 productos de prueba (4, 7, 15, 91, 92), coincidiendo con lo mostrado en la tabla de impacto compartida con el usuario. Tras el despliegue, verificado vía `curl`: "Bandera 1 Metro Doble Cara" pasó de `precio_venta=0, margen=0%` a `precio_venta=25, margen_real_pct=96.1, margen_estimado_pct=88.9`.
+
+- **Logro Conseguido:**
+    Se corrigió el segundo bug crítico de datos del Reporte de Desviación de Costos (tras el de rendimiento del día anterior), restaurando la funcionalidad de margen para prácticamente todos los productos reales del reporte. Además, se completó una auditoría exhaustiva de todo el backend que confirma que `products.price` es un campo 100% legacy y sin ninguna escritura activa, dejando el terreno preparado para evaluar su eliminación del esquema una vez resuelto el último punto de lectura en el frontend.
+
+- **Observaciones:** Ver bitácora complementaria en `app_multi/logs_gemini/` para el fix de los 3 componentes del frontend que sí consumían `product.price` en vivo. Continúa pendiente el resto de la Fase 1 (datos de la API) del Reporte de Desviación de Costos antes de pasar a la Fase 2.
+
+- **Respuesta de Claude:** Se corrigió `precio_venta` en los 3 endpoints para usar `products_prices` en vez del campo legacy `products.price`. Se auditó exhaustivamente todo el backend (lectura y escritura) confirmando que la columna ya no se escribe desde ningún flujo activo, y que el único punto de lectura con impacto real está en 3 componentes del frontend (corregidos en tarea complementaria). Verificado con datos reales antes y después: el margen, que antes era 0% para el 97% de los productos, ahora refleja valores reales.
