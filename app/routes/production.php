@@ -1970,21 +1970,17 @@ return function (App $app) {
   $app->get('/produccion/verificar-asignacion-empleado/{departamento}/{id_orden}/{id_ordenes_productos}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    /* $sql = "SELECT id_empleado FROM lotes_detalles WHERE id_orden = " . $args["id_orden"] . " AND id_ordenes_productos = " . $args["id_ordenes_productos"] . " AND departamento = '" . $args["departamento"] . "'";
-    $object["sql"] = $sql; */
-
     $sql = 'SELECT
-        lot.id_empleado, 
+        lot.id_empleado,
         emp.departamento emp_departamento,
         lot.departamento lot_departamento
     FROM
         lotes_detalles lot
       LEFT JOIN api_empresas.empresas_usuarios emp ON lot.id_empleado = emp.id_usuario
     WHERE
-        lot.id_orden = ' . $args['id_orden'] . ' AND lot.id_ordenes_productos = ' . $args['id_ordenes_productos'] . " AND lot.departamento = '" . $args['departamento'] . "'";
-    $object['sql'] = $sql;
+        lot.id_orden = ? AND lot.id_ordenes_productos = ? AND lot.departamento = ?';
 
-    $resp = $localConnection->goQuery($sql);
+    $resp = $localConnection->goQuery($sql, [(int) $args['id_orden'], (int) $args['id_ordenes_productos'], $args['departamento']]);
 
     if (count($resp)) {
       $object = $resp[0];

@@ -1464,8 +1464,8 @@ return function (App $app) {
   $app->get('/empleado/asignado/{departamento}/{orden}/{item_id}', function (Request $request, Response $response, array $args) {
     // Verificar la asignacion
     $localConnection = new LocalDB();
-    $sql = "SELECT id_empleado FROM lotes_detalles  WHERE id_orden = '" . $args['orden'] . "' AND id_ordenes_productos = '" . $args['item_id'] . "' AND departamento = '" . $args['departamento'] . "'";
-    $object['id_empleado'] = $localConnection->goQuery($sql);
+    $sql = 'SELECT id_empleado FROM lotes_detalles WHERE id_orden = ? AND id_ordenes_productos = ? AND departamento = ?';
+    $object['id_empleado'] = $localConnection->goQuery($sql, [(int) $args['orden'], (int) $args['item_id'], $args['departamento']]);
 
     $localConnection->disconnect();
 

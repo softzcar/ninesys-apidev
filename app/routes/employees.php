@@ -415,29 +415,18 @@ return function (App $app) {
         // Para 'variable' no se actualiza ningún campo de comisión
 
         // Actualizar empleado
-        $values = "nombre='" . $miEmpleado['nombre'] . "',";
-        // $values .= "departamento='" . $miEmpleado['departamento'] . "',";
-        $values .= "acceso='" . $miEmpleado['acceso'] . "',";
-        $values .= "password='" . $miEmpleado['password'] . "',";
-        $values .= "email='" . $miEmpleado['email'] . "',";
-        $values .= "telefono='" . $miEmpleado['telefono'] . "',";
-        $values .= "comision_tipo='" . $miEmpleado['comsion_tipo'] . "',";
-        $values .= "comision='" . $comision . "',";
-        $values .= "comision_porcentaje='" . $comision_porcentaje . "',";
-        $values .= "salario_tipo='" . $miEmpleado['salario_tipo'] . "',";
-        $values .= "salario_monto='" . $miEmpleado['salario'] . "',";
-        $values .= "salario_periodo='" . $miEmpleado['periodo_pago'] . "',";
-        $values .= "dni='" . $miEmpleado['id_legal'] . "',";
-        $values .= "fecha_ingreso='" . $miEmpleado['fecha_ingreso'] . "',";
-        $values .= "id_seguridad_social='" . $miEmpleado['id_seguridad_social'] . "'";
-
-        $sql = 'UPDATE api_empresas.empresas_usuarios SET ' . $values . ' WHERE id_usuario = ' . $miEmpleado['_id'];
-        $object['response'] = json_encode($localConnection->goQuery($sql));
+        $sql = 'UPDATE api_empresas.empresas_usuarios SET nombre = ?, acceso = ?, password = ?, email = ?, telefono = ?, comision_tipo = ?, comision = ?, comision_porcentaje = ?, salario_tipo = ?, salario_monto = ?, salario_periodo = ?, dni = ?, fecha_ingreso = ?, id_seguridad_social = ? WHERE id_usuario = ?';
+        $params = [
+            $miEmpleado['nombre'], $miEmpleado['acceso'], $miEmpleado['password'], $miEmpleado['email'],
+            $miEmpleado['telefono'], $miEmpleado['comsion_tipo'], $comision, $comision_porcentaje,
+            $miEmpleado['salario_tipo'], $miEmpleado['salario'], $miEmpleado['periodo_pago'], $miEmpleado['id_legal'],
+            $miEmpleado['fecha_ingreso'], $miEmpleado['id_seguridad_social'], (int) $miEmpleado['_id'],
+        ];
+        $object['response'] = json_encode($localConnection->goQuery($sql, $params));
 
         // Limpiar registros anteriores
-        $sql = "DELETE FROM api_empresas.empresas_usuarios_departamentos WHERE id_empleado = {$miEmpleado['_id']};";
-
-        $object['response_delete'] = json_encode($localConnection->goQuery($sql));
+        $sql = 'DELETE FROM api_empresas.empresas_usuarios_departamentos WHERE id_empleado = ?';
+        $object['response_delete'] = json_encode($localConnection->goQuery($sql, [(int) $miEmpleado['_id']]));
 
         // Insertar nuevas asiganciones de departamentos
         $misDeps = explode(',', $miEmpleado['departamentos']);
@@ -445,9 +434,9 @@ return function (App $app) {
         $object['sql_update'] = [];
         $object['response_update'] = [];
         foreach ($misDeps as $id_dep) {
-            $sql = "INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES ({$miEmpleado['_id']}, {$id_dep});";
+            $sql = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES (?, ?)';
             $object['sql_update'][] = $sql;
-            $object['response_update'][] = json_encode($localConnection->goQuery($sql));
+            $object['response_update'][] = json_encode($localConnection->goQuery($sql, [(int) $miEmpleado['_id'], (int) $id_dep]));
         }
 
         $localConnection = new LocalDB();

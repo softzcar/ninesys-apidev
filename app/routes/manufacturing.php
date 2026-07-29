@@ -1505,8 +1505,8 @@ return function (App $app) {
   $app->get('/lotes/existencia/{talla}/{tela}/{corte}/{categoria}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "SELECT piezas_actuales FROM lotes_fisicos WHERE talla = '" . $args['talla'] . "' AND tela = '" . $args['tela'] . "' AND corte = '" . $args['corte'] . "' AND categoria = '" . $args['categoria'] . "'";
-    $response_lotes = $localConnection->goQuery($sql);
+    $sql = 'SELECT piezas_actuales FROM lotes_fisicos WHERE talla = ? AND tela = ? AND corte = ? AND categoria = ?';
+    $response_lotes = $localConnection->goQuery($sql, [$args['talla'], $args['tela'], $args['corte'], $args['categoria']]);
 
     $localConnection->disconnect();
 

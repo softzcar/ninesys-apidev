@@ -430,9 +430,8 @@ return function (App $app) {
       $localConnection = new LocalDB();  // Asegúrate de que esta clase y su conexión/desconexión sean manejadas correctamente.
 
       // BUSCAR TELEFONO DEL EMPLEADO AL QUE SE LE ENVIARÁ EL MENSAJE
-      // Es importante sanitizar $id_destino_empleado antes de usarlo en una consulta SQL
-      $sql = "SELECT nombre, telefono FROM api_empresas.empresas_usuarios WHERE id_usuario = '" . $dataMensaje['id_destino'] . "'";
-      $data_emp = $localConnection->goQuery($sql);
+      $sql = 'SELECT nombre, telefono FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+      $data_emp = $localConnection->goQuery($sql, [(int) $dataMensaje['id_destino']]);
 
       if (empty($data_emp) || !isset($data_emp[0]['telefono'])) {
         $result['error'] = 'No se encontró el teléfono para el empleado destino.';
@@ -444,8 +443,8 @@ return function (App $app) {
       }
 
       // BUSCAR NOMBRE DEL DEPARTAMENTO
-      $sql = "SELECT departamento FROM departamentos WHERE _id = '" . $dataMensaje['id_departamento'] . "'";
-      $data_dep = $localConnection->goQuery($sql);
+      $sql = 'SELECT departamento FROM departamentos WHERE _id = ?';
+      $data_dep = $localConnection->goQuery($sql, [(int) $dataMensaje['id_departamento']]);
 
       $localConnection->disconnect();  // Desconectar tan pronto como ya no se necesite
 
