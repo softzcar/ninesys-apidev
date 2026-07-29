@@ -1057,10 +1057,10 @@ class WooMe
    */
   public function getCustomerById($id)
   {
-    $sql = 'SELECT * FROM customers WHERE _id = ' . $id . ';';
+    $sql = 'SELECT * FROM customers WHERE _id = ?';
 
     $localConnection = new LocalDB();
-    $data = $localConnection->goQuery($sql);
+    $data = $localConnection->goQuery($sql, [intval($id)]);
     $localConnection->disconnect();
 
     return json_encode($data);
@@ -1082,10 +1082,10 @@ class WooMe
         id_catalogo_pais,
         id_catalogo_estado,
         id_catalogo_ciudad
-        FROM customers WHERE _id = ' . $id;
+        FROM customers WHERE _id = ?';
 
     $localConnection = new LocalDB();
-    $data = $localConnection->goQuery($sql);
+    $data = $localConnection->goQuery($sql, [intval($id)]);
     $localConnection->disconnect();
 
     // return json_encode($data);
@@ -1267,11 +1267,12 @@ class WooMe
     $digits = preg_replace('/\D/', '', $phone);
     if (strlen($digits) >= 7) {
       $last10 = substr($digits, -10);
-      $sql = "SELECT _id, first_name, last_name, phone, eliminado FROM customers WHERE REGEXP_REPLACE(phone, '[^0-9]', '') LIKE '%" . $last10 . "';";
+      $sql = "SELECT _id, first_name, last_name, phone, eliminado FROM customers WHERE REGEXP_REPLACE(phone, '[^0-9]', '') LIKE ?";
+      $exist = $localConnection->goQuery($sql, ['%' . $last10]);
     } else {
-      $sql = "SELECT _id, first_name, last_name, phone, eliminado FROM customers WHERE phone = '" . trim($phone) . "';";
+      $sql = "SELECT _id, first_name, last_name, phone, eliminado FROM customers WHERE phone = ?";
+      $exist = $localConnection->goQuery($sql, [trim($phone)]);
     }
-    $exist = $localConnection->goQuery($sql);
     $myCount = count($exist);
 
     if ($myCount === 0) {
@@ -1310,18 +1311,11 @@ class WooMe
                 id_catalogo_estado,
                 id_catalogo_ciudad
             )
-            VALUES(
-                '" . $first_name . "',
-                '" . $last_name . "',
-                '" . $username . "',
-                '" . $cedula . "',
-                '" . $address . "',
-                '" . $phone . "',
-                '" . $email . "',
-                " . $recibirVal . ",
-                ?, ?, ?
-                )";
-      $response['resp_insert'] = $localConnection->goQuery($sql, [$id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad]);
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+      $response['resp_insert'] = $localConnection->goQuery($sql, [
+        $first_name, $last_name, $username, $cedula, $address, $phone, $email, $recibirVal,
+        $id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad
+      ]);
     } else {
       $conflictCustomer = $exist[0];
       $conflictId = (int)$conflictCustomer['_id'];
@@ -1389,11 +1383,12 @@ class WooMe
     $digits = preg_replace('/\D/', '', $phone);
     if (strlen($digits) >= 7) {
       $last10 = substr($digits, -10);
-      $sqlPhone = "SELECT _id, first_name, last_name, phone FROM customers WHERE _id <> " . intval($id) . " AND REGEXP_REPLACE(phone, '[^0-9]', '') LIKE '%" . $last10 . "';";
+      $sqlPhone = "SELECT _id, first_name, last_name, phone FROM customers WHERE _id <> ? AND REGEXP_REPLACE(phone, '[^0-9]', '') LIKE ?";
+      $existPhone = $localConnection->goQuery($sqlPhone, [intval($id), '%' . $last10]);
     } else {
-      $sqlPhone = "SELECT _id, first_name, last_name, phone FROM customers WHERE _id <> " . intval($id) . " AND phone = '" . trim($phone) . "';";
+      $sqlPhone = "SELECT _id, first_name, last_name, phone FROM customers WHERE _id <> ? AND phone = ?";
+      $existPhone = $localConnection->goQuery($sqlPhone, [intval($id), trim($phone)]);
     }
-    $existPhone = $localConnection->goQuery($sqlPhone);
     if (count($existPhone) > 0) {
       $conflictCustomer = $existPhone[0];
       $response = [
@@ -1412,8 +1407,8 @@ class WooMe
     }
 
     // 2. Verificar si el cliente existe
-    $sql = 'SELECT count(_id) existe FROM customers WHERE _id = ' . $id . ';';
-    $result = $localConnection->goQuery($sql);
+    $sql = 'SELECT count(_id) existe FROM customers WHERE _id = ?';
+    $result = $localConnection->goQuery($sql, [intval($id)]);
 
     // Si el cliente existe, actualiza la información
     if ($result[0]['existe'] > 0) {
@@ -1429,17 +1424,18 @@ class WooMe
 
       $sql = "UPDATE customers SET
                         eliminado = 0,
-                        first_name = '" . $first_name . "',
-                        last_name = '" . $last_name . "',
-                        cedula = '" . $cedula . "',
-                        phone = '" . $phone . "',
-                        email = '" . $email . "',
-                        address = '" . $address . "',
+                        first_name = ?,
+                        last_name = ?,
+                        cedula = ?,
+                        phone = ?,
+                        email = ?,
+                        address = ?,
                         id_catalogo_pais = ?,
                         id_catalogo_estado = ?,
                         id_catalogo_ciudad = ?
                         " . $recibirSql . "
-                    WHERE _id = " . $id . ';';
+                    WHERE _id = ?";
+      $params = [$first_name, $last_name, $cedula, $phone, $email, $address, $id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad, intval($id)];
     }
     // Si el cliente no existe, inserta un nuevo registro
     else {
@@ -1449,16 +1445,20 @@ class WooMe
       $recibirVal = '';
       if ($recibir_notificaciones !== null) {
         $recibirCol = ", recibir_notificaciones";
-        $recibirVal = ", " . (int)$recibir_notificaciones;
+        $recibirVal = ", ?";
       }
 
       $sql = 'INSERT INTO customers
                 (_id, username, first_name, last_name, cedula, phone, email, address, id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad' . $recibirCol . ')
             VALUES
-                (' . $id . ", '" . $username . "', '" . $first_name . "', '" . $last_name . "', '" . $cedula . "', '" . $phone . "', '" . $email . "', '" . $address . "', ?, ?, ?" . $recibirVal . ");";
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?' . $recibirVal . ')';
+      $params = [intval($id), $username, $first_name, $last_name, $cedula, $phone, $email, $address, $id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad];
+      if ($recibir_notificaciones !== null) {
+        $params[] = (int)$recibir_notificaciones;
+      }
     }
-    $localConnection->goQuery($sql, [$id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad]);
-    $data = $localConnection->goQuery('SELECT * FROM customers WHERE _id = ' . $id);
+    $localConnection->goQuery($sql, $params);
+    $data = $localConnection->goQuery('SELECT * FROM customers WHERE _id = ?', [intval($id)]);
     $localConnection->disconnect();
 
     return json_encode($data);
