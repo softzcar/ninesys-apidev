@@ -27,17 +27,12 @@ return function (App $app) {
             $vendedor = null;
         } */
 
-    if (!is_null($vendedor)) {
-      if ($vendedor == '0') {
-        $searchVendedor = '';
-      } else {
-        $searchVendedor = ' AND ord.responsable = ' . $vendedor . ' ';
-      }
-    } else {
-      $searchVendedor = '';
+    $searchVendedor = '';
+    $paramsVendedor = [];
+    if (!is_null($vendedor) && $vendedor != '0') {
+      $searchVendedor = ' AND ord.responsable = ?';
+      $paramsVendedor[] = (int) $vendedor;
     }
-
-    $object['searchVendedor'] = $searchVendedor;
 
     if (is_null($inicio) || is_null($fin)) {
     if (DB_DRIVER === 'pgsql') {
@@ -155,6 +150,7 @@ return function (App $app) {
     ORDER BY
         met.id_orden DESC, met.moment ASC;";
     }
+      $params = $paramsVendedor;
       /* $sql = "SELECT
                 met._id,
                 ord._id orden,
@@ -230,10 +226,11 @@ return function (App $app) {
             JOIN ordenes ord ON met.id_orden = ord._id 
             JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
             WHERE
-                met.moment::date BETWEEN '" . $inicio . "' AND '" . $fin . "' 
+                met.moment::date BETWEEN ? AND ?
                 " . $searchVendedor . '
                 ORDER BY
                 met.id_orden DESC, met.moment ASC;';
+      $params = array_merge([$inicio, $fin], $paramsVendedor);
     } else {
       $sql = "SELECT
                 met._id,
@@ -289,16 +286,17 @@ return function (App $app) {
             JOIN ordenes ord ON met.id_orden = ord._id 
             JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
             WHERE
-                DATE(met.moment) BETWEEN '" . $inicio . "' AND '" . $fin . "' 
+                DATE(met.moment) BETWEEN ? AND ?
                 " . $searchVendedor . '
                 ORDER BY
                 met.id_orden DESC, met.moment ASC;';
+      $params = array_merge([$inicio, $fin], $paramsVendedor);
     }
   }
 
     // $object['sql_pagos'] = $sql;
 
-    $object['pagos'] = $localConnection->goQuery($sql);
+    $object['pagos'] = $localConnection->goQuery($sql, $params);
 
     $pagos = $object['pagos'];
 
@@ -452,72 +450,81 @@ return function (App $app) {
     if ($inicio === $fin) {
       // "moment" es timestamp; LIKE requiere cast a texto en PostgreSQL (no existe el
       // operador LIKE para timestamp), MySQL lo tolera con coercion implicita.
-      $whereBase = DB_DRIVER === 'pgsql' ? "moment::text LIKE '$inicio%'" : "moment LIKE '$inicio%'";
+      $whereBase = DB_DRIVER === 'pgsql' ? "moment::text LIKE ?" : "moment LIKE ?";
+      $paramsFecha = [$inicio . '%'];
     } else {
-      $whereBase = "moment BETWEEN '$inicio' AND '$fin'";
+      $whereBase = "moment BETWEEN ? AND ?";
+      $paramsFecha = [$inicio, $fin];
     }
 
     // Filtro de vendedor
-    $filterUserCaja = $id_vendedor === 0 ? "" : " AND id_empleado = $id_vendedor";
-    $filterUserOrdenes = $id_vendedor === 0 ? "" : " AND o.responsable = $id_vendedor";
-    $filterUserRetiros = $id_vendedor === 0 ? "" : " AND a.id_empleado = $id_vendedor";
+    $filterUserCaja = '';
+    $filterUserOrdenes = '';
+    $filterUserRetiros = '';
+    $paramsUser = [];
+    if ($id_vendedor !== 0) {
+      $filterUserCaja = ' AND id_empleado = ?';
+      $filterUserOrdenes = ' AND o.responsable = ?';
+      $filterUserRetiros = ' AND a.id_empleado = ?';
+      $paramsUser = [$id_vendedor];
+    }
 
     /** EFECTIVO (Dólares, Pesos, Bolívares) */
     $tiposMoneda = ['Dólares', 'Pesos', 'Bolívares'];
     foreach ($tiposMoneda as $moneda) {
       $monedaKey = strtolower(str_replace('ó', 'o', $moneda));
-      $sql = "SELECT 
-                SUM(monto) monto, 
-                '$moneda' moneda, 
-                tasa, 
+      $sql = "SELECT
+                SUM(monto) monto,
+                '$moneda' moneda,
+                tasa,
                 SUM(monto / tasa) dolares
-              FROM caja 
+              FROM caja
               WHERE $whereBase $filterUserCaja AND moneda = '$moneda'
               GROUP BY tasa";
-      $object['data']['efectivo'][$monedaKey] = $localConnection->goQuery($sql);
+      $object['data']['efectivo'][$monedaKey] = $localConnection->goQuery($sql, array_merge($paramsFecha, $paramsUser));
     }
 
     /** MONEDA DIGITAL */
     $metodosDigitales = ['Zelle', 'Pagomovil', 'Punto', 'Transferencia'];
     foreach ($metodosDigitales as $metodo) {
       $metodoKey = strtolower($metodo);
-      $sql = "SELECT 
-                SUM(a.monto) monto, 
-                a.tasa, 
-                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
-                a.moneda, 
+      $sql = "SELECT
+                SUM(a.monto) monto,
+                a.tasa,
+                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares,
+                a.moneda,
                 '$metodo' metodo_pago
               FROM metodos_de_pago AS a
               LEFT JOIN ordenes AS o ON a.id_orden = o._id
               WHERE a.metodo_pago = '$metodo' AND a.$whereBase $filterUserOrdenes
               GROUP BY a.tasa, a.moneda";
-      $object['data']['digital'][$metodoKey] = $localConnection->goQuery($sql);
+      $object['data']['digital'][$metodoKey] = $localConnection->goQuery($sql, array_merge($paramsFecha, $paramsUser));
     }
 
     /** RETIROS */
     if (DB_DRIVER === 'pgsql') {
-      $sql = "SELECT 
-                SUM(a.monto) monto, 
-                a.moneda, 
-                a.tasa, 
-                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
+      $sql = "SELECT
+                SUM(a.monto) monto,
+                a.moneda,
+                a.tasa,
+                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares,
                 'Retiros' metodo_pago
-              FROM retiros AS a 
-              WHERE a.moment::date BETWEEN '$inicio' AND '$fin' $filterUserRetiros
+              FROM retiros AS a
+              WHERE a.moment::date BETWEEN ? AND ? $filterUserRetiros
               GROUP BY a.tasa, a.moneda";
     } else {
-      $sql = "SELECT 
-                SUM(a.monto) monto, 
-                a.moneda, 
-                a.tasa, 
-                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares, 
+      $sql = "SELECT
+                SUM(a.monto) monto,
+                a.moneda,
+                a.tasa,
+                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares,
                 'Retiros' metodo_pago
-              FROM retiros AS a 
-              WHERE DATE(a.moment) BETWEEN '$inicio' AND '$fin' $filterUserRetiros
+              FROM retiros AS a
+              WHERE DATE(a.moment) BETWEEN ? AND ? $filterUserRetiros
               GROUP BY a.tasa, a.moneda";
     }
 
-    $object['data']['retiros'] = $localConnection->goQuery($sql);
+    $object['data']['retiros'] = $localConnection->goQuery($sql, array_merge([$inicio, $fin], $paramsUser));
 
     // Obtener lista de vendedores para el select del frontend
     $sqlv = "SELECT DISTINCT
@@ -813,13 +820,12 @@ return function (App $app) {
 
     // Obtener retiros
     if (DB_DRIVER === 'pgsql') {
-      $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario WHERE a.moment::date BETWEEN '" . $args['inicio'] . "' AND '" . $args['fin'] . "' ORDER BY a.moment DESC";
+      $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario WHERE a.moment::date BETWEEN ? AND ? ORDER BY a.moment DESC";
     } else {
-      $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario WHERE DATE(a.moment) BETWEEN '" . $args['inicio'] . "' AND '" . $args['fin'] . "' ORDER BY a.moment DESC";
+      $sql = "SELECT a._id, a.moment, a.monto, a.moneda, a.metodo_pago, a.detalle_retiro, a.tasa, b.nombre empleado  FROM retiros a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario WHERE DATE(a.moment) BETWEEN ? AND ? ORDER BY a.moment DESC";
     }
 
-    $pbject['sql']['data_retiros'] = $sql;
-    $object['data']['retiros'] = $localConnection->goQuery($sql);
+    $object['data']['retiros'] = $localConnection->goQuery($sql, [$args['inicio'], $args['fin']]);
 
     /** FONDO */
     $sql = 'SELECT dolares, pesos, bolivares FROM caja_fondos WHERE id_empleado = ? ORDER BY _id DESC LIMIT 1';
@@ -890,8 +896,8 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     $momentLikeExpr = DB_DRIVER === 'pgsql' ? 'moment::text' : 'moment';
-    $sql = "SELECT _id, moment, monto, moneda, metodo_pago, id_orden, tasa FROM metodos_de_pago WHERE $momentLikeExpr LIKE '" . $args['fecha'] . "%'";
-    $object['data'] = $localConnection->goQuery($sql);
+    $sql = "SELECT _id, moment, monto, moneda, metodo_pago, id_orden, tasa FROM metodos_de_pago WHERE $momentLikeExpr LIKE ?";
+    $object['data'] = $localConnection->goQuery($sql, [$args['fecha'] . '%']);
 
     $localConnection->disconnect();
 
@@ -908,11 +914,16 @@ return function (App $app) {
     $fin = $args['fin'];
     $id_vendedor = (int)$args['id_vendedor'];
 
-    $filterVendedor = $id_vendedor === 0 ? "" : " AND c.id_empleado = $id_vendedor";
+    $filterVendedor = '';
+    $paramsVendedor = [];
+    if ($id_vendedor !== 0) {
+      $filterVendedor = ' AND c.id_empleado = ?';
+      $paramsVendedor[] = $id_vendedor;
+    }
 
     // Consulta para obtener los cierres y calcular el balance
     if (DB_DRIVER === 'pgsql') {
-      $sql = "SELECT 
+      $sql = "SELECT
               c._id,
               c.moment AS fecha_cierre,
               u.nombre AS vendedor,
@@ -944,10 +955,10 @@ return function (App $app) {
             FROM caja_cierres c
             JOIN caja_fondos f ON c._id = f.id_caja_cierres
             JOIN api_empresas.empresas_usuarios u ON c.id_empleado = u.id_usuario
-            WHERE c.moment::date BETWEEN '$inicio' AND '$fin' $filterVendedor
+            WHERE c.moment::date BETWEEN ? AND ? $filterVendedor
             ORDER BY c.moment DESC";
     } else {
-      $sql = "SELECT 
+      $sql = "SELECT
               c._id,
               c.moment AS fecha_cierre,
               u.nombre AS vendedor,
@@ -979,11 +990,11 @@ return function (App $app) {
             FROM caja_cierres c
             JOIN caja_fondos f ON c._id = f.id_caja_cierres
             JOIN api_empresas.empresas_usuarios u ON c.id_empleado = u.id_usuario
-            WHERE DATE(c.moment) BETWEEN '$inicio' AND '$fin' $filterVendedor
+            WHERE DATE(c.moment) BETWEEN ? AND ? $filterVendedor
             ORDER BY c.moment DESC";
     }
 
-    $object['data'] = $localConnection->goQuery($sql);
+    $object['data'] = $localConnection->goQuery($sql, array_merge([$inicio, $fin], $paramsVendedor));
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));

@@ -20,11 +20,11 @@ return function (App $app) {
             lotes_detalles_empleados_asignados b ON b.id_orden = a._id
         WHERE
             b.id_orden IS NULL 
-            AND (a.status = 'En espera' OR a.status = 'Pausada' OR a.status = 'activa') 
-            AND a.responsable = {$args['id_vendedor']}
+            AND (a.status = 'En espera' OR a.status = 'Pausada' OR a.status = 'activa')
+            AND a.responsable = ?
     ";
 
-        $resp = $localConnection->goQuery($sql);
+        $resp = $localConnection->goQuery($sql, [(int) $args['id_vendedor']]);
         $localConnection->disconnect();
 
         $response->getBody()->write(json_encode($resp));

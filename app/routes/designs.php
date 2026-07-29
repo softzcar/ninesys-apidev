@@ -53,8 +53,8 @@ return function (App $app) {
   $app->get('/diseno/revisiones/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new localDB();
 
-    $sql = 'SELECT a.id_orden, b._id id_revision, a._id id_diseno, b.detalles, b.estatus, b.revision, c.id_wp id_cliente, c.cliente_nombre cliente FROM disenos a JOIN revisiones b ON a._id = b.id_diseno JOIN ordenes c ON c._id = a.id_orden WHERE a.id_empleado =' . $args['id_empleado'] . " AND c.status != 'entregada' AND c.status != 'cancelada' AND c.status != 'terminado'";
-    $object['revisiones'] = $localConnection->goQuery($sql);
+    $sql = "SELECT a.id_orden, b._id id_revision, a._id id_diseno, b.detalles, b.estatus, b.revision, c.id_wp id_cliente, c.cliente_nombre cliente FROM disenos a JOIN revisiones b ON a._id = b.id_diseno JOIN ordenes c ON c._id = a.id_orden WHERE a.id_empleado = ? AND c.status != 'entregada' AND c.status != 'cancelada' AND c.status != 'terminado'";
+    $object['revisiones'] = $localConnection->goQuery($sql, [(int) $args['id_empleado']]);
 
     $localConnection->disconnect();
 
@@ -69,8 +69,8 @@ return function (App $app) {
   // REVISAR DISEÑO APROBADO
   $app->get('/diseno/aprobado/{id_orden}', function (Request $request, Response $response, array $args) {
     $localConnection = new localDB();
-    $sql = 'SELECT revision, estatus, id_diseno FROM revisiones WHERE id_orden = ' . $args['id_orden'] . " AND estatus = 'Aprobado'";
-    $resp = $localConnection->goQuery($sql);
+    $sql = "SELECT revision, estatus, id_diseno FROM revisiones WHERE id_orden = ? AND estatus = 'Aprobado'";
+    $resp = $localConnection->goQuery($sql, [(int) $args['id_orden']]);
     $localConnection->disconnect();
 
     if (empty($resp)) {
@@ -166,9 +166,9 @@ return function (App $app) {
         LEFT JOIN disenos AS b ON a._id = b.id_orden
         LEFT JOIN revisiones AS c ON c.id_diseno = b._id 
         WHERE
-            a._id = ' . $args['id_orden'];
+            a._id = ?';
 
-    $object['data'] = $localConnection->goQuery($sql);
+    $object['data'] = $localConnection->goQuery($sql, [(int) $args['id_orden']]);
 
     $localConnection->disconnect();
 
@@ -290,8 +290,8 @@ return function (App $app) {
   $app->get('/disenos/ajustes-y-personalizaciones/{id_diseno}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT a.tipo, a.cantidad, b.id_orden FROM disenos_ajustes_y_personalizaciones a JOIN disenos b ON b._id = a.id_diseno WHERE a.id_diseno = ' . $args['id_diseno'];
-    $object = $localConnection->goQuery($sql);
+    $sql = 'SELECT a.tipo, a.cantidad, b.id_orden FROM disenos_ajustes_y_personalizaciones a JOIN disenos b ON b._id = a.id_diseno WHERE a.id_diseno = ?';
+    $object = $localConnection->goQuery($sql, [(int) $args['id_diseno']]);
 
     $localConnection->disconnect();
 
@@ -305,8 +305,8 @@ return function (App $app) {
   $app->get('/disenos/link/{id}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT linkdrive FROM disenos WHERE _id = ' . $args['id'];
-    $object = $localConnection->goQuery($sql);
+    $sql = 'SELECT linkdrive FROM disenos WHERE _id = ?';
+    $object = $localConnection->goQuery($sql, [(int) $args['id']]);
 
     $localConnection->disconnect();
 
@@ -320,8 +320,8 @@ return function (App $app) {
   $app->get('/disenos/codigo/{id}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT codigo_diseno FROM disenos WHERE _id = ' . $args['id'];
-    $object = $localConnection->goQuery($sql);
+    $sql = 'SELECT codigo_diseno FROM disenos WHERE _id = ?';
+    $object = $localConnection->goQuery($sql, [(int) $args['id']]);
 
     $localConnection->disconnect();
 
@@ -588,10 +588,10 @@ return function (App $app) {
         LEFT JOIN ordenes b ON
             b._id = a.id_orden
         WHERE
-            a.terminado = 0 AND a.id_orden = ' . $args['id_orden'] . '
+            a.terminado = 0 AND a.id_orden = ?
         ';
 
-    $object = $localConnection->goQuery($sql);
+    $object = $localConnection->goQuery($sql, [(int) $args['id_orden']]);
 
     $localConnection->disconnect();
 
@@ -727,16 +727,14 @@ return function (App $app) {
     JOIN ordenes b 
     ON b._id = a.id_orden 
     LEFT JOIN disenos d ON d._id = c.id_diseno
-    WHERE a.id_empleado =    ' . $args['id_empleado'] . '
+    WHERE a.id_empleado = ?
     AND a.terminado = 0
     ORDER BY a.id_orden ASC
     ';
-    $object['sql_items'] = $sql;
-    $object['items'] = $localConnection->goQuery($sql);
+    $object['items'] = $localConnection->goQuery($sql, [(int) $args['id_empleado']]);
 
-    $sql = 'SELECT a.id_diseno id, a.revision, a.detalles detalles_revision, a.id_orden FROM revisiones a JOIN disenos b ON b._id = a.id_diseno WHERE b.id_empleado = ' . $args['id_empleado'];
-    $object['sql_revisiones'] = $sql;
-    $object['revisiones'] = $localConnection->goQuery($sql);
+    $sql = 'SELECT a.id_diseno id, a.revision, a.detalles detalles_revision, a.id_orden FROM revisiones a JOIN disenos b ON b._id = a.id_diseno WHERE b.id_empleado = ?';
+    $object['revisiones'] = $localConnection->goQuery($sql, [(int) $args['id_empleado']]);
 
     $localConnection->disconnect();
 
@@ -749,9 +747,9 @@ return function (App $app) {
   // TODO eliminar ninesys antiguo => Obtener diseños pendientes por diseñador
   $app->get('/disenos/pendientes/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
-    $sql = 'SELECT a.id_orden orden, b.cliente_nombre cliente, b.fecha_inicio, b.status FROM disenos a JOIN ordenes b ON b._id = a.id_orden WHERE a.id_empleado = ' . $args['id_empleado'] . ' AND terminado = 0';
+    $sql = 'SELECT a.id_orden orden, b.cliente_nombre cliente, b.fecha_inicio, b.status FROM disenos a JOIN ordenes b ON b._id = a.id_orden WHERE a.id_empleado = ? AND terminado = 0';
 
-    $disenos = $localConnection->goQuery($sql);
+    $disenos = $localConnection->goQuery($sql, [(int) $args['id_empleado']]);
 
     $localConnection->disconnect();
 
@@ -765,9 +763,9 @@ return function (App $app) {
   $app->get('/disenos/terminados/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT a.id_orden orden, b.cliente_nombre cliente, b.fecha_inicio, b.status FROM disenos a JOIN ordenes b ON b._id = a.id_orden WHERE a.id_empleado = ' . $args['id_empleado'] . ' AND terminado = 1';
+    $sql = 'SELECT a.id_orden orden, b.cliente_nombre cliente, b.fecha_inicio, b.status FROM disenos a JOIN ordenes b ON b._id = a.id_orden WHERE a.id_empleado = ? AND terminado = 1';
 
-    $disenos = $localConnection->goQuery($sql);
+    $disenos = $localConnection->goQuery($sql, [(int) $args['id_empleado']]);
 
     $localConnection->disconnect();
 
@@ -885,8 +883,8 @@ return function (App $app) {
   $app->get('/revision/image/{id_revision}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "SELECT url_image FROM revisiones WHERE _id = {$args['id_revision']};";
-    $data = $localConnection->goQuery($sql);
+    $sql = "SELECT url_image FROM revisiones WHERE _id = ?";
+    $data = $localConnection->goQuery($sql, [(int) $args['id_revision']]);
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($data[0], JSON_NUMERIC_CHECK));

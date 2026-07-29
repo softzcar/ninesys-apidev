@@ -1151,7 +1151,7 @@ return function (App $app) {
               LEFT JOIN metodos_de_pago e ON
                   e._id = a.id_metodos_de_pago
               WHERE
-                  a.id_empleado = {$args['id_vendedoor']} AND
+                  a.id_empleado = ? AND
                   a.fecha_pago IS NULL
               GROUP BY
                   a._id, c.nombre, d.cliente_nombre, d.pago_abono, e.monto, d.status, e.tipo_de_pago, e.metodo_pago, e.moneda, d._id
@@ -1191,7 +1191,7 @@ return function (App $app) {
               LEFT JOIN metodos_de_pago e ON
                   e._id = a.id_metodos_de_pago
               WHERE
-                  a.id_empleado = {$args['id_vendedoor']} AND
+                  a.id_empleado = ? AND
                   a.fecha_pago IS NULL
               GROUP BY
                   a._id
@@ -1200,8 +1200,7 @@ return function (App $app) {
                   a._id DESC";
     }
 
-    // $object['sql'] = $sql;
-    $object['data']['vendedores'] = $localConnection->goQuery($sql);
+    $object['data']['vendedores'] = $localConnection->goQuery($sql, [(int) $args['id_vendedoor']]);
 
     $localConnection->disconnect();
 

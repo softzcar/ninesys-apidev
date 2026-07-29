@@ -468,7 +468,7 @@ return function (App $app) {
         $sql = "SELECT
             b.id_empresa empresa_id,
             b.activo empresa_activa,
-            b.nombre empresa_nombre,    
+            b.nombre empresa_nombre,
             b.telefono empresa_telefono,
             b.email email_empresa,
             a.activo usuario_activo,
@@ -482,9 +482,8 @@ return function (App $app) {
             empresas_usuarios a
         JOIN empresas b ON a.id_empresa = b.id_empresa
         WHERE
-            a.email = '" . $datosAcceso['username'] . "' AND a.password = '" . $datosAcceso['password'] . "';";
-        // $object['sql'] = $sql;
-        $resp = $localConnection->goQuery($sql);
+            a.email = ? AND a.password = ?";
+        $resp = $localConnection->goQuery($sql, [$datosAcceso['username'] ?? '', $datosAcceso['password'] ?? '']);
 
         if (empty($resp)) {
             $object['access'] = false;

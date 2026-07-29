@@ -193,18 +193,20 @@ return function (App $app) {
 
   $app->get('/ordenes/observaciones/{id_orden}/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
-    // $sql = "SELECT a.observaciones observaciones_orden, b.borrador observaciones_empleado FROM ordenes a JOIN ordenes_borrador_empleado b ON b.id_orden = a._id WHERE a._id = {$args['id_orden']} AND b.id_empleado = {$args['id_empleado']} AND b.id_departamento = {$args['id_departamento']}";
+    $idOrden = (int) $args['id_orden'];
+    $idEmpleado = (int) $args['id_empleado'];
+    $idDepartamento = (int) $args['id_departamento'];
 
     $sql = "SELECT
         obs.observaciones AS observaciones_ordenes,
-            (SELECT borrador FROM ordenes_borrador_empleado WHERE id_orden = {$args['id_orden']} AND id_empleado = {$args['id_empleado']} AND id_departamento = {$args['id_departamento']}) observaciones_empleado
+            (SELECT borrador FROM ordenes_borrador_empleado WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ?) observaciones_empleado
         FROM
             ordenes a
         LEFT JOIN ordenes_observaciones obs ON a._id = obs.id_orden
         WHERE
-            a._id = {$args['id_orden']}";
+            a._id = ?";
 
-    $object = $localConnection->goQuery($sql);
+    $object = $localConnection->goQuery($sql, [$idOrden, $idEmpleado, $idDepartamento, $idOrden]);
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
     return $response
@@ -214,7 +216,7 @@ return function (App $app) {
 
   $app->get('/ordenes/notas-por-empleado/{id_orden}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
-    $id_orden = $args['id_orden'];
+    $id_orden = (int) $args['id_orden'];
 
     $sql = "SELECT
                 loa.id_empleado,
@@ -226,14 +228,14 @@ return function (App $app) {
                 lotes_detalles_empleados_asignados loa
             JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = loa.id_empleado
             JOIN departamentos dep ON dep._id = loa.id_departamento
-            LEFT JOIN ordenes_borrador_empleado obe ON obe.id_orden = loa.id_orden 
-                AND obe.id_empleado = loa.id_empleado 
+            LEFT JOIN ordenes_borrador_empleado obe ON obe.id_orden = loa.id_orden
+                AND obe.id_empleado = loa.id_empleado
                 AND obe.id_departamento = loa.id_departamento
             WHERE
-                loa.id_orden = $id_orden
+                loa.id_orden = ?
             ORDER BY dep.orden_proceso ASC, emp.nombre ASC";
 
-    $object = $localConnection->goQuery($sql);
+    $object = $localConnection->goQuery($sql, [$id_orden]);
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
@@ -258,11 +260,11 @@ return function (App $app) {
             FROM
                 ordenes_borrador_empleado a
             LEFT JOIN ordenes b ON b._id = a.id_orden
-            WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']}
+            WHERE a.id_empleado = ? AND a.id_departamento = ?
               AND $yearweekCond
         ";
 
-    $object = $localConnection->goQuery($sql);
+    $object = $localConnection->goQuery($sql, [(int) $args['id_empleado'], (int) $args['id_departamento']]);
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
     return $response
@@ -275,17 +277,22 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
+    $idOrden = (int) $data['id_orden'];
+    $idEmpleado = (int) $data['id_empleado'];
+    $idDepartamento = (int) $data['id_departamento'];
+    $borrador = $data['borrador'] ?? '';
+
     // Verificar si ya existe un registro para la orden
-    $sql = 'SELECT _id FROM ordenes_borrador_empleado WHERE id_orden = ' . $data['id_orden'] . ' AND id_empleado = ' . $data['id_empleado'] . ' AND id_departamento = ' . $data['id_departamento'];
-    $resp = $localConnection->goQuery($sql);
+    $sql = 'SELECT _id FROM ordenes_borrador_empleado WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ?';
+    $resp = $localConnection->goQuery($sql, [$idOrden, $idEmpleado, $idDepartamento]);
 
     if (empty($resp)) {
-      $sql = 'INSERT INTO ordenes_borrador_empleado (id_orden, id_empleado, id_departamento, borrador) VALUES (' . $data['id_orden'] . ', ' . $data['id_empleado'] . ", '{$data['id_departamento']}', '" . addslashes($data['borrador'] ?? '') . "');";
+      $sql = 'INSERT INTO ordenes_borrador_empleado (id_orden, id_empleado, id_departamento, borrador) VALUES (?, ?, ?, ?)';
+      $resp = $localConnection->goQuery($sql, [$idOrden, $idEmpleado, $idDepartamento, $borrador]);
     } else {
-      $sql = 'UPDATE ordenes_borrador_empleado SET id_departamento = ' . $data['id_departamento'] . ', id_orden = ' . $data['id_orden'] . ', id_empleado = ' . $data['id_empleado'] . ", borrador = '" . addslashes($data['borrador'] ?? '') . "' WHERE id_orden = " . $data['id_orden'] . ' AND id_empleado = ' . $data['id_empleado'];
+      $sql = 'UPDATE ordenes_borrador_empleado SET id_departamento = ?, borrador = ? WHERE id_orden = ? AND id_empleado = ?';
+      $resp = $localConnection->goQuery($sql, [$idDepartamento, $borrador, $idOrden, $idEmpleado]);
     }
-    $object['sql'] = $sql;
-    $resp = $localConnection->goQuery($sql);
     $localConnection->disconnect();
     $object['resp'] = 'OK';
 
@@ -525,8 +532,8 @@ return function (App $app) {
   $app->get('/table/ordenes-activas/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
-    $sql = 'SELECT departamento FROM  empresas_usuarios  WHERE id_usuario = ' . $args['id_empleado'];
-    $departamento = $localConnection->goQuery($sql)[0]['departamento'];
+    $sql = 'SELECT departamento FROM empresas_usuarios WHERE id_usuario = ?';
+    $departamento = $localConnection->goQuery($sql, [(int) $args['id_empleado']])[0]['departamento'];
 
     $localConnection = new LocalDB();
 
@@ -564,19 +571,19 @@ return function (App $app) {
             LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable";
     $saldoFilter = "$saldo > 0 OR ($saldo = 0 AND ord.status != 'entregada') OR $saldo < 0";
 
+    $sqlParams = [];
     if (strpos($departamento, 'Admin') !== false) {
       $sql = "SELECT $baseFields $baseJoins
             WHERE ord.status != 'cancelada' AND ($saldoFilter)
             ORDER BY ord._id DESC";
     } else {
       $sql = "SELECT $baseFields $baseJoins
-            WHERE ord.responsable = '{$args['id_empleado']}'
+            WHERE ord.responsable = ?
                 AND ord.status != 'cancelada'
                 AND ($saldoFilter)
             ORDER BY ord._id DESC";
+      $sqlParams[] = (int) $args['id_empleado'];
     }
-
-    $object['sql'] = $sql;
 
     // Cabeceras de la tabla
     $object['fields'][0]['key'] = 'orden';
@@ -607,7 +614,7 @@ return function (App $app) {
     $object['fields'][6]['label'] = 'Acciones';
     $object['fields'][6]['sortable'] = false;
 
-    $items = $localConnection->goQuery($sql);
+    $items = $localConnection->goQuery($sql, $sqlParams);
     foreach ($items as &$item) {
       if (isset($item['product_categories'])) {
         $item['product_categories'] = json_decode($item['product_categories']);
