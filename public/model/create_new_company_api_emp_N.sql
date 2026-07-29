@@ -900,6 +900,7 @@ CREATE TABLE `ordenes_productos` (
   `tela` varchar(128) DEFAULT NULL COMMENT 'Tela principal seleccionada desde Comercialización',
   `precio_unitario` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT 'Precio del producto',
   `precio_woo` decimal(10, 2) DEFAULT NULL COMMENT 'Precio de Woocommerce',
+  `multiplicador_porcentaje` decimal(5, 2) DEFAULT NULL COMMENT 'Porcentaje del multiplicador de empresa aplicado a este ítem al momento de la venta; NULL = no aplicado',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Productos incluidos en cada orden. Detalla cada ítem con cantidad, talla, corte, tela, precio unitario y categoría.';
 CREATE TABLE `ordenes_auditoria` (
@@ -988,7 +989,8 @@ CREATE TABLE `presupuestos_productos` (
   `moment` timestamp NOT NULL DEFAULT current_timestamp(),
   `id_products_attributes` int(11) DEFAULT NULL COMMENT 'ID de la variante del producto',
   `id_size` int(11) DEFAULT NULL COMMENT 'ID de la talla',
-  `id_tela` int(11) DEFAULT NULL COMMENT 'ID de la tela a utilizar del catálogo de telas'
+  `id_tela` int(11) DEFAULT NULL COMMENT 'ID de la tela a utilizar del catálogo de telas',
+  `multiplicador_porcentaje` decimal(5, 2) DEFAULT NULL COMMENT 'Reservado por consistencia de esquema con ordenes_productos; no usado en presupuestos'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
 CREATE TABLE `products` (
   `_id` bigint(20) UNSIGNED NOT NULL,

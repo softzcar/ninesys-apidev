@@ -2164,7 +2164,7 @@ return function (App $app) {
 
     // 3. MANEJO DE PRODUCTOS (INSERT, UPDATE, DELETE)
     // 3.1. Obtener productos actuales de la base de datos para comparar
-    $sql_productos_actuales = "SELECT _id, _id cod, cantidad, precio_unitario, talla, tela, corte, id_products_attributes FROM {$table_productos} WHERE id_orden = {$id_orden_a_editar}";
+    $sql_productos_actuales = "SELECT _id, _id cod, cantidad, precio_unitario, talla, tela, corte, id_products_attributes, multiplicador_porcentaje FROM {$table_productos} WHERE id_orden = {$id_orden_a_editar}";
     $productos_actuales_db = $localConnection->goQuery($sql_productos_actuales);
 
     $map_productos_actuales = [];
@@ -2206,13 +2206,18 @@ return function (App $app) {
         $p_actual = $map_productos_actuales[$id_nuevo];
         // Comparamos si algo cambió para evitar updates innecesarios
         // Usamos el operador de fusión de null (??) para evitar errores de "Undefined index"
+        $multiplicadorNuevo = (isset($p_nuevo['multiplicador_porcentaje']) && is_numeric($p_nuevo['multiplicador_porcentaje']))
+          ? (float) $p_nuevo['multiplicador_porcentaje']
+          : null;
+
         if (
           ($p_actual['cantidad'] ?? null) != ($p_nuevo['cantidad'] ?? null) ||
           ($p_actual['precio_unitario'] ?? null) != ($p_nuevo['precio'] ?? null) ||
           ($p_actual['talla'] ?? null) != ($p_nuevo['talla'] ?? null) ||
           ($p_actual['tela'] ?? null) != ($p_nuevo['tela'] ?? null) ||
           ($p_actual['corte'] ?? null) != ($p_nuevo['corte'] ?? null) ||
-          ($p_actual['id_products_attributes'] ?? null) != ($p_nuevo['atributo'] ?? null)
+          ($p_actual['id_products_attributes'] ?? null) != ($p_nuevo['atributo'] ?? null) ||
+          ($p_actual['multiplicador_porcentaje'] ?? null) != $multiplicadorNuevo
         ) {
           $idTallaNuevo = (isset($p_nuevo['talla']) && !is_null($p_nuevo['talla'])) ? (int) $p_nuevo['talla'] : null;
           $idTelaNuevo = (isset($p_nuevo['tela']) && !is_null($p_nuevo['tela'])) ? (int) $p_nuevo['tela'] : null;
@@ -2226,11 +2231,13 @@ return function (App $app) {
                     talla = (SELECT nombre FROM sizes WHERE _id = ?),
                     id_tela = ?,
                     tela = (SELECT tela FROM catalogo_telas WHERE _id = ?),
-                    id_products_attributes = ?
+                    id_products_attributes = ?,
+                    multiplicador_porcentaje = ?
                     WHERE _id = ?";
           $localConnection->goQuery($sql_update_prod, [
             $p_nuevo['cantidad'], $p_nuevo['precio'], $p_nuevo['corte'],
             $idTallaNuevo, $idTallaNuevo, $idTelaNuevo, $idTelaNuevo, $idAtributoNuevo,
+            $multiplicadorNuevo,
             (int) $id_nuevo,
           ]);
         }
@@ -2251,9 +2258,12 @@ return function (App $app) {
           : null;
         $id_products_attributes = (isset($decodedObj['atributo']) && !is_null($decodedObj['atributo'])) ? (int) $decodedObj['atributo'] : null;
         $corte = isset($decodedObj['corte']) ? $decodedObj['corte'] : '';
+        $multiplicador_porcentaje = (isset($decodedObj['multiplicador_porcentaje']) && is_numeric($decodedObj['multiplicador_porcentaje']))
+          ? (float) $decodedObj['multiplicador_porcentaje']
+          : null;
 
-        $sql2 = "INSERT INTO {$table_productos} (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT nombre FROM sizes WHERE _id = ?), ?, ?, (SELECT tela FROM catalogo_telas WHERE _id = ?), ?)";
+        $sql2 = "INSERT INTO {$table_productos} (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes, multiplicador_porcentaje)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT nombre FROM sizes WHERE _id = ?), ?, ?, (SELECT tela FROM catalogo_telas WHERE _id = ?), ?, ?)";
 
         $res_insert = $localConnection->goQuery($sql2, [
           date('Y-m-d H:i:s'),
@@ -2269,6 +2279,7 @@ return function (App $app) {
           $corte,
           $id_tela, $id_tela,
           $id_products_attributes,
+          $multiplicador_porcentaje,
         ]);
         $object['sql_insert_new_product'] = $sql2;
 
@@ -2854,13 +2865,18 @@ $object['sales_commission_ISSET'][] = false;
             $id_products_attributes_single = (int) $decodedObj['atributo'];
           }
 
-          $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT nombre FROM sizes WHERE _id = ?), ?, ?, (SELECT tela FROM catalogo_telas WHERE _id = ?), ?)';
+          $multiplicador_porcentaje = (isset($decodedObj['multiplicador_porcentaje']) && is_numeric($decodedObj['multiplicador_porcentaje']))
+            ? (float) $decodedObj['multiplicador_porcentaje']
+            : null;
+
+          $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes, multiplicador_porcentaje)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT nombre FROM sizes WHERE _id = ?), ?, ?, (SELECT tela FROM catalogo_telas WHERE _id = ?), ?, ?)';
           $object['sql_ordenes_productos'] = $sql2;
           $producto_detalle_response = $localConnection->goQuery($sql2, [
             $now, $precio_item, $precio_item, $decodedObj['producto'], $last_id,
             $decodedObj['cod'], $decodedObj['cantidad'], $id_categoria, $cat_name,
             $id_talla, $id_talla, $corte, $id_tela, $id_tela, $id_products_attributes_single,
+            $multiplicador_porcentaje,
           ]);
           error_log('Resultado INSERT: ' . json_encode($producto_detalle_response));
           $object['producto_detalle'][] = $producto_detalle_response;
@@ -3336,7 +3352,12 @@ $object['sales_commission_ISSET'][] = false;
           }
           $params2[] = $id_products_attributes;
 
-          $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes) VALUES (' . $values . ', ?)';
+          $multiplicador_porcentaje = (isset($decodedObj['multiplicador_porcentaje']) && is_numeric($decodedObj['multiplicador_porcentaje']))
+            ? floatval($decodedObj['multiplicador_porcentaje'])
+            : null;
+          $params2[] = $multiplicador_porcentaje;
+
+          $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes, multiplicador_porcentaje) VALUES (' . $values . ', ?, ?)';
           $object['sql_ordenes_productos'] = $sql2;
           $producto_detalle_response = $localConnection->goQuery($sql2, $params2);
           $object['producto_detalle'][] = $producto_detalle_response;

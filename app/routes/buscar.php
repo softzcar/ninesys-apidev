@@ -9,6 +9,10 @@ return function (App $app) {
   // Función para obtener la respuesta de /buscar
   function obtenerRespuestaBuscar($id, $email = null): array
   {
+    // Route param numérico reutilizado muchas veces en esta función -- casteado
+    // una sola vez aquí (mismo patrón ya usado en production.php/orders.php)
+    // en vez de parametrizar cada una de las ~11 consultas por separado.
+    $id = (int) $id;
     $object = array();
     $localConnection = new LocalDB();
 
@@ -222,6 +226,7 @@ return function (App $app) {
             op.id_tela,
             op.corte,
             op.precio_unitario AS precio,
+            op.multiplicador_porcentaje,
             (SELECT attribute_name FROM products_attributes WHERE _id = op.id_products_attributes) atributo_nombre,
             op.id_products_attributes AS atributo -- Añadir el atributo del producto
           FROM
@@ -256,6 +261,7 @@ return function (App $app) {
         $data[$key]['tela'] = $product['tela'];
         $data[$key]['corte'] = $product['corte'];
         $data[$key]['precio'] = $product['precio'];
+        $data[$key]['multiplicador_porcentaje'] = $product['multiplicador_porcentaje'] !== null ? (float) $product['multiplicador_porcentaje'] : null;
         $data[$key]['atributo'] = $product['atributo'];
         $data[$key]['atributo_nombre'] = $product['atributo_nombre'];
         // Manejar el caso donde prices puede ser NULL (productos sin precios asociados)
