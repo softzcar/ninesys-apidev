@@ -328,15 +328,15 @@ return function (App $app) {
     }
 
     // 8. SI PASA LAS VALIDACIONES, ACTUALIZAR
-    $sql = "UPDATE ordenes SET status = '" . $order['estado'] . "' WHERE _id = " . intval($order['id']);
-    $data = $localConnection->goQuery($sql);
+    $sql = 'UPDATE ordenes SET status = ? WHERE _id = ?';
+    $data = $localConnection->goQuery($sql, [$order['estado'], intval($order['id'])]);
 
     // 9. REGISTRAR EN AUDITORÍA (si es cancelada, terminada manual, reactivada o reversión de entregada)
     // No registrar auditoría manual si es el flujo normal terminada -> entregada
     if (!$esFlujoNormalTerminadaAEntrega && ($order['estado'] === 'cancelada' || $order['estado'] === 'terminada' || $estadoActual === 'cancelada' || $estadoActual === 'terminada' || $estadoActual === 'entregada') && $order['estado'] !== $estadoActual) {
-      $motivoEscaped = addslashes(trim($order['motivo']));
+      $motivo = trim($order['motivo']);
       $idAdmin = isset($order['id_admin']) ? intval($order['id_admin']) : 0;
-      $nombreAdmin = isset($order['nombre_admin']) ? addslashes($order['nombre_admin']) : 'Desconocido';
+      $nombreAdmin = isset($order['nombre_admin']) ? $order['nombre_admin'] : 'Desconocido';
 
       // Determinar la acción para la auditoría
       $accion = $order['estado'];
@@ -346,13 +346,8 @@ return function (App $app) {
         $accion = 'reversión de entrega';
       }
 
-      $sqlAudit = "INSERT INTO ordenes_auditoria (id_orden, accion, id_admin, nombre_admin, motivo) 
-                   VALUES (" . intval($order['id']) . ", 
-                           '$accion', 
-                           $idAdmin, 
-                           '$nombreAdmin', 
-                           '$motivoEscaped')";
-      $localConnection->goQuery($sqlAudit);
+      $sqlAudit = 'INSERT INTO ordenes_auditoria (id_orden, accion, id_admin, nombre_admin, motivo) VALUES (?, ?, ?, ?, ?)';
+      $localConnection->goQuery($sqlAudit, [intval($order['id']), $accion, $idAdmin, $nombreAdmin, $motivo]);
     }
 
     // Confirmar los cambios en BD antes de la sincronización externa con WooCommerce
@@ -840,32 +835,35 @@ return function (App $app) {
   $app->get('/reportes/resumen/disenadores/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT departamento FROM departamentos WHERE _id = ' . $args['id_departamento'];
-    $departamento = $localConnection->goQuery($sql);
+    $idDepartamento = (int) $args['id_departamento'];
+    $idEmpleado = (int) $args['id_empleado'];
+
+    $sql = 'SELECT departamento FROM departamentos WHERE _id = ?';
+    $departamento = $localConnection->goQuery($sql, [$idDepartamento]);
     $object['departamento'] = $departamento[0]['departamento'];
 
     // Obtener datos salariales del empleado
-    $sqlEmpleado = "SELECT salario_tipo, salario_monto, salario_periodo, comision, comision_tipo 
-                    FROM api_empresas.empresas_usuarios 
-                    WHERE id_usuario = {$args['id_empleado']}";
-    $datosEmpleado = $localConnection->goQuery($sqlEmpleado);
+    $sqlEmpleado = 'SELECT salario_tipo, salario_monto, salario_periodo, comision, comision_tipo
+                    FROM api_empresas.empresas_usuarios
+                    WHERE id_usuario = ?';
+    $datosEmpleado = $localConnection->goQuery($sqlEmpleado, [$idEmpleado]);
     $object['datos_empleado'] = !empty($datosEmpleado) ? $datosEmpleado[0] : null;
 
-    $sql = "SELECT
+    $sql = 'SELECT
                 a._id id_revision,
                 a.id_orden,
                 (SELECT product FROM products WHERE _id = a.id_product) producto,
                 b.monto_pago,
-                '{$object['departamento']}' departamento,
+                ? departamento,
                 b.fecha_pago,
-                'terminada' progreso
+                \'terminada\' progreso
             FROM
                 revisiones a
-            JOIN pagos b ON b.id_orden = a.id_orden AND b.detalle = '{$object['departamento']}'
-            JOIN ordenes c ON c._id = a.id_orden AND c.status NOT LIKE 'entregada' AND c.status NOT LIKE 'cancelada' AND c.status NOT LIKE 'terminada' 
-            WHERE b.id_empleado = {$args['id_empleado']} AND b.fecha_pago IS NULL
-        ";
-    $object['ordenes_terminadas'] = $localConnection->goQuery($sql);
+            JOIN pagos b ON b.id_orden = a.id_orden AND b.detalle = ?
+            JOIN ordenes c ON c._id = a.id_orden AND c.status NOT LIKE \'entregada\' AND c.status NOT LIKE \'cancelada\' AND c.status NOT LIKE \'terminada\'
+            WHERE b.id_empleado = ? AND b.fecha_pago IS NULL
+        ';
+    $object['ordenes_terminadas'] = $localConnection->goQuery($sql, [$object['departamento'], $object['departamento'], $idEmpleado]);
 
     $sql = "SELECT
             a._id AS id_revision,
@@ -878,12 +876,11 @@ return function (App $app) {
             revisiones a
         LEFT JOIN products p ON p._id = a.id_product
         JOIN ordenes c ON c._id = a.id_orden
-        WHERE 
-            a.id_empleado = {$args['id_empleado']}
+        WHERE
+            a.id_empleado = ?
             AND a.estatus != 'Aprobado'
-            AND c.status NOT IN ('entregada', 'cancelada', 'terminada');
-        ";
-    $object['ordenes_pendientes'] = $localConnection->goQuery($sql);
+            AND c.status NOT IN ('entregada', 'cancelada', 'terminada')";
+    $object['ordenes_pendientes'] = $localConnection->goQuery($sql, [$idEmpleado]);
 
     $localConnection->disconnect();
 
@@ -897,16 +894,24 @@ return function (App $app) {
   $app->get('/reportes/resumen/empleados/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT departamento, tipo FROM departamentos WHERE _id = ' . $args['id_departamento'];
-    $departamento = $localConnection->goQuery($sql);
+    // Casteados a entero: se reusan muchas veces dentro de varias consultas
+    // legacy grandes más abajo (no factible convertir todas a placeholders sin
+    // reescribir la función completa) -- el cast a int neutraliza cualquier
+    // intento de inyección igual de efectivo que un bind, dado que solo se
+    // usan en contexto numérico. Mismo patrón ya usado en production.php.
+    $idEmpleado = (int) $args['id_empleado'];
+    $idDepartamento = (int) $args['id_departamento'];
+
+    $sql = 'SELECT departamento, tipo FROM departamentos WHERE _id = ?';
+    $departamento = $localConnection->goQuery($sql, [$idDepartamento]);
     $object['departamento'] = $departamento[0]['departamento'];
     $departamentoTipo = $departamento[0]['tipo'] ?? null;
 
     // Obtener datos salariales del empleado
-    $sqlEmpleado = "SELECT salario_tipo, salario_monto, salario_periodo, comision, comision_tipo 
-                    FROM api_empresas.empresas_usuarios 
-                    WHERE id_usuario = {$args['id_empleado']}";
-    $datosEmpleado = $localConnection->goQuery($sqlEmpleado);
+    $sqlEmpleado = 'SELECT salario_tipo, salario_monto, salario_periodo, comision, comision_tipo
+                    FROM api_empresas.empresas_usuarios
+                    WHERE id_usuario = ?';
+    $datosEmpleado = $localConnection->goQuery($sqlEmpleado, [$idEmpleado]);
     $object['datos_empleado'] = !empty($datosEmpleado) ? $datosEmpleado[0] : null;
 
     if (DB_DRIVER === 'pgsql') {
@@ -928,7 +933,7 @@ return function (App $app) {
                 SUM(c.tiempo * b.cantidad) AS tiempo_estimado_de_produccion,
                 (EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int - SUM(c.tiempo * b.cantidad)) rendimiento,
                 SUM(b.cantidad) unidades,
-                (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$args['id_departamento']}) cantidad_empleados_asigandos,
+                (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$idDepartamento}) cantidad_empleados_asigandos,
                 string_agg(DISTINCT b.id_woo::text, ',') id_producto,
                 'EficienciaInsumos' eficiencia_insumos,
                 string_agg(DISTINCT b.talla, ', ') as talla
@@ -936,10 +941,10 @@ return function (App $app) {
                 lotes_detalles_empleados_asignados a
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
-            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
+            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios eu ON a.id_empleado = eu.id_usuario
-            WHERE a.id_empleado = {$args['id_empleado']} 
-              AND a.id_departamento = {$args['id_departamento']} 
+            WHERE a.id_empleado = {$idEmpleado} 
+              AND a.id_departamento = {$idDepartamento} 
               AND a.fecha_terminado IS NOT NULL 
               AND EXISTS (SELECT 1 FROM pagos WHERE id_lotes_detalles = a._id AND fecha_pago IS NULL)
             GROUP BY a._id, a.id_orden, a.fecha_inicio, a.fecha_terminado, a.progreso, eu.salario_tipo, eu.salario_monto, eu.salario_periodo
@@ -964,7 +969,7 @@ return function (App $app) {
                 SUM(c.tiempo * b.cantidad) AS tiempo_estimado_de_produccion,
                 (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - SUM(c.tiempo * b.cantidad)) rendimiento,
                 SUM(b.cantidad) unidades,
-                (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$args['id_departamento']}) cantidad_empleados_asigandos,
+                (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$idDepartamento}) cantidad_empleados_asigandos,
                 GROUP_CONCAT(DISTINCT b.id_woo) id_producto,
                 'EficienciaInsumos' eficiencia_insumos,
                 GROUP_CONCAT(DISTINCT b.talla SEPARATOR ', ') as talla
@@ -972,10 +977,10 @@ return function (App $app) {
                 lotes_detalles_empleados_asignados a
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
-            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
+            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios eu ON a.id_empleado = eu.id_usuario
-            WHERE a.id_empleado = {$args['id_empleado']} 
-              AND a.id_departamento = {$args['id_departamento']} 
+            WHERE a.id_empleado = {$idEmpleado} 
+              AND a.id_departamento = {$idDepartamento} 
               AND a.fecha_terminado IS NOT NULL 
               AND EXISTS (SELECT 1 FROM pagos WHERE id_lotes_detalles = a._id AND fecha_pago IS NULL)
             GROUP BY a.id_orden
@@ -1002,7 +1007,7 @@ return function (App $app) {
                 (EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int - c.tiempo) rendimiento,
                 b.cantidad unidades,
                 SUM(b.cantidad) total_productos,
-                (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$args['id_departamento']}) cantidad_empleados_asigandos,
+                (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$idDepartamento}) cantidad_empleados_asigandos,
                 b.id_woo id_producto,
                 e.product,
                 b.talla,
@@ -1022,10 +1027,10 @@ return function (App $app) {
             JOIN ordenes ord ON ord._id = a.id_orden
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
-            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
+            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios d ON d.id_usuario = a.id_empleado
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = ord._id
-            WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND a.progreso != 'terminada' AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
+            WHERE a.id_empleado = {$idEmpleado} AND a.id_departamento = {$idDepartamento} AND a.progreso != 'terminada' AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
             GROUP BY a._id, a.id_orden, ord.cliente_nombre, a.fecha_inicio, a.fecha_terminado, a.progreso, d.comision_tipo, c.tiempo, b.cantidad, b.id_woo, e.product, b.talla, ofo.orden_fila, e.comision, d.comision
             ORDER BY ofo.orden_fila ASC, a.id_orden DESC, a.progreso ASC
         ";
@@ -1043,7 +1048,7 @@ return function (App $app) {
                 (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - c.tiempo) rendimiento,
                 b.cantidad unidades,
                 SUM(b.cantidad) total_productos,
-                (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$args['id_departamento']}) cantidad_empleados_asigandos,
+                (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$idDepartamento}) cantidad_empleados_asigandos,
                 b.id_woo id_producto,
                 e.product,
                 b.talla,
@@ -1056,10 +1061,10 @@ return function (App $app) {
             JOIN ordenes ord ON ord._id = a.id_orden
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
-            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$args['id_departamento']}
+            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios d ON d.id_usuario = a.id_empleado
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = ord._id
-            WHERE a.id_empleado = {$args['id_empleado']} AND a.id_departamento = {$args['id_departamento']} AND a.progreso != 'terminada' AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
+            WHERE a.id_empleado = {$idEmpleado} AND a.id_departamento = {$idDepartamento} AND a.progreso != 'terminada' AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
             GROUP BY a.id_orden ORDER BY ofo.orden_fila ASC, a.id_orden DESC, a.progreso ASC
         ";
     }
@@ -1233,8 +1238,8 @@ return function (App $app) {
                 LEFT JOIN sizes s ON op.id_size = s._id
                 LEFT JOIN catalogo_insumos_productos cip ON pia.id_catalogo_insumos_productos = cip._id
                 WHERE
-                    ldea.id_empleado = {$args['id_empleado']}
-                    AND ldea.id_departamento = {$args['id_departamento']}
+                    ldea.id_empleado = {$idEmpleado}
+                    AND ldea.id_departamento = {$idDepartamento}
                     AND pia.id_catalogo_insumos_productos IS NOT NULL
                 GROUP BY
                     ldea.id_orden, ldea.id_empleado, ldea.id_departamento,
@@ -1267,8 +1272,8 @@ return function (App $app) {
                     inventario_movimientos im
                 LEFT JOIN inventario inv ON im.id_insumo = inv._id
                 WHERE
-                    im.id_empleado = {$args['id_empleado']}
-                    AND im.id_departamento = {$args['id_departamento']}
+                    im.id_empleado = {$idEmpleado}
+                    AND im.id_departamento = {$idDepartamento}
                 GROUP BY
                     im.id_orden, im.id_departamento, im.id_empleado, COALESCE(im.id_catalogo_insumos_prodcutos, inv.id_catalogo)
             ) AS consumo_r ON est.id_orden = consumo_r.id_orden
@@ -1318,8 +1323,8 @@ return function (App $app) {
                 LEFT JOIN sizes s ON op.id_size = s._id
                 LEFT JOIN catalogo_insumos_productos cip ON pia.id_catalogo_insumos_productos = cip._id
                 WHERE
-                    ldea.id_empleado = {$args['id_empleado']}
-                    AND ldea.id_departamento = {$args['id_departamento']}
+                    ldea.id_empleado = {$idEmpleado}
+                    AND ldea.id_departamento = {$idDepartamento}
                     AND pia.id_catalogo_insumos_productos IS NOT NULL
                 GROUP BY
                     ldea.id_orden, ldea.id_empleado, ldea.id_departamento,
@@ -1352,8 +1357,8 @@ return function (App $app) {
                     inventario_movimientos im
                 LEFT JOIN inventario inv ON im.id_insumo = inv._id
                 WHERE
-                    im.id_empleado = {$args['id_empleado']}
-                    AND im.id_departamento = {$args['id_departamento']}
+                    im.id_empleado = {$idEmpleado}
+                    AND im.id_departamento = {$idDepartamento}
                 GROUP BY
                     im.id_orden, im.id_departamento, im.id_empleado, COALESCE(im.id_catalogo_insumos_prodcutos, inv.id_catalogo)
             ) AS consumo_r ON est.id_orden = consumo_r.id_orden
@@ -1391,8 +1396,8 @@ return function (App $app) {
                 p.estatus AS estatus_pago
             FROM lotes_detalles_empleados_asignados ldea
             LEFT JOIN pagos p ON p.id_lotes_detalles = ldea._id
-            WHERE ldea.id_empleado = {$args['id_empleado']}
-              AND ldea.id_departamento = {$args['id_departamento']}
+            WHERE ldea.id_empleado = {$idEmpleado}
+              AND ldea.id_departamento = {$idDepartamento}
               AND ldea.progreso = 'terminada'
               AND ldea.fecha_terminado IS NOT NULL
             ORDER BY ldea.fecha_terminado DESC
@@ -1408,8 +1413,8 @@ return function (App $app) {
                 p.estatus AS estatus_pago
             FROM lotes_detalles_empleados_asignados ldea
             LEFT JOIN pagos p ON p.id_lotes_detalles = ldea._id
-            WHERE ldea.id_empleado = {$args['id_empleado']}
-              AND ldea.id_departamento = {$args['id_departamento']}
+            WHERE ldea.id_empleado = {$idEmpleado}
+              AND ldea.id_departamento = {$idDepartamento}
               AND ldea.progreso = 'terminada'
               AND ldea.fecha_terminado IS NOT NULL
             ORDER BY ldea.fecha_terminado DESC
@@ -2285,30 +2290,36 @@ return function (App $app) {
     $nuevo_abono_total = $abono_historico + $arr['abono'];
 
     // Se elimina el campo `observaciones` de la actualización principal
+    // NOTA: $table_principal es un literal fijo ('ordenes' o 'presupuestos',
+    // ver arriba) -- nunca proviene de input del usuario, seguro de interpolar.
     $sql_update_orden = "UPDATE {$table_principal} SET
-        pago_total = " . $arr['total'] . ',
-        pago_abono = ' . $nuevo_abono_total . ',
-        pago_descuento = pago_descuento + ' . $arr['descuento'] . ",
-        fecha_entrega = '" . $arr['fechaEntrega'] . "'
-        WHERE _id = {$id_orden_a_editar}";
-    $localConnection->goQuery($sql_update_orden);
+        pago_total = ?,
+        pago_abono = ?,
+        pago_descuento = pago_descuento + ?,
+        fecha_entrega = ?
+        WHERE _id = ?";
+    $localConnection->goQuery($sql_update_orden, [
+      $arr['total'], $nuevo_abono_total, $arr['descuento'], $arr['fechaEntrega'], $id_orden_a_editar,
+    ]);
     $object['sql_update_orden'] = $sql_update_orden;
 
     // Lógica para insertar o actualizar las observaciones
     if ($is_presupuesto) {
-      $sql_obs = "UPDATE presupuestos SET observaciones = '{$arr['obs']}' WHERE _id = {$id_orden_a_editar}";
+      $sql_obs = 'UPDATE presupuestos SET observaciones = ? WHERE _id = ?';
+      $localConnection->goQuery($sql_obs, [$arr['obs'], $id_orden_a_editar]);
     } else {
       // NUEVO: Lógica para insertar o actualizar las observaciones en la tabla dedicada para órdenes
-      $sql_check_obs = "SELECT _id FROM ordenes_observaciones WHERE id_orden = {$id_orden_a_editar}";
-      $obs_existente = $localConnection->goQuery($sql_check_obs);
+      $sql_check_obs = 'SELECT _id FROM ordenes_observaciones WHERE id_orden = ?';
+      $obs_existente = $localConnection->goQuery($sql_check_obs, [$id_orden_a_editar]);
 
       if (empty($obs_existente)) {
-        $sql_obs = "INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES ({$id_orden_a_editar}, '{$arr['obs']}')";
+        $sql_obs = 'INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)';
+        $localConnection->goQuery($sql_obs, [$id_orden_a_editar, $arr['obs']]);
       } else {
-        $sql_obs = "UPDATE ordenes_observaciones SET observaciones = '{$arr['obs']}' WHERE id_orden = {$id_orden_a_editar}";
+        $sql_obs = 'UPDATE ordenes_observaciones SET observaciones = ? WHERE id_orden = ?';
+        $localConnection->goQuery($sql_obs, [$arr['obs'], $id_orden_a_editar]);
       }
     }
-    $localConnection->goQuery($sql_obs);
     $object['sql_observaciones'] = $sql_obs;
 
     // DEFINIR FECHA ACTUAL
@@ -2322,26 +2333,22 @@ return function (App $app) {
       $detalle_descuento = isset($arr['descuentoDetalle']) ? $arr['descuentoDetalle'] : 'Ajuste de descuento en edición';
 
       // Insertar directamente el incremento
-      $sql_insert_desc = "INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento, detalle) VALUES ('" . $now . "', '" . $id_orden_a_editar . "', '" . $arr['responsable'] . "', 0, '" . $nuevo_descuento . "', '" . addslashes($detalle_descuento) . "')";
-
-      $localConnection->goQuery($sql_insert_desc);
+      $sql_insert_desc = 'INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento, detalle) VALUES (?, ?, ?, 0, ?, ?)';
+      $localConnection->goQuery($sql_insert_desc, [$now, $id_orden_a_editar, $arr['responsable'], $nuevo_descuento, $detalle_descuento]);
       $object['sql_nuevo_descuento'] = $sql_insert_desc;
-
-
     }
 
     // 5. REGISTRAR NUEVOS ABONOS Y COMISIONES (Solo sobre el nuevo pago)
     if (floatval($arr['abono']) > 0) {
       // Crear registro del nuevo abono
-      $sql_abono = "INSERT INTO abonos (moment, id_orden, id_empleado, abono) VALUES ('" . $now . "', '" . $id_orden_a_editar . "',  '" . $arr['responsable'] . "', '"
-        . $arr['abono'] . "');";
-      $localConnection->goQuery($sql_abono);
+      $sql_abono = 'INSERT INTO abonos (moment, id_orden, id_empleado, abono) VALUES (?, ?, ?, ?)';
+      $localConnection->goQuery($sql_abono, [$now, $id_orden_a_editar, $arr['responsable'], $arr['abono']]);
       $object['sql_nuevo_abono'] = $sql_abono;
 
       // Calcular comisión SOLO sobre el nuevo abono
       if ($arr['sales_commission'] === true) {
-        $sql_comision = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $arr['responsable'];
-        $respComision = $localConnection->goQuery($sql_comision)[0];
+        $sql_comision = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+        $respComision = $localConnection->goQuery($sql_comision, [$arr['responsable']])[0];
         $comisionTipo = $respComision['comision_tipo'];
 
         if ($comisionTipo === 'porcentaje') {
@@ -2555,21 +2562,22 @@ return function (App $app) {
     $abono_value = (is_numeric($arr['abono']) && $arr['abono'] !== '') ? floatval($arr['abono']) : 0;
     $descuento_value = (is_numeric($arr['descuento']) && $arr['descuento'] !== '') ? floatval($arr['descuento']) : 0;
 
-    // Validar id_wp
+    // Validar id_wp -- $id_wp_param queda como valor limpio (int o null) para
+    // ligar directamente como parámetro más abajo, nunca como texto SQL.
     $id_wp_val = $arr['id_wp'];
-    $id_wp_sql = "NULL";
+    $id_wp_param = null;
     if (!empty($id_wp_val) && is_numeric($id_wp_val)) {
-      $id_wp_sql = "'" . $id_wp_val . "'";
+      $id_wp_param = (int) $id_wp_val;
     } else {
       // NUEVO: Si no hay id_wp, crear o actualizar el cliente automáticamente
       error_log("id_wp vacío detectado, creando/actualizando cliente automáticamente");
 
-      $cliente_nombre = addslashes($arr['nombre'] ?? '');
-      $cliente_apellido = addslashes($arr['apellido'] ?? '');
-      $cliente_cedula = addslashes($arr['cedula'] ?? '');
-      $cliente_telefono = addslashes($arr['telefono'] ?? '');
-      $cliente_email = addslashes($arr['email'] ?? '');
-      $cliente_direccion = addslashes($arr['direccion'] ?? 'none');
+      $cliente_nombre = $arr['nombre'] ?? '';
+      $cliente_apellido = $arr['apellido'] ?? '';
+      $cliente_cedula = $arr['cedula'] ?? '';
+      $cliente_telefono = $arr['telefono'] ?? '';
+      $cliente_email = $arr['email'] ?? '';
+      $cliente_direccion = $arr['direccion'] ?? 'none';
 
       // Generar email si está vacío
       if (empty($cliente_email) || $cliente_email === 'none') {
@@ -2578,52 +2586,59 @@ return function (App $app) {
       }
 
       // Buscar si ya existe un cliente con esa cédula o teléfono
-      $sqlCheckCustomer = "SELECT _id FROM customers WHERE ";
       $conditions = [];
+      $conditionParams = [];
 
       if (!empty($cliente_cedula) && $cliente_cedula !== 'none') {
-        $conditions[] = "cedula = '$cliente_cedula'";
+        $conditions[] = 'cedula = ?';
+        $conditionParams[] = $cliente_cedula;
       }
 
       if (!empty($cliente_telefono) && $cliente_telefono !== 'none') {
         $digits = preg_replace('/\D/', '', $cliente_telefono);
         if (strlen($digits) >= 7) {
           $last10 = substr($digits, -10);
-          $conditions[] = "REGEXP_REPLACE(phone, '[^0-9]', '') LIKE '%" . $last10 . "'";
+          $conditions[] = "REGEXP_REPLACE(phone, '[^0-9]', '') LIKE ?";
+          $conditionParams[] = '%' . $last10;
         } else {
-          $conditions[] = "phone = '$cliente_telefono'";
+          $conditions[] = 'phone = ?';
+          $conditionParams[] = $cliente_telefono;
         }
       }
 
       if (!empty($conditions)) {
-        $sqlCheckCustomer .= '(' . implode(' OR ', $conditions) . ') LIMIT 1';
-        $existingCustomer = $localConnection->goQuery($sqlCheckCustomer);
+        $sqlCheckCustomer = 'SELECT _id FROM customers WHERE (' . implode(' OR ', $conditions) . ') LIMIT 1';
+        $existingCustomer = $localConnection->goQuery($sqlCheckCustomer, $conditionParams);
 
         if (!empty($existingCustomer)) {
           // Cliente ya existe (activo o eliminado), ACTUALIZAR sus datos.
           // eliminado = 0 → auto-reactivar: si estaba con soft delete y hace una
           // nueva orden, se reutiliza su registro (no se duplica el teléfono).
-          $customer_id = $existingCustomer[0]['_id'];
-          $sqlUpdateCustomer = "UPDATE customers SET
+          $customer_id = (int) $existingCustomer[0]['_id'];
+          $sqlUpdateCustomer = 'UPDATE customers SET
                                   eliminado = 0,
-                                  first_name = '$cliente_nombre',
-                                  last_name = '$cliente_apellido',
-                                  cedula = '$cliente_cedula',
-                                  phone = '$cliente_telefono',
-                                  email = '$cliente_email',
-                                  address = '$cliente_direccion'
-                                WHERE _id = $customer_id";
-          $localConnection->goQuery($sqlUpdateCustomer);
-          $id_wp_sql = "'" . $customer_id . "'";
+                                  first_name = ?,
+                                  last_name = ?,
+                                  cedula = ?,
+                                  phone = ?,
+                                  email = ?,
+                                  address = ?
+                                WHERE _id = ?';
+          $localConnection->goQuery($sqlUpdateCustomer, [
+            $cliente_nombre, $cliente_apellido, $cliente_cedula,
+            $cliente_telefono, $cliente_email, $cliente_direccion, $customer_id,
+          ]);
+          $id_wp_param = $customer_id;
           error_log("Cliente existente actualizado con ID: $customer_id");
         } else {
           // Cliente no existe, CREAR nuevo
-          $sqlCreateCustomer = "INSERT INTO customers (first_name, last_name, cedula, phone, email, address) 
-                                VALUES ('$cliente_nombre', '$cliente_apellido', '$cliente_cedula', '$cliente_telefono', '$cliente_email', '$cliente_direccion')";
-          $createResult = $localConnection->goQuery($sqlCreateCustomer);
+          $sqlCreateCustomer = 'INSERT INTO customers (first_name, last_name, cedula, phone, email, address) VALUES (?, ?, ?, ?, ?, ?)';
+          $createResult = $localConnection->goQuery($sqlCreateCustomer, [
+            $cliente_nombre, $cliente_apellido, $cliente_cedula, $cliente_telefono, $cliente_email, $cliente_direccion,
+          ]);
 
           if (isset($createResult['insert_id'])) {
-            $id_wp_sql = "'" . $createResult['insert_id'] . "'";
+            $id_wp_param = (int) $createResult['insert_id'];
             error_log("Nuevo cliente creado con ID: " . $createResult['insert_id']);
           } else {
             error_log("Error al crear cliente: id_wp quedará NULL");
@@ -2631,12 +2646,13 @@ return function (App $app) {
         }
       } else {
         // No hay cédula ni teléfono para buscar, crear cliente nuevo directamente
-        $sqlCreateCustomer = "INSERT INTO customers (first_name, last_name, cedula, phone, email, address) 
-                              VALUES ('$cliente_nombre', '$cliente_apellido', '$cliente_cedula', '$cliente_telefono', '$cliente_email', '$cliente_direccion')";
-        $createResult = $localConnection->goQuery($sqlCreateCustomer);
+        $sqlCreateCustomer = 'INSERT INTO customers (first_name, last_name, cedula, phone, email, address) VALUES (?, ?, ?, ?, ?, ?)';
+        $createResult = $localConnection->goQuery($sqlCreateCustomer, [
+          $cliente_nombre, $cliente_apellido, $cliente_cedula, $cliente_telefono, $cliente_email, $cliente_direccion,
+        ]);
 
         if (isset($createResult['insert_id'])) {
-          $id_wp_sql = "'" . $createResult['insert_id'] . "'";
+          $id_wp_param = (int) $createResult['insert_id'];
           error_log("Nuevo cliente creado con ID: " . $createResult['insert_id']);
         } else {
           error_log("Error al crear cliente: id_wp quedará NULL");
@@ -2649,8 +2665,21 @@ return function (App $app) {
     $localConnection->beginTransaction();
 
     try {
-      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (' . intval($newJson['responsable']) . ", '" . $now . "', " . $descuento_value . ', ' . $abono_value . ",  " . $id_wp_sql . ", '" . addslashes($arr['cedula'] ?? '') . "', " . floatval($newJson['total']) . ",'" . addslashes($cliente ?? '') . "', '" . date('Y-m-d') . "', '" . $newJson['fechaEntrega'] . "', '" . date('Y-m-d') . "', 'En espera' )";
-      $nueva_oreden_response = $localConnection->goQuery($sql);
+      $sql = 'INSERT INTO ordenes (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+      $nueva_oreden_response = $localConnection->goQuery($sql, [
+        intval($newJson['responsable']),
+        $now,
+        $descuento_value,
+        $abono_value,
+        $id_wp_param,
+        $arr['cedula'] ?? '',
+        floatval($newJson['total']),
+        $cliente ?? '',
+        date('Y-m-d'),
+        $newJson['fechaEntrega'],
+        date('Y-m-d'),
+        'En espera',
+      ]);
       $object['nueva_oreden_sql'] = $sql;
 
       // $object['nueva_oreden_response'] = $nueva_oreden_response['message'];
@@ -2679,20 +2708,22 @@ return function (App $app) {
       $lastOrdenFila = $localConnection->goQuery('SELECT MAX(orden_fila) AS max FROM ordenes_fila_orden;');
       $lastOrdenFila = $lastOrdenFila[0]['max'] + 1;
 
-      $sql = "INSERT INTO ordenes_fila_orden(id_orden, orden_fila)  VALUES ($last_id, $lastOrdenFila)";
+      $sql = 'INSERT INTO ordenes_fila_orden(id_orden, orden_fila) VALUES (?, ?)';
       $object['sql_orden_fila'] = $sql;
-      $response_last_fila = $localConnection->goQuery($sql);
+      $response_last_fila = $localConnection->goQuery($sql, [$last_id, $lastOrdenFila]);
 
       // Guardar orden vinculada
       if ($arr['vinculada'] != 0 || $arr['vinculada'] != '0') {
-        $sql = "INSERT INTO ordenes_vinculadas (moment, id_father, id_child) VALUES ('" . $now . "', " . $arr['vinculada'] . ', ' . $last_id . ')';
-        $object['response_orden_vinculada'] = json_encode($localConnection->goQuery($sql));
+        $sql = 'INSERT INTO ordenes_vinculadas (moment, id_father, id_child) VALUES (?, ?, ?)';
+        $object['response_orden_vinculada'] = json_encode($localConnection->goQuery($sql, [$now, (int) $arr['vinculada'], $last_id]));
       }
 
       // Crear abono inicial de la orden
-      $sql = "INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento) VALUES ('" . $now . "', '" . $last_id . "',  '" . $newJson['responsable'] . "', '" . $newJson['abono'] . "', '" . $newJson['descuento'] . "');";
+      $sql = 'INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento) VALUES (?, ?, ?, ?, ?)';
       $object['sql_abonos'] = $sql;
-      $object['response_primer_abono'] = json_encode($localConnection->goQuery($sql));
+      $object['response_primer_abono'] = json_encode($localConnection->goQuery($sql, [
+        $now, $last_id, $newJson['responsable'], $newJson['abono'], $newJson['descuento'],
+      ]));
 
       // CALCULAMOE ES PORCENTAJE DEL VENDEDOR
       // if (isset($arg["sales_commission"])) { // sales_comission no llega en el Payload vamoa a validar el valor de abono
@@ -2701,8 +2732,8 @@ return function (App $app) {
         // $object['sales_commission_ISSET'][] = $arg["sales_commission"];
 
         // BUSCAR COMISION DEL VENDEDOR
-        $sql = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $newJson['responsable'];
-        $respComision = $localConnection->goQuery($sql)[0];
+        $sql = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+        $respComision = $localConnection->goQuery($sql, [(int) $newJson['responsable']])[0];
 
         $comisionTipo = $respComision['comision_tipo'];
 
@@ -2927,10 +2958,12 @@ $object['sales_commission_ISSET'][] = false;
 
               $sql_lote_detalles = '';
 
+              $sql_lote_detalles = 'INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, id_departamento, departamento) VALUES (?, ?, ?, ?, ?, ?)';
               foreach ($resultDepartamentos as $departamento) {
-                $sql_lote_detalles = "INSERT INTO lotes_detalles (moment, id_orden, id_ordenes_productos, id_woo, id_departamento, departamento) VALUES ( '" . $now . "', '" . $last_id . "', '" . $last_id_ordenes_productos . "', '" . $decodedObj['cod'] . "', {$departamento['_id']}, '{$departamento['departamento']}');";
                 $object['lotes_detalles_sql'][$i][] = $sql_lote_detalles;
-                $object['lote_detalles_response'][$i][] = $localConnection->goQuery($sql_lote_detalles);
+                $object['lote_detalles_response'][$i][] = $localConnection->goQuery($sql_lote_detalles, [
+                  $now, $last_id, $last_id_ordenes_productos, $myWooId, $departamento['_id'], $departamento['departamento'],
+                ]);
               }
             }
           }
