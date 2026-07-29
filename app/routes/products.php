@@ -1294,7 +1294,7 @@ return function (App $app) {
     // mayúsculas/espacios), esté activa o eliminada -- para no crear un
     // duplicado silencioso ni perder el historial ya asociado al _id original.
     $existing = $localConnection->goQuery(
-      'SELECT _id, nombre, eliminado FROM sizes WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?))',
+      'SELECT _id, nombre, eliminado, variation_percentage FROM sizes WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?))',
       [$nombre]
     );
 
@@ -1307,6 +1307,10 @@ return function (App $app) {
           'eliminado_existente' => true,
           'id' => $match['_id'],
           'name' => $match['nombre'],
+          // Se devuelve el porcentaje de variación que tenía guardado antes
+          // de eliminarla, para que el frontend lo recupere en vez de
+          // pisarlo silenciosamente con el valor por defecto del formulario.
+          'variation_percentage' => (float) $match['variation_percentage'],
         ];
         $response->getBody()->write(json_encode($object));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
