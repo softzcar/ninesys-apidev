@@ -2148,7 +2148,10 @@ return function (App $app) {
     $arr = [];
     $arr['id_wp'] = $newJson['id'] ?? null;
     $arr['fechaEntrega'] = $newJson['fechaEntrega'] ?? date('Y-m-d');
-    $arr['obs'] = isset($newJson['obs']) && $newJson['obs'] !== null ? addslashes($newJson['obs']) : '';
+    // Ya no se aplica addslashes() aquí: 'obs' ahora se liga como parámetro
+    // (placeholder) en las consultas de abajo, addslashes lo habría escapado
+    // dos veces (guardando barras invertidas literales en la base de datos).
+    $arr['obs'] = isset($newJson['obs']) && $newJson['obs'] !== null ? $newJson['obs'] : '';
     $arr['total'] = floatval($newJson['total'] ?? 0);
     $arr['abono'] = floatval($newJson['abono'] ?? 0);
     $arr['descuento'] = floatval($newJson['descuento'] ?? 0);
@@ -2186,13 +2189,13 @@ return function (App $app) {
     foreach ($map_productos_actuales as $id_actual => $p_actual) {
       if (!isset($map_productos_nuevos[$id_actual])) {
         // Este producto ya no está en la lista del frontend, hay que borrarlo.
-        $sql_delete_prod = "DELETE FROM {$table_productos} WHERE _id = {$id_actual}";
-        $localConnection->goQuery($sql_delete_prod);
+        $sql_delete_prod = "DELETE FROM {$table_productos} WHERE _id = ?";
+        $localConnection->goQuery($sql_delete_prod, [(int) $id_actual]);
 
         if (!$is_presupuesto) {
           // También borrar sus detalles de lote (solo para órdenes)
-          $sql_delete_lote = "DELETE FROM lotes_detalles WHERE id_ordenes_productos = {$id_actual}";
-          $localConnection->goQuery($sql_delete_lote);
+          $sql_delete_lote = 'DELETE FROM lotes_detalles WHERE id_ordenes_productos = ?';
+          $localConnection->goQuery($sql_delete_lote, [(int) $id_actual]);
         }
       }
     }
@@ -2211,17 +2214,25 @@ return function (App $app) {
           ($p_actual['corte'] ?? null) != ($p_nuevo['corte'] ?? null) ||
           ($p_actual['id_products_attributes'] ?? null) != ($p_nuevo['atributo'] ?? null)
         ) {
+          $idTallaNuevo = (isset($p_nuevo['talla']) && !is_null($p_nuevo['talla'])) ? (int) $p_nuevo['talla'] : null;
+          $idTelaNuevo = (isset($p_nuevo['tela']) && !is_null($p_nuevo['tela'])) ? (int) $p_nuevo['tela'] : null;
+          $idAtributoNuevo = isset($p_nuevo['atributo']) ? (int) $p_nuevo['atributo'] : null;
+
           $sql_update_prod = "UPDATE {$table_productos} SET
-                    cantidad = {$p_nuevo['cantidad']},
-                    precio_unitario = {$p_nuevo['precio']},
-                    corte = '{$p_nuevo['corte']}',
-                    id_size = " . (isset($p_nuevo['talla']) && !is_null($p_nuevo['talla']) ? intval($p_nuevo['talla']) : 'NULL') . ',
-                    talla = (SELECT nombre FROM sizes WHERE _id = ' . (isset($p_nuevo['talla']) && !is_null($p_nuevo['talla']) ? intval($p_nuevo['talla']) : 'NULL') . '),
-                    id_tela = ' . (isset($p_nuevo['tela']) && !is_null($p_nuevo['tela']) ? intval($p_nuevo['tela']) : 'NULL') . ',
-                    tela = (SELECT tela FROM catalogo_telas WHERE _id = ' . (isset($p_nuevo['tela']) && !is_null($p_nuevo['tela']) ? intval($p_nuevo['tela']) : 'NULL') . '),
-                    id_products_attributes = ' . (isset($p_nuevo['atributo']) ? intval($p_nuevo['atributo']) : 'NULL') . "
-                    WHERE _id = {$id_nuevo}";
-          $localConnection->goQuery($sql_update_prod);
+                    cantidad = ?,
+                    precio_unitario = ?,
+                    corte = ?,
+                    id_size = ?,
+                    talla = (SELECT nombre FROM sizes WHERE _id = ?),
+                    id_tela = ?,
+                    tela = (SELECT tela FROM catalogo_telas WHERE _id = ?),
+                    id_products_attributes = ?
+                    WHERE _id = ?";
+          $localConnection->goQuery($sql_update_prod, [
+            $p_nuevo['cantidad'], $p_nuevo['precio'], $p_nuevo['corte'],
+            $idTallaNuevo, $idTallaNuevo, $idTelaNuevo, $idTelaNuevo, $idAtributoNuevo,
+            (int) $id_nuevo,
+          ]);
         }
       }
     }
@@ -2232,42 +2243,33 @@ return function (App $app) {
         // Reutilizamos la lógica de inserción del endpoint original
         $cat_name = 'Uncatagorized';  // Valor por defecto
 
-        $values = "'" . date('Y-m-d H:i:s') . "',";
-        $values .= floatval($decodedObj['precio'] ?? 0) . ',';
-        $values .= "'" . floatval($decodedObj['precio'] ?? 0) . "',";  // precio_woo
-        $values .= "'" . addslashes($decodedObj['producto'] ?? '') . "',";
-        $values .= $id_orden_a_editar . ',';
-        $values .= intval($decodedObj['cod'] ?? 0) . ',';
-        $values .= floatval($decodedObj['cantidad'] ?? 0) . ',';
-        $values .= intval($decodedObj['categoria'] ?? 0) . ',';
-        $values .= "'" . $cat_name . "',";
+        $id_talla = (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '')
+          ? (int) $decodedObj['talla']
+          : null;
+        $id_tela = (isset($decodedObj['tela']) && !is_null($decodedObj['tela']) && $decodedObj['tela'] !== '')
+          ? (int) $decodedObj['tela']
+          : null;
+        $id_products_attributes = (isset($decodedObj['atributo']) && !is_null($decodedObj['atributo'])) ? (int) $decodedObj['atributo'] : null;
+        $corte = isset($decodedObj['corte']) ? $decodedObj['corte'] : '';
 
-        // Talla
-        if (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '') {
-          $id_talla = intval($decodedObj['talla']);
-          $values .= $id_talla . ',';
-          $values .= "(SELECT nombre FROM sizes WHERE _id = {$id_talla}),";
-        } else {
-          $values .= 'NULL, NULL,';
-        }
+        $sql2 = "INSERT INTO {$table_productos} (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT nombre FROM sizes WHERE _id = ?), ?, ?, (SELECT tela FROM catalogo_telas WHERE _id = ?), ?)";
 
-        // Corte
-        $values .= (isset($decodedObj['corte']) ? "'" . $decodedObj['corte'] . "'," : "'',");
-
-        // Tela
-        if (isset($decodedObj['tela']) && !is_null($decodedObj['tela']) && $decodedObj['tela'] !== '') {
-          $id_tela = intval($decodedObj['tela']);
-          $values .= $id_tela . ',';
-          $values .= "(SELECT tela FROM catalogo_telas WHERE _id = {$id_tela})";
-        } else {
-          $values .= "NULL, ''";
-        }
-
-        $id_products_attributes = (isset($decodedObj['atributo']) && !is_null($decodedObj['atributo'])) ? intval($decodedObj['atributo']) : 'NULL';
-
-        $sql2 = "INSERT INTO {$table_productos} (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes) VALUES (" . $values . ', ' . $id_products_attributes . ')';
-
-        $res_insert = $localConnection->goQuery($sql2);
+        $res_insert = $localConnection->goQuery($sql2, [
+          date('Y-m-d H:i:s'),
+          floatval($decodedObj['precio'] ?? 0),
+          floatval($decodedObj['precio'] ?? 0),
+          $decodedObj['producto'] ?? '',
+          $id_orden_a_editar,
+          intval($decodedObj['cod'] ?? 0),
+          floatval($decodedObj['cantidad'] ?? 0),
+          intval($decodedObj['categoria'] ?? 0),
+          $cat_name,
+          $id_talla, $id_talla,
+          $corte,
+          $id_tela, $id_tela,
+          $id_products_attributes,
+        ]);
         $object['sql_insert_new_product'] = $sql2;
 
         /* $response->getBody()->write(json_encode($res_insert));
@@ -2817,13 +2819,6 @@ $object['sales_commission_ISSET'][] = false;
           $cat_name = 'Uncatagorized';
 
           $precio_item = (isset($decodedObj['precio']) && !empty($decodedObj['precio'])) ? $decodedObj['precio'] : 0;
-          $values = "'" . $now . "',";
-          $values .= $precio_item . ',';
-          $values .= "'" . $precio_item . "',";
-          $values .= "'" . $decodedObj['producto'] . "',";
-          $values .= $last_id . ',';
-          $values .= $decodedObj['cod'] . ',';
-          $values .= $decodedObj['cantidad'] . ',';
           $id_categoria = (isset($decodedObj['categoria']) && !empty($decodedObj['categoria'])) ? intval($decodedObj['categoria']) : 0;
           // El frontend no siempre envía 'categoria' (ej. al importar un presupuesto).
           // Si no llegó, se resuelve desde la categoría real del producto en vez de
@@ -2839,48 +2834,34 @@ $object['sales_commission_ISSET'][] = false;
               }
             }
           }
-          $values .= $id_categoria . ',';
-          $values .= "'" . addslashes($cat_name) . "',";
-          // $values .= "'" . $tmp["->name"] . "',";
+          // --- Talla: id_size + talla (nombre) resueltos con una subconsulta
+          // inline -- si $id_talla es null, "_id = ?" con NULL nunca matchea
+          // ninguna fila y la subconsulta escalar da NULL, mismo efecto que
+          // el "NULL, NULL" explícito de antes, sin necesitar dos ramas de SQL.
+          $id_talla = (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '')
+            ? (int) $decodedObj['talla']
+            : null;
 
-          // --- INICIO: Corrección para guardar ID y Nombre de la Talla ---
-          if (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '') {
-            $id_talla = intval($decodedObj['talla']);
-            $values .= $id_talla . ',';  // Para la columna id_size
-            $resultTalla = $localConnection->goQuery("SELECT nombre FROM sizes WHERE _id = {$id_talla}");
-            $nombreTalla = (isset($resultTalla[0]['nombre'])) ? $resultTalla[0]['nombre'] : '';
-            $values .= "'" . addslashes($nombreTalla) . "',";  // Para la columna talla
-          } else {
-            $values .= 'NULL, NULL,';  // Para id_size y talla
-          }
-          // --- FIN: Corrección ---
+          $corte = isset($decodedObj['corte']) ? ($decodedObj['corte'] ?? '') : '';
 
-          if (isset($decodedObj['corte'])) {
-            $values .= "'" . addslashes($decodedObj['corte'] ?? '') . "',";
-          } else {
-            $values .= "'',";
-          }
-
-          if (isset($decodedObj['tela'])) {
-            $id_tela = intval($decodedObj['tela']);
-            $values .= $id_tela . ',';  // ID de la tela para la columna `id_tela`
-            $values .= "'" . addslashes((string) $localConnection->goQuery('SELECT tela FROM catalogo_telas WHERE _id = ' . $id_tela)[0]['tela']) . "'";  // Nombre para la columna `tela`
-          } else {
-            $values .= "NULL, ''";  // Valores por defecto si no hay tela
-          }
+          $id_tela = isset($decodedObj['tela']) ? (int) $decodedObj['tela'] : null;
 
           // Manejar el nuevo atributo (SINGLE) si es que existe.
           // Según el payload, este campo 'atributo' no está llegando.
           // El que llega es 'atributos_seleccionados' (plural, array).
-          $id_products_attributes_single = 'NULL';
+          $id_products_attributes_single = null;
           if (isset($decodedObj['atributo']) && !is_null($decodedObj['atributo']) && $decodedObj['atributo'] !== '') {
-            $id_products_attributes_single = intval($decodedObj['atributo']);
+            $id_products_attributes_single = (int) $decodedObj['atributo'];
           }
 
-          $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes) VALUES (' . $values . ', ' . $id_products_attributes_single . ')';
-          error_log('SQL producto: ' . $sql2);
+          $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT nombre FROM sizes WHERE _id = ?), ?, ?, (SELECT tela FROM catalogo_telas WHERE _id = ?), ?)';
           $object['sql_ordenes_productos'] = $sql2;
-          $producto_detalle_response = $localConnection->goQuery($sql2);
+          $producto_detalle_response = $localConnection->goQuery($sql2, [
+            $now, $precio_item, $precio_item, $decodedObj['producto'], $last_id,
+            $decodedObj['cod'], $decodedObj['cantidad'], $id_categoria, $cat_name,
+            $id_talla, $id_talla, $corte, $id_tela, $id_tela, $id_products_attributes_single,
+          ]);
           error_log('Resultado INSERT: ' . json_encode($producto_detalle_response));
           $object['producto_detalle'][] = $producto_detalle_response;
 
