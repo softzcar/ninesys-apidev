@@ -1,0 +1,45 @@
+- **Solicitud del Usuario:** "Vamos a resolver lo de la inyección SQL primero, al cerrar esta tarea continuamos con el multiplicador de precios." -- tras encontrar la inyección SQL en Telas y confirmar que el mismo patrón existía en `catalogo_tintas` e `/insumos/nuevo`, el usuario pidió tratarlo como tarea dedicada y prioritaria antes de continuar el checklist de catálogos.
+- **Fecha y Hora:** 2026-07-29 11:30:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/catalogs.php` (catalogo_tintas: crear, editar)
+    - `app/routes/inventory.php` (insumos: nuevo, editar; 2 GETs de movimientos/historial)
+    - `app/routes/employees.php` (empleados: editar)
+    - `app/routes/products.php` (empleado/asignado)
+    - `app/routes/manufacturing.php` (lotes/existencia)
+    - `app/routes/production.php` (verificar-asignacion-empleado)
+    - `app/routes/communications.php` (mensaje interno)
+- **Commits Relacionados:**
+    - Backend: `6232ba8`, `b065c75`
+- **Acción Realizada:**
+    Continuación del saneamiento iniciado en Telas (commit previo `5af6caa`). Se corrigieron 9 endpoints adicionales con el mismo patrón (SQL construido concatenando texto de usuario/route params sin parámetros ni escape), en orden de severidad:
+
+    1. **`POST /catalogo-tintas` y `POST /catalogo-tintas/{_id}/{nombre}`** (crear/editar tipo de tinta) -- mismo código exacto que el bug de Telas, mismo archivo. `eliminar` ya usaba `intval()`, sin cambios.
+    2. **`POST /insumos/nuevo` y `POST /insumos/editar`** (Inventario) -- el hallazgo más urgente: pantalla de uso diario, interpolaba sin escapar el nombre del insumo, departamento, unidad, SKU, rendimiento y costo. Los valores condicionales que podían ser `NULL` (id_catalogo, id_color_tinta, id_catalogo_tintas) se cambiaron de el string literal `"NULL"` a `null` de PHP, que `goQuery()` liga correctamente como `NULL` de SQL vía PDO.
+    3. **`GET /inventario-movimientos/{id_orden}/{id_empleado}`** y **`GET /inventario/historial/{id_orden}`** -- route params numéricos sin cast, parametrizados por consistencia (riesgo menor, de lectura).
+    4. **`POST /empleados/editar`** -- el hallazgo más crítico de esta ronda: actualiza la base COMPARTIDA `api_empresas.empresas_usuarios` (nombre, email, teléfono, DNI, password, salario, seguridad social, y la reasignación de departamentos) concatenando todos los campos sin parámetros. El endpoint gemelo `/empleados/nuevo` ya estaba correctamente parametrizado -- `/editar` quedó desalineado y sin corregir hasta ahora.
+    5. **`GET /empleado/asignado/{departamento}/{orden}/{item_id}`** (products.php), **`GET /lotes/existencia/{talla}/{tela}/{corte}/{categoria}`** (manufacturing.php), **`GET /produccion/verificar-asignacion-empleado/{departamento}/{id_orden}/{id_ordenes_productos}`** (production.php) -- route params de texto libre (departamento/talla/tela/corte/categoria) y numéricos sin cast, todos parametrizados. De paso se eliminó código muerto comentado y una fuga de la consulta SQL cruda en la respuesta JSON de este último.
+    6. **Envío de mensaje interno** (communications.php) -- `id_destino`/`id_departamento` concatenados sin cast, pese a un comentario preexistente ("Es importante sanitizar...") que ya señalaba el problema sin resolverlo. Corregido con cast a `(int)` + placeholder.
+
+    **Quedan pendientes, deprioritizados por menor severidad (ya tienen algo de mitigación o no son texto libre de usuario):**
+    - `orders.php` (creación automática de cliente al crear una orden sin `id_wp`): usa `addslashes()` en vez de parametrizar -- mitiga la clase de bug "un apóstrofe rompe todo" (confirmado que NO se rompe con un apóstrofe simple), pero sigue sin ser el patrón correcto. Es el flujo de creación de órdenes, el más sensible del sistema -- se decidió NO tocarlo en esta pasada sin una revisión y prueba más exhaustiva y dedicada, dado el riesgo de una regresión en un flujo tan crítico.
+    - `reports.php:126` (`horario_laboral`): valor interno de configuración de la empresa (JSON generado por el propio sistema), no texto libre ingresado por un usuario en un formulario -- riesgo bajo, no se tocó.
+
+- **Inconvenientes y Desafíos:**
+    Al verificar `/lotes/existencia/{talla}/{tela}/{corte}/{categoria}` con datos de prueba, una primera prueba con `categoria=Camisas` (texto) devolvió un 500 -- se investigó extensamente (varios intentos de ubicar el log de error correcto en el VPS, sin éxito directo) antes de revisar el esquema y descubrir que `categoria` es una columna `INTEGER` en `lotes_fisicos`: el 500 no era un bug introducido por el fix, sino un error de la prueba (un valor de prueba de tipo incorrecto). Confirmado con `categoria` numérico que el endpoint funciona correctamente.
+
+    Verificar `/empleados/editar` (que modifica la base compartida `api_empresas`) requirió crear un empleado de prueba dedicado vía `/empleados/nuevo` (ya parametrizado y seguro), editarlo con un apóstrofe real para confirmar el fix, y desactivarlo (soft-delete vía `/empleados/eliminar`, que preserva el registro) al terminar -- para no arriesgar ningún dato de un empleado real.
+
+- **Decisión Final y Justificación:** Se priorizó por severidad e impacto real (pantallas de uso diario, bases de datos compartidas entre empresas) en vez de intentar cubrir el 100% del backend en una sola pasada. El flujo de creación de órdenes (`orders.php`) se dejó pendiente deliberadamente por su criticidad -- ya tiene una mitigación funcional (`addslashes()`) y merece su propia revisión dedicada en vez de un cambio apurado.
+
+- **Herramienta(s) Utilizada(s):** `grep` (barrido de candidatos), `Read`, `Edit`, `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` (prueba no destructiva con apóstrofe en cada endpoint corregido), `ssh`/`psql` (verificación de esquema y de valores guardados, incluyendo confirmar que los `NULL` condicionales se guardaron como NULL real y no como el string "NULL").
+
+- **Resultado:** Éxito
+
+- **Verificación:** Cada endpoint corregido se probó con datos que antes rompían la consulta (apóstrofes, espacios) y con datos reales de la empresa 194 donde aplicaba (orden 6293, departamentos reales). Un empleado de prueba dedicado confirmó que `/empleados/editar` guarda correctamente nombres y campos con apóstrofe (`TEST_QA_EMPLEADO O'BRIAN`, `id_seguridad_social` con apóstrofe) sin romperse, y fue desactivado al finalizar. Todos los endpoints devolvieron 200 con los fixes desplegados.
+
+- **Logro Conseguido:** Se eliminó una clase completa de vulnerabilidad de inyección SQL (confirmada explotable en al menos 4 de los 9 endpoints corregidos) que afectaba pantallas de uso diario (Insumos, Empleados, catálogos) y una base de datos compartida entre todas las empresas del sistema (`api_empresas`).
+
+- **Observaciones:** Auditoría del backend NO exhaustiva -- basada en un grep inicial de patrones de concatenación de comillas (`"'" . $` / `. "'"`), que puede no haber capturado el 100% de los casos. Ver [[project_pendiente_auditoria_inyeccion_sql]] (memoria) para la lista de candidatos ya identificados y pendientes de revisión más profunda (`orders.php`, y un barrido más amplio de patrones no cubiertos por el grep inicial). El usuario indicó continuar con "Multiplicador de Precios" (checklist de catálogos) una vez cerrada esta tarea -- pendiente decidir si esta pasada de inyección SQL se considera suficiente o si se retoma para cubrir `orders.php` y el resto de candidatos antes de seguir.
+
+- **Respuesta de Claude:** Se corrigieron 9 endpoints adicionales con inyección SQL real (Catálogo de Tintas, Insumos, Empleados -- el más crítico, toca la base compartida entre empresas --, y varios endpoints de asignación/verificación en Producción/Manufacturing/Comunicaciones). Todos verificados con pruebas no destructivas (apóstrofes reales) contra datos de la empresa 194, incluyendo un empleado de prueba dedicado para no arriesgar datos reales. Quedan pendientes, deliberadamente deprioritizados, el flujo de creación de clientes en `orders.php` (ya mitigado con `addslashes()`, no roto) y un barrido más amplio del resto del backend.
