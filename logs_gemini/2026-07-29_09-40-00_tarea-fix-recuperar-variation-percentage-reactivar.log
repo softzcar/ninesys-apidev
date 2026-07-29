@@ -1,0 +1,27 @@
+- **Solicitud del Usuario:** "¿Verificaste que al momento de reactivar una talla recuperemos el campo `Porcentaje de variación`?" -- pregunta de seguimiento inmediatamente después de verificar en vivo el flujo de soft-delete/reactivación de Tallas.
+- **Fecha y Hora:** 2026-07-29 09:40:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/products.php` (`POST /sizes`, respuesta 409)
+- **Commits Relacionados:**
+    - Backend: `d0eae29`
+- **Acción Realizada:**
+    La pregunta del usuario expuso un gap real en el fix anterior (commit `c1c2783`): la respuesta 409 de `POST /sizes` (cuando se detecta una talla eliminada con el mismo nombre) solo devolvía `id` y `name`, no el `variation_percentage` que tenía guardado antes de eliminarse. El frontend reactivaba usando el valor que hubiera en el formulario de "creación" en ese momento -- típicamente 0 (el valor por defecto), porque el usuario está intentando *crear* la talla, no sabe que ya existía, y no tiene forma de saber cuál era su variación calibrada original. Verificado en vivo antes del fix: al reactivar "TEST_QA_TALLA" con el formulario en su valor por defecto, la variación quedó en 0.00, pisando silenciosamente cualquier valor previo.
+
+    Se agregó `variation_percentage` (casteado a float) a la consulta y a la respuesta 409 de `POST /sizes`.
+
+- **Inconvenientes y Desafíos:** Ninguno técnico. El hallazgo en sí fue el desafío -- confirma el valor de que el usuario audite activamente los resultados en vez de asumir que "funciona" solo porque no tira error.
+
+- **Decisión Final y Justificación:** Se optó por que el backend sea la fuente de verdad del valor a recuperar (en vez de que el frontend intente "adivinar" o pedir al usuario que lo reingrese de memoria), devolviéndolo en el mismo 409 que ya dispara el flujo de reactivación -- una sola llamada, sin endpoints adicionales.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `php -l`, `git commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` (creación de talla de prueba con variación 33.5, soft-delete, reintento de creación verificando que el 409 devuelve `variation_percentage: 33.5`).
+
+- **Resultado:** Éxito
+
+- **Verificación:** `curl` antes del despliegue confirmó el bug (reactivación con formulario en 0 → variación final 0.00, no el valor original). Tras el despliegue: talla de prueba creada con 33.5% → eliminada → reintento de creación con 0% en el request → respuesta 409 incluye `"variation_percentage":33.5` (el valor original, no el 0 recién enviado). Verificado además visualmente end-to-end en el navegador junto con el fix de frontend correspondiente (ver bitácora en `app_multi/logs_gemini/`).
+
+- **Logro Conseguido:** Cierra por completo el flujo de soft-delete de Tallas sin ningún cabo suelto -- reactivar una talla ahora es una operación segura que no requiere que el usuario recuerde ni reingrese manualmente un valor de calibración que el sistema ya tenía guardado.
+
+- **Observaciones:** Ninguna.
+
+- **Respuesta de Claude:** No, no lo había verificado -- y en efecto no se recuperaba. Corregido: la respuesta 409 ahora incluye el `variation_percentage` original, y el frontend lo usa para reactivar en vez de aplicar el valor por defecto del formulario. Verificado con datos de prueba que el valor correcto (33.5%) se preserva.
