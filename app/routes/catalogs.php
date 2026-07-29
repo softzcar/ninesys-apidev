@@ -504,22 +504,79 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  // Cuántos registros reales dependen de una tela, para advertir antes de
+  // eliminarla (mismo patrón que GET /sizes/{id}/uso).
+  $app->get('/telas/{id}/uso', function (Request $request, Response $response, array $args) {
+    $id = (int) $args['id'];
+    $localConnection = new LocalDB();
+    $sql = 'SELECT
+              (SELECT COUNT(*) FROM ordenes_productos WHERE id_tela = ?) AS ordenes_productos,
+              (SELECT COUNT(*) FROM presupuestos_productos WHERE id_tela = ?) AS presupuestos_productos';
+    $result = $localConnection->goQuery($sql, [$id, $id]);
+    $localConnection->disconnect();
+
+    $uso = $result[0] ?? ['ordenes_productos' => 0, 'presupuestos_productos' => 0];
+    $uso = array_map('intval', $uso);
+    $uso['total'] = array_sum($uso);
+
+    $response->getBody()->write(json_encode($uso, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   $app->post('/telas', function (Request $request, Response $response) {
     $miTela = $request->getParsedBody();
-    $object['miTela'] = $miTela;
-
-    $miTela = $request->getParsedBody();
-
-    // Crear estructura de valores para insertar nuevo cliente
-    $values = '(';
-    $values .= "'" . $miTela['tela'] . "')";
-
-    $sql = 'INSERT INTO catalogo_telas (tela) VALUES ' . $values . ';';
+    $nombre = trim($miTela['tela']);
+    $reactivarId = (isset($miTela['reactivar_id']) && $miTela['reactivar_id'] !== '') ? (int) $miTela['reactivar_id'] : null;
 
     $localConnection = new LocalDB();
-    $localConnection->goQuery($sql);
+
+    if ($reactivarId) {
+      // Reactivar la tela existente en vez de crear un registro duplicado --
+      // preserva el mismo _id, por lo que todo el historial que ya la
+      // referencia (órdenes, presupuestos) sigue intacto.
+      $localConnection->goQuery('UPDATE catalogo_telas SET tela = ?, eliminado = 0 WHERE _id = ?', [$nombre, $reactivarId]);
+      $localConnection->disconnect();
+
+      $responseData = ['message' => 'Tela reactivada exitosamente.', 'id' => $reactivarId];
+      $response->getBody()->write(json_encode($responseData, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    }
+
+    // Verificar si ya existe una tela con el mismo nombre (sin importar
+    // mayúsculas/espacios), esté activa o eliminada.
+    $existing = $localConnection->goQuery(
+      'SELECT _id, tela, eliminado FROM catalogo_telas WHERE LOWER(TRIM(tela)) = LOWER(TRIM(?))',
+      [$nombre]
+    );
+
+    if ($existing) {
+      $match = $existing[0];
+
+      if ((int) $match['eliminado'] === 1) {
+        $localConnection->disconnect();
+        $object = [
+          'eliminado_existente' => true,
+          'id' => $match['_id'],
+          'tela' => $match['tela'],
+        ];
+        $response->getBody()->write(json_encode($object));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+      }
+
+      $localConnection->disconnect();
+      $object = ['error' => 'Ya existe una tela activa llamada "' . $match['tela'] . '"'];
+      $response->getBody()->write(json_encode($object));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $sql = 'INSERT INTO catalogo_telas (tela) VALUES (?)';
+    $result = $localConnection->goQuery($sql, [$nombre]);
+    $newId = $result['insert_id'] ?? null;
     $sql = 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
     $object['response'] = json_encode($localConnection->goQuery($sql));
+    $object['id'] = $newId;
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
@@ -529,14 +586,15 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  $app->post('/telas/{_id}/{tela}', function (Request $request, Response $response, array $args) {
-    // $miTela = $request->getParsedBody();
+  // Editar una tela existente. Antes era POST /telas/{_id}/{tela} (el nombre
+  // viajaba en la URL, sin parametrizar y roto ante un nombre con "/") --
+  // unificado con el mismo patrón que /sizes/editar (body + placeholders).
+  $app->post('/telas/editar', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
     $localConnection = new LocalDB();
-    $values = "tela='" . $args['tela'] . "'";
-    $sql = 'UPDATE catalogo_telas SET ' . $values . ' WHERE _id = ' . $args['_id'] . ';';
-    $localConnection->goQuery($sql);
+    $sql = 'UPDATE catalogo_telas SET tela = ? WHERE _id = ?';
+    $result = $localConnection->goQuery($sql, [trim($data['tela']), $data['id']]);
     $sql = 'SELECT * FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela';
-    $object['sql'] = $sql;
     $object['response'] = json_encode($localConnection->goQuery($sql));
     $localConnection->disconnect();
 
@@ -549,14 +607,12 @@ return function (App $app) {
   $app->post('/telas/eliminar', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
     $miEmpleado = $request->getParsedBody();
-    $object['miEmpleado'] = $miEmpleado;
-    $sql = 'UPDATE catalogo_telas SET eliminado = 1 WHERE _id =  ' . $miEmpleado['id'];
-    $object['sql'] = $sql;
-
-    $object['response'] = json_encode($localConnection->goQuery($sql));
+    $sql = 'UPDATE catalogo_telas SET eliminado = 1 WHERE _id = ?';
+    $result = $localConnection->goQuery($sql, [$miEmpleado['id']]);
     $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode($object));
+    $responseData = ['message' => 'Tela eliminada exitosamente.'];
+    $response->getBody()->write(json_encode($responseData));
 
     return $response
       ->withHeader('Content-Type', 'application/json')
