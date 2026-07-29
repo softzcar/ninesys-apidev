@@ -1,0 +1,36 @@
+- **Solicitud del Usuario:** "Debemos evitar que se rompan luego las consultas! de manera que debemos implementar soft-delete y al momento que el usuario solicite eliminar una talla mostramos la advertencia mostrando si la talla está en uso, de manera que decida si realmente quiere eliminar la talla o le conviene más editarla, de igual manera al crear una nueva talla debemos verificar si esta talla existe ya sea activa o con estatus eliminada, si había sido eliminada previamente informar al usuario que la talla había sido eliminada y será reactivada." -- tras auditar `Varios > Tallas` (API, crear, editar, eliminar y el campo Porcentaje de Variación) y encontrar que `/sizes/eliminar` hacía un DELETE físico real, sin ninguna bandera de borrado lógico.
+- **Fecha y Hora:** 2026-07-29 09:00:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/products.php` (`GET /sizes/{id}/uso` nuevo, `POST /sizes`, `POST /sizes/editar`, `POST /sizes/eliminar`)
+    - `app/lib/woome.php` (`WooMe::getSizes()`)
+    - `public/model/create_new_company_api_emp_N_postgres.sql`
+    - `public/model/create_new_company_api_emp_N.sql`
+- **Commits Relacionados:**
+    - Backend: `c1c2783`
+- **Acción Realizada:**
+    Auditoría previa confirmó que `sizes._id` tiene FKs reales desde 3 tablas (`ordenes_productos.id_size` ON DELETE SET NULL, `products_sizes_eficiencia.id_size` **ON DELETE CASCADE**, `product_insumos_asignados.id_talla` ON DELETE SET NULL) más una cuarta sin FK declarada (`presupuestos_productos.id_size`, referencia huérfana silenciosa). Con datos reales de la empresa 194, cada una de las 19 tallas activas hoy tiene entre 23 y 4550 líneas de `ordenes_productos` dependientes -- el DELETE físico habría causado pérdida real de datos de eficiencia (CASCADE) y roto el agrupamiento por talla ya usado en el Reporte de Desviación de Costos (fix de ayer).
+
+    Se agregó columna `eliminado SMALLINT NOT NULL DEFAULT 0` a `sizes` (Postgres Dev vía `ALTER TABLE`, con backup previo `pg_dump -t sizes`; actualizadas ambas plantillas de esquema para nuevas empresas, Postgres y MySQL). Al preservar el `_id` en vez de borrarlo, ninguna de las FKs (CASCADE/SET NULL) se dispara jamás -- el soft-delete resuelve el problema de raíz, no solo lo oculta.
+
+    Cambios en los 4 endpoints, replicando exactamente el patrón ya probado de `/categories` y `/departamentos/nuevo`:
+    - `WooMe::getSizes()` (usada por `GET /sizes`) filtra `WHERE eliminado = 0`.
+    - `POST /sizes/eliminar`: cambia de `DELETE FROM sizes` a `UPDATE sizes SET eliminado = 1`.
+    - `POST /sizes`: antes de insertar, busca por nombre normalizado (`LOWER(TRIM(...))`) cualquier talla existente, activa o eliminada. Si está activa: error 400. Si está eliminada: responde 409 con `eliminado_existente: true` + `id` + `name`, para que el frontend ofrezca reactivar. Soporta `reactivar_id` para reactivar (`UPDATE ... SET eliminado = 0`) aplicando los valores recién ingresados (nombre y variación), preservando el `_id` original y por lo tanto todo su historial ya vinculado.
+    - Nuevo `GET /sizes/{id}/uso`: cuenta en una sola consulta (4 subconsultas escalares, portable entre MySQL/Postgres) las referencias reales en `ordenes_productos`, `presupuestos_productos`, `products_sizes_eficiencia` y `product_insumos_asignados`, para que el frontend arme la advertencia antes de eliminar.
+
+- **Inconvenientes y Desafíos:** El directorio de backups convencional (`/home/backups/...`) no existía en este VPS para respaldos manuales puntuales -- se usó `/tmp` en su lugar para el backup previo a la alteración de esquema, suficiente para este cambio de bajo riesgo (agregar columna con default, no destructivo).
+
+- **Decisión Final y Justificación:** Se replicó el patrón `reactivar_id`/409 ya usado y probado en `/categories` y `/departamentos/nuevo` en vez de diseñar uno nuevo, por consistencia con el resto del sistema y porque ya está validado en producción. Se prefirió una única consulta con subconsultas escalares para `/sizes/{id}/uso` en vez de 4 llamadas separadas, por eficiencia y porque la sintaxis es portable sin necesitar ramas MySQL/Postgres.
+
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (auditoría de FKs reales vía `\d sizes`, backup, `ALTER TABLE`, verificación de uso real por talla antes del fix), `Read`, `Edit`, `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` (ciclo completo crear/duplicado-activo/eliminar/ocultar-del-listado/duplicado-eliminado-409/reactivar/limpieza, con una talla de prueba dedicada).
+
+- **Resultado:** Éxito
+
+- **Verificación:** Ciclo completo probado con datos reales vía `curl` antes de tocar el frontend: `GET /sizes/81/uso` → `{"insumos_asignados":133,"total":133}` (coincide con conteo real por `psql`); `GET /sizes/73/uso` (talla "M") → `total:1933`, también coincidente. Creación de una talla de prueba, intento de duplicado activo (400), soft-delete, confirmación de que desaparece del listado (`GET /sizes` sigue devolviendo 19, no 20), intento de recrear con el mismo nombre (409 + `eliminado_existente`), reactivación explícita con `reactivar_id` (mismo `_id` preservado, nuevo valor de variación aplicado), y limpieza final -- todos los pasos coincidieron exactamente con lo esperado.
+
+- **Logro Conseguido:** Se eliminó un riesgo real de pérdida de datos de producción (CASCADE DELETE silencioso en eficiencia teórica) y de corrupción de agrupamientos por talla en reportes ya corregidos esta semana, antes de que ocurriera un incidente real -- las 19 tallas activas de la empresa 194 tienen uso masivo (hasta 4550 líneas dependientes cada una).
+
+- **Observaciones:** Ver bitácora complementaria en `app_multi/logs_gemini/` para el frontend (advertencia de uso + reactivación), verificado visualmente en el navegador.
+
+- **Respuesta de Claude:** Se implementó soft-delete real en Tallas (columna `eliminado`, sin más DELETE físico), un endpoint de conteo de uso para advertir antes de eliminar, y detección/reactivación de tallas eliminadas al intentar crear una con el mismo nombre -- replicando el patrón ya probado en Categorías y Departamentos. Verificado con datos reales que ninguna de las 3 FKs problemáticas (1 CASCADE, 2 SET NULL) se dispara nunca ahora, ya que el `_id` nunca se borra.
