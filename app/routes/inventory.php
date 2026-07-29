@@ -938,26 +938,32 @@ return function (App $app) {
 
         try {
             $localConnection->beginTransaction();
+            // Se usa null (no el string "NULL") -- goQuery() liga los parámetros vía
+            // PDO, que traduce automáticamente un valor null de PHP a NULL de SQL.
             $id_catalogo_tintas = (isset($miInsumo['id_catalogo_tintas']) && $miInsumo['id_catalogo_tintas'] !== 'null' && $miInsumo['id_catalogo_tintas'] !== '')
                 ? intval($miInsumo['id_catalogo_tintas'])
-                : "NULL";
-                
+                : null;
+
             $id_color_tinta = (isset($miInsumo['id_color_tinta']) && $miInsumo['id_color_tinta'] !== 'null' && $miInsumo['id_color_tinta'] !== '')
                 ? intval($miInsumo['id_color_tinta'])
-                : "NULL";
+                : null;
+
+            $sqlInsert = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, cantidad_inicial, sku, id_catalogo, tipo_insumo, id_color_tinta, id_catalogo_tintas) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
             if (isset($miInsumo['es_tinta']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN) && isset($miInsumo['cantidad']) && intval($miInsumo['cantidad']) > 1) {
                 for ($i = 0; $i < intval($miInsumo['cantidad']); $i++) {
                     $currentCantidad = (isset($miInsumo['mililitros']) && filter_var($miInsumo['es_tinta'], FILTER_VALIDATE_BOOLEAN)) ? $miInsumo['mililitros'] : 1;
 
                     $id_catalogo = (isset($miInsumo['id_catalogo_producto']) && $miInsumo['id_catalogo_producto'] !== 'null' && $miInsumo['id_catalogo_producto'] !== '')
-                        ? "'" . $miInsumo['id_catalogo_producto'] . "'"
-                        : "NULL";
+                        ? $miInsumo['id_catalogo_producto']
+                        : null;
 
                     $tipo_insumo = $miInsumo['tipo_insumo'] ?? 'general';
-                    $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$currentCantidad}, {$currentCantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}', {$id_color_tinta}, {$id_catalogo_tintas})";
-                    $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, cantidad_inicial, sku, id_catalogo, tipo_insumo, id_color_tinta, id_catalogo_tintas) VALUES ' . $values;
-                    $result = $localConnection->goQuery($sql);
+                    $result = $localConnection->goQuery($sqlInsert, [
+                        $now, $miInsumo['insumo'], $miInsumo['departamento'], $miInsumo['unidad'],
+                        $miInsumo['rendimiento'], $miInsumo['costo'], $currentCantidad, $currentCantidad,
+                        $miInsumo['sku'], $id_catalogo, $tipo_insumo, $id_color_tinta, $id_catalogo_tintas,
+                    ]);
                     $lastId = $localConnection->getLastID();
 
                     $newInsumo = $miInsumo;
@@ -973,13 +979,15 @@ return function (App $app) {
                 }
 
                 $id_catalogo = (isset($miInsumo['id_catalogo_producto']) && $miInsumo['id_catalogo_producto'] !== 'null' && $miInsumo['id_catalogo_producto'] !== '')
-                    ? "'" . $miInsumo['id_catalogo_producto'] . "'"
-                    : "NULL";
+                    ? $miInsumo['id_catalogo_producto']
+                    : null;
 
                 $tipo_insumo = $miInsumo['tipo_insumo'] ?? 'general';
-                $values = "('{$now}', '{$miInsumo['insumo']}', '{$miInsumo['departamento']}', '{$miInsumo['unidad']}', '{$miInsumo['rendimiento']}', '{$miInsumo['costo']}', {$cantidad}, {$cantidad}, '{$miInsumo['sku']}', {$id_catalogo}, '{$tipo_insumo}', {$id_color_tinta}, {$id_catalogo_tintas})";
-                $sql = 'INSERT INTO inventario (moment, insumo, departamento, unidad, rendimiento, costo, cantidad, cantidad_inicial, sku, id_catalogo, tipo_insumo, id_color_tinta, id_catalogo_tintas) VALUES ' . $values;
-                $result = $localConnection->goQuery($sql);
+                $result = $localConnection->goQuery($sqlInsert, [
+                    $now, $miInsumo['insumo'], $miInsumo['departamento'], $miInsumo['unidad'],
+                    $miInsumo['rendimiento'], $miInsumo['costo'], $cantidad, $cantidad,
+                    $miInsumo['sku'], $id_catalogo, $tipo_insumo, $id_color_tinta, $id_catalogo_tintas,
+                ]);
                 $lastId = $localConnection->getLastID();
 
                 $newInsumo = $miInsumo;
@@ -1021,33 +1029,23 @@ return function (App $app) {
 
         $id_color_tinta = (isset($miInsumo['id_color_tinta']) && $miInsumo['id_color_tinta'] !== 'null' && $miInsumo['id_color_tinta'] !== '')
             ? intval($miInsumo['id_color_tinta'])
-            : "NULL";
+            : null;
 
         $id_catalogo_tintas = (isset($miInsumo['id_catalogo_tintas']) && $miInsumo['id_catalogo_tintas'] !== 'null' && $miInsumo['id_catalogo_tintas'] !== '')
             ? intval($miInsumo['id_catalogo_tintas'])
-            : "NULL";
-
-        // Crear estructura de valores para insertar nuevo cliente
-        $values = "insumo='" . $miInsumo['insumo'] . "',";
-        $values .= "unidad='" . $miInsumo['unidad'] . "',";
-        $values .= "cantidad='" . $miInsumo['cantidad'] . "',";
-        $values .= "rendimiento='" . $miInsumo['rendimiento'] . "',";
-        $values .= "costo='" . $miInsumo['costo'] . "',";
-        $values .= "departamento='" . $miInsumo['departamento'] . "',";
-        $values .= "sku='" . $miInsumo['sku'] . "',";
+            : null;
 
         $id_catalogo = (isset($miInsumo['id_catalogo_producto']) && $miInsumo['id_catalogo_producto'] !== 'null' && $miInsumo['id_catalogo_producto'] !== '')
-            ? "'" . $miInsumo['id_catalogo_producto'] . "'"
-            : ((isset($miInsumo['id_catalogo']) && $miInsumo['id_catalogo'] !== 'null' && $miInsumo['id_catalogo'] !== '') ? "'" . $miInsumo['id_catalogo'] . "'" : 'NULL');
+            ? $miInsumo['id_catalogo_producto']
+            : ((isset($miInsumo['id_catalogo']) && $miInsumo['id_catalogo'] !== 'null' && $miInsumo['id_catalogo'] !== '') ? $miInsumo['id_catalogo'] : null);
 
-        $values .= "id_catalogo=" . $id_catalogo . ",";
-        $values .= "id_color_tinta=" . $id_color_tinta . ",";
-        $values .= "id_catalogo_tintas=" . $id_catalogo_tintas . ",";
-        $values .= "tipo_insumo='" . ($miInsumo['tipo_insumo'] ?? 'general') . "'";
-
-        $sql = 'UPDATE inventario SET ' . $values . ' WHERE _id = ' . $miInsumo['_id'];
-        $object['sql'] = $sql;
-        $object['data'] = json_encode($localConnection->goQuery($sql));
+        $sql = 'UPDATE inventario SET insumo = ?, unidad = ?, cantidad = ?, rendimiento = ?, costo = ?, departamento = ?, sku = ?, id_catalogo = ?, id_color_tinta = ?, id_catalogo_tintas = ?, tipo_insumo = ? WHERE _id = ?';
+        $params = [
+            $miInsumo['insumo'], $miInsumo['unidad'], $miInsumo['cantidad'], $miInsumo['rendimiento'],
+            $miInsumo['costo'], $miInsumo['departamento'], $miInsumo['sku'], $id_catalogo,
+            $id_color_tinta, $id_catalogo_tintas, $miInsumo['tipo_insumo'] ?? 'general', (int) $miInsumo['_id'],
+        ];
+        $object['data'] = json_encode($localConnection->goQuery($sql, $params));
 
         $localConnection->disconnect();
 
@@ -1084,11 +1082,11 @@ return function (App $app) {
 
         // NOTA: ordenes_productos nunca tuvo columna id_empleado (confirmado en MySQL prod y
         // Postgres) - esta consulta fallaba siempre en ambos motores. Se quita el filtro invalido.
-        $sql = 'SELECT * FROM ordenes_productos WHERE id_orden = ' . $args['id_orden'];
-        $object['items'] = $localConnection->goQuery($sql);
+        $sql = 'SELECT * FROM ordenes_productos WHERE id_orden = ?';
+        $object['items'] = $localConnection->goQuery($sql, [(int) $args['id_orden']]);
 
-        $sql = 'SELECT b._id, a._id id_insumo, a.cantidad, a.unidad, a.insumo, a.sku FROM inventario a JOIN inventario_movimientos b ON a._id = b.id_insumo  WHERE b.id_orden = ' . $args['id_orden'] . ' AND b.id_empleado = ' . $args['id_empleado'];
-        $object['movimientos'] = $localConnection->goQuery($sql);
+        $sql = 'SELECT b._id, a._id id_insumo, a.cantidad, a.unidad, a.insumo, a.sku FROM inventario a JOIN inventario_movimientos b ON a._id = b.id_insumo  WHERE b.id_orden = ? AND b.id_empleado = ?';
+        $object['movimientos'] = $localConnection->goQuery($sql, [(int) $args['id_orden'], (int) $args['id_empleado']]);
 
         $localConnection->disconnect();
 
@@ -1102,8 +1100,8 @@ return function (App $app) {
     $app->get('/inventario/historial/{id_orden}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
 
-        $sql = 'SELECT id_insumo, valor_inicial, valor_final, departamento FROM inventario_movimientos WHERE id_orden = ' . $args['id_orden'];
-        $object['items'] = $localConnection->goQuery($sql);
+        $sql = 'SELECT id_insumo, valor_inicial, valor_final, departamento FROM inventario_movimientos WHERE id_orden = ?';
+        $object['items'] = $localConnection->goQuery($sql, [(int) $args['id_orden']]);
 
         $localConnection->disconnect();
 

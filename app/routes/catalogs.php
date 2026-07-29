@@ -209,14 +209,14 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $nombre = $data['nombre'] ?? '';
+    $nombre = trim($data['nombre'] ?? '');
 
-    $sql = "INSERT INTO catalogo_tintas (nombre) VALUES ('$nombre')";
-    $result = $localConnection->goQuery($sql);
+    $sql = 'INSERT INTO catalogo_tintas (nombre) VALUES (?)';
+    $result = $localConnection->goQuery($sql, [$nombre]);
     $lastId = $localConnection->getLastID();
 
-    $sqlNew = "SELECT * FROM catalogo_tintas WHERE _id = $lastId";
-    $newItem = $localConnection->goQuery($sqlNew);
+    $sqlNew = 'SELECT * FROM catalogo_tintas WHERE _id = ?';
+    $newItem = $localConnection->goQuery($sqlNew, [$lastId]);
 
     $object['response'] = $result;
     $object['data'] = $newItem[0] ?? null;
@@ -231,9 +231,8 @@ return function (App $app) {
 
   $app->post('/catalogo-tintas/{_id}/{nombre}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
-    $values = "nombre='" . $args['nombre'] . "'";
-    $sql = 'UPDATE catalogo_tintas SET ' . $values . ' WHERE _id = ' . $args['_id'] . ';';
-    $localConnection->goQuery($sql);
+    $sql = 'UPDATE catalogo_tintas SET nombre = ? WHERE _id = ?';
+    $localConnection->goQuery($sql, [trim($args['nombre']), (int) $args['_id']]);
 
     $sqlAll = 'SELECT * FROM catalogo_tintas WHERE eliminado = 0 ORDER BY nombre';
     $object['data'] = $localConnection->goQuery($sqlAll);
