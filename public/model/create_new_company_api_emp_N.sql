@@ -1297,7 +1297,8 @@ CREATE TABLE `revisiones` (
 CREATE TABLE `sizes` (
   `_id` int(11) NOT NULL COMMENT 'ID único de la talla',
   `nombre` varchar(100) DEFAULT NULL COMMENT 'Nombre de la talla',
-  `variation_percentage` decimal(5,2) DEFAULT 0.00 COMMENT 'Porcentaje de variación para cálculo de insumos'
+  `variation_percentage` decimal(5,2) DEFAULT 0.00 COMMENT 'Porcentaje de variación para cálculo de insumos',
+  `eliminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Borrado lógico: 0 = activo, 1 = eliminado/oculto'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de tallas disponibles. Define las tallas manejadas por la empresa para asignación en productos y órdenes.';
 INSERT INTO `sizes` (`_id`, `nombre`) VALUES
 (1, 'S'),

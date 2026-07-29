@@ -1245,14 +1245,81 @@ return function (App $app) {
   /** FIN TALLAS */
 
 
-  // Crear una nueva talla
+  // Cuántos registros reales dependen de una talla, para advertir antes de
+  // eliminarla (soft-delete no rompe estas referencias, pero el usuario debe
+  // saber si le conviene más editar en vez de desactivarla).
+  $app->get('/sizes/{id}/uso', function (Request $request, Response $response, array $args) {
+    $id = (int) $args['id'];
+    $localConnection = new LocalDB();
+    $sql = 'SELECT
+              (SELECT COUNT(*) FROM ordenes_productos WHERE id_size = ?) AS ordenes_productos,
+              (SELECT COUNT(*) FROM presupuestos_productos WHERE id_size = ?) AS presupuestos_productos,
+              (SELECT COUNT(*) FROM products_sizes_eficiencia WHERE id_size = ?) AS eficiencia_teorica,
+              (SELECT COUNT(*) FROM product_insumos_asignados WHERE id_talla = ?) AS insumos_asignados';
+    $result = $localConnection->goQuery($sql, [$id, $id, $id, $id]);
+    $localConnection->disconnect();
+
+    $uso = $result[0] ?? ['ordenes_productos' => 0, 'presupuestos_productos' => 0, 'eficiencia_teorica' => 0, 'insumos_asignados' => 0];
+    $uso = array_map('intval', $uso);
+    $uso['total'] = array_sum($uso);
+
+    $response->getBody()->write(json_encode($uso, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   // Crear una nueva talla
   $app->post('/sizes', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
-    $localConnection = new LocalDB();
-    $sql = 'INSERT INTO sizes (nombre, variation_percentage) VALUES (?, ?)';
+    $nombre = trim($data['name']);
     $variation = isset($data['variation_percentage']) ? $data['variation_percentage'] : 0;
-    $result = $localConnection->goQuery($sql, [$data['name'], $variation]);
+    $reactivarId = (isset($data['reactivar_id']) && $data['reactivar_id'] !== '') ? (int) $data['reactivar_id'] : null;
+
+    $localConnection = new LocalDB();
+
+    if ($reactivarId) {
+      // Reactivar la talla existente en vez de crear un registro duplicado --
+      // preserva el mismo _id, por lo que todo el historial que ya la
+      // referencia (órdenes, Ficha Técnica, eficiencia teórica) sigue intacto.
+      $localConnection->goQuery('UPDATE sizes SET nombre = ?, variation_percentage = ?, eliminado = 0 WHERE _id = ?', [$nombre, $variation, $reactivarId]);
+      $localConnection->disconnect();
+
+      $responseData = ['message' => 'Talla reactivada exitosamente.', 'id' => $reactivarId];
+      $response->getBody()->write(json_encode($responseData, JSON_NUMERIC_CHECK));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    }
+
+    // Verificar si ya existe una talla con el mismo nombre (sin importar
+    // mayúsculas/espacios), esté activa o eliminada -- para no crear un
+    // duplicado silencioso ni perder el historial ya asociado al _id original.
+    $existing = $localConnection->goQuery(
+      'SELECT _id, nombre, eliminado FROM sizes WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?))',
+      [$nombre]
+    );
+
+    if ($existing) {
+      $match = $existing[0];
+
+      if ((int) $match['eliminado'] === 1) {
+        $localConnection->disconnect();
+        $object = [
+          'eliminado_existente' => true,
+          'id' => $match['_id'],
+          'name' => $match['nombre'],
+        ];
+        $response->getBody()->write(json_encode($object));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+      }
+
+      $localConnection->disconnect();
+      $object = ['error' => 'Ya existe una talla activa llamada "' . $match['nombre'] . '"'];
+      $response->getBody()->write(json_encode($object));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $sql = 'INSERT INTO sizes (nombre, variation_percentage) VALUES (?, ?)';
+    $result = $localConnection->goQuery($sql, [$nombre, $variation]);
     $newId = $result['insert_id'] ?? null;
     $localConnection->disconnect();
 
@@ -1288,11 +1355,13 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // Eliminar una talla
+  // Eliminar una talla (soft-delete -- preserva el _id para no romper el
+  // historial que ya la referencia en órdenes, presupuestos, Ficha Técnica y
+  // eficiencia teórica; ver GET /sizes/{id}/uso para el detalle de uso).
   $app->post('/sizes/eliminar', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
-    $sql = 'DELETE FROM sizes WHERE _id = ?';
+    $sql = 'UPDATE sizes SET eliminado = 1 WHERE _id = ?';
     $result = $localConnection->goQuery($sql, [$data['id']]);
     $localConnection->disconnect();
 

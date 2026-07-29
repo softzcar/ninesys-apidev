@@ -1588,7 +1588,7 @@ class WooMe
    */
   public function getSizes()
   {
-    $sql = 'SELECT _id, nombre name, variation_percentage FROM sizes';
+    $sql = 'SELECT _id, nombre name, variation_percentage FROM sizes WHERE eliminado = 0';
     $localConnection = new LocalDB();
     $sizes = $localConnection->goQuery($sql);
     $localConnection->disconnect();
