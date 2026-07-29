@@ -1,0 +1,33 @@
+- **Solicitud del Usuario:** "Sigamos con Telas que tiene una estructura similar, es más sencilla pues solo se guarda el nombre de la tela, procedamos la revisión de la misma manera, primero la API... luego verificamos el soft-delete que entiendo también se debe implementar si no está ya implementado y hacemos que la interfaz se comporte de la misma manera, haz las mismas pruebas." Seguido de la confirmación tras reportar los hallazgos: "Sí, corrige todo."
+- **Fecha y Hora:** 2026-07-29 10:30:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/catalogs.php` (`GET /telas`, `POST /telas`, `POST /telas/{_id}/{tela}` eliminado -> `POST /telas/editar` nuevo, `POST /telas/eliminar`, `GET /telas/{id}/uso` nuevo)
+- **Commits Relacionados:**
+    - Backend: `5af6caa`
+- **Acción Realizada:**
+    Al auditar la API de Telas se encontró que el soft-delete YA estaba parcialmente implementado (columna `eliminado` existente, `GET /telas` ya filtraba `WHERE eliminado = 0`, `POST /telas/eliminar` ya hacía `UPDATE eliminado = 1` en vez de DELETE físico) -- a diferencia de Tallas, no había riesgo de CASCADE/pérdida de datos.
+
+    Pero se encontró algo más grave: **inyección SQL real y confirmada** en las 3 consultas de escritura (`POST /telas`, `POST /telas/{_id}/{tela}`, `POST /telas/eliminar`), que construían el SQL concatenando el texto del usuario directamente sin parámetros ni escape (ej. `$values .= "'" . $miTela['tela'] . "')"`). Verificado con una prueba no destructiva: crear una tela con un simple apóstrofe (`TEST_QA_TELA'S`) rompía el endpoint con un 500 -- confirmando que cualquier apóstrofe en un nombre de tela (común en español) rompía la funcionalidad, y un payload deliberado podría ejecutar SQL arbitrario. Se confirmó que no quedó ningún registro corrupto tras la prueba.
+
+    Correcciones aplicadas:
+    - Las 3 consultas de escritura ahora usan placeholders (`?`) vía `goQuery($sql, [...])`.
+    - `POST /telas/{_id}/{tela}` (el nombre de la tela viajaba como parámetro de URL, sin parametrizar y roto ante un nombre con "/") reemplazado por `POST /telas/editar` (body + placeholders), unificando el patrón con `/sizes/editar`.
+    - `POST /telas` ahora detecta duplicados (activos o eliminados) por nombre normalizado antes de insertar, ofreciendo `reactivar_id` para reactivar en vez de duplicar -- mismo patrón que `/sizes`/`/categories`/`/departamentos/nuevo`. Antes simplemente insertaba sin ninguna verificación.
+    - Nuevo `GET /telas/{id}/uso`: cuenta referencias reales en `ordenes_productos` y `presupuestos_productos` (las únicas 2 tablas con FK a `catalogo_telas`, ambas ya `ON DELETE SET NULL`, sin riesgo de CASCADE) para advertir antes de eliminar.
+
+- **Inconvenientes y Desafíos:** Se identificó, durante la investigación, que el mismo patrón de concatenación insegura existe en al menos otros 2 lugares del backend (`catalogo_tintas` en el mismo archivo, y `/insumos/nuevo` en `inventory.php`, este último interpolando directamente el nombre del insumo, departamento, unidad, SKU, rendimiento y costo) -- confirmado con el usuario que se tratará como una auditoría de seguridad dedicada y separada, dado el alcance sistémico del problema (no limitado a Telas).
+
+- **Decisión Final y Justificación:** Se replicó exactamente el patrón `reactivar_id`/409/`GET .../uso` ya validado en Tallas/Categorías/Departamentos, por consistencia y porque ya está probado. Se decidió reemplazar el endpoint de edición por URL (`/telas/{_id}/{tela}`) por uno basado en body (`/telas/editar`) en vez de solo parametrizar la ruta existente, porque un nombre de tela con "/" habría seguido rompiendo el ruteo de Slim incluso con la consulta ya parametrizada.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `php -l`, `git diff`/`commit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `ssh`/`psql` (esquema de `catalogo_telas`, FKs reales, conteo de uso real por tela antes del fix), `curl` (prueba no destructiva del apóstrofe antes/después del fix, ciclo completo crear/duplicado-activo/eliminar/duplicado-eliminado-409/reactivar/editar/limpieza).
+
+- **Resultado:** Éxito
+
+- **Verificación:** Antes del fix: `POST /telas` con `tela=TEST_QA_TELA'S` -> 500. Después del fix: mismo request -> 200, tela creada correctamente con el apóstrofe intacto. `GET /telas/1/uso` -> `{"ordenes_productos":539,"presupuestos_productos":1,"total":540}`, coincidente con conteo real por `psql`. `GET /telas/48/uso` -> `total:0`, también coincidente. Ciclo completo de creación/duplicado/eliminación/reactivación/edición probado con una tela de prueba dedicada (`_id` 84-86 según la prueba), sin tocar ninguna de las 33 telas reales -- verificado además que `SUPER POLY 1.48` (tela real con 176 líneas de órdenes) permaneció intacta tras un click accidental en su botón de eliminar durante la verificación visual (cancelado a tiempo).
+
+- **Logro Conseguido:** Se eliminó una vulnerabilidad de inyección SQL real y explotable en un endpoint de uso diario (catálogo de telas, usado en cada creación de orden/presupuesto), y se completó el flujo de gestión (duplicados/reactivación/advertencia de uso) para que sea consistente con el resto del sistema.
+
+- **Observaciones:** Ver bitácora complementaria en `app_multi/logs_gemini/` para el frontend. El hallazgo de inyección SQL sistémica en otros módulos (Tintas, Insumos, y potencialmente más) queda pendiente como la siguiente tarea prioritaria, a solicitud explícita del usuario, antes de continuar con el resto de la auditoría del checklist de administración.
+
+- **Respuesta de Claude:** Se corrigió una inyección SQL real y confirmada en los 3 endpoints de escritura de Telas (crear/editar/eliminar), reemplazando la concatenación directa por consultas parametrizadas. Se completó también el flujo de gestión: detección de duplicados con reactivación al crear, y advertencia de uso real antes de eliminar -- el soft-delete de base ya existía. Verificado con datos reales de punta a punta, sin tocar ninguna de las 33 telas reales de la empresa.
