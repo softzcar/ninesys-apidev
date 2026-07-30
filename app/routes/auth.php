@@ -48,7 +48,7 @@ return function (App $app) {
         }
 
         // Paso 3: Obtener datos de la empresa
-        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, db_name FROM empresas WHERE id_empresa = ?';
+        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, id_pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, db_name FROM empresas WHERE id_empresa = ?';
         $object['debug'][] = 'Obteniendo datos de la empresa.';
         $data_empresa = $localConnection->goQuery($sql_empresa, [$usuario_data['id_empresa']]);
 
@@ -80,7 +80,7 @@ return function (App $app) {
         if (empty(trim($empresa_data['email'] ?? ''))) {
             $datos_faltantes[] = 'Email de la empresa (en empresas)';
         }
-        if (empty(trim($empresa_data['pais'] ?? ''))) {
+        if (empty($empresa_data['id_pais'])) {
             $datos_faltantes[] = 'País de la empresa (en empresas)';
         }
 
@@ -104,6 +104,7 @@ return function (App $app) {
                     'telefono' => $empresa_data['telefono'],
                     'email' => $empresa_data['email'],
                     'pais' => $empresa_data['pais'],
+                    'id_pais' => $empresa_data['id_pais'] !== null ? (int) $empresa_data['id_pais'] : null,
                     'timezone' => $empresa_data['timezone'] ?? null
                 ],
                 'datos_usuario' => [
@@ -146,6 +147,25 @@ return function (App $app) {
                         'sys_comision_de_costura' => (bool) $config_data[0]['sys_comision_de_costura'],
                         'multiplicador_precio' => (float) $config_data[0]['multiplicador_precio'],
                     ];
+                }
+
+                // Moneda base real de la empresa (Fase 4 del rediseño de monedas) --
+                // reemplaza la asunción hardcodeada de que el dólar siempre es la base.
+                // catalogo_monedas solo existe hoy en empresas ya migradas (Fase 2, ej.
+                // 194); en el resto la tabla no existe todavía -- se captura ese caso
+                // puntual para no romper el login de empresas aún no migradas.
+                try {
+                    $sql_moneda_base = 'SELECT codigo, nombre, simbolo FROM catalogo_monedas WHERE es_base = 1 AND eliminado = 0 LIMIT 1';
+                    $moneda_base_data = $localConnection->goQuery($sql_moneda_base);
+                    if (!empty($moneda_base_data)) {
+                        $error_response_object['datos_empresa']['moneda_base'] = [
+                            'codigo' => $moneda_base_data[0]['codigo'],
+                            'nombre' => $moneda_base_data[0]['nombre'],
+                            'simbolo' => $moneda_base_data[0]['simbolo'],
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    // Empresa aún no migrada a catalogo_monedas -- no es un error real.
                 }
             }
             // FIN DE DATOS ADICIONALES
@@ -300,6 +320,7 @@ return function (App $app) {
                 'telefono' => $empresa_data['telefono'],
                 'email' => $empresa_data['email'],
                 'pais' => $empresa_data['pais'],
+                'id_pais' => $empresa_data['id_pais'] !== null ? (int) $empresa_data['id_pais'] : null,
                 'timezone' => $empresa_data['timezone'] ?? null,
                 'horario_laboral' => json_decode($empresa_data['horario_laboral']),
                 'tipos_de_monedas' => json_decode($empresa_data['tipos_de_monedas'])
@@ -340,6 +361,25 @@ return function (App $app) {
                     'multiplicador_precio' => (float) $config_data[0]['multiplicador_precio'],
                 ];
             }
+
+            // Moneda base real de la empresa (Fase 4 del rediseño de monedas) --
+            // reemplaza la asunción hardcodeada de que el dólar siempre es la base.
+            // catalogo_monedas solo existe hoy en empresas ya migradas (Fase 2, ej.
+            // 194); en el resto la tabla no existe todavía -- se captura ese caso
+            // puntual para no romper el login de empresas aún no migradas.
+            try {
+                $sql_moneda_base = 'SELECT codigo, nombre, simbolo FROM catalogo_monedas WHERE es_base = 1 AND eliminado = 0 LIMIT 1';
+                $moneda_base_data = $localConnection->goQuery($sql_moneda_base);
+                if (!empty($moneda_base_data)) {
+                    $object['datos_empresa']['moneda_base'] = [
+                        'codigo' => $moneda_base_data[0]['codigo'],
+                        'nombre' => $moneda_base_data[0]['nombre'],
+                        'simbolo' => $moneda_base_data[0]['simbolo'],
+                    ];
+                }
+            } catch (\Exception $e) {
+                // Empresa aún no migrada a catalogo_monedas -- no es un error real.
+            }
             // FIN DE DATOS ADICIONALES PARA EL WIZARD
         } else {
             $object['msg'] = 'Error durante el inicio de sesión. No se pudieron cargar todos los datos de la empresa.';
@@ -379,7 +419,7 @@ return function (App $app) {
         $usuario_data = $credenciales[0];
 
         // 2. Obtener datos de la empresa
-        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, db_name FROM empresas WHERE id_empresa = ?';
+        $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, id_pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, db_name FROM empresas WHERE id_empresa = ?';
         $data_empresa = $localConnection->goQuery($sql_empresa, [$usuario_data['id_empresa']]);
 
         if (empty($data_empresa)) {
@@ -412,6 +452,7 @@ return function (App $app) {
             'telefono' => $empresa_data['telefono'],
             'email' => $empresa_data['email'],
             'pais' => $empresa_data['pais'],
+            'id_pais' => $empresa_data['id_pais'] !== null ? (int) $empresa_data['id_pais'] : null,
             'timezone' => $empresa_data['timezone'] ?? null,
             'horario_laboral' => json_decode($empresa_data['horario_laboral']),
             'tipos_de_monedas' => json_decode($empresa_data['tipos_de_monedas'])
@@ -451,6 +492,25 @@ return function (App $app) {
                     'sys_comision_de_costura' => (bool) $config_data[0]['sys_comision_de_costura'],
                     'multiplicador_precio' => (float) $config_data[0]['multiplicador_precio'],
                 ];
+            }
+
+            // Moneda base real de la empresa (Fase 4 del rediseño de monedas) --
+            // reemplaza la asunción hardcodeada de que el dólar siempre es la base.
+            // catalogo_monedas solo existe hoy en empresas ya migradas (Fase 2, ej.
+            // 194); en el resto la tabla no existe todavía -- se captura ese caso
+            // puntual para no romper el refresh-session de empresas aún no migradas.
+            try {
+                $sql_moneda_base = 'SELECT codigo, nombre, simbolo FROM catalogo_monedas WHERE es_base = 1 AND eliminado = 0 LIMIT 1';
+                $moneda_base_data = $localConnection->goQuery($sql_moneda_base);
+                if (!empty($moneda_base_data)) {
+                    $object['datos_empresa']['moneda_base'] = [
+                        'codigo' => $moneda_base_data[0]['codigo'],
+                        'nombre' => $moneda_base_data[0]['nombre'],
+                        'simbolo' => $moneda_base_data[0]['simbolo'],
+                    ];
+                }
+            } catch (\Exception $e) {
+                // Empresa aún no migrada a catalogo_monedas -- no es un error real.
             }
         }
 

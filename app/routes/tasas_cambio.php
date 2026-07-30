@@ -154,8 +154,10 @@ return function (App $app) {
       $monedas = $localConnection->goQuery('SELECT codigo, es_base FROM catalogo_monedas WHERE activo = 1 AND eliminado = 0 ORDER BY es_base DESC');
       $localConnection->disconnect();
     } catch (Exception $e) {
-      $response->getBody()->write(json_encode(['error' => 'Error al obtener el catálogo de monedas: ' . $e->getMessage()]));
-      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+      // catalogo_monedas todavía no existe en empresas no migradas a la Fase 2 --
+      // no es un error real, simplemente no hay monedas configuradas que resolver.
+      $response->getBody()->write(json_encode(['data' => []]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     }
 
     $data = [];
