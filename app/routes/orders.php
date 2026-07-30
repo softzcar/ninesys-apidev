@@ -3549,6 +3549,38 @@ $object['sales_commission_ISSET'][] = false;
         $object['stock_update_response'] = $stock_update_responses;
       }
 
+      // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
+      // NOTA: esta ruta (sport) leía los campos montoDolaresEfectivo, etc. en
+      // $arr pero nunca los insertaba en metodos_de_pago/caja -- un vacío
+      // preexistente de la implementación original, sin uso histórico que
+      // dependiera de él (mismo tipo de hallazgo que en convertir-a-orden,
+      // ver Fase 6). No se retrofittea el camino legado; se agrega solo el
+      // camino nuevo (Fase 7), dirigido 100% por catalogo_metodos_pago real.
+      $object['metodos_pago'] = [];
+      $pagosGenericos = decodificarPagosGenericos($newJson);
+      if (!empty($pagosGenericos)) {
+        foreach ($pagosGenericos as $pago) {
+          $monto = floatval($pago['monto'] ?? 0);
+          if ($monto <= 0) {
+            continue;
+          }
+
+          $metodo = resolverMetodoPagoPorId($localConnection, $pago['id_metodo_pago'] ?? 0);
+          if (!$metodo) {
+            throw new Exception('Método de pago inválido o eliminado (id_metodo_pago=' . ($pago['id_metodo_pago'] ?? '?') . ')');
+          }
+
+          $detalle = $pago['detalle'] ?? '';
+          $tasa = floatval($pago['tasa'] ?? 1);
+
+          $object['metodos_pago'][] = insertarMetodoPagoGenerico($localConnection, $last_id, 'Orden nueva', $metodo, $monto, $detalle, $tasa);
+
+          if ((int) $metodo['es_efectivo'] === 1) {
+            $object['metodos_pago'][] = insertarCajaGenerico($localConnection, $monto, $metodo, $tasa, 'Orden Nueva', $newJson['responsable'], 'Nueva Orden');
+          }
+        }
+      }
+
       // COMISIÓN VENDEDORES
       if (floatval($newJson['abono']) > 0 && !(isset($newJson['guardar_stock']) && filter_var($newJson['guardar_stock'], FILTER_VALIDATE_BOOLEAN))) {
         $sql_comision = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
