@@ -1,0 +1,25 @@
+- **Solicitud del Usuario:** Implementar la Fase 1 del plan aprobado "Estándar de monedas, métodos de pago y moneda base dinámicos": catálogos de plataforma (paises_soportados, monedas_soportadas_por_pais) y migración de empresas.pais a una FK real (id_pais), evaluando explícitamente cómo migran los datos reales de la empresa 194 antes de avanzar.
+- **Fecha y Hora:** 2026-07-30 12:23:51
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+    - app/routes/config.php (nuevos endpoints GET /paises-soportados, GET /monedas-soportadas/{id_pais}; POST /configuracion/empresa/{id} acepta id_pais)
+    - app/routes/auth.php (SELECT y payloads de /login y /refresh-session incluyen id_pais; validación de "país obligatorio" pasa de checar `pais` a checar `id_pais`)
+    - Migración SQL directa sobre vps-contabo-dev/api_empresas (paises_soportados, monedas_soportadas_por_pais, empresas.id_pais)
+- **Commits Relacionados:**
+    - Backend: 8589e9a (feature/postgresql-support)
+    - Frontend: N/A (ver bitácora de app_multi)
+- **Acción Realizada:**
+    1. Se investigó contra el clon real de producción de la empresa 194 (vps-contabo-dev/api_empresas, sincronizado vía clone_194_prod_to_dev_postgres.sh) para verificar la migrabilidad de los datos reales antes de diseñar el catálogo de plataforma. Se confirmó `empresas.pais='58'` para las 4 empresas venezolanas configuradas y vacío para la empresa 176 (también venezolana en la práctica).
+    2. Se creó `paises_soportados` (id_pais, nombre, codigo_iso2, codigo_telefonico) y `monedas_soportadas_por_pais` (id_pais FK, codigo ISO, nombre, simbolo, es_default_para_pais) en la base compartida `api_empresas`, sembradas solo con Venezuela (VE) y sus 3 monedas reales (USD default, VES, COP) -- ningún país/moneda hipotético.
+    3. Se agregó `empresas.id_pais` (FK nullable) de forma aditiva, sin tocar la columna `pais` existente (que no se usa en ninguna lógica de negocio, solo se leía como texto). Backfill: las 5 empresas existentes (todas venezolanas) apuntan ahora a id_pais=1.
+    4. Se agregaron los endpoints `GET /paises-soportados` y `GET /monedas-soportadas/{id_pais}` en config.php, siguiendo el patrón de conexión `LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS)` ya usado en el resto del archivo.
+    5. Se extendió `POST /configuracion/empresa/{id}` para aceptar y persistir `id_pais` (además de `pais`, que se deja de enviar desde el frontend pero no se borra de la tabla).
+    6. En auth.php se agregó `id_pais` al SELECT y al payload `datos_empresa` en las 3 rutas que lo devuelven (`/login` con configuración completa, `/login` con configuración incompleta, `/refresh-session/{id}`), y se cambió la validación de "país obligatorio para completar el wizard" de `empty(trim($empresa_data['pais']))` a `empty($empresa_data['id_pais'])`, ya que el id_pais es ahora la fuente de verdad real.
+- **Inconvenientes y Desafíos:** Ninguno bloqueante. Se identificó que el campo `pais` legado sí era chequeado como "dato faltante" obligatorio en el flujo de login (`auth.php`), un hallazgo no documentado explícitamente en el plan -- se adaptó ese check a `id_pais` en el mismo commit para no dejar el wizard bloqueado con un chequeo contra un campo que el frontend ya no alimenta.
+- **Decisión Final y Justificación:** Migración 100% aditiva (se agrega id_pais, no se toca ni se borra `pais`), consistente con la restricción explícita del usuario de no romper nada de lo que funciona hoy para la empresa 194. Solo Venezuela fue sembrada en los catálogos de plataforma -- se agregarán países nuevos únicamente cuando exista una necesidad real de negocio (ej. un cliente colombiano), no de forma especulativa.
+- **Herramienta(s) Utilizada(s):** `psql` vía SSH contra vps-contabo-dev, `Edit`/`Write`, `php -l`, `deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` para pruebas en vivo.
+- **Resultado:** Éxito
+- **Verificación:** `php -l` sin errores en config.php y auth.php. Migración verificada con `SELECT` post-COMMIT (3 monedas para Venezuela, 5 empresas con id_pais=1). Tras el despliegue a `vps-contabo-dev`, se probaron en vivo `GET /paises-soportados` y `GET /monedas-soportadas/1` (ambos devuelven los datos esperados) y se ejercitó `POST /configuracion/empresa/3` con `id_pais=1` (idempotente, confirmado con SELECT que no alteró `pais` ni ningún otro campo).
+- **Logro Conseguido:** Primera fase del rediseño de monedas en producción-dev: existe ahora un catálogo real y curado de países/monedas soportadas por la plataforma, y el país de cada empresa es una FK verificable en vez de un string derivado (frágilmente) del código telefónico del wizard.
+- **Observaciones de Gemini:** N/A (sesión con Claude Code).
+- **Respuesta de Gemini:** Fase 1 completa: catálogos de plataforma creados y sembrados con Venezuela, empresas.id_pais migrado de forma aditiva para las 5 empresas existentes, endpoints nuevos probados en vivo contra vps-contabo-dev. Continúo con la Fase 2 (catálogos por empresa y migración de los pagos reales de la 194).
