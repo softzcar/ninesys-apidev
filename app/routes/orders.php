@@ -5273,18 +5273,26 @@ $object['sales_commission_ISSET'][] = false;
   $total = isset($data['total']) ? floatval($data['total']) : floatval($presupuesto['pago_total']);
   $descuento = isset($data['descuento']) ? floatval($data['descuento']) : 0;
 
-  // SUMAR TODOS LOS MONTOS DE PAGO PARA EL ABONO
-  // decodificado aquí (y reutilizado más abajo en "REGISTRAR MÉTODOS DE
-  // PAGO") porque el abono debe reflejar el camino que realmente se usó --
-  // si el formulario ya envía 'pagos' (Fase 7), sumar los campos legados
-  // (ausentes) daría un abono de 0 aunque sí se haya registrado el pago.
+  // CALCULAR EL ABONO (decodificado aquí, y reutilizado más abajo en
+  // "REGISTRAR MÉTODOS DE PAGO")
   $pagosGenericos = decodificarPagosGenericos($data);
-  $abono = 0;
-  if (!empty($pagosGenericos)) {
+  if (!empty($pagosGenericos) && isset($data['abono']) && is_numeric($data['abono'])) {
+    // Camino nuevo (Fase 7): el frontend ya envía el abono convertido a la
+    // moneda base (mismo criterio que /orden/abono, /retiro, etc.) -- sumar
+    // los montos crudos de `pagos` aquí sería incorrecto para cualquier
+    // moneda que no sea la base (ej. VES/Bolívares sin dividir por tasa).
+    $abono = floatval($data['abono']);
+  } elseif (!empty($pagosGenericos)) {
+    // Fallback si no llega 'abono' explícito: suma cruda (solo correcta si
+    // todos los pagos ya están en la moneda base).
+    $abono = 0;
     foreach ($pagosGenericos as $pago) {
       $abono += floatval($pago['monto'] ?? 0);
     }
   } else {
+    // CAMINO LEGADO: sin consumidores reales hoy (presupuesto.vue, el único
+    // caller, ya migró a 'pagos'), se conserva por seguridad/rollback.
+    $abono = 0;
     $abono += isset($data['montoDolaresEfectivo']) ? floatval($data['montoDolaresEfectivo']) : 0;
     $abono += isset($data['montoDolaresZelle']) ? floatval($data['montoDolaresZelle']) : 0;
     $abono += isset($data['montoDolaresPanama']) ? floatval($data['montoDolaresPanama']) : 0;
