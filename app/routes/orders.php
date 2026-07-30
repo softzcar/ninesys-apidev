@@ -537,53 +537,62 @@ return function (App $app) {
       $detalleAbonoOrden = addslashes('Abono a Orden #' . intval($datosAbono['id']));
 
       if (intval($datosAbono['montoDolaresEfectivo'] ?? 0) > 0) {
-        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Dólares', 'Efectivo', '" . floatval($datosAbono['montoDolaresEfectivo']) . "', '1')";
+        list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dólares', 'Efectivo');
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa, id_moneda, id_metodo_pago) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Dólares', 'Efectivo', '" . floatval($datosAbono['montoDolaresEfectivo']) . "', '1', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
-        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . floatval($datosAbono['montoDolaresEfectivo']) . "', 'Dólares', 1, '" . addslashes($datosAbono['tipoAbono']) . "', '" . $responsable . "', '" . $detalleAbonoOrden . "')";
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle, id_moneda) VALUES ('" . floatval($datosAbono['montoDolaresEfectivo']) . "', 'Dólares', 1, '" . addslashes($datosAbono['tipoAbono']) . "', '" . $responsable . "', '" . $detalleAbonoOrden . "', " . ($idMoneda ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
       }
 
       if (intval($datosAbono['montoDolaresZelle'] ?? 0) > 0) {
-        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detalleZelle'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Dólares', 'Zelle', '" . floatval($datosAbono['montoDolaresZelle']) . "', '1')";
+        list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dólares', 'Zelle');
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa, id_moneda, id_metodo_pago) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detalleZelle'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Dólares', 'Zelle', '" . floatval($datosAbono['montoDolaresZelle']) . "', '1', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
       }
 
       if (intval($datosAbono['montoDolaresPanama'] ?? 0) > 0) {
-        $sql = "INSERT INTO metodos_de_pago (detalle, tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['detallePanama'] ?? '') . "', '" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Dólares', 'Panamá', '" . floatval($datosAbono['montoDolaresPanama']) . "', '1')";
+        list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dólares', 'Panamá');
+        $sql = "INSERT INTO metodos_de_pago (detalle, tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa, id_moneda, id_metodo_pago) VALUES ('" . addslashes($datosAbono['detallePanama'] ?? '') . "', '" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Dólares', 'Panamá', '" . floatval($datosAbono['montoDolaresPanama']) . "', '1', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
       }
 
       if (intval($datosAbono['montoPesosEfectivo'] ?? 0) > 0) {
-        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Pesos', 'Efectivo', '" . floatval($datosAbono['montoPesosEfectivo']) . "', '" . $tasa_peso . "')";
+        list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Pesos', 'Efectivo');
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa, id_moneda, id_metodo_pago) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Pesos', 'Efectivo', '" . floatval($datosAbono['montoPesosEfectivo']) . "', '" . $tasa_peso . "', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
-        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . floatval($datosAbono['montoPesosEfectivo']) . "', 'Pesos', '" . $tasa_peso . "', '" . addslashes($datosAbono['tipoAbono']) . "', '" . $responsable . "', '" . $detalleAbonoOrden . "')";
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle, id_moneda) VALUES ('" . floatval($datosAbono['montoPesosEfectivo']) . "', 'Pesos', '" . $tasa_peso . "', '" . addslashes($datosAbono['tipoAbono']) . "', '" . $responsable . "', '" . $detalleAbonoOrden . "', " . ($idMoneda ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
       }
 
       if (intval($datosAbono['montoPesosTransferencia'] ?? 0) > 0) {
-        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detallePesosTransferencia'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Pesos', 'Transferencia', '" . floatval($datosAbono['montoPesosTransferencia']) . "', '" . $tasa_peso . "')";
+        list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Pesos', 'Transferencia');
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa, id_moneda, id_metodo_pago) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detallePesosTransferencia'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Pesos', 'Transferencia', '" . floatval($datosAbono['montoPesosTransferencia']) . "', '" . $tasa_peso . "', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
       }
 
       if (intval($datosAbono['montoBolivaresEfectivo'] ?? 0) > 0) {
-        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Efectivo', '" . floatval($datosAbono['montoBolivaresEfectivo']) . "', '" . $tasa_dolar . "')";
+        list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Bolívares', 'Efectivo');
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa, id_moneda, id_metodo_pago) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Efectivo', '" . floatval($datosAbono['montoBolivaresEfectivo']) . "', '" . $tasa_dolar . "', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
-        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle) VALUES ('" . floatval($datosAbono['montoBolivaresEfectivo']) . "', 'Bolívares', '" . $tasa_dolar . "', '" . addslashes($datosAbono['tipoAbono']) . "', '" . $responsable . "', '" . $detalleAbonoOrden . "')";
+        $sql = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle, id_moneda) VALUES ('" . floatval($datosAbono['montoBolivaresEfectivo']) . "', 'Bolívares', '" . $tasa_dolar . "', '" . addslashes($datosAbono['tipoAbono']) . "', '" . $responsable . "', '" . $detalleAbonoOrden . "', " . ($idMoneda ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
       }
 
       if (intval($datosAbono['montoBolivaresPunto'] ?? 0) > 0) {
-        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Punto', '" . floatval($datosAbono['montoBolivaresPunto']) . "', '" . $tasa_dolar . "')";
+        list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Bolívares', 'Punto');
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, id_orden, moneda, metodo_pago, monto, tasa, id_moneda, id_metodo_pago) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Punto', '" . floatval($datosAbono['montoBolivaresPunto']) . "', '" . $tasa_dolar . "', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
       }
 
       if (intval($datosAbono['montoBolivaresPagomovil'] ?? 0) > 0) {
-        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detallePagomovil'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Pagomovil', '" . floatval($datosAbono['montoBolivaresPagomovil']) . "', '" . $tasa_dolar . "')";
+        list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Bolívares', 'Pagomovil');
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa, id_moneda, id_metodo_pago) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detallePagomovil'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Pagomovil', '" . floatval($datosAbono['montoBolivaresPagomovil']) . "', '" . $tasa_dolar . "', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
       }
 
       if (intval($datosAbono['montoBolivaresTransferencia'] ?? 0) > 0) {
-        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detalleBolivaresTransferencia'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Transferencia', '" . floatval($datosAbono['montoBolivaresTransferencia']) . "', '" . $tasa_dolar . "')";
+        list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Bolívares', 'Transferencia');
+        $sql = "INSERT INTO metodos_de_pago (tipo_de_pago, detalle, id_orden, moneda, metodo_pago, monto, tasa, id_moneda, id_metodo_pago) VALUES ('" . addslashes($datosAbono['tipoAbono']) . "', '" . addslashes($datosAbono['detalleBolivaresTransferencia'] ?? '') . "', '" . intval($datosAbono['id']) . "', 'Bolívares', 'Transferencia', '" . floatval($datosAbono['montoBolivaresTransferencia']) . "', '" . $tasa_dolar . "', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ")";
         $localConnection->goQuery($sql);
       }
 
