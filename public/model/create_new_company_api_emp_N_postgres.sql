@@ -60,6 +60,7 @@ CREATE TABLE catalogo_metodos_pago (
   codigo varchar(50) NOT NULL ,
   nombre varchar(50) NOT NULL ,
   requiere_referencia SMALLINT NOT NULL DEFAULT 0 ,
+  es_efectivo SMALLINT NOT NULL DEFAULT 0 ,
   activo SMALLINT NOT NULL DEFAULT 1 ,
   eliminado SMALLINT NOT NULL DEFAULT 0 ,
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,

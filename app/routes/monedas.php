@@ -205,6 +205,7 @@ return function (App $app) {
     $codigo = strtolower(trim($data['codigo'] ?? ''));
     $nombre = trim($data['nombre'] ?? '');
     $requiereReferencia = isset($data['requiere_referencia']) ? (int) filter_var($data['requiere_referencia'], FILTER_VALIDATE_BOOLEAN) : 0;
+    $esEfectivo = isset($data['es_efectivo']) ? (int) filter_var($data['es_efectivo'], FILTER_VALIDATE_BOOLEAN) : 0;
     $reactivarId = (isset($data['reactivar_id']) && $data['reactivar_id'] !== '') ? (int) $data['reactivar_id'] : null;
 
     if (!$idMoneda || $codigo === '' || $nombre === '') {
@@ -216,8 +217,8 @@ return function (App $app) {
 
     if ($reactivarId) {
       $localConnection->goQuery(
-        'UPDATE catalogo_metodos_pago SET nombre = ?, requiere_referencia = ?, eliminado = 0 WHERE _id = ?',
-        [$nombre, $requiereReferencia, $reactivarId]
+        'UPDATE catalogo_metodos_pago SET nombre = ?, requiere_referencia = ?, es_efectivo = ?, eliminado = 0 WHERE _id = ?',
+        [$nombre, $requiereReferencia, $esEfectivo, $reactivarId]
       );
       $localConnection->disconnect();
 
@@ -251,8 +252,8 @@ return function (App $app) {
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
-    $sql = 'INSERT INTO catalogo_metodos_pago (id_moneda, codigo, nombre, requiere_referencia) VALUES (?, ?, ?, ?)';
-    $result = $localConnection->goQuery($sql, [$idMoneda, $codigo, $nombre, $requiereReferencia]);
+    $sql = 'INSERT INTO catalogo_metodos_pago (id_moneda, codigo, nombre, requiere_referencia, es_efectivo) VALUES (?, ?, ?, ?, ?)';
+    $result = $localConnection->goQuery($sql, [$idMoneda, $codigo, $nombre, $requiereReferencia, $esEfectivo]);
     $newId = $result['insert_id'] ?? null;
     $sql = 'SELECT * FROM catalogo_metodos_pago WHERE eliminado = 0 ORDER BY id_moneda, nombre';
     $object['response'] = json_encode($localConnection->goQuery($sql));
@@ -269,9 +270,10 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
     $requiereReferencia = isset($data['requiere_referencia']) ? (int) filter_var($data['requiere_referencia'], FILTER_VALIDATE_BOOLEAN) : 0;
+    $esEfectivo = isset($data['es_efectivo']) ? (int) filter_var($data['es_efectivo'], FILTER_VALIDATE_BOOLEAN) : 0;
     $activo = isset($data['activo']) ? (int) filter_var($data['activo'], FILTER_VALIDATE_BOOLEAN) : 1;
-    $sql = 'UPDATE catalogo_metodos_pago SET nombre = ?, requiere_referencia = ?, activo = ? WHERE _id = ?';
-    $localConnection->goQuery($sql, [trim($data['nombre']), $requiereReferencia, $activo, $data['id']]);
+    $sql = 'UPDATE catalogo_metodos_pago SET nombre = ?, requiere_referencia = ?, es_efectivo = ?, activo = ? WHERE _id = ?';
+    $localConnection->goQuery($sql, [trim($data['nombre']), $requiereReferencia, $esEfectivo, $activo, $data['id']]);
     $sql = 'SELECT * FROM catalogo_metodos_pago WHERE eliminado = 0 ORDER BY id_moneda, nombre';
     $object['response'] = json_encode($localConnection->goQuery($sql));
     $localConnection->disconnect();
