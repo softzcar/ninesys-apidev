@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** Implementar la Fase 5 del plan aprobado "Estándar de monedas, métodos de pago y moneda base dinámicos": Gestor de Monedas y wizard sobre catálogos reales -- construir el CRUD completo de catalogo_monedas/catalogo_metodos_pago (con soft-delete + uso, mismo patrón que Tallas/Telas) para que el frontend deje de depender de tipos_de_monedas.
+- **Fecha y Hora:** 2026-07-30 15:07:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+    - app/routes/monedas.php (nuevo)
+    - app/routes.php (registro del nuevo archivo de rutas)
+- **Commits Relacionados:**
+    - Backend: 639c250 (feature/postgresql-support)
+    - Frontend: ver bitácora de app_multi
+- **Acción Realizada:**
+    1. Se creó `app/routes/monedas.php` con el CRUD completo de `catalogo_monedas` (`GET /monedas`, `GET /monedas/{id}/uso`, `POST /monedas` con reactivación por 409 igual que `/telas`, `POST /monedas/editar`, `POST /monedas/eliminar`) y `catalogo_metodos_pago` (mismo patrón, con `id_moneda` como filtro opcional en el GET de listado).
+    2. `GET /monedas/{id}/uso` cuenta uso real en `metodos_de_pago`, `caja` y `retiros`; `GET /metodos-pago/{id}/uso` cuenta en `metodos_de_pago` y `retiros` (caja no tiene columna de método).
+    3. Regla de negocio explícita: `POST /monedas` nunca establece `es_base` (la moneda base se define una sola vez en la migración inicial de la empresa, Fase 2); `POST /monedas/eliminar` bloquea explícitamente la eliminación de la moneda base con un 400 claro.
+    4. `POST /monedas` recibe `id_moneda_soportada` (referencia de aplicación al catálogo de plataforma) + `codigo`/`nombre`/`simbolo` denormalizados, para no depender de un JOIN cross-database en tiempo de lectura.
+- **Inconvenientes y Desafíos:** Ninguno bloqueante. Se decidió no envolver estos endpoints en try/catch de compatibilidad (a diferencia de `/tasas-cambio` y `/login`/`/refresh-session` en la Fase 4) porque el Gestor de Monedas es navegación explícita del usuario administrador, no algo que se ejecute automáticamente en cada carga de página para todas las empresas -- si una empresa no migrada llega aquí, un 500 real es la respuesta correcta (indicaría un bug de navegación, no un estado esperado).
+- **Decisión Final y Justificación:** Mismo patrón exacto que Tallas/Telas (reactivar en vez de duplicar, uso-check antes de eliminar, soft-delete). Probado en vivo de punta a punta contra la empresa 194 con una moneda de prueba desechable (creación, uso=0, eliminación, verificado que las 3 monedas reales y sus 9 métodos no se tocaron).
+- **Herramienta(s) Utilizada(s):** `Write`, `php -l`, `deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` para pruebas en vivo.
+- **Resultado:** Éxito
+- **Verificación:** `php -l` sin errores. En vivo: `GET /monedas` devuelve las 3 monedas reales; `GET /monedas/1/uso` (USD) devuelve `{metodos_de_pago:3618, caja:1982, retiros:0, total:5600}` (coincide con los datos reales de la Fase 2); intento de eliminar USD (es_base=1) devuelve 400 con mensaje claro; ciclo completo crear→uso→eliminar con moneda "TST" de prueba, sin dejar rastro y sin afectar las 3 monedas/9 métodos reales.
+- **Logro Conseguido:** El Gestor de Monedas ahora tiene un backend real detrás -- responde la pregunta que abrió esta investigación hace varias fases: sí existe ahora un soft-delete con verificación de uso real para monedas y métodos de pago, igual que Tallas/Telas.
+- **Observaciones de Gemini:** N/A (sesión con Claude Code).
+- **Respuesta de Gemini:** Fase 5 backend completa: CRUD de catalogo_monedas/catalogo_metodos_pago probado en vivo de punta a punta, sin tocar los datos reales de la empresa 194. Sigue el frontend (ver bitácora de app_multi) y después la Fase 6.
