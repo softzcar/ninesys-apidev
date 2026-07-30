@@ -5315,9 +5315,14 @@ pago_comision,
 moment
 ) VALUES (?, \'activa\', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'pendiente\', ?)';
 
+  // id_wp es FK nullable hacia customers -- intval(null) daría 0, que no es un
+  // cliente válido y viola la FK. Se preserva NULL cuando el presupuesto no
+  // tiene cliente vinculado (mismo criterio ya usado en /ordenes/nueva/custom).
+  $id_wp_presupuesto = !empty($presupuesto['id_wp']) ? intval($presupuesto['id_wp']) : null;
+
   $object['sql_orden'] = $sql_orden;
   $localConnection->goQuery($sql_orden, [
-    intval($presupuesto['id_wp']),
+    $id_wp_presupuesto,
     $presupuesto['tipo'],
     intval($presupuesto['responsable']),
     $presupuesto['cliente_nombre'],
