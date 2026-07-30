@@ -5262,32 +5262,36 @@ id_products_attributes, id_size, id_tela, moment
   $tasa_dolar = isset($data['tasa_dolar']) ? floatval($data['tasa_dolar']) : 1;
   $tasa_peso = isset($data['tasa_peso']) ? floatval($data['tasa_peso']) : 1;
 
-  // Nota: esta ruta ya escribía 'Dolares'/'Bolivares'/'Banesco Panama' sin tilde
-  // (fragmentación de datos preexistente, documentada e independiente del
-  // rediseño de monedas) -- el resolver no encuentra esos nombres en
-  // catalogo_monedas/catalogo_metodos_pago (que usan 'Dólares'/'Bolívares' con
-  // tilde) y devuelve [null, null], igual que para cualquier empresa no
-  // migrada. No se corrige esa fragmentación aquí, fuera de alcance de esta fase.
+  // Corregido: esta ruta escribía 'Dolares'/'Bolivares'/'Banesco Panama' sin
+  // tilde y con nombres de método inconsistentes con el resto del sistema
+  // (fragmentación de datos preexistente). Verificado contra el clon real de
+  // producción: CERO filas históricas usan esa grafía -- esta ruta nunca se
+  // había ejercitado con esos montos, por lo que corregir el texto no rompe
+  // ni desconecta ningún dato ya guardado. Se alinea a los mismos strings
+  // exactos que usa el resto del sistema ('Dólares', 'Bolívares', 'Panamá'),
+  // para que además el resolver de catalogo_monedas/catalogo_metodos_pago
+  // encuentre coincidencia real.
   $sql_metodo_pago = 'INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, detalle, tipo_de_pago, monto, tasa, moment, id_moneda, id_metodo_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
   // Dólares Efectivo
   if (isset($data['montoDolaresEfectivo']) && $data['montoDolaresEfectivo'] > 0) {
-    list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dolares', 'Efectivo');
-    $localConnection->goQuery($sql_metodo_pago, [$id_orden, 'Dolares', 'Efectivo', '', 'Orden nueva', floatval($data['montoDolaresEfectivo']), $tasa_dolar, $now, $idMoneda, $idMetodo]);
+    list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dólares', 'Efectivo');
+    $localConnection->goQuery($sql_metodo_pago, [$id_orden, 'Dólares', 'Efectivo', '', 'Orden nueva', floatval($data['montoDolaresEfectivo']), $tasa_dolar, $now, $idMoneda, $idMetodo]);
   }
 
   // Dólares Zelle
   if (isset($data['montoDolaresZelle']) && $data['montoDolaresZelle'] > 0) {
     $detalle = $data['montoDolaresZelleDetalle'] ?? '';
-    list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dolares', 'Zelle');
-    $localConnection->goQuery($sql_metodo_pago, [$id_orden, 'Dolares', 'Zelle', $detalle, 'Orden nueva', floatval($data['montoDolaresZelle']), $tasa_dolar, $now, $idMoneda, $idMetodo]);
+    list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dólares', 'Zelle');
+    $localConnection->goQuery($sql_metodo_pago, [$id_orden, 'Dólares', 'Zelle', $detalle, 'Orden nueva', floatval($data['montoDolaresZelle']), $tasa_dolar, $now, $idMoneda, $idMetodo]);
   }
 
-  // Dólares Banesco Panamá
+  // Dólares Panamá (antes 'Banesco Panama' -- alineado al mismo método que usan
+  // los demás endpoints de pago)
   if (isset($data['montoDolaresPanama']) && $data['montoDolaresPanama'] > 0) {
     $detalle = $data['montoDolaresPanamaDetalle'] ?? '';
-    list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dolares', 'Banesco Panama');
-    $localConnection->goQuery($sql_metodo_pago, [$id_orden, 'Dolares', 'Banesco Panama', $detalle, 'Orden nueva', floatval($data['montoDolaresPanama']), $tasa_dolar, $now, $idMoneda, $idMetodo]);
+    list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dólares', 'Panamá');
+    $localConnection->goQuery($sql_metodo_pago, [$id_orden, 'Dólares', 'Panamá', $detalle, 'Orden nueva', floatval($data['montoDolaresPanama']), $tasa_dolar, $now, $idMoneda, $idMetodo]);
   }
 
   // Pesos
@@ -5296,6 +5300,12 @@ id_products_attributes, id_size, id_tela, moment
     $localConnection->goQuery($sql_metodo_pago, [$id_orden, 'Pesos', 'Efectivo', '', 'Orden nueva', floatval($data['montoPesosEfectivo']), $tasa_peso, $now, $idMoneda, $idMetodo]);
   }
 
+  // 'Pago movil' para Pesos: no tiene tilde, pero tampoco corresponde a ningún
+  // método real del catálogo de la empresa (Pesos solo tiene Efectivo/
+  // Transferencia, ver Fase 2) -- sin uso histórico real tampoco. Se deja el
+  // texto intacto a propósito: no es un problema de acento, es una pregunta de
+  // negocio (¿existe este método realmente? ¿debería mapear a Transferencia?)
+  // que no corresponde decidir aquí.
   if (isset($data['montoPesosPago']) && $data['montoPesosPago'] > 0) {
     $detalle = $data['montoPesosPagoDetalle'] ?? '';
     list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Pesos', 'Pago movil');
@@ -5304,8 +5314,8 @@ id_products_attributes, id_size, id_tela, moment
 
   // Bolívares (si aplica)
   if (isset($data['montoBolivaresEfectivo']) && $data['montoBolivaresEfectivo'] > 0) {
-    list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Bolivares', 'Efectivo');
-    $localConnection->goQuery($sql_metodo_pago, [$id_orden, 'Bolivares', 'Efectivo', '', 'Orden nueva', floatval($data['montoBolivaresEfectivo']), 1, $now, $idMoneda, $idMetodo]);
+    list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Bolívares', 'Efectivo');
+    $localConnection->goQuery($sql_metodo_pago, [$id_orden, 'Bolívares', 'Efectivo', '', 'Orden nueva', floatval($data['montoBolivaresEfectivo']), 1, $now, $idMoneda, $idMetodo]);
   }
 
   // CREAR LOTE DE PRODUCCIÓN
