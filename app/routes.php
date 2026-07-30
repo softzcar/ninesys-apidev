@@ -223,6 +223,9 @@ return function (App $app) {
   // TASAS DE CAMBIO NORMALIZADAS POR EMPRESA (Fase 3 del rediseño de monedas)
   (require __DIR__ . '/routes/tasas_cambio.php')($app);
 
+  // CATÁLOGOS POR EMPRESA DE MONEDAS Y MÉTODOS DE PAGO (Fase 5 del rediseño de monedas)
+  (require __DIR__ . '/routes/monedas.php')($app);
+
   /** PROXY PARA TASAS DE CAMBIO (CORS FIX) */
   $app->get('/bcv-rates', function (Request $request, Response $response) {
     // Caché transitoria: la tasa del BCV cambia ~1 vez al día. Evita golpear
