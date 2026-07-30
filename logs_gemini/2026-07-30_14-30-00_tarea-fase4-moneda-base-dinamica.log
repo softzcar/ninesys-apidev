@@ -1,0 +1,21 @@
+- **Solicitud del Usuario:** Implementar la Fase 4 del plan aprobado "Estándar de monedas, métodos de pago y moneda base dinámicos": moneda base dinámica -- que el sistema deje de asumir que el dólar siempre es la unidad de cuenta, reprogramando `usdConverter()` para que compare contra la moneda base real de la empresa en vez de strings fijos.
+- **Fecha y Hora:** 2026-07-30 14:30:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+    - app/routes/auth.php (`/login`, `/refresh-session`)
+    - app/routes/tasas_cambio.php (ajuste de resiliencia)
+- **Commits Relacionados:**
+    - Backend: ba256e9 (feature/postgresql-support)
+    - Frontend: ver bitácora de app_multi
+- **Acción Realizada:**
+    1. Se agregó `moneda_base` (`{codigo, nombre, simbolo}`) a `datos_empresa` en los 3 lugares donde `/login` y `/refresh-session` construyen esa respuesta, consultando `catalogo_monedas WHERE es_base = 1 AND eliminado = 0` en la base de datos propia de la empresa (misma conexión ya usada para `config`/personalización).
+    2. **Hallazgo crítico durante la implementación:** `catalogo_monedas` solo existe hoy en la empresa 194 (única migrada en la Fase 2) -- las otras 4 empresas (163, 176, 193, 195) NO tienen esa tabla todavía. Sin protección, la consulta habría lanzado una excepción real (tabla inexistente) que `LocalDB::goQuery()` propaga como `DatabaseQueryException` -> HTTP 500, rompiendo el login de esas 4 empresas. Se envolvió la consulta en `try/catch` en los 3 lugares, tratando la ausencia de la tabla como un estado esperado (empresa aún no migrada), no como un error.
+    3. Se aplicó el mismo criterio a `GET /tasas-cambio` (Fase 3): en vez de devolver `500` si `catalogo_monedas` no existe, ahora devuelve `{data: []}` con `200`.
+- **Inconvenientes y Desafíos:** El hallazgo del punto 2 fue detectado ANTES de desplegar, verificando mentalmente el flujo de `goQuery()` (que documenta explícitamente que errores SQL no manejados se re-lanzan como excepción real, por diseño, para no fingir éxito). Se verificó en vivo tras el despliegue: `refresh-session` para un usuario de la empresa 176 (no migrada) devuelve `200` sin la clave `moneda_base`, sin ningún error visible.
+- **Decisión Final y Justificación:** Migración 100% retrocompatible: las empresas no migradas siguen funcionando exactamente igual que antes (sin `moneda_base` en la respuesta, tal como ya era el caso); solo la empresa 194 empieza a recibir el dato nuevo. Reafirma el patrón ya usado en la Fase 1/2 de "aditivo, nunca romper lo que funciona".
+- **Herramienta(s) Utilizada(s):** `Edit`, `php -l`, `deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` para pruebas en vivo, `psql` vía SSH para ubicar usuarios de prueba de otras empresas.
+- **Resultado:** Éxito
+- **Verificación:** `php -l` sin errores. En vivo: `GET /refresh-session/3` (empresa 194) devuelve `moneda_base: {codigo:"USD", nombre:"Dólares", simbolo:"$"}`; `GET /refresh-session/623` (empresa 176, no migrada) devuelve `200` sin esa clave y sin ningún error.
+- **Logro Conseguido:** El backend ahora puede decirle al frontend, de forma real y verificable, cuál es la moneda base de cada empresa -- sentando la base para que `usdConverter()` (ver bitácora frontend) deje de asumir "todo lo que no sea Bolívares/Pesos es dólares".
+- **Observaciones de Gemini:** N/A (sesión con Claude Code).
+- **Respuesta de Gemini:** Fase 4 backend completa: `moneda_base` expuesto en login/refresh-session con protección total para empresas aún no migradas (verificado en vivo que no rompe nada). Sigue el resto de la Fase 4 en el frontend (`convertirAMonedaBase()`).
