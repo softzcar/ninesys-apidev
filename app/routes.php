@@ -220,6 +220,9 @@ return function (App $app) {
   // RUTAS DEL MODULO DE CRM
   (require __DIR__ . '/routes/crm.php')($app);
 
+  // TASAS DE CAMBIO NORMALIZADAS POR EMPRESA (Fase 3 del rediseño de monedas)
+  (require __DIR__ . '/routes/tasas_cambio.php')($app);
+
   /** PROXY PARA TASAS DE CAMBIO (CORS FIX) */
   $app->get('/bcv-rates', function (Request $request, Response $response) {
     // Caché transitoria: la tasa del BCV cambia ~1 vez al día. Evita golpear
