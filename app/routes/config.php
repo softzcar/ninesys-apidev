@@ -90,6 +90,11 @@ return function (App $app) {
             $params[] = $data['pais'];
         }
 
+        if (isset($data['id_pais'])) {
+            $updateFields[] = 'id_pais = ?';
+            $params[] = (int) $data['id_pais'];
+        }
+
         if (isset($data['timezone'])) {
             $updateFields[] = 'timezone = ?';
             $params[] = $data['timezone'];
@@ -131,6 +136,52 @@ return function (App $app) {
         return $response
             ->withHeader('Content-Type', 'application/json')
             ->withStatus(200);
+    });
+
+    // CATÁLOGO DE PLATAFORMA - PAÍSES SOPORTADOS (compartido entre empresas, curado a mano)
+    $app->get('/paises-soportados', function (Request $request, Response $response) {
+        try {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $localConnection->goQuery('SELECT id_pais, nombre, codigo_iso2, codigo_telefonico FROM paises_soportados ORDER BY nombre');
+            $localConnection->disconnect();
+
+            $data = array_map(function ($row) {
+                $row['id_pais'] = (int) $row['id_pais'];
+                return $row;
+            }, $rows);
+
+            $response->getBody()->write(json_encode(['data' => $data]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error al obtener países soportados: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    // CATÁLOGO DE PLATAFORMA - MONEDAS SOPORTADAS POR PAÍS
+    $app->get('/monedas-soportadas/{id_pais}', function (Request $request, Response $response, array $args) {
+        try {
+            $idPais = (int) $args['id_pais'];
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $localConnection->goQuery(
+                'SELECT id_moneda_soportada, id_pais, codigo, nombre, simbolo, es_default_para_pais FROM monedas_soportadas_por_pais WHERE id_pais = ? ORDER BY es_default_para_pais DESC, nombre',
+                [$idPais]
+            );
+            $localConnection->disconnect();
+
+            $data = array_map(function ($row) {
+                $row['id_moneda_soportada'] = (int) $row['id_moneda_soportada'];
+                $row['id_pais'] = (int) $row['id_pais'];
+                $row['es_default_para_pais'] = (bool) $row['es_default_para_pais'];
+                return $row;
+            }, $rows);
+
+            $response->getBody()->write(json_encode(['data' => $data]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error al obtener monedas soportadas: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
     });
 
     // CONFIGURACIÓN WIZARD - MONEDAS
