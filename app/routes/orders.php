@@ -2594,27 +2594,28 @@ return function (App $app) {
     $arr['responsable'] = json_decode($newJson['responsable']);
     $arr['sales_commission'] = json_decode($newJson['sales_commission']);
 
-    // RECIBIR LOS METODOS DE PAGO
-    $arr['montoDolaresEfectivo'] = json_decode($newJson['montoDolaresEfectivo']);
+    // RECIBIR LOS METODOS DE PAGO (camino legado; ausentes cuando el
+    // formulario ya envía 'pagos' -- ver decodificarPagosGenericos más abajo)
+    $arr['montoDolaresEfectivo'] = json_decode($newJson['montoDolaresEfectivo'] ?? 'null');
     $arr['montoDolaresEfectivoDetalle'] = $newJson['montoDolaresEfectivoDetalle'] ?? '';
-    $arr['montoDolaresZelle'] = json_decode($newJson['montoDolaresZelle']);
+    $arr['montoDolaresZelle'] = json_decode($newJson['montoDolaresZelle'] ?? 'null');
     $arr['montoDolaresZelleDetalle'] = $newJson['montoDolaresZelleDetalle'] ?? '';
-    $arr['montoDolaresPanama'] = json_decode($newJson['montoDolaresPanama']);
+    $arr['montoDolaresPanama'] = json_decode($newJson['montoDolaresPanama'] ?? 'null');
     $arr['montoDolaresPanamaDetalle'] = $newJson['montoDolaresPanamaDetalle'] ?? '';
-    $arr['montoPesosEfectivo'] = json_decode($newJson['montoPesosEfectivo']);
+    $arr['montoPesosEfectivo'] = json_decode($newJson['montoPesosEfectivo'] ?? 'null');
     $arr['montoPesosEfectivoDetalle'] = $newJson['montoPesosEfectivoDetalle'] ?? '';
-    $arr['montoPesosTransferencia'] = json_decode($newJson['montoPesosTransferencia']);
+    $arr['montoPesosTransferencia'] = json_decode($newJson['montoPesosTransferencia'] ?? 'null');
     $arr['montoPesosTransferenciaDetalle'] = $newJson['montoPesosTransferenciaDetalle'] ?? '';
-    $arr['montoBolivaresEfectivo'] = json_decode($newJson['montoBolivaresEfectivo']);
+    $arr['montoBolivaresEfectivo'] = json_decode($newJson['montoBolivaresEfectivo'] ?? 'null');
     $arr['montoBolivaresEfectivoDetalle'] = $newJson['montoBolivaresEfectivoDetalle'] ?? '';
-    $arr['montoBolivaresPunto'] = json_decode($newJson['montoBolivaresPunto']);
+    $arr['montoBolivaresPunto'] = json_decode($newJson['montoBolivaresPunto'] ?? 'null');
     $arr['montoBolivaresPuntoDetalle'] = $newJson['montoBolivaresPuntoDetalle'] ?? '';
-    $arr['montoBolivaresPagomovil'] = json_decode($newJson['montoBolivaresPagomovil']);
+    $arr['montoBolivaresPagomovil'] = json_decode($newJson['montoBolivaresPagomovil'] ?? 'null');
     $arr['montoBolivaresPagomovilDetalle'] = $newJson['montoBolivaresPagomovilDetalle'] ?? '';
-    $arr['montoBolivaresTransferencia'] = json_decode($newJson['montoBolivaresTransferencia']);
+    $arr['montoBolivaresTransferencia'] = json_decode($newJson['montoBolivaresTransferencia'] ?? 'null');
     $arr['montoBolivaresTransferenciaDetalle'] = $newJson['montoBolivaresTransferenciaDetalle'] ?? '';
-    $arr['tasa_dolar'] = json_decode($newJson['tasa_dolar']);
-    $arr['tasa_peso'] = json_decode($newJson['tasa_peso']);
+    $arr['tasa_dolar'] = json_decode($newJson['tasa_dolar'] ?? 'null');
+    $arr['tasa_peso'] = json_decode($newJson['tasa_peso'] ?? 'null');
     $sendWhatsApp = filter_var($newJson['sendWhatsAppMessage'] ?? false, FILTER_VALIDATE_BOOLEAN);
     $guardar_stock = filter_var($newJson['guardar_stock'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
@@ -3353,27 +3354,10 @@ $object['sales_commission_ISSET'][] = false;
       $arr['responsable'] = json_decode($newJson['responsable']);
       $arr['sales_commission'] = json_decode($newJson['sales_commission']);
 
-      // RECIBIR LOS METODOS DE PAGO
-      $arr['montoDolaresEfectivo'] = json_decode($newJson['montoDolaresEfectivo']);
-      $arr['montoDolaresEfectivoDetalle'] = json_decode($newJson['montoDolaresEfectivoDetalle']);
-      $arr['montoDolaresZelle'] = json_decode($newJson['montoDolaresZelle']);
-      $arr['montoDolaresZelleDetalle'] = json_decode($newJson['montoDolaresZelleDetalle']);
-      $arr['montoDolaresPanama'] = json_decode($newJson['montoDolaresPanama']);
-      $arr['montoDolaresPanamaDetalle'] = json_decode($newJson['montoDolaresPanamaDetalle']);
-      $arr['montoPesosEfectivo'] = json_decode($newJson['montoPesosEfectivo']);
-      $arr['montoPesosEfectivoDetalle'] = json_decode($newJson['montoPesosEfectivoDetalle']);
-      $arr['montoPesosTransferencia'] = json_decode($newJson['montoPesosTransferencia']);
-      $arr['montoPesosTransferenciaDetalle'] = json_decode($newJson['montoPesosTransferenciaDetalle']);
-      $arr['montoBolivaresEfectivo'] = json_decode($newJson['montoBolivaresEfectivo']);
-      $arr['montoBolivaresEfectivoDetalle'] = json_decode($newJson['montoBolivaresEfectivoDetalle']);
-      $arr['montoBolivaresPunto'] = json_decode($newJson['montoBolivaresPunto']);
-      $arr['montoBolivaresPuntoDetalle'] = json_decode($newJson['montoBolivaresPuntoDetalle']);
-      $arr['montoBolivaresPagomovil'] = json_decode($newJson['montoBolivaresPagomovil']);
-      $arr['montoBolivaresPagomovilDetalle'] = json_decode($newJson['montoBolivaresPagomovilDetalle']);
-      $arr['montoBolivaresTransferencia'] = json_decode($newJson['montoBolivaresTransferencia']);
-      $arr['montoBolivaresTransferenciaDetalle'] = json_decode($newJson['montoBolivaresTransferenciaDetalle']);
-      $arr['tasa_dolar'] = json_decode($newJson['tasa_dolar']);
-      $arr['tasa_peso'] = json_decode($newJson['tasa_peso']);
+      // NOTA (Fase 7): esta ruta nunca insertó los campos montoDolaresEfectivo,
+      // etc. en metodos_de_pago/caja (ver bloque más abajo) -- eran leídos a
+      // $arr sin ningún uso real, código muerto eliminado aquí. El pago se
+      // recibe ahora exclusivamente vía el parámetro 'pagos' (decodificarPagosGenericos).
       $sendWhatsApp = filter_var($newJson['sendWhatsAppMessage'] ?? false);
 
       $arr['hoy'] = date('d/m/Y');
