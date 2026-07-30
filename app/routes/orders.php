@@ -5274,14 +5274,25 @@ $object['sales_commission_ISSET'][] = false;
   $descuento = isset($data['descuento']) ? floatval($data['descuento']) : 0;
 
   // SUMAR TODOS LOS MONTOS DE PAGO PARA EL ABONO
+  // decodificado aquí (y reutilizado más abajo en "REGISTRAR MÉTODOS DE
+  // PAGO") porque el abono debe reflejar el camino que realmente se usó --
+  // si el formulario ya envía 'pagos' (Fase 7), sumar los campos legados
+  // (ausentes) daría un abono de 0 aunque sí se haya registrado el pago.
+  $pagosGenericos = decodificarPagosGenericos($data);
   $abono = 0;
-  $abono += isset($data['montoDolaresEfectivo']) ? floatval($data['montoDolaresEfectivo']) : 0;
-  $abono += isset($data['montoDolaresZelle']) ? floatval($data['montoDolaresZelle']) : 0;
-  $abono += isset($data['montoDolaresPanama']) ? floatval($data['montoDolaresPanama']) : 0;
-  $abono += isset($data['montoPesosEfectivo']) ? floatval($data['montoPesosEfectivo']) : 0;
-  $abono += isset($data['montoPesosPago']) ? floatval($data['montoPesosPago']) : 0;
-  $abono += isset($data['montoBolivaresEfectivo']) ? floatval($data['montoBolivaresEfectivo']) : 0;
-  $abono += isset($data['montoBolivaresPago']) ? floatval($data['montoBolivaresPago']) : 0;
+  if (!empty($pagosGenericos)) {
+    foreach ($pagosGenericos as $pago) {
+      $abono += floatval($pago['monto'] ?? 0);
+    }
+  } else {
+    $abono += isset($data['montoDolaresEfectivo']) ? floatval($data['montoDolaresEfectivo']) : 0;
+    $abono += isset($data['montoDolaresZelle']) ? floatval($data['montoDolaresZelle']) : 0;
+    $abono += isset($data['montoDolaresPanama']) ? floatval($data['montoDolaresPanama']) : 0;
+    $abono += isset($data['montoPesosEfectivo']) ? floatval($data['montoPesosEfectivo']) : 0;
+    $abono += isset($data['montoPesosPago']) ? floatval($data['montoPesosPago']) : 0;
+    $abono += isset($data['montoBolivaresEfectivo']) ? floatval($data['montoBolivaresEfectivo']) : 0;
+    $abono += isset($data['montoBolivaresPago']) ? floatval($data['montoBolivaresPago']) : 0;
+  }
 
   // CREAR ORDEN EN TABLA ORDENES
   $localConnection->beginTransaction();
@@ -5361,11 +5372,9 @@ id_products_attributes, id_size, id_tela, moment
     ]);
   }
 
-  // REGISTRAR MÉTODOS DE PAGO
+  // REGISTRAR MÉTODOS DE PAGO ($pagosGenericos ya decodificado arriba, junto al cálculo del abono)
   $tasa_dolar = isset($data['tasa_dolar']) ? floatval($data['tasa_dolar']) : 1;
   $tasa_peso = isset($data['tasa_peso']) ? floatval($data['tasa_peso']) : 1;
-
-  $pagosGenericos = decodificarPagosGenericos($data);
 
   if (!empty($pagosGenericos)) {
     // CAMINO NUEVO (Fase 7): dirigido por catalogo_metodos_pago real. A
