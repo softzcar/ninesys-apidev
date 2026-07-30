@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** Implementar la Fase 3 del plan aprobado "Estándar de monedas, métodos de pago y moneda base dinámicos": generalizar el scrapper de tasas para que devuelva un contrato JSON normalizado por moneda, con una estrategia de obtención por código (scraping o API de terceros) invisible para el consumidor, preservando exactamente el comportamiento actual de Venezuela (BCV + dolarapi.com).
+- **Fecha y Hora:** 2026-07-30 13:40:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+    - app/routes/tasas_cambio.php (nuevo)
+    - app/routes.php (registro del nuevo archivo de rutas)
+- **Commits Relacionados:**
+    - Backend: ba4207d (feature/postgresql-support)
+    - Frontend: N/A
+- **Acción Realizada:**
+    1. Se creó `GET /tasas-cambio`, que consulta `catalogo_monedas` (activo=1, eliminado=0) de la empresa autenticada (vía `ID_EMPRESA`/`LocalDB()`) y devuelve, para cada moneda, `{codigo, tasa, fuente, fecha}`. La moneda con `es_base=1` siempre reporta `tasa=1, fuente="base"` sin hacer ninguna llamada externa.
+    2. Se implementaron 2 estrategias, mapeadas por código ISO: VES reutiliza el MISMO mecanismo que `GET /bcv-rates` (scrape a bcv.org.ve vía cURL+XPath, con fallback a `ve.dolarapi.com/v1/dolares/oficial` si el scrape falla), con su propio archivo de caché (10 min) independiente del de `/bcv-rates` para no acoplar ambos endpoints. COP usa la misma API de jsdelivr que hoy llama directamente el frontend (`plugins/currency-rates.js`), pero movida al backend.
+    3. `GET /bcv-rates` (routes.php) se dejó completamente intacto -- no se tocó ni una línea -- porque sigue siendo la fuente que usa `currency-rates.js` en producción hoy; el cambio de consumidor del frontend queda deliberadamente para la Fase 4, cuando se reprograme `store/login.js` de todas formas.
+    4. Se registró el nuevo archivo de rutas en `routes.php` (confirmado que es el único archivo de rutas realmente cargado por `index.php`; `routes_refactorized.php` no está en el bootstrap activo, no se tocó).
+- **Inconvenientes y Desafíos:** Ninguno bloqueante. Se decidió duplicar la lógica de scrape de BCV en vez de refactorizar el closure existente dentro de `routes.php` para compartirlo entre ambos endpoints -- evita cualquier riesgo de tocar el endpoint legacy ya en uso, a cambio de ~50 líneas duplicadas (documentado explícitamente en el código como decisión intencional, candidato a consolidar en una fase de limpieza posterior).
+- **Decisión Final y Justificación:** Contrato único `{codigo, tasa, fuente, fecha}` independiente de la tecnología de obtención, exactamente como lo pidió el usuario ("la tecnología usada es un detalle de implementación por moneda, invisible para el consumidor"). Verificado en vivo que la tasa VES devuelta por el endpoint nuevo coincide EXACTAMENTE con la que devuelve `/bcv-rates` en el mismo momento (745.6371 en ambos), confirmando que la fuente de datos no cambió, solo se generalizó el contrato de salida.
+- **Herramienta(s) Utilizada(s):** `Write`, `php -l`, `deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` para pruebas en vivo.
+- **Resultado:** Éxito
+- **Verificación:** `php -l` sin errores en ambos archivos. Probado en vivo contra `vps-contabo-dev`: `GET /tasas-cambio` con `Authorization: 194` devuelve las 3 monedas de la empresa (USD base=1, VES=745.6371 vía bcv_oficial, COP=3196.45 vía jsdelivr_currency_api); la tasa VES coincide exactamente con `GET /bcv-rates` consultado en el mismo momento; sin header `Authorization` el endpoint devuelve `401` correctamente.
+- **Logro Conseguido:** El sistema ahora tiene un endpoint de tasas que sabe, por sí mismo, qué monedas usa cada empresa y cómo obtener la tasa de cada una -- sin hardcodear Bolívares/Pesos en ningún lugar del backend nuevo -- preparando el terreno para que el frontend (Fase 4) deje de llamar 3 URLs externas fijas desde el navegador.
+- **Observaciones de Gemini:** N/A (sesión con Claude Code).
+- **Respuesta de Gemini:** Fase 3 completa: `GET /tasas-cambio` implementado y verificado en vivo, con la tasa VES coincidiendo exactamente con la fuente actual. `/bcv-rates` no se tocó. Sigue la Fase 4 (moneda base dinámica), que incluye migrar `currency-rates.js`/`store/login.js` a este nuevo endpoint.
