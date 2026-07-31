@@ -295,6 +295,7 @@ return function (App $app) {
         $object['empresa']['horario_laboral'] = json_decode($empresa_data['horario_laboral']);
         $object['empresa']['tipos_de_monedas'] = json_decode($empresa_data['tipos_de_monedas']);
         $object['empresa']['pais'] = $empresa_data['pais'];
+        $object['empresa']['id_pais'] = $empresa_data['id_pais'] !== null ? (int) $empresa_data['id_pais'] : null;
         $object['empresa']['timezone'] = $empresa_data['timezone'] ?? null;
         $object['empresa']['numero_registro_legal'] = $empresa_data['numero_registro_legal'];
         $object['empresa']['activo'] = $empresa_data['activo'];
