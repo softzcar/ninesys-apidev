@@ -10,13 +10,23 @@ return function (App $app) {
   // monedas/métodos de pago). Cada estrategia normaliza su resultado al mismo
   // contrato {tasa, fuente, fecha} sin importar la tecnología usada para obtenerla
   // (scraping, API de terceros, etc.) -- el consumidor final nunca necesita saberlo.
+  // Convención (importante): toda estrategia automática devuelve la tasa
+  // expresada "unidades de esa moneda por 1 USD" -- un ancla fija, sin
+  // importar cuál sea la moneda base real de la empresa. GET /tasas-cambio
+  // es quien, más abajo, triangula ese valor contra la moneda base actual.
+  // Se eligió USD como ancla porque es lo que ya publican las fuentes
+  // externas usadas (BCV cotiza en bolívares por dólar, jsdelivr cotiza en
+  // pesos por dólar) -- normalizar aquí evita que cada estrategia tenga que
+  // saber nada sobre la empresa que la está consultando.
   // No tocan ni comparten caché con GET /bcv-rates (routes.php) para no arriesgar
   // ese endpoint ya en uso -- fuentes de datos iguales, implementación independiente.
 
-  // VES: mismo mecanismo que GET /bcv-rates (scrape a bcv.org.ve con fallback a
-  // dolarapi.com), para que la tasa resultante sea idéntica a la que ya se usa hoy.
-  $obtenerTasaVES = function () {
-    $cacheFile = sys_get_temp_dir() . '/ninesys_tasa_ves.json';
+  // El BCV publica, en la misma página, la cotización de varias divisas
+  // frente al bolívar (dólar, euro, yuan, lira, rublo). Se scrapea una sola
+  // vez y se cachean juntas -- evita pedidos duplicados y evita que dólar y
+  // euro puedan quedar leídos en momentos distintos entre sí.
+  $obtenerCotizacionesBCV = function () {
+    $cacheFile = sys_get_temp_dir() . '/ninesys_cotizaciones_bcv.json';
     $cacheTtl = 600; // 10 minutos
     if (is_readable($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTtl) {
       $cached = json_decode(file_get_contents($cacheFile), true);
@@ -42,7 +52,8 @@ return function (App $app) {
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    $tasa = null;
+    $vesPorUsd = null;
+    $vesPorEur = null;
     $fuente = null;
 
     if ($code < 400 && $html) {
@@ -52,23 +63,33 @@ return function (App $app) {
       libxml_clear_errors();
       libxml_use_internal_errors(false);
       $xpath = new DOMXPath($dom);
-      $nodes = $xpath->query('//*[@id="dolar"]//strong');
-      if ($nodes && $nodes->length > 0) {
-        $raw = trim($nodes->item(0)->textContent);
-        if ($raw !== '') {
-          $cleaned = preg_replace('/[^\d,.-]/', '', $raw);
-          $cleaned = str_replace('.', '', $cleaned);
-          $cleaned = str_replace(',', '.', $cleaned);
-          if (is_numeric($cleaned) && floatval($cleaned) > 0) {
-            $tasa = floatval($cleaned);
-            $fuente = 'bcv_oficial';
-          }
+
+      $leerNodo = function ($id) use ($xpath) {
+        $nodes = $xpath->query('//*[@id="' . $id . '"]//strong');
+        if (!$nodes || $nodes->length === 0) {
+          return null;
         }
+        $raw = trim($nodes->item(0)->textContent);
+        if ($raw === '') {
+          return null;
+        }
+        $cleaned = preg_replace('/[^\d,.-]/', '', $raw);
+        $cleaned = str_replace('.', '', $cleaned);
+        $cleaned = str_replace(',', '.', $cleaned);
+        return (is_numeric($cleaned) && floatval($cleaned) > 0) ? floatval($cleaned) : null;
+      };
+
+      $vesPorUsd = $leerNodo('dolar');
+      $vesPorEur = $leerNodo('euro');
+      if ($vesPorUsd !== null) {
+        $fuente = 'bcv_oficial';
       }
     }
 
-    if ($tasa === null) {
-      // Fallback: DolarAPI oficial (mismo fallback que GET /bcv-rates)
+    if ($vesPorUsd === null) {
+      // Fallback: DolarAPI oficial (mismo fallback que GET /bcv-rates). Solo
+      // cubre el dólar -- si el BCV está caído, el euro queda sin resolver
+      // por esta vía (cae a tasa manual o "sin_configurar" más abajo).
       $chFallback = curl_init();
       curl_setopt($chFallback, CURLOPT_URL, 'https://ve.dolarapi.com/v1/dolares/oficial');
       curl_setopt($chFallback, CURLOPT_RETURNTRANSFER, true);
@@ -81,23 +102,52 @@ return function (App $app) {
       if ($fbCode === 200 && $fbResult) {
         $data = json_decode($fbResult, true);
         if (isset($data['promedio']) && $data['promedio'] > 0) {
-          $tasa = (float) $data['promedio'];
+          $vesPorUsd = (float) $data['promedio'];
           $fuente = 'dolarapi_fallback';
         }
       }
     }
 
-    if ($tasa === null) {
+    if ($vesPorUsd === null) {
       return null;
     }
 
-    $resultado = ['tasa' => $tasa, 'fuente' => $fuente, 'fecha' => date('c')];
+    $resultado = [
+      'ves_por_usd' => $vesPorUsd,
+      'ves_por_eur' => $vesPorEur,
+      'fuente' => $fuente,
+      'fecha' => date('c'),
+    ];
     @file_put_contents($cacheFile, json_encode($resultado));
     return $resultado;
   };
 
+  // VES: mismo mecanismo que GET /bcv-rates, para que la tasa resultante sea
+  // idéntica a la que ya se usa hoy. Ya viene expresada "VES por 1 USD".
+  $obtenerTasaVES = function () use ($obtenerCotizacionesBCV) {
+    $cot = $obtenerCotizacionesBCV();
+    if (!$cot || $cot['ves_por_usd'] === null) {
+      return null;
+    }
+    return ['tasa' => $cot['ves_por_usd'], 'fuente' => $cot['fuente'], 'fecha' => $cot['fecha']];
+  };
+
+  // EUR: el BCV publica euro cotizado en bolívares, no en dólares -- se
+  // triangula a través del bolívar (mismo momento, misma página) para
+  // obtener "EUR por 1 USD", que es el contrato común de todas las
+  // estrategias automáticas.
+  $obtenerTasaEUR = function () use ($obtenerCotizacionesBCV) {
+    $cot = $obtenerCotizacionesBCV();
+    if (!$cot || $cot['ves_por_usd'] === null || $cot['ves_por_eur'] === null) {
+      return null;
+    }
+    $eurPorUsd = $cot['ves_por_usd'] / $cot['ves_por_eur'];
+    return ['tasa' => $eurPorUsd, 'fuente' => $cot['fuente'], 'fecha' => $cot['fecha']];
+  };
+
   // COP: misma fuente que hoy usa directamente el frontend (jsdelivr currency-api),
   // movida al backend para que el navegador deje de llamar 3 URLs externas fijas.
+  // Ya viene expresada "COP por 1 USD".
   $obtenerTasaCOP = function () {
     $cacheFile = sys_get_temp_dir() . '/ninesys_tasa_cop.json';
     $cacheTtl = 600; // 10 minutos
@@ -133,6 +183,7 @@ return function (App $app) {
 
   $estrategiasPorCodigo = [
     'VES' => $obtenerTasaVES,
+    'EUR' => $obtenerTasaEUR,
     'COP' => $obtenerTasaCOP,
   ];
 
@@ -143,6 +194,16 @@ return function (App $app) {
   // plugins/currency-rates.js) para que el frontend pueda, en una fase posterior,
   // dejar de llamar URLs externas fijas y en su lugar pedir "las tasas que le
   // corresponden a mi empresa".
+  //
+  // Las estrategias automáticas siempre devuelven "por 1 USD" (ver comentario
+  // arriba de $obtenerCotizacionesBCV). Como la moneda base de una empresa es
+  // configurable (Fase 4/8 del rediseño) y no siempre es USD, aquí se
+  // triangula cada resultado automático contra el valor "por USD" de la
+  // moneda base real -- así el resultado final es siempre "unidades de X por
+  // 1 unidad de la moneda base", que es lo que espera el frontend
+  // (equivalenteEnBase() en MetodosPagoDinamico.vue). Para la empresa 194
+  // real (base = USD) esto da exactamente el mismo resultado que antes,
+  // porque dividir entre 1 no cambia nada.
   $app->get('/tasas-cambio', function (Request $request, Response $response) use ($estrategiasPorCodigo) {
     if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
       $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
@@ -160,13 +221,20 @@ return function (App $app) {
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     }
 
-    $data = [];
+    // Paso 1: resolver cada moneda no-USD contra su fuente (automática,
+    // triangulada "por USD"; o manual, ya expresada "por la base actual").
+    // USD siempre es 1 por definición -- es el ancla, exista o no como fila
+    // de catalogo_monedas para esta empresa.
+    $codigoBase = null;
+    $resueltas = ['USD' => ['tasa' => 1.0, 'fuente' => 'ancla', 'fecha' => date('c'), 'esManual' => false]];
+
     foreach ($monedas as $moneda) {
       $codigo = $moneda['codigo'];
-
       if ((int) $moneda['es_base'] === 1) {
-        $data[] = ['codigo' => $codigo, 'tasa' => 1.0, 'fuente' => 'base', 'fecha' => date('c')];
-        continue;
+        $codigoBase = $codigo;
+      }
+      if ($codigo === 'USD') {
+        continue; // ya resuelto como ancla
       }
 
       $resultado = null;
@@ -174,25 +242,79 @@ return function (App $app) {
         $resultado = $estrategiasPorCodigo[$codigo]();
       }
 
+      if ($resultado !== null) {
+        $resultado['esManual'] = false;
+        $resueltas[$codigo] = $resultado;
+        continue;
+      }
+
       // Respaldo manual: si no hay estrategia automática, o la que existe
       // falló (ej. bcv.org.ve caído), usar la tasa cargada a mano en el
-      // Gestor de Monedas -- mismo contrato normalizado {tasa, fuente, fecha}.
-      if ($resultado === null && $moneda['tasa_manual'] !== null) {
-        $resultado = [
+      // Gestor de Monedas. A diferencia de las automáticas, el valor manual
+      // ya está expresado "por la moneda base actual" (es lo que el
+      // administrador ve y llena en el Gestor de Monedas) -- no se triangula.
+      if ($moneda['tasa_manual'] !== null) {
+        $resueltas[$codigo] = [
           'tasa' => (float) $moneda['tasa_manual'],
           'fuente' => 'manual',
           'fecha' => $moneda['tasa_manual_actualizado_en'],
+          'esManual' => true,
         ];
       }
+    }
 
-      // Nunca se omite una moneda activa del contrato: si tampoco hay tasa
-      // manual, se reporta explícitamente sin resolver, para que el frontend
-      // pueda avisar en vez de asumir en silencio una conversión 1:1.
-      if ($resultado !== null) {
-        $data[] = array_merge(['codigo' => $codigo], $resultado);
-      } else {
-        $data[] = ['codigo' => $codigo, 'tasa' => null, 'fuente' => 'sin_configurar', 'fecha' => null];
+    // Paso 2: factor de la moneda base respecto a USD, necesario para
+    // triangular las automáticas. Si la base no tiene un valor automático
+    // resuelto (ej. base=EUR pero el BCV no respondió y tampoco hay tasa
+    // manual para EUR), no hay forma confiable de triangular nada --
+    // cualquier automática no-base queda "sin_configurar" en vez de
+    // arriesgar un cálculo con datos parciales.
+    $baseFactorPorUsd = null;
+    if ($codigoBase === 'USD') {
+      $baseFactorPorUsd = 1.0;
+    } elseif (isset($resueltas[$codigoBase]) && empty($resueltas[$codigoBase]['esManual'])) {
+      $baseFactorPorUsd = $resueltas[$codigoBase]['tasa'];
+    }
+
+    // Paso 3: construir la respuesta final, siempre "por la moneda base
+    // actual", sin omitir nunca una moneda activa.
+    $data = [];
+    foreach ($monedas as $moneda) {
+      $codigo = $moneda['codigo'];
+
+      if ($codigo === $codigoBase) {
+        $data[] = ['codigo' => $codigo, 'tasa' => 1.0, 'fuente' => 'base', 'fecha' => date('c')];
+        continue;
       }
+
+      $resultado = $resueltas[$codigo] ?? null;
+
+      if ($resultado !== null && !empty($resultado['esManual'])) {
+        // Ya está en términos de la base actual, se usa tal cual.
+        $data[] = [
+          'codigo' => $codigo,
+          'tasa' => $resultado['tasa'],
+          'fuente' => $resultado['fuente'],
+          'fecha' => $resultado['fecha'],
+        ];
+        continue;
+      }
+
+      if ($resultado !== null && $baseFactorPorUsd !== null && $baseFactorPorUsd > 0) {
+        $data[] = [
+          'codigo' => $codigo,
+          'tasa' => $resultado['tasa'] / $baseFactorPorUsd,
+          'fuente' => $resultado['fuente'],
+          'fecha' => $resultado['fecha'],
+        ];
+        continue;
+      }
+
+      // Nunca se omite una moneda activa del contrato: si no hay forma de
+      // resolverla (ni automática ni manual, o la base misma no se pudo
+      // triangular), se reporta explícitamente sin resolver, para que el
+      // frontend pueda avisar en vez de asumir en silencio una conversión 1:1.
+      $data[] = ['codigo' => $codigo, 'tasa' => null, 'fuente' => 'sin_configurar', 'fecha' => null];
     }
 
     $response->getBody()->write(json_encode(['data' => $data]));
