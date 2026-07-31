@@ -19,68 +19,6 @@ return function (App $app) {
     return bin2hex(random_bytes($length));
   }
 
-  function splitSqlStatements($sql)
-  {
-    $statements = [];
-    $lines = explode("\n", $sql);
-    $currentStatement = '';
-    $inDelimiterBlock = false;
-    $delimiter = ';';
-
-    foreach ($lines as $line) {
-      $line = trim($line);
-
-      // Saltar líneas vacías
-      if (empty($line))
-        continue;
-
-      // Saltar líneas de comentario entre statements (-- y #) para que no
-      // contaminen el inicio del siguiente statement y hagan que sea descartado
-      if (empty($currentStatement) && preg_match('/^(--|#)/', $line))
-        continue;
-
-      // Manejar cambios de delimitador
-      if (preg_match('/^DELIMITER\s+(\S+)$/i', $line, $matches)) {
-        $delimiter = $matches[1];
-        continue;
-      }
-
-      $currentStatement .= $line . "\n";
-
-      // Si estamos en un bloque delimitado y encontramos el delimitador
-      if ($inDelimiterBlock && strpos($line, $delimiter) !== false && substr($line, -strlen($delimiter)) === $delimiter) {
-        // Remover el delimitador del final antes de guardar
-        $cleanStatement = trim(substr($currentStatement, 0, -strlen($delimiter)));
-        $statements[] = trim($cleanStatement);
-        $currentStatement = '';
-        $inDelimiterBlock = false;
-        $delimiter = ';'; // Reset to default
-        continue;
-      }
-
-      // Detectar inicio de bloque (CREATE TRIGGER, CREATE PROCEDURE, CREATE FUNCTION)
-      if (!$inDelimiterBlock && preg_match('/^(CREATE\s+(TRIGGER|PROCEDURE|FUNCTION))/i', $line)) {
-        $inDelimiterBlock = true;
-      }
-
-      // Para statements normales terminados con ;
-      if (!$inDelimiterBlock && strpos($line, ';') !== false && substr($line, -1) === ';') {
-        $currentStatement = trim(substr($currentStatement, 0, -1));
-        if (!empty($currentStatement) && !preg_match('/^(\s*--|\s*\/\*|\s*#)/', $currentStatement)) {
-          $statements[] = $currentStatement . ';';
-        }
-        $currentStatement = '';
-      }
-    }
-
-    // Agregar cualquier statement restante
-    if (!empty(trim($currentStatement))) {
-      $statements[] = trim($currentStatement);
-    }
-
-    return $statements;
-  }
-
   $app->options('/{routes:.*}', function (Request $request, Response $response, array $args) {
     // CORS Pre-Flight OPTIONS Request Handler
     return $response
@@ -491,20 +429,18 @@ return function (App $app) {
 
   // GET /setup/user
   $app->get('/setup/user', function (Request $request, Response $response) {
-    $dsn = 'mysql:host=localhost;dbname=api_empresas';
-    $user = 'setup_admin';
-    $password = 'SetupAdmin2024!';
-    $user = 'setup_admin';
-    $password = 'SetupAdmin2024!';
-
     try {
-      $pdo = new PDO($dsn, $user, $password, [
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
-      ]);
+      // Fase 8.5 (auditoría de creación de empresa nueva): este endpoint
+      // seguía conectando a MySQL con credenciales hardcodeadas, previo a la
+      // migración completa a PostgreSQL -- se reemplaza por EMPRESAS_DNS/
+      // EMPRESAS_USER/EMPRESAS_PASS, la conexión central real que ya usa el
+      // resto del sistema (resuelta por entorno vía .env, nunca hardcodeada).
+      $pdo = new PDO(EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
       $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+      $pdo->exec("SET client_encoding TO 'UTF8'");
 
       // Consulta básica - solo empleados administradores
-      $sql_users = "SELECT id_usuario AS id_empleado, email, id_empresa FROM empresas_usuarios WHERE departamento LIKE 'Administración'";
+      $sql_users = "SELECT id_usuario AS id_empleado, email, id_empresa FROM empresas_usuarios WHERE departamento = 'Administración'";
       $stmt_users = $pdo->prepare($sql_users);
       $stmt_users->execute();
       $users = $stmt_users->fetchAll(PDO::FETCH_ASSOC);
@@ -512,8 +448,10 @@ return function (App $app) {
       $result = [];
 
       foreach ($users as $user) {
-        // Consulta datos de empresa
-        $sql_empresa = 'SELECT nombre, numero_registro_legal, direccion, telefono, email, pais, timezone FROM empresas WHERE id_empresa = ?';
+        // Consulta datos de empresa -- "pais" (texto legado) reemplazado por
+        // "id_pais" (FK real, Fase 1 del rediseño de monedas) para decidir si
+        // la configuración de la empresa está completa.
+        $sql_empresa = 'SELECT nombre, numero_registro_legal, direccion, telefono, email, id_pais FROM empresas WHERE id_empresa = ?';
         $stmt_empresa = $pdo->prepare($sql_empresa);
         $stmt_empresa->execute([$user['id_empresa']]);
         $empresa_data = $stmt_empresa->fetch(PDO::FETCH_ASSOC);
@@ -526,15 +464,15 @@ return function (App $app) {
           empty(trim($empresa_data['direccion'] ?? '')) ||
           empty(trim($empresa_data['telefono'] ?? '')) ||
           empty(trim($empresa_data['email'] ?? '')) ||
-          empty(trim($empresa_data['pais'] ?? ''))
+          empty($empresa_data['id_pais'])
         ) {
           $activo = false;
         }
 
         $result[] = [
-          'id_empleado' => $user['id_empleado'],
+          'id_empleado' => (int) $user['id_empleado'],
           'email' => $user['email'],
-          'id_empresa' => $user['id_empresa'],
+          'id_empresa' => (int) $user['id_empresa'],
           'nombre_empresa' => !empty(trim($empresa_data['nombre'] ?? '')) ? $empresa_data['nombre'] : 'Sin nombre...',
           'activo' => $activo
         ];
@@ -559,23 +497,13 @@ return function (App $app) {
     }
 
     $id_empleado = $data['id_empleado'];
-    $email = trim($data['email']);
-
-    // Validar formato de email
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-      $response->getBody()->write(json_encode(['error' => 'Formato de email inválido']));
-      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
-    }
 
     try {
-      // Conexión única con setup_admin (ahora con permisos globales)
-      $dsn = 'mysql:host=localhost;dbname=api_empresas';
-      $user = 'setup_admin';
-      $password = 'SetupAdmin2024!';
-      $pdo = new PDO($dsn, $user, $password, [
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
-      ]);
+      // Migrado a Postgres (ver GET /setup/user) -- misma conexión central
+      // real del resto del sistema, ya no MySQL hardcodeado.
+      $pdo = new PDO(EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
       $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+      $pdo->exec("SET client_encoding TO 'UTF8'");
 
       // Obtener el id_empresa del empleado para el email
       $stmt_id = $pdo->prepare('SELECT id_empresa FROM empresas_usuarios WHERE id_usuario = ?');
@@ -584,17 +512,14 @@ return function (App $app) {
       $id_emp_val = $user_row ? $user_row['id_empresa'] : 0;
 
       // Cambiar el email del administrador para incluir el ID de empresa y hacerlo único
+      // (comportamiento preexistente sin cambios: se preserva tal cual, fuera
+      // de alcance de esta migración a Postgres -- el valor libre enviado por
+      // el formulario nunca se usó realmente).
       $email = 'administrador@empresa' . $id_emp_val . '.com';
 
-      // Verificar que las tablas tienen las columnas necesarias
-      $stmt = $pdo->query('DESCRIBE empresas');
-      $columns_empresas = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
-      $required_columns_empresas = ['db_name', 'db_user', 'db_password'];
-
-      foreach ($required_columns_empresas as $col) {
-        if (!in_array($col, $columns_empresas)) {
-          throw new Exception("La tabla 'empresas' no tiene la columna requerida: {$col}");
-        }
+      if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $response->getBody()->write(json_encode(['error' => 'Formato de email inválido']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
       }
 
       // Verificar que el email no esté asignado a otro usuario
@@ -639,14 +564,10 @@ return function (App $app) {
     }
 
     try {
-      // Conectar a la base de datos
-      $dsn = 'mysql:host=localhost;dbname=api_empresas';
-      $user = 'setup_admin';
-      $password = 'SetupAdmin2024!';
-      $pdo = new PDO($dsn, $user, $password, [
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
-      ]);
+      // Migrado a Postgres (ver GET /setup/user).
+      $pdo = new PDO(EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
       $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+      $pdo->exec("SET client_encoding TO 'UTF8'");
 
       // Verificar que el empleado existe y no está activo
       $stmt = $pdo->prepare('SELECT activo, id_empresa FROM empresas_usuarios WHERE id_usuario = ?');
@@ -658,48 +579,39 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
       }
 
-      // 1. Obtener datos de la empresa y Validar seguridad (ID 163 intocable)
-      $id_empresa = $usuario['id_empresa'];
-      if ($id_empresa == 163) {
-        $response->getBody()->write(json_encode(['error' => 'No se puede eliminar la empresa principal (Producción)']));
+      // 1. Validar seguridad -- 163 (legado) Y 194 (empresa real en
+      // producción hoy) intocables. El código original solo protegía 163,
+      // desactualizado desde que 194 pasó a ser la empresa real.
+      $id_empresa = (int) $usuario['id_empresa'];
+      if ($id_empresa === 163 || $id_empresa === 194) {
+        $response->getBody()->write(json_encode(['error' => 'No se puede eliminar una empresa protegida (legado o producción real).']));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
       }
 
-      $stmt = $pdo->prepare('SELECT db_name, db_user FROM empresas WHERE id_empresa = ?');
+      $stmt = $pdo->prepare('SELECT db_name FROM empresas WHERE id_empresa = ?');
       $stmt->execute([$id_empresa]);
       $empresa = $stmt->fetch(PDO::FETCH_ASSOC);
 
-      if ($empresa) {
-        $db_name = $empresa['db_name'];
-        $db_user = $empresa['db_user'];
-
-        // Conexión con root para DDL
-        $root_dsn = 'mysql:host=localhost;dbname=mysql';
-        $root_user = 'root';
-        $host = $_SERVER['HTTP_HOST'] ?? '';
-        $root_password = (strpos($host, 'nineteengreen.com') !== false || strpos($host, 'localhost') !== false) ? 'ppbT5QsP5FgWIR' : 'MyR5jRHuwj6kWA';
-        $root_pdo = new PDO($root_dsn, $root_user, $root_password, [
-          PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
-        ]);
-        $root_pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-        // Eliminar BD y Usuario (Drop)
-        if ($db_name) {
-          $root_pdo->exec("DROP DATABASE IF EXISTS `{$db_name}`");
+      // 2. Eliminar la base de datos Postgres de la empresa -- ya no hay un
+      // usuario/rol por-empresa que eliminar aparte: todas las empresas
+      // comparten EMPRESAS_USER (mismo patrón que
+      // scripts/provision_company_db_postgres.sh).
+      if ($empresa && !empty($empresa['db_name'])) {
+        $dbName = $empresa['db_name'];
+        if (!preg_match('/^api_emp_\d+$/', $dbName)) {
+          throw new Exception('Nombre de base de datos con formato inesperado, se aborta por seguridad: ' . $dbName);
         }
-        if ($db_user) {
-          $root_pdo->exec("DROP USER IF EXISTS '{$db_user}'@'localhost'");
-          $root_pdo->exec("DROP USER IF EXISTS '{$db_user}'@'%'");
-        }
+        $pdo->exec('DROP DATABASE IF EXISTS "' . $dbName . '"');
       }
 
-      // 2. Eliminar referencias en api_empresas en orden para no violar FK
-      $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
-      $pdo->exec("DELETE FROM empresas_gastos WHERE id_empresa = {$id_empresa}");
-      $pdo->exec("DELETE FROM empresas_usuarios_departamentos WHERE id_empleado IN (SELECT id_usuario FROM empresas_usuarios WHERE id_empresa = {$id_empresa})");
-      $pdo->exec("DELETE FROM empresas_usuarios WHERE id_empresa = {$id_empresa}");
-      $pdo->exec("DELETE FROM empresas WHERE id_empresa = {$id_empresa}");
-      $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
+      // 3. Eliminar referencias en api_empresas. empresas_usuarios y
+      // empresas_gastos tienen ON DELETE CASCADE real desde empresas (se
+      // limpian solos); empresas_usuarios_departamentos no tiene FK, se
+      // limpia a mano.
+      $stmt = $pdo->prepare('DELETE FROM empresas_usuarios_departamentos WHERE id_empleado IN (SELECT id_usuario FROM empresas_usuarios WHERE id_empresa = ?)');
+      $stmt->execute([$id_empresa]);
+      $stmt = $pdo->prepare('DELETE FROM empresas WHERE id_empresa = ?');
+      $stmt->execute([$id_empresa]);
 
       $response->getBody()->write(json_encode(['message' => 'Usuario eliminado correctamente']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
@@ -727,14 +639,18 @@ return function (App $app) {
     }
 
     try {
-      // Conectar a la base de datos
-      $dsn = 'mysql:host=localhost;dbname=api_empresas';
-      $user = 'setup_admin';
-      $password = 'SetupAdmin2024!';
-      $pdo = new PDO($dsn, $user, $password, [
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
-      ]);
+      // Migrado a Postgres (Fase 8.5, auditoría de creación de empresa
+      // nueva) -- este endpoint seguía siendo 100% MySQL pre-migración,
+      // creaba la BD de la empresa con la plantilla legada (sin
+      // catalogo_monedas/catalogo_metodos_pago/caja_*_extra ni id_pais) y
+      // nunca hubiera podido conectar en un servidor configurado con
+      // DB_DRIVER=pgsql. Ahora usa EMPRESAS_DNS/EMPRESAS_USER/EMPRESAS_PASS
+      // (la misma conexión central real del resto del sistema) y la
+      // plantilla Postgres vigente, con todas las tablas del rediseño de
+      // monedas incluidas.
+      $pdo = new PDO(EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
       $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+      $pdo->exec("SET client_encoding TO 'UTF8'");
 
       // Verificar que el email no esté registrado en empresas_usuarios
       $stmt = $pdo->prepare('SELECT eu.id_empresa, e.nombre FROM empresas_usuarios eu LEFT JOIN empresas e ON eu.id_empresa = e.id_empresa WHERE eu.email = ?');
@@ -768,180 +684,98 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
       }
 
-      // 1. Crear registro en empresas con monedas por defecto
-      $default_monedas = json_encode([
-        ['moneda' => 'dolar', 'mondeda_nombre' => 'Dólar', 'activo' => true, 'valor' => 1],
-        ['moneda' => 'bolivar', 'mondeda_nombre' => 'Bolívar', 'activo' => true, 'valor' => 1],
-        ['moneda' => 'peso_colombiano', 'mondeda_nombre' => 'Peso Colombiano', 'activo' => false, 'valor' => 0],
-      ]);
-      $stmt = $pdo->prepare('INSERT INTO empresas (activo, tipos_de_monedas) VALUES (1, ?)');
-      $stmt->execute([$default_monedas]);
-      $id_empresa = $pdo->lastInsertId();
+      // 1. Crear registro en empresas -- SIN tipos_de_monedas (columna
+      // legada del sistema de monedas viejo, ya no se usa) y SIN id_pais: se
+      // deja NULL a propósito, igual que nombre/direccion/telefono/etc. --
+      // el propio admin lo completa en el wizard de "configuración
+      // incompleta" en su primer login (auth.php ya detecta id_pais vacío y
+      // fuerza el wizard). Ese mismo wizard, una vez fijado el país, siembra
+      // la moneda base real (ver POST /configuracion/empresa/{id}).
+      $stmt = $pdo->prepare('INSERT INTO empresas (activo) VALUES (1)');
+      $stmt->execute();
+      $id_empresa = (int) $pdo->lastInsertId();
       error_log("DEBUG: Empresa creada con ID: {$id_empresa}");
 
-      // Verificar que el registro se creó correctamente
       if (!$id_empresa) {
         throw new Exception('No se pudo obtener el ID de la empresa creada');
       }
 
-      // Verificar que el registro existe
-      $stmt = $pdo->prepare('SELECT COUNT(*) as count FROM empresas WHERE id_empresa = ?');
-      $stmt->execute([$id_empresa]);
-      $result = $stmt->fetch(PDO::FETCH_ASSOC);
-      if ($result['count'] == 0) {
-        throw new Exception('El registro de empresa no existe después del INSERT');
-      }
-
-      // 2. Crear base de datos y usuario MySQL para la empresa
+      // 2. Crear la base de datos Postgres de la empresa. Todas las
+      // empresas comparten EMPRESAS_USER (mismo patrón ya usado por
+      // scripts/provision_company_db_postgres.sh -- no hay un rol Postgres
+      // por-empresa como sí lo había en MySQL).
       $db_name = 'api_emp_' . $id_empresa;
-      $db_user = 'api_user_' . $id_empresa;
-      $db_password = bin2hex(random_bytes(12));  // 24 caracteres aleatorios
-
-      // Conexión con root para operaciones DDL
-      $root_dsn = 'mysql:host=localhost;dbname=mysql';
-      $root_user = 'root';
-      $host = $_SERVER['HTTP_HOST'] ?? '';
-      $root_password = (strpos($host, 'nineteengreen.com') !== false || strpos($host, 'localhost') !== false) ? 'ppbT5QsP5FgWIR' : 'MyR5jRHuwj6kWA';
-      $root_pdo = new PDO($root_dsn, $root_user, $root_password, [
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
-      ]);
-      $root_pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+      $db_host = getenv('DB_HOST') ?: 'localhost';
+      $db_port = getenv('DB_PORT') ?: '5432';
 
       try {
-        // Crear base de datos
-        error_log("DEBUG: Creando BD {$db_name}");
-        $root_pdo->exec("CREATE DATABASE `{$db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        error_log("DEBUG: Creando BD Postgres {$db_name}");
+        $pdo->exec('CREATE DATABASE "' . $db_name . '" OWNER "' . EMPRESAS_USER . '"');
 
-        // Crear usuario MySQL con permisos para localhost y %
-        error_log("DEBUG: Creando usuario {$db_user}");
-        $root_pdo->exec("CREATE USER '{$db_user}'@'localhost' IDENTIFIED BY '{$db_password}'");
-        $root_pdo->exec("CREATE USER '{$db_user}'@'%' IDENTIFIED BY '{$db_password}'");
-
-        // Otorgar privilegios al nuevo usuario en su BD
-        error_log("DEBUG: Otorgando privilegios a {$db_user} en {$db_name}");
-        $root_pdo->exec("GRANT ALL PRIVILEGES ON `{$db_name}`.* TO '{$db_user}'@'localhost'");
-        $root_pdo->exec("GRANT ALL PRIVILEGES ON `{$db_name}`.* TO '{$db_user}'@'%'");
-
-        // Otorgar permisos al usuario central en la nueva BD (necesario para consultas cruzadas en /empleados)
-        $central_user = EMPRESAS_USER;
-        $root_pdo->exec("GRANT SELECT ON `{$db_name}`.* TO '{$central_user}'@'localhost'");
-
-        // Otorgar permisos de lectura en api_empresas
-        error_log('DEBUG: Otorgando permisos de lectura en api_empresas');
-        $root_pdo->exec("GRANT SELECT ON `api_empresas`.* TO '{$db_user}'@'localhost'");
-        $root_pdo->exec("GRANT SELECT ON `api_empresas`.* TO '{$db_user}'@'%'");
-
-        // Otorgar permisos para ejecutar funciones/rutinas en api_empresas
-        error_log('DEBUG: Otorgando permisos EXECUTE en api_empresas');
-        $root_pdo->exec("GRANT EXECUTE ON `api_empresas`.* TO '{$db_user}'@'localhost'");
-        $root_pdo->exec("GRANT EXECUTE ON `api_empresas`.* TO '{$db_user}'@'%'");
-
-        // Aplicar cambios de privilegios
-        $root_pdo->exec('FLUSH PRIVILEGES');
-        error_log("DEBUG: FLUSH PRIVILEGES ejecutado - Usuario {$db_user} creado con permisos");
-
-        // 3. Crear tablas en la nueva base de datos
-        error_log("DEBUG: Creando tablas en {$db_name}");
-
-        // Leer archivo SQL
-        $sql_file = __DIR__ . '/../public/model/create_new_company_api_emp_N.sql';
+        // 3. Cargar el schema Postgres vigente (con catalogo_monedas,
+        // catalogo_metodos_pago, caja_cierres_extra, caja_fondos_extra y
+        // todo lo demás del rediseño) -- a diferencia de MySQL, Postgres
+        // ejecuta un script completo con múltiples sentencias en un solo
+        // exec(), no hace falta dividirlo a mano.
+        $sql_file = __DIR__ . '/../public/model/create_new_company_api_emp_N_postgres.sql';
         if (!file_exists($sql_file)) {
           throw new Exception('Archivo SQL no encontrado: ' . $sql_file);
         }
-
         $sql_content = file_get_contents($sql_file);
         if ($sql_content === false) {
           throw new Exception('No se pudo leer el archivo SQL');
         }
 
-        // Verificar que el usuario puede conectarse antes de ejecutar SQL
-        error_log("DEBUG: Verificando conexión con nuevo usuario {$db_user}");
-        try {
-          $test_dsn = 'mysql:host=localhost;dbname=' . $db_name;
-          $test_pdo = new PDO($test_dsn, $db_user, $db_password, [
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
-          ]);
-          $test_pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-          error_log("DEBUG: Conexión de prueba exitosa con {$db_user}");
-          $test_pdo = null;  // Cerrar conexión de prueba
-        } catch (Exception $e) {
-          error_log('ERROR: Falló conexión de prueba: ' . $e->getMessage());
-          throw new Exception('Usuario creado pero no puede conectarse: ' . $e->getMessage());
-        }
-
-        // Conectar con el nuevo usuario a la nueva base de datos
-        $new_db_dsn = 'mysql:host=localhost;dbname=' . $db_name;
-        $new_db_pdo = new PDO($new_db_dsn, $db_user, $db_password, [
-          PDO::MYSQL_ATTR_INIT_COMMAND => "SET lc_time_names = 'es_ES', NAMES utf8"
-        ]);
+        $new_db_dsn = 'pgsql:host=' . $db_host . ';port=' . $db_port . ';dbname=' . $db_name;
+        $new_db_pdo = new PDO($new_db_dsn, EMPRESAS_USER, EMPRESAS_PASS);
         $new_db_pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $new_db_pdo->exec("SET client_encoding TO 'UTF8'");
 
-        // Ejecutar el SQL por partes para manejar DELIMITER correctamente
-        try {
-          // Función para dividir SQL en statements
-          $statements = splitSqlStatements($sql_content);
+        error_log("DEBUG: Cargando schema en {$db_name}");
+        $new_db_pdo->exec($sql_content);
+        error_log("DEBUG: Tablas creadas exitosamente en {$db_name}");
 
-          foreach ($statements as $statement) {
-            $statement = trim($statement);
-            if (!empty($statement)) {
-              // Saltar comentarios y líneas vacías, pero permitir /*! */ (comandos MySQL)
-              if (strpos($statement, '--') === 0 || (strpos($statement, '/*') === 0 && strpos($statement, '/*!') !== 0)) {
-                continue;
-              }
-              // Saltar comandos DELIMITER
-              if (stripos($statement, 'DELIMITER') === 0) {
-                continue;
-              }
-
-              try {
-                $new_db_pdo->exec($statement);
-              } catch (Exception $e) {
-                error_log('ERROR: Falló statement: ' . substr($statement, 0, 100) . '... - ' . $e->getMessage());
-                throw new Exception('Error al ejecutar sentencia SQL: ' . $e->getMessage() . ' - Sentencia: ' . substr($statement, 0, 200));
-              }
-            }
-          }
-
-          error_log("DEBUG: Tablas creadas exitosamente en {$db_name}");
-        } catch (Exception $e) {
-          error_log('ERROR: Falló creación de tablas: ' . $e->getMessage());
-          throw new Exception('Error al crear tablas: ' . $e->getMessage());
-        }
+        // 4. Configurar postgres_fdw hacia api_empresas (necesario para
+        // consultas cruzadas, ej. GET /empleados) -- mismo procedimiento que
+        // scripts/provision_company_db_postgres.sh.
+        error_log("DEBUG: Configurando postgres_fdw en {$db_name}");
+        $new_db_pdo->exec('CREATE EXTENSION IF NOT EXISTS postgres_fdw');
+        $new_db_pdo->exec(
+          "CREATE SERVER IF NOT EXISTS api_empresas_server FOREIGN DATA WRAPPER postgres_fdw "
+          . "OPTIONS (host '{$db_host}', port '{$db_port}', dbname 'api_empresas')"
+        );
+        $new_db_pdo->exec(
+          'CREATE USER MAPPING IF NOT EXISTS FOR "' . EMPRESAS_USER . '" SERVER api_empresas_server '
+          . 'OPTIONS (user \'' . EMPRESAS_USER . '\', password \'' . EMPRESAS_PASS . '\')'
+        );
+        $new_db_pdo->exec('CREATE SCHEMA IF NOT EXISTS api_empresas');
+        $new_db_pdo->exec('IMPORT FOREIGN SCHEMA public FROM SERVER api_empresas_server INTO api_empresas');
+        $new_db_pdo->exec('ALTER SCHEMA api_empresas OWNER TO "' . EMPRESAS_USER . '"');
+        $new_db_pdo->exec('GRANT USAGE ON SCHEMA api_empresas TO "' . EMPRESAS_USER . '"');
+        $new_db_pdo->exec('GRANT SELECT ON ALL TABLES IN SCHEMA api_empresas TO "' . EMPRESAS_USER . '"');
+        $new_db_pdo->exec('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "' . EMPRESAS_USER . '"');
+        $new_db_pdo->exec('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "' . EMPRESAS_USER . '"');
       } catch (Exception $e) {
-        // Si falla la creación de BD/usuario, eliminar la empresa creada
+        // Si falla la creación de BD/schema, eliminar la empresa creada y,
+        // si la BD llegó a crearse, también eliminarla para no dejar huérfanos.
+        try {
+          $pdo->exec('DROP DATABASE IF EXISTS "' . $db_name . '"');
+        } catch (Exception $cleanupError) {
+          error_log('WARN: no se pudo limpiar la BD huérfana ' . $db_name . ': ' . $cleanupError->getMessage());
+        }
         $stmt = $pdo->prepare('DELETE FROM empresas WHERE id_empresa = ?');
         $stmt->execute([$id_empresa]);
         throw new Exception('Error al crear infraestructura de base de datos: ' . $e->getMessage());
       }
 
-      // Debug: Verificar valores antes del UPDATE
-      error_log("DEBUG: id_empresa={$id_empresa}, db_name={$db_name}, db_user={$db_user}");
-
-      // Actualizar la empresa con las credenciales de BD
-      $stmt = $pdo->prepare('UPDATE empresas SET db_name = ?, db_user = ?, db_password = ? WHERE id_empresa = ?');
-      $result = $stmt->execute([$db_name, $db_user, $db_password, $id_empresa]);
+      // 5. Guardar las credenciales de conexión en empresas (mismas para
+      // todas las empresas, ver punto 2).
+      $stmt = $pdo->prepare('UPDATE empresas SET db_host = ?, db_name = ?, db_user = ?, db_password = ? WHERE id_empresa = ?');
+      $result = $stmt->execute([$db_host, $db_name, EMPRESAS_USER, EMPRESAS_PASS, $id_empresa]);
       error_log("DEBUG: UPDATE empresas result: " . ($result ? 'true' : 'false') . ", affected rows: " . $stmt->rowCount());
 
-      // Verificar que la ejecución fue exitosa
-      if (!$result) {
-        throw new Exception('Error al ejecutar el UPDATE de empresas: ' . implode(', ', $stmt->errorInfo()));
-      }
-
-      // Verificar que la actualización afectó filas
-      $affected_rows = $stmt->rowCount();
-      error_log("DEBUG: UPDATE affected_rows={$affected_rows}");
-
-      if ($affected_rows === 0) {
-        // Verificar si el registro aún existe
-        $stmt_check = $pdo->prepare('SELECT id_empresa FROM empresas WHERE id_empresa = ?');
-        $stmt_check->execute([$id_empresa]);
-        $exists = $stmt_check->fetch(PDO::FETCH_ASSOC);
-
-        if (!$exists) {
-          throw new Exception('El registro de empresa fue eliminado antes del UPDATE');
-        } else {
-          throw new Exception('UPDATE ejecutado pero no afectó filas. Registro existe pero WHERE no coincidió');
-        }
+      if (!$result || $stmt->rowCount() === 0) {
+        throw new Exception('No se pudieron guardar las credenciales de conexión de la empresa recién creada.');
       }
 
       // 3. Generar password aleatorio

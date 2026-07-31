@@ -125,12 +125,58 @@ return function (App $app) {
         $params[] = $companyId;
 
         $result = $localConnection->goQuery($sql, $params);
-        $localConnection->disconnect();
 
         if (isset($result['status']) && $result['status'] === 'error') {
+            $localConnection->disconnect();
             $response->getBody()->write(json_encode(['error' => 'Error al actualizar la empresa: ' . $result['message']]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
+
+        // Fase 8.5 (auditoría de creación de empresa nueva): si esta llamada
+        // fija id_pais por primera vez y la empresa todavía no tiene ninguna
+        // moneda configurada, se siembra automáticamente la moneda default
+        // del país como base -- cierra el gap documentado desde la Fase 5
+        // ("una empresa completamente nueva puede agregar monedas vía el
+        // wizard, pero ninguna queda marcada es_base"). Nunca sobrescribe una
+        // empresa que ya tiene monedas (ej. 194): solo actúa si
+        // catalogo_monedas está vacío. Cualquier fallo aquí se registra pero
+        // NO bloquea la respuesta -- el resto de la configuración de la
+        // empresa (nombre, dirección, etc.) no debe depender de esto.
+        if (isset($data['id_pais'])) {
+            try {
+                $connectionDetails = $localConnection->getConnectionDetails($companyId);
+                if ($connectionDetails && !empty($connectionDetails['db_name'])) {
+                    $driver = DB_DRIVER;
+                    $companyDsn = ($driver === 'pgsql')
+                        ? 'pgsql:host=' . $connectionDetails['db_host'] . ';port=' . (getenv('DB_PORT') ?: '5432') . ';dbname=' . $connectionDetails['db_name']
+                        : 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
+                    $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
+
+                    $existentes = $localConnection->goQuery('SELECT COUNT(*) AS total FROM catalogo_monedas');
+                    $sinMonedas = !empty($existentes) && (int) $existentes[0]['total'] === 0;
+
+                    if ($sinMonedas) {
+                        $localConnection->switchDatabase(EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+                        $monedaDefault = $localConnection->goQuery(
+                            'SELECT id_moneda_soportada, codigo, nombre, simbolo FROM monedas_soportadas_por_pais WHERE id_pais = ? ORDER BY es_default_para_pais DESC, nombre LIMIT 1',
+                            [(int) $data['id_pais']]
+                        );
+
+                        if (!empty($monedaDefault)) {
+                            $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
+                            $localConnection->goQuery(
+                                'INSERT INTO catalogo_monedas (id_moneda_soportada, codigo, nombre, simbolo, es_base, activo) VALUES (?, ?, ?, ?, 1, 1)',
+                                [$monedaDefault[0]['id_moneda_soportada'], $monedaDefault[0]['codigo'], $monedaDefault[0]['nombre'], $monedaDefault[0]['simbolo']]
+                            );
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                error_log('WARN: no se pudo sembrar la moneda base automática para la empresa ' . $companyId . ': ' . $e->getMessage());
+            }
+        }
+
+        $localConnection->disconnect();
 
         $response->getBody()->write(json_encode(['message' => 'Empresa actualizada correctamente']));
         return $response
