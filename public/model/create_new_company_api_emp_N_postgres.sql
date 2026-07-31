@@ -50,6 +50,8 @@ CREATE TABLE catalogo_monedas (
   es_base SMALLINT NOT NULL DEFAULT 0 ,
   activo SMALLINT NOT NULL DEFAULT 1 ,
   eliminado SMALLINT NOT NULL DEFAULT 0 ,
+  tasa_manual NUMERIC(18,6) DEFAULT NULL ,
+  tasa_manual_actualizado_en timestamp DEFAULT NULL ,
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (_id)
 );

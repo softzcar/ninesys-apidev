@@ -151,7 +151,7 @@ return function (App $app) {
 
     try {
       $localConnection = new LocalDB();
-      $monedas = $localConnection->goQuery('SELECT codigo, es_base FROM catalogo_monedas WHERE activo = 1 AND eliminado = 0 ORDER BY es_base DESC');
+      $monedas = $localConnection->goQuery('SELECT codigo, es_base, tasa_manual, tasa_manual_actualizado_en FROM catalogo_monedas WHERE activo = 1 AND eliminado = 0 ORDER BY es_base DESC');
       $localConnection->disconnect();
     } catch (Exception $e) {
       // catalogo_monedas todavía no existe en empresas no migradas a la Fase 2 --
@@ -169,11 +169,29 @@ return function (App $app) {
         continue;
       }
 
+      $resultado = null;
       if (isset($estrategiasPorCodigo[$codigo])) {
         $resultado = $estrategiasPorCodigo[$codigo]();
-        if ($resultado !== null) {
-          $data[] = array_merge(['codigo' => $codigo], $resultado);
-        }
+      }
+
+      // Respaldo manual: si no hay estrategia automática, o la que existe
+      // falló (ej. bcv.org.ve caído), usar la tasa cargada a mano en el
+      // Gestor de Monedas -- mismo contrato normalizado {tasa, fuente, fecha}.
+      if ($resultado === null && $moneda['tasa_manual'] !== null) {
+        $resultado = [
+          'tasa' => (float) $moneda['tasa_manual'],
+          'fuente' => 'manual',
+          'fecha' => $moneda['tasa_manual_actualizado_en'],
+        ];
+      }
+
+      // Nunca se omite una moneda activa del contrato: si tampoco hay tasa
+      // manual, se reporta explícitamente sin resolver, para que el frontend
+      // pueda avisar en vez de asumir en silencio una conversión 1:1.
+      if ($resultado !== null) {
+        $data[] = array_merge(['codigo' => $codigo], $resultado);
+      } else {
+        $data[] = ['codigo' => $codigo, 'tasa' => null, 'fuente' => 'sin_configurar', 'fecha' => null];
       }
     }
 

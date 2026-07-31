@@ -199,6 +199,45 @@ return function (App $app) {
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 
+  // Tasa manual de respaldo, para monedas sin estrategia automática de
+  // obtención en GET /tasas-cambio (ej. Euro). La moneda base nunca la
+  // necesita -- siempre reporta tasa=1 desde ese mismo endpoint.
+  $app->post('/monedas/establecer-tasa', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $id = (int) ($data['id'] ?? 0);
+    $tasa = isset($data['tasa']) ? (float) $data['tasa'] : null;
+
+    if (!$id || $tasa === null || $tasa <= 0) {
+      $response->getBody()->write(json_encode(['error' => 'Debe indicar una moneda y una tasa mayor a 0.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection = new LocalDB();
+
+    $moneda = $localConnection->goQuery('SELECT _id, es_base FROM catalogo_monedas WHERE _id = ?', [$id]);
+    if (empty($moneda)) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'La moneda indicada no existe.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+    }
+
+    if ((int) $moneda[0]['es_base'] === 1) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'La moneda base siempre tiene tasa 1, no se puede editar.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection->goQuery(
+      'UPDATE catalogo_monedas SET tasa_manual = ?, tasa_manual_actualizado_en = CURRENT_TIMESTAMP WHERE _id = ?',
+      [$tasa, $id]
+    );
+    $localConnection->disconnect();
+
+    $responseData = ['message' => 'Tasa actualizada exitosamente.'];
+    $response->getBody()->write(json_encode($responseData));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
   $app->post('/monedas/eliminar', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
     $id = (int) $data['id'];
