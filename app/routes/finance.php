@@ -1056,7 +1056,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
     $inicio = $args['inicio'];
     $fin = $args['fin'];
-    $id_vendedor = (int)$args['id_vendedor'];
+    $id_vendedor = (int) $args['id_vendedor'];
 
     $filterVendedor = '';
     $paramsVendedor = [];
@@ -1065,82 +1065,159 @@ return function (App $app) {
       $paramsVendedor[] = $id_vendedor;
     }
 
-    // Consulta para obtener los cierres y calcular el balance
-    if (DB_DRIVER === 'pgsql') {
-      $sql = "SELECT
-              c._id,
-              c.moment AS fecha_cierre,
-              u.nombre AS vendedor,
-              c.dolares AS monto_cierre_usd,
-              c.pesos AS monto_cierre_cop,
-              c.bolivares AS monto_cierre_bs,
-              f.dolares AS fondo_nuevo_usd,
-              f.pesos AS fondo_nuevo_cop,
-              f.bolivares AS fondo_nuevo_bs,
-              -- Fondo anterior (del cierre previo)
-              (SELECT f_ant.dolares FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_usd,
-              (SELECT f_ant.pesos FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_cop,
-              (SELECT f_ant.bolivares FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_bs,
-              -- Recaudado en este cierre
-              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Dólares') as recaudado_usd,
-              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Pesos') as recaudado_cop,
-              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Bolívares') as recaudado_bs,
-              -- Tasas manejadas en este cierre (o la última conocida hasta ese momento)
-              COALESCE(
-                (SELECT tasa FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Pesos' ORDER BY _id DESC LIMIT 1),
-                (SELECT tasa FROM caja WHERE moneda = 'Pesos' AND moment <= c.moment ORDER BY moment DESC LIMIT 1),
-                1
-              ) as tasa_cop,
-              COALESCE(
-                (SELECT tasa FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Bolívares' ORDER BY _id DESC LIMIT 1),
-                (SELECT tasa FROM caja WHERE moneda = 'Bolívares' AND moment <= c.moment ORDER BY moment DESC LIMIT 1),
-                1
-              ) as tasa_bs
-            FROM caja_cierres c
-            JOIN caja_fondos f ON c._id = f.id_caja_cierres
-            JOIN api_empresas.empresas_usuarios u ON c.id_empleado = u.id_usuario
-            WHERE c.moment::date BETWEEN ? AND ? $filterVendedor
-            ORDER BY c.moment DESC";
-    } else {
-      $sql = "SELECT
-              c._id,
-              c.moment AS fecha_cierre,
-              u.nombre AS vendedor,
-              c.dolares AS monto_cierre_usd,
-              c.pesos AS monto_cierre_cop,
-              c.bolivares AS monto_cierre_bs,
-              f.dolares AS fondo_nuevo_usd,
-              f.pesos AS fondo_nuevo_cop,
-              f.bolivares AS fondo_nuevo_bs,
-              -- Fondo anterior (del cierre previo)
-              (SELECT f_ant.dolares FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_usd,
-              (SELECT f_ant.pesos FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_cop,
-              (SELECT f_ant.bolivares FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) as fondo_anterior_bs,
-              -- Recaudado en este cierre
-              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Dólares') as recaudado_usd,
-              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Pesos') as recaudado_cop,
-              (SELECT SUM(monto) FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Bolívares') as recaudado_bs,
-              -- Tasas manejadas en este cierre (o la última conocida hasta ese momento)
-              COALESCE(
-                (SELECT tasa FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Pesos' ORDER BY _id DESC LIMIT 1),
-                (SELECT tasa FROM caja WHERE moneda = 'Pesos' AND moment <= c.moment ORDER BY moment DESC LIMIT 1),
-                1
-              ) as tasa_cop,
-              COALESCE(
-                (SELECT tasa FROM caja WHERE id_caja_cierres = c._id AND moneda = 'Bolívares' ORDER BY _id DESC LIMIT 1),
-                (SELECT tasa FROM caja WHERE moneda = 'Bolívares' AND moment <= c.moment ORDER BY moment DESC LIMIT 1),
-                1
-              ) as tasa_bs
-            FROM caja_cierres c
-            JOIN caja_fondos f ON c._id = f.id_caja_cierres
-            JOIN api_empresas.empresas_usuarios u ON c.id_empleado = u.id_usuario
-            WHERE DATE(c.moment) BETWEEN ? AND ? $filterVendedor
-            ORDER BY c.moment DESC";
+    // Fase 8 (rediseño 100% dinámico): dolares/pesos/bolivares son puramente
+    // históricas -- solo cierres de antes de esta migración las usan. Se
+    // interpretan por código ISO real únicamente para decodificar ese
+    // historial (nunca para decidir dónde escribir). Toda moneda, legada o
+    // nueva, se combina con caja_cierres_extra/caja_fondos_extra por
+    // id_moneda real, y el "recaudado" se agrupa por caja.id_moneda en vez
+    // de comparar contra el texto de caja.moneda.
+    $columnaPorCodigo = ['USD' => 'dolares', 'COP' => 'pesos', 'VES' => 'bolivares'];
+
+    $monedasActivas = $localConnection->goQuery(
+      'SELECT _id, codigo, nombre, simbolo, es_base FROM catalogo_monedas WHERE activo = 1 AND eliminado = 0 ORDER BY es_base DESC, nombre'
+    );
+
+    $monedaBase = null;
+    foreach ($monedasActivas as $moneda) {
+      if ((int) $moneda['es_base'] === 1) {
+        $monedaBase = $moneda;
+        break;
+      }
     }
 
-    $object['data'] = $localConnection->goQuery($sql, array_merge([$inicio, $fin], $paramsVendedor));
+    $dateExpr = DB_DRIVER === 'pgsql' ? 'c.moment::date' : 'DATE(c.moment)';
+
+    $sql = "SELECT
+              c._id,
+              c.moment AS fecha_cierre,
+              u.nombre AS vendedor,
+              c.dolares, c.pesos, c.bolivares,
+              f._id AS id_caja_fondos,
+              f.dolares AS f_dolares, f.pesos AS f_pesos, f.bolivares AS f_bolivares,
+              (SELECT f_ant._id FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) AS id_fondo_anterior,
+              (SELECT f_ant.dolares FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) AS fa_dolares,
+              (SELECT f_ant.pesos FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) AS fa_pesos,
+              (SELECT f_ant.bolivares FROM caja_fondos f_ant WHERE f_ant.id_empleado = c.id_empleado AND f_ant.id_caja_cierres < c._id ORDER BY f_ant._id DESC LIMIT 1) AS fa_bolivares
+            FROM caja_cierres c
+            JOIN caja_fondos f ON c._id = f.id_caja_cierres
+            JOIN api_empresas.empresas_usuarios u ON c.id_empleado = u.id_usuario
+            WHERE $dateExpr BETWEEN ? AND ? $filterVendedor
+            ORDER BY c.moment DESC";
+
+    $cierres = $localConnection->goQuery($sql, array_merge([$inicio, $fin], $paramsVendedor));
+
+    $data = [];
+
+    if (!empty($cierres)) {
+      $cierreIds = array_map('intval', array_column($cierres, '_id'));
+      $fondoIds = array_map('intval', array_column($cierres, 'id_caja_fondos'));
+      $fondoAnteriorIds = array_map('intval', array_filter(array_column($cierres, 'id_fondo_anterior')));
+      $todosFondoIds = array_values(array_unique(array_merge($fondoIds, $fondoAnteriorIds)));
+
+      $cierresExtraMap = mapaSumaPorClaveYMoneda(
+        $localConnection,
+        'SELECT id_caja_cierres AS clave, id_moneda, SUM(monto) AS monto FROM caja_cierres_extra WHERE id_caja_cierres IN (' . marcadoresPosicionales(count($cierreIds)) . ') GROUP BY id_caja_cierres, id_moneda',
+        $cierreIds
+      );
+
+      $fondosExtraMap = mapaSumaPorClaveYMoneda(
+        $localConnection,
+        'SELECT id_caja_fondos AS clave, id_moneda, SUM(monto) AS monto FROM caja_fondos_extra WHERE id_caja_fondos IN (' . marcadoresPosicionales(count($todosFondoIds)) . ') GROUP BY id_caja_fondos, id_moneda',
+        $todosFondoIds
+      );
+
+      $recaudadoMap = mapaSumaPorClaveYMoneda(
+        $localConnection,
+        'SELECT id_caja_cierres AS clave, id_moneda, SUM(monto) AS monto FROM caja WHERE id_caja_cierres IN (' . marcadoresPosicionales(count($cierreIds)) . ') AND id_moneda IS NOT NULL GROUP BY id_caja_cierres, id_moneda',
+        $cierreIds
+      );
+
+      $tasaCierreMap = mapaUltimaTasaPorCierre($localConnection, $cierreIds);
+
+      // Historial de tasas por moneda no-base, para cuando un cierre no tuvo
+      // ningún movimiento de caja en esa moneda durante el turno.
+      $historialTasas = [];
+      foreach ($monedasActivas as $moneda) {
+        if ((int) $moneda['es_base'] === 1) {
+          continue;
+        }
+        $historialTasas[(int) $moneda['_id']] = $localConnection->goQuery(
+          'SELECT moment, tasa FROM caja WHERE id_moneda = ? ORDER BY moment ASC',
+          [$moneda['_id']]
+        );
+      }
+
+      foreach ($cierres as $c) {
+        $cierreId = (int) $c['_id'];
+        $fondoId = (int) $c['id_caja_fondos'];
+        $fondoAnteriorId = $c['id_fondo_anterior'] !== null ? (int) $c['id_fondo_anterior'] : null;
+
+        $porMoneda = [];
+        $totalTeoricoBase = 0.0;
+        $totalRealBase = 0.0;
+
+        foreach ($monedasActivas as $moneda) {
+          $idMoneda = (int) $moneda['_id'];
+          $esBase = (int) $moneda['es_base'] === 1;
+          $columna = $columnaPorCodigo[$moneda['codigo']] ?? null;
+
+          $cierreValor = ($columna ? (float) $c[$columna] : 0) + ($cierresExtraMap[$cierreId][$idMoneda] ?? 0);
+          $fondoNuevoValor = ($columna ? (float) $c['f_' . $columna] : 0) + ($fondosExtraMap[$fondoId][$idMoneda] ?? 0);
+          $fondoAnteriorValor = 0.0;
+          if ($fondoAnteriorId !== null) {
+            $fondoAnteriorValor = ($columna ? (float) $c['fa_' . $columna] : 0) + ($fondosExtraMap[$fondoAnteriorId][$idMoneda] ?? 0);
+          }
+          $recaudadoValor = $recaudadoMap[$cierreId][$idMoneda] ?? 0;
+
+          if ($esBase) {
+            $tasa = 1.0;
+          } else {
+            $tasa = $tasaCierreMap[$cierreId][$idMoneda] ?? tasaHistoricaEnMomento($historialTasas[$idMoneda] ?? [], $c['fecha_cierre']);
+            if ($tasa <= 0) {
+              $tasa = 1.0;
+            }
+          }
+
+          $teorico = $fondoAnteriorValor + $recaudadoValor;
+          $real = $cierreValor + $fondoNuevoValor;
+
+          $totalTeoricoBase += $esBase ? $teorico : $teorico / $tasa;
+          $totalRealBase += $esBase ? $real : $real / $tasa;
+
+          $porMoneda[] = [
+            'id_moneda' => $idMoneda,
+            'codigo' => $moneda['codigo'],
+            'nombre' => $moneda['nombre'],
+            'simbolo' => $moneda['simbolo'],
+            'cierre' => $cierreValor,
+            'fondo_nuevo' => $fondoNuevoValor,
+            'fondo_anterior' => $fondoAnteriorValor,
+            'recaudado' => $recaudadoValor,
+            'tasa' => $tasa,
+            'diferencia' => $real - $teorico,
+          ];
+        }
+
+        $data[] = [
+          '_id' => $cierreId,
+          'fecha_cierre' => $c['fecha_cierre'],
+          'vendedor' => $c['vendedor'],
+          'total_teorico_base' => $totalTeoricoBase,
+          'total_real_base' => $totalRealBase,
+          'diferencia_base' => $totalRealBase - $totalTeoricoBase,
+          'porMoneda' => $porMoneda,
+        ];
+      }
+    }
+
     $localConnection->disconnect();
 
+    $object = [
+      'monedaBase' => $monedaBase,
+      'monedas' => $monedasActivas,
+      'data' => $data,
+    ];
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
     return $response
       ->withHeader('Content-Type', 'application/json')

@@ -193,10 +193,10 @@ function decodificarArrayJson($data, $key)
 
 /**
  * Fase 8 del rediseño de monedas: caja_cierres/caja_fondos tienen columnas
- * fijas (dolares/pesos/bolivares) que se quedan intactas -- estas funciones
- * cubren cualquier moneda ADICIONAL a esas 3 vía las tablas hijas
- * caja_cierres_extra/caja_fondos_extra. $idMoneda debe ser el _id real de
- * catalogo_monedas (no uno de los 3 códigos legados).
+ * fijas (dolares/pesos/bolivares) que quedan congeladas en 0 para cualquier
+ * cierre nuevo -- son puramente históricas (cierres anteriores a este
+ * cambio). TODA moneda, incluidas las 3 legadas, se registra vía estas
+ * tablas hijas por $idMoneda real (_id de catalogo_monedas).
  */
 function insertarCierreCajaExtra($localConnection, $idCajaCierres, $idMoneda, $monto)
 {
@@ -208,4 +208,78 @@ function insertarFondoCajaExtra($localConnection, $idCajaFondos, $idMoneda, $mon
 {
   $sql = 'INSERT INTO caja_fondos_extra (id_caja_fondos, id_moneda, monto) VALUES (?, ?, ?)';
   return $localConnection->goQuery($sql, [$idCajaFondos, $idMoneda, $monto]);
+}
+
+/**
+ * Helpers de lectura para el reporte "Balance de Cierres" (Fase 8): combinan
+ * las columnas fijas legadas (solo relevantes para cierres históricos) con
+ * las tablas hijas, agrupando por moneda real -- sin ningún literal de
+ * código de moneda en la lógica de negocio, solo en la traducción puntual
+ * de las 3 columnas físicas del esquema legado.
+ */
+function marcadoresPosicionales($cantidad)
+{
+  return implode(',', array_fill(0, max(0, (int) $cantidad), '?'));
+}
+
+function mapaSumaPorClaveYMoneda($localConnection, $sql, $ids)
+{
+  $mapa = [];
+  if (empty($ids)) {
+    return $mapa;
+  }
+
+  $rows = $localConnection->goQuery($sql, array_values($ids));
+  foreach ($rows as $row) {
+    $mapa[(int) $row['clave']][(int) $row['id_moneda']] = (float) $row['monto'];
+  }
+
+  return $mapa;
+}
+
+/**
+ * Última tasa registrada en `caja` para cada combinación (id_caja_cierres,
+ * id_moneda) -- la tasa vigente durante ese turno específico.
+ */
+function mapaUltimaTasaPorCierre($localConnection, $cierreIds)
+{
+  $mapa = [];
+  if (empty($cierreIds)) {
+    return $mapa;
+  }
+
+  $placeholders = marcadoresPosicionales(count($cierreIds));
+  $sql = "SELECT t.id_caja_cierres AS clave, t.id_moneda, t.tasa
+          FROM caja t
+          INNER JOIN (
+            SELECT id_caja_cierres, id_moneda, MAX(_id) AS max_id
+            FROM caja
+            WHERE id_caja_cierres IN ($placeholders) AND id_moneda IS NOT NULL
+            GROUP BY id_caja_cierres, id_moneda
+          ) mx ON mx.max_id = t._id";
+
+  $rows = $localConnection->goQuery($sql, array_values($cierreIds));
+  foreach ($rows as $row) {
+    $mapa[(int) $row['clave']][(int) $row['id_moneda']] = (float) $row['tasa'];
+  }
+
+  return $mapa;
+}
+
+/**
+ * Fallback cuando un cierre no tuvo ningún movimiento de `caja` en una
+ * moneda dada: busca, dentro del historial ya ordenado por fecha de esa
+ * moneda, la última tasa conocida en o antes del momento del cierre.
+ */
+function tasaHistoricaEnMomento($historial, $momento)
+{
+  $tasa = 1.0;
+  foreach ($historial as $row) {
+    if ($row['moment'] > $momento) {
+      break;
+    }
+    $tasa = (float) $row['tasa'];
+  }
+
+  return $tasa;
 }
