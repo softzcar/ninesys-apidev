@@ -514,45 +514,68 @@ return function (App $app) {
       $paramsUser = [$id_vendedor];
     }
 
-    /** EFECTIVO (Dólares, Pesos, Bolívares) */
-    $tiposMoneda = ['Dólares', 'Pesos', 'Bolívares'];
-    foreach ($tiposMoneda as $moneda) {
-      $monedaKey = strtolower(str_replace('ó', 'o', $moneda));
+    // Fase 8 (rediseño 100% dinámico): ni las monedas del efectivo ni los
+    // métodos digitales están hardcodeados -- ambos se leen del catálogo
+    // real de la empresa, así que una moneda o método nuevo agregado vía el
+    // Gestor de Monedas aparece automáticamente en este reporte sin tocar
+    // código. Sustituye los arrays fijos `$tiposMoneda`/`$metodosDigitales`.
+
+    /** EFECTIVO: una entrada por cada moneda activa real */
+    $monedasActivas = $localConnection->goQuery(
+      'SELECT _id, codigo, nombre, simbolo FROM catalogo_monedas WHERE activo = 1 AND eliminado = 0 ORDER BY es_base DESC, nombre'
+    );
+
+    $object['data']['efectivo'] = [];
+    foreach ($monedasActivas as $moneda) {
       $sql = "SELECT
                 SUM(monto) monto,
-                '$moneda' moneda,
+                moneda,
                 tasa,
-                SUM(monto / tasa) dolares
+                SUM(monto / tasa) monto_base
               FROM caja
-              WHERE $whereBase $filterUserCaja AND moneda = '$moneda'
-              GROUP BY tasa";
-      $object['data']['efectivo'][$monedaKey] = $localConnection->goQuery($sql, array_merge($paramsFecha, $paramsUser));
+              WHERE $whereBase $filterUserCaja AND id_moneda = ?
+              GROUP BY moneda, tasa";
+      $object['data']['efectivo'][] = [
+        'id_moneda' => (int) $moneda['_id'],
+        'codigo' => $moneda['codigo'],
+        'nombre' => $moneda['nombre'],
+        'simbolo' => $moneda['simbolo'],
+        'items' => $localConnection->goQuery($sql, array_merge($paramsFecha, $paramsUser, [$moneda['_id']])),
+      ];
     }
 
-    /** MONEDA DIGITAL */
-    $metodosDigitales = ['Zelle', 'Pagomovil', 'Punto', 'Transferencia'];
+    /** DIGITAL: una entrada por cada método no-efectivo activo real (puede
+     * cubrir varias monedas a la vez, ej. "Transferencia" existe tanto para
+     * COP como para VES -- se agrupa por nombre, no por id de catálogo). */
+    $metodosDigitales = $localConnection->goQuery(
+      'SELECT DISTINCT nombre FROM catalogo_metodos_pago WHERE es_efectivo = 0 AND eliminado = 0 ORDER BY nombre'
+    );
+
+    $object['data']['digital'] = [];
     foreach ($metodosDigitales as $metodo) {
-      $metodoKey = strtolower($metodo);
       $sql = "SELECT
                 SUM(a.monto) monto,
                 a.tasa,
-                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares,
-                a.moneda,
-                '$metodo' metodo_pago
+                SUM(ROUND(a.monto / a.tasa, 2)) AS monto_base,
+                a.moneda
               FROM metodos_de_pago AS a
               LEFT JOIN ordenes AS o ON a.id_orden = o._id
-              WHERE a.metodo_pago = '$metodo' AND a.$whereBase $filterUserOrdenes
+              JOIN catalogo_metodos_pago AS cmp ON cmp._id = a.id_metodo_pago
+              WHERE cmp.nombre = ? AND cmp.es_efectivo = 0 AND a.$whereBase $filterUserOrdenes
               GROUP BY a.tasa, a.moneda";
-      $object['data']['digital'][$metodoKey] = $localConnection->goQuery($sql, array_merge($paramsFecha, $paramsUser));
+      $object['data']['digital'][] = [
+        'nombre' => $metodo['nombre'],
+        'items' => $localConnection->goQuery($sql, array_merge([$metodo['nombre']], $paramsFecha, $paramsUser)),
+      ];
     }
 
-    /** RETIROS */
+    /** RETIROS (ya era dinámico -- no filtra por moneda/método hardcodeado) */
     if (DB_DRIVER === 'pgsql') {
       $sql = "SELECT
                 SUM(a.monto) monto,
                 a.moneda,
                 a.tasa,
-                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares,
+                SUM(ROUND(a.monto / a.tasa, 2)) AS monto_base,
                 'Retiros' metodo_pago
               FROM retiros AS a
               WHERE a.moment::date BETWEEN ? AND ? $filterUserRetiros
@@ -562,7 +585,7 @@ return function (App $app) {
                 SUM(a.monto) monto,
                 a.moneda,
                 a.tasa,
-                SUM(ROUND(a.monto / a.tasa, 2)) AS dolares,
+                SUM(ROUND(a.monto / a.tasa, 2)) AS monto_base,
                 'Retiros' metodo_pago
               FROM retiros AS a
               WHERE DATE(a.moment) BETWEEN ? AND ? $filterUserRetiros
