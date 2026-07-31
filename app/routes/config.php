@@ -164,10 +164,20 @@ return function (App $app) {
 
                         if (!empty($monedaDefault)) {
                             $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
-                            $localConnection->goQuery(
+                            $insertResult = $localConnection->goQuery(
                                 'INSERT INTO catalogo_monedas (id_moneda_soportada, codigo, nombre, simbolo, es_base, activo) VALUES (?, ?, ?, ?, 1, 1)',
                                 [$monedaDefault[0]['id_moneda_soportada'], $monedaDefault[0]['codigo'], $monedaDefault[0]['nombre'], $monedaDefault[0]['simbolo']]
                             );
+                            $idMonedaNueva = $insertResult['insert_id'] ?? null;
+                            if ($idMonedaNueva) {
+                                // Deja sembrado desde el día 1 cuál es la moneda base de
+                                // esta empresa nueva, para que el historial nunca quede
+                                // con un hueco al principio.
+                                $localConnection->goQuery(
+                                    'INSERT INTO historial_moneda_base (id_moneda, desde) VALUES (?, CURRENT_TIMESTAMP)',
+                                    [$idMonedaNueva]
+                                );
+                            }
                         }
                     }
                 }

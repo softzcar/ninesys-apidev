@@ -185,6 +185,11 @@ return function (App $app) {
     try {
       $localConnection->goQuery('UPDATE catalogo_monedas SET es_base = 0 WHERE es_base = 1');
       $localConnection->goQuery('UPDATE catalogo_monedas SET es_base = 1 WHERE _id = ?', [$id]);
+      // Deja constancia de cuándo empezó y terminó cada período de moneda
+      // base -- necesario para que un reporte futuro sobre transacciones de
+      // hoy pueda saber, más adelante, qué moneda era la base en ese momento.
+      $localConnection->goQuery('UPDATE historial_moneda_base SET hasta = CURRENT_TIMESTAMP WHERE hasta IS NULL');
+      $localConnection->goQuery('INSERT INTO historial_moneda_base (id_moneda, desde) VALUES (?, CURRENT_TIMESTAMP)', [$id]);
       $localConnection->commit();
     } catch (\Throwable $e) {
       $localConnection->rollback();
