@@ -402,101 +402,56 @@ return function (App $app) {
     $localConnection->beginTransaction();
 
     try {
-      // Fase 8: dolares/pesos/bolivares son columnas fijas de caja_cierres/
-      // caja_fondos (enfoque híbrido ya decidido en el plan, cero riesgo sobre
-      // saldo/cierre histórico) -- se mapean por código ISO real desde el
-      // catálogo; cualquier moneda fuera de esas 3 va a la tabla hija
-      // caja_cierres_extra/caja_fondos_extra. Mismo mapeo ya usado en /retiro.
-      $columnaPorCodigo = ['USD' => 'dolares', 'COP' => 'pesos', 'VES' => 'bolivares'];
-
+      // Fase 8 (rediseño 100% dinámico): dolares/pesos/bolivares quedan
+      // congeladas en 0 para todo cierre nuevo -- son puramente históricas,
+      // se conservan solo para que los cierres de antes de hoy sigan siendo
+      // legibles. TODA moneda nueva (incluyendo USD/VES/COP) se escribe en
+      // caja_cierres_extra/caja_fondos_extra por id_moneda real, sin ningún
+      // mapeo de código a columna. Corrige el enfoque híbrido anterior,
+      // señalado explícitamente por el usuario como un vestigio hardcodeado.
       $cierresGenericos = decodificarArrayJson($datosCierre, 'cierres');
       $fondosGenericos = decodificarArrayJson($datosCierre, 'fondos');
 
-      if (!empty($cierresGenericos) || !empty($fondosGenericos)) {
-        // CAMINO NUEVO (Fase 8): dirigido por catalogo_monedas real.
-        $cierrePorColumna = ['dolares' => 0, 'pesos' => 0, 'bolivares' => 0];
-        $cierresExtra = [];
-        foreach ($cierresGenericos as $item) {
-          $monto = floatval($item['monto'] ?? 0);
-          if ($monto <= 0) {
-            continue;
-          }
-          $moneda = resolverMonedaPorId($localConnection, $item['id_moneda'] ?? 0);
-          if (!$moneda) {
-            throw new Exception('Moneda inválida o eliminada (id_moneda=' . ($item['id_moneda'] ?? '?') . ')');
-          }
-          $columna = $columnaPorCodigo[$moneda['codigo']] ?? null;
-          if ($columna) {
-            $cierrePorColumna[$columna] += $monto;
-          } else {
-            $cierresExtra[] = ['id_moneda' => $moneda['id_moneda'], 'monto' => $monto];
-          }
+      $cierresExtra = [];
+      foreach ($cierresGenericos as $item) {
+        $monto = floatval($item['monto'] ?? 0);
+        if ($monto <= 0) {
+          continue;
         }
-
-        $sql = 'INSERT INTO caja_cierres (dolares, pesos, bolivares, id_empleado) VALUES (?, ?, ?, ?)';
-        $responseCierreCaja = $localConnection->goQuery($sql, [
-          $cierrePorColumna['dolares'],
-          $cierrePorColumna['pesos'],
-          $cierrePorColumna['bolivares'],
-          $datosCierre['id_empleado'],
-        ]);
-        $insertID = $responseCierreCaja['insert_id'];
-
-        foreach ($cierresExtra as $extra) {
-          insertarCierreCajaExtra($localConnection, $insertID, $extra['id_moneda'], $extra['monto']);
+        $moneda = resolverMonedaPorId($localConnection, $item['id_moneda'] ?? 0);
+        if (!$moneda) {
+          throw new Exception('Moneda inválida o eliminada (id_moneda=' . ($item['id_moneda'] ?? '?') . ')');
         }
+        $cierresExtra[] = ['id_moneda' => $moneda['id_moneda'], 'monto' => $monto];
+      }
 
-        $fondoPorColumna = ['dolares' => 0, 'pesos' => 0, 'bolivares' => 0];
-        $fondosExtra = [];
-        foreach ($fondosGenericos as $item) {
-          $monto = floatval($item['monto'] ?? 0);
-          if ($monto <= 0) {
-            continue;
-          }
-          $moneda = resolverMonedaPorId($localConnection, $item['id_moneda'] ?? 0);
-          if (!$moneda) {
-            throw new Exception('Moneda inválida o eliminada (id_moneda=' . ($item['id_moneda'] ?? '?') . ')');
-          }
-          $columna = $columnaPorCodigo[$moneda['codigo']] ?? null;
-          if ($columna) {
-            $fondoPorColumna[$columna] += $monto;
-          } else {
-            $fondosExtra[] = ['id_moneda' => $moneda['id_moneda'], 'monto' => $monto];
-          }
+      $sql = 'INSERT INTO caja_cierres (dolares, pesos, bolivares, id_empleado) VALUES (0, 0, 0, ?)';
+      $responseCierreCaja = $localConnection->goQuery($sql, [$datosCierre['id_empleado']]);
+      $insertID = $responseCierreCaja['insert_id'];
+
+      foreach ($cierresExtra as $extra) {
+        insertarCierreCajaExtra($localConnection, $insertID, $extra['id_moneda'], $extra['monto']);
+      }
+
+      $fondosExtra = [];
+      foreach ($fondosGenericos as $item) {
+        $monto = floatval($item['monto'] ?? 0);
+        if ($monto <= 0) {
+          continue;
         }
-
-        $sql = 'INSERT INTO caja_fondos (id_empleado, dolares, id_caja_cierres, pesos, bolivares) VALUES (?, ?, ?, ?, ?)';
-        $fondoInsert = $localConnection->goQuery($sql, [
-          $datosCierre['id_empleado'],
-          $fondoPorColumna['dolares'],
-          $insertID,
-          $fondoPorColumna['pesos'],
-          $fondoPorColumna['bolivares'],
-        ]);
-        $idCajaFondos = $fondoInsert['insert_id'];
-
-        foreach ($fondosExtra as $extra) {
-          insertarFondoCajaExtra($localConnection, $idCajaFondos, $extra['id_moneda'], $extra['monto']);
+        $moneda = resolverMonedaPorId($localConnection, $item['id_moneda'] ?? 0);
+        if (!$moneda) {
+          throw new Exception('Moneda inválida o eliminada (id_moneda=' . ($item['id_moneda'] ?? '?') . ')');
         }
-      } else {
-        // CAMINO LEGADO: formulario aún no migrado -- sin cambios de comportamiento.
-        $sql = 'INSERT INTO caja_cierres (dolares, pesos, bolivares, id_empleado) VALUES (?, ?, ?, ?)';
-        $responseCierreCaja = $localConnection->goQuery($sql, [
-          $datosCierre['cierreDolaresEfectivo'],
-          $datosCierre['cierrePesosEfectivo'],
-          $datosCierre['cierreBolivaresEfectivo'],
-          $datosCierre['id_empleado'],
-        ]);
-        $insertID = $responseCierreCaja['insert_id'];
+        $fondosExtra[] = ['id_moneda' => $moneda['id_moneda'], 'monto' => $monto];
+      }
 
-        $sql = 'INSERT INTO caja_fondos (id_empleado, dolares, id_caja_cierres, pesos, bolivares) VALUES (?, ?, ?, ?, ?)';
-        $localConnection->goQuery($sql, [
-          $datosCierre['id_empleado'],
-          $datosCierre['fondoDolares'],
-          $insertID,
-          $datosCierre['fondoPesos'],
-          $datosCierre['fondoBolivares'],
-        ]);
+      $sql = 'INSERT INTO caja_fondos (id_empleado, dolares, id_caja_cierres, pesos, bolivares) VALUES (?, 0, ?, 0, 0)';
+      $fondoInsert = $localConnection->goQuery($sql, [$datosCierre['id_empleado'], $insertID]);
+      $idCajaFondos = $fondoInsert['insert_id'];
+
+      foreach ($fondosExtra as $extra) {
+        insertarFondoCajaExtra($localConnection, $idCajaFondos, $extra['id_moneda'], $extra['monto']);
       }
 
       // Actualizamos caja para los registros cerrados
