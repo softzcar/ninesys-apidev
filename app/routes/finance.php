@@ -594,6 +594,13 @@ return function (App $app) {
 
     $object['data']['retiros'] = $localConnection->goQuery($sql, array_merge([$inicio, $fin], $paramsUser));
 
+    // Moneda base real de la empresa, para que el frontend etiquete "Total
+    // {codigo}"/el símbolo de los totales generales sin asumir "$"/USD.
+    $monedaBaseRow = $localConnection->goQuery(
+      'SELECT codigo, nombre, simbolo FROM catalogo_monedas WHERE es_base = 1 AND eliminado = 0 LIMIT 1'
+    );
+    $object['monedaBase'] = !empty($monedaBaseRow) ? $monedaBaseRow[0] : null;
+
     // Obtener lista de vendedores para el select del frontend
     $sqlv = "SELECT DISTINCT
                 id_usuario _id,
