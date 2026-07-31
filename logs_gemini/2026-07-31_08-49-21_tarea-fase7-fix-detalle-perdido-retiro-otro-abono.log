@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** Continuación de la Fase 7 sobre `retiros/index.vue`: al probar en vivo el camino genérico de `/retiro` con el payload que ya envía el frontend migrado, se detectó que el "Detalle del retiro" (campo obligatorio del formulario) no se guardaba. Se corrigió porque bloqueaba la verificación.
+- **Fecha y Hora:** 2026-07-31 08:49:21
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+    - app/routes/finance.php (`POST /retiro`, `POST /otro-abono`)
+- **Commits Relacionados:**
+    - Backend: 5da83f5
+- **Acción Realizada:**
+    Causa raíz: `MetodosPagoDinamico.vue` (componente compartido) siempre emite `detalle: ""` (string vacío) para cada línea de `pagos` cuando el método no requiere referencia (ej. Efectivo) -- nunca `null` ni ausente. El backend, en ambos endpoints, usaba el operador `??`, que solo activa su fallback cuando el valor de la izquierda es `null` o la clave no existe -- una cadena vacía `""` es un valor válido para PHP, así que `??` NUNCA caía al detalle general:
+    - `POST /retiro`: `$detallePago = $pago['detalle'] ?? $detalle;` -- el "Detalle del retiro" (campo de texto general y obligatorio en `retiros/index.vue`, sin equivalente por método de pago) se perdía siempre que se usara el camino nuevo.
+    - `POST /otro-abono`: mismo patrón exacto (`$detalle = $pago['detalle'] ?? ($arr['detalle'] ?? '');`), corregido preventivamente aunque `retiros/index.vue` no lo usa -- lo usará `comercializacion/abonos.vue`, el próximo formulario de la Fase 7, y habría reproducido el mismo bug al migrarlo.
+    Corrección en ambos: `!empty($pago['detalle']) ? $pago['detalle'] : $detalle` -- cae al detalle general en cualquier caso "sin contenido real" (`""`, `null`, ausente), no solo `null`.
+- **Inconvenientes y Desafíos:** Ninguno más allá del hallazgo en sí -- una vez identificada la causa (comportamiento de `??` con string vacío en PHP, no un bug de lógica de negocio), la corrección fue directa y de bajo riesgo.
+- **Decisión Final y Justificación:** Se corrigieron los 2 endpoints en el mismo commit en vez de solo el que bloqueaba la prueba inmediata (`/retiro`), porque el patrón es idéntico y el segundo (`/otro-abono`) iba a producir el mismo bug silencioso en cuanto se migrara su único formulario consumidor real -- más barato corregirlo ahora que descubrirlo de nuevo en la próxima tarea.
+- **Herramienta(s) Utilizada(s):** `Edit`, `php -l`, `git commit`, `deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl`, `psql` vía SSH (crédito de prueba fabricado, retiro de prueba, verificación de `detalle_retiro`, limpieza y confirmación de saldo restaurado).
+- **Resultado:** Éxito
+- **Verificación:** `php -l` sin errores. Probado en vivo dos veces contra `/retiro`: antes del fix, `detalle_retiro` quedaba vacío pese a enviar un detalle real; después del fix, `detalle_retiro = "TEST FASE7 retiro dinamico"` exacto. Saldo de la cuenta de prueba (empleado 3, USD) confirmado en $5 tras el retiro de prueba ($10 crédito - $5 retiro) y de vuelta en $0 tras la limpieza.
+- **Logro Conseguido:** Se cerró un bug real que habría hecho que TODOS los retiros hechos desde el formulario migrado quedaran sin su motivo/detalle registrado -- un dato usado para auditoría y conciliación de caja. Se previno proactivamente el mismo bug en `/otro-abono` antes de que afectara al próximo formulario migrado.
+- **Observaciones:** Ver bitácora complementaria en `app_multi/logs_gemini/` para el detalle de la migración de `retiros/index.vue` (incluyendo la extensión del componente compartido `MetodosPagoDinamico.vue` con un modo "solo efectivo" y desglose por moneda).
+- **Respuesta de Claude:** Corregido un bug real donde el detalle general de un retiro/abono se perdía silenciosamente en el camino genérico de `/retiro` y `/otro-abono`, por una diferencia entre "string vacío" y "null" en PHP que `??` no cubre. Verificado en vivo con datos de prueba; saldo restaurado exacto.
