@@ -11,8 +11,20 @@ return function (App $app) {
   $app->get('/monedas', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
     $sql = 'SELECT * FROM catalogo_monedas WHERE eliminado = 0 ORDER BY es_base DESC, nombre';
-    $object['data'] = $localConnection->goQuery($sql);
+    $rows = $localConnection->goQuery($sql);
     $localConnection->disconnect();
+
+    // goQuery devuelve los valores crudos del driver (ej. "0"/"1" como string
+    // en vez de boolean real) -- Vue2 trata el número/string "0" como valor
+    // "presente" para atributos booleanos como `disabled`, así que sin este
+    // cast explícito el botón "eliminar" queda deshabilitado para TODAS las
+    // monedas, no solo la base. Se castean los 3 flags a boolean real.
+    $object['data'] = array_map(function ($row) {
+      $row['es_base'] = (bool) $row['es_base'];
+      $row['activo'] = (bool) $row['activo'];
+      $row['eliminado'] = (bool) $row['eliminado'];
+      return $row;
+    }, $rows);
 
     $response->getBody()->write(json_encode($object));
     return $response
@@ -133,6 +145,58 @@ return function (App $app) {
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
+  });
+
+  // Esta página no es un CRUD completo de monedas -- solo permite asignar,
+  // desasignar (soft-delete vía /monedas/eliminar) y elegir cuál es la
+  // moneda base. Nunca queda la empresa sin moneda base: la base nunca se
+  // puede desasignar (ver /monedas/eliminar) y este endpoint exige que el
+  // destino ya esté activo antes de convertirlo en base.
+  $app->post('/monedas/establecer-base', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $id = (int) ($data['id'] ?? 0);
+    $localConnection = new LocalDB();
+
+    $moneda = $localConnection->goQuery(
+      'SELECT _id, es_base, activo, eliminado FROM catalogo_monedas WHERE _id = ?',
+      [$id]
+    );
+
+    if (empty($moneda)) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'La moneda indicada no existe.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+    }
+
+    if ((int) $moneda[0]['eliminado'] === 1 || (int) $moneda[0]['activo'] !== 1) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'Solo una moneda activa puede convertirse en la moneda base.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    if ((int) $moneda[0]['es_base'] === 1) {
+      $localConnection->disconnect();
+      $responseData = ['message' => 'Esa moneda ya es la base.'];
+      $response->getBody()->write(json_encode($responseData));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    }
+
+    $localConnection->beginTransaction();
+    try {
+      $localConnection->goQuery('UPDATE catalogo_monedas SET es_base = 0 WHERE es_base = 1');
+      $localConnection->goQuery('UPDATE catalogo_monedas SET es_base = 1 WHERE _id = ?', [$id]);
+      $localConnection->commit();
+    } catch (\Throwable $e) {
+      $localConnection->rollback();
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'No se pudo establecer la moneda base.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    }
+
+    $localConnection->disconnect();
+    $responseData = ['message' => 'Moneda base actualizada exitosamente.'];
+    $response->getBody()->write(json_encode($responseData));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 
   $app->post('/monedas/eliminar', function (Request $request, Response $response) {
