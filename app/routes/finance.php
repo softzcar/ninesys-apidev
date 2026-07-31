@@ -701,7 +701,11 @@ return function (App $app) {
             throw new Exception('Método de pago inválido o eliminado (id_metodo_pago=' . ($pago['id_metodo_pago'] ?? '?') . ')');
           }
           $tasa = floatval($pago['tasa'] ?? 1);
-          $detallePago = $pago['detalle'] ?? $detalle;
+          // '??' no cae al detalle general cuando el componente dinámico envía
+          // detalle: "" (string vacío, no null/ausente) -- caso real de
+          // retiros/index.vue, donde el "Detalle del retiro" es un campo
+          // general obligatorio, sin equivalente por método de pago.
+          $detallePago = !empty($pago['detalle']) ? $pago['detalle'] : $detalle;
           insertarRetiroGenerico($localConnection, $id_empleado, $metodo, $monto, $detallePago, $tasa);
         }
       } else {
@@ -801,7 +805,9 @@ return function (App $app) {
             throw new Exception('Método de pago inválido o eliminado (id_metodo_pago=' . ($pago['id_metodo_pago'] ?? '?') . ')');
           }
 
-          $detalle = $pago['detalle'] ?? ($arr['detalle'] ?? '');
+          // '??' no cae al detalle general cuando el componente dinámico envía
+          // detalle: "" (string vacío, no null/ausente) -- mismo hallazgo que en /retiro.
+          $detalle = !empty($pago['detalle']) ? $pago['detalle'] : ($arr['detalle'] ?? '');
           $tasa = floatval($pago['tasa'] ?? 1);
           $tipoAbono = $arr['tipoAbono'] ?? '';
 
