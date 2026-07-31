@@ -648,13 +648,29 @@ return function (App $app) {
       // camino genérico de abajo pueda validar cualquier moneda futura.
       // (Reutilizamos la lógica del GET /retiros pero simplificada para validación)
 
-      // Fondo: caja_fondos sigue con columnas fijas (dolares/pesos/bolivares)
-      // -- enfoque híbrido ya decidido en el plan, no se generaliza aquí.
-      // Se mapea a las monedas reales por su código ISO.
-      $sqlFondo = 'SELECT dolares, pesos, bolivares FROM caja_fondos WHERE id_empleado = ? ORDER BY _id DESC LIMIT 1';
+      // Fondo: columnas fijas (dolares/pesos/bolivares, puramente históricas
+      // desde la corrección del 2026-07-31 -- congeladas en 0 para cualquier
+      // fondo nuevo) combinadas con caja_fondos_extra, donde vive el fondo
+      // real de TODA moneda desde esa corrección. Mismo patrón ya usado en
+      // GET /retiros y GET /cierre-de-caja.
+      $sqlFondo = 'SELECT _id, dolares, pesos, bolivares FROM caja_fondos WHERE id_empleado = ? ORDER BY _id DESC LIMIT 1';
       $fondoRes = $localConnection->goQuery($sqlFondo, [$id_empleado]);
       $fondo = !empty($fondoRes) ? $fondoRes[0] : ['dolares' => 0, 'pesos' => 0, 'bolivares' => 0];
-      $extraFondoPorCodigo = ['USD' => $fondo['dolares'], 'COP' => $fondo['pesos'], 'VES' => $fondo['bolivares']];
+      $extraFondoPorCodigo = ['USD' => (float) $fondo['dolares'], 'COP' => (float) $fondo['pesos'], 'VES' => (float) $fondo['bolivares']];
+
+      if (!empty($fondoRes)) {
+        $fondoExtra = $localConnection->goQuery(
+          'SELECT cm.codigo, SUM(cfe.monto) AS monto
+           FROM caja_fondos_extra cfe
+           JOIN catalogo_monedas cm ON cm._id = cfe.id_moneda
+           WHERE cfe.id_caja_fondos = ?
+           GROUP BY cm.codigo',
+          [$fondoRes[0]['_id']]
+        );
+        foreach ($fondoExtra as $row) {
+          $extraFondoPorCodigo[$row['codigo']] = (float) $row['monto'];
+        }
+      }
 
       $monedasActivas = $localConnection->goQuery('SELECT codigo, nombre FROM catalogo_monedas WHERE activo = 1 AND eliminado = 0');
 
