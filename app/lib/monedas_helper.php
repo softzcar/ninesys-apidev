@@ -87,6 +87,27 @@ function resolverMetodoPagoPorId($localConnection, $idMetodoPago)
 }
 
 /**
+ * Resuelve una moneda real por su _id de catalogo_monedas (Fase 8: usado por
+ * cierre de caja, que trabaja por moneda, no por método de pago).
+ *
+ * @return array|null {id_moneda, codigo, nombre, simbolo} o null si no existe o está eliminada.
+ */
+function resolverMonedaPorId($localConnection, $idMoneda)
+{
+  $idMoneda = (int) $idMoneda;
+  if ($idMoneda <= 0) {
+    return null;
+  }
+
+  $result = $localConnection->goQuery(
+    'SELECT _id AS id_moneda, codigo, nombre, simbolo FROM catalogo_monedas WHERE _id = ? AND eliminado = 0',
+    [$idMoneda]
+  );
+
+  return !empty($result) ? $result[0] : null;
+}
+
+/**
  * Inserta una fila en metodos_de_pago a partir de un método ya resuelto por
  * resolverMetodoPagoPorId() -- sin ningún literal de moneda/método.
  */
@@ -152,10 +173,39 @@ function insertarRetiroGenerico($localConnection, $idEmpleado, $metodo, $monto, 
  */
 function decodificarPagosGenericos($data)
 {
-  if (empty($data['pagos'])) {
+  return decodificarArrayJson($data, 'pagos');
+}
+
+/**
+ * Versión genérica de decodificarPagosGenericos(): decodifica cualquier
+ * parámetro que llegue como array real o como string JSON (form-urlencoded),
+ * devolviendo [] si está ausente o no es un array válido.
+ */
+function decodificarArrayJson($data, $key)
+{
+  if (empty($data[$key])) {
     return [];
   }
 
-  $decoded = is_string($data['pagos']) ? json_decode($data['pagos'], true) : $data['pagos'];
+  $decoded = is_string($data[$key]) ? json_decode($data[$key], true) : $data[$key];
   return is_array($decoded) ? $decoded : [];
+}
+
+/**
+ * Fase 8 del rediseño de monedas: caja_cierres/caja_fondos tienen columnas
+ * fijas (dolares/pesos/bolivares) que se quedan intactas -- estas funciones
+ * cubren cualquier moneda ADICIONAL a esas 3 vía las tablas hijas
+ * caja_cierres_extra/caja_fondos_extra. $idMoneda debe ser el _id real de
+ * catalogo_monedas (no uno de los 3 códigos legados).
+ */
+function insertarCierreCajaExtra($localConnection, $idCajaCierres, $idMoneda, $monto)
+{
+  $sql = 'INSERT INTO caja_cierres_extra (id_caja_cierres, id_moneda, monto) VALUES (?, ?, ?)';
+  return $localConnection->goQuery($sql, [$idCajaCierres, $idMoneda, $monto]);
+}
+
+function insertarFondoCajaExtra($localConnection, $idCajaFondos, $idMoneda, $monto)
+{
+  $sql = 'INSERT INTO caja_fondos_extra (id_caja_fondos, id_moneda, monto) VALUES (?, ?, ?)';
+  return $localConnection->goQuery($sql, [$idCajaFondos, $idMoneda, $monto]);
 }

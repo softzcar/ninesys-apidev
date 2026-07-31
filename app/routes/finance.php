@@ -330,54 +330,59 @@ return function (App $app) {
   // Datos para efectuar el cietre de caja
   $app->get('/cierre-de-caja/{id_vendedor}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
-    $id_vendedor = $args['id_vendedor'];
+    $id_vendedor = (int) $args['id_vendedor'];
     $object = ['data' => []];
 
-    // 1. Get the latest cash fund for the vendor using a prepared statement
-    $sql_fondo = 'SELECT dolares, pesos, bolivares FROM caja_fondos WHERE id_empleado = ? ORDER BY _id DESC LIMIT 1';
+    // Fase 8: dolares/pesos/bolivares son columnas fijas del último fondo
+    // dejado (enfoque híbrido) -- se combinan con la tabla hija
+    // caja_fondos_extra para cualquier moneda fuera de esas 3.
+    $columnaPorCodigo = ['USD' => 'dolares', 'COP' => 'pesos', 'VES' => 'bolivares'];
+
+    $sql_fondo = 'SELECT _id, dolares, pesos, bolivares FROM caja_fondos WHERE id_empleado = ? ORDER BY _id DESC LIMIT 1';
     $fondo = $localConnection->goQuery($sql_fondo, [$id_vendedor]);
 
-    $fondo_dolares = !empty($fondo) ? (float) $fondo[0]['dolares'] : 0;
-    $fondo_pesos = !empty($fondo) ? (float) $fondo[0]['pesos'] : 0;
-    $fondo_bolivares = !empty($fondo) ? (float) $fondo[0]['bolivares'] : 0;
+    $fondoPorCodigo = [];
+    if (!empty($fondo)) {
+      $fondoPorCodigo['USD'] = (float) $fondo[0]['dolares'];
+      $fondoPorCodigo['COP'] = (float) $fondo[0]['pesos'];
+      $fondoPorCodigo['VES'] = (float) $fondo[0]['bolivares'];
 
-    $object['data']['fondo'] = [['dolares' => $fondo_dolares, 'pesos' => $fondo_pesos, 'bolivares' => $fondo_bolivares]];
-
-    // 2. Get the sum of open cash transactions for each currency using a prepared statement
-    $sql_caja = 'SELECT 
-                        moneda, 
-                        (SUM(monto)) as total_monto                        
-                     FROM caja 
-                     WHERE id_empleado = ? AND id_caja_cierres IS NULL 
-                     GROUP BY moneda';
-    $caja_entries = $localConnection->goQuery($sql_caja, [$id_vendedor]);
-
-    $caja_dolares = 0;
-    $caja_pesos = 0;
-    $caja_bolivares = 0;
-
-    foreach ($caja_entries as $entry) {
-      switch ($entry['moneda']) {
-        case 'Dólares':
-          $caja_dolares = (float) $entry['total_monto'];
-          break;
-        case 'Pesos':
-          $caja_pesos = (float) $entry['total_monto'];
-          break;
-        case 'Bolívares':
-          $caja_bolivares = (float) $entry['total_monto'];
-          break;
+      $fondoExtra = $localConnection->goQuery(
+        'SELECT cm.codigo, SUM(cfe.monto) AS monto
+         FROM caja_fondos_extra cfe
+         JOIN catalogo_monedas cm ON cm._id = cfe.id_moneda
+         WHERE cfe.id_caja_fondos = ?
+         GROUP BY cm.codigo',
+        [$fondo[0]['_id']]
+      );
+      foreach ($fondoExtra as $row) {
+        $fondoPorCodigo[$row['codigo']] = (float) $row['monto'];
       }
     }
 
-    // 3. Calculate total cash on hand and structure the response
-    $total_dolares = $fondo_dolares + $caja_dolares;
-    $total_pesos = $fondo_pesos + $caja_pesos;
-    $total_bolivares = $fondo_bolivares + $caja_bolivares;
+    // Caja abierta (sin cerrar) por CADA moneda activa real del catálogo --
+    // ya no limitado a un switch de 3 strings hardcodeados.
+    $monedasActivas = $localConnection->goQuery(
+      'SELECT _id, codigo, nombre, simbolo FROM catalogo_monedas WHERE activo = 1 AND eliminado = 0 ORDER BY es_base DESC, nombre'
+    );
 
-    $object['data']['dolares'] = [['moneda' => 'Dólares', 'monto' => $total_dolares]];
-    $object['data']['pesos'] = [['moneda' => 'Pesos', 'monto' => $total_pesos]];
-    $object['data']['bolivares'] = [['moneda' => 'Bolívares', 'monto' => $total_bolivares]];
+    $object['data']['porMoneda'] = [];
+    foreach ($monedasActivas as $moneda) {
+      $sql_caja = 'SELECT COALESCE(SUM(monto), 0) AS total FROM caja WHERE moneda = ? AND id_empleado = ? AND id_caja_cierres IS NULL';
+      $res = $localConnection->goQuery($sql_caja, [$moneda['nombre'], $id_vendedor]);
+      $cajaMonto = !empty($res) ? (float) $res[0]['total'] : 0;
+      $fondoMonto = $fondoPorCodigo[$moneda['codigo']] ?? 0;
+
+      $object['data']['porMoneda'][] = [
+        'id_moneda' => (int) $moneda['_id'],
+        'codigo' => $moneda['codigo'],
+        'nombre' => $moneda['nombre'],
+        'simbolo' => $moneda['simbolo'],
+        'fondo' => $fondoMonto,
+        'caja' => $cajaMonto,
+        'total' => $fondoMonto + $cajaMonto,
+      ];
+    }
 
     $localConnection->disconnect();
 
@@ -391,52 +396,137 @@ return function (App $app) {
   $app->post('/cierre-de-caja-vendedor', function (Request $request, Response $response, $args) {
     $datosCierre = $request->getParsedBody();
     $localConnection = new LocalDB();
+    $object = [];
 
     // Atomicidad FK: cierre (caja_cierres + caja_fondos + UPDATE caja) en una transacción
     $localConnection->beginTransaction();
 
-    // $object['response_DB'] = $localConnection;
+    try {
+      // Fase 8: dolares/pesos/bolivares son columnas fijas de caja_cierres/
+      // caja_fondos (enfoque híbrido ya decidido en el plan, cero riesgo sobre
+      // saldo/cierre histórico) -- se mapean por código ISO real desde el
+      // catálogo; cualquier moneda fuera de esas 3 va a la tabla hija
+      // caja_cierres_extra/caja_fondos_extra. Mismo mapeo ya usado en /retiro.
+      $columnaPorCodigo = ['USD' => 'dolares', 'COP' => 'pesos', 'VES' => 'bolivares'];
 
-    // Guardamos el cierre
-    $sql = 'INSERT INTO caja_cierres (dolares, pesos, bolivares, id_empleado) VALUES (?, ?, ?, ?)';
-    $responseCierreCaja = $localConnection->goQuery($sql, [
-      $datosCierre['cierreDolaresEfectivo'],
-      $datosCierre['cierrePesosEfectivo'],
-      $datosCierre['cierreBolivaresEfectivo'],
-      $datosCierre['id_empleado'],
-    ]);
+      $cierresGenericos = decodificarArrayJson($datosCierre, 'cierres');
+      $fondosGenericos = decodificarArrayJson($datosCierre, 'fondos');
 
-    // Identificamos el ID del INSERT
-    $insertID = $responseCierreCaja['insert_id'];
+      if (!empty($cierresGenericos) || !empty($fondosGenericos)) {
+        // CAMINO NUEVO (Fase 8): dirigido por catalogo_monedas real.
+        $cierrePorColumna = ['dolares' => 0, 'pesos' => 0, 'bolivares' => 0];
+        $cierresExtra = [];
+        foreach ($cierresGenericos as $item) {
+          $monto = floatval($item['monto'] ?? 0);
+          if ($monto <= 0) {
+            continue;
+          }
+          $moneda = resolverMonedaPorId($localConnection, $item['id_moneda'] ?? 0);
+          if (!$moneda) {
+            throw new Exception('Moneda inválida o eliminada (id_moneda=' . ($item['id_moneda'] ?? '?') . ')');
+          }
+          $columna = $columnaPorCodigo[$moneda['codigo']] ?? null;
+          if ($columna) {
+            $cierrePorColumna[$columna] += $monto;
+          } else {
+            $cierresExtra[] = ['id_moneda' => $moneda['id_moneda'], 'monto' => $monto];
+          }
+        }
 
-    // Insertamos caja_fondos
-    $sql = 'INSERT INTO caja_fondos (id_empleado, dolares, id_caja_cierres, pesos, bolivares) VALUES (?, ?, ?, ?, ?)';
-    $object['response_insert_caja_fondos'] = $localConnection->goQuery($sql, [
-      $datosCierre['id_empleado'],
-      $datosCierre['fondoDolares'],
-      $insertID,
-      $datosCierre['fondoPesos'],
-      $datosCierre['fondoBolivares'],
-    ]);
+        $sql = 'INSERT INTO caja_cierres (dolares, pesos, bolivares, id_empleado) VALUES (?, ?, ?, ?)';
+        $responseCierreCaja = $localConnection->goQuery($sql, [
+          $cierrePorColumna['dolares'],
+          $cierrePorColumna['pesos'],
+          $cierrePorColumna['bolivares'],
+          $datosCierre['id_empleado'],
+        ]);
+        $insertID = $responseCierreCaja['insert_id'];
 
-    // Actualizamos caja para los registros cerrados
-    $sql = 'UPDATE caja SET id_caja_cierres = ? WHERE id_empleado = ? AND id_caja_cierres IS NULL';
-    $object['response_update_caja'] = $localConnection->goQuery($sql, [$insertID, $datosCierre['id_empleado']]);
+        foreach ($cierresExtra as $extra) {
+          insertarCierreCajaExtra($localConnection, $insertID, $extra['id_moneda'], $extra['monto']);
+        }
 
-    // Marcamos como cerrados los retiros pendientes (mismo criterio que caja arriba).
-    // Sin esto, retiros de cierres anteriores se siguen restando del saldo disponible
-    // indefinidamente (cierre_caja nunca se actualizaba desde su valor por defecto 0).
-    $sql = 'UPDATE retiros SET cierre_caja = 1 WHERE id_empleado = ? AND cierre_caja = 0';
-    $object['response_update_retiros'] = $localConnection->goQuery($sql, [$datosCierre['id_empleado']]);
+        $fondoPorColumna = ['dolares' => 0, 'pesos' => 0, 'bolivares' => 0];
+        $fondosExtra = [];
+        foreach ($fondosGenericos as $item) {
+          $monto = floatval($item['monto'] ?? 0);
+          if ($monto <= 0) {
+            continue;
+          }
+          $moneda = resolverMonedaPorId($localConnection, $item['id_moneda'] ?? 0);
+          if (!$moneda) {
+            throw new Exception('Moneda inválida o eliminada (id_moneda=' . ($item['id_moneda'] ?? '?') . ')');
+          }
+          $columna = $columnaPorCodigo[$moneda['codigo']] ?? null;
+          if ($columna) {
+            $fondoPorColumna[$columna] += $monto;
+          } else {
+            $fondosExtra[] = ['id_moneda' => $moneda['id_moneda'], 'monto' => $monto];
+          }
+        }
 
-    $localConnection->commit();
-    $localConnection->disconnect();
+        $sql = 'INSERT INTO caja_fondos (id_empleado, dolares, id_caja_cierres, pesos, bolivares) VALUES (?, ?, ?, ?, ?)';
+        $fondoInsert = $localConnection->goQuery($sql, [
+          $datosCierre['id_empleado'],
+          $fondoPorColumna['dolares'],
+          $insertID,
+          $fondoPorColumna['pesos'],
+          $fondoPorColumna['bolivares'],
+        ]);
+        $idCajaFondos = $fondoInsert['insert_id'];
 
-    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+        foreach ($fondosExtra as $extra) {
+          insertarFondoCajaExtra($localConnection, $idCajaFondos, $extra['id_moneda'], $extra['monto']);
+        }
+      } else {
+        // CAMINO LEGADO: formulario aún no migrado -- sin cambios de comportamiento.
+        $sql = 'INSERT INTO caja_cierres (dolares, pesos, bolivares, id_empleado) VALUES (?, ?, ?, ?)';
+        $responseCierreCaja = $localConnection->goQuery($sql, [
+          $datosCierre['cierreDolaresEfectivo'],
+          $datosCierre['cierrePesosEfectivo'],
+          $datosCierre['cierreBolivaresEfectivo'],
+          $datosCierre['id_empleado'],
+        ]);
+        $insertID = $responseCierreCaja['insert_id'];
 
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
+        $sql = 'INSERT INTO caja_fondos (id_empleado, dolares, id_caja_cierres, pesos, bolivares) VALUES (?, ?, ?, ?, ?)';
+        $localConnection->goQuery($sql, [
+          $datosCierre['id_empleado'],
+          $datosCierre['fondoDolares'],
+          $insertID,
+          $datosCierre['fondoPesos'],
+          $datosCierre['fondoBolivares'],
+        ]);
+      }
+
+      // Actualizamos caja para los registros cerrados
+      $sql = 'UPDATE caja SET id_caja_cierres = ? WHERE id_empleado = ? AND id_caja_cierres IS NULL';
+      $localConnection->goQuery($sql, [$insertID, $datosCierre['id_empleado']]);
+
+      // Marcamos como cerrados los retiros pendientes (mismo criterio que caja arriba).
+      // Sin esto, retiros de cierres anteriores se siguen restando del saldo disponible
+      // indefinidamente (cierre_caja nunca se actualizaba desde su valor por defecto 0).
+      $sql = 'UPDATE retiros SET cierre_caja = 1 WHERE id_empleado = ? AND cierre_caja = 0';
+      $localConnection->goQuery($sql, [$datosCierre['id_empleado']]);
+
+      $localConnection->commit();
+      $localConnection->disconnect();
+
+      $object['success'] = true;
+      $object['id_caja_cierres'] = $insertID;
+      $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+    } catch (\Throwable $e) {
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
+      $localConnection->disconnect();
+      error_log('Error en /cierre-de-caja-vendedor: ' . $e->getMessage());
+      return ApiResponse::serverError($response, 'Error al registrar el cierre de caja. Por favor intente nuevamente.', $e);
+    }
   });
 
   // Reporte de caja
@@ -930,62 +1020,58 @@ return function (App $app) {
 
     $object['data']['retiros'] = $localConnection->goQuery($sql, [$args['inicio'], $args['fin']]);
 
-    /** FONDO */
-    $sql = 'SELECT dolares, pesos, bolivares FROM caja_fondos WHERE id_empleado = ? ORDER BY _id DESC LIMIT 1';
-    $fondo = $localConnection->goQuery($sql, [$args['id_empleado']]);
-    // $pbject['sql']['data_fondo'] = $sql;
-    $object['data']['fondo'] = $fondo;
+    $id_emp = (int) $args['id_empleado'];
 
-    if (empty($fondo)) {
-      $fondo[0]['dolares'] = 0;
-      $fondo[0]['pesos'] = 0;
-      $fondo[0]['bolivares'] = 0;
+    // FONDO: columnas fijas + tabla hija (Fase 8, enfoque híbrido, mismo
+    // mapeo por código ISO ya usado en /retiro y /cierre-de-caja).
+    $columnaPorCodigo = ['USD' => 'dolares', 'COP' => 'pesos', 'VES' => 'bolivares'];
+    $sql = 'SELECT _id, dolares, pesos, bolivares FROM caja_fondos WHERE id_empleado = ? ORDER BY _id DESC LIMIT 1';
+    $fondoRow = $localConnection->goQuery($sql, [$id_emp]);
+    $object['data']['fondo'] = $fondoRow;
+
+    $fondoPorCodigo = ['USD' => 0, 'COP' => 0, 'VES' => 0];
+    if (!empty($fondoRow)) {
+      $fondoPorCodigo['USD'] = floatval($fondoRow[0]['dolares']);
+      $fondoPorCodigo['COP'] = floatval($fondoRow[0]['pesos']);
+      $fondoPorCodigo['VES'] = floatval($fondoRow[0]['bolivares']);
+
+      $fondoExtra = $localConnection->goQuery(
+        'SELECT cm.codigo, SUM(cfe.monto) AS monto
+         FROM caja_fondos_extra cfe
+         JOIN catalogo_monedas cm ON cm._id = cfe.id_moneda
+         WHERE cfe.id_caja_fondos = ?
+         GROUP BY cm.codigo',
+        [$fondoRow[0]['_id']]
+      );
+      foreach ($fondoExtra as $row) {
+        $fondoPorCodigo[$row['codigo']] = floatval($row['monto']);
+      }
     }
-     $id_emp = $args['id_empleado'];
 
-    // DÓLARES EN CAJA
-    $montoDolaresCaja = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM caja WHERE moneda = 'Dólares' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
-    $montoDolaresRetiros = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Dólares' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
-    $saldoDolares = floatval($montoDolaresCaja + ($fondo[0]['dolares'] ?? 0) - $montoDolaresRetiros);
+    // SALDO EN CAJA para CADA moneda activa real -- ya no 3 bloques
+    // hardcodeados a Dólares/Pesos/Bolívares.
+    $monedasActivas = $localConnection->goQuery('SELECT codigo, nombre FROM catalogo_monedas WHERE activo = 1 AND eliminado = 0 ORDER BY es_base DESC, nombre');
+    $object['data']['caja'] = [];
+    foreach ($monedasActivas as $moneda) {
+      $montoCaja = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM caja WHERE moneda = ? AND id_caja_cierres IS NULL AND id_empleado = ?", [$moneda['nombre'], $id_emp])[0]['total']);
+      $montoRetiros = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM retiros WHERE moneda = ? AND cierre_caja = 0 AND id_empleado = ?", [$moneda['nombre'], $id_emp])[0]['total']);
+      $extraFondo = $fondoPorCodigo[$moneda['codigo']] ?? 0;
+      $saldo = floatval($montoCaja + $extraFondo - $montoRetiros);
 
-    $object['data']['caja'] = [[
-        'monto' => $saldoDolares,
-        'moneda' => 'Dólares',
-        'tasa' => 1,
-        'dolares' => '$' . number_format($saldoDolares, 2)
-    ]];
+      $resTasa = $localConnection->goQuery("SELECT tasa FROM caja WHERE moneda = ? AND id_empleado = ? ORDER BY _id DESC LIMIT 1", [$moneda['nombre'], $id_emp]);
+      $tasa = floatval(!empty($resTasa) ? $resTasa[0]['tasa'] : 1);
+      if ($tasa <= 0) {
+        $tasa = 1;
+      }
 
-    // PESOS EN CAJA
-    $montoPesosCaja = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM caja WHERE moneda = 'Pesos' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
-    $montoPesosRetiros = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Pesos' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
-    $saldoPesos = floatval($montoPesosCaja + ($fondo[0]['pesos'] ?? 0) - $montoPesosRetiros);
-    
-    $resTasaP = $localConnection->goQuery("SELECT tasa FROM caja WHERE moneda = 'Pesos' AND id_empleado = ? ORDER BY _id DESC LIMIT 1", [$id_emp]);
-    $tasaP = floatval(!empty($resTasaP) ? $resTasaP[0]['tasa'] : 1);
-    if($tasaP <= 0) $tasaP = 1;
+      $object['data']['caja'][] = [
+        'monto' => $saldo,
+        'moneda' => $moneda['nombre'],
+        'tasa' => $tasa,
+        'dolares' => '$' . number_format($saldo / $tasa, 2),
+      ];
+    }
 
-    array_push($object['data']['caja'], [
-        'monto' => $saldoPesos,
-        'moneda' => 'Pesos',
-        'tasa' => $tasaP,
-        'dolares' => '$' . number_format($saldoPesos / $tasaP, 2)
-    ]);
-
-    // BOLIVARES EN CAJA
-    $montoBolivaresCaja = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM caja WHERE moneda = 'Bolívares' AND id_caja_cierres IS NULL AND id_empleado = ?", [$id_emp])[0]['total']);
-    $montoBolivaresRetiros = floatval($localConnection->goQuery("SELECT COALESCE(SUM(monto), 0) as total FROM retiros WHERE moneda = 'Bolívares' AND cierre_caja = 0 AND id_empleado = ?", [$id_emp])[0]['total']);
-    $saldoBolivares = floatval($montoBolivaresCaja + ($fondo[0]['bolivares'] ?? 0) - $montoBolivaresRetiros);
-
-    $resTasaB = $localConnection->goQuery("SELECT tasa FROM caja WHERE moneda = 'Bolívares' AND id_empleado = ? ORDER BY _id DESC LIMIT 1", [$id_emp]);
-    $tasaB = floatval(!empty($resTasaB) ? $resTasaB[0]['tasa'] : 1);
-    if($tasaB <= 0) $tasaB = 1;
-
-    array_push($object['data']['caja'], [
-        'monto' => $saldoBolivares,
-        'moneda' => 'Bolívares',
-        'tasa' => $tasaB,
-        'dolares' => '$' . number_format($saldoBolivares/ $tasaB, 2)
-    ]);
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
