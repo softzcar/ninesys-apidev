@@ -371,6 +371,16 @@ return function (App $app) {
       $sql_caja = 'SELECT COALESCE(SUM(monto), 0) AS total FROM caja WHERE moneda = ? AND id_empleado = ? AND id_caja_cierres IS NULL';
       $res = $localConnection->goQuery($sql_caja, [$moneda['nombre'], $id_vendedor]);
       $cajaMonto = !empty($res) ? (float) $res[0]['total'] : 0;
+
+      // Antes no se restaban los retiros ya hechos -- "disponible para
+      // cerrar" mostraba el bruto de caja, no lo que realmente queda
+      // (hallazgo real: tras retirar, Retiros mostraba el saldo correcto
+      // pero Cierre de Caja seguía mostrando el monto de antes del retiro,
+      // 2026-08-03). Mismo cálculo que ya usa GET /retiros/.../{id_empleado}.
+      $sql_retiros = 'SELECT COALESCE(SUM(monto), 0) AS total FROM retiros WHERE moneda = ? AND id_empleado = ? AND cierre_caja = 0';
+      $resRetiros = $localConnection->goQuery($sql_retiros, [$moneda['nombre'], $id_vendedor]);
+      $retirosMonto = !empty($resRetiros) ? (float) $resRetiros[0]['total'] : 0;
+
       $fondoMonto = $fondoPorCodigo[$moneda['codigo']] ?? 0;
 
       $object['data']['porMoneda'][] = [
@@ -380,7 +390,8 @@ return function (App $app) {
         'simbolo' => $moneda['simbolo'],
         'fondo' => $fondoMonto,
         'caja' => $cajaMonto,
-        'total' => $fondoMonto + $cajaMonto,
+        'retiros' => $retirosMonto,
+        'total' => $fondoMonto + $cajaMonto - $retirosMonto,
       ];
     }
 

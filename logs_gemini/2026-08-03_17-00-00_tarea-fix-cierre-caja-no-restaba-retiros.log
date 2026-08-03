@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** Probando la Fase D, el usuario notó que tras sus pruebas de retiro, la página de Retiros mostraba correctamente los saldos reducidos (Dólares 4.600,32, Bolívares 100.477,00), pero la página de Cierre de Caja seguía mostrando los montos de ANTES de los retiros (Dólares 10.865,32, Bolívares 257.477,00) -- pidió revisar qué está trayendo esa página.
+- **Fecha y Hora:** 2026-08-03 17:00:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+    - app/routes/finance.php (`GET /cierre-de-caja/{id_vendedor}`)
+- **Commits Relacionados:**
+    - Backend: (ver hash tras el commit)
+- **Acción Realizada:**
+    1. **Causa confirmada por lectura directa y comparación entre 2 endpoints:** `GET /cierre-de-caja/{id_vendedor}` calculaba `total = fondo + caja` (solo sumaba los pagos reales), sin restar NUNCA los retiros ya hechos -- mientras que `GET /retiros/.../{id_empleado}` (el endpoint que sí funciona bien, usado por la pantalla de Retiros) sí hace `caja + fondo - retiros`. El "disponible para cerrar" mostraba el bruto histórico, no lo que realmente queda en caja.
+    2. **Corregido:** agregada la misma resta de retiros (`WHERE moneda = ? AND id_empleado = ? AND cierre_caja = 0`, mismo filtro exacto que ya usa el endpoint de Retiros) al cálculo de `total` por moneda, y expuesto el desglose (`retiros`) en la respuesta junto a `fondo`/`caja` ya existentes.
+- **Inconvenientes y Desafíos:** Ninguno técnico. Se verificó el cálculo con datos reales ANTES de desplegar (consulta SQL directa replicando la lógica nueva) para confirmar que los totales resultantes coincidían EXACTO con lo que el usuario esperaba ver (4.600,32 y 100.477,00, los mismos valores que ya mostraba correctamente Retiros).
+- **Decisión Final y Justificación:** Se replicó el mismo filtro y patrón ya usado por `GET /retiros/.../{id_empleado}` en vez de inventar uno nuevo -- ambos endpoints deben coincidir siempre en el mismo saldo real, por definición.
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `grep`, `php -l`, `psql` (verificación de datos reales antes y después del cambio).
+- **Resultado:** Éxito.
+- **Verificación:** Consulta SQL directa replicando la nueva lógica confirmó los 4 totales reales por moneda (USD=4.600,32, VES=100.477,00, EUR=0, COP=-216.236,51) -- coincidiendo exactamente con Retiros para USD y VES antes de desplegar el cambio.
+- **Logro Conseguido:** Cierra un bug financiero real -- Cierre de Caja permitía "cerrar" dinero que en realidad ya se había retirado, mostrando un disponible inflado. Ahora ambas pantallas (Retiros y Cierre de Caja) reportan exactamente el mismo saldo real por moneda.
+- **Observaciones:** Ninguna pendiente para esta tarea puntual.
+- **Respuesta de Claude:** Encontrada la causa: `GET /cierre-de-caja` nunca restaba los retiros ya hechos, a diferencia del endpoint de Retiros que sí lo hacía correctamente -- por eso mostraba el monto de antes de tus pruebas. Corregido con el mismo cálculo, verificado con los datos reales antes de desplegar (coincide exacto con lo que esperabas ver).
