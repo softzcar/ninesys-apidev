@@ -4,6 +4,35 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
 
+/**
+ * Resuelve la zona horaria real de la empresa para exponerla al frontend --
+ * mismo criterio en capas que IdEmpresaMiddleware::process() (override
+ * explícito de la empresa > país configurado > default), pero recalculado
+ * aquí porque en /login y /refresh-session no siempre hay todavía un
+ * id_empresa conocido en el header Authorization para que el middleware lo
+ * haya resuelto en EMPRESA_TIMEZONE en ese punto del flujo.
+ */
+function resolverTimezoneEmpresa($localConnection, array $empresaData): string
+{
+    if (!empty($empresaData['timezone'])) {
+        return $empresaData['timezone'];
+    }
+    if (!empty($empresaData['id_pais']) && (getenv('DB_DRIVER') ?: 'mysql') === 'pgsql') {
+        try {
+            $pais = $localConnection->goQuery(
+                'SELECT timezone FROM paises_soportados WHERE id_pais = ?',
+                [(int) $empresaData['id_pais']]
+            );
+            if (!empty($pais[0]['timezone'])) {
+                return $pais[0]['timezone'];
+            }
+        } catch (\Throwable $e) {
+            // catalogo no disponible en este entorno -- cae al default
+        }
+    }
+    return 'America/Caracas';
+}
+
 return function (App $app) {
 
     /** * Login */
@@ -105,7 +134,7 @@ return function (App $app) {
                     'email' => $empresa_data['email'],
                     'pais' => $empresa_data['pais'],
                     'id_pais' => $empresa_data['id_pais'] !== null ? (int) $empresa_data['id_pais'] : null,
-                    'timezone' => $empresa_data['timezone'] ?? null
+                    'timezone' => resolverTimezoneEmpresa($localConnection, $empresa_data)
                 ],
                 'datos_usuario' => [
                     'nombre' => $usuario_data['nombre'],
@@ -296,7 +325,7 @@ return function (App $app) {
         $object['empresa']['tipos_de_monedas'] = json_decode($empresa_data['tipos_de_monedas']);
         $object['empresa']['pais'] = $empresa_data['pais'];
         $object['empresa']['id_pais'] = $empresa_data['id_pais'] !== null ? (int) $empresa_data['id_pais'] : null;
-        $object['empresa']['timezone'] = $empresa_data['timezone'] ?? null;
+        $object['empresa']['timezone'] = resolverTimezoneEmpresa($localConnection, $empresa_data);
         $object['empresa']['numero_registro_legal'] = $empresa_data['numero_registro_legal'];
         $object['empresa']['activo'] = $empresa_data['activo'];
 
@@ -322,7 +351,7 @@ return function (App $app) {
                 'email' => $empresa_data['email'],
                 'pais' => $empresa_data['pais'],
                 'id_pais' => $empresa_data['id_pais'] !== null ? (int) $empresa_data['id_pais'] : null,
-                'timezone' => $empresa_data['timezone'] ?? null,
+                'timezone' => resolverTimezoneEmpresa($localConnection, $empresa_data),
                 'horario_laboral' => json_decode($empresa_data['horario_laboral']),
                 'tipos_de_monedas' => json_decode($empresa_data['tipos_de_monedas'])
             ];
@@ -454,7 +483,7 @@ return function (App $app) {
             'email' => $empresa_data['email'],
             'pais' => $empresa_data['pais'],
             'id_pais' => $empresa_data['id_pais'] !== null ? (int) $empresa_data['id_pais'] : null,
-            'timezone' => $empresa_data['timezone'] ?? null,
+            'timezone' => resolverTimezoneEmpresa($localConnection, $empresa_data),
             'horario_laboral' => json_decode($empresa_data['horario_laboral']),
             'tipos_de_monedas' => json_decode($empresa_data['tipos_de_monedas'])
         ];

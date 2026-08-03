@@ -37,15 +37,20 @@ class LocalDB
         $this->pdo = new PDO($this->dsn, $this->user, $this->pass);
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->pdo->exec("SET client_encoding TO 'UTF8';");
-        // NO establecer TIME ZONE aquí -- el clúster de Postgres ya tiene
-        // `timezone = 'America/Caracas'` en postgresql.conf (aplica a
-        // cualquier base de datos, presente o futura). Hacerlo aquí con
-        // `date('P')` (formato ISO, ej. "-04:00") era un bug real: Postgres
-        // interpreta los strings de offset "pelados" con el signo invertido
-        // (convención POSIX), así que "-04:00" terminaba fijando la sesión
-        // en +04:00 -- un error de 8 horas en TODO timestamp basado en
-        // CURRENT_TIMESTAMP/NOW() (confirmado en vivo el 2026-08-03:
-        // metodos_de_pago.moment vs abonos.moment del mismo pago real).
+        // Zona horaria por empresa (país configurado), no un offset fijo de
+        // servidor -- IdEmpresaMiddleware ya resolvió EMPRESA_TIMEZONE (ej.
+        // "America/Bogota") como NOMBRE de zona, nunca offset numérico:
+        // Postgres interpreta los offsets numéricos "pelados" (ej. "-04:00")
+        // con el signo invertido (convención POSIX) -- ese fue exactamente
+        // el bug real encontrado el 2026-08-03 (8 horas de desfase, cuando
+        // esto usaba `date('P')` directo). Los nombres de zona no tienen ese
+        // problema (verificado en vivo). Si la zona no se pudo resolver o no
+        // es válida, cae al default del propio clúster (America/Caracas, ya
+        // fijado en postgresql.conf) sin tumbar la conexión.
+        $tz = (defined('EMPRESA_TIMEZONE') && EMPRESA_TIMEZONE) ? EMPRESA_TIMEZONE : 'America/Caracas';
+        try {
+          $this->pdo->exec('SET TIME ZONE ' . $this->pdo->quote($tz) . ';');
+        } catch (\Exception $e) {}
         try {
           $this->pdo->exec("SET lc_time TO 'es_ES.UTF-8';");
         } catch (\Exception $e) {}

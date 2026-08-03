@@ -35,7 +35,18 @@ class IdEmpresaMiddleware implements Middleware
                     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
                 }
 
-                $sql = 'SELECT db_host, db_user, db_password, nombre, db_name, pais, timezone FROM empresas WHERE id_empresa = :id_empresa';
+                // paises_soportados (catálogo de plataforma del rediseño de monedas)
+                // solo existe hoy en la BD central Postgres -- Producción sigue en
+                // MySQL para la BD central, así que el JOIN se hace condicional al
+                // driver para no romper cada request autenticada ahí.
+                if ($driver === 'pgsql') {
+                    $sql = 'SELECT e.db_host, e.db_user, e.db_password, e.nombre, e.db_name, e.pais, e.timezone, e.id_pais, ps.timezone AS timezone_pais
+                            FROM empresas e
+                            LEFT JOIN paises_soportados ps ON ps.id_pais = e.id_pais
+                            WHERE e.id_empresa = :id_empresa';
+                } else {
+                    $sql = 'SELECT db_host, db_user, db_password, nombre, db_name, pais, timezone, NULL AS id_pais, NULL AS timezone_pais FROM empresas WHERE id_empresa = :id_empresa';
+                }
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute(['id_empresa' => $id_empresa]);
 
@@ -52,11 +63,25 @@ class IdEmpresaMiddleware implements Middleware
                 
                 if ($connectionDetails) {
                     $pais = $connectionDetails['pais'] ?? null;
+                    // Resolución en capas (nunca se asume en silencio):
+                    // 1) override explícito de la empresa (empresas.timezone,
+                    //    editable desde ConfigTimezoneForm.vue);
+                    // 2) zona real del país configurado (paises_soportados,
+                    //    vía empresas.id_pais -- la fuente correcta);
+                    // 3) mapa legado por nombre de país (empresas.pais es en
+                    //    realidad un código telefónico, casi nunca coincide,
+                    //    queda solo como último recurso para empresas sin
+                    //    id_pais fijado todavía);
+                    // 4) default final.
                     $timezone = $connectionDetails['timezone'] ?? null;
+                    if (empty($timezone)) {
+                        $timezone = $connectionDetails['timezone_pais'] ?? null;
+                    }
                     if (empty($timezone)) {
                         $timezone = $this->getTimezoneByCountry($pais);
                     }
                     date_default_timezone_set($timezone);
+                    define('EMPRESA_TIMEZONE', $timezone);
                     $targetHost = $connectionDetails['db_host'];
                     // Si el servidor es 'development' pero la base de datos de la empresa no es local ni del dominio dev,
                     // podríamos bloquearlo. Pero lo más seguro es confiar en que el ID_EMPRESA en este servidor
