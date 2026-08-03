@@ -37,9 +37,15 @@ class LocalDB
         $this->pdo = new PDO($this->dsn, $this->user, $this->pass);
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->pdo->exec("SET client_encoding TO 'UTF8';");
-        try {
-          $this->pdo->exec("SET TIME ZONE '{$timezoneOffset}';");
-        } catch (\Exception $e) {}
+        // NO establecer TIME ZONE aquí -- el clúster de Postgres ya tiene
+        // `timezone = 'America/Caracas'` en postgresql.conf (aplica a
+        // cualquier base de datos, presente o futura). Hacerlo aquí con
+        // `date('P')` (formato ISO, ej. "-04:00") era un bug real: Postgres
+        // interpreta los strings de offset "pelados" con el signo invertido
+        // (convención POSIX), así que "-04:00" terminaba fijando la sesión
+        // en +04:00 -- un error de 8 horas en TODO timestamp basado en
+        // CURRENT_TIMESTAMP/NOW() (confirmado en vivo el 2026-08-03:
+        // metodos_de_pago.moment vs abonos.moment del mismo pago real).
         try {
           $this->pdo->exec("SET lc_time TO 'es_ES.UTF-8';");
         } catch (\Exception $e) {}
