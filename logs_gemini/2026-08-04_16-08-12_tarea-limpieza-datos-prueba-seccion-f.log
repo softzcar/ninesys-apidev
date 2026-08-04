@@ -1,0 +1,23 @@
+- **Solicitud del Usuario:** Retomando el checklist de QA del rediseño de monedas (`docs/QA_rediseno_monedas_dinamicas_ozcar.md`), Sección F: "Limpieza de datos de prueba" -- decidir con el equipo si los datos de prueba creados durante toda la ronda de QA se dejan o se limpian en Desarrollo, y confirmar que Producción no tiene nada de esto.
+- **Fecha y Hora:** 2026-08-04 16:08:12
+- **Proyecto(s):** Backend (ninesys-api) -- cambio de datos en Dev, sin cambios de código.
+- **Archivos Involucrados:** Ninguno (solo datos, vía SQL directo replicando la lógica exacta de `POST /monedas/eliminar` y `POST /metodos-pago/eliminar`, ambos ya existentes en `app/routes/monedas.php`).
+- **Commits Relacionados:** N/A (sin cambios de código).
+- **Acción Realizada:**
+    1. Auditoría completa por SQL directo contra `api_emp_194` (Dev) de qué datos de prueba quedaban realmente, antes de decidir qué limpiar:
+       - Órdenes de prueba (999000, 999002, 999004, usadas en distintas tareas de Fase 6/7): confirmado que **ya no existen** en la tabla `ordenes` -- se habían limpiado correctamente en su momento.
+       - Moneda "Test Coin" (TST, `_id=4`) y su método de pago: ya estaban dados de baja (`eliminado=1`) desde antes.
+       - Moneda "Euro" (EUR, `_id=6`): **activa y seleccionable** en toda la app, pero con **0 filas** en `metodos_de_pago`, `caja` y `retiros` -- cero uso real, agregada solo como prueba durante la Sección A del checklist (Gestor de Monedas).
+       - Método de pago "binance" (`_id=12`, moneda Dólares): activo, **0 uso real** confirmado.
+       - Orden 6445 (abono duplicado por el bug de doble clic, tarea anterior): ya limpiado, confirmado en su bitácora original.
+    2. Decisión explícita del usuario (vía pregunta): dar de baja Euro y "binance" (soft-delete, reversible) -- mismo mecanismo ya usado para Test Coin, no se borra nada físicamente.
+    3. Ejecutado: `UPDATE catalogo_metodos_pago SET eliminado = 1 WHERE _id IN (11, 12)` (Efectivo/Euro y binance/Dólares) y `UPDATE catalogo_monedas SET eliminado = 1 WHERE _id = 6` (Euro) -- exactamente la misma operación que hacen los endpoints reales `POST /metodos-pago/eliminar` y `POST /monedas/eliminar`, ejecutada directo por ser una limpieza puntual de datos, no un cambio de código.
+    4. **NO se tocó** el cierre de caja `_id=10` (empleado Sayerlin) ni sus retiros asociados, generados durante las pruebas en vivo de Sección C/D -- se determinó que son historial real del sistema (mismo criterio ya aplicado a los cierres históricos 1-9), no datos de prueba descartables.
+- **Inconvenientes y Desafíos:** Ninguno. La única decisión real (qué hacer con Euro/binance) se resolvió preguntando al usuario en vez de asumir.
+- **Decisión Final y Justificación:** Soft-delete en vez de borrado físico -- reversible, y consistente con el mecanismo ya existente en el sistema para "eliminar" monedas/métodos (nunca se borra la fila, solo se oculta de las opciones seleccionables).
+- **Herramienta(s) Utilizada(s):** `ssh` + `psql` (auditoría y limpieza), lectura de `app/routes/monedas.php` para replicar exactamente la lógica de los endpoints de eliminación reales.
+- **Resultado:** Éxito.
+- **Verificación:** Confirmado por SQL que `catalogo_monedas`/`catalogo_metodos_pago` reflejan el estado esperado (Euro, binance y Test Coin con `eliminado=1`; USD/VES/COP intactas).
+- **Logro Conseguido:** Cierra la primera mitad de la Sección F del checklist -- catálogo de monedas/métodos de la 194 en Desarrollo queda limpio de artefactos de prueba sin uso real, sin perder ningún dato transaccional real (incluidos los cierres/retiros generados durante las pruebas en vivo, que se conservan como historial legítimo).
+- **Observaciones:** Queda pendiente el segundo punto de la Sección F (confirmar que Producción no tiene datos de prueba) -- requiere permiso explícito del usuario para conectarse a `vps-contabo-prod`, ni siquiera en modo solo-lectura, según la regla de bloqueo de Producción del CLAUDE.md.
+- **Respuesta de Claude:** Auditoría completa de datos de prueba en Desarrollo -- la mayoría ya estaba limpia; Euro y "binance" (0 uso real) dados de baja por decisión del usuario. El cierre real de las pruebas de Sección C/D se conserva como historial, igual que los cierres antiguos.
