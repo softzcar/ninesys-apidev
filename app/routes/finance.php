@@ -469,11 +469,12 @@ return function (App $app) {
       $sql = 'UPDATE caja SET id_caja_cierres = ? WHERE id_empleado = ? AND id_caja_cierres IS NULL';
       $localConnection->goQuery($sql, [$insertID, $datosCierre['id_empleado']]);
 
-      // Marcamos como cerrados los retiros pendientes (mismo criterio que caja arriba).
-      // Sin esto, retiros de cierres anteriores se siguen restando del saldo disponible
-      // indefinidamente (cierre_caja nunca se actualizaba desde su valor por defecto 0).
-      $sql = 'UPDATE retiros SET cierre_caja = 1 WHERE id_empleado = ? AND cierre_caja = 0';
-      $localConnection->goQuery($sql, [$datosCierre['id_empleado']]);
+      // Marcamos como cerrados los retiros pendientes (mismo criterio que caja arriba),
+      // y les atribuimos el id_caja_cierres real -- sin esto, GET /balance-de-cierres
+      // no tiene forma de restarlos del "teórico" y siempre muestra un Diff falso del
+      // tamaño exacto de lo retirado (hallazgo real, 2026-08-03).
+      $sql = 'UPDATE retiros SET cierre_caja = 1, id_caja_cierres = ? WHERE id_empleado = ? AND cierre_caja = 0';
+      $localConnection->goQuery($sql, [$insertID, $datosCierre['id_empleado']]);
 
       $localConnection->commit();
       $localConnection->disconnect();
@@ -1190,6 +1191,18 @@ return function (App $app) {
         $cierreIds
       );
 
+      // Retiros atribuidos a este cierre -- sin esto, "teórico" no reflejaba
+      // el dinero que salió de caja antes de cerrar, y el Diff siempre daba
+      // un falso descuadre del tamaño exacto de lo retirado (hallazgo real,
+      // 2026-08-03). Cierres anteriores a este fix no tendrán retiros
+      // atribuidos (id_caja_cierres quedó NULL en su momento) -- fuera de
+      // alcance, dato histórico irreversible.
+      $retirosMap = mapaSumaPorClaveYMoneda(
+        $localConnection,
+        'SELECT id_caja_cierres AS clave, id_moneda, SUM(monto) AS monto FROM retiros WHERE id_caja_cierres IN (' . marcadoresPosicionales(count($cierreIds)) . ') AND id_moneda IS NOT NULL GROUP BY id_caja_cierres, id_moneda',
+        $cierreIds
+      );
+
       $tasaCierreMap = mapaUltimaTasaPorCierre($localConnection, $cierreIds);
 
       // Historial de tasas por moneda no-base, para cuando un cierre no tuvo
@@ -1226,6 +1239,7 @@ return function (App $app) {
             $fondoAnteriorValor = ($columna ? (float) $c['fa_' . $columna] : 0) + ($fondosExtraMap[$fondoAnteriorId][$idMoneda] ?? 0);
           }
           $recaudadoValor = $recaudadoMap[$cierreId][$idMoneda] ?? 0;
+          $retiradoValor = $retirosMap[$cierreId][$idMoneda] ?? 0;
 
           if ($esBase) {
             $tasa = 1.0;
@@ -1236,7 +1250,7 @@ return function (App $app) {
             }
           }
 
-          $teorico = $fondoAnteriorValor + $recaudadoValor;
+          $teorico = $fondoAnteriorValor + $recaudadoValor - $retiradoValor;
           $real = $cierreValor + $fondoNuevoValor;
 
           $totalTeoricoBase += $esBase ? $teorico : $teorico / $tasa;
@@ -1251,6 +1265,7 @@ return function (App $app) {
             'fondo_nuevo' => $fondoNuevoValor,
             'fondo_anterior' => $fondoAnteriorValor,
             'recaudado' => $recaudadoValor,
+            'retirado' => $retiradoValor,
             'tasa' => $tasa,
             'diferencia' => $real - $teorico,
           ];

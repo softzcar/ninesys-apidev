@@ -1391,6 +1391,7 @@ CREATE TABLE retiros (
   detalle_retiro text DEFAULT NULL,
   cierre_caja SMALLINT NOT NULL DEFAULT 0 ,
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id_caja_cierres INTEGER DEFAULT NULL REFERENCES caja_cierres (_id) ON UPDATE CASCADE ON DELETE SET NULL,
   PRIMARY KEY (_id)
 );
 CREATE TABLE revisiones (
