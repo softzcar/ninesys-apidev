@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** Cerrar el último punto de la Sección F del checklist de QA: confirmar que ningún dato de prueba de la ronda de pruebas del rediseño de monedas quedó en Producción. El usuario autorizó explícitamente ("conectate a producción para solo lectura") una conexión de solo lectura a `vps-contabo-prod`, algo normalmente bloqueado sin pedido directo.
+- **Fecha y Hora:** 2026-08-04 16:15:23
+- **Proyecto(s):** Backend (ninesys-api) -- verificación pura, sin ningún cambio.
+- **Archivos Involucrados:** Ninguno modificado (solo lectura vía `ssh` + `mysql`).
+- **Commits Relacionados:** N/A.
+- **Acción Realizada:**
+    1. `ssh vps-contabo-prod` + intento de `psql` (patrón ya usado en Desarrollo) → falló, no existe usuario `postgres` ni el binario `psql` en ese servidor. Confirmado que Producción corre **MySQL** (`mysql` sí está disponible), no Postgres.
+    2. `mysql api_emp_194 -e 'SHOW TABLES'` → confirmado que **no existen** las tablas del rediseño de monedas (`catalogo_monedas`, `catalogo_metodos_pago`, `caja_cierres_extra`, `caja_fondos_extra`) en la base de Producción -- el rediseño completo de 8 fases nunca se ha desplegado ahí.
+    3. Verificado que las órdenes de prueba (999000/999002/999004) **no existen** en Producción.
+    4. Verificado que las órdenes 6312/6314/6445 (usadas como casos reales durante el QA) **sí existen** en Producción con los mismos datos -- confirma que Desarrollo es un clon de Producción (no que se haya filtrado nada de las pruebas hacia Producción).
+- **Inconvenientes y Desafíos:** Ninguno con la verificación en sí. El hallazgo real (Producción sin el rediseño desplegado) fue inesperado -- se documentó de inmediato en una memoria propia dado su tamaño e importancia para decisiones futuras.
+- **Decisión Final y Justificación:** Todas las consultas fueron estrictamente de solo lectura (`SHOW TABLES`, `SELECT`), respetando al pie de la letra la autorización explícita y acotada del usuario -- ningún `UPDATE`/`INSERT`/`DELETE` ni cambio de configuración en Producción.
+- **Herramienta(s) Utilizada(s):** `ssh`, `mysql` (cliente CLI, no `psql`).
+- **Resultado:** Éxito.
+- **Verificación:** Consultas ejecutadas y confirmadas directamente contra la base real de Producción.
+- **Logro Conseguido:** Cierra por completo la Sección F del checklist de QA del rediseño de monedas (todas las secciones A-F ahora completas). Además, detecta y documenta un hallazgo crítico para la planificación futura: el despliegue a Producción de todo el rediseño de monedas + la migración a Postgres sigue pendiente por completo, sin iniciar.
+- **Observaciones:** Ninguna acción tomada sobre Producción más allá de las consultas de lectura solicitadas -- el despliegue real a Producción queda fuera de alcance, sin iniciar, a la espera de que el usuario decida planificarlo.
+- **Respuesta de Claude:** Confirmado -- no hay ningún dato de prueba en Producción. Pero encontré algo más importante: Producción todavía corre MySQL con el esquema viejo, sin ninguna de las tablas del rediseño de monedas -- todo ese trabajo (8 fases + migración a Postgres) sigue viviendo solo en Desarrollo, sin desplegar a Producción todavía.
