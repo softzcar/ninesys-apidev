@@ -654,8 +654,54 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
+        $tipo = $data['tipo'] ?? 'fijo';
+        $reactivarId = (isset($data['reactivar_id']) && $data['reactivar_id'] !== '') ? (int) $data['reactivar_id'] : null;
+
         try {
             $db = new LocalDB();
+
+            if ($reactivarId) {
+                // Reactivar la plantilla existente en vez de crear un duplicado --
+                // preserva el mismo _id, por lo que el historial de pagos que ya
+                // la referencia (gastos_registros.id_gasto_plantilla) sigue intacto.
+                $db->goQuery(
+                    'UPDATE gastos SET nombre = ?, descripcion = ?, monto = ?, moneda = ?, periodicidad = ?, estatus = ?, eliminado = 0 WHERE _id = ?',
+                    [$data['nombre'], $data['descripcion'] ?? null, $data['monto'], $data['moneda'] ?? 'USD', $data['periodicidad'] ?? 'mensual', $data['estatus'] ?? 'activo', $reactivarId]
+                );
+                $db->disconnect();
+
+                $response->getBody()->write(json_encode(['message' => 'Plantilla de gasto reactivada exitosamente.', 'id' => $reactivarId]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+            }
+
+            // Mismo patrón ya usado en Tallas/Telas: detectar un nombre ya
+            // usado (activo o eliminado) antes de insertar, para no crear un
+            // duplicado silencioso ni perder el historial de pagos ya
+            // asociado al _id original si el usuario recrea un gasto que
+            // había eliminado (hallazgo real reportado por el usuario,
+            // 2026-08-06 -- "Internet" quedó duplicado al recrearlo).
+            $existing = $db->goQuery(
+                'SELECT _id, nombre, eliminado FROM gastos WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?)) AND tipo = ?',
+                [$data['nombre'], $tipo]
+            );
+
+            if ($existing) {
+                $match = $existing[0];
+                if ((int) $match['eliminado'] === 1) {
+                    $db->disconnect();
+                    $response->getBody()->write(json_encode([
+                        'eliminado_existente' => true,
+                        'id' => $match['_id'],
+                        'nombre' => $match['nombre'],
+                    ]));
+                    return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+                }
+
+                $db->disconnect();
+                $response->getBody()->write(json_encode(['error' => 'Ya existe un gasto activo llamado "' . $match['nombre'] . '"']));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            }
+
             $sql = 'INSERT INTO gastos (nombre, descripcion, monto, moneda, periodicidad, tipo, estatus) VALUES (?, ?, ?, ?, ?, ?, ?)';
             $params = [
                 $data['nombre'],
@@ -663,7 +709,7 @@ return function (App $app) {
                 $data['monto'],
                 $data['moneda'] ?? 'USD',
                 $data['periodicidad'] ?? 'mensual',
-                $data['tipo'] ?? 'fijo',
+                $tipo,
                 $data['estatus'] ?? 'activo'
             ];
 
