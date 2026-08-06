@@ -2884,19 +2884,24 @@ return function (App $app) {
             // deben reflejar exactamente el mismo período). Se arman varias
             // variantes porque las distintas queries de este endpoint alternan
             // entre alias 'i'/'im'/'t' o van sin alias sobre 'inventario' directo.
+            // Parametrizado con "?" (antes usaba addslashes()) -- $fechaParams
+            // se reutiliza en cada query que incluya alguno de estos 4 fragmentos,
+            // siempre en el mismo orden (desde, hasta).
             if ($fechaDesde && $fechaHasta) {
-                $fechaDesdeSql = addslashes($fechaDesde) . ' 00:00:00';
-                $fechaHastaSql = addslashes($fechaHasta) . ' 23:59:59';
-                $fechaWhere = "im.moment >= '{$fechaDesdeSql}' AND im.moment <= '{$fechaHastaSql}'";
-                $fechaWhereTintas = "t.moment >= '{$fechaDesdeSql}' AND t.moment <= '{$fechaHastaSql}'";
-                $fechaWhereStock = "i.moment >= '{$fechaDesdeSql}' AND i.moment <= '{$fechaHastaSql}'";
-                $fechaWhereStockDirect = "moment >= '{$fechaDesdeSql}' AND moment <= '{$fechaHastaSql}'";
+                $fechaDesdeVal = $fechaDesde . ' 00:00:00';
+                $fechaHastaVal = $fechaHasta . ' 23:59:59';
+                $fechaWhere = "im.moment >= ? AND im.moment <= ?";
+                $fechaWhereTintas = "t.moment >= ? AND t.moment <= ?";
+                $fechaWhereStock = "i.moment >= ? AND i.moment <= ?";
+                $fechaWhereStockDirect = "moment >= ? AND moment <= ?";
+                $fechaParams = [$fechaDesdeVal, $fechaHastaVal];
             } else {
                 $ultimos30Dias = DB_DRIVER === 'pgsql' ? "CURRENT_TIMESTAMP - INTERVAL '30 days'" : 'DATE_SUB(NOW(), INTERVAL 30 DAY)';
                 $fechaWhere = "im.moment >= $ultimos30Dias";
                 $fechaWhereTintas = "t.moment >= $ultimos30Dias";
                 $fechaWhereStock = "i.moment >= $ultimos30Dias";
                 $fechaWhereStockDirect = "moment >= $ultimos30Dias";
+                $fechaParams = [];
             }
 
             // Tabla de ítems: antes ignoraba el rango de fechas por completo
@@ -2910,7 +2915,7 @@ return function (App $app) {
             //   ingresaron en este período y siguen con stock".
             if ($filtroStock === 'terminados') {
                 $conditions = ["i.eliminado = 0", $fechaWhere, "(im.valor_inicial - im.valor_final) > 0"];
-                $queryParams = [];
+                $queryParams = $fechaParams;
 
                 if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') {
                     $conditions[] = "i.departamento = ?";
@@ -2948,6 +2953,7 @@ return function (App $app) {
                 if ($filtroStock === 'enStock') {
                     $conditions[] = "cantidad > 0";
                     $conditions[] = $fechaWhereStockDirect;
+                    $queryParams = array_merge($queryParams, $fechaParams);
                 }
 
                 // Filtro por tipo de tinta: solo aplica sobre registros tipo 'tinta'
@@ -2971,9 +2977,11 @@ return function (App $app) {
             $availableDepartments = array_map(function($d) { return $d['departamento']; }, $resDeps);
 
             // Obtener tipos de tinta disponibles según departamento y filtroStock activos
-            $tintaTypeDeptWhere = ($departamento && $departamento !== 'Todas' && $departamento !== 'todos')
-                ? "AND i.departamento = '" . addslashes($departamento) . "'"
-                : "";
+            // $deptParam es el valor parametrizado del departamento (antes cada
+            // fragmento de abajo lo interpolaba por separado vía addslashes()) --
+            // se reutiliza en todos los fragmentos "deptWhere*" siguientes.
+            $deptParam = ($departamento && $departamento !== 'Todas' && $departamento !== 'todos') ? [$departamento] : [];
+            $tintaTypeDeptWhere = !empty($deptParam) ? "AND i.departamento = ?" : "";
             $tintaTypeStockWhere = ($filtroStock === 'enStock') ? "AND i.cantidad > 0" : "AND (i.cantidad_inicial - i.cantidad) > 0";
             $sqlTintaTypes = "SELECT DISTINCT ct._id, ct.nombre
                               FROM catalogo_tintas ct
@@ -2982,17 +2990,12 @@ return function (App $app) {
                                 {$tintaTypeStockWhere}
                                 {$tintaTypeDeptWhere}
                               ORDER BY ct.nombre ASC";
-            $availableTintaTypes = $localConnection->goQuery($sqlTintaTypes) ?: [];
+            $availableTintaTypes = $localConnection->goQuery($sqlTintaTypes, $deptParam) ?: [];
 
             // ====== DATOS PARA GRÁFICOS ======
             $chartData = [];
-            $deptWhere = ($departamento && $departamento !== 'Todas' && $departamento !== 'todos')
-                ? "AND i.departamento = '" . addslashes($departamento) . "'"
-                : "";
-            
-            $deptWhereDirect = ($departamento && $departamento !== 'Todas' && $departamento !== 'todos')
-                ? "AND departamento = '" . addslashes($departamento) . "'"
-                : "";
+            $deptWhere = !empty($deptParam) ? "AND i.departamento = ?" : "";
+            $deptWhereDirect = !empty($deptParam) ? "AND departamento = ?" : "";
 
             // WHERE adicional para filtrar tintas por tipo en los JOINs
             $tipoTintaJoinWhere = ($tipoTintaId !== null)
@@ -3033,7 +3036,8 @@ return function (App $app) {
                                 ORDER BY value DESC
                                 {$limitSql}";
             }
-            $chartData['materiales'] = $localConnection->goQuery($sqlMateriales) ?: [];
+            // Ambas ramas (enStock/else) usan el mismo orden de parámetros: fecha, luego departamento.
+            $chartData['materiales'] = $localConnection->goQuery($sqlMateriales, array_merge($fechaParams, $deptParam)) ?: [];
 
             // 2. Distribución de Tintas por Color
             if ($filtroStock === 'enStock') {
@@ -3052,7 +3056,7 @@ return function (App $app) {
                               AND {$fechaWhereStock}
                               {$deptWhereDirect}
                               {$tipoTintaJoinWhere}";
-                $tintasResult = $localConnection->goQuery($sqlTintas);
+                $tintasResult = $localConnection->goQuery($sqlTintas, array_merge($fechaParams, $deptParam));
                 if (!empty($tintasResult)) {
                     $t = $tintasResult[0];
                     $chartData['tintas'] = [
@@ -3065,27 +3069,29 @@ return function (App $app) {
                 }
             } else {
                 $tintaFilterByDept = "";
+                $tintaFilterByDeptParams = [];
                 if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos' && $departamento !== 'Impresión' && $departamento !== 'Impresion') {
                     $tintaFilterByDept = "AND t.id_orden IN (
-                        SELECT DISTINCT im.id_orden 
+                        SELECT DISTINCT im.id_orden
                         FROM inventario_movimientos im
                         JOIN inventario i ON im.id_insumo = i._id
-                        WHERE i.departamento = '" . addslashes($departamento) . "'
+                        WHERE i.departamento = ?
                         AND im.id_orden IS NOT NULL AND im.id_orden != 0
                     )";
+                    $tintaFilterByDeptParams = [$departamento];
                 }
 
-                $sqlTintas = "SELECT 
-                                ROUND(SUM(CASE WHEN cct.codigo = 'C' THEN t.cantidad ELSE 0 END), 2) as C, 
-                                ROUND(SUM(CASE WHEN cct.codigo = 'M' THEN t.cantidad ELSE 0 END), 2) as M, 
-                                ROUND(SUM(CASE WHEN cct.codigo = 'Y' THEN t.cantidad ELSE 0 END), 2) as Y, 
-                                ROUND(SUM(CASE WHEN cct.codigo = 'K' THEN t.cantidad ELSE 0 END), 2) as K, 
-                                ROUND(SUM(CASE WHEN cct.codigo = 'W' THEN t.cantidad ELSE 0 END), 2) as W 
+                $sqlTintas = "SELECT
+                                ROUND(SUM(CASE WHEN cct.codigo = 'C' THEN t.cantidad ELSE 0 END), 2) as C,
+                                ROUND(SUM(CASE WHEN cct.codigo = 'M' THEN t.cantidad ELSE 0 END), 2) as M,
+                                ROUND(SUM(CASE WHEN cct.codigo = 'Y' THEN t.cantidad ELSE 0 END), 2) as Y,
+                                ROUND(SUM(CASE WHEN cct.codigo = 'K' THEN t.cantidad ELSE 0 END), 2) as K,
+                                ROUND(SUM(CASE WHEN cct.codigo = 'W' THEN t.cantidad ELSE 0 END), 2) as W
                             FROM tintas t
                             LEFT JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id
                             WHERE {$fechaWhereTintas}
                             {$tintaFilterByDept}";
-                $tintasResult = $localConnection->goQuery($sqlTintas);
+                $tintasResult = $localConnection->goQuery($sqlTintas, array_merge($fechaParams, $tintaFilterByDeptParams));
                 if (!empty($tintasResult)) {
                     $t = $tintasResult[0];
                     $chartData['tintas'] = [
@@ -3111,19 +3117,22 @@ return function (App $app) {
                             GROUP BY sku, insumo
                             ORDER BY value DESC
                             LIMIT 5";
-                $chartData['papel'] = $localConnection->goQuery($sqlPapel) ?: [];
+                $chartData['papel'] = $localConnection->goQuery($sqlPapel, array_merge($fechaParams, $deptParam)) ?: [];
             } else {
                 $papelFilterByDept = "";
+                $papelFilterByDeptParams = [];
                 if ($departamento && $departamento !== 'Todas' && $departamento !== 'todos' && $departamento !== 'Impresión' && $departamento !== 'Impresion') {
                     $papelFilterByDept = "AND im.id_orden IN (
-                        SELECT DISTINCT im2.id_orden 
+                        SELECT DISTINCT im2.id_orden
                         FROM inventario_movimientos im2
                         JOIN inventario i2 ON im2.id_insumo = i2._id
-                        WHERE i2.departamento = '" . addslashes($departamento) . "'
+                        WHERE i2.departamento = ?
                         AND im2.id_orden IS NOT NULL AND im2.id_orden != 0
                     )";
+                    $papelFilterByDeptParams = [$departamento];
                 } else {
                     $papelFilterByDept = $deptWhere;
+                    $papelFilterByDeptParams = $deptParam;
                 }
 
                 $weekExpr = DB_DRIVER === 'pgsql' ? 'EXTRACT(WEEK FROM im.moment)' : 'WEEK(im.moment, 1)';
@@ -3138,41 +3147,45 @@ return function (App $app) {
                               {$papelFilterByDept}
                             GROUP BY {$weekExpr}
                             ORDER BY MIN(im.moment) ASC";
-                $chartData['papel'] = $localConnection->goQuery($sqlPapel) ?: [];
+                $chartData['papel'] = $localConnection->goQuery($sqlPapel, array_merge($fechaParams, $papelFilterByDeptParams)) ?: [];
             }
 
-            // 4. Valorización Financiera ($)
+            // 4. Valorización Financiera ($) -- $costosParams se arma en cada
+            // rama, según los "?" que efectivamente use esa consulta.
+            $costosParams = [];
             if ($filtroStock === 'enStock') {
                 if (!$departamento || $departamento === 'Todas' || $departamento === 'todos') {
-                    $sqlCostos = "SELECT 
-                                    COALESCE(NULLIF(departamento, ''), 'Sin Asignar') as label, 
+                    $sqlCostos = "SELECT
+                                    COALESCE(NULLIF(departamento, ''), 'Sin Asignar') as label,
                                     ROUND(SUM(cantidad * costo), 2) as value
-                                FROM inventario 
+                                FROM inventario
                                 WHERE cantidad > 0
                                 GROUP BY departamento
                                 ORDER BY value DESC";
                 } else {
-                    $sqlCostos = "SELECT 
-                                    insumo as label, 
+                    $sqlCostos = "SELECT
+                                    insumo as label,
                                     ROUND(SUM(cantidad * costo), 2) as value
-                                FROM inventario 
+                                FROM inventario
                                 WHERE cantidad > 0
-                                  AND departamento = '" . addslashes($departamento) . "'
+                                  AND departamento = ?
                                 GROUP BY sku, insumo
-                                ORDER BY value DESC 
+                                ORDER BY value DESC
                                 LIMIT 5";
+                    $costosParams = [$departamento];
                 }
             } else {
                 if (!$departamento || $departamento === 'Todas' || $departamento === 'todos') {
-                    $sqlCostos = "SELECT 
-                                    COALESCE(NULLIF(i.departamento, ''), 'Sin Asignar') as label, 
+                    $sqlCostos = "SELECT
+                                    COALESCE(NULLIF(i.departamento, ''), 'Sin Asignar') as label,
                                     ROUND(SUM((im.valor_inicial - im.valor_final) * i.costo), 2) as value
-                                FROM inventario_movimientos im 
-                                JOIN inventario i ON im.id_insumo = i._id 
+                                FROM inventario_movimientos im
+                                JOIN inventario i ON im.id_insumo = i._id
                                 WHERE {$fechaWhere}
                                   AND (im.valor_inicial - im.valor_final) > 0
                                 GROUP BY i.departamento
                                 ORDER BY value DESC";
+                    $costosParams = $fechaParams;
                 } else {
                     $groupByCostos = $isPg ? 'i.sku, i.insumo' : 'i.sku';
                     $sqlCostos = "SELECT
@@ -3182,13 +3195,14 @@ return function (App $app) {
                                 JOIN inventario i ON im.id_insumo = i._id
                                 WHERE {$fechaWhere}
                                   AND (im.valor_inicial - im.valor_final) > 0
-                                  AND i.departamento = '" . addslashes($departamento) . "'
+                                  AND i.departamento = ?
                                 GROUP BY {$groupByCostos}
                                 ORDER BY value DESC
                                 LIMIT 5";
+                    $costosParams = array_merge($fechaParams, [$departamento]);
                 }
             }
-            $chartData['costos'] = $localConnection->goQuery($sqlCostos) ?: [];
+            $chartData['costos'] = $localConnection->goQuery($sqlCostos, $costosParams) ?: [];
 
             // ====== FIN DATOS GRÁFICOS ======
 
