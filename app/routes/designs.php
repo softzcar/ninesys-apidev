@@ -854,8 +854,10 @@ return function (App $app) {
   });
   /** Fin Diseños */
   $app->get('/disenos/images/{id_orden}', function (Request $request, Response $response, array $args) {
-    // Directorio base de imágenes
-    $baseDir = 'images/' . ID_EMPRESA . '/orden_' . $args['id_orden'];  // Array para almacenar las URLs de las imágenes
+    // Directorio base de imágenes -- id_orden casteado a entero: sin esto,
+    // un valor con "../" permitía listar directorios arbitrarios del
+    // servidor (path traversal, hallazgo real 2026-08-06).
+    $baseDir = 'images/' . ID_EMPRESA . '/orden_' . (int) $args['id_orden'];  // Array para almacenar las URLs de las imágenes
     $object['naseDir'] = $baseDir;
     $imageUrls = [];  // Verificar si el directorio existe
     if (is_dir($baseDir)) {
@@ -1010,12 +1012,24 @@ return function (App $app) {
   });
 
   $app->delete('/disenos/images/{id_orden}/{image_name}', function (Request $request, Response $response, array $args) {
-    // Directorio base de imágenes
-    $baseDir = 'images/' . ID_EMPRESA . '/orden_' . $args['id_orden'];
-    $imagePath = $baseDir . '/' . $args['image_name'];
+    // Path traversal real (hallazgo 2026-08-06): ni id_orden ni image_name
+    // se validaban antes de pasar la ruta construida a unlink() -- un
+    // image_name con "../../../algo" permitía BORRAR cualquier archivo del
+    // servidor con permisos de escritura del proceso PHP, no solo imágenes.
+    // Corregido: id_orden casteado a entero, basename() sobre image_name
+    // (descarta cualquier componente de directorio), y verificación de que
+    // la ruta resuelta siga dentro del directorio esperado antes de borrar.
+    $baseDir = 'images/' . ID_EMPRESA . '/orden_' . (int) $args['id_orden'];
+    $imageName = basename($args['image_name']);
+    $imagePath = $baseDir . '/' . $imageName;
+
+    $realBase = realpath($baseDir);
+    $realImage = realpath($imagePath);
+    $dentroDelDirectorioEsperado = $realBase !== false && $realImage !== false
+      && strpos($realImage, $realBase . DIRECTORY_SEPARATOR) === 0;
 
     // Verificar si la imagen existe
-    if (file_exists($imagePath)) {
+    if ($dentroDelDirectorioEsperado && file_exists($imagePath)) {
       // Eliminar la imagen
       if (unlink($imagePath)) {
         $response->getBody()->write(json_encode(['status' => 'success', 'message' => 'Imagen eliminada exitosamente.'], JSON_NUMERIC_CHECK));
@@ -1030,7 +1044,10 @@ return function (App $app) {
   });
 
   $app->post('/disenos/imagen/{id_orden}/{id_diseno}', function (Request $request, Response $response, array $args) {
-    $id_orden = $args['id_orden'];
+    // id_orden casteado a entero: sin esto, un valor con "../" permitía
+    // crear directorios y escribir el archivo subido en una ruta arbitraria
+    // del servidor (path traversal, hallazgo real 2026-08-06).
+    $id_orden = (int) $args['id_orden'];
     $idEmpresa = $args['id_diseno'];
     $idEmpresa = ID_EMPRESA;
 
