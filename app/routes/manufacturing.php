@@ -880,6 +880,20 @@ return function (App $app) {
       $id_lotes_detalles = null;  // Valor por defecto
       $totalComimision = 0;  // Valor por defecto
 
+      // Alcance por reposición: sin esto, las consultas de comisión de abajo
+      // (que unen lotes_detalles_empleados_asignados con ordenes_productos
+      // por id_orden) hacen fan-out cuando ya existen varias filas de
+      // seguimiento acumuladas para el mismo empleado/orden/departamento --
+      // una fila nueva se crea por cada reposición del mismo lote. Cada fila
+      // coincidente multiplica el resultado. Bug real encontrado el
+      // 2026-08-06: orden 6299, "Montar Tallas", pagó 80/160/240 unidades
+      // en vez de 80 (original) + 2 + 1 (reposiciones). Acota siempre a la
+      // fila de seguimiento específica de esta reposición, o solo a la
+      // original si no es una reposición.
+      $idReposicionScopeSql = ($miEmpleado['es_reposicion'] && isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion']))
+        ? ' AND a.id_reposicion = ' . intval($miEmpleado['id_reposicion'])
+        : ' AND a.id_reposicion IS NULL';
+
       // Consulta para obtener datos de comisión y otros datos relacionados
       if ($comisionTipo === 'porcentaje') {
         // Para comisión por porcentaje: calcular basado en precio del producto
@@ -895,9 +909,10 @@ return function (App $app) {
           JOIN
               products p ON c.id_woo = p._id
           WHERE
-              a.id_empleado = {$miEmpleado['id_empleado']} 
-              AND a.id_orden = {$miEmpleado['id_orden']} 
+              a.id_empleado = {$miEmpleado['id_empleado']}
+              AND a.id_orden = {$miEmpleado['id_orden']}
               AND a.id_departamento = {$miEmpleado['id_departamento']}
+              {$idReposicionScopeSql}
               AND (p.fisico = 1 OR p.fisico IS NULL)
               AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
           GROUP BY
@@ -985,9 +1000,10 @@ return function (App $app) {
           JOIN
               products p ON c.id_woo = p._id
           WHERE
-              a.id_empleado = {$miEmpleado['id_empleado']} 
-              AND a.id_orden = {$miEmpleado['id_orden']} 
+              a.id_empleado = {$miEmpleado['id_empleado']}
+              AND a.id_orden = {$miEmpleado['id_orden']}
               AND a.id_departamento = {$miEmpleado['id_departamento']}
+              {$idReposicionScopeSql}
               AND (p.fisico = 1 OR p.fisico IS NULL)
               AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
           GROUP BY
@@ -1078,9 +1094,10 @@ return function (App $app) {
           LEFT JOIN
               products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = a.id_departamento
           WHERE
-              a.id_empleado = {$miEmpleado['id_empleado']} 
-              AND a.id_orden = {$miEmpleado['id_orden']} 
+              a.id_empleado = {$miEmpleado['id_empleado']}
+              AND a.id_orden = {$miEmpleado['id_orden']}
               AND a.id_departamento = {$miEmpleado['id_departamento']}
+              {$idReposicionScopeSql}
               AND (p.fisico = 1 OR p.fisico IS NULL)
               AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
           ;
@@ -1117,6 +1134,19 @@ return function (App $app) {
         // CORRECCIÓN: Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
         if ($salarioTipo === 'Salario') {
           $montoTotalVariable = 0;
+        }
+
+        // Reposición (comisión variable): a diferencia de 'porcentaje' y
+        // 'fija' (que ya hacían este ajuste), esta rama no tenía ningún
+        // override -- pagaba por TODOS los productos físicos de la orden
+        // completa (la query de arriba no está acotada por producto/
+        // reposición) en vez de por las unidades reales que la reposición
+        // señala reparar. Usar siempre reposiciones.unidades cuando
+        // es_reposicion, igual que las otras dos ramas.
+        if ($miEmpleado['es_reposicion']) {
+          $sqlUnidadesRepo = "SELECT unidades FROM reposiciones WHERE _id = {$miEmpleado['id_reposicion']}";
+          $piezasTotales = floatval($localConnection->goQuery($sqlUnidadesRepo)[0]['unidades'] ?? 0);
+          $montoTotalVariable = ($salarioTipo === 'Salario') ? 0 : ($piezasTotales * floatval($comision_referencial));
         }
 
         $id_reposicion_val = (isset($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) ? $miEmpleado['id_reposicion'] : 'NULL';
@@ -2137,7 +2167,13 @@ return function (App $app) {
         } else {
           $comision_valor = floatval($resp_comision_empleado[0]['comision'] ?? 0);
         }
-        $sql_calculo_pago = 'SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable, ((SUM(c.cantidad) * eu.comision) * a.procentaje_comision / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) GROUP BY a._id, a.procentaje_comision';
+        // Acota a la fila de seguimiento SIN reposición (este endpoint
+        // siempre inserta id_reposicion = NULL en pagos, línea de abajo) --
+        // sin esto, si ya existen filas de seguimiento de reposiciones para
+        // este empleado/orden/departamento, la unión con ordenes_productos
+        // hace fan-out y multiplica el pago (mismo bug real corregido en
+        // /registrar-paso-empleado el 2026-08-06, orden 6299).
+        $sql_calculo_pago = 'SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable, ((SUM(c.cantidad) * eu.comision) * a.procentaje_comision / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND a.id_reposicion IS NULL AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) GROUP BY a._id, a.procentaje_comision';
         $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
         if (!empty($resp_comision)) {
           $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
