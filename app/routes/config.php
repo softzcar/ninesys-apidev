@@ -668,6 +668,18 @@ return function (App $app) {
                     'UPDATE gastos SET nombre = ?, descripcion = ?, monto = ?, moneda = ?, periodicidad = ?, estatus = ?, eliminado = 0 WHERE _id = ?',
                     [$data['nombre'], $data['descripcion'] ?? null, $data['monto'], $data['moneda'] ?? 'USD', $data['periodicidad'] ?? 'mensual', $data['estatus'] ?? 'activo', $reactivarId]
                 );
+
+                // Auditar la reactivación (antes no quedaba ningún rastro de
+                // este evento, dificultó reconstruir un incidente real el
+                // 2026-08-06 -- mismo criterio ya usado para la baja).
+                $idUsuarioReact = (isset($data['id_usuario']) && is_numeric($data['id_usuario'])) ? (int) $data['id_usuario'] : null;
+                try {
+                    $db->goQuery(
+                        'INSERT INTO gastos_auditoria (id_registro, accion, id_usuario, nombre_usuario, monto_anterior, monto_nuevo, detalle) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                        [$reactivarId, 'plantilla_reactivada', $idUsuarioReact, $data['nombre_usuario'] ?? 'Sistema', null, $data['monto'], 'Plantilla "' . $data['nombre'] . '" reactivada']
+                    );
+                } catch (Exception $eAudit) { /* no bloquear la reactivación si la auditoría falla */ }
+
                 $db->disconnect();
 
                 $response->getBody()->write(json_encode(['message' => 'Plantilla de gasto reactivada exitosamente.', 'id' => $reactivarId]));
