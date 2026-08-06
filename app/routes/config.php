@@ -497,8 +497,32 @@ return function (App $app) {
         }
     });
 
-    // CONFIGURACIÓN DE GASTOS FIJOS
+    // CONFIGURACIÓN DE GASTOS FIJOS -- endpoint del Wizard de Configuración de
+    // Empresa (ConfigGastosForm.vue -> GastosManager.vue). GastosManager.vue
+    // ya persiste cada alta/edición/baja en tiempo real contra los endpoints
+    // reales (POST/PUT/DELETE /gastos), así que este endpoint NO vuelve a
+    // escribir la tabla local `gastos` -- solo refresca el caché central
+    // `empresas_gastos` (usado únicamente para precargar este mismo wizard
+    // en el próximo login) a partir del estado real actual, nunca del
+    // payload del cliente.
+    //
+    // Antes hacía un DELETE + reinsert de TODA la tabla local `gastos` a
+    // partir de lo que el cliente mandara -- dos hallazgos reales corregidos
+    // aquí (2026-08-06):
+    //  1) No validaba que el id_empleado recibido perteneciera a la empresa
+    //     autenticada (ID_EMPRESA) -- cualquiera podía mandar un id_empleado
+    //     de OTRA empresa y sobreescribir sus gastos fijos.
+    //  2) El DELETE+reinsert de la tabla local, combinado con que el wizard
+    //     precarga desde el caché `empresas_gastos` (que puede estar
+    //     desactualizado si alguien editó gastos desde la página dedicada
+    //     "Gastos Fijos" en el medio), podía borrar silenciosamente cambios
+    //     reales hechos por esa otra pantalla.
     $app->post('/configuracion/gastos', function (Request $request, Response $response) {
+        if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Acceso no autorizado.']));
+            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+
         try {
             $json = $request->getBody()->getContents();
             $data = json_decode($json, true);
@@ -509,10 +533,9 @@ return function (App $app) {
             }
 
             $id_empleado = $data['id_empleado'] ?? null;
-            $gastos = $data['gastos'] ?? null;
 
-            if (!$id_empleado || !is_array($gastos)) {
-                $response->getBody()->write(json_encode(['success' => false, 'message' => 'Faltan datos requeridos: id_empleado y gastos (array)']));
+            if (!$id_empleado) {
+                $response->getBody()->write(json_encode(['success' => false, 'message' => 'Falta id_empleado.']));
                 return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
             }
 
@@ -525,18 +548,42 @@ return function (App $app) {
                 return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
             }
 
-            $id_empresa = $conn[0]['id_empresa'];
+            $id_empresa = (int) $conn[0]['id_empresa'];
 
-            // 1. ELIMINAR Y REINSERTAR EN TABLA GLOBAL (empresas_gastos)
+            // Límite de tenant: el empleado indicado debe pertenecer a la
+            // misma empresa ya autenticada por el middleware, nunca a otra.
+            if ($id_empresa !== (int) ID_EMPRESA) {
+                $localConnection->disconnect();
+                $response->getBody()->write(json_encode(['success' => false, 'message' => 'El empleado indicado no pertenece a esta empresa.']));
+                return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+            }
+
+            // Leer el estado REAL actual de la empresa (no el payload del
+            // cliente) para refrescar el caché central.
+            $connectionDetails = $localConnection->getConnectionDetails($id_empresa);
+            $gastosReales = [];
+            if ($connectionDetails) {
+                $driverGastos = getenv('DB_DRIVER') ?: 'mysql';
+                if ($driverGastos === 'pgsql') {
+                    $portGastos = getenv('DB_PORT') ?: '5432';
+                    $companyDsn = 'pgsql:host=' . $connectionDetails['db_host'] . ';port=' . $portGastos . ';dbname=' . $connectionDetails['db_name'];
+                } else {
+                    $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
+                }
+                $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
+                $gastosReales = $localConnection->goQuery("SELECT nombre, descripcion, monto, moneda, periodicidad, estatus FROM gastos WHERE tipo = 'fijo' AND eliminado = 0");
+
+                // Volver a la conexión central para escribir el caché.
+                $localConnection->switchDatabase(EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            }
+
             $localConnection->beginTransaction();
             $localConnection->goQuery('DELETE FROM empresas_gastos WHERE id_empresa = ?', [$id_empresa]);
 
-            foreach ($gastos as $gasto) {
-                if (empty($gasto['nombre']) || !isset($gasto['monto'])) continue;
-                
+            foreach ($gastosReales as $gasto) {
                 $localConnection->goQuery('
-                    INSERT INTO empresas_gastos (id_empresa, nombre, descripcion, monto, moneda, periodicidad, estatus, fecha_creacion) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())', 
+                    INSERT INTO empresas_gastos (id_empresa, nombre, descripcion, monto, moneda, periodicidad, estatus, fecha_creacion)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())',
                     [
                         $id_empresa,
                         $gasto['nombre'],
@@ -549,51 +596,10 @@ return function (App $app) {
                 );
             }
 
-            // Confirmar los gastos globales antes de cambiar de base de datos
             $localConnection->commit();
-
-            // 2. ACTUALIZAR TAMBIÉN EN LA BASE DE DATOS LOCAL DE LA EMPRESA (tabla gastos)
-            $connectionDetails = $localConnection->getConnectionDetails($id_empresa);
-            if ($connectionDetails) {
-                $driverGastos = getenv('DB_DRIVER') ?: 'mysql';
-                if ($driverGastos === 'pgsql') {
-                    $portGastos = getenv('DB_PORT') ?: '5432';
-                    $companyDsn = 'pgsql:host=' . $connectionDetails['db_host'] . ';port=' . $portGastos . ';dbname=' . $connectionDetails['db_name'];
-                } else {
-                    $companyDsn = 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
-                }
-                $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
-
-                // Atomicidad: reemplazo de gastos fijos locales en una transacción
-                $localConnection->beginTransaction();
-
-                // Eliminar gastos fijos previos en la tabla local
-                $localConnection->goQuery("DELETE FROM gastos WHERE tipo = 'fijo'");
-
-                foreach ($gastos as $gasto) {
-                    if (empty($gasto['nombre']) || !isset($gasto['monto'])) continue;
-                    
-                    $localConnection->goQuery('
-                        INSERT INTO gastos (nombre, descripcion, monto, moneda, periodicidad, tipo, estatus) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?)', 
-                        [
-                            $gasto['nombre'],
-                            $gasto['descripcion'] ?? '',
-                            $gasto['monto'],
-                            $gasto['moneda'] ?? 'USD',
-                            $gasto['periodicidad'] ?? 'mensual',
-                            'fijo',
-                            $gasto['estatus'] ?? 'activo'
-                        ]
-                    );
-                }
-
-                $localConnection->commit();
-            }
-
             $localConnection->disconnect();
 
-            $response->getBody()->write(json_encode(['success' => true, 'message' => "Gastos fijos guardados correctamente en global y local."]));
+            $response->getBody()->write(json_encode(['success' => true, 'message' => "Gastos fijos sincronizados correctamente."]));
             return $response->withHeader('Content-Type', 'application/json');
         } catch (Exception $e) {
             if (isset($localConnection) && $localConnection->inTransaction()) {
@@ -620,7 +626,7 @@ return function (App $app) {
 
         try {
             $db = new LocalDB();
-            $sql = 'SELECT _id, nombre, descripcion, monto, moneda, periodicidad, tipo, estatus, moment FROM gastos';
+            $sql = 'SELECT _id, nombre, descripcion, monto, moneda, periodicidad, tipo, estatus, moment FROM gastos WHERE eliminado = 0';
             $gastos = $db->goQuery($sql);
             $db->disconnect();
 
@@ -678,7 +684,7 @@ return function (App $app) {
      * Actualiza una plantilla de gasto existente.
      */
     $app->put('/gastos/{id}', function (Request $request, Response $response, array $args) {
-        $id = $args['id'];
+        $id = (int) $args['id'];
         $put_body = $request->getBody()->getContents();
         parse_str($put_body, $data);
 
@@ -689,11 +695,23 @@ return function (App $app) {
 
         try {
             $db = new LocalDB();
+            // Lista blanca de columnas editables -- sin esto, cualquier clave
+            // enviada en el body se concatenaba directo como nombre de
+            // columna en el UPDATE, sin validar (hallazgo real, 2026-08-06;
+            // PUT /gastos/registros/{id} sí tenía esta protección, este
+            // endpoint hermano no).
+            $camposPermitidos = ['nombre', 'descripcion', 'monto', 'moneda', 'periodicidad', 'tipo', 'estatus'];
             $fields = [];
             $params = [];
             foreach ($data as $key => $value) {
+                if (!in_array($key, $camposPermitidos, true)) continue;
                 $fields[] = "$key = ?";
                 $params[] = $value;
+            }
+            if (empty($fields)) {
+                $db->disconnect();
+                $response->getBody()->write(json_encode(['error' => 'No se proporcionaron campos válidos para actualizar.']));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
             }
             $params[] = $id;
 
@@ -710,13 +728,65 @@ return function (App $app) {
     });
 
     /**
+     * GET /gastos/{id}/uso
+     * Cuenta cuántos pagos reales (gastos_registros) dependen de esta plantilla,
+     * para avisar antes de eliminar (mismo patrón que /sizes/{id}/uso y /telas/{id}/uso).
+     */
+    $app->get('/gastos/{id}/uso', function (Request $request, Response $response, array $args) {
+        try {
+            $db = new LocalDB();
+            $id = (int) $args['id'];
+            $res = $db->goQuery('SELECT COUNT(*) AS total FROM gastos_registros WHERE id_gasto_plantilla = ?', [$id]);
+            $db->disconnect();
+
+            $total = !empty($res) ? (int) $res[0]['total'] : 0;
+            $response->getBody()->write(json_encode(['uso' => $total]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    /**
      * DELETE /gastos/{id}
-     * Elimina una plantilla de gasto.
+     * Da de baja (soft-delete) una plantilla de gasto -- antes era un DELETE
+     * físico real (hallazgo real, 2026-08-06). El esquema tiene
+     * gastos_registros.id_gasto_plantilla con ON DELETE SET NULL (no
+     * CASCADE), así que un DELETE físico no borraba los pagos históricos,
+     * pero les rompía para siempre el vínculo con su plantilla. Con
+     * soft-delete el _id se preserva y ese vínculo nunca se pierde.
+     * Además, ahora sí queda auditado en gastos_auditoria (antes, a
+     * diferencia de eliminar un registro de pago, no dejaba ningún rastro).
      */
     $app->delete('/gastos/{id}', function (Request $request, Response $response, array $args) {
         try {
+            $id = (int) $args['id'];
+            $bodyRaw = $request->getBody()->getContents();
+            parse_str($bodyRaw, $bodyData);
+
             $db = new LocalDB();
-            $db->goQuery('DELETE FROM gastos WHERE _id = ?', [$args['id']]);
+
+            $actual = $db->goQuery('SELECT nombre, monto FROM gastos WHERE _id = ?', [$id]);
+            if (empty($actual)) {
+                $db->disconnect();
+                $response->getBody()->write(json_encode(['error' => 'Plantilla de gasto no encontrada.']));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+            }
+
+            $db->goQuery('UPDATE gastos SET eliminado = 1 WHERE _id = ?', [$id]);
+
+            $idUsuario = (isset($bodyData['id_usuario']) && is_numeric($bodyData['id_usuario'])) ? (int) $bodyData['id_usuario'] : null;
+            $nombreUsuario = $bodyData['nombre_usuario'] ?? 'Sistema';
+            try {
+                $db->goQuery(
+                    'INSERT INTO gastos_auditoria (id_registro, accion, id_usuario, nombre_usuario, monto_anterior, monto_nuevo, detalle) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    [$id, 'plantilla_eliminada', $idUsuario, $nombreUsuario, $actual[0]['monto'], null, 'Plantilla "' . $actual[0]['nombre'] . '" dada de baja']
+                );
+            } catch (Exception $eAudit) {
+                // No bloquear la eliminación si la auditoría falla -- ya se comportaba así en /gastos/registros/{id}.
+            }
+
             $db->disconnect();
 
             $response->getBody()->write(json_encode(['message' => 'Plantilla de gasto eliminada exitosamente.']));
@@ -1003,9 +1073,10 @@ return function (App $app) {
             $db = new LocalDB();
             $periodoActual = date('Y-m');
 
-            $sql = "SELECT g.* 
+            $sql = "SELECT g.*
                     FROM gastos g
                     WHERE g.estatus = 'activo'
+                    AND g.eliminado = 0
                     AND g._id NOT IN (
                         SELECT id_gasto_plantilla 
                         FROM gastos_registros 

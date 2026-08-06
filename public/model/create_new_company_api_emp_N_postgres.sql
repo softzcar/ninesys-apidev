@@ -674,6 +674,7 @@ CREATE TABLE gastos (
   tipo VARCHAR(255) NOT NULL DEFAULT 'fijo',
   estatus VARCHAR(255) NOT NULL DEFAULT 'activo',
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  eliminado SMALLINT NOT NULL DEFAULT 0,
   PRIMARY KEY (_id)
 );
 
