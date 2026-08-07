@@ -1,0 +1,49 @@
+- **Solicitud del Usuario:** Reportó que el reporte "Órdenes Terminadas" (rol Comercialización, `/comercializacion/reportes/terminadas`) se mostraba en blanco, aunque compartió la respuesta cruda del endpoint `GET /comercializacion/ordenes/reporte/terminadas/{rango}` mostrando datos correctos (46 órdenes reales). Pidió investigar la causa.
+
+- **Fecha y Hora:** 2026-08-07 15:50:00
+
+- **Proyecto(s):** Backend (schema) + Frontend (diagnóstico, sin cambios de código)
+
+- **Archivos Involucrados:**
+  - `ninesys-api/public/model/create_new_company_api_emp_N_postgres.sql` (línea 528)
+  - Base de datos `api_emp_194` (Desarrollo), tabla `departamentos`, fila `_id=6`
+  - `app_multi/pages/comercializacion/reportes/terminadas.vue` (identificado como afectado, NO modificado -- el fix fue en los datos)
+  - Identificados (no modificados) ~20 archivos más de `app_multi` con la misma comparación frágil `dataUser.departamento === 'Comercialización'`
+
+- **Commits Relacionados:**
+  - Backend: `a2bffff` (fix(schema): corregir typo "Comecialización" -> "Comercialización" en plantilla de empresa nueva)
+  - Frontend: N/A (no se tocó código, el bug estaba en los datos)
+
+- **Acción Realizada:**
+  1. Se confirmó que la API respondía datos correctos (el usuario ya lo había verificado con curl/DevTools), descartando un problema de backend.
+  2. Se leyó `pages/comercializacion/reportes/terminadas.vue` y se encontró que TODO el contenido de la página (incluida la tabla) está envuelto en `<b-container v-if="this.dataUser.departamento === 'Comercialización'">` -- si esa comparación falla, no se renderiza NADA, aunque la petición a la API ya se haya disparado y completado con éxito en `mounted()` (exactamente el síntoma reportado: red funcionando, pantalla en blanco).
+  3. Se verificó `empresas_usuarios.departamento` para Sarahit (`id_usuario=22`) -- coincide exactamente con `'Comercialización'` (confirmado incluso a nivel de bytes/hex, sin espacios ni codificación rara). Esto descartó la hipótesis inicial más obvia.
+  4. Se investigó el mecanismo de "departamento actual" (`store/login.js`, mutación `scurrentDepartament`): al seleccionar un departamento (desde el selector del sidebar, o automáticamente al iniciar sesión si el empleado tiene un solo departamento operativo asignado), esa mutación SOBREESCRIBE `dataUser.departamento` con el nombre de ese departamento operativo -- un concepto DISTINTO al campo fijo `empresas_usuarios.departamento` verificado en el paso anterior.
+  5. Se consultó `empresas_usuarios_departamentos` (tabla de vínculos empleado-departamento operativo) para Sarahit: vinculada al departamento operativo `_id=6`.
+  6. **Causa raíz encontrada:** `departamentos._id=6` en `api_emp_194` tiene el nombre `'Comecialización'` -- **typo real, falta la "r" de "comer"**. Al seleccionarse este departamento por defecto, `dataUser.departamento` queda con el texto typo'd, y la comparación estricta (`===`) en `terminadas.vue` nunca hace match.
+  7. Se buscó la misma comparación (`dataUser.departamento === 'Comercialización'`) en todo `app_multi` -- apareció en **más de 20 archivos** (páginas y componentes: Home.vue, clientes/gestion.vue, relacion-de-pagos.vue, crm/*, ordenes/preview.vue, ordenes/presupuesto-preview.vue, buscar/resultadoModal_v1.vue, diseno/viewImage.vue, ReporteEficienciaEmpleados.vue, pages/_.vue, asistencias/index.vue, etc.). En 3 de ellos (`clientes/gestion.vue:506`, `ClientDetailDrawer.vue:393`, `relacion-de-pagos.vue:15`) alguien YA había parcheado el problema agregando `dataUser.departamento === 'Comecialización'` como alternativa en un OR -- confirmando que el typo era conocido, pero el parche nunca se aplicó de forma consistente en todos los sitios ni se corrigió en la raíz (los datos).
+  8. Se verificó que el mismo typo existe también en `api_emp_163` (legacy, NO corregido a pedido explícito del usuario: "Recuerda que la empresa 163 es legacy esos datos son historicos no nos interesan") y en la plantilla de aprovisionamiento de empresa nueva (`create_new_company_api_emp_N_postgres.sql:528`) -- confirmando que es un typo de origen (probablemente del script/plantilla inicial), propagado a ambas empresas reales.
+  9. Se confirmó ausencia de restricción UNIQUE sobre la columna `departamento` y ausencia de una fila ya-correcta `'Comercialización'` en `api_emp_194` (evitando duplicados al corregir).
+  10. Fix aplicado: `UPDATE departamentos SET departamento = 'Comercialización' WHERE _id = 6 AND departamento = 'Comecialización';` en `api_emp_194` (Desarrollo) -- verificado con SELECT posterior. Solo se cambia el texto, no el `_id`, por lo que ninguna de las ~15 foreign keys que referencian `departamentos(_id)` se ve afectada.
+  11. Se corrigió el mismo typo en `create_new_company_api_emp_N_postgres.sql` (línea 528), para que ninguna empresa nueva futura lo herede.
+  12. Se verificó (solo lectura, sin modificar nada) que Producción (`vps-contabo-prod`, MySQL) tiene el mismo typo en `api_emp_194.departamentos._id=6` -- reportado al usuario, no corregido ahí por regla explícita del proyecto (bloqueo de cambios en Producción sin petición literal).
+
+- **Inconvenientes y Desafíos:** El diagnóstico requirió descartar varias hipótesis en orden (backend, encoding del valor correcto en `empresas_usuarios.departamento`) antes de descubrir que existen DOS conceptos de "departamento" distintos en el sistema (el campo fijo de `empresas_usuarios` vs. el departamento operativo seleccionable, vinculado vía `empresas_usuarios_departamentos`) y que es este segundo el que realmente puebla `dataUser.departamento` en tiempo de ejecución.
+
+- **Decisión Final y Justificación:** Se corrigió el typo en los DATOS (la fila real) en vez de parchar cada uno de los ~20 archivos de código que hacen la comparación -- es el fix mínimamente invasivo que resuelve el problema en TODOS esos sitios de una sola vez, incluyendo los 3 que ya tenían el workaround manual (que ahora queda como una verificación redundante mas no incorrecta) y los ~17 restantes que nunca fueron parchados y hubieran seguido fallando silenciosamente. Se respetó la instrucción explícita del usuario de no tocar la empresa 163 (legacy). Producción se dejó intacta por política del proyecto, reportando el hallazgo para que el usuario decida cuándo aplicar el mismo fix ahí.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (ssh + psql/mysql para diagnóstico e investigación en ambos servidores, grep extensivo sobre `app_multi`, git).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - Confirmado con SELECT posterior que `departamentos._id=6` en `api_emp_194` ahora dice `'Comercialización'` correctamente.
+  - Confirmado que no existía una fila duplicada ni restricción UNIQUE que pudiera bloquear o generar conflicto con el cambio.
+  - Commit del fix de la plantilla pusheado a `feature/postgresql-support`.
+  - Pendiente: confirmación visual del usuario en el navegador (el fix es a nivel de datos, no requiere despliegue de código -- debería funcionar en el siguiente login/recarga de Sarahit sin necesidad de ningún deploy).
+
+- **Logro Conseguido:** Se identificó y corrigió la causa raíz de un bug que afectaba potencialmente más de 20 pantallas distintas del sistema para el rol Comercialización (y posiblemente otros roles que dependan de la misma comparación), no solo el reporte de Órdenes Terminadas reportado inicialmente -- un solo typo de datos, corregido con un UPDATE de una fila, resuelve todos esos casos de una vez sin necesidad de tocar ni desplegar código.
+
+- **Observaciones de Gemini:** Queda como sugerencia opcional (no ejecutada, fuera del alcance de esta tarea puntual) limpiar los 3 archivos que tienen el workaround `=== 'Comecialización'` como OR redundante, ya que con el typo corregido en los datos esas comparaciones ya no son necesarias -- de bajo riesgo pero no solicitado explícitamente.
+
+- **Respuesta de Gemini:** Se encontró que la causa real del reporte en blanco era un typo en los datos ("Comecialización" en vez de "Comercialización" en el departamento operativo de Sarahit), que rompía la comparación de visibilidad usada en más de 20 pantallas del sistema. Corregido en Desarrollo (api_emp_194) y en la plantilla de empresa nueva; empresa 163 dejada intacta a pedido del usuario; Producción tiene el mismo typo, reportado pero no modificado.
