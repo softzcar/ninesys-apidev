@@ -1134,22 +1134,42 @@ class WooMe
     return $response; */
   }
 
-  public function getAllCustomesrs($id_vendedor = null)
+  // $buscar: si se envía, acota por nombre/apellido/teléfono/cédula (LIKE) y
+  // limita el resultado -- usado por el typeahead de clientes para buscar en
+  // el servidor mientras el usuario escribe, en vez de traer toda la tabla
+  // (hallazgo real 2026-08-06: la carga completa, sin límite, era la petición
+  // más pesada de las ~15 que dispara "Nueva Orden" al montar, y su tiempo de
+  // ejecución contribuía a saturar el pool de procesos PHP en Desarrollo).
+  // Sin $buscar, el comportamiento es exactamente el de antes (compatibilidad
+  // con CRM, gestión de clientes, etc. que siguen pidiendo la lista completa).
+  public function getAllCustomesrs($id_vendedor = null, $buscar = null)
   {
     $localConnection = new LocalDB();
+
+    $tieneBusqueda = $buscar !== null && trim($buscar) !== '';
+    $like = $tieneBusqueda ? '%' . trim($buscar) . '%' : null;
+    $limitSql = $tieneBusqueda ? ' LIMIT 20' : '';
+
     if ($id_vendedor !== null) {
+      $searchWhere = $tieneBusqueda ? ' AND (c.first_name LIKE ? OR c.last_name LIKE ? OR c.phone LIKE ? OR c.cedula LIKE ?)' : '';
       $sql = 'SELECT DISTINCT c._id id, c.first_name, c.last_name, c.username, c.cedula, c.phone, c.address, c.email, c.recibir_notificaciones,
                               c.id_catalogo_pais, c.id_catalogo_estado, c.id_catalogo_ciudad
               FROM customers c
               INNER JOIN ordenes o ON o.id_wp = c._id
-              WHERE c.eliminado = 0 AND o.responsable = ?';
-      $data = $localConnection->goQuery($sql, [$id_vendedor]);
+              WHERE c.eliminado = 0 AND o.responsable = ?' . $searchWhere . $limitSql;
+      $params = [$id_vendedor];
+      if ($tieneBusqueda) {
+        $params = array_merge($params, [$like, $like, $like, $like]);
+      }
+      $data = $localConnection->goQuery($sql, $params);
     } else {
+      $searchWhere = $tieneBusqueda ? ' AND (first_name LIKE ? OR last_name LIKE ? OR phone LIKE ? OR cedula LIKE ?)' : '';
       $sql = 'SELECT _id id, first_name, last_name, username, cedula, phone, address, email, recibir_notificaciones,
                      id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad
               FROM customers
-              WHERE eliminado = 0';
-      $data = $localConnection->goQuery($sql);
+              WHERE eliminado = 0' . $searchWhere . $limitSql;
+      $params = $tieneBusqueda ? [$like, $like, $like, $like] : [];
+      $data = $localConnection->goQuery($sql, $params);
     }
     $localConnection->disconnect();
 

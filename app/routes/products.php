@@ -787,13 +787,15 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // OBTENER TODOS LOS CLIENTES
+  // OBTENER TODOS LOS CLIENTES (o, si se envía "buscar", solo los que coincidan --
+  // usado por el typeahead de clientes para no precargar la tabla completa)
   $app->get('/customers', function (Request $request, Response $response) {
     $queryParams = $request->getQueryParams();
     $id_vendedor = isset($queryParams['id_vendedor']) ? intval($queryParams['id_vendedor']) : null;
+    $buscar = isset($queryParams['buscar']) ? trim($queryParams['buscar']) : null;
 
     $woo = new WooMe();
-    $object['data'] = json_decode($woo->getAllCustomesrs($id_vendedor));
+    $object['data'] = json_decode($woo->getAllCustomesrs($id_vendedor, $buscar));
     $response->getBody()->write(json_encode($object));
 
     return $response
