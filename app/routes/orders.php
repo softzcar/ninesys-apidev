@@ -1807,8 +1807,18 @@ return function (App $app) {
             ORDER BY o._id ASC";
     $object['items'] = $localConnection->goQuery($sql, [$id_empleado, $momentEnd, $momentInit]);
 
-    $sql = 'SELECT _id, id_child, id_father from ordenes_vinculadas ORDER BY id_father ASC';
-    $object['vinculadas'] = $localConnection->goQuery($sql);
+    // Vinculadas acotadas a las órdenes realmente mostradas arriba (antes
+    // traía TODO el historial de ordenes_vinculadas de la empresa completa,
+    // sin relación con lo que se veía en pantalla -- el frontend solo usa
+    // id_father para pintar la columna, así que basta acotar por ese lado).
+    $idsOrdenes = array_column($object['items'], '_id');
+    if (!empty($idsOrdenes)) {
+      $placeholders = implode(',', array_fill(0, count($idsOrdenes), '?'));
+      $sql = "SELECT _id, id_child, id_father from ordenes_vinculadas WHERE id_father IN ($placeholders) ORDER BY id_father ASC";
+      $object['vinculadas'] = $localConnection->goQuery($sql, $idsOrdenes);
+    } else {
+      $object['vinculadas'] = [];
+    }
 
     // CREAR CAMPOS DE LA TABLA
     // (columna "Status" quitada -- este reporte es exclusivamente de órdenes
