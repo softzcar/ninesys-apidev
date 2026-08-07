@@ -1,0 +1,42 @@
+- **Solicitud del Usuario:** Tras los fixes anteriores en "Órdenes Terminadas", reportó que seguía recibiendo una cantidad de "órdenes vinculadas" en la respuesta de la API que nunca se mostraban en la columna "Vinculadas" de la tabla, y notó que esos IDs correspondían a órdenes muy antiguas -- pidió revisar la consulta y asegurar que siempre lleguen las órdenes vinculadas correctas. Sesión interrumpida por un SEGUNDO corte eléctrico durante la investigación; se retomó verificando primero que no hubiera trabajo perdido (el archivo seguía exactamente en el último commit ya desplegado, sin cambios pendientes).
+
+- **Fecha y Hora:** 2026-08-07 17:30:00
+
+- **Proyecto(s):** Backend (`ninesys-api`)
+
+- **Archivos Involucrados:**
+  - `ninesys-api/app/routes/orders.php` (endpoint `GET /comercializacion/ordenes/reporte/terminadas/{rango}/{id_empleado}`, línea ~1810)
+
+- **Commits Relacionados:**
+  - Backend: `00cf3f3` (fix(comercializacion): acotar "vinculadas" a las órdenes mostradas en Órdenes Terminadas)
+
+- **Acción Realizada:**
+  1. Se confirmó, al retomar tras el corte eléctrico, que no había ningún cambio pendiente ni pérdida de trabajo (`git status`/`git diff` sobre `orders.php` sin diferencias, exactamente en el commit `0bd4cd7` ya desplegado).
+  2. Se leyó la consulta de "vinculadas": `SELECT _id, id_child, id_father FROM ordenes_vinculadas ORDER BY id_father ASC` -- **sin ningún WHERE**, trae el historial COMPLETO de vínculos de la empresa (35 filas en total), sin relación con las órdenes realmente filtradas/mostradas en `items`.
+  3. Se verificó con datos reales que ninguna de las 8 órdenes actualmente mostradas (rango "una semana", responsable=22) tenía coincidencia alguna en esas 35 filas -- confirmando exactamente lo reportado por el usuario.
+  4. Se investigó más a fondo el POR QUÉ: se cruzó `ordenes_vinculadas.id_father` contra el `status` real de esas órdenes, encontrando que las 35 relaciones existentes son TODAS de órdenes que ya están en estado `'entregada'`, ninguna en `'terminada'`. Esto tiene una explicación estructural real: `'terminada'` es un estado transitorio que toda orden atraviesa antes de `'entregada'` (confirmado en el fix del dashboard de esta misma sesión), así que para cuando alguien consulta o crea un vínculo, la orden típicamente ya avanzó más allá de `'terminada'`.
+  5. Se corrigió la consulta para acotarla a `WHERE id_father IN (...)` usando los `_id` de las órdenes ya obtenidas en `$object['items']` (`array_column`), parametrizado con placeholders dinámicos -- el frontend (`terminadas.vue`) solo compara `item.id_father === data.item._id` para pintar la columna, nunca `id_child`, así que basta acotar por ese lado.
+  6. Verificado con `php -l` (sin errores).
+  7. Verificado el patrón de la consulta parametrizada con un caso real positivo (orden `1864`, que sí tiene un vínculo real hacia `1866`) para confirmar que la lógica del `IN` funciona correctamente cuando SÍ hay coincidencias, no solo el caso negativo.
+  8. Commit y push a `feature/postgresql-support` (commit `00cf3f3`).
+  9. Despliegue a Desarrollo (Contabo Dev) vía `deploy_backend.sh`, opción 2.
+  10. Verificación final end-to-end contra el endpoint real desplegado: 8 items, `vinculadas: []` (vacío, correcto -- ya no llega el historial global irrelevante).
+
+- **Inconvenientes y Desafíos:** Segundo corte eléctrico de la sesión, esta vez durante la fase de investigación (antes de aplicar ningún cambio) -- sin impacto real más allá de la interrupción, ya que no había cambios sin commitear al momento del corte.
+
+- **Decisión Final y Justificación:** Se acotó la consulta por `id_father` únicamente (no también por `id_child`) porque es exactamente lo que el frontend actualmente consume -- ampliar el alcance a ambas direcciones hubiera sido un cambio de comportamiento no solicitado. Se explicó al usuario que, aun con el fix correcto, la columna "Vinculadas" probablemente seguirá apareciendo vacía en este reporte específico en la práctica (por la razón estructural del ciclo de vida terminada→entregada) -- no es un bug residual, es el comportamiento correcto y esperado dado cómo se usan los vínculos en el sistema hoy.
+
+- **Herramienta(s) Utilizada(s):** `Bash` (ssh + psql para verificación con datos reales, `php -l`, git, deploy_backend.sh, curl de verificación final), `Read`, `Edit`.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - `php -l`: sin errores de sintaxis.
+  - Verificado el caso negativo (0 coincidencias reales para las órdenes actualmente mostradas) y el caso positivo (patrón de consulta confirmado correcto con un vínculo real existente).
+  - Verificación end-to-end contra el endpoint real desplegado: `vinculadas: []`, consistente con los datos reales de la empresa.
+
+- **Logro Conseguido:** Se eliminó el envío innecesario y confuso del historial completo de vínculos de la empresa en un endpoint que no lo necesitaba, y se documentó la razón estructural (ciclo de vida terminada→entregada) por la que esta columna específica probablemente seguirá vacía en la práctica -- evitando que se interprete como un bug residual en el futuro.
+
+- **Observaciones de Gemini:** Ninguna adicional.
+
+- **Respuesta de Gemini:** Se corrigió la consulta de "vinculadas" para que solo traiga las relaciones relevantes a las órdenes efectivamente mostradas, en vez de todo el historial de la empresa. Se explicó además por qué es esperable que la columna aparezca vacía en la práctica en este reporte específico (las órdenes con vínculos reales ya avanzaron a 'entregada' para cuando se consultan). Verificado con datos reales y desplegado en Desarrollo.
