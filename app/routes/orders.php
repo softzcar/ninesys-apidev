@@ -378,9 +378,19 @@ return function (App $app) {
           }
         }
 
-        if ($order['estado'] === 'entregada') {
-          $woo->updateOrderStatus(intval($data[0]['id_wp_order']), 'completed');
-        }
+        // NOTA (2026-08-07): se quitó la llamada a $woo->updateOrderStatus()
+        // que se ejecutaba aquí al marcar una orden 'entregada'. Esa función
+        // (woome.php) NO llama a la API real de WooCommerce -- a diferencia
+        // de todos los demás métodos de la clase WooMe, escribe directo con
+        // un UPDATE local sobre esta MISMA tabla `ordenes`, sobreescribiendo
+        // el status recién puesto en 'entregada' con el literal 'completed'
+        // (un valor ajeno al enum interno de Ninesys, que ningún reporte
+        // reconoce). Además de corromper el status, borraba por error
+        // moment_entregada (el trigger de sincronización la limpia al ver
+        // que el status deja de ser 'entregada'). Verificado con datos
+        // reales: hoy solo 2 órdenes en toda la empresa tienen id_wp_order
+        // (ambas ya canceladas), así que este bloque no tenía efecto
+        // práctico real, pero sí representaba un riesgo latente.
       }
     }
 
@@ -1841,8 +1851,9 @@ return function (App $app) {
   });
 
   // ORDENES ENTREGADAS
-  $app->get('/comercializacion/ordenes/reporte/entregadas/{rango}', function (Request $request, Response $response, array $args) {
+  $app->get('/comercializacion/ordenes/reporte/entregadas/{rango}/{id_empleado}', function (Request $request, Response $response, array $args) {
     $object['rango'] = $args['rango'];
+    $id_empleado = (int) $args['id_empleado'];
     $localConnection = new LocalDB();
 
     // PREPARAR FECHAS
@@ -1854,32 +1865,45 @@ return function (App $app) {
     $momentInit = $now;
     $momentEnd = $before;
 
-    // BUSCAR ORENES EN CURSO
-    // $sql = "SELECT _id, status, cliente_nombre, _id vinculada from ordenes WHERE status = 'entregada' AND moment BETWEEN '" . $momentEnd . "' AND '" . $momentInit . " '   ORDER BY _id ASC";
-    $sql = 'SELECT _id, status, cliente_nombre, _id vinculada from ordenes ORDER BY _id ASC';
+    // BUSCAR ORDENES ENTREGADAS DEL VENDEDOR LOGUEADO (antes traía TODAS las
+    // órdenes de la empresa, de cualquier estado, sin filtro alguno -- el
+    // WHERE real estaba comentado/deshabilitado en el código). Mismo
+    // criterio ya aplicado y verificado en "Órdenes Terminadas"
+    // (moment_entregada, sincronizada por el trigger trg_sync_moment_entregada
+    // -- ver ALTER TABLE ordenes del 2026-08-07).
+    $sql = "SELECT _id, cliente_nombre, _id vinculada
+            FROM ordenes
+            WHERE status = 'entregada'
+              AND responsable = ?
+              AND moment_entregada BETWEEN ? AND ?
+            ORDER BY _id ASC";
+    $object['items'] = $localConnection->goQuery($sql, [$id_empleado, $momentEnd, $momentInit]);
 
-    $object['items'] = $localConnection->goQuery($sql);
-
-    $sql = 'SELECT _id, id_child, id_father from ordenes_vinculadas ORDER BY id_father ASC';
-
-    $object['vinculadas'] = $localConnection->goQuery($sql);
+    // Vinculadas acotadas a las órdenes realmente mostradas (mismo fix ya
+    // aplicado en "Órdenes Terminadas").
+    $idsOrdenes = array_column($object['items'], '_id');
+    if (!empty($idsOrdenes)) {
+      $placeholders = implode(',', array_fill(0, count($idsOrdenes), '?'));
+      $sql = "SELECT _id, id_child, id_father from ordenes_vinculadas WHERE id_father IN ($placeholders) ORDER BY id_father ASC";
+      $object['vinculadas'] = $localConnection->goQuery($sql, $idsOrdenes);
+    } else {
+      $object['vinculadas'] = [];
+    }
 
     // CREAR CAMPOS DE LA TABLA
+    // (columna "Status" quitada -- este reporte es exclusivamente de
+    // órdenes entregadas, la columna siempre mostraba el mismo valor)
     $object['fields'][0]['key'] = '_id';
     $object['fields'][0]['label'] = 'Orden';
 
     $object['fields'][1]['key'] = 'cliente_nombre';
     $object['fields'][1]['label'] = 'Cliente';
 
-    $object['fields'][2]['key'] = 'status';
-    $object['fields'][2]['label'] = 'Status';
-
-    $object['fields'][3]['key'] = 'vinculada';
-    $object['fields'][3]['label'] = 'Vinculadas';
+    $object['fields'][2]['key'] = 'vinculada';
+    $object['fields'][2]['label'] = 'Vinculadas';
 
     $localConnection->disconnect();
 
-    // $response->getBody()->write(json_encode($object["id_empleado"][0]["dep"]));
     $response->getBody()->write(json_encode($object));
     return $response
       ->withHeader('Content-Type', 'application/json')
