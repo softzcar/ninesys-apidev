@@ -1,0 +1,46 @@
+- **Solicitud del Usuario:** Reportó, sobre la página `/test` (Control de Producción), que el endpoint `GET /ordenes/proyeccion-entrega` devolvía un 500 genérico (`"An internal error has occurred while processing your request."`), con captura de pantalla mostrando las advertencias en la UI ("No se pudieron sincronizar las proyecciones de entrega (endpoint pesado)") y el error 500 visible en Network/Console de DevTools.
+
+- **Fecha y Hora:** 2026-08-07 11:10:00
+
+- **Proyecto(s):** Backend (Desarrollo, PostgreSQL — Contabo Dev)
+
+- **Archivos Involucrados:**
+  - `ninesys-api/app/routes/manufacturing.php` (línea 2918)
+
+- **Commits Relacionados:**
+  - Backend: `eb02e10` (fix(manufacturing): corregir división por cero en GET /ordenes/proyeccion-entrega (Postgres))
+
+- **Acción Realizada:**
+  1. Se identificó que el texto exacto del error ("An internal error has occurred...") corresponde al `HttpErrorHandler` normal de Slim (no al `ShutdownHandler`), según el criterio ya documentado en memoria de sesiones anteriores -- señal de que es una excepción real capturada, no un warning de PHP crudo.
+  2. Se revisó `/usr/local/lsws/logs/error.log` en Contabo Dev (el log correcto para excepciones capturadas por Slim, distinto del `error_log` del vhost que siempre está vacío) filtrando por el timestamp del reporte del usuario (11:01:31).
+  3. Se encontró la traza completa: `App\Application\Exceptions\DatabaseQueryException` desde `LocalDB.php:344`, con excepción previa `PDOException` real: `SQLSTATE[22012]: Division by zero: 7 ERROR: division by zero`, originada en `manufacturing.php:2988` (la ejecución de la consulta SQL de `GET /ordenes/proyeccion-entrega`).
+  4. Se localizó la línea exacta en el SQL (`manufacturing.php:2918`): `(SUM(d.tiempo * a.cantidad) / COALESCE(ad.numero_de_empleados, 1)) AS tiempo_total_orden_depto`. `ad.numero_de_empleados` viene de `COUNT(DISTINCT ldea.id_empleado)` sobre `lotes_detalles_empleados_asignados` en un CTE (`AssignmentData`) -- cuando todas las filas de un grupo (orden+departamento) tienen `id_empleado` NULL, `COUNT(DISTINCT ...)` devuelve `0` (un cero real, no `NULL`), que `COALESCE(..., 1)` no cubre (solo protege contra NULL).
+  5. Se confirmó el escenario con datos reales de la empresa 194 (consulta directa a Postgres, sin modificar nada): al menos 10 combinaciones orden+departamento en órdenes activas (`En espera`/`activa`/`pausada`) tienen `numero_de_empleados = 0` por esta causa (ej. órdenes 4446, 4744, 5645, 6047, 6188, 6233, 6253, 6262).
+  6. Se aplicó el fix mínimo: `COALESCE(NULLIF(ad.numero_de_empleados, 0), 1)` -- normaliza el 0 real a NULL antes del COALESCE, cubriendo ambos casos (NULL y 0) sin cambiar el comportamiento para el resto de los casos.
+  7. Verificado con `php -l` (sin errores de sintaxis).
+  8. Verificado el fragmento de la consulta afectada directamente contra `api_emp_194` en Desarrollo con los IDs de orden reales del hallazgo -- sin error, valores correctos.
+  9. Verificada la consulta COMPLETA del endpoint (CTEs + UNION ALL completo) contra `api_emp_194` -- antes del fix fallaba con el mismo SQLSTATE; después retorna 514 filas sin error.
+  10. Commit y push a `feature/postgresql-support` (commit `eb02e10`).
+  11. Despliegue a Desarrollo (Contabo Dev) vía `ninesys-hub/bin/deploy_backend.sh`, opción 2 (git push + git reset --hard en el servidor + reset de OPcache).
+  12. Verificación final: `curl` directo contra `https://api.nineteengreen.com/ordenes/proyeccion-entrega` en producción-de-pruebas (Desarrollo) -- HTTP 200, JSON con datos reales, sin error.
+
+- **Inconvenientes y Desafíos:** Ninguno relevante -- el log de errores (`/usr/local/lsws/logs/error.log`) ya documentado en memoria de sesiones anteriores permitió ubicar la causa exacta (archivo, línea, SQLSTATE) en el primer intento, sin necesidad de reproducir el bug por prueba y error.
+
+- **Decisión Final y Justificación:** Este es el mismo patrón de divergencia MySQL→Postgres ya visto varias veces en esta migración (ej. `LIKE`/`ILIKE`, ver [[project_migracion_citext_case_insensitive]]): código escrito y probado contra MySQL, donde una división por cero por defecto devuelve `NULL` con un warning silencioso (sin `sql_mode` estricto), en vez de fallar. Postgres SÍ trata la división por cero como un error real (`SQLSTATE 22012`), exponiendo un bug de lógica que llevaba tiempo latente sin causar problemas visibles en Producción. Se prefirió el fix mínimo y localizado (`NULLIF` + `COALESCE`) sobre alternativas más invasivas (ej. filtrar esas filas en el CTE, o cambiar la semántica de `numero_de_empleados`), ya que el propio código deja claro la intención original: usar 1 como divisor por defecto cuando no hay empleados asignados contabilizables, sea por NULL o por un cero real del agregado.
+
+- **Herramienta(s) Utilizada(s):** `Bash` (ssh + grep sobre el log de errores de LiteSpeed, psql para verificación con datos reales, git, deploy_backend.sh, curl de verificación final), `Read`, `Edit`.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - Causa raíz confirmada en el log de errores real del servidor (traza completa con SQLSTATE), no supuesta.
+  - Escenario reproducido con datos reales antes del fix (10+ combinaciones orden+departamento con `numero_de_empleados = 0`).
+  - Fix verificado contra datos reales en dos niveles: fragmento aislado de la consulta, y consulta completa del endpoint (antes fallaba, después 514 filas sin error).
+  - `php -l` sin errores de sintaxis.
+  - Verificación final end-to-end contra el endpoint real desplegado: HTTP 200 con datos reales, confirmado con `curl`.
+
+- **Logro Conseguido:** Se corrigió un 500 real y activo en producción-de-pruebas (Desarrollo) que afectaba la página de Control de Producción (`/test`), específicamente el widget de "proyecciones de entrega". El bug estaba latente desde antes de la migración a Postgres (MySQL lo enmascaraba silenciosamente) y solo se manifestó al migrar el motor de base de datos -- mismo patrón de riesgo ya identificado y documentado para otras diferencias de comportamiento entre MySQL y Postgres.
+
+- **Observaciones de Gemini:** Ninguna adicional.
+
+- **Respuesta de Gemini:** Se identificó y corrigió la causa real del 500 en `GET /ordenes/proyeccion-entrega`: una división por cero en Postgres (enmascarada en MySQL) causada por asignaciones de empleados sin empleado real (`id_empleado` NULL) en `lotes_detalles_empleados_asignados`. Verificado con datos reales antes/después del fix y confirmado en vivo en el endpoint desplegado.
