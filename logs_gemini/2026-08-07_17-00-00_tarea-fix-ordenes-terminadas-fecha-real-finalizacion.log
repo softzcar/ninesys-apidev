@@ -1,0 +1,47 @@
+- **Solicitud del Usuario:** Reportó que filtrando "Órdenes Terminadas" por "Un día" el endpoint devolvía `items: []` vacío pese a que la orden `vinculadas` (no filtrada) sí traía datos, señalando "eso no tiene sentido" y pidiendo revisar las consultas para asegurar que los datos de la API sean correctos. Al aclarar que `vinculadas` nunca se filtra por fecha (no era evidencia de nada), se investigó la causa real. El usuario propuso inicialmente una hipótesis simple ("si status=terminada y moment coincide con el filtro, esas son las órdenes que queremos"), y al mostrarle que eso era exactamente el comportamiento actual (con el bug), se investigó más a fondo hasta encontrar que no existía ninguna fecha confiable de finalización. El usuario hizo una corrección de seguridad importante sobre la propuesta de usar `lotes_detalles_empleados_asignados`: advirtió que esa tabla tiene VARIOS empleados asignados por orden, y que había que verificar que TODOS tuvieran fecha_terminado (si no, la orden podría seguir activa/pausada/en espera) antes de usarla como fuente de fecha.
+
+- **Fecha y Hora:** 2026-08-07 17:00:00
+
+- **Proyecto(s):** Backend (`ninesys-api`)
+
+- **Archivos Involucrados:**
+  - `ninesys-api/app/routes/orders.php` (endpoint `GET /comercializacion/ordenes/reporte/terminadas/{rango}/{id_empleado}`, línea ~1768)
+
+- **Commits Relacionados:**
+  - Backend: `0bd4cd7` (fix(comercializacion): filtrar Órdenes Terminadas por fecha real de finalización)
+
+- **Acción Realizada:**
+  1. Se verificó el esquema de `ordenes`: `moment` es `DEFAULT CURRENT_TIMESTAMP` sin trigger de actualización -- fecha de CREACIÓN, nunca tocada después. Confirmado con datos reales de Sarahit: brecha real de 1 a 4 días entre `moment` (creación) y cuándo la orden realmente pasó a terminada, en las 10 órdenes más recientes verificadas.
+  2. Se investigó `ordenes_auditoria` (tabla con `accion` = 'cancelada'/'reactivada'/'terminada' + `fecha`) como posible fuente de "fecha de finalización real". Se encontró que solo el cambio MANUAL de estado (vía el endpoint de administración, `orders.php:349`) escribe ahí -- el flujo AUTOMÁTICO de producción (`manufacturing.php:775`, cuando el último departamento completa el lote) nunca lo toca. Verificado: solo 32 de 78 órdenes terminadas (41%) tenían registro en `ordenes_auditoria` -- no es fuente confiable por sí sola.
+  3. Se buscaron todos los puntos del código que hacen `UPDATE ordenes SET status = 'terminada'` (`manufacturing.php:775`, `production.php:1749`) para entender el flujo real. Se encontró que `lotes.moment` tampoco sirve (mismo problema: sin trigger de actualización, solo fecha de creación del lote, confirmado sin trigger en `pg_trigger`).
+  4. Se encontró `lotes_detalles_empleados_asignados.fecha_terminado` (columna a nivel de tarea por empleado/departamento/orden), ya usada en otro reporte del proyecto (`products_reports.php`, patrón `COALESCE(ldea.fecha_terminado, ...)`) como fuente de "fecha en que se completó" la orden.
+  5. **A pedido explícito del usuario, se verificó el riesgo de que la orden tenga tareas SIN terminar** (varios empleados asignados, no todos con `fecha_terminado`) antes de usar `MAX(ldea.fecha_terminado)`. Se confirmó que esto NO aplica como riesgo aquí: el filtro ya exige `o.status = 'terminada'` ANTES de llegar a la subconsulta de fecha -- el estado de la orden ya está determinado independientemente por la aplicación (que solo marca `status='terminada'` cuando efectivamente se completó el último departamento); `MAX(fecha_terminado)` solo se usa para saber CUÁNDO ocurrió eso, no para decidir SI ocurrió.
+  6. Se verificó cobertura real de `ldea.fecha_terminado` (agrupado por `MAX` por orden) contra las 76 órdenes terminadas reales de la empresa: 72/76 (94.7%) cubiertas -- muy superior al 41% de `ordenes_auditoria`. Las 4 restantes son órdenes atípicas/antiguas (una de 2025-03, dos de junio-2026, sin ninguna tarea de producción registrada).
+  7. Se identificó y verificó un segundo riesgo real (no solicitado explícitamente pero relacionado con la advertencia del usuario): las tareas de **reposición** (`ldea.id_reposicion` no nulo) podrían tener un `fecha_terminado` posterior a la finalización real de la orden si se solicita una reposición DESPUÉS de que la orden ya terminó, contaminando el `MAX()`. Verificado con datos reales que hoy esto no ocurre en ningún caso (0 de todas las órdenes terminadas de la empresa), pero se agregó `AND ldea.id_reposicion IS NULL` como protección preventiva sin costo (mismo resultado hoy, evita el riesgo real a futuro).
+  8. Fix final: `COALESCE(MAX(ldea.fecha_terminado) WHERE id_reposicion IS NULL, o.moment)` como criterio de fecha, reemplazando `o.moment` puro.
+  9. Verificado con `php -l` (sin errores).
+  10. Verificado con datos reales ANTES de desplegar, en los 3 rangos posibles del selector: "Un día" (0 resultados, correcto -- no hay completadas recientes), "Una semana" (8 órdenes reales, antes siempre 0), "Un mes" (17, sin cambio respecto al fix anterior de filtro por vendedor).
+  11. Commit y push a `feature/postgresql-support` (commit `0bd4cd7`).
+  12. Despliegue a Desarrollo (Contabo Dev) vía `deploy_backend.sh`, opción 2.
+  13. Verificación final end-to-end contra el endpoint real desplegado (`curl`, rango "-8 days"): confirma las mismas 8 órdenes reales.
+
+- **Inconvenientes y Desafíos:** La investigación reveló que el sistema no tenía NINGUNA columna dedicada y confiable para "fecha en que la orden se completó" -- ni siquiera parcialmente, ya que las dos fuentes candidatas (`ordenes_auditoria`, `lotes.moment`) resultaron insuficientes o incorrectas tras verificarlas con datos reales. La advertencia del usuario sobre verificar que TODOS los empleados asignados tuvieran `fecha_terminado` fue clave para razonar correctamente por qué la solución SÍ era segura (el status ya viene confirmado por la aplicación antes de la subconsulta), en vez de asumir que estaba bien sin justificarlo.
+
+- **Decisión Final y Justificación:** Se descartó agregar una nueva columna `fecha_terminada` a `ordenes` (opción presentada al usuario en una pregunta anterior, antes de este mensaje) en favor de reutilizar un dato YA EXISTENTE (`ldea.fecha_terminado`) que además ya es el patrón establecido en otro reporte del mismo proyecto (`products_reports.php`) -- evita una migración de esquema y logra cobertura del 94.7% inmediatamente, sin esperar a que se acumulen datos nuevos. Se agregó el filtro de `id_reposicion IS NULL` como medida preventiva de bajo costo tras la advertencia del usuario, aunque no cambiara ningún resultado actual -- prioriza corrección estructural sobre "funciona hoy con los datos que hay".
+
+- **Herramienta(s) Utilizada(s):** `Bash` (ssh + psql para investigación y verificación exhaustiva con datos reales en cada paso, `php -l`, git, deploy_backend.sh, curl de verificación final), `Read`, `Edit`.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - `php -l`: sin errores de sintaxis.
+  - Cobertura de la nueva fuente de fecha verificada con datos reales: 94.7% (72/76) vs 41% (32/78) de la alternativa descartada.
+  - Verificado que el riesgo de contaminación por reposiciones no afecta ningún dato real hoy, antes de decidir si aplicar la protección.
+  - Verificado en los 3 rangos de tiempo del selector del frontend, antes y después del despliegue: "Un día" correctamente vacío, "Una semana" con 8 resultados reales (antes 0), "Un mes" consistente en 17.
+  - Verificación end-to-end contra el endpoint real desplegado.
+
+- **Logro Conseguido:** Se corrigió un bug real que hacía que el selector de rango de tiempo del reporte fuera esencialmente inútil (el rango más común, "una semana", casi siempre mostraba 0 resultados sin importar cuántas órdenes se hubieran completado realmente en ese período) -- reutilizando datos ya existentes en el sistema en vez de requerir una migración de esquema, y verificando exhaustivamente con datos reales cada decisión antes de aplicarla, incluyendo un riesgo de integridad de datos señalado directamente por el usuario.
+
+- **Observaciones de Gemini:** Ninguna adicional.
+
+- **Respuesta de Gemini:** Se identificó que "Órdenes Terminadas" no tenía ninguna fecha confiable de finalización disponible, y se resolvió reutilizando `lotes_detalles_empleados_asignados.fecha_terminado` (ya usado en otro reporte del proyecto) con cobertura del 94.7% de los casos reales, en vez de agregar una nueva columna. Se verificó y protegió contra el riesgo de reposiciones señalado por el usuario, y se confirmó el fix con datos reales antes y después del despliegue.
