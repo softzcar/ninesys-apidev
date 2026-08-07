@@ -1,0 +1,46 @@
+- **Solicitud del Usuario:** Inicio de la auditoría del módulo Empleados, comenzando por el rol Comercialización (usuario de prueba "Sarahit"). Primer punto: "Inicio" (dashboard de ventas). El usuario pidió explícitamente verificar que los datos que llegan de la API sean correctos y que los gráficos rendericen la información real y correctamente, antes de revisar el resto del módulo.
+
+- **Fecha y Hora:** 2026-08-07 12:45:00
+
+- **Proyecto(s):** Backend (`ninesys-api`)
+
+- **Archivos Involucrados:**
+  - `ninesys-api/app/routes/orders.php` (endpoint `GET /comercializacion/dashboard/{id_empleado}/{id_departamento}`, línea ~1475)
+  - `app_multi/components/comercializacion/DashboardComercializacion.vue` (consumidor, leído para contexto, no modificado)
+  - `app_multi/components/charts/RadialProgress.vue` (leído para confirmar el efecto visual del bug de porcentaje, no modificado)
+
+- **Commits Relacionados:**
+  - Backend: `8336677` (fix(comercializacion): corregir dashboard de ventas -- case sensitivity y ventana de tiempo)
+  - Frontend: N/A
+
+- **Acción Realizada:**
+  1. Se identificó que el "Inicio" del rol Comercialización renderiza `DashboardComercializacion.vue`, que consume `GET /comercializacion/dashboard/{id_empleado}/{id_departamento}` (`orders.php:1475`) y alimenta 5 secciones: resumen de órdenes (gráfico radial), estado de órdenes (donut), pagos de la semana (barras), progreso de órdenes (detallado) y finanzas (cuentas por cobrar).
+  2. Se leyó el endpoint completo y se identificaron 2 problemas reales, verificados con datos reales de un vendedor real (`responsable = 22`, empresa 194, usuario "Sarahit Mojica") ANTES de tocar código, siguiendo la disciplina de "no adivinar" ya establecida en la sesión:
+     - **Case sensitivity (Postgres):** `ordenes.status` guarda el valor real como `'En espera'` (mayúscula, confirmado con `SELECT DISTINCT status FROM ordenes`), pero 2 de las 3 consultas que la filtran (estado de órdenes/donut y progreso de órdenes) usaban `'en espera'` en minúscula -- ocultando silenciosamente las 19 órdenes reales de Sarahit en ese estado. La tercera consulta (finanzas) ya usaba `'En espera'` correctamente, confirmando que era un descuido puntual, no un criterio de diseño.
+     - **Ventana de tiempo inconsistente:** `creadas` filtraba solo la semana actual, pero `terminadas`/`entregadas` contaban el histórico completo sin filtro de fecha. El frontend calcula `terminadas/creadas*100` y `entregadas/creadas*100` para el gráfico radial "Resumen Semanal" -- con datos reales de Sarahit (creadas=50 esta semana, entregadas=4373 histórico) esto daba **8746%**, confirmado antes del fix con una consulta directa a la base real.
+  3. Fix 1: se igualaron las 2 consultas con casing incorrecto a `'En espera'` (mayúscula), consistente con el valor real ya usado correctamente en la consulta de finanzas del mismo endpoint.
+  4. Fix 2: se extrajo el filtro de "semana actual" (ya existente para `creadas`) a una variable compartida (`$semanaActualSql`) y se aplicó también a `terminadas` y `entregadas`, convirtiendo la sección en un embudo semanal coherente: "de las órdenes creadas esta semana, cuántas ya están terminadas/entregadas" -- interpretación que respeta el título "Resumen Semanal" del gráfico y hace que los porcentajes queden acotados entre 0-100%.
+  5. Verificado con `php -l` (sin errores de sintaxis).
+  6. Verificado cada fix por separado contra la base real (`api_emp_194`, responsable=22) ANTES de desplegar: estado de órdenes ahora muestra `En espera: 19` correctamente; progreso de órdenes pasa de 28 a 47 filas candidatas; el embudo semanal da 50→3→15 (porcentajes sensatos, ninguno supera 100%).
+  7. Commit y push a `feature/postgresql-support` (commit `8336677`).
+  8. Despliegue a Desarrollo (Contabo Dev) vía `deploy_backend.sh`, opción 2.
+  9. Verificación final end-to-end contra el endpoint real desplegado (`curl` con `id_empleado=22`): JSON completo con `en_espera: 19`, `resumen_ordenes: {creadas:50, terminadas:3, entregadas:15}`, y la lista de `ordenes_progreso` ahora incluyendo órdenes en estado "En espera" además de "activa".
+
+- **Inconvenientes y Desafíos:** Ninguno técnico -- ambos bugs se identificaron directamente leyendo el código SQL y se confirmaron con consultas de solo lectura contra datos reales antes de tocar nada, sin necesidad de prueba y error.
+
+- **Decisión Final y Justificación:** Para el bug de ventana de tiempo, se evaluaron dos opciones: (a) filtrar también `terminadas`/`entregadas` a la semana actual (elegida), o (b) quitar el filtro semanal de `creadas` para que las 3 consultas cuenten histórico completo. Se eligió (a) porque el título del gráfico ("Resumen Semanal") y el diseño del componente (`RadialProgress` mostrando porcentajes acotados 0-100%) indican claramente que la intención original era un embudo de la semana en curso, no un acumulado histórico -- (b) hubiera sido más simple pero hubiera cambiado el significado del widget sin justificación, y los porcentajes de "terminadas"/"entregadas" sobre TODO el histórico de un vendedor con miles de órdenes entregadas seguirían sin tener sentido como "resumen semanal".
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (ssh + psql para verificación con datos reales antes/después, `php -l`, git, `deploy_backend.sh`, curl de verificación final).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - `php -l`: sin errores de sintaxis.
+  - Verificación con datos reales (responsable=22, empresa 194) antes y después de cada fix, confirmando el bug y luego la corrección.
+  - Verificación end-to-end contra el endpoint real desplegado en Desarrollo: JSON completo, correcto y coherente.
+
+- **Logro Conseguido:** Se corrigieron 2 bugs reales y activos en el dashboard principal ("Inicio") del rol Comercialización -- uno que ocultaba por completo 19 órdenes reales de la vista de un vendedor, y otro que mostraba un porcentaje absurdo (8746%) en el primer gráfico que ve cualquier vendedor al iniciar sesión. Ambos verificados con datos reales de principio a fin, sentando la base para continuar la auditoría del resto del módulo Empleados/rol Comercialización.
+
+- **Observaciones de Gemini:** Ninguna adicional.
+
+- **Respuesta de Gemini:** Se encontraron y corrigieron 2 bugs reales en el endpoint del Dashboard de Comercialización: un problema de mayúsculas/minúsculas que ocultaba 19 órdenes "En espera" de un vendedor real, y una inconsistencia de ventana de tiempo que producía porcentajes sin sentido (8746%) en el gráfico "Resumen Semanal". Ambos verificados con datos reales antes y después del fix, y confirmados en vivo contra el endpoint desplegado.
