@@ -1485,11 +1485,18 @@ return function (App $app) {
       return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
     };
 
-    // 1. Resumen de Órdenes
+    // 1. Resumen de Órdenes (embudo semanal: de las órdenes CREADAS esta semana,
+    // cuántas ya están terminadas/entregadas -- las 3 consultas deben compartir
+    // la misma ventana de fecha para que los porcentajes tengan sentido; antes
+    // "terminadas"/"entregadas" contaban el histórico completo sin filtro de
+    // fecha, dando porcentajes de miles de % en el gráfico radial).
+    $semanaActualSql = DB_DRIVER === 'pgsql'
+      ? "EXTRACT(WEEK FROM fecha_creacion) = EXTRACT(WEEK FROM NOW()) AND EXTRACT(YEAR FROM fecha_creacion) = EXTRACT(YEAR FROM NOW())"
+      : "YEARWEEK(fecha_creacion, 1) = YEARWEEK(NOW(), 1)";
     $queries = [
-      'creadas' => (DB_DRIVER === 'pgsql' ? "SELECT COUNT(*) as total FROM ordenes WHERE EXTRACT(WEEK FROM fecha_creacion) = EXTRACT(WEEK FROM NOW()) AND EXTRACT(YEAR FROM fecha_creacion) = EXTRACT(YEAR FROM NOW()) AND responsable = $id_empleado" : "SELECT COUNT(*) as total FROM ordenes WHERE YEARWEEK(fecha_creacion, 1) = YEARWEEK(NOW(), 1) AND responsable = $id_empleado"),
-      'terminadas' => "SELECT COUNT(*) as total FROM ordenes WHERE status = 'terminada' AND responsable = $id_empleado",
-      'entregadas' => "SELECT COUNT(*) as total FROM ordenes WHERE status = 'entregada' AND responsable = $id_empleado"
+      'creadas' => "SELECT COUNT(*) as total FROM ordenes WHERE $semanaActualSql AND responsable = $id_empleado",
+      'terminadas' => "SELECT COUNT(*) as total FROM ordenes WHERE status = 'terminada' AND $semanaActualSql AND responsable = $id_empleado",
+      'entregadas' => "SELECT COUNT(*) as total FROM ordenes WHERE status = 'entregada' AND $semanaActualSql AND responsable = $id_empleado"
     ];
 
     $resumen = [];
@@ -1505,7 +1512,7 @@ return function (App $app) {
     // 2. Estado de Órdenes (Donut)
     $sqlEstados = "SELECT status, COUNT(*) as cantidad 
                    FROM ordenes 
-                   WHERE status IN ('en espera', 'activa', 'pausada', 'terminada') 
+                   WHERE status IN ('En espera', 'activa', 'pausada', 'terminada')
                    AND responsable = $id_empleado 
                    GROUP BY status";
     $estadosData = $localConnection->goQuery($sqlEstados);
@@ -1565,7 +1572,7 @@ return function (App $app) {
                          FROM ordenes o 
                          JOIN lotes l ON o._id = l.id_orden 
                          JOIN departamentos d ON l.id_departamento_actual = d._id 
-                         WHERE o.status IN ('activa', 'en espera') 
+                         WHERE o.status IN ('activa', 'En espera')
                          AND o.responsable = $id_empleado
                          ORDER BY d.orden_proceso DESC, o._id DESC";
 
