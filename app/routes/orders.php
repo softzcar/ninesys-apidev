@@ -1780,8 +1780,31 @@ return function (App $app) {
     $momentEnd = $before;
 
     // BUSCAR ORDENES TERMINADAS DEL VENDEDOR LOGUEADO (antes traía las de
-    // TODOS los vendedores -- sin filtro de responsable)
-    $sql = "SELECT _id, cliente_nombre, _id vinculada from ordenes WHERE status = 'terminada' AND responsable = ? AND moment BETWEEN ? AND ? ORDER BY _id ASC";
+    // TODOS los vendedores -- sin filtro de responsable).
+    // El filtro de fecha usa cuándo la orden REALMENTE se completó, no
+    // o.moment (fecha de CREACIÓN de la orden, sin relación con cuándo pasó
+    // a 'terminada' -- confirmado con datos reales una brecha de 1 a 4 días
+    // entre ambas fechas, lo que dejaba el filtro "un día"/"una semana" casi
+    // siempre vacío). La fecha real de finalización es MAX(fecha_terminado)
+    // de las tareas de producción de la orden (mismo patrón ya usado en
+    // products_reports.php) -- cubre automáticamente tanto el flujo manual
+    // (Administración) como el automático (último departamento de
+    // producción). Para el puñado de órdenes sin ninguna tarea registrada
+    // (verificado: 4 de 76, todas atípicas/antiguas) se usa o.moment como
+    // respaldo, mejor que excluirlas del todo. Se excluyen tareas de
+    // reposición (id_reposicion) del MAX -- verificado que hoy no cambian
+    // el resultado (0 casos en toda la empresa), pero una reposición
+    // solicitada DESPUÉS de terminada la orden podría fecharla más tarde de
+    // lo real si se contaran.
+    $sql = "SELECT o._id, o.cliente_nombre, o._id vinculada
+            FROM ordenes o
+            WHERE o.status = 'terminada'
+              AND o.responsable = ?
+              AND COALESCE(
+                    (SELECT MAX(ldea.fecha_terminado) FROM lotes_detalles_empleados_asignados ldea WHERE ldea.id_orden = o._id AND ldea.id_reposicion IS NULL),
+                    o.moment
+                  ) BETWEEN ? AND ?
+            ORDER BY o._id ASC";
     $object['items'] = $localConnection->goQuery($sql, [$id_empleado, $momentEnd, $momentInit]);
 
     $sql = 'SELECT _id, id_child, id_father from ordenes_vinculadas ORDER BY id_father ASC';
