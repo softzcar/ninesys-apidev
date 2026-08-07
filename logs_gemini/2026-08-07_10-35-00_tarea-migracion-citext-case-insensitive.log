@@ -1,0 +1,50 @@
+- **Solicitud del Usuario:** Tras corregir en vivo el bug de búsqueda de clientes ("ozc" no encontraba a "Ozcar Vela" por diferencias LIKE/ILIKE entre MySQL y Postgres), el usuario preguntó si un middleware podía resolver el problema de forma sistémica para que nunca más ocurriera. Al explicársele que un middleware no tiene visibilidad del SQL escrito a mano en cada endpoint, el usuario propuso su propia idea (tratar los strings de entrada) y, tras discutirla, aceptó la recomendación de usar `citext` como solución estructural, con la condición explícita de aplicarla solo sobre columnas verificadas (sin adivinar), excluyendo contraseñas (fuera de alcance, aún en texto plano, pendiente de una fase de seguridad futura), y actualizando obligatoriamente la plantilla SQL de creación de empresa nueva.
+
+- **Fecha y Hora:** 2026-08-07 10:35:00
+
+- **Proyecto(s):** Backend (Desarrollo, PostgreSQL — Contabo Dev)
+
+- **Archivos Involucrados:**
+  - `ninesys-api/public/model/create_new_company_api_emp_N_postgres.sql`
+  - Bases de datos remotas (Contabo Dev): `api_emp_194`, `api_emp_163`, `api_empresas`
+
+- **Commits Relacionados:**
+  - Frontend: N/A
+  - Backend: `cb7a110` (schema(citext): declarar como citext las columnas de búsqueda libre en la plantilla de empresa nueva)
+
+- **Acción Realizada:**
+  1. Se auditó todo `ninesys-api/app/` (rutas, lib, clases) en busca de usos de `LIKE` sin la variante `ILIKE` para Postgres, confirmando ~46 ocurrencias en 11 archivos, de las cuales ~19 son búsquedas reales de texto libre (prioridad alta), concentradas en `GeminiChatAssistant.php` (bot de WhatsApp/IA) y `orders.php` (creación conversacional de órdenes), además de `inventory.php` y `machine_services.php`.
+  2. Se descartó la opción de middleware (no tiene visibilidad del SQL de cada endpoint) y la opción de corregir caso por caso con `$likeOp` (depende de que cada desarrollador lo recuerde en el futuro).
+  3. Se decidió con el usuario aplicar `citext` (extensión nativa de Postgres que hace cualquier comparación sobre la columna insensible a mayúsculas/minúsculas a nivel de esquema: `=`, `LIKE`, `ORDER BY`, `GROUP BY`, `UNIQUE`), escopado únicamente a las columnas verificadas como de búsqueda libre real, sin tocar contraseñas.
+  4. Se identificaron y verificaron directamente en el código fuente (sin confiar en resúmenes de agentes) 12 columnas objetivo: `customers.first_name/last_name/cedula`, `products.product`, `sizes.nombre`, `catalogo_telas.tela`, `inventario.sku/insumo`, `servicios_maquinas.tipo_servicio/descripcion/tecnico` (11 columnas, existen idénticas en `api_emp_194` y `api_emp_163`), más `api_empresas.empresas_usuarios.nombre` (base central, referenciada en `inventory.php` vía `LEFT JOIN api_empresas.empresas_usuarios`).
+  5. Se verificó, vía `information_schema.table_constraints`/`key_column_usage`, que ninguna de las 12 columnas tiene restricciones UNIQUE ni PRIMARY KEY (riesgo principal de `citext`: colisión de valores que solo difieren en mayúsculas/minúsculas) — confirmado cero restricciones en las 3 bases.
+  6. Se tomó backup fresco (`pg_dump -Fc`) de `api_emp_194`, `api_emp_163` y `api_empresas` en `/tmp/backups_citext/` (Contabo Dev, timestamp `20260807_102354`) antes de alterar cualquier esquema.
+  7. Se ejecutó `CREATE EXTENSION IF NOT EXISTS citext;` + 11 `ALTER TABLE ... ALTER COLUMN ... TYPE citext;` contra `api_emp_194` y luego contra `api_emp_163` — ambas corridas exitosas sin errores.
+  8. Al intentar la 12ª columna (`api_empresas.empresas_usuarios.nombre`), Postgres rechazó el `ALTER` por una vista dependiente. Se diagnosticó vía `pg_class`/`pg_namespace` que existe una vista `api_empresas.empresas_usuarios` (schema con el mismo nombre que la base de datos, usada para que las bases por-empresa hagan `JOIN api_empresas.empresas_usuarios` vía FDW) que envuelve la tabla real `public.empresas_usuarios`. Se resolvió con una transacción explícita: `DROP VIEW api_empresas.empresas_usuarios` → `ALTER TABLE public.empresas_usuarios ALTER COLUMN nombre TYPE citext` → recrear la vista idéntica (mismas columnas) → restaurar dueño (`dev_user`) y permisos (INSERT/SELECT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER) previamente confirmados por consulta a `information_schema.role_table_grants` y `pg_views`.
+  9. Se verificó funcionalmente con `LIKE` plano (sin `ILIKE`) que las columnas migradas ya son insensibles a mayúsculas/minúsculas: `customers.first_name LIKE '%OZC%'` encontró a "Ozcar" en `api_emp_194`, y `api_empresas.empresas_usuarios.nombre LIKE '%YERVIN%'` encontró a "yervin" (minúsculas) en `api_empresas`.
+  10. Se actualizó `public/model/create_new_company_api_emp_N_postgres.sql` (regla "Garantía de Esquema"): se agregó `CREATE EXTENSION IF NOT EXISTS citext;` al inicio del script y se cambiaron los 11 tipos de columna (de `varchar(N)`/`text` a `citext`) para que toda empresa nueva se aprovisione ya protegida desde el inicio.
+  11. Se probó el script completo de punta a punta creando una base de datos temporal (`api_emp_test_citext`) en Contabo Dev, ejecutando el `.sql` completo con `ON_ERROR_STOP=1` (terminó en `COMMIT` sin errores), confirmando que las 11 columnas quedaron con `udt_name='citext'`, y luego se eliminó la base de prueba.
+  12. Se hizo commit (`cb7a110`) y push a `feature/postgresql-support` (rama de Desarrollo/Postgres) del cambio en la plantilla SQL.
+
+- **Inconvenientes y Desafíos:**
+  - El primer intento de `ALTER TABLE empresas_usuarios ALTER COLUMN nombre TYPE citext` en `api_empresas` falló por una vista dependiente (`rule _RETURN on view api_empresas.empresas_usuarios depends on column "nombre"`), resuelto diagnosticando la estructura real (tabla `public.empresas_usuarios` + vista de mismo nombre en schema `api_empresas` para acceso cross-database vía FDW) y envolviendo el `ALTER` en un `DROP VIEW` / `CREATE VIEW` idéntico dentro de la misma transacción.
+  - El primer intento de recrear la vista falló con `type "citext" does not exist` porque el `CREATE EXTENSION` de un intento previo se había revertido junto con el `ALTER` fallido (ambos estaban en la misma transacción abortada). Se corrigió incluyendo `CREATE EXTENSION IF NOT EXISTS citext;` dentro de la misma transacción exitosa.
+
+- **Decisión Final y Justificación:** `citext` es la única solución realmente "a prueba de olvido": no depende de que cada desarrollador recuerde usar `ILIKE` ni de un helper compartido, corrige automáticamente tanto el código actual (~19 ocurrencias de prioridad alta en `GeminiChatAssistant.php`, `orders.php`, `inventory.php`, `machine_services.php`) como cualquier consulta futura sobre estas columnas. Se descartó aplicar `citext` a todas las columnas de texto del sistema (demasiado amplio, cambia semántica de `UNIQUE`/`=`/`ORDER BY` sin necesidad) a favor de escoparlo estrictamente a las columnas ya verificadas como de búsqueda libre real, cumpliendo el requisito explícito del usuario de "no adivinar". Las contraseñas quedaron explícitamente fuera de alcance por decisión del usuario (siguen en texto plano, tema separado de seguridad pendiente).
+
+- **Herramienta(s) Utilizada(s):** `Bash` (ssh + psql en Contabo Dev, pg_dump, scp), `Edit` (plantilla SQL), `Read`, `Explore agent` (auditoría inicial de ocurrencias `LIKE`).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - Backups `pg_dump -Fc` tomados antes de cualquier cambio (`/tmp/backups_citext/`, Contabo Dev, timestamp `20260807_102354`).
+  - Confirmación por SQL directo (`information_schema.columns`, `udt_name='citext'`) de las 11 columnas en `api_emp_194` y `api_emp_163`, y de `empresas_usuarios.nombre` en `api_empresas`.
+  - Prueba funcional con `LIKE` plano (sin `ILIKE`) confirmando comportamiento insensible a mayúsculas/minúsculas en `customers.first_name` (api_emp_194) y `empresas_usuarios.nombre` (api_empresas).
+  - Ejecución completa y limpia (`ON_ERROR_STOP=1`, termina en `COMMIT`) de la plantilla SQL actualizada contra una base de datos temporal de prueba, con verificación posterior de los 11 tipos `citext` y eliminación de la base de prueba.
+  - Commit `cb7a110` empujado a `origin/feature/postgresql-support`.
+
+- **Logro Conseguido:** Se eliminó de raíz una clase completa de bugs (diferencia de case-sensitivity entre MySQL y Postgres en búsquedas de texto) que afectaba ~19 puntos activos del sistema (bot de WhatsApp/IA, creación conversacional de órdenes, reportes de inventario, gestión de servicios de máquinas) sin tener que tocar ni un solo endpoint de código PHP — la corrección queda a nivel de esquema de base de datos, protegiendo también todo código futuro. Además, toda empresa nueva que se cree a partir de ahora queda protegida desde el aprovisionamiento inicial.
+
+- **Observaciones de Gemini:** Ninguna adicional.
+
+- **Respuesta de Gemini:** Se completó la migración `citext` en las 12 columnas verificadas (11 en `api_emp_194`/`api_emp_163`, más `empresas_usuarios.nombre` en la base central `api_empresas`, resolviendo un bloqueo por vista dependiente en el camino), se verificó funcionalmente con `LIKE` plano, y se actualizó y probó de punta a punta la plantilla SQL de creación de empresa nueva, con el cambio ya commiteado y empujado a `feature/postgresql-support`.
