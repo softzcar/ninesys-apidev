@@ -1,0 +1,44 @@
+- **Solicitud del Usuario:** Tras confirmar que "Órdenes Terminadas" ya renderizaba (fix del typo de departamento), reportó dos problemas: (1) la columna "Status" en la tabla es redundante, siempre muestra "terminada"; (2) el reporte trae órdenes de TODOS los vendedores al cargar, no solo las del vendedor logueado (aunque el filtro de rango de tiempo parecía sí acotar por vendedor -- percepción a confirmar). Pidió revisar las consultas y asegurar que solo retorne las órdenes terminadas del vendedor logueado.
+
+- **Fecha y Hora:** 2026-08-07 16:30:00 (sesión interrumpida por corte eléctrico, retomada y verificada sin pérdida de trabajo)
+
+- **Proyecto(s):** Backend (`ninesys-api`) + Frontend (`app_multi`)
+
+- **Archivos Involucrados:**
+  - `ninesys-api/app/routes/orders.php` (endpoint `GET /comercializacion/ordenes/reporte/terminadas/{rango}`, línea ~1768)
+  - `app_multi/pages/comercializacion/reportes/terminadas.vue`
+
+- **Commits Relacionados:**
+  - Backend: `1abf688` (fix(comercializacion): filtrar Órdenes Terminadas por vendedor logueado + quitar columna Status redundante)
+  - Frontend: `4bf00a2` (fix(comercializacion): enviar id_empleado al reporte de Órdenes Terminadas)
+
+- **Acción Realizada:**
+  1. Se leyó el endpoint completo y se confirmó el bug exacto: `SELECT _id, status, cliente_nombre, _id vinculada FROM ordenes WHERE status = 'terminada' AND moment BETWEEN ... ORDER BY _id ASC` -- **sin ningún filtro por `responsable`/vendedor**. La ruta ni siquiera aceptaba un parámetro de empleado (`{rango}` únicamente). La percepción del usuario de que el filtro de rango "sí filtraba por vendedor" se explica porque una ventana de fecha más corta simplemente reduce el total de filas devueltas (de todos los vendedores), dando la impresión de un filtro personal que en realidad nunca existió.
+  2. Se verificó que este endpoint tiene un único consumidor en todo el frontend (`terminadas.vue`), confirmando que era seguro cambiar la firma de la ruta sin romper otros llamadores.
+  3. Se agregó `{id_empleado}` a la ruta (`/comercializacion/ordenes/reporte/terminadas/{rango}/{id_empleado}`) y se parametrizó el filtro (`AND responsable = ?`), reemplazando la concatenación de fechas cruda por placeholders también.
+  4. Se quitó la columna "Status" de la respuesta (`$object['fields']`, antes índice 2) -- el reporte es exclusivamente de órdenes en estado `'terminada'`, así que esa columna siempre mostraba el mismo valor sin aportar información.
+  5. Se actualizó `terminadas.vue` para enviar `this.dataUser.id_empleado` en la URL de la petición.
+  6. Verificado con `php -l` (backend) y el chequeo de sintaxis Node.js estándar (frontend): ambos OK.
+  7. Verificado con datos reales ANTES de desplegar: de las 46 órdenes que devolvía el endpoint sin filtro (empresa 194, últimos 32 días), solo 17 pertenecen realmente a Sarahit (`responsable = 22`).
+  8. **Corte eléctrico durante el despliegue** -- la sesión se interrumpió justo después de hacer commit y push en ambos repositorios, antes de ejecutar el despliegue del frontend. Al retomar, se verificó primero (sin asumir nada) que ambos commits SÍ llegaron a GitHub (`git rev-parse` local vs `origin` idénticos en ambos repos) y que el backend ya había quedado desplegado en Desarrollo (confirmado por el mensaje de éxito del despliegue anterior al corte). Solo faltaba ejecutar `deploy.sh` (frontend), que se completó sin incidentes.
+  9. Verificación final end-to-end contra el endpoint real desplegado: `curl` confirma 17 items (todos de Sarahit) y el array `fields` sin la columna "Status".
+
+- **Inconvenientes y Desafíos:** Corte eléctrico interrumpió la sesión entre el push de los commits y el despliegue del frontend. Se resolvió verificando metódicamente el estado real (git, servidor) antes de continuar, en vez de asumir qué se había completado o repetir pasos ya hechos -- procedimiento ya establecido en la memoria del proyecto para este tipo de interrupciones.
+
+- **Decisión Final y Justificación:** Se optó por agregar `{id_empleado}` como segmento de ruta (en vez de query param) para mantener consistencia con el patrón ya usado en el resto del proyecto para este tipo de endpoints (ej. `GET /comercializacion/dashboard/{id_empleado}/{id_departamento}`, corregido en la misma sesión). Se quitó la columna Status junto con el fix de filtro por ser un cambio pequeño, relacionado y explícitamente pedido en el mismo mensaje del usuario.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (ssh + psql para verificación con datos reales antes/después, `php -l`, chequeo de sintaxis Node.js, git, deploy_backend.sh, deploy.sh, curl de verificación final).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - `php -l` y chequeo de sintaxis Node.js: sin errores.
+  - Verificación con datos reales antes del despliegue (46 → 17 filas al filtrar por responsable=22).
+  - Verificación de integridad post-corte eléctrico: commits confirmados en GitHub (local == origin en ambos repos), sin pérdida de trabajo.
+  - Verificación end-to-end contra el endpoint real desplegado: 17 items, columna Status ausente de `fields`.
+
+- **Logro Conseguido:** Se corrigió un bug real de privacidad/alcance de datos -- cualquier vendedor podía ver las órdenes terminadas de TODOS sus compañeros, no solo las propias -- y se limpió una columna redundante en la misma pasada, sin pérdida de trabajo pese a la interrupción eléctrica.
+
+- **Observaciones de Gemini:** Ninguna adicional.
+
+- **Respuesta de Gemini:** Se corrigió el endpoint de Órdenes Terminadas para filtrar por el vendedor logueado (antes mostraba las de todos) y se quitó la columna Status redundante. Verificado con datos reales, desplegado en ambos lados pese al corte eléctrico intermedio (se confirmó que no hubo pérdida de trabajo antes de continuar).
