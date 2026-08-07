@@ -525,7 +525,7 @@ VALUES (
     6,
     2,
     0,
-    'Comecialización',
+    'Comercialización',
     0,
     0,
     NULL,
