@@ -1765,8 +1765,9 @@ return function (App $app) {
   });
 
   // ORDENES TERMNADAS Y NO ENTREGADAS
-  $app->get('/comercializacion/ordenes/reporte/terminadas/{rango}', function (Request $request, Response $response, array $args) {
+  $app->get('/comercializacion/ordenes/reporte/terminadas/{rango}/{id_empleado}', function (Request $request, Response $response, array $args) {
     $object['rango'] = $args['rango'];
+    $id_empleado = (int) $args['id_empleado'];
     $localConnection = new LocalDB();
 
     // PREPARAR FECHAS
@@ -1778,25 +1779,25 @@ return function (App $app) {
     $momentInit = $now;
     $momentEnd = $before;
 
-    // BUSCAR ORENES EN CURSO
-    $sql = "SELECT _id, status, cliente_nombre, _id vinculada from ordenes WHERE status = 'terminada' AND moment BETWEEN '" . $momentEnd . "' AND '" . $momentInit . " '   ORDER BY _id ASC";
-    $object['items'] = $localConnection->goQuery($sql);
+    // BUSCAR ORDENES TERMINADAS DEL VENDEDOR LOGUEADO (antes traía las de
+    // TODOS los vendedores -- sin filtro de responsable)
+    $sql = "SELECT _id, cliente_nombre, _id vinculada from ordenes WHERE status = 'terminada' AND responsable = ? AND moment BETWEEN ? AND ? ORDER BY _id ASC";
+    $object['items'] = $localConnection->goQuery($sql, [$id_empleado, $momentEnd, $momentInit]);
 
     $sql = 'SELECT _id, id_child, id_father from ordenes_vinculadas ORDER BY id_father ASC';
     $object['vinculadas'] = $localConnection->goQuery($sql);
 
     // CREAR CAMPOS DE LA TABLA
+    // (columna "Status" quitada -- este reporte es exclusivamente de órdenes
+    // terminadas, la columna siempre mostraba el mismo valor)
     $object['fields'][0]['key'] = '_id';
     $object['fields'][0]['label'] = 'Orden';
 
     $object['fields'][1]['key'] = 'cliente_nombre';
     $object['fields'][1]['label'] = 'Cliente';
 
-    $object['fields'][2]['key'] = 'status';
-    $object['fields'][2]['label'] = 'Status';
-
-    $object['fields'][3]['key'] = 'vinculada';
-    $object['fields'][3]['label'] = 'Vinculadas';
+    $object['fields'][2]['key'] = 'vinculada';
+    $object['fields'][2]['label'] = 'Vinculadas';
 
     $localConnection->disconnect();
 
