@@ -1149,9 +1149,13 @@ class WooMe
     $tieneBusqueda = $buscar !== null && trim($buscar) !== '';
     $like = $tieneBusqueda ? '%' . trim($buscar) . '%' : null;
     $limitSql = $tieneBusqueda ? ' LIMIT 20' : '';
+    // Postgres, a diferencia de MySQL, distingue mayúsculas/minúsculas con
+    // LIKE -- sin esto, buscar "ozc" no encontraba a "Ozcar" (hallazgo real
+    // 2026-08-07, mismo patrón ya usado en msg_service.php).
+    $likeOp = (defined('DB_DRIVER') && DB_DRIVER === 'pgsql') ? 'ILIKE' : 'LIKE';
 
     if ($id_vendedor !== null) {
-      $searchWhere = $tieneBusqueda ? ' AND (c.first_name LIKE ? OR c.last_name LIKE ? OR c.phone LIKE ? OR c.cedula LIKE ?)' : '';
+      $searchWhere = $tieneBusqueda ? " AND (c.first_name {$likeOp} ? OR c.last_name {$likeOp} ? OR c.phone {$likeOp} ? OR c.cedula {$likeOp} ?)" : '';
       $sql = 'SELECT DISTINCT c._id id, c.first_name, c.last_name, c.username, c.cedula, c.phone, c.address, c.email, c.recibir_notificaciones,
                               c.id_catalogo_pais, c.id_catalogo_estado, c.id_catalogo_ciudad
               FROM customers c
@@ -1163,7 +1167,7 @@ class WooMe
       }
       $data = $localConnection->goQuery($sql, $params);
     } else {
-      $searchWhere = $tieneBusqueda ? ' AND (first_name LIKE ? OR last_name LIKE ? OR phone LIKE ? OR cedula LIKE ?)' : '';
+      $searchWhere = $tieneBusqueda ? " AND (first_name {$likeOp} ? OR last_name {$likeOp} ? OR phone {$likeOp} ? OR cedula {$likeOp} ?)" : '';
       $sql = 'SELECT _id id, first_name, last_name, username, cedula, phone, address, email, recibir_notificaciones,
                      id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad
               FROM customers
