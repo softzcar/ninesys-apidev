@@ -2915,7 +2915,7 @@ return function (App $app) {
                 c.fecha_entrega AS fecha_entrega_de_la_orden,
                 CONCAT(c.fecha_entrega, ' 08:30:00') AS fecha_entrega_orden,
                 ot.total_unidades,
-                (SUM(d.tiempo * a.cantidad) / COALESCE(ad.numero_de_empleados, 1)) AS tiempo_total_orden_depto,
+                (SUM(d.tiempo * a.cantidad) / COALESCE(NULLIF(ad.numero_de_empleados, 0), 1)) AS tiempo_total_orden_depto,
                 ofo.orden_fila AS orden_fila_orden,
                 dep.orden_proceso AS orden_proceso_departamento,
                 COALESCE(ad.numero_de_empleados, 0) AS cant_empleados
