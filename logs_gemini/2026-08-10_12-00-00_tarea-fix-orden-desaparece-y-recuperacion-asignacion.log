@@ -1,0 +1,40 @@
+- **Solicitud del Usuario:** "OK he eliminado el diseño con imagen y el formulario vacío, esta vez el botón de eliminar ha eliminado correctamente el formulario correctamente pero han sucedido dos cosas a reparar, una que la imagen sigue en el servidor `https://cdn.nineteengreen.com/images/194/6515-1074.png?_=nrg7h22D` la otra que después de eliminar ambos formularios la orden dejó de aparecer en la tabla... LA orden debe seguir asignada al diseñador para que pueda subir nuevamente las imágenes que necesite..."
+
+- **Fecha y Hora:** 2026-08-10 12:00:00
+
+- **Proyecto(s):** Backend (fix + recuperación de datos) + Ambos (fix de robustez en frontend, ver bitácora homóloga en `app_multi`)
+
+- **Archivos Involucrados:**
+  - `app/routes/designs.php` (`DELETE /disenos/revision/{id_revision}`)
+  - Datos en `api_emp_194` (Desarrollo): tabla `disenos`, fila `_id=1067` (orden 6515) recreada
+  - `ninesys-cdn` (solo investigación, sin cambios -- endpoint de borrado ya existente)
+
+- **Commits Relacionados:**
+  - Backend: `fefa835` (rama `feature/postgresql-support`)
+  - Frontend: `5b8e01c` (rama `refactor/modular-routes`, ver bitácora homóloga)
+
+- **Acción Realizada:**
+  1. **Bug #2 -- la orden desaparece de la tabla del diseñador tras eliminar sus revisiones:** se confirmó la causa: `DELETE /disenos/revision/{id}` (agregado en la tarea anterior) borraba también el registro padre en `disenos` cuando quedaba sin revisiones, para "no dejar proyectos huérfanos" -- pero ese registro es justamente lo que mantiene al diseñador ASIGNADO a la orden (`GET /sse/diseno/{id_empleado}` arma el listado de `items` filtrando por `disenos.id_empleado` y `disenos.terminado=0`, sin importar si tiene revisiones). Al eliminar ambas revisiones de la orden 6515 (la restaurada del incidente anterior y la nueva creada hoy), sus DOS registros padre en `disenos` quedaron huérfanos y se borraron, dejando la orden sin ningún registro de asignación -- desapareció por completo de la tabla.
+  2. Se corrigió el endpoint: ahora **nunca** borra el registro padre en `disenos`, solo la fila de `revisiones`. Si un proyecto queda sin revisiones, el diseñador simplemente ve el proyecto vacío en el modal y puede volver a subir con "+ Nuevo Diseño" -- la orden nunca deja de estar asignada.
+  3. **Bug #1 -- la imagen seguía en el servidor:** se verificó de forma directa (SSH al servidor del CDN, `vps-contabo-dev:/home/cdn.nineteengreen.com/public_html/images/194/`) si el archivo `6515-1074.png` reportado por el usuario seguía presente -- **no estaba** (confirmado también con el propio endpoint de borrado del CDN, que respondió "No image found to delete" al reintentar). No se pudo determinar con certeza si el archivo realmente seguía en el servidor cuando el usuario lo reportó (posible caché de Cloudflare/navegador mostrando una copia ya no vigente en el origen) o si el borrado tardó en completarse. De cualquier forma, se identificó un problema real de robustez independiente de si esta vez falló: el frontend descartaba en silencio (`.catch(() => {})`) cualquier fallo al borrar la imagen del CDN, sin avisar a nadie -- corregido en `app_multi` (ver bitácora homóloga) para que ahora sí avise si la imagen no se pudo borrar.
+  4. **Recuperación de la asignación perdida:** dado que el fix de "no borrar `disenos`" solo previene el problema hacia adelante (no revierte lo ya borrado por el usuario ANTES del despliegue), se recreó manualmente el registro `disenos._id=1067` (orden 6515, empleado 3) con los mismos datos originales de Producción ya usados en la recuperación anterior de esta misma sesión, esta vez **sin** recrear la revisión (`revisiones`) -- a diferencia del incidente previo, esta segunda eliminación fue una prueba intencional del usuario para verificar el fix, no un error, así que se dejó el proyecto vacío y listo para que suba una imagen nueva, tal como pidió explícitamente ("para que pueda subir nuevamente las imágenes que necesite").
+  5. Verificado contra `GET /sse/diseno/3` en vivo: la orden 6515 vuelve a aparecer en el listado de "items" del diseñador.
+
+- **Inconvenientes y Desafíos:** No fue posible confirmar con certeza absoluta la causa exacta del reporte de "la imagen sigue en el servidor" -- el archivo ya no estaba presente al momento de investigar, sin rastro de haber fallado realmente (ni en el filesystem del CDN ni en la respuesta de su propio endpoint de borrado). Se optó por corregir la robustez del código (dejar de ocultar fallos en silencio) en vez de afirmar una causa no verificable.
+
+- **Decisión Final y Justificación:** Se decidió NUNCA borrar `disenos` desde este endpoint, en vez de intentar una lógica más sofisticada (ej. borrar el padre solo si el usuario confirma explícitamente que quiere abandonar el proyecto por completo) -- la petición del usuario fue clara y directa ("la orden debe seguir asignada"), y la limpieza de proyectos-padre huérfanos no aporta ningún valor real frente al riesgo de romper la asignación del diseñador a la orden.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (`ssh`, `psql`, `curl`, `php -l`, `git`, `deploy_backend.sh`).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - `php -l` sin errores.
+  - `GET /sse/diseno/3` en vivo confirma que la orden 6515 volvió a aparecer en el listado del diseñador tras la recuperación manual.
+  - Verificación directa por SSH del filesystem del CDN para el hallazgo de la imagen (sin poder confirmar la causa exacta, documentado como tal).
+
+- **Logro Conseguido:** Se corrigió un bug real y potencialmente grave (una orden podía perder por completo su asignación a un diseñador con solo limpiar sus propios borradores/envíos, sin ninguna acción explícita de "desasignar") y se recuperó la asignación específica que se había perdido durante las pruebas de esta misma sesión.
+
+- **Observaciones:** Ninguna adicional.
+
+- **Respuesta:** Se corrigió el endpoint de eliminación para que NUNCA borre el registro de asignación del diseñador a la orden (`disenos`), solo la revisión individual -- así la orden nunca desaparece de la tabla, sin importar cuántas revisiones se eliminen. Se recreó la asignación de la orden 6515 que se había perdido durante las pruebas de hoy, ahora vacía y lista para subir un diseño nuevo. Sobre la imagen: al investigar ya no estaba en el servidor (no se pudo confirmar si realmente falló el borrado o fue una copia en caché del navegador/Cloudflare), pero de todas formas se corrigió el código para que avise si esto vuelve a pasar en vez de fallar en silencio.
