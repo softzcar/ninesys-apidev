@@ -1,0 +1,46 @@
+- **Solicitud del Usuario:** "Estoy en la página `/diseno/disenos` en la tabla en la columna 'Revisión' tenemos un componente que permite subir los diseños para su posterior aprobación por parte de un administrador. Por defecto me muestra un formulario para subir un primer diseño y el botón que pone '+ Nuevo Diseño' se muestra habilitado, si hago click en él me muestra un confirm para 'Crear un nuevo proyecto de diseño' [...] pero el formulario vacío se sigue mostrando... no hay manera de eliminar el formulario vacío. [...] el diseñador debería poder eliminar los diseños que envíe desde este formulario los cuales se muestran mientras que no estén aprobados. Luego de aprobados ya el diseñador no debe poder eliminarlos [...] Esto implica manipular el registro del diseño en la base de datos y también poder eliminar el archivo directamente de el servidor. Debemos entonces poner un botón que nos permita eliminar tanto un formulario vacío (sin confirmación alguna) y poder eliminar un diseño tanto de la base de datos como la imagen del servidor esta vez sí con un confirm."
+
+- **Fecha y Hora:** 2026-08-10 11:10:00
+
+- **Proyecto(s):** Ambos
+
+- **Archivos Involucrados:**
+  - `ninesys-api/app/routes/designs.php` (nuevo endpoint `DELETE /disenos/revision/{id_revision}`)
+  - `app_multi/components/diseno/uploadPropuesta.vue` (botón + método de borrado)
+  - `app_multi/components/disenosse/uploadPropuestaDisenador.vue` (solo lectura, para entender el flujo padre)
+  - `app_multi/components/disenosse/asignados.vue` (solo lectura, `/diseno/disenos` es servida por este componente)
+  - `ninesys-cdn/index.php` (solo lectura -- ya tenía un endpoint DELETE de imagen reutilizado tal cual desde el frontend, sin cambios)
+
+- **Commits Relacionados:**
+  - Backend: `ab85fdf` (rama `feature/postgresql-support`)
+  - Frontend: `3ffcfa5` (rama `refactor/modular-routes`)
+
+- **Acción Realizada:**
+  1. Se investigó (agente Explore) la cadena completa: `pages/diseno/disenos/index.vue` → `components/disenosse/asignados.vue` (columna "Revisión") → `components/disenosse/uploadPropuestaDisenador.vue` (botón "+ Nuevo Diseño", `POST /disenos/nuevo-con-revision`) → `components/diseno/uploadPropuesta.vue` (una tarjeta por cada fila de `revisiones`; muestra el formulario de subida mientras `item.id_product === null`).
+  2. Se confirmó que NO existía ningún endpoint de borrado de una revisión individual (`revisiones`/`disenos`) en todo el backend -- solo un borrado masivo por `id_orden`+`id_empleado` usado para reasignar diseñador (`designs.php:350-377`, con SQL concatenado, no reutilizable de forma segura).
+  3. Se revisó el esquema: `disenos` (proyecto de diseño, sin campo de aprobación propio) y `revisiones` (cada revisión, con `estatus` -- valores reales: `'Esperando Respuesta'`, `'Aprobado'`, `'Rechazado'` -- y `url_image`, la URL de la imagen en el CDN). Se confirmó que un mismo `id_diseno` puede tener MÚLTIPLES revisiones (`POST /revision/nuevo` en `manufacturing.php` agrega revisión 2, 3, etc. al mismo proyecto), dato clave para no borrar el proyecto padre por error si aún quedan otras revisiones activas.
+  4. Se confirmó que la imagen física NO vive en `ninesys-api` para este flujo -- se sube directo desde el frontend a `ninesys-cdn` (`https://cdn.nineteengreen.com`), que **ya tenía** un endpoint `DELETE` funcional para borrar la imagen de una revisión (`?id_orden=X&review=Y&id_empresa=Z`), sin necesidad de tocar ese servicio.
+  5. Se agregó `DELETE /disenos/revision/{id_revision}` en `designs.php`: verifica que la revisión exista (404 si no) y que su `estatus` no sea `'Aprobado'` (403 si lo es), borra la fila de `revisiones`, y si esa era la ÚLTIMA revisión de su `id_diseno`, borra también la fila padre en `disenos` (evita proyectos huérfanos) -- todo en una transacción.
+  6. En el frontend (`uploadPropuesta.vue`), se agregó un botón "Eliminar" (visible mientras `item.estatus !== 'Aprobado'`) y el método `deleteDesign()`: si la revisión no tiene imagen (`id_product === null`, formulario vacío) borra directo sin confirmación; si ya tiene una imagen enviada, pide confirmación (`$confirm`) y, tras confirmar, borra el registro en `ninesys-api` y llama al `DELETE` ya existente en `ninesys-cdn` para eliminar la imagen física, reutilizando la misma URL (`urlCDN`) que ya usa el formulario para subir.
+  7. Verificación de sintaxis: `php -l` en el backend, `vue-template-compiler` + `@babel/core` en el frontend (Vue 2/Nuxt 2).
+  8. Despliegue a Desarrollo (Contabo): backend vía `ninesys-hub/bin/deploy_backend.sh` (opción 2), frontend vía `ninesys-hub/bin/deploy.sh` (opción 2).
+  9. Verificación funcional en vivo contra el endpoint real (con datos 100% desechables, creados y eliminados dentro de la misma orden real ya asociada a Maru para no dejar rastro): (a) crear una revisión vacía y borrarla -- confirma borrado de `revisiones` y limpieza del `disenos` padre (`diseno_eliminado: true`); (b) crear una revisión, marcarla `Aprobado` manualmente y confirmar que el `DELETE` responde 403 "No se puede eliminar un diseño ya aprobado"; (c) crear un proyecto con 2 revisiones (simulando `POST /revision/nuevo`), borrar solo una, y confirmar que el `disenos` padre NO se elimina (`diseno_eliminado: false`) porque queda la otra revisión activa. Los 3 casos se limpiaron por completo al terminar (0 filas remanentes).
+
+- **Inconvenientes y Desafíos:** No fue posible verificar visualmente el botón nuevo en el navegador dentro de esta sesión porque la sesión de Chrome disponible estaba logueada como otro empleado (Sayerlin, sin diseños asignados) y no se contaba con las credenciales de "Maru" para iniciar sesión como ella -- se compensó verificando el endpoint backend de forma exhaustiva y directa (los 3 casos de negocio relevantes), y se le pidió al usuario confirmar el botón visualmente desde su propia sesión ya autenticada como Maru.
+
+- **Decisión Final y Justificación:** Un solo botón "Eliminar" con comportamiento condicional (sin confirmación si es un formulario vacío, con confirmación si ya hay un diseño enviado) en vez de dos botones separados -- coincide exactamente con lo pedido por el usuario y evita duplicar UI para dos estados de la misma tarjeta. Se decidió limpiar el `disenos` padre solo cuando quede sin ninguna revisión (en vez de siempre, o nunca) tras confirmar con el esquema real que un proyecto puede acumular varias revisiones a lo largo del tiempo -- borrar el padre siempre habría roto ese caso real.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (`php -l`, verificación de sintaxis Vue, `curl`, `ssh`/`psql` para preparar y limpiar datos de prueba desechables, `git`, `deploy_backend.sh`, `deploy.sh`), agente Explore, `claude-in-chrome` (intento de verificación visual, sesión sin permisos suficientes).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - `php -l` sin errores.
+  - Sintaxis Vue 2 (template + script) sin errores.
+  - 3 escenarios reales probados contra el endpoint desplegado en Desarrollo, todos con el comportamiento esperado (200 + limpieza correcta / 403 en aprobado / padre preservado con múltiples revisiones), datos de prueba 100% eliminados al finalizar.
+
+- **Logro Conseguido:** Se cerró un hueco funcional real -- hasta ahora un diseñador no tenía ninguna forma de corregir un error propio (formulario vacío creado por accidente, o un diseño mal enviado antes de ser revisado), quedando atascado en la interfaz para siempre. Ahora puede limpiar su propio trabajo en curso, sin poder tocar nada ya aprobado.
+
+- **Observaciones:** Pendiente que el usuario confirme visualmente el botón desde su sesión real de Maru (verificación funcional del backend ya completa y exhaustiva).
+
+- **Respuesta:** Se agregó un botón "Eliminar" en cada tarjeta de diseño de `/diseno/disenos`: si es un formulario vacío se borra al instante sin preguntar nada; si ya tiene un diseño enviado, pide confirmación y borra tanto el registro en la base de datos como la imagen en el servidor (CDN). Una vez que el diseño queda "Aprobado", el botón desaparece y ya no se puede eliminar. Verificado exhaustivamente contra el backend real en Desarrollo con datos desechables (formulario vacío, diseño aprobado protegido, y un proyecto con varias revisiones donde solo se borra la que corresponde).
