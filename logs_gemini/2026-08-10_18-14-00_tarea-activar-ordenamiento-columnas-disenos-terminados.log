@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** "Activemos la opcion de ordenar en las columnaas de esta tabla"
+
+- **Fecha y Hora:** 2026-08-10 18:14:00
+
+- **Proyecto(s):** Backend (`ninesys-api`)
+
+- **Archivos Involucrados:**
+  - `ninesys-api/app/routes/designs.php`
+
+- **Commits Relacionados:** Pendiente de commitear
+
+- **Acción Realizada:**
+  1. Se actualizó la definición del arreglo de campos (`fields`) en el endpoint `GET /disenos/terminados` de `designs.php`.
+  2. Se marcó la propiedad `'sortable' => true` en las columnas de datos (`orden`, `cliente`, `disenador`, `inicio`, `entrega`, `tipo`, `codigo_diseno`) y `'sortable' => false` en columnas multimedia (`linkdrive`, `imagen`).
+
+- **Inconvenientes y Desafíos:** Ninguno.
+
+- **Decisión Final y Justificación:** Suministrar metadatos explícitos de ordenamiento desde la API garantiza consistencia independientemente de los clientes que consuman este endpoint.
+
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command`, `write_to_file`.
+
+- **Resultado:** Éxito.
+
+- **Verificación:** Código de la API actualizado y listo para despliegue.

@@ -666,32 +666,15 @@ return function (App $app) {
     $idEmpleado = isset($params['id_empleado']) && $params['id_empleado'] !== '' ? (int)$params['id_empleado'] : null;
     $dias = isset($params['dias']) && $params['dias'] !== '' ? (int)$params['dias'] : 30;
 
-    $object['fields'][0]['key'] = 'orden';
-    $object['fields'][0]['label'] = 'Orden';
-
-    $object['fields'][1]['key'] = 'cliente';
-    $object['fields'][1]['label'] = 'Cliente';
-
-    $object['fields'][2]['key'] = 'disenador';
-    $object['fields'][2]['label'] = 'Diseñador';
-
-    $object['fields'][3]['key'] = 'inicio';
-    $object['fields'][3]['label'] = 'Inicio';
-
-    $object['fields'][4]['key'] = 'entrega';
-    $object['fields'][4]['label'] = 'Entregado';
-
-    $object['fields'][5]['key'] = 'tipo';
-    $object['fields'][5]['label'] = 'Tipo';
-
-    $object['fields'][6]['key'] = 'codigo_diseno';
-    $object['fields'][6]['label'] = 'Codigo';
-
-    $object['fields'][7]['key'] = 'linkdrive';
-    $object['fields'][7]['label'] = 'Drive';
-
-    $object['fields'][8]['key'] = 'imagen';
-    $object['fields'][8]['label'] = 'Imagen';
+    $object['fields'][0] = ['key' => 'orden', 'label' => 'Orden', 'sortable' => true];
+    $object['fields'][1] = ['key' => 'cliente', 'label' => 'Cliente', 'sortable' => true];
+    $object['fields'][2] = ['key' => 'disenador', 'label' => 'Diseñador', 'sortable' => true];
+    $object['fields'][3] = ['key' => 'inicio', 'label' => 'Inicio', 'sortable' => true];
+    $object['fields'][4] = ['key' => 'entrega', 'label' => 'Entregado', 'sortable' => true];
+    $object['fields'][5] = ['key' => 'tipo', 'label' => 'Tipo', 'sortable' => true];
+    $object['fields'][6] = ['key' => 'codigo_diseno', 'label' => 'Codigo', 'sortable' => true];
+    $object['fields'][7] = ['key' => 'linkdrive', 'label' => 'Drive', 'sortable' => false];
+    $object['fields'][8] = ['key' => 'imagen', 'label' => 'Imagen', 'sortable' => false];
 
     $whereConditions = ["a.terminado = 1", "(b.status != 'entregada' OR b.status != 'cancelada')"];
     $sqlQueryParams = [];
