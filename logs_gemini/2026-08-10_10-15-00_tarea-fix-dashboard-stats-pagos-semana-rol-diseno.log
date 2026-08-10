@@ -1,0 +1,50 @@
+- **Solicitud del Usuario:** "Ahora sigamos con el rol de Diseño en la auditoría de Empleados, me he logueado con el empleado 'Maru' y he seleccionado el departamento de 'Diseño' Ella tiene asignado varios departamentos para que lo tengas en cuenta durante las pruebas por si se crea alguna confusión con los departamentos. Empecemos por la página de inicio para diseñadores, en la página de inicio tenemos tres gráficos [...] Vamos a verificar como en las ocasiones anteriores que los datos que nos llegan de la API sean correctos y que los gráficos muestren la información real de manera correcta."
+
+- **Fecha y Hora:** 2026-08-10 10:15:00
+
+- **Proyecto(s):** Backend
+
+- **Archivos Involucrados:**
+  - `app/routes/employees.php` (líneas ~1052-1090 y ~1254-1290, endpoint `GET /empleados/dashboard-stats/{id_empleado}/{id_departamento}`)
+  - `components/empleados/DashboardEmpleado.vue` (frontend, solo lectura -- consume el endpoint para los 3 gráficos: "Estado de Diseños"/"Estado de Órdenes", "Estado de Reposiciones", "Pagos Semanales")
+
+- **Commits Relacionados:**
+  - Backend: `25527cb` (rama `feature/postgresql-support`)
+  - Frontend: N/A (sin cambios)
+
+- **Acción Realizada:**
+  1. Se identificó el endpoint real detrás de los 3 gráficos de la página de Inicio (vía agente Explore): `GET /empleados/dashboard-stats/{id_empleado}/{id_departamento}` en `employees.php:878-1292`, con dos ramas de código -- una especial para Diseño(7)/Impresión(1) y otra "estándar" para el resto de departamentos.
+  2. Se confirmó con el usuario que el empleado de prueba ("Maru", `id_usuario`/`id_empleado`=3) tiene 3 departamentos asignados en la empresa 194: Impresión(1), Diseño(7) y Montar Tallas(16) -- dato clave para las pruebas cruzadas.
+  3. Se verificó `curl` directo con `Authorization: 194` para los 3 departamentos de Maru contra el endpoint en Desarrollo, ANTES de tocar código:
+     - `id_departamento=7` (Diseño): 200 OK, `status` = 588 terminadas + 111 pendientes = 699 total (84.1%/15.9%, coincide exacto con la captura de pantalla del usuario). `reposiciones` = 0 (correcto, sin datos). `pagos_semana` = vacío.
+     - `id_departamento=1` (Impresión): 200 OK.
+     - `id_departamento=16` (Montar Tallas, uno de los departamentos REALES de Maru): **500 Error interno**.
+  4. Se investigó el 500 vía `ssh vps-contabo-dev "tail -100 /usr/local/lsws/logs/error.log"` (ver `reference_debugging_500_produccion` en memoria): `SQLSTATE[42803]: Grouping error` -- la rama "estándar" del query de `pagos_semana` seleccionaba `TO_CHAR(ldea.fecha_terminado, 'Day')` sin envolverlo en una función de agregación ni incluirlo en el `GROUP BY` (que agrupaba por `ldea.fecha_terminado::date`, una expresión distinta). Postgres es estricto con esto; MySQL (usado en Producción) no lo era, por lo que el bug quedó invisible desde la migración a Postgres (commit `0bfb528`, confirmado con `git log -L`).
+  5. Se revisó también si `pagos_semana` filtraba por `id_departamento` pese a que la columna existe en `pagos` -- NO lo hacía en ninguna de las dos ramas. Se verificó con el historial real de pagos de Maru (`pg_stat_activity`/consultas directas a `api_emp_194`) que, por ejemplo, en la semana ISO 31 de 2026 tuvo $112.00 en pagos sin departamento asignado + $1.50 en Montar Tallas -- de haber sido la semana actual, el gráfico "Pagos Semanales" habría mostrado $113.50 en CUALQUIERA de sus 3 dashboards de departamento, no solo en el correspondiente.
+  6. Antes de aplicar el filtro por `id_departamento`, se investigó a fondo si la columna `pagos.id_departamento` es confiable para todos los casos -- hallazgo importante: los pagos de Diseño (tipo `detalle = 'Diseño'`) **NUNCA** llevan `id_departamento` poblado (siempre `NULL`, confirmado con 594 registros de Diseño en toda la empresa, 0 con `id_departamento = 7`), mientras que Impresión, Montar Tallas, Estampado, Corte, Revisión, Limpieza y Costura (todos los pagos ligados a `lotes_detalles_empleados_asignados`, es decir con `id_lotes_detalles` no nulo) sí llevan `id_departamento` consistente y confiable. Aplicar un filtro ciego por `id_departamento = 7` habría dejado el gráfico de Pagos Semanales de Diseño permanentemente vacío -- una regresión nueva, peor que el bug original en ese caso específico.
+  7. Se aplicó el fix con este conocimiento: en la rama Diseño/Impresión, se construye el filtro condicionalmente -- `p.detalle = 'Diseño'` cuando `id_departamento == 7`, o `p.id_departamento = $id_departamento` en cualquier otro caso (incluye Impresión). En la rama estándar (todos los demás departamentos, con JOIN a `lotes_detalles_empleados_asignados`), se agregó `p.id_departamento = $id_departamento` sin necesidad de casos especiales (confirmado confiable para esos departamentos), y se corrigió el `GROUP BY` envolviendo `ldea.fecha_terminado` en `MAX(...)`, igual al patrón ya usado correctamente en la rama Diseño/Impresión.
+  8. Verificación de sintaxis (`php -l`) y ejecución directa de ambas consultas SQL corregidas contra Postgres (vía `ssh` + `psql`) antes de desplegar, incluyendo una prueba con datos reales de una semana con pagos (semana 32: $1.20 + $0.90 = $2.10, coincide con el total esperado).
+  9. Commit (`25527cb`, solo `app/routes/employees.php`, sin arrastrar otros cambios sueltos preexistentes en el repo) y despliegue a Desarrollo vía `ninesys-hub/bin/deploy_backend.sh` (opción 2).
+  10. Verificación en vivo post-despliegue: los 3 departamentos de Maru (`1`, `7`, `16`) devuelven 200 OK, incluyendo el que antes crasheaba (`16`).
+
+- **Inconvenientes y Desafíos:**
+  - El hallazgo de la fuga de datos entre departamentos no era reproducible en vivo con la semana actual (Maru no tenía pagos aprobados en la semana ISO 33), lo que obligó a demostrarlo con datos históricos en vez de una reproducción visual directa en el navegador.
+  - El primer intento de fix (filtrar `pagos_semana` por `id_departamento` en ambas ramas de forma uniforme) habría introducido una regresión nueva para Diseño, ya que esos pagos nunca llevan `id_departamento` poblado -- se detectó ANTES de desplegar gracias a una verificación de datos reales, no en producción.
+
+- **Decisión Final y Justificación:** Se optó por un filtro condicional (`detalle = 'Diseño'` vs `id_departamento = $id_departamento`) en vez de una solución uniforme, porque los datos reales muestran que el modelo de datos etiqueta los pagos de Diseño de una forma distinta al resto (por texto libre en `detalle`, no por FK a `departamentos`) -- forzar una solución "limpia" y uniforme habría sido incorrecto dado el estado real de los datos. Se corrigió también el `GROUP BY` roto en la rama estándar aprovechando que ya se estaba tocando ese bloque, por ser un crash real y bloqueante (no solo un hallazgo de auditoría).
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (`ssh`, `psql`, `curl`, `php -l`, `git`, `deploy_backend.sh`), agente `Explore` (localización inicial del endpoint y del código fuente).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - `php -l` sin errores.
+  - Ambas consultas SQL corregidas ejecutadas directamente contra Postgres (`api_emp_194`) antes de desplegar: sin error de sintaxis/agrupación, y con un caso de datos reales (semana 32) devolviendo el total esperado ($2.10).
+  - `curl` en vivo post-despliegue contra los 3 departamentos reales de Maru (1, 7, 16): los 3 devuelven 200 OK; el que antes daba 500 (16, Montar Tallas) ahora responde correctamente con `status`, `reposiciones`, `eficiencia` y `pagos_semana` completos.
+  - Los números de "Estado de Diseños" para el departamento 7 siguen coincidiendo exactamente con la captura de pantalla del usuario (699 total, 84.1%/15.9%) -- sin regresión en esa parte del endpoint.
+
+- **Logro Conseguido:** Se corrigió un crash real (500) que afectaba la página de Inicio de CUALQUIER empleado en CUALQUIER departamento fuera de Diseño(7)/Impresión(1) desde la migración a Postgres -- en el caso concreto de Maru, esto significaba que su Inicio se rompía por completo al cambiar a "Montar Tallas", uno de sus 3 departamentos reales. Además se cerró una fuga de datos entre departamentos (el gráfico "Pagos Semanales" mezclaba el dinero de todos los departamentos de un empleado multi-departamento en cualquiera de sus dashboards), evitando al mismo tiempo introducir una regresión nueva para Diseño gracias a verificar el comportamiento real de los datos antes de aplicar el fix "obvio".
+
+- **Observaciones:** Los otros dos gráficos de la página de Inicio para Diseño ("Estado de Diseños" y "Estado de Reposiciones") se auditaron y están correctos -- correctamente escopados y con totales que coinciden con lo mostrado en pantalla. Queda pendiente seguir con el resto de la auditoría del rol Diseño (otras páginas del sidebar), a pedido del usuario.
+
+- **Respuesta:** Se encontraron y corrigieron dos bugs reales en el endpoint que alimenta los 3 gráficos de la página de Inicio: (1) un crash (500) en Postgres para cualquier departamento fuera de Diseño/Impresión, reproducido en vivo con el departamento "Montar Tallas" de Maru; (2) una fuga de datos donde "Pagos Semanales" sumaba los pagos de TODOS los departamentos de un empleado multi-departamento en cualquiera de sus dashboards, en vez de acotarse al departamento visto. Ambos corregidos con cuidado especial para no romper el caso de Diseño (cuyos pagos se identifican de forma distinta en la base de datos), verificados con datos reales antes y después del despliegue a Desarrollo. Los gráficos "Estado de Diseños" y "Estado de Reposiciones" ya estaban correctos.
