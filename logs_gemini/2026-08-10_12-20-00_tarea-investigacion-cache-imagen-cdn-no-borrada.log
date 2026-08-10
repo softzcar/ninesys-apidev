@@ -1,0 +1,39 @@
+- **Solicitud del Usuario:** "La imagen `https://cdn.nineteengreen.com/images/194/6515-1080.png?_=CQuknWKt` que subí esta vez para probar, NO se ha eliminado en el servidor, he probado en otro navegador que jamás ha abierto esta URL para descartar completamente la teoría de caché y la ha abierto... Vamos a resolver el problema de la imagen, probablemente sea cuestión de permisos en el directorio. Cerremos lo de la imagen para hacer un par de mejoras más en este componente."
+
+- **Fecha y Hora:** 2026-08-10 12:20:00
+
+- **Proyecto(s):** Infraestructura (VPS Contabo Desarrollo -- servidor `ninesys-cdn`, sin cambios de código)
+
+- **Archivos Involucrados:**
+  - `vps-contabo-dev:/home/cdn.nineteengreen.com/public_html/images/.htaccess` (intento de fix, revertido)
+  - `vps-contabo-dev:/usr/local/lsws/conf/vhosts/cdn.nineteengreen.com/vhost.conf` (solo lectura)
+
+- **Commits Relacionados:** N/A (investigación de infraestructura, sin cambios de código; el `.htaccess` probado se revirtió por no ser efectivo)
+
+- **Acción Realizada:**
+  1. Se verificó por SSH directo al filesystem del CDN (`/home/cdn.nineteengreen.com/public_html/images/194/`) que el archivo `6515-1080.png` **ya no existe en el servidor** -- el borrado a nivel de archivo SÍ funcionó correctamente (descartando definitivamente un problema de permisos, contrario a la hipótesis inicial del usuario).
+  2. Se confirmó con `curl -I` sobre la URL exacta reportada por el usuario (`?_=CQuknWKt`) que la respuesta trae `cf-cache-status: HIT`, `age: 746`, `cache-control: public, max-age=604800` -- Cloudflare está sirviendo una copia cacheada en su borde desde la petición original de subida (11:42:38), completamente independiente de que el archivo de origen ya no exista. Esto explica por qué un navegador que "jamás abrió esta URL" también la ve: el caché de Cloudflare es compartido/global entre todos los visitantes, no depende del historial del navegador del cliente.
+  3. Se probó una petición al origen SALTEANDO Cloudflare por completo (`curl --resolve cdn.nineteengreen.com:443:185.214.135.74`, IP real de `vps-contabo-dev`) con una query string nueva (para forzar un `MISS` real) -- el propio origen (`server: LiteSpeed`) YA envía `cache-control: public, max-age=604800` para archivos de imagen, sin que exista ningún header de este tipo en el `.htaccess` del sitio. Esto descarta que el problema sea exclusivamente de Cloudflare -- el origen mismo ya cachea agresivamente por defecto.
+  4. Se intentó un fix vía `.htaccess` (`images/.htaccess`, agregando `<IfModule mod_headers.c><FilesMatch "\.(png|jpe?g|gif|webp|tiff?)$">Header set Cache-Control "public, max-age=60, must-revalidate"</FilesMatch></IfModule>`), con backup previo del archivo original. **No tuvo efecto**: una petición nueva (bypasseando Cloudflare, forzando `MISS`) siguió devolviendo `max-age=604800` desde el propio LiteSpeed, confirmando que el header viene del módulo de caché estático de LiteSpeed a nivel de servidor/vhost (`module cache { storagePath ... }` en `vhost.conf`), no de un `Header set` procesable vía `.htaccess` para este tipo de contenido -- LiteSpeed sirve archivos estáticos cacheados por su propio motor antes de que las directivas de `.htaccess` tengan efecto sobre esos headers.
+  5. Se revirtió el cambio de `.htaccess` (restaurado desde el backup) al confirmar que no era efectivo, para no dejar configuración muerta/confusa en el servidor.
+  6. Se decidió NO seguir profundizando en la configuración de caché a nivel de servidor LiteSpeed (`httpd_config`/panel de administración de CyberPanel) -- es una configuración de infraestructura COMPARTIDA por todo el VPS (afecta también `api.nineteengreen.com`, `setup.nineteengreen.com` en la misma máquina), cambiarla a ciegas por SSH sin pasar por la interfaz de administración correspondiente es un riesgo desproporcionado frente al impacto real (entorno de Desarrollo/pruebas, la caché vieja expira sola en 7 días).
+
+- **Inconvenientes y Desafíos:** El diagnóstico inicial del usuario (permisos de directorio) resultó incorrecto -- se verificó explícitamente que el archivo SÍ se borra correctamente del filesystem; el problema real está en dos capas de caché completamente fuera del código de la aplicación (LiteSpeed a nivel de origen + Cloudflare a nivel de borde), ninguna de las dos controlada por `.htaccess` de la forma esperada.
+
+- **Decisión Final y Justificación:** Se optó por NO forzar un fix inmediato tocando configuración de servidor compartida sin acceso a la interfaz de administración apropiada (CyberPanel/LiteSpeed WebAdmin), priorizando no arriesgar otros servicios del mismo VPS por un problema de bajo impacto real (imágenes de diseños de PRUEBA en Desarrollo, que expiran solas de la caché en una semana). Se documentó la causa raíz exacta para que, si se decide resolver de raíz más adelante, quede claro que requiere: (a) ajustar la política de caché de archivos estáticos de LiteSpeed para este vhost específico (vía CyberPanel, no vía `.htaccess`), y/o (b) purgar manualmente por URL específica desde el dashboard de Cloudflare cuando haga falta.
+
+- **Herramienta(s) Utilizada(s):** `Bash` (`ssh`, `curl` con `--resolve` para bypassear Cloudflare, inspección de `vhost.conf`).
+
+- **Resultado:** Parcial (causa raíz identificada con certeza; fix diferido por ser infraestructura compartida, decisión consciente)
+
+- **Verificación:**
+  - Confirmado por filesystem (SSH directo) que el archivo de imagen SÍ se borra correctamente -- se descarta el problema de permisos reportado inicialmente.
+  - `cf-cache-status: HIT` confirmado en la URL exacta reportada por el usuario.
+  - Petición directa al origen (bypasseando Cloudflare vía `--resolve`) confirmó que el propio LiteSpeed ya envía `max-age=604800` sin intervención de `.htaccess`.
+  - `.htaccess` revertido a su estado original, verificado con `cat` tras la reversión.
+
+- **Logro Conseguido:** Se descartó definitivamente la hipótesis de permisos del usuario con evidencia directa, y se identificó la causa raíz real y exacta (doble capa de caché: LiteSpeed en origen + Cloudflare en el borde, ambas con 7 días de TTL, ninguna controlada por el `.htaccess` de la aplicación) -- información necesaria para decidir correctamente cómo (y si) resolverlo de raíz en el futuro, en vez de aplicar un fix a ciegas.
+
+- **Observaciones:** El registro de la base de datos SÍ se elimina correctamente en todos los casos (verificado en tareas anteriores del mismo día) -- el único problema pendiente es la copia cacheada de la imagen, que es cosmético/de bajo impacto en Desarrollo (no hay ningún proceso que dependa de que el archivo "realmente" no exista, solo de que el registro de la base de datos ya no lo referencie, lo cual sí ocurre).
+
+- **Respuesta:** El archivo SÍ se borra correctamente del servidor (confirmado por filesystem) -- no es un problema de permisos. Lo que el usuario veía era una copia cacheada, servida en dos capas (LiteSpeed en el origen y Cloudflare en el borde), ambas con una política de caché de 7 días que no está bajo control de la aplicación ni se pudo corregir vía `.htaccess`. Resolverlo de raíz requeriría tocar configuración de servidor compartida por todo el VPS de Desarrollo -- se decidió no hacerlo a ciegas por SSH y dejarlo documentado como pendiente de bajo impacto (la caché vieja expira sola en 7 días; entorno de pruebas), a pedido del usuario de cerrar este tema y seguir con otras mejoras.
