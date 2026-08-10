@@ -1,0 +1,47 @@
+- **Solicitud del Usuario:** "ok antes de continuar vamos a traer la data fresca desde producción, olvidé hacerlo más temprano. Recuerda que tenemos nuevos aspectos que atender al momento de migrar los datos de producción, necesitamos crear datos en desarrollo que en producción no existen, entiendo que ya has programado esto la semana pasada, sin embargo te lo recuerdo. vamos a traer los datos frescos desde producción a desarrollo entonces."
+
+- **Fecha y Hora:** 2026-08-10 10:25:00
+
+- **Proyecto(s):** Backend (operación de datos, sin cambios de código)
+
+- **Archivos Involucrados:**
+  - `ninesys-hub/bin/clone_194_prod_to_dev_postgres.sh` (ejecutado, sin cambios)
+  - `ninesys-hub/bin/lib/clone_194_postgres_etl.php` (ejecutado, sin cambios)
+  - `ninesys-hub/bin/sync_empresas_centrales_194_prod_to_dev.sh` (invocado automáticamente al final del clon, sin cambios)
+  - `ninesys-hub/bin/backfill_ids_moneda_metodo_194.sh` (ejecutado, sin cambios)
+  - `ninesys-hub/bin/backfill_moment_entregada_194.sh` (ejecutado, sin cambios)
+
+- **Commits Relacionados:**
+  - Backend: N/A (operación de datos, ningún script fue modificado)
+
+- **Acción Realizada:**
+  1. Se corrió `clone_194_prod_to_dev_postgres.sh` (empresa 194, Producción MySQL → Desarrollo Postgres) en segundo plano, respondiendo la doble confirmación ("SI CLONAR" + "194") vía stdin. Backup previo automático generado en `vps-contabo-dev:/tmp/backups_migracion_postgres/api_emp_194_pre_migracion_20260810_095540.dump`.
+  2. El script terminó con código de salida 1 ("advertencias", esperado y documentado -- no confundir con el bug catastrófico de TRUNCATE/FK ya corregido el 2026-08-03). Se verificó a fondo antes de dar por buena la corrida (lección ya reforzada en corridas anteriores: no confiar solo en el resumen del script):
+     - `grep -c "ERROR"` sobre el log completo: 0 coincidencias.
+     - Verificación independiente de frescura: `pagos.MAX(moment)` en Desarrollo quedó en `2026-08-10 09:58:25`, coincide con el momento real en que esa tabla se extrajo dentro de la corrida (inició 09:55:40) -- confirma que la carga real ocurrió, no es un caso del bug histórico de fallo silencioso.
+     - Las 9 tablas con diferencias de conteo (`abonos`, `lotes`, `lotes_detalles`, `lotes_detalles_empleados_asignados`, `ordenes`, `ordenes_fila_orden`, `ordenes_observaciones`, `ordenes_productos`, `pagos`) difieren solo 1-8 filas cada una -- drift esperado por tráfico real en Producción durante los ~30 minutos que tardó la extracción, mismo patrón ya visto y documentado en las 2 corridas exitosas previas (2026-08-03 y 2026-08-06).
+  3. El paso [7/8] (tablas parciales) reportó las columnas ya conocidas del rediseño de monedas (`caja.id_moneda`, `metodos_de_pago.id_moneda/id_metodo_pago`, `retiros.id_moneda/id_metodo_pago/id_caja_cierres`) más `ordenes.moment_entregada` y los gaps preexistentes ya documentados (`ordenes_productos`/`presupuestos_productos.multiplicador_porcentaje`, `sizes.eliminado`) -- y un gap NUEVO no visto en corridas anteriores: `gastos.eliminado`. Se investigó de inmediato: la columna tiene `DEFAULT 0` real y `NOT NULL` en el esquema de Postgres (igual que `sizes.eliminado`), así que las filas cargadas quedaron correctamente en `eliminado=0` sin necesidad de backfill -- verificado con `SELECT eliminado, COUNT(*) FROM gastos GROUP BY eliminado` (2/2 filas en 0).
+  4. Se ejecutó `backfill_ids_moneda_metodo_194.sh`: resolvió 100% de las filas pendientes (`metodos_de_pago` 8441/8441, `caja` 2288/2288, `retiros` 1/1), 0 filas sin resolver.
+  5. Se ejecutó `backfill_moment_entregada_194.sh`: resolvió 6224/6224 órdenes `entregada` que quedaron con `moment_entregada` en NULL tras el clon (columna exclusiva de Postgres, Producción aún no la tiene), 0 sin resolver.
+  6. La sincronización de datos centrales (`api_empresas`, empresa 194) se ejecutó automáticamente al final del clon principal (ya integrada desde el 2026-08-06), sin novedades.
+
+- **Inconvenientes y Desafíos:** El código de salida 1 del script principal generó una notificación de "falló" a nivel de la tarea en segundo plano, lo que obligó a investigar el log completo en detalle antes de confirmar al usuario que todo había salido bien -- distinguir entre "advertencias esperadas" (drift de conteos, tablas parciales conocidas) y un fallo real fue el paso más importante de esta tarea, siguiendo la lección ya documentada de corridas anteriores.
+
+- **Decisión Final y Justificación:** Se dio por exitosa la clonación tras verificar independientemente (no solo el resumen) que no hubo errores reales de carga y que los datos están genuinamente frescos. El gap nuevo (`gastos.eliminado`) se resolvió sin backfill al confirmar que el `DEFAULT 0` del esquema ya lo cubre -- mismo criterio ya aplicado a `sizes.eliminado`, evita escribir un backfill innecesario.
+
+- **Herramienta(s) Utilizada(s):** `Bash` (ejecución de los scripts existentes en segundo plano, `ssh`, `psql`, `grep`).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - 0 líneas "ERROR" en el log completo de la carga.
+  - `pagos.MAX(moment)` en Desarrollo coincide con el momento real de extracción dentro de la corrida (frescura confirmada de forma independiente al resumen del script).
+  - Ambos backfills reportaron 0 filas sin resolver.
+  - `gastos.eliminado` verificado con `DEFAULT 0` aplicado correctamente a las filas cargadas.
+  - Efecto colateral positivo verificado: el hallazgo pendiente de la corrida anterior (`products_prices` con 3 filas extra en Desarrollo) quedó resuelto automáticamente por el `TRUNCATE`+`COPY` completo de esta corrida (365=365 exacto).
+
+- **Logro Conseguido:** Desarrollo quedó con datos 100% frescos de Producción para la empresa 194, incluyendo los campos exclusivos de Postgres correctamente resueltos (moneda/método de pago, fecha real de entrega), sin necesidad de intervención manual más allá de correr los 2 backfills ya preparados de antemano. Se identificó y documentó un gap nuevo (`gastos.eliminado`) para que futuras corridas no tengan que volver a investigarlo.
+
+- **Observaciones:** Ninguna adicional.
+
+- **Respuesta:** Se trajeron datos frescos de Producción a Desarrollo (empresa 194) con éxito -- verificado con datos reales (frescura de `pagos.MAX(moment)`, 0 errores en el log), no solo con el resumen del script. Se corrieron los 2 backfills necesarios para los campos exclusivos de Postgres (moneda/método de pago en pagos/caja/retiros, y fecha real de entrega en órdenes), ambos 100% resueltos. Se encontró un gap nuevo (`gastos.eliminado`) que no necesitó backfill por tener un valor por defecto seguro en el esquema.
