@@ -1050,6 +1050,15 @@ return function (App $app) {
                 ];
 
                 // 3. PAGOS SEMANALES (Sin JOIN a lotes, usando 'moment' de pagos)
+                // Los pagos de Diseño NUNCA llevan pagos.id_departamento poblado (se
+                // identifican por pagos.detalle = 'Diseño'); los de Impresión sí llevan
+                // id_departamento = 1 de forma consistente. Verificado con datos reales
+                // el 2026-08-10 -- filtrar solo por id_departamento aquí dejaría el
+                // gráfico de Pagos Semanales de Diseño siempre vacío.
+                $filtroDepartamentoPagos = $id_departamento == 7
+                    ? "p.detalle = 'Diseño'"
+                    : "p.id_departamento = $id_departamento";
+
                 if (DB_DRIVER === 'pgsql') {
                     $sqlPagos = "SELECT
                             SUM(p.monto_pago) as total_pagado,
@@ -1057,17 +1066,19 @@ return function (App $app) {
                             p.moment::date as fecha
                         FROM pagos p
                         WHERE p.id_empleado = $id_empleado
+                        AND $filtroDepartamentoPagos
                         AND p.estatus = 'aprobado'
                         AND EXTRACT(WEEK FROM p.moment) = EXTRACT(WEEK FROM NOW())
                         AND EXTRACT(YEAR FROM p.moment) = EXTRACT(YEAR FROM NOW())
                         GROUP BY p.moment::date";
                 } else {
-                    $sqlPagos = "SELECT 
+                    $sqlPagos = "SELECT
                             SUM(p.monto_pago) as total_pagado,
                             DATE_FORMAT(p.moment, '%W') as dia,
                             DATE(p.moment) as fecha
                         FROM pagos p
                         WHERE p.id_empleado = $id_empleado
+                        AND $filtroDepartamentoPagos
                         AND p.estatus = 'aprobado'
                         AND YEARWEEK(p.moment, 1) = YEARWEEK(NOW(), 1)
                         GROUP BY DATE(p.moment)";
@@ -1253,23 +1264,25 @@ return function (App $app) {
                 if (DB_DRIVER === 'pgsql') {
                     $sqlPagos = "SELECT
                             SUM(p.monto_pago) as total_pagado,
-                            TO_CHAR(ldea.fecha_terminado, 'Day') as dia,
+                            TO_CHAR(MAX(ldea.fecha_terminado), 'Day') as dia,
                             ldea.fecha_terminado::date as fecha
                         FROM pagos p
                         JOIN lotes_detalles_empleados_asignados ldea ON p.id_lotes_detalles = ldea._id
                         WHERE p.id_empleado = $id_empleado
+                        AND p.id_departamento = $id_departamento
                         AND p.estatus = 'aprobado'
                         AND EXTRACT(WEEK FROM ldea.fecha_terminado) = EXTRACT(WEEK FROM NOW())
                         AND EXTRACT(YEAR FROM ldea.fecha_terminado) = EXTRACT(YEAR FROM NOW())
                         GROUP BY ldea.fecha_terminado::date";
                 } else {
-                    $sqlPagos = "SELECT 
+                    $sqlPagos = "SELECT
                             SUM(p.monto_pago) as total_pagado,
                             DATE_FORMAT(ldea.fecha_terminado, '%W') as dia,
                             DATE(ldea.fecha_terminado) as fecha
                         FROM pagos p
                         JOIN lotes_detalles_empleados_asignados ldea ON p.id_lotes_detalles = ldea._id
                         WHERE p.id_empleado = $id_empleado
+                        AND p.id_departamento = $id_departamento
                         AND p.estatus = 'aprobado'
                         AND YEARWEEK(ldea.fecha_terminado, 1) = YEARWEEK(NOW(), 1)
                         GROUP BY DATE(ldea.fecha_terminado)";
