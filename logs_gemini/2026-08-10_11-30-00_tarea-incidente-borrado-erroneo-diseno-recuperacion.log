@@ -1,0 +1,45 @@
+- **Solicitud del Usuario:** "Ya lo probé, tenía un formulario vacío en la parte superior y un formulario con imagen subida, al probar eliminar el formulario vacío me eliminó el otro formulario con imagen, sí mostró el confirm pero el botón eliminó el formulario incorrecto." Luego, al pedir el número de orden para investigar: "la orden es 6515".
+
+- **Fecha y Hora:** 2026-08-10 11:30:00
+
+- **Proyecto(s):** Backend (investigación, fix y recuperación de datos) + Ambos (fix de frontend, ver bitácora homóloga en `app_multi`)
+
+- **Archivos Involucrados:**
+  - `app/routes/production.php` (fix: `ORDER BY` sin desempate en `GET /sse/diseno/{id_empleado}`)
+  - Datos en `api_emp_194` (Desarrollo/Postgres): tablas `disenos`/`revisiones`, filas `_id=1067`/`_id=1066` recuperadas
+  - `app_multi/components/disenosse/uploadPropuestaDisenador.vue` (fix real del bug, en el otro repo)
+
+- **Commits Relacionados:**
+  - Backend: `737ea2d` (rama `feature/postgresql-support`)
+  - Frontend: `7739798` (rama `refactor/modular-routes`, ver bitácora homóloga)
+
+- **Acción Realizada:**
+  1. **Diagnóstico de la causa raíz real** (no solo el síntoma reportado): se identificó que `components/disenosse/uploadPropuestaDisenador.vue` usaba `v-for="(rev, index) in misRevisiones" :key="index"` -- un antipatrón real de Vue: si el orden del array cambia entre una carga y otra, Vue reutiliza la instancia del componente por POSICIÓN, no por identidad, arrastrando estado interno (`miRevision`, `showCard`, `tipoDiseno`, fijados solo una vez en `mounted()`) de una revisión distinta a la que ahora corresponde a esa posición.
+  2. Se encontró la causa que HABILITABA ese reordenamiento: la consulta real detrás de `GET /sse/diseno/{id_empleado}` (`production.php:817-820`, la que de verdad se ejecuta -- hay una consulta anterior comentada/reemplazada en el mismo bloque) ordenaba solo `ORDER BY a.id_orden ASC`, sin ningún criterio de desempate entre revisiones de la MISMA orden -- Postgres no garantiza orden estable entre ejecuciones para filas empatadas en la clave de ordenamiento. Corregido agregando `a._id DESC` como desempate (más reciente primero).
+  3. **Investigación forense del incidente real** (con el número de orden confirmado por el usuario, 6515): se revisó el access log de LiteSpeed (`/usr/local/lsws/logs/api.nineteengreen.com... ` vía `grep`) para encontrar la petición `DELETE` real hecha desde el navegador (no las de prueba por `curl`) -- se encontró `DELETE /disenos/revision/1066` a las `11:13:18`, exitosa (200).
+  4. Se investigó qué era la fila `revisiones._id=1066` en Desarrollo -- ya no existía (borrada), así que se intentó reconstruirla desde el backup previo a la clonación de esta misma mañana (`api_emp_194_pre_migracion_20260810_095540.dump`). **Primer intento erróneo**: se infirió el `id_diseno` padre asumiendo (incorrectamente) que coincidía numéricamente con `disenos._id=1066` -- ese número resultó pertenecer a un proyecto de diseño de la orden 6504, totalmente distinto y no relacionado. Se corrigió consultando directamente **Producción** (MySQL, `vps-contabo-prod`, solo lectura, credenciales centrales `api_adminemp`) por el registro real `revisiones._id=1066`, que confirmó: `id_diseno=1067`, `id_orden=6515` (coincide exactamente con lo reportado por el usuario), `id_product=91`, `estatus='Esperando Respuesta'` (nunca estuvo aprobado, por eso el guard de 403 no impidió el borrado), `url_image` apuntando al CDN de Producción, `moment='2026-08-06 18:45:12'`.
+  5. **Hallazgo clave que redujo la gravedad real del incidente**: como el `DELETE /disenos/revision/{id}` de este endpoint SOLO opera contra la base de Desarrollo (Postgres), y jamás toca Producción (MySQL, servidor separado), el registro original en Producción NUNCA se vio afectado -- se confirmó consultando Producción directamente y viéndolo intacto. La "pérdida de datos" quedó acotada por completo al espejo de pruebas de Desarrollo, no a un dato de negocio real.
+  6. **Recuperación**: se reconstruyó la secuencia completa del incidente cruzando timestamps: la orden 6515 ya tenía en Desarrollo (desde el clon de esta mañana) el diseño real `disenos=1067`/`revisiones=1066` (con imagen, sin aprobar); a las 10:31:56 el usuario creó una revisión NUEVA y vacía para la misma orden (`disenos=1075`/`revisiones=1074`) probando "+ Nuevo Diseño"; al intentar borrar esa revisión vacía, el bug de `:key` hizo que se borrara la 1066 en su lugar; el usuario, sin saberlo, terminó subiendo una imagen a la revisión 1074 (la que sí sobrevivió), dejando la orden con una revisión de más (1074) y la original (1066/1067) faltante. Se restauró `disenos._id=1067` y `revisiones._id=1066` en Desarrollo con los valores EXACTOS obtenidos de Producción (mismo `_id`, mismos datos, misma URL de imagen -- consistente con el patrón ya existente de otras filas clonadas, que también apuntan al CDN de Producción sin reescribir la URL).
+  7. Verificado: la orden 6515 en Desarrollo ahora muestra correctamente las 2 revisiones (la original restaurada `1066` y la nueva `1074` creada hoy por el usuario).
+
+- **Inconvenientes y Desafíos:**
+  - El primer intento de identificar el registro borrado usando el backup local llevó a una conclusión INCORRECTA (asumir que el `id_diseno` coincidía numéricamente con otro `_id` de la tabla `disenos` que resultó pertenecer a una orden distinta, 6504) -- se corrigió consultando la fuente autoritativa real (Producción) en vez de confiar en una suposición no verificada, evitando reportar información falsa al usuario.
+  - El backup de esta misma mañana (previo a la clonación) NO contenía el registro, lo cual inicialmente pareció un problema -- se determinó que es el comportamiento ESPERADO: ese backup es del estado de Desarrollo ANTES de la clonación (desactualizado, del clon anterior del 2026-08-06), y el registro perdido fue creado en Producción el mismo 2026-08-06 pero después del clon de esa fecha, por lo que recién entró a Desarrollo con el clon de HOY.
+
+- **Decisión Final y Justificación:** Se optó por restaurar el registro exacto desde Producción (fuente autoritativa, con los mismos `_id` que ya usaba Desarrollo, preservando todas las relaciones/FKs sin necesidad de reindexar nada) en vez de re-correr el protocolo completo de clonación (que habría sido mucho más lento y hubiera afectado datos ya modificados hoy en Desarrollo por otras pruebas). Se decidió también corregir el `ORDER BY` sin desempate en el backend, no solo el `:key` del frontend, porque ambos son causas reales del mismo bug -- corregir solo uno habría dejado el sistema funcionalmente correcto pero frágil ante la próxima vez que Postgres decida devolver las filas en otro orden.
+
+- **Herramienta(s) Utilizada(s):** `Edit`, `Bash` (`ssh`, `psql`, `mysql` contra Producción de solo lectura, `pg_restore` a una base de datos temporal desechable, `grep` sobre access log, `git`, `deploy_backend.sh`).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - Access log de LiteSpeed confirmó la petición `DELETE` real (id 1066) hecha desde el navegador, distinguiéndola de las peticiones de prueba por `curl` hechas antes.
+  - Datos verificados contra Producción (solo lectura) como fuente autoritativa antes de restaurar nada.
+  - Estado final de la orden 6515 en Desarrollo verificado con las 2 revisiones esperadas presentes.
+  - Base de datos temporal de investigación forense (`temp_forense_194`) eliminada al terminar, sin dejar rastro.
+
+- **Logro Conseguido:** Se corrigió la causa raíz real (dos bugs relacionados: `ORDER BY` sin desempate en el backend + `:key` inestable en el frontend) del incidente reportado por el usuario, y se recuperó el 100% del dato afectado desde la fuente autoritativa (Producción, nunca tocada por el bug), dejando Desarrollo exactamente como debía estar. Se evitó reportar una conclusión forense incorrecta al haberla verificado contra la fuente real antes de comunicarla.
+
+- **Observaciones:** Este incidente confirma la importancia de usar identificadores estables (`:key`) en listas Vue que puedan reordenarse, especialmente cuando hay acciones destructivas (borrado) atadas a un ítem específico de la lista -- lección aplicable a cualquier otro `v-for` del proyecto que use `index` como key sobre datos que puedan reordenarse entre cargas.
+
+- **Respuesta:** Se identificó la causa raíz completa (dos bugs relacionados: falta de desempate en el `ORDER BY` del backend + uso de `index` como `:key` en el frontend, que en combinación causaron que el botón operara sobre la revisión equivocada) y se corrigieron ambos, desplegados en Desarrollo. Se investigó a fondo el diseño borrado por error (orden 6515, revisión con imagen del 2026-08-06) y se confirmó que Producción nunca fue tocada -- el dato original seguía intacto ahí. Se restauró el registro exacto en Desarrollo desde esa fuente, dejando la orden 6515 con sus 2 revisiones correctas otra vez.
