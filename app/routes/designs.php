@@ -555,7 +555,7 @@ return function (App $app) {
       'sql_rev' => $sqlRevision,
       'id_diseno_nuevo' => $id_diseno_nuevo,
       'id_revision_nuevo' => $id_revision_nuevo
-    ]);
+    ], JSON_NUMERIC_CHECK);
     $response->getBody()->write($payload);
     return $response->withHeader('Content-Type', 'application/json')->withStatus(201);  // 201 Created
   });
@@ -658,9 +658,13 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // Todos los diseños terminados
+  // Todos los diseños terminados (con filtros opcionales de id_empleado y días)
   $app->get('/disenos/terminados', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
+    $params = $request->getQueryParams();
+
+    $idEmpleado = isset($params['id_empleado']) && $params['id_empleado'] !== '' ? (int)$params['id_empleado'] : null;
+    $dias = isset($params['dias']) && $params['dias'] !== '' ? (int)$params['dias'] : 30;
 
     $object['fields'][0]['key'] = 'orden';
     $object['fields'][0]['label'] = 'Orden';
@@ -689,7 +693,22 @@ return function (App $app) {
     $object['fields'][8]['key'] = 'imagen';
     $object['fields'][8]['label'] = 'Imagen';
 
-    // $sql = "SELECT a.id_orden orden, b.cliente_nombre cliente, c.nombre disenador, b.fecha_inicio inicio, b.fecha_entrega entrega, a.tipo, b._id imagen FROM disenos a JOIN ordenes b ON a.id_orden = b._id JOIN empleados c ON a.id_empleado = c._id WHERE a.terminado = 1;";
+    $whereConditions = ["a.terminado = 1", "(b.status != 'entregada' OR b.status != 'cancelada')"];
+    $sqlQueryParams = [];
+
+    if ($idEmpleado) {
+      $whereConditions[] = "a.id_empleado = ?";
+      $sqlQueryParams[] = $idEmpleado;
+    }
+
+    if ($dias > 0) {
+      $intervalExpr = DB_DRIVER === 'pgsql'
+        ? "CURRENT_TIMESTAMP - INTERVAL '{$dias} days'"
+        : "DATE_SUB(NOW(), INTERVAL {$dias} DAY)";
+      $whereConditions[] = "a.moment >= {$intervalExpr}";
+    }
+
+    $whereSql = implode(' AND ', $whereConditions);
 
     $sql = "SELECT
             a.id_orden orden,
@@ -709,15 +728,14 @@ return function (App $app) {
         JOIN ordenes b ON
             a.id_orden = b._id
         LEFT JOIN revisiones d ON a._id = d.id_diseno
-        -- JOIN empleados c ON
         JOIN api_empresas.empresas_usuarios c ON 
             a.id_empleado = c.id_usuario
         WHERE
-            a.terminado = 1 AND (b.status != 'entregada' OR b.status != 'cancelada')";
+            {$whereSql}";
 
     $object['sql'] = $sql;
 
-    $object['items'] = $localConnection->goQuery($sql);
+    $object['items'] = $localConnection->goQuery($sql, $sqlQueryParams);
 
     $localConnection->disconnect();
 

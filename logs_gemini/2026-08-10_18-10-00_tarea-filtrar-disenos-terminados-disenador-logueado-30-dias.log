@@ -1,0 +1,25 @@
+- **Solicitud del Usuario:** "Ahora en la sección 'Diseños terminados' tenemos que se están mostrando los diseños de todos los diseñadores, se deben mostrar solo los diseños del diseñador logueado, y no tienen un limite de fechas, vamos a mostrar los registros de los últimos 30 dias unicamente en esta pagina y que sean solo del diseñador logueado"
+
+- **Fecha y Hora:** 2026-08-10 18:10:00
+
+- **Proyecto(s):** Backend (`ninesys-api`)
+
+- **Archivos Involucrados:**
+  - `ninesys-api/app/routes/designs.php`
+
+- **Commits Relacionados:** Pendiente de commitear
+
+- **Acción Realizada:**
+  1. Se actualizó el endpoint `GET /disenos/terminados` en `designs.php` para recibir query params opcionales: `id_empleado` y `dias` (con default 30).
+  2. Se agregó la condición dinámica de filtrado por diseñador `a.id_empleado = ?`.
+  3. Se agregó la restricción de fecha para los últimos 30 días usando la expresión compatible `DB_DRIVER === 'pgsql' ? "CURRENT_TIMESTAMP - INTERVAL '30 days'" : "DATE_SUB(NOW(), INTERVAL 30 DAY)"`.
+
+- **Inconvenientes y Desafíos:** Ninguno.
+
+- **Decisión Final y Justificación:** Con este cambio, el backend soporta tanto consultas generales (para administradores si fuera necesario en el futuro) como consultas estrictamente acotadas por diseñador y período de 30 días.
+
+- **Herramienta(s) Utilizada(s):** `replace_file_content`, `run_command` (`git`, `deploy_backend.sh`), `write_to_file`.
+
+- **Resultado:** Éxito.
+
+- **Verificación:** Código actualizado y preparado para despliegue en Desarrollo.
