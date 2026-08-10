@@ -1,0 +1,49 @@
+- **Solicitud del Usuario:** "OK voy a probar esto, me preocupa que en la base de datos de producción todavía quedan existiendo estos 402 registros y cuando traigamos los datos frescos los va a volver a crear... ¿Qué solución le damos a esto?" -- seguido de confirmación explícita para desplegar el fix completo a Producción y limpiar los registros huérfanos existentes ahí.
+
+- **Fecha y Hora:** 2026-08-10 14:50:00
+
+- **Proyecto(s):** Ambos + limpieza de datos en Producción
+
+- **Archivos Involucrados:**
+  - `app/routes/designs.php` (rama `refactor/modular-routes`, portados los cambios ya probados en Desarrollo)
+  - `app/routes/production.php` (rama `refactor/modular-routes`, mismo fix de `ORDER BY`)
+  - Datos en `api_emp_194` **Producción** (MySQL): 405 filas de `revisiones` eliminadas
+
+- **Commits Relacionados:**
+  - Backend: `8b58a3d` (rama `refactor/modular-routes`)
+  - Frontend: N/A -- `app_multi` usa una sola rama (`refactor/modular-routes`) para ambos entornos, el commit `2b39867` de hoy ya estaba ahí, solo faltaba desplegarlo.
+
+- **Acción Realizada:**
+  1. Se investigó (solo lectura, contra Producción vía credenciales centrales de solo consulta) y se confirmó que el problema es real y activo: **405 revisiones huérfanas** en Producción (vs. 402 encontradas en Desarrollo antes de limpiarlas), con **2 creadas ese mismo día** en vivo -- confirmando que el bug de "+ Nuevo Diseño crea de inmediato" seguía activo en Producción sin ningún fix, mientras que Desarrollo ya lo tenía corregido desde antes en esta misma sesión.
+  2. Se determinó el alcance real del trabajo: el **frontend** (`app_multi`) usa una única rama git para ambos entornos (Desarrollo y Producción se diferencian solo por variables de entorno en el build, no por rama) -- el código de hoy ya estaba listo, solo faltaba correr el script de despliegue apuntando a Producción. El **backend** (`ninesys-api`) sí usa dos ramas separadas (`feature/postgresql-support` para Desarrollo/Postgres, `refactor/modular-routes` para Producción/MySQL) -- confirmado que la rama de Producción NO tenía ninguno de los 4 cambios de hoy relacionados a este flujo.
+  3. Se creó un `git worktree` aislado (`/tmp/ninesys-api-prod-worktree`) en la rama `refactor/modular-routes`, para no interferir con cambios sin commitear ajenos ya presentes en el directorio de trabajo principal (ver hallazgos previos de esta sesión sobre `msg_service.php` y archivos de prueba sueltos). Se portaron ahí, verificando compatibilidad con MySQL (`LocalDB.php` de esta rama usa el mismo patrón de `goQuery()`/`insert_id` con parámetros, sin nada específico de Postgres):
+     - `POST /disenos/nuevo-con-revision` ahora también devuelve `id_revision_nuevo`.
+     - Nuevo `DELETE /disenos/revision/{id_revision}` (mismo comportamiento que en Desarrollo: 403 si `Aprobado`, nunca borra `disenos`).
+     - `GET /sse/diseno/{id_empleado}`: mismo desempate estable (`a._id DESC`) en el `ORDER BY`.
+  4. `php -l` sobre ambos archivos portados, commit y push directo a `refactor/modular-routes` desde el worktree (sin tocar el checkout principal), luego se eliminó el worktree.
+  5. **Despliegue a Producción** (con autorización explícita del usuario, siguiendo el workflow obligatorio `validar-seguridad-despliegue.md`): backend vía `ninesys-hub/bin/deploy_backend.sh` (opción 1, clave de seguridad del propio script) y frontend vía `ninesys-hub/bin/deploy.sh` (opción 1, misma clave).
+  6. Verificación en vivo inmediatamente después del despliegue del backend: se probó `POST /disenos/nuevo-con-revision` directo contra `api.nineteencustom.com` (Producción real) -- confirmó `id_revision_nuevo` en la respuesta, pero **esto creó una fila real en la orden 6510 de Producción** (dato real, no de prueba) -- se eliminó de inmediato con el propio `DELETE /disenos/revision/{id}` recién desplegado, verificado como limpio.
+  7. **Limpieza de los 405 registros huérfanos en Producción:** backup previo (`mysqldump -u api_user_194 ... disenos revisiones`, en el VPS de Producción). Se capturó el baseline de órdenes activas visibles por diseñador (`disenos WHERE terminado=0 GROUP BY id_empleado`) antes de tocar nada. A diferencia de la limpieza de Desarrollo, esta vez **no se necesitó la lógica de "disenos seguros de borrar"**: se decidió (aprendiendo de la limpieza anterior, donde ese cálculo tuvo un bug real) NO tocar ningún registro de `disenos` en absoluto, solo las `revisiones` huérfanas -- estructuralmente imposible que esto cambie la cantidad de órdenes visibles, ya que esa cuenta depende solo de `disenos.id_empleado`/`terminado`, nunca de si tiene revisiones. Borrado ejecutado en una transacción simple (`START TRANSACTION`/`DELETE`/`COMMIT`), verificado con conteo de candidatos restantes (0) inmediatamente antes del `COMMIT`.
+  8. Verificación posterior: conteo de órdenes activas por diseñador idéntico al baseline (Maru 96, Enemias 236, Andreina 47, +3 con 1 c/u -- sin cambios). Verificado también en vivo contra `GET /sse/diseno/3` (Producción real) -- cantidad de órdenes en curso coherente (la diferencia entre "96 asignaciones totales" y "3 en la cola activa" es esperada, la mayoría de esas 96 son órdenes ya finalizadas/entregadas que no aparecen en la cola de trabajo en curso).
+
+- **Inconvenientes y Desafíos:**
+  - Había cambios sin commitear ajenos a esta tarea en el checkout principal del backend (`msg_service.php`, archivos de prueba) -- se evitó tocarlos usando un `git worktree` aislado en vez de hacer `git checkout` de la rama de Producción directamente sobre el directorio de trabajo sucio.
+  - La primera verificación en vivo del endpoint recién desplegado en Producción creó sin querer un registro real (no de prueba) en una orden real -- se corrigió de inmediato con el propio endpoint de borrado, sin dejar rastro, pero sirve como recordatorio de que "probar en Producción" siempre implica datos reales, incluso para una verificación rápida.
+
+- **Decisión Final y Justificación:** Se decidió no replicar en Producción la lógica de "borrar también algunos `disenos` huérfanos" usada en Desarrollo -- dado que esa lógica ya había demostrado tener un bug real (contar mal los hermanos del mismo lote), y que el beneficio (limpiar un puñado de filas más de una tabla ya pequeña) no justifica repetir ese riesgo en Producción. Limitar la limpieza a solo `revisiones` es estructuralmente imposible que rompa una asignación, eliminando por completo esa clase de riesgo.
+
+- **Herramienta(s) Utilizada(s):** `git worktree`, `Read`, `Edit`, `Bash` (`php -l`, `ssh`, `mysql` con transacciones explícitas, `mysqldump`, `curl`, `git`, `deploy_backend.sh`, `deploy.sh`), `AskUserQuestion` para confirmar explícitamente el despliegue a Producción antes de tocarla (workflow `validar-seguridad-despliegue.md` cumplido).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - `php -l` sin errores en los archivos portados.
+  - `POST /disenos/nuevo-con-revision` y `DELETE /disenos/revision/{id}` verificados en vivo contra Producción real (con limpieza inmediata del dato de prueba creado sin querer).
+  - Conteo de órdenes activas por diseñador idéntico antes/después de la limpieza (Maru 96, Enemias 236, Andreina 47, +3 con 1 c/u).
+  - Backup previo disponible en `vps-contabo-prod:/tmp/api_emp_194_disenos_revisiones_pre_limpieza_20260810_144633.sql` por si hiciera falta revertir.
+
+- **Logro Conseguido:** Producción quedó con el mismo fix que Desarrollo -- el bug de acumulación de formularios vacíos dejó de estar activo en el sistema real, y se limpiaron los 405 registros históricos que venían acumulándose ahí desde julio de 2025, sin afectar ninguna asignación real de ningún diseñador. Cierra por completo la preocupación del usuario de que el próximo clon Producción→Desarrollo reintrodujera la basura ya limpiada.
+
+- **Observaciones:** El mismo hallazgo menor de Desarrollo (registros `disenos` duplicados vacíos para una orden específica muy probada) no aplica aquí -- Producción no fue usada como conejillo de indias durante las pruebas de hoy, así que no debería tener ese artefacto puntual.
+
+- **Respuesta:** Se desplegó el fix completo a Producción (backend portado a la rama MySQL, frontend ya estaba listo en su única rama) y se limpiaron los 405 formularios vacíos huérfanos que existían ahí desde julio de 2025 -- verificado que ninguna orden perdió su asignación. El próximo clon Producción→Desarrollo ya no va a reintroducir esta basura, porque la fuente (Producción) ya está limpia y el bug que la generaba ya no existe.
