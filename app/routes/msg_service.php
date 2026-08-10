@@ -115,6 +115,9 @@ return function (App $app) {
         ));
 
         // --- 5. Respuesta ---
+        $driver = defined('DB_DRIVER') ? DB_DRIVER : 'mysql';
+        $port   = defined('DB_PORT') ? (int) DB_PORT : ($driver === 'pgsql' ? 5432 : 3306);
+
         $payload = [
             'id_empresa'  => (int) $empresa['id_empresa'],
             'nombre'      => $empresa['nombre'],
@@ -122,6 +125,8 @@ return function (App $app) {
             'db_user'     => $empresa['db_user'],
             'db_password' => $empresa['db_password'],
             'db_name'     => $empresa['db_name'],
+            'db_driver'   => $driver,
+            'db_port'     => $port,
         ];
 
         $response->getBody()->write(json_encode($payload));
@@ -528,11 +533,12 @@ return function (App $app) {
             // cross-database no existe en una sola conexión (rompe con "schema does not existe").
             $dbName = DB_DRIVER === 'pgsql' ? '' : "`{$tenantDb}`.";  // Backticks para seguridad (solo mysql)
 
+            $likeOp = DB_DRIVER === 'pgsql' ? 'ILIKE' : 'LIKE';
             if ($onlyDesign) {
                 $whereClause = 'p.es_diseno = 1';
                 $bindParams = [];
             } else {
-                $whereClause = 'p.product LIKE ? AND (p.fisico = 1 OR p.es_diseno = 1)';
+                $whereClause = "p.product {$likeOp} ? AND (p.fisico = 1 OR p.es_diseno = 1)";
                 $bindParams = ['%' . $searchTerm . '%'];
             }
 

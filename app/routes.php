@@ -708,6 +708,10 @@ return function (App $app) {
       $db_host = getenv('DB_HOST') ?: 'localhost';
       $db_port = getenv('DB_PORT') ?: '5432';
 
+      // Guardar credenciales de conexión de la BD en la tabla central empresas
+      $stmtCredentials = $pdo->prepare('UPDATE empresas SET db_host = ?, db_user = ?, db_password = ?, db_name = ? WHERE id_empresa = ?');
+      $stmtCredentials->execute([$db_host, EMPRESAS_USER, EMPRESAS_PASS, $db_name, $id_empresa]);
+
       try {
         error_log("DEBUG: Creando BD Postgres {$db_name}");
         $pdo->exec('CREATE DATABASE "' . $db_name . '" OWNER "' . EMPRESAS_USER . '"');
