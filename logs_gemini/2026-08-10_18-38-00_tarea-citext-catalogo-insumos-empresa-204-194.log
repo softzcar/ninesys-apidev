@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** "/plan ok alica la solución para las nuevas empresas, para la esta empresa y la empresa 194 tmbién"
+- **Diagnóstico Realizado:**
+  - Siguiendo la convención técnica de PostgreSQL adoptada en el proyecto (documentada en `logs_gemini/2026-08-07_10-35-00_tarea-migracion-citext-case-insensitive.log`), se requiere migrar la columna `nombre` de `catalogo_insumos_productos` a tipo `citext` para garantizar paridad case-insensitive con MySQL en comparaciones y restricciones `UNIQUE`.
+- **Acciones Realizadas:**
+  1. **Migración en Bases de Datos Remotas (`vps-contabo-dev`)**:
+     - En `api_emp_204`: Eliminada la fila de prueba duplicada `_id: 11` (`PApel DTF 28cm`), ejecutado `CREATE EXTENSION IF NOT EXISTS citext;`, `ALTER TABLE catalogo_insumos_productos ALTER COLUMN nombre TYPE citext;` y resincronizada la secuencia `setval`.
+     - En `api_emp_194`: Ejecutado `CREATE EXTENSION IF NOT EXISTS citext;`, `ALTER TABLE catalogo_insumos_productos ALTER COLUMN nombre TYPE citext;` y resincronizada la secuencia `setval`.
+  2. **Actualización de Plantilla de Empresas Nuevas**:
+     - En `ninesys-api/public/model/create_new_company_api_emp_N_postgres.sql`, declarada la columna `nombre` de `catalogo_insumos_productos` como `citext NOT NULL`.
+  3. **Mejora del Endpoint `POST /catalogo-insumos-productos` (`ninesys-api/app/routes/catalogs.php`)**:
+     - Al capturar una colisión de restricción única (`status === 'error'`), se realiza la consulta del registro existente `SELECT * FROM catalogo_insumos_productos WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?))` y se retorna HTTP 409 incluyendo la propiedad `existing_item` en el cuerpo JSON.
+  4. **Despliegue a Servidor Dev (`vps-contabo-dev`)**:
+     - Cambios subidos a GitHub y desplegados a `vps-contabo-dev` mediante `ninesys-hub/bin/deploy_backend.sh` (Opción 2), reseteando OPcache.
+- **Verificación:**
+  - Comprobado por `psql` que `api_emp_204` e `api_emp_194` tienen `nombre` de tipo `citext` y secuencias alineadas (`setval 9` y `setval 10`).

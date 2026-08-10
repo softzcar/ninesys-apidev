@@ -387,10 +387,14 @@ return function (App $app) {
     $result = $localConnection->goQuery($sql, [$nombre]);
 
     if (isset($result['status']) && $result['status'] === 'error') {
+      $sqlExist = 'SELECT * FROM catalogo_insumos_productos WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?))';
+      $existingItem = $localConnection->goQuery($sqlExist, [$nombre]);
       $localConnection->disconnect();
+
       $response->getBody()->write(json_encode([
         'status' => 'error',
         'message' => 'Ya existe un insumo del catálogo con ese nombre.',
+        'existing_item' => !empty($existingItem) && !isset($existingItem['status']) ? $existingItem[0] : null,
       ]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
     }
