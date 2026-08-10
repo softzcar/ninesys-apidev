@@ -568,29 +568,19 @@ return function (App $app) {
       return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
     }
 
-    $id_diseno = (int) $revision['id_diseno'];
-
-    $localConnection->beginTransaction();
+    // NUNCA se borra el registro padre en `disenos`, aunque quede sin
+    // revisiones -- ese registro es lo que mantiene al diseñador ASIGNADO a
+    // la orden (ver el query de `items` en GET /sse/diseno/{id_empleado},
+    // filtra por disenos.id_empleado). Borrarlo hacía que la orden
+    // desapareciera por completo de la tabla del diseñador tras limpiar sus
+    // borradores/envíos -- hallazgo real reportado por el usuario
+    // (2026-08-10). Si queda sin revisiones, el diseñador simplemente ve el
+    // proyecto vacío y puede volver a subir con "+ Nuevo Diseño".
     $localConnection->goQuery('DELETE FROM revisiones WHERE _id = ?', [$id_revision]);
-
-    // Si esta era la única revisión de su proyecto de diseño, eliminar
-    // también el registro padre en `disenos` para no dejarlo huérfano
-    // (un proyecto puede tener varias revisiones -- ver POST /revision/nuevo
-    // en manufacturing.php -- así que solo se limpia si ya no queda ninguna).
-    $restantes = $localConnection->goQuery('SELECT COUNT(*) as count FROM revisiones WHERE id_diseno = ?', [$id_diseno]);
-    $diseno_eliminado = false;
-    if (!empty($restantes) && (int) $restantes[0]['count'] === 0) {
-      $localConnection->goQuery('DELETE FROM disenos WHERE _id = ?', [$id_diseno]);
-      $diseno_eliminado = true;
-    }
-
-    $localConnection->commit();
-    $localConnection->disconnect();
 
     $response->getBody()->write(json_encode([
       'success' => true,
       'message' => 'Diseño eliminado correctamente.',
-      'diseno_eliminado' => $diseno_eliminado,
     ]));
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
