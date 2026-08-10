@@ -654,8 +654,7 @@ return function (App $app) {
             WHERE
                 a.id_empleado = {$args['id_empleado']} AND b.id_empleado = {$args['id_empleado']} AND a.estatus LIKE 'Esperando Respuesta'
             ORDER BY
-                a.id_orden
-            ASC
+                a.id_orden ASC, a._id DESC
         ";
     $obj['sql_revisiones'] = $sql;
     $obj['revisiones'] = $localConnection->goQuery($sql);
