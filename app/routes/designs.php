@@ -544,6 +544,57 @@ return function (App $app) {
     return $response->withHeader('Content-Type', 'application/json')->withStatus(201);  // 201 Created
   });
 
+  // Eliminar una revisión de diseño (borrador vacío o diseño ya enviado pero
+  // sin aprobar). El diseñador debe poder retirar sus propios envíos mientras
+  // trabaja en la orden; una vez aprobado, la revisión queda protegida. La
+  // imagen física se elimina desde el frontend directamente contra
+  // ninesys-cdn (mismo servicio al que ya sube las imágenes) -- este endpoint
+  // solo maneja el registro en la base de datos.
+  $app->delete('/disenos/revision/{id_revision}', function (Request $request, Response $response, array $args) {
+    $id_revision = (int) $args['id_revision'];
+    $localConnection = new LocalDB();
+
+    $revisionRows = $localConnection->goQuery('SELECT id_diseno, estatus FROM revisiones WHERE _id = ?', [$id_revision]);
+    if (empty($revisionRows)) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'La revisión no existe.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+    }
+
+    $revision = $revisionRows[0];
+    if ($revision['estatus'] === 'Aprobado') {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'No se puede eliminar un diseño ya aprobado.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
+
+    $id_diseno = (int) $revision['id_diseno'];
+
+    $localConnection->beginTransaction();
+    $localConnection->goQuery('DELETE FROM revisiones WHERE _id = ?', [$id_revision]);
+
+    // Si esta era la única revisión de su proyecto de diseño, eliminar
+    // también el registro padre en `disenos` para no dejarlo huérfano
+    // (un proyecto puede tener varias revisiones -- ver POST /revision/nuevo
+    // en manufacturing.php -- así que solo se limpia si ya no queda ninguna).
+    $restantes = $localConnection->goQuery('SELECT COUNT(*) as count FROM revisiones WHERE id_diseno = ?', [$id_diseno]);
+    $diseno_eliminado = false;
+    if (!empty($restantes) && (int) $restantes[0]['count'] === 0) {
+      $localConnection->goQuery('DELETE FROM disenos WHERE _id = ?', [$id_diseno]);
+      $diseno_eliminado = true;
+    }
+
+    $localConnection->commit();
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode([
+      'success' => true,
+      'message' => 'Diseño eliminado correctamente.',
+      'diseno_eliminado' => $diseno_eliminado,
+    ]));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
   // Todos los diseños asignados
   $app->get('/disenos/asignados', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
