@@ -530,6 +530,21 @@ return function (App $app) {
     $sqlRevision = "INSERT INTO revisiones (id_orden, id_diseno, id_empleado, id_product, revision, tipo) VALUES ({$id_orden}, {$id_diseno_nuevo}, {$id_empleado}, {$id_product}, 1, '{$tipo_diseno}')";
     $resultRevision = $localConnection->goQuery($sqlRevision);
 
+    // 5b. Obtener el ID de la revisión recién creada -- el frontend lo necesita
+    // de inmediato en el mismo flujo de clic (ahora este endpoint se llama al
+    // momento de "Enviar Diseño", no al crear el formulario vacío, así que no
+    // hay un reload posterior del que depender para enterarse del ID nuevo).
+    $id_revision_nuevo = $resultRevision['insert_id'];
+
+    if (empty($id_revision_nuevo) || $id_revision_nuevo == 0) {
+      if ($localConnection->inTransaction()) {
+        $localConnection->rollback();
+      }
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'No se pudo obtener el ID de la nueva revisión.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    }
+
     // 6. Cerrar la conexión y enviar respuesta exitosa
     $localConnection->commit();
     $localConnection->disconnect();
@@ -538,7 +553,8 @@ return function (App $app) {
       'success' => true,
       'message' => 'Nuevo proyecto de diseño y su primera revisión han sido creados.',
       'sql_rev' => $sqlRevision,
-      'id_diseno_nuevo' => $id_diseno_nuevo
+      'id_diseno_nuevo' => $id_diseno_nuevo,
+      'id_revision_nuevo' => $id_revision_nuevo
     ]);
     $response->getBody()->write($payload);
     return $response->withHeader('Content-Type', 'application/json')->withStatus(201);  // 201 Created
