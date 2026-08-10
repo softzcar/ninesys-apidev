@@ -1,0 +1,50 @@
+- **Solicitud del Usuario:** "sí, probé de nuevo y funciona correctamente, me queda la duda de por qué si creo un formulario vacío este prevalece después de recargar la página, no debería ni estar después de cerrar el modal... ¿Estamos creando algún registro al momento de crear el formulario vacío? Si es así es un error porque estaríamos creando registros en un momento en que probablemente sea un error del usuario haberlo creado... debemos crear el registro al momento de subir la imagen! si no quedarían esos registros basura en la base de datos! [...] Entonces el comportamiento esperado es que el botón cree un nuevo formulario, si no se usa al momento de cerrar el modal desaparece." Confirmado por el usuario en modo plan: limpiar también los registros basura ya existentes en Desarrollo.
+
+- **Fecha y Hora:** 2026-08-10 14:20:00
+
+- **Proyecto(s):** Ambos + limpieza de datos en Desarrollo
+
+- **Archivos Involucrados:**
+  - `app/routes/designs.php` (`POST /disenos/nuevo-con-revision` ahora también devuelve `id_revision_nuevo`)
+  - `app_multi/components/disenosse/uploadPropuestaDisenador.vue` (borradores locales)
+  - `app_multi/components/diseno/uploadPropuesta.vue` (creación diferida al momento de "Enviar Diseño")
+  - Datos en `api_emp_194` (Desarrollo): 402 filas de `revisiones` eliminadas
+
+- **Commits Relacionados:**
+  - Backend: `5e0c2c8` (rama `feature/postgresql-support`)
+  - Frontend: `395f5f5` (rama `refactor/modular-routes`)
+
+- **Acción Realizada:**
+  1. Se investigó (confirmado con el usuario) que "+ Nuevo Diseño" creaba de inmediato un registro real en `disenos`+`revisiones` (`POST /disenos/nuevo-con-revision`), antes de subir cualquier imagen -- causa de que un formulario abandonado quedara permanentemente en la base de datos.
+  2. Se diseñó (modo plan, con agente Explore + agente Plan para validar la mecánica de reactividad de Vue 2 y la estrategia de deduplicación) y aprobó un rediseño: el botón ahora solo agrega un "borrador" 100% local (array `borradores` en el componente padre); el registro real se crea recién al hacer clic en "Enviar Diseño", justo antes de subir la imagen (el CDN necesita un `id_revision` real para nombrar el archivo). Detalle completo en el plan aprobado (`/home/developer/.claude/plans/s-arma-el-plan-snug-orbit.md`).
+  3. Implementado: `POST /disenos/nuevo-con-revision` ahora valida y devuelve también `id_revision_nuevo` (aditivo, sin romper nada existente). `uploadPropuestaDisenador.vue`: `addReview()` ya no llama a la API, solo hace `push` a `borradores`; `misRevisiones` fusiona borradores + revisiones del servidor con deduplicación por `id_revision` una vez resuelto; `:key` estable por `localKey` durante toda la vida del borrador (evita perder el estado de una subida en curso al pasar de local a real -- lección directa del incidente del `:key="index"` de hoy mismo); limpieza de borradores no usados al cerrar el modal (en ambos puntos de salida de `handleHide`). `uploadPropuesta.vue`: nuevo método `crearRevisionReal()` (crea el registro real y emite el ID al padre); `postImage()` lo invoca solo si `item.id_revision === null`, antes de subir; `mounted()` salta la búsqueda de imagen en el CDN para borradores locales; `deleteDesign()` para un borrador local solo emite un evento al padre (sin llamada a la API, sin confirmación).
+  4. Verificación de sintaxis (`php -l`, `vue-template-compiler`+`@babel/core`) y despliegue a Desarrollo (backend + frontend).
+  5. Verificado en vivo: `POST /disenos/nuevo-con-revision` ahora devuelve `id_revision_nuevo` en la respuesta real.
+  6. **Limpieza de datos existentes:** investigación de solo lectura encontró 402 revisiones huérfanas (formulario vacío, nunca aprobado, sin imagen) -- mucho más que "las pruebas de hoy": el problema viene desde 2025-07-22. Desglose: Enemias (250), Maru (101), Andreina Barilla (48), y 3 más con 1 c/u. Ninguna de las últimas 24 horas (se limpiaron aparte 2 filas de prueba propias vía el endpoint real de la app antes de la investigación, para no contaminar los conteos).
+  7. Análisis de qué registros padre (`disenos`) quedarían huérfanos si se borran esas 402 revisiones: **primer intento de cálculo tenía un bug real** -- contaba como "hermano seguro" a otro `disenos` candidato que también iba a borrarse en el mismo lote, lo cual no lo hace un hermano seguro de verdad. Se detectó ANTES de aplicar nada, gracias a una verificación automática dentro de la misma transacción (un bloque `DO` que compara la cantidad de órdenes visibles por diseñador antes/después y hace `RAISE EXCEPTION` si cambia) -- la primera corrida real abortó sola al detectar que el empleado 3 pasaba de 94 a 91 órdenes visibles, sin necesidad de intervención manual para revertir (Postgres deshizo la transacción automáticamente al cerrar la conexión con error).
+  8. Corregido el cálculo (contar hermanos activos EXCLUYENDO a los que también son candidatos del mismo lote) y re-verificado en solo lectura: con la lógica correcta, ningún `disenos` quedaba con un hermano genuinamente seguro -- se decidió, por simplicidad y máxima seguridad, no borrar NINGÚN registro de `disenos` en esta limpieza (regla ya establecida hoy: nunca borrar la única asignación de un diseñador a una orden). Solo se borraron las 402 `revisiones` huérfanas.
+  9. Backup previo (`pg_dump -t disenos -t revisiones`) antes de tocar nada. Borrado ejecutado en una transacción con la misma verificación automática (`DO` + `RAISE EXCEPTION` si cambia la cantidad de órdenes visibles) -- pasó limpio, `COMMIT` aplicado. Verificado con conteo de candidatos restantes (0) y en vivo contra `GET /sse/diseno/{id_empleado}` para Maru (3) y Enemias (9): cantidad de órdenes sin cambios.
+  10. Verificación final: se investigó una alarma falsa (dos filas de la orden 6515, restauradas en un incidente anterior del mismo día, ya no existían) -- se confirmó con una restauración de solo lectura del backup recién hecho que esas filas YA estaban ausentes ANTES de correr la limpieza (el usuario las había borrado intencionalmente probando el fix, en una sesión anterior de este mismo día) -- la limpieza de hoy no las tocó, la orden 6515 sigue correctamente asignada a Maru.
+
+- **Inconvenientes y Desafíos:**
+  - El cálculo inicial de "qué `disenos` son seguros de borrar también" tenía un error real (no descontaba los candidatos del propio lote al contar hermanos) -- capturado por una verificación automática dentro de la transacción antes de que pudiera causar daño real, en vez de por inspección manual del resultado.
+  - Investigar la alarma falsa de la orden 6515 requirió restaurar el backup recién creado a una base temporal para reconstruir el estado exacto pre-limpieza, ya que la sospecha inicial (que la limpieza había borrado datos restaurados antes) resultó ser una confusión de cronología de la propia sesión, no un bug real.
+
+- **Decisión Final y Justificación:** Se optó por la opción más simple y conservadora para los `disenos` (no borrar ninguno) en vez de invertir más tiempo en una lógica de "hermanos seguros" más sofisticada -- el beneficio real (limpiar 36 filas más de una tabla ya pequeña) no justificaba el riesgo adicional, dado que ya se había demostrado en vivo que el cálculo "obvio" tenía un bug real. El objetivo principal del usuario (limpiar las revisiones huérfanas) se cumplió igual al 100%.
+
+- **Herramienta(s) Utilizada(s):** Modo plan (agentes Explore + Plan), `Read`, `Edit`, `Bash` (`php -l`, verificación de sintaxis Vue, `ssh`/`psql` con transacciones explícitas y verificación automática vía bloque `DO`, `pg_dump`/`pg_restore` a bases temporales desechables, `curl`, `git`, `deploy_backend.sh`, `deploy.sh`), `AskUserQuestion` para confirmar el alcance de la limpieza antes de ejecutarla.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+  - `php -l` y sintaxis Vue sin errores en ambos archivos modificados.
+  - `POST /disenos/nuevo-con-revision` verificado en vivo devolviendo `id_revision_nuevo`.
+  - Verificación automática (dentro de la transacción) de que la cantidad de órdenes visibles por diseñador no cambió, para las 6 corridas relevantes (el intento fallido que abortó solo, y la corrida exitosa final).
+  - Verificación en vivo post-limpieza contra `GET /sse/diseno/{id_empleado}` para Maru y Enemias.
+  - Backup previo disponible en `vps-contabo-dev:/tmp/backups_migracion_postgres/api_emp_194_disenos_revisiones_pre_limpieza_20260810_141714.dump` por si hiciera falta revertir.
+
+- **Logro Conseguido:** Se cerró de raíz un problema real y de larga data (más de un año de formularios vacíos acumulándose en la base de datos sin ninguna forma de evitarlo) con un cambio de arquitectura que lo previene hacia adelante, y se limpiaron los 402 registros ya existentes de forma segura, con una verificación automática que efectivamente detectó y evitó un error real antes de que causara pérdida de datos.
+
+- **Observaciones:** Se detectó (no corregido, fuera de alcance de esta tarea) que la orden 6515 ahora tiene 4 registros de `disenos` distintos (todos vacíos, del mismo diseñador), causando que aparezca 4 veces en la tabla de "Diseños Asignados" -- artefacto acumulado de las pruebas repetidas de hoy sobre esa orden específica, no un problema sistémico ni causado por esta limpieza. Candidato a revisar si se vuelve molesto en la práctica.
+
+- **Respuesta:** El botón "+ Nuevo Diseño" ya no crea ningún registro en la base de datos -- solo agrega un formulario local que desaparece sin dejar rastro si no se usa al cerrar el modal. El registro real se crea recién al enviar el diseño, justo antes de subir la imagen. Además se limpiaron 402 formularios vacíos que ya existían en Desarrollo desde julio de 2025 (verificado que ninguna orden perdió su asignación en el proceso, con una verificación automática que de hecho atrapó un error real en el primer intento antes de aplicarlo).
