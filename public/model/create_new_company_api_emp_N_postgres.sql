@@ -2417,9 +2417,7 @@ CREATE INDEX idx_aprobacion_clientes_id_orden ON aprobacion_clientes (id_orden, 
 CREATE INDEX idx_asistencias_id_empleado ON asistencias (id_empleado);
 CREATE INDEX idx_caja_id_empleado ON caja (id_empleado);
 CREATE INDEX idx_caja_cierres_id_empleado ON caja_cierres (id_empleado);
-CREATE UNIQUE INDEX uq_catalogo_impresoras_idx_codigo_interno ON catalogo_impresoras (codigo_interno);
 CREATE UNIQUE INDEX uq_catalogo_insumos_productos_nombre ON catalogo_insumos_productos (nombre);
-CREATE UNIQUE INDEX uq_catalogo_insumos_productos_nombre_2 ON catalogo_insumos_productos (nombre);
 CREATE UNIQUE INDEX uq_catalogo_telas__id ON catalogo_telas (_id);
 CREATE INDEX idx_check_tareas_id_ordenes_productos ON check_tareas (id_ordenes_productos);
 CREATE INDEX idx_crm_campanas_envios_id_campana ON crm_campanas_envios (id_campana);
@@ -2514,6 +2512,23 @@ CREATE INDEX idx_wa_messages_idx_deleted_at ON wa_messages (deleted_at);
 CREATE UNIQUE INDEX uq_wa_templates_uniq_name ON wa_templates (name);
 CREATE UNIQUE INDEX uq_wa_ai_agents_uniq_slug ON wa_ai_agents (slug);
 CREATE INDEX idx_wa_send_log_idx_created ON wa_send_log (created_at);
+
+-- Sincronizar secuencias identity PostgreSQL para tablas con datos iniciales pre-poblados
+SELECT setval(pg_get_serial_sequence('catalogo_impresoras', '_id'), COALESCE((SELECT MAX(_id) FROM catalogo_impresoras), 1));
+SELECT setval(pg_get_serial_sequence('catalogo_colores_tintas', '_id'), COALESCE((SELECT MAX(_id) FROM catalogo_colores_tintas), 1));
+SELECT setval(pg_get_serial_sequence('catalogo_insumos_productos', '_id'), COALESCE((SELECT MAX(_id) FROM catalogo_insumos_productos), 1));
+SELECT setval(pg_get_serial_sequence('catalogo_telas', '_id'), COALESCE((SELECT MAX(_id) FROM catalogo_telas), 1));
+SELECT setval(pg_get_serial_sequence('catalogo_tintas', '_id'), COALESCE((SELECT MAX(_id) FROM catalogo_tintas), 1));
+SELECT setval(pg_get_serial_sequence('categories', '_id'), COALESCE((SELECT MAX(_id) FROM categories), 1));
+SELECT setval(pg_get_serial_sequence('inventario', '_id'), COALESCE((SELECT MAX(_id) FROM inventario), 1));
+SELECT setval(pg_get_serial_sequence('products_attributes', '_id'), COALESCE((SELECT MAX(_id) FROM products_attributes), 1));
+SELECT setval(pg_get_serial_sequence('products_prices', '_id'), COALESCE((SELECT MAX(_id) FROM products_prices), 1));
+SELECT setval(pg_get_serial_sequence('products_tiempos_de_produccion', '_id'), COALESCE((SELECT MAX(_id) FROM products_tiempos_de_produccion), 1));
+SELECT setval(pg_get_serial_sequence('product_insumos_asignados', '_id'), COALESCE((SELECT MAX(_id) FROM product_insumos_asignados), 1));
+SELECT setval(pg_get_serial_sequence('sizes', '_id'), COALESCE((SELECT MAX(_id) FROM sizes), 1));
+SELECT setval(pg_get_serial_sequence('catalogo_paises', '_id'), COALESCE((SELECT MAX(_id) FROM catalogo_paises), 1));
+SELECT setval(pg_get_serial_sequence('catalogo_estados', '_id'), COALESCE((SELECT MAX(_id) FROM catalogo_estados), 1));
+SELECT setval(pg_get_serial_sequence('catalogo_ciudades', '_id'), COALESCE((SELECT MAX(_id) FROM catalogo_ciudades), 1));
 
 COMMIT;
 -- /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */
