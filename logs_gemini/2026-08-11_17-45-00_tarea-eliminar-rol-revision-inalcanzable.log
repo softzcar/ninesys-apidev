@@ -1,0 +1,27 @@
+- **Solicitud del Usuario:** Continuación de la auditoría del rol "Revisión" dentro de Empleados. El usuario no encontraba el link a `/revision` en la interfaz (logueado como Gladys con el departamento "Revisión" seleccionado). Tras confirmar la causa raíz, el usuario pidió eliminar el endpoint/feature: "Bueno si ese endpoint esta muerto vamo a eliminarlo para evitar confusiones posteriormente".
+- **Fecha y Hora:** 2026-08-11 17:45:00
+- **Proyecto(s):** Backend (ninesys-api) + Frontend (app_multi)
+- **Archivos Involucrados:**
+    - `app/routes/manufacturing.php` (rutas eliminadas)
+    - `components/layout/AppSidebar.vue`
+    - `components/sidebars/SidebarRevision.vue` (eliminado)
+    - `pages/revision/index.vue` (eliminado)
+    - `components/revision/selectEstatus.vue` (eliminado)
+- **Commits Relacionados:**
+    - Frontend: `011ed17`
+    - Backend: `54fd51a`
+- **Acción Realizada:**
+    1. **Diagnóstico de por qué el usuario no encontraba el link**: "Revisión" existe como dos conceptos distintos -- el departamento `_id=10` (parte del flujo de producción, `id_modulo=4` = módulo genérico "Empleado", es lo que el usuario seleccionaba) y el rol/módulo dedicado `id_modulo=6` (folder `menus/menuRevision`, el que renderiza `SidebarRevision.vue`/`/revision`). Se confirmó revisando la tabla `departamentos` completa (13 filas reales en la empresa 194) que **ninguna tiene `id_modulo=6`** -- el rol dedicado es estructuralmente inalcanzable.
+    2. **Confirmación de que es legacy huérfano, no una regresión reciente**: la plantilla maestra para empresas nuevas (`create_new_company_api_emp_N.sql`) solo siembra 8 departamentos estándar, sin "Revisión" ni `id_modulo=6`. Git history de `SidebarRevision.vue` y los 2 endpoints muestra el último toque real en `first commit`/`2026-01-12` (un commit amplio, no trabajo dirigido a esta feature).
+    3. **Verificación de alcance aislado**: confirmado por grep que los 2 endpoints backend no se referencian desde ningún otro lugar, y que el frontend (`SidebarRevision.vue`, `revision/selectEstatus.vue`, `pages/revision/index.vue`) solo se referencian entre sí y desde el mapa de sidebars.
+    4. **Eliminación**: se quitaron las 2 rutas de `manufacturing.php` (`GET /revision/trabajos`, `GET /revision/actualizar-estatus-de-pago/{estatus}/{id_pago}`), los 3 archivos frontend completos, y la entrada correspondiente en `sidebarComponentMap` de `AppSidebar.vue` (dejada como comentario explicativo en vez de simplemente desaparecer, para que quede constancia de por qué ya no está).
+    5. Desplegado a Desarrollo (backend y frontend).
+- **Inconvenientes y Desafíos:** Ninguno técnico -- el hallazgo de que la feature es legacy huérfana simplificó la decisión (eliminar en vez de corregir), evitando invertir tiempo en arreglar 3 bugs reales (JOIN roto, colisión de vocabulario en `pagos.estatus`, falta de filtro de departamento) para una funcionalidad que ningún empleado puede alcanzar hoy.
+- **Decisión Final y Justificación:** Se eliminó en vez de corregir, siguiendo el criterio ya establecido en esta sesión ("verificar uso antes de arreglar" -- si no hay ninguna referencia/alcance real, eliminar en vez de arreglar). Mantener código roto e inalcanzable no aporta nada y genera confusión (como la que tuvo el propio usuario buscando el link). Se dejó deliberadamente sin tocar la fila `id_modulo=6` en la tabla central `api_empresas.modulos` (compartida entre todas las empresas) -- es solo una etiqueta de catálogo, su existencia no causa ningún bug.
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (git, grep, ssh, curl, php -l), `deploy_backend.sh`/`deploy.sh` (opción 2).
+- **Resultado:** Éxito.
+- **Verificación:** `php -l` sin errores tras eliminar las rutas. `grep` confirmó cero referencias colgantes en ambos repos tras la eliminación. Verificado en vivo contra Desarrollo: ambos endpoints eliminados devuelven el mismo código HTTP (405) que una ruta que nunca existió, mientras que un endpoint real sigue devolviendo 200 -- confirma que la eliminación fue limpia, no un error de despliegue.
+- **Logro Conseguido:** Se eliminó una funcionalidad legacy inalcanzable con bugs reales latentes (que habrían corrompido datos de pago de haberse usado alguna vez), resolviendo de paso la confusión del usuario al no encontrar el link -- ya no hay nada que buscar, porque nunca debió haber sido buscable.
+- **Referencias de Sesión (Contexto):** N/A (sesión de Claude Code, no Antigravity/Gemini).
+- **Observaciones de Gemini:** N/A (tarea realizada por Claude).
+- **Respuesta de Gemini:** N/A (ver resumen entregado al usuario en el chat).
