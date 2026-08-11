@@ -3130,6 +3130,7 @@ return function (App $app) {
                 c.id_woo id_producto,
                 -- d.orden_proceso orden_proceso_empleado_en_departamentos,
                 c.name nombre_producto,
+                b.cliente_nombre AS cliente,
                 (SELECT nombre FROM sizes WHERE $sizeMatchExprRepos) talla,
                 {$args['orden_proceso']} orden_proceso_recibido,                
                 (SELECT orden_proceso FROM departamentos WHERE _id = a.id_departamento_solicitante) orden_proceso_solicitante,
@@ -3243,6 +3244,7 @@ return function (App $app) {
             c.paso,
             d.status,
             y.progreso,
+            d.cliente_nombre AS cliente,
             NULL AS detalles_revision -- Este campo venía de lotes_detalles, ahora es NULL
         FROM
             -- ============================ CAMBIO PRINCIPAL ============================
