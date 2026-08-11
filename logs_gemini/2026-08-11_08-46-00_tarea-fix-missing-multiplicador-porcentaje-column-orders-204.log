@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** El usuario reportó un error HTTP 500 al emitir una nueva orden en la empresa 204 del servidor de desarrollo (`POST https://api.nineteengreen.com/ordenes/nueva/custom`) obteniendo `{"success": false, "message": "Error al crear la orden: Error interno al ejecutar una operación de base de datos."}`.
+
+- **Diagnóstico:**
+  1. Se inspeccionaron los registros de LiteSpeed `/usr/local/lsws/logs/error.log` en el servidor de desarrollo (`vps-contabo-dev`).
+  2. Se identificó el error exacto de PostgreSQL:
+     `goQuery() error SQL no manejado: SQLSTATE[42703]: Undefined column: 7 ERROR: column "multiplicador_porcentaje" of relation "ordenes_productos" does not exist`
+  3. La columna `multiplicador_porcentaje` había sido añadida al código de endpoints (`POST /ordenes/nueva/custom` y `POST /ordenes/nueva/custom/edit`) y a la plantilla MySQL (`create_new_company_api_emp_N.sql`), pero no se había ejecutado la migración de la columna en las bases de datos de desarrollo `api_emp_204` y `api_emp_163`, ni figuraba en la plantilla Postgres (`create_new_company_api_emp_N_postgres.sql`).
+
+- **Acciones Realizadas:**
+  1. Se ejecutó `ALTER TABLE ordenes_productos ADD COLUMN IF NOT EXISTS multiplicador_porcentaje numeric(5,2) DEFAULT NULL;` y `ALTER TABLE presupuestos_productos ADD COLUMN IF NOT EXISTS multiplicador_porcentaje numeric(5,2) DEFAULT NULL;` en la base de datos `api_emp_204` y `api_emp_163` del servidor de desarrollo (`vps-contabo-dev`).
+  2. Se actualizó el archivo de plantilla para nuevas empresas en Postgres `ninesys-api/public/model/create_new_company_api_emp_N_postgres.sql` agregando `multiplicador_porcentaje decimal(5, 2) DEFAULT NULL` a las definiciones de las tablas `ordenes_productos` y `presupuestos_productos`.
+  3. Se probó exitosamente la emisión de la orden en la empresa 204 vía `curl` con el payload exacto suministrado por el usuario, recibiendo una respuesta HTTP 200 de éxito:
+     `{"success":true,"message":"La orden número 9 ha sido creada correctamente","orden_creada":true,"id_orden":9,"response":{"status":"success","message":"La orden número 9 ha sido creada correctamente"}}`.
+
+- **Archivos Modificados:**
+  - `ninesys-api/public/model/create_new_company_api_emp_N_postgres.sql`
+  - Base de datos Postgres en `vps-contabo-dev`: `api_emp_204` y `api_emp_163` (`ordenes_productos`, `presupuestos_productos`).

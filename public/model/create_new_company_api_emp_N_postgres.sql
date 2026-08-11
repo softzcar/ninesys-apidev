@@ -1035,6 +1035,7 @@ CREATE TABLE ordenes_productos (
   precio_unitario decimal(10, 2) NOT NULL DEFAULT 0.00 ,
   precio_woo decimal(10, 2) DEFAULT NULL ,
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  multiplicador_porcentaje decimal(5, 2) DEFAULT NULL,
   PRIMARY KEY (_id)
 );
 CREATE TABLE ordenes_auditoria (
@@ -1127,6 +1128,7 @@ CREATE TABLE presupuestos_productos (
   id_products_attributes INTEGER DEFAULT NULL ,
   id_size INTEGER DEFAULT NULL ,
   id_tela INTEGER DEFAULT NULL,
+  multiplicador_porcentaje decimal(5, 2) DEFAULT NULL,
   PRIMARY KEY (_id)
 );
 CREATE TABLE products (
