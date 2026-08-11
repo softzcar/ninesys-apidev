@@ -225,8 +225,25 @@ return function (App $app) {
       $personalizacion = false;
     }
 
+    $idDiseno = intval($data['id_diseno'] ?? 0);
+    $idOrden = intval($data['id_orden'] ?? 0);
+
     $sqlord = 'SELECT id_orden, id_empleado FROM disenos WHERE _id = ?';
-    $resultDiseno = $localConnection->goQuery($sqlord, [$data['id_diseno']]);
+    $resultDiseno = $localConnection->goQuery($sqlord, [$idDiseno]);
+
+    if (empty($resultDiseno) && $idOrden > 0) {
+      $sqlordByOrden = 'SELECT _id, id_orden, id_empleado FROM disenos WHERE id_orden = ? LIMIT 1';
+      $findDiseno = $localConnection->goQuery($sqlordByOrden, [$idOrden]);
+      if (!empty($findDiseno)) {
+        $idDiseno = intval($findDiseno[0]['_id']);
+        $resultDiseno = $findDiseno;
+      } else {
+        $sqlCreateDiseno = "INSERT INTO disenos (id_orden, id_empleado, terminado) VALUES (?, 0, 0)";
+        $localConnection->goQuery($sqlCreateDiseno, [$idOrden]);
+        $idDiseno = intval($localConnection->lastInsertId('disenos__id_seq'));
+        $resultDiseno = [['id_orden' => $idOrden, 'id_empleado' => 0]];
+      }
+    }
 
     // Atomicidad FK: ajustes/personalizaciones + sus pagos en una transacción
     $localConnection->beginTransaction();
@@ -235,24 +252,24 @@ return function (App $app) {
     if ($ajuste) {
       $localConnection->goQuery(
         "UPDATE disenos_ajustes_y_personalizaciones SET cantidad = ? WHERE id_diseno = ? AND tipo = 'ajuste'",
-        [$monto_ajustes, $data['id_diseno']]
+        [$monto_ajustes, $idDiseno]
       );
     } else {
       $localConnection->goQuery(
         "INSERT INTO disenos_ajustes_y_personalizaciones (id_diseno, id_orden, tipo, cantidad) VALUES (?, ?, 'ajuste', ?)",
-        [$data['id_diseno'], $resultDiseno[0]['id_orden'], $monto_ajustes]
+        [$idDiseno, $resultDiseno[0]['id_orden'], $monto_ajustes]
       );
     }
 
     if ($personalizacion) {
       $localConnection->goQuery(
         "UPDATE disenos_ajustes_y_personalizaciones SET cantidad = ? WHERE id_diseno = ? AND tipo = 'personalizacion'",
-        [$monto_personalizacion, $data['id_diseno']]
+        [$monto_personalizacion, $idDiseno]
       );
     } else {
       $localConnection->goQuery(
         "INSERT INTO disenos_ajustes_y_personalizaciones (id_diseno, id_orden, tipo, cantidad) VALUES (?, ?, 'personalizacion', ?)",
-        [$data['id_diseno'], $resultDiseno[0]['id_orden'], $monto_personalizacion]
+        [$idDiseno, $resultDiseno[0]['id_orden'], $monto_personalizacion]
       );
     }
 
