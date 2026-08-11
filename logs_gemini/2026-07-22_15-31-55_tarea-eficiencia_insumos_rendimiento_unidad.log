@@ -1,0 +1,51 @@
+- **Solicitud del Usuario:** "Si aditalo tabien por favor debemos asegurarnos de mosatrar datso reales" (auditar también la columna EFICIENCIA INSUMOS del reporte de eficiencia de empleados, dentro de la verificación general de que /reporte-eficiencia-empleados muestra datos correctos).
+- **Fecha y Hora:** 2026-07-22 15:31:55
+- **Proyecto(s):** Backend (Ambos, ver también log correspondiente en app_multi)
+- **Archivos Involucrados:**
+    - `ninesys-api/app/routes/orders.php` (subquery `eficiencia_insumos` dentro de `GET /reportes/resumen/empleados/{id_empleado}/{id_departamento}`, ramas PostgreSQL y MySQL)
+- **Commits Relacionados:**
+    - Frontend: b898e9f (ver log correspondiente en app_multi/logs_gemini)
+    - Backend: a5771ee
+- **Acción Realizada:**
+    Se auditó la columna "EFICIENCIA INSUMOS" del reporte de eficiencia de empleados, no revisada previamente en esta sesión. Se rastreó el origen de sus datos: `calcularEficienciaInsumos()` en el frontend consume `this.eficienciInsumos` <- `resp.data.eficiencia_insumos`, poblado por el endpoint `/reportes/resumen/empleados/{id_empleado}/{id_departamento}` en `orders.php`.
+
+    Se encontró que la subquery `consumo_r` (líneas ~1238-1257 en la rama PostgreSQL y ~1315-1334 en la rama MySQL, texto idéntico) calculaba `consumo_real_total` con:
+    ```sql
+    SUM((im.valor_inicial - im.valor_final) * COALESCE(inv.rendimiento, 1)) AS consumo_real_total
+    ```
+    Este es el MISMO patrón de bug ya corregido antes en esta sesión en `manufacturing.php` (`/reports/input-efficiency`): el factor `inventario.rendimiento` (conversión Kg->Mt) se aplicaba incondicionalmente siempre que el insumo tuviera uno cargado, sin verificar si el insumo ya estaba registrado en la unidad destino (`Mts`), inflando el consumo real reportado.
+
+    Se corrigió a:
+    ```sql
+    SUM(ABS(im.valor_final - im.valor_inicial) * CASE WHEN inv.unidad = 'Kg' AND inv.rendimiento IS NOT NULL THEN inv.rendimiento ELSE 1 END) AS consumo_real_total
+    ```
+    aplicando además `ABS()` en vez de resta directa (mismo criterio del fix anterior, evita valores negativos ante correcciones de inventario). Se corrigió en ambas ramas (PostgreSQL y MySQL) mediante un único `Edit` con `replace_all: true`, dado que el texto de ambas era idéntico.
+
+- **Inconvenientes y Desafíos:**
+    Al aplicar el fix, el comentario explicativo agregado incluía comillas dobles (`"Papel de sublimacion 40gsm"`) dentro de un literal de cadena PHP también delimitado por comillas dobles (`$sql = "..."`), lo cual rompió el parseo de PHP (`php -l` reportó `syntax error, unexpected identifier "Papel"` en la línea 1247). Se corrigió eliminando las comillas dobles internas del comentario (dejando el texto sin comillas), tanto en la ocurrencia de la rama PostgreSQL como en la de MySQL. Tras el ajuste, `php -l app/routes/orders.php` no reportó errores.
+
+- **Decisión Final y Justificación:**
+    Se mantuvo el mismo criterio de corrección ya validado y verificado en `manufacturing.php` para consistencia: el `rendimiento` es un factor de conversión Kg->Mt y solo debe aplicarse cuando la unidad nativa del insumo (`inventario.unidad`) es efectivamente `'Kg'`; aplicarlo a insumos ya registrados en `'Mts'` con un `rendimiento` residual cargado en la base de datos produce una sobreestimación artificial del consumo real.
+
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit` (replace_all), `Bash` (`php -l`, `git diff`, `git commit`, `curl` contra Postgres Dev, `ssh` + `psql` para verificación directa de datos), script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Antes del fix, se verificó vía `psql` directo contra `api_emp_194` (Postgres Dev) que la orden 6018 (un solo movimiento: diff=8.45, rendimiento=11.0, unidad='Mts') producía `consumo_real_total = 92.95` (8.45 × 11, valor inflado y ya visible en la respuesta de la API antes del fix), y que la orden 6028 (dos movimientos: (diff=8.01, rendimiento=1.0) + (diff=10.00, rendimiento=11.0, unidad='Mts')) producía `118.01` (8.01 + 110.00).
+
+    Tras aplicar el fix, lintear (`php -l`), commitear (a5771ee) y desplegar a Contabo Dev (`deploy_backend.sh` opción 2), se reconsultó en vivo:
+    ```
+    curl -s "https://api.nineteengreen.com/reportes/resumen/empleados/28/1" -H "Authorization: 194"
+    ```
+    Resultado: orden 6018 -> `consumo_real_total: 8.45` (antes 92.95); orden 6028 -> `consumo_real_total: 18.01` en cada uno de sus dos renglones (antes 118.01), coincidiendo exactamente con los valores crudos de la base de datos.
+
+    Se verificó también en el navegador (Chrome, sesión conectada) sobre `https://app.nineteengreen.com/reporte-eficiencia-empleados/`, seleccionando al empleado "yamir caicedo - Impresión" (id 28, departamento 1): la columna EFICIENCIA INSUMOS mostró 155.50% para la orden 6018 (13.14 estimado / 8.45 real × 100) y 11.10% para la orden 6028 (4 estimado / 36.02 real × 100), coincidiendo con el cálculo esperado tras el fix.
+
+- **Logro Conseguido:**
+    Se eliminó una segunda inflación (hasta ~11x) del consumo real de insumos reportado en el módulo de eficiencia de empleados, mismo patrón de bug ya corregido antes en el módulo de eficiencia general — ahora ambos reportes son consistentes entre sí y reflejan el consumo real verdadero, no inflado por un factor de conversión de unidad aplicado fuera de lugar.
+
+- **Observaciones:**
+    Se detectó que el mismo texto de subquery aparecía duplicado (rama PostgreSQL y rama MySQL) dentro del mismo endpoint — patrón recurrente en este archivo desde la migración dual-driver, a tener en cuenta en futuras auditorías de `orders.php` (buscar siempre ambas ramas `DB_DRIVER === 'pgsql'` / `else`).
+
+- **Respuesta de Claude:** Se corrigió y verificó en vivo la inflación de `consumo_real_total` en la subquery `eficiencia_insumos` de `/reportes/resumen/empleados/{id}/{id}`, aplicando el mismo criterio de unidad (`Kg` vs `Mts`) ya usado en el fix previo de `/reports/input-efficiency`. Cambio commiteado (a5771ee), desplegado a Contabo Dev y verificado con datos reales de las órdenes 6018 y 6028, tanto vía API como en el navegador.

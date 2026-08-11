@@ -1,0 +1,55 @@
+- **Solicitud del Usuario:** Continuando la revisión de "PENDIENTE $" en el Reporte de Eficiencia de Empleados, tras detectar que `procentaje_comision` no se aplicaba en el cálculo. El usuario pidió primero investigar "en el dashboard de empleados qué endpoint tiene la responsabilidad de ver las comisiones asignadas al empleado y guardar esta información" antes de decidir cómo proceder, y luego confirmó: "Sí, aplica el fix con la protección >0 ? valor : 100".
+- **Fecha y Hora:** 2026-07-22 17:20:46
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `ninesys-api/app/routes/orders.php` (query "ordenes pendientes" del endpoint `GET /reportes/resumen/empleados/{id_empleado}/{id_departamento}`)
+- **Commits Relacionados:**
+    - Backend: 384c00b
+- **Acción Realizada:**
+    Se investigó, por pedido explícito del usuario, TODO el uso de `procentaje_comision` en el backend (`grep -rn "procentaje_comision" app/routes/*.php`) antes de aplicar cualquier fix. Se encontró que el campo se usa extensamente en `manufacturing.php` y `products.php` para calcular comisiones reales al completar tareas, y que en TODOS esos lugares existe el mismo patrón de protección:
+    ```sql
+    (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END / 100)
+    ```
+    o en PHP: `$porcentaje = floatval($asignacion['procentaje_comision']) > 0 ? floatval($asignacion['procentaje_comision']) : 100;`
+
+    Se descubrió el origen del patrón: al iniciar una tarea (`manufacturing.php:625`), la fila de `lotes_detalles_empleados_asignados` se crea con `procentaje_comision = 0` como placeholder, y se actualiza después (`manufacturing.php:1156`, `UPDATE ... SET procentaje_comision = $nuevoPorcentaje`) cuando se determina el reparto real entre empleados. Esto significa que `0` en la base de datos NO significa "0% de comisión", sino "reparto aún no asignado" -- y el resto del sistema lo trata consistentemente como 100%.
+
+    Se verificó el impacto real antes de decidir el fix:
+    - 11,818 de 12,113 filas (97.5%) tienen `procentaje_comision = 100` (caso normal, un solo empleado).
+    - 165 filas tienen `procentaje_comision = 0`, TODAS con `progreso = 'terminada'` y TODAS pertenecientes a lotes con más de un empleado asignado (verificado con `total_asignados_mismo_lote > 1` en cada caso) -- consistentes con el flujo de "placeholder antes de reparto".
+    - 130 filas tienen reparto real (50%, 33.33%, 25%, 10%).
+    - 0 órdenes pendientes (no terminadas) actuales tienen más de un empleado asignado al mismo lote/departamento -- el bug de "PENDIENTE $ duplicado" no se manifiesta en ningún dato visible hoy, pero el escenario es real (ya ocurrió 130 veces en el histórico de tareas terminadas).
+
+    Con esta evidencia, se aplicó el fix usando el MISMO patrón de protección ya establecido en el resto del sistema (no la versión simple que estaba comentada en `orders.php`, que habría roto las 165 filas con `procentaje_comision = 0` mostrando $0 en vez de 100%):
+    ```sql
+    ((SUM(b.cantidad) * e.comision) * (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_variable,
+    ((SUM(b.cantidad) * d.comision) * (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_fija
+    ```
+    Aplicado en ambas ramas de la consulta (PostgreSQL y MySQL).
+
+- **Inconvenientes y Desafíos:**
+    Se repitió, por tercera vez en la sesión, el error de incluir comillas dobles literales dentro de un comentario SQL embebido en un literal de cadena PHP también delimitado por comillas dobles (esta vez la palabra "aun no asignado" entre comillas), rompiendo `php -l`. Se corrigió eliminando las comillas dobles del comentario.
+
+- **Decisión Final y Justificación:**
+    Se prefirió NO descomentar la fórmula original que ya estaba comentada en el código (`* a.procentaje_comision / 100`, sin protección), porque un análisis previo -- pedido explícitamente por el usuario antes de aplicar cualquier cambio -- reveló que esa versión simple habría introducido una regresión real: interpretaría `procentaje_comision = 0` (placeholder de "aún no asignado") como 0% de comisión, cuando el resto del sistema lo trata como 100%. Se usó en su lugar el patrón `CASE WHEN > 0 THEN valor ELSE 100 END`, ya validado y en uso en `manufacturing.php` y `products.php`, garantizando consistencia entre todos los cálculos de comisión del sistema.
+
+- **Herramienta(s) Utilizada(s):** `Bash` (`grep` para mapear todos los usos de `procentaje_comision`, `ssh` + `psql` para verificación de datos reales antes y después del fix, `php -l`, `git diff`, `git commit`), `Read`, `Edit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `curl` para verificación final en vivo.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Antes de desplegar, se ejecutó la query corregida directamente en `psql` para danuil/departamento Corte (empleado 588, cuyas 61 filas de "ordenes pendientes" tienen todas `procentaje_comision = 100`): el resultado agregado de `total_comision_fija` se mantuvo exactamente en `$51.70`, idéntico al valor pre-fix, confirmando que el cambio no afecta el caso normal (single-empleado).
+
+    Tras lintear, commitear (384c00b) y desplegar a Contabo Dev, se verificó en vivo:
+    ```
+    curl -s "https://api.nineteengreen.com/reportes/resumen/empleados/588/3" -H "Authorization: 194"
+    ```
+    Suma de `total_comision_fija` de `ordenes_pendientes`: `$51.70`, exacto.
+
+- **Logro Conseguido:**
+    Se cerró la revisión completa de los montos de "RELACIÓN DE PAGOS" (TERMINADO/PENDIENTE/TOTAL) en el Reporte de Eficiencia de Empleados, corrigiendo un riesgo latente de duplicación de comisiones pendientes en el escenario de lotes con múltiples empleados asignados -- un escenario que, aunque no activo hoy, ya ha ocurrido 130 veces en el histórico y previsiblemente volverá a ocurrir. El fix se hizo con evidencia completa del patrón correcto usado en el resto del sistema, evitando introducir una regresión que la versión "obvia" (descomentar tal cual) habría causado.
+
+- **Observaciones:**
+    Este hallazgo es un buen ejemplo de por qué investigar el patrón establecido en el resto del código (a pedido del usuario) antes de aplicar un fix "evidente" es crítico: la solución ingenua (descomentar la fórmula vieja) habría sido peor que no hacer nada, al romper 165 casos históricos silenciosamente. Con la página de eficiencia de empleados, esto cierra la ronda de verificación de "RELACIÓN DE PAGOS" (HORAS, TERMINADO, PENDIENTE, TOTAL) iniciada en sesiones anteriores del mismo día.
+
+- **Respuesta de Claude:** Se investigó el uso de `procentaje_comision` en todo el backend antes de decidir el fix, encontrando que el patrón correcto y ya establecido en `manufacturing.php`/`products.php` es tratar `0` como "100% (aún no repartido)", no como 0%. Se aplicó ese mismo patrón (no la fórmula simple que estaba comentada) al cálculo de `PENDIENTE $` en el Reporte de Eficiencia de Empleados, corrigiendo un riesgo de duplicación de comisiones para el día que un lote pendiente tenga más de un empleado asignado con reparto real -- verificado que no afecta ningún dato actual (sigue en $51.70 exacto para danuil/Corte) pero sí corrige 130 escenarios históricos ya confirmados como reales.

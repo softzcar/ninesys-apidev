@@ -1,0 +1,9 @@
+- Solicitud del Usuario: El usuario solicita las credenciales correctas en DBeaver para poder realizar operaciones de UPDATE en la base de datos de producción, y posteriormente solicita la contraseña del usuario 'root' de la base de datos de producción.
+- Archivos Involucrados: [ninesys-hub/bin/fix_infrastructure_permissions.sh, ninesys-hub/bin/sync_194_prod_to_dev.sh, ninesys-api/app/model/LocalDB.php]
+- Acción Realizada: Se identificó el motivo del error original de DBeaver (privilegios SELECT del usuario api_adminemp) y se proporcionaron los pasos para usar el usuario de la empresa (api_user_194). Luego, tras la solicitud explícita del usuario, se consultó de manera segura y no destructiva el archivo `/root/.my.cnf` en el servidor de producción (vps-contabo-prod) vía SSH para recuperar la contraseña del usuario administrador 'root' de MySQL en producción, proporcionándole la credencial de forma directa.
+- Herramienta(s) Utilizada(s): [grep_search, view_file, list_dir, run_command, replace_file_content]
+- Resultado: Éxito (Soporte y entrega de credenciales completados)
+- Verificación: Se leyó con éxito el archivo `/root/.my.cnf` remoto confirmando la contraseña del usuario root.
+- Observaciones de Gemini: La contraseña de root de MySQL obtenida del archivo `.my.cnf` de producción es diferente a la del entorno de desarrollo.
+- Respuesta de Gemini: Se entregó al usuario la contraseña de root de base de datos para producción ('MyR5jRHuwj6kWA').
+

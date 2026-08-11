@@ -1,0 +1,13 @@
+- **Solicitud del Usuario:** Revisar la interfaz de inicio (Dashboard) para departamentos genéricos de producción (ej: Montar Tallas), utilizando como prueba al empleado Yervin en la Empresa 194.
+- **Diagnóstico del Root Cause:**
+  - En la consulta `sqlPendientes` del endpoint `/empleados/dashboard-stats/{id_empleado}/{id_departamento}` (para departamentos genéricos), el conteo de tareas pendientes filtraba estrictamente por `ord.status LIKE 'En espera'`.
+  - Esto provocaba que tareas asignadas no iniciadas (`fecha_inicio IS NULL`) pertenecientes a órdenes activas (`status = 'activa'`, ej: órdenes 5203, 6541, 6540) fueran omitidas del contador de tareas pendientes del Dashboard.
+  - Adicionalmente, `sqlPagos` realizaba un `JOIN` obligatorio con `lotes_detalles_empleados_asignados`, ignorando aquellos registros de la tabla `pagos` que no poseen un lote asignado directamente (como abonos o sueldos base).
+- **Acciones Realizadas:**
+  - En `ninesys-api/app/routes/employees.php`:
+    1. Se actualizó `sqlPendientes` para considerar órdenes `'En espera'`, `'activa'` y `'pausada'`.
+    2. Se homologó `sqlPagos` para consultar directamente `p.moment` y `p.id_departamento`, unificando el criterio con el resto de módulos.
+  - Se confirmó el commit en git (`44c49f2`) y se ejecutó el despliegue al servidor de desarrollo `vps-contabo-dev` mediante `ninesys-hub/bin/deploy_backend.sh`.
+- **Verificación:**
+  - Petición `GET https://api.nineteengreen.com/empleados/dashboard-stats/656/16` (`Authorization: 194`).
+  - El contador de tareas pendientes pasó de **15** a **18** reflejando con exactitud las órdenes activas pendientes.

@@ -1,0 +1,30 @@
+**Tarea:** Re-verificar y corregir el hallazgo crítico de tabla `empleados` en `employees.php` (marcado 97% en el doc de estado)
+**Fecha:** 2026-07-13 09:52:00
+**Rama:** feature/postgresql-support
+**Commits:** `20cbcef`, `00eb66c`
+
+### Hallazgos (archivo de 1246 líneas)
+Este archivo tenía el problema más extendido de todos los revisados: incluso ramas `pgsql` **ya existentes** (con `TO_CHAR`/`EXTRACT` correctos) seguían referenciando `JOIN empleados`/`FROM empleados` (tabla inexistente en Postgres) en vez de `api_empresas.empresas_usuarios`. El patrón "se corrigieron las funciones de fecha pero no la tabla" se repitió en 6 puntos:
+
+1. `/empleados/produccion/asignacion`: sin condicional alguno → se agregó rama pgsql con `api_empresas.empresas_usuarios` + filtro `id_empresa`.
+2. `/asistencias/semanal`: rama pgsql ya existente, tabla sin migrar.
+3. `/asistencias/tabla/{fecha}`: 3 queries — listado de empleados (sin condicional, se agregó), "diarias" y "NUEVO REPORTE" (ambas con rama pgsql ya existente pero tabla sin migrar).
+4. `/asistencias/reporte/resumen/{fecha_inicio}/{fecha_fin}`: 2 queries (resumen y detallado, ambas con rama pgsql ya existente).
+
+Adicional (sweep completo):
+- `DATE(p.moment)` / `DATE(ldea.fecha_terminado)` en 2 queries de pagos semanales (endpoint de eficiencia de empleado) → `::date` cast explícito.
+- Backticks removidos en 3 INSERTs de un solo statement (nuevo empleado, carga familiar ×2, asistencias).
+
+### Bug de seguimiento (autodetectado, no visible hasta desplegar)
+Al migrar `empleados._id` → `empresas_usuarios.id_usuario`, quedaron 2 referencias `SELECT e._id`/`b._id` sin actualizar (el alias cambió de tabla pero no se actualizó la columna en el SELECT), causando `column e._id does not exist` en `/asistencias/semanal` y `column b._id does not exist` en `/asistencias/reporte/resumen` (detallado). Corregido a `e.id_usuario`/`b.id_usuario` en un commit de seguimiento inmediato.
+
+### Nota operativa
+Esta sesión se interrumpió por un intento de `/compact` que falló (`API Error: 403`). Al retomar, se confirmó que el commit de columnas `_id` (`00eb66c`) ya se había realizado antes de la interrupción, pero **no estaba desplegado** a Desarrollo (el servidor seguía en `20cbcef`). Se desplegó y verificó normalmente.
+
+### Validación
+- `php -l`: sin errores en cada paso.
+- 2 despliegues a Desarrollo (uno antes y otro después de la interrupción).
+- Verificado en vivo (empresa 194), 5 endpoints: `/empleados`, `/empleados/produccion/asignacion`, `/asistencias/semanal`, `/asistencias/tabla/2026-07-10`, `/asistencias/reporte/resumen/2026-07-01/2026-07-10` → todos 200, sin errores embebidos tras ambos commits.
+
+### Resultado
+Éxito. `employees.php` ahora sí está genuinamente completo en los endpoints revisados (el gap documentado del 97% — la subquery de `/empleados` con `GROUP_CONCAT`/`IFNULL` — resultó ya estar resuelto de antes, coincidiendo con el patrón de documentación desactualizada visto en archivos previos).

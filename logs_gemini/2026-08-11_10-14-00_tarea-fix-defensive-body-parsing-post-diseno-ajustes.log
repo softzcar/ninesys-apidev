@@ -1,0 +1,12 @@
+- **Solicitud del Usuario:** Corregir el error HTTP 500 al enviar la petición `POST https://api.nineteengreen.com/diseno/ajustes-y-personalizaciones` con el payload `id_diseno=0&id_orden=6548&ajustes=4&personalizaciones=12` desde el formulario modal de Yervin.
+- **Diagnóstico del Root Cause:**
+  - En PHP 8.3, si `$request->getParsedBody()` retorna `null` (por ejemplo, cuando las peticiones HTTP llegan formateadas como JSON o en variantes de form-data), intentar acceder a un offset sobre `null` (`$data['ajustes']`) genera un error fatal no capturado: `TypeError: Cannot access offset of type string on null`.
+  - Este error fatal en PHP 8.3 hacía que la API fallara con HTTP 500 antes de ejecutar las consultas de inserción.
+- **Acciones Realizadas:**
+  - En `ninesys-api/app/routes/designs.php`: Se implementó un parsing defensivo para `$data`. Si `$request->getParsedBody()` es nulo o vacío, la API busca en `php://input` (JSON/parse_str) y en `$_POST`, garantizando que `$data` sea **100% un array asociativo seguro**.
+  - Se confirmó el guardado correcto tanto para payloads de tipo Form-Data como para peticiones JSON (`application/json`).
+  - Desplegado en el servidor de Desarrollo (`vps-contabo-dev`) reseteando OPcache PHP.
+- **Verificación:**
+  - Probada la orden 6548 enviando `id_diseno=0&id_orden=6548&ajustes=4&personalizaciones=12` con `Content-Type: application/json` y `application/x-www-form-urlencoded`.
+  - Respuesta retornada: `{"personalizacion": 1}` (**HTTP 200 OK**).
+  - Limpieza de prueba ejecutada en la base de datos `api_emp_194`.

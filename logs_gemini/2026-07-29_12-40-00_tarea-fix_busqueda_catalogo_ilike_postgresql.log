@@ -1,0 +1,24 @@
+# Bitácora de Trabajo - Corrección de Búsqueda Sensible a Mayúsculas/Minúsculas en Catálogo de WhatsApp
+Fecha: 2026-07-29
+Hora: 12:40:00
+
+## Tarea Realizada
+Corrección del filtro de búsqueda de productos en el catálogo de WhatsApp (`GET /internal/catalog/{id_empresa}`) en `ninesys-api` para soportar insensibilidad a mayúsculas/minúsculas en PostgreSQL.
+
+## Diagnóstico y Causa Raíz
+1. Al migrar la base de datos a PostgreSQL, la cláusula SQL `LIKE` pasó a ser 100% **case-sensitive** (sensible a mayúsculas y minúsculas).
+2. Al buscar términos en minúsculas (ej: `"franela"`), PostgreSQL omitía los productos registrados como `"Franela Sublimada"`, `"FRANELA SUBLIMADA CUELLO V"`, `"Franela Oversize Sublimada"`, etc., devolviendo únicamente las 2 filas escritas literalmente en minúsculas (`"franela mitad sublimada"` y `"franela estampado DTF"`).
+3. Esto causaba que la IA de WhatsApp informara erróneamente a los clientes que solo existía el producto "mitad sublimada", ignorando el resto de franelas sublimadas del catálogo.
+
+## Solución Implementada
+- Se modificó `app/routes/msg_service.php` en `ninesys-api` para aplicar dinámicamente la cláusula `ILIKE` cuando `DB_DRIVER === 'pgsql'`:
+  `$likeOp = DB_DRIVER === 'pgsql' ? 'ILIKE' : 'LIKE';`
+  `$whereClause = "p.product {$likeOp} ? AND (p.fisico = 1 OR p.es_diseno = 1)";`
+
+## Verificación
+- Se probó la búsqueda `GET /internal/catalog/194?search=franela`.
+- Antes del fix: `product_count: 2` (solo devolvía `franela estampado DTF` y `franela mitad sublimada`).
+- Después del fix: `product_count: 13` (devuelve el catálogo completo de franelas sublimadas, de algodón, oversize, cuello V, licra, etc., con todas sus escalas de precio).
+
+## Resultado
+Éxito. La IA de WhatsApp ahora tiene visibilidad completa de todas las franelas sublimadas disponibles en la base de datos.

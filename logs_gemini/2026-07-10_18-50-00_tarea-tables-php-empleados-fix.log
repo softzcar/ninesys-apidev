@@ -1,0 +1,21 @@
+**Tarea:** Re-verificar y corregir el hallazgo crítico de tabla `empleados` en `tables.php` (marcado 100% en el doc de estado pero no re-verificado)
+**Fecha:** 2026-07-10 18:50:00
+**Rama:** feature/postgresql-support
+**Commit:** `322c218`
+
+### Hallazgo
+Confirmado: `tables.php` SÍ tenía el mismo bug de la tabla `empleados` inexistente en Postgres, en 2 endpoints:
+- `/ordenes-reporte-semanal/{fecha}`: `JOIN empleados b ON a.responsable = b._id`
+- `/presupuestos/guardados`: `JOIN empleados b ON a.id_empleado = b._id`
+
+Ambos migrados a `JOIN api_empresas.empresas_usuarios b ON ... = b.id_usuario` (mismo patrón establecido en el resto del código ya adaptado).
+
+Adicionalmente, un sweep completo del archivo (837 líneas) encontró backticks sin proteger en un `INSERT` de `/ordenes/borrador` (`` `id_orden`, `id_empleado`, `id_departamento`, `borrador` ``) — removidos. El resto de patrones MySQL-only encontrados por grep (DATE_FORMAT, GROUP_CONCAT, FIND_IN_SET, IFNULL, YEARWEEK) están genuinamente protegidos con `DB_DRIVER` o dentro de un bloque de código muerto comentado (`/table/ordenes-todas_OLD`) — confirmado leyendo cada bloque, no solo grepeando.
+
+### Validación
+- `php -l`: sin errores.
+- Desplegado a Desarrollo.
+- Verificado en vivo (empresa 194): `/ordenes-reporte-semanal/{hoy}` y `/presupuestos/guardados` → HTTP 200, JSON válido, sin errores embebidos en ninguna parte de la respuesta (búsqueda recursiva).
+
+### Resultado
+Éxito. `tables.php` ahora sí está genuinamente 100%.

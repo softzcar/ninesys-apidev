@@ -1,0 +1,13 @@
+- **Solicitud del Usuario:** Diagnosticar la carga de datos del endpoint `/sse/disenos-todo` en la empresa 204 y resolver por qué no llegaban o guardaban datos.
+- **Diagnóstico del Root Cause:**
+  1. El endpoint `/sse/disenos-todo` únicamente consultaba `SELECT a._id id_orden, a._id tallas_personalizacion FROM ordenes a...`, omitiendo la columna `id_diseno`.
+  2. En empresas con órdenes recientes sin registro previo en la tabla `disenos` (como la orden 11 en Empresa 204), `id_diseno` llegaba como `undefined` o `0` al modal `tallasPersoalizacion.vue`.
+  3. Al intentar guardar ajustes o personalizaciones, `POST /diseno/ajustes-y-personalizaciones` fallaba con error 500 debido a una restricción Foreign Key en `pagos.id_empleado` cuando `id_empleado` era 0.
+- **Acciones Realizadas:**
+  1. En `production.php` (`/sse/disenos-todo`): Se actualizó la consulta a `SELECT COALESCE(d._id, 0) AS id_diseno, a._id id_orden, a._id tallas_personalizacion, d.id_empleado AS id_disenador FROM ordenes a LEFT JOIN disenos d ON d.id_orden = a._id...`.
+  2. En `designs.php` (`POST /diseno/ajustes-y-personalizaciones`): Se resolvió `$idDiseno` prioritariamente. Si la orden activa no contaba aún con una entrada en `disenos`, la API ahora la genera automáticamente de forma segura. Adicionalmente, se protegió la inserción en la tabla `pagos` para ejecutarse únicamente cuando exista un `id_empleado > 0`, previniendo violaciones de clave foránea.
+  3. Desplegado en Desarrollo (`vps-contabo-dev`) reseteando OPcache PHP.
+- **Verificación:**
+  - Probado `curl` con `Authorization: 204` tanto en consulta como en guardado de datos (`POST /diseno/ajustes-y-personalizaciones`).
+  - Verificado retorno exitoso `{"personalizacion":0}` y respuesta limpia con `items` y `ajustes`.
+  - Limpieza de datos de prueba ejecutada en `api_emp_204`.

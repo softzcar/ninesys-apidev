@@ -1,0 +1,26 @@
+**Tarea:** Re-verificar y corregir el hallazgo crítico de tabla `empleados` en `production.php` (marcado 100% en el doc de estado pero no re-verificado)
+**Fecha:** 2026-07-10 19:05:00
+**Rama:** feature/postgresql-support
+**Commits:** `d0b8c01`, `7143586`
+
+### Hallazgos
+Sweep completo del archivo (1526 líneas) encontró 4 problemas reales sin proteger, pese a estar marcado 100%:
+
+1. `/sse/produccion/ordenes-activas`: la rama `pgsql` del `if (DB_DRIVER === 'pgsql')` (que ya tenía `TO_CHAR` correcto) seguía usando `JOIN empleados b ON a.id_empleado = b._id` sin condicionar — la conversión de fecha se hizo pero la tabla no. Migrado a `api_empresas.empresas_usuarios`/`id_usuario`.
+2. Query interna de `/sse/produccion/corte/{id_empleado}`: `FROM empleados WHERE departamento = 'Corte' AND activo = 1` sin ningún condicional. Migrado a `api_empresas.empresas_usuarios` — con `AND id_empresa = ID_EMPRESA` agregado explícitamente, porque a diferencia de la tabla local `empleados` (implícitamente scopeada por ser una BD por empresa), la tabla central `empresas_usuarios` mezcla todas las empresas y necesita filtro explícito.
+3. Query de `ordenes_productos` (`/sse/produccion`, listado de productos): `FIND_IN_SET(cat._id, p.category_ids)` sin condicional → `ANY(string_to_array(...))` para pgsql, extraído a variable `$categoryJoinCond`.
+4. `INSERT INTO \`ordenes_fila_reposiciones\`(...)`: backticks removidos (sintaxis inválida en PDO pgsql).
+
+### Hallazgo adicional (categoría nueva, no relacionada con `empleados`)
+Al verificar en vivo `/sse/produccion` apareció un error de tipo distinto: PostgreSQL exige `GROUP BY` estricto (a diferencia de MySQL sin `ONLY_FULL_GROUP_BY`). La query principal de items de producción agrupaba solo por `a._id` pero seleccionaba columnas de otras tablas (`f.orden_fila`, `cus.first_name/last_name`, `b.prioridad`, `prog_info.*`, `d.estatus`, `n.borrador`, `c._id`, `e.nombre`) sin agruparlas ni agregarlas — MySQL lo permite (toma un valor arbitrario del grupo), PostgreSQL lo rechaza con `SQLSTATE[42803]`. Se agregó el `GROUP BY` completo solo para la rama pgsql (variable `$groupByItems`), sin tocar la rama MySQL. Este tipo de error **no aparece en ningún grep de funciones MySQL-only** — solo se detecta ejecutando la query real contra Postgres.
+
+### Validación
+- `php -l`: sin errores en cada paso.
+- 2 despliegues a Desarrollo.
+- Verificado en vivo (empresa 194):
+  - `/sse/produccion/ordenes-activas` → 200, sin errores.
+  - `/sse/produccion/corte/1` → formato SSE válido (`event: message\ndata: {...}`), con `empleados` conteniendo datos reales (`{"id_empleado":5,"nombre":"Jesus "}`) — confirma el fix de la tabla `empleados` funcionando.
+  - `/sse/produccion` → 200, sin errores embebidos, `asignacion` con datos reales de `api_empresas.empresas_usuarios` (varios empleados reales listados).
+
+### Resultado
+Éxito. `production.php` ahora sí está genuinamente 100%, incluyendo un bug de estrictez de `GROUP BY` que no estaba relacionado con el hallazgo original pero que solo se detectó probando en vivo.

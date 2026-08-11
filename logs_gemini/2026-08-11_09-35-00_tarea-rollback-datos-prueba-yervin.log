@@ -1,0 +1,11 @@
+- **Solicitud del Usuario:** Realizar Rollback de los datos temporales de prueba creados para Yervin tras finalizar la revisión visual.
+- **Acción Realizada:**
+  Se ejecutó el borrado de los datos temporales creados para Yervin (orden 6535, diseño 1070) en la base de datos `api_emp_194` del servidor de desarrollo (`vps-contabo-dev`):
+  ```sql
+  DELETE FROM disenos_ajustes_y_personalizaciones WHERE id_diseno = 1070;
+  DELETE FROM pagos WHERE id_orden = 6535 AND id_empleado = 656 AND (detalle = 'ajuste' OR detalle = 'personalización');
+  ```
+  - Registros eliminados de `disenos_ajustes_y_personalizaciones`: 2 filas.
+  - Registros eliminados de `pagos`: 2 filas.
+- **Verificación:**
+  `curl -s "https://api.nineteengreen.com/sse/diseno/656"` retorna `"ajustes":[]`, confirmando la limpieza total de la base de datos sin alterar ningún dato real del sistema.

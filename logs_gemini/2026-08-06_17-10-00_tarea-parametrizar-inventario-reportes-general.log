@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** Resolver el punto 5 de los pendientes de la revisión del módulo de Administración: `GET /inventario/reportes/general` seguía usando `addslashes()` en vez de parámetros reales para fecha y departamento.
+- **Fecha y Hora:** 2026-08-06 17:10:00
+- **Proyecto(s):** Backend (ninesys-api).
+- **Archivos Involucrados:** `app/routes/inventory.php` (una sola función, ~380 líneas, ~10 consultas independientes).
+- **Commits Relacionados:**
+    - Backend: `0a43256` (rama `feature/postgresql-support`, desplegado en Desarrollo).
+- **Acción Realizada:**
+    1. Mapeadas las ~10 consultas SQL independientes dentro de la función (tabla de ítems ×2 ramas, tipos de tinta disponibles, materiales ×2 ramas, tintas ×2 ramas, papel ×2 ramas, costos ×4 ramas) y sus 8 puntos de uso de `addslashes()` sobre `fechaDesde`/`fechaHasta`/`departamento`.
+    2. Reemplazados todos los fragmentos de fecha (`$fechaWhere`/`$fechaWhereTintas`/`$fechaWhereStock`/`$fechaWhereStockDirect`) y de departamento (`$deptWhere`/`$deptWhereDirect`/`$tintaTypeDeptWhere`) para usar `?` en vez de interpolación con `addslashes()`, con arrays de parámetros (`$fechaParams`/`$deptParam`) construidos una sola vez y reutilizados en el mismo orden en cada consulta que los usa.
+    3. Cuidado especial en las 2 subconsultas anidadas (`$tintaFilterByDept`, `$papelFilterByDept`, que filtran tintas/papel por departamento vía `id_orden IN (SELECT...)` cuando el departamento no es "Impresión") -- cada una con su propio array de parámetros (`$tintaFilterByDeptParams`/`$papelFilterByDeptParams`) para no romper el orden posicional de los `?` en su consulta específica.
+    4. Verificado `php -l` sin errores. Desplegado a Desarrollo.
+    5. **Verificado en vivo con 6 combinaciones reales de filtros** (por separado y combinadas): sin filtros, `filtroStock=terminados`, con departamento real, con rango de fechas amplio, combinación de tipoTinta+departamento+fechas, y específicamente el caso que dispara las subconsultas anidadas (`terminados` + departamento distinto de Impresión). Las 6 respondieron `success: true` sin errores, con datos coherentes (ej. conteos de ítems variando según el rango de fechas como se espera).
+- **Inconvenientes y Desafíos:** El tamaño de la función (una sola ruta con ~10 consultas independientes y variantes por rama) requirió mapear con cuidado el orden exacto de los `?` en cada consulta por separado antes de tocar el código, para no desalinear los parámetros posicionales.
+- **Decisión Final y Justificación:** Se mantuvo la misma arquitectura de construcción de condiciones por fragmentos de string (ya usada en este mismo endpoint para `departamento`/`tipoTintaId`), solo parametrizando fecha y departamento -- no se rediseñó la función a un patrón distinto, por ser el cambio más seguro y menos invasivo dado el tamaño de la función.
+- **Herramienta(s) Utilizada(s):** `php -l`, `curl` (6 pruebas reales con distintas combinaciones de filtros), `deploy_backend.sh` (Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** 6 combinaciones de filtros probadas en vivo contra el servidor real de Desarrollo, todas exitosas y con datos coherentes; sin excepciones ni errores 500.
+- **Logro Conseguido:** Cerrado el último foco de `addslashes()` identificado en el barrido de inyección SQL de esta sesión -- este endpoint ahora usa parámetros reales de forma consistente con el resto del proyecto.
+- **Observaciones de Gemini:** Con esto quedan resueltos los puntos 3 (path traversal) y 5 (addslashes en inventario) de la lista de pendientes del módulo de Administración. Siguen puntos 6 y 7 (menores, Gastos Variables y limpieza de código muerto).
+- **Respuesta de Claude:** `GET /inventario/reportes/general` reescrito con parámetros reales en sus ~10 consultas, verificado en vivo con 6 combinaciones de filtros sin errores.

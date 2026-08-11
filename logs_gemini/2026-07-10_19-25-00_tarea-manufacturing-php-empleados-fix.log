@@ -1,0 +1,22 @@
+**Tarea:** Re-verificar y corregir el hallazgo crítico de tabla `empleados` en `manufacturing.php` (marcado 100% en el doc de estado pero no re-verificado)
+**Fecha:** 2026-07-10 19:25:00
+**Rama:** feature/postgresql-support
+**Commit:** `572cff6`
+
+### Hallazgos (archivo de 4642 líneas)
+1. `/revision/trabajos`: `JOIN empleados c ON a.id_empleado = c._id` sin condicional → `api_empresas.empresas_usuarios`/`id_usuario`.
+2. Cálculo de comisión en el flujo de pago de lotes (dentro del bloque activo, no el duplicado comentado): `SELECT comision FROM empleados WHERE _id = ...` sin condicional → mismo fix.
+3. 14 usos de `IFNULL(` (no existe en PostgreSQL estándar) → reemplazo global por `COALESCE(` (equivalente funcional idéntico para 2 argumentos en ambos motores, no requiere condicional).
+4. ~14 líneas con identificadores entre backticks en sentencias `UPDATE`/`INSERT`/`DELETE` de un solo statement → backticks removidos.
+5. `/reports/input-efficiency/{id_ordenes}`: `DATE_SUB(CURDATE(), INTERVAL 7 DAY)` (×2) sin condicional → `CURRENT_DATE - INTERVAL '7 days'` para pgsql, extraído a `$sieteDiasExpr`.
+
+### NO resuelto (deliberado, requiere decisión del usuario)
+`POST /truncate`: endpoint destructivo que trunca ~30 tablas operacionales (`ordenes`, `pagos`, `lotes_detalles`, etc.) en un solo string SQL con `SET FOREIGN_KEY_CHECKS = 0/1` (sintaxis MySQL-only sin equivalente PG directo) y múltiples sentencias separadas por `;` en una sola llamada a `goQuery()`. Esto necesita una solución distinta a un simple condicional de sintaxis (en PG sería `TRUNCATE tabla1, tabla2, ... CASCADE;` en una sola sentencia, o deshabilitar constraints de otra forma, y probablemente separar en múltiples llamadas a `goQuery`). No se tocó dado el riesgo (destructivo) y que excede el alcance de "compatibilidad de sintaxis SQL".
+
+### Validación
+- `php -l`: sin errores.
+- Desplegado a Desarrollo.
+- Verificado en vivo (empresa 194): `/revision/trabajos` → 200, sin errores, con `sql`/`items` correctos. `/reports/input-efficiency/1,2,3` → 200, array vacío (sin datos para esas órdenes en el pilot) pero sin errores SQL.
+
+### Resultado
+Éxito parcial: todo lo relacionado a compatibilidad de sintaxis SQL quedó corregido y verificado. El endpoint `/truncate` queda explícitamente pendiente, documentado como hallazgo aparte para decisión del usuario.

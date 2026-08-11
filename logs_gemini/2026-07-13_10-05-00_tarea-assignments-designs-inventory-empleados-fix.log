@@ -1,0 +1,18 @@
+**Tarea:** Cerrar el hallazgo crítico de tabla `empleados` en los últimos 3 archivos pendientes: `assignments.php`, `designs.php`, `inventory.php`
+**Fecha:** 2026-07-13 10:05:00
+**Rama:** feature/postgresql-support
+**Commit:** `1401e99`
+
+### Hallazgos
+- `assignments.php` (131 líneas): 1 ocurrencia real sin proteger en `/asignacion/{orden}/{departamento}/{empleado}` (`SELECT comision FROM empleados WHERE _id = ...`) → migrada a `api_empresas.empresas_usuarios`/`id_usuario`. También se removió un backtick suelto en otra query del mismo archivo (`` `ordenes` `` → `ordenes`), encontrado en un sweep rápido dado el tamaño pequeño del archivo.
+- `designs.php` (1349 líneas): las 2 coincidencias de grep eran código muerto — una línea completa comentada (`// $sql = ...`) y un comentario SQL (`-- JOIN empleados c ON`) que precede a la versión ya corregida (`JOIN api_empresas.empresas_usuarios c ON ...`). **Sin cambios necesarios.**
+- `inventory.php` (4263 líneas, NO estaba marcado como completo en el doc de estado — está en la lista "Fase 4 pendiente"): 2 queries con `JOIN empleados` + `DATE_FORMAT` sin ningún condicional (`/insumos/reporte/insumos/{id}` y `/insumos/reporte/insumos/producto/{id_producto}`) → migradas con condicional `DB_DRIVER` (pgsql: `api_empresas.empresas_usuarios` + `TO_CHAR`; mysql: sin cambios). **No se auditó el resto del archivo** (backticks, IFNULL, GROUP_CONCAT, etc.) por estar fuera del alcance específico de este hallazgo — inventory.php sigue pendiente de una revisión completa aparte, como ya reflejaba el doc de estado.
+
+### Validación
+- `php -l`: sin errores en los 3 archivos.
+- Desplegado a Desarrollo.
+- Verificado en vivo (empresa 194): `/insumos/reporte/insumos/1` y `/insumos/reporte/insumos/producto/1` → 200, sin errores embebidos.
+- `/asignacion/{orden}/{departamento}/{empleado}` (POST, modifica datos: actualiza orden + borra/inserta en `pagos`) **no se disparó en vivo** — se dejó solo con revisión de código + lint, siguiendo el mismo criterio aplicado a otros endpoints mutantes durante esta tarea, para no generar datos de prueba/modificar registros reales en la empresa piloto sin necesidad.
+
+### Resultado
+Con esto se cierran los 8 archivos identificados en el hallazgo crítico original de la tabla `empleados` inexistente en PostgreSQL: `orders.php`, `finance.php` (sin cambios, ya estaba bien), `tables.php`, `production.php`, `manufacturing.php`, `payments.php`, `employees.php`, `assignments.php`, `inventory.php` (parcial, 2 de N queries), `designs.php` (sin cambios, ya estaba bien). Detalle completo consolidado pendiente de actualizar en `postgresql_endpoints_status.md`.

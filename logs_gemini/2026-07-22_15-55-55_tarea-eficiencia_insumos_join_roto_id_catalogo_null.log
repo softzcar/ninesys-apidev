@@ -1,0 +1,59 @@
+- **Solicitud del Usuario:** El usuario reportó, tras el fix anterior de N/A, que en la pestaña TERMINADOS del reporte de eficiencia de empleados, para el empleado "danuil - Corte", la columna EFICIENCIA INSUMOS mostraba "N/A" en el 100% de las órdenes tras un refresco forzado (Ctrl+Shift+R), señalando correctamente que "no tiene sentido pues indica que en NINGUNA ORDEN SE GASTO MATERIAL lo que es falso".
+- **Fecha y Hora:** 2026-07-22 15:55:55
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `ninesys-api/app/routes/orders.php` (subquery `consumo_r` dentro de `eficiencia_insumos`, endpoint `GET /reportes/resumen/empleados/{id_empleado}/{id_departamento}`, ramas PostgreSQL y MySQL)
+- **Commits Relacionados:**
+    - Backend: 94681b6
+- **Acción Realizada:**
+    Se investigó por qué TODAS las órdenes de un empleado/departamento específico (588, "Corte") mostraban N/A pese a que el departamento de Corte sí consume tela físicamente. Se verificó primero que sí existían movimientos de inventario reales para esa combinación:
+    ```sql
+    SELECT id_departamento, COUNT(*) FROM inventario_movimientos WHERE id_empleado=588 GROUP BY id_departamento;
+    -- id_departamento 3 (Corte): 16 filas
+    ```
+    Se inspeccionaron esas 16 filas directamente y se encontró que 14 de 16 tenían `id_catalogo_insumos_prodcutos` vacío/NULL. Esta columna es precisamente la clave usada en el `LEFT JOIN` entre la subconsulta `est` (consumo estimado, vía `product_insumos_asignados.id_catalogo_insumos_productos`) y la subconsulta `consumo_r` (consumo real, vía `inventario_movimientos.id_catalogo_insumos_prodcutos`). Con la clave en NULL, el JOIN nunca encontraba coincidencia y `consumo_real_total` quedaba en 0/NULL, disparando el guard de N/A ya implementado en el frontend (fix anterior de esta misma sesión).
+
+    Se verificó el alcance del problema a nivel de toda la tabla:
+    ```sql
+    SELECT COUNT(*) FILTER (WHERE id_catalogo_insumos_prodcutos IS NULL) AS nulos,
+           COUNT(*) FILTER (WHERE id_catalogo_insumos_prodcutos IS NOT NULL) AS con_valor,
+           COUNT(*) AS total
+    FROM inventario_movimientos;
+    -- nulos: 2908, con_valor: 1296, total: 4204 (69% de los movimientos históricos sin esta columna)
+    ```
+    Se identificó que la tabla `inventario` (unida en la misma subconsulta vía `LEFT JOIN inventario inv ON im.id_insumo = inv._id`) tiene una columna `id_catalogo` que apunta al mismo catálogo (`catalogo_insumos_productos`) y que **nunca está NULL** (`SELECT COUNT(*) FROM inventario WHERE id_catalogo IS NULL` = 0). Se confirmó, comparando insumos específicos (ej. `_id` 701, 721, 725, 768, 883, todos con `insumo` = variantes de tela y `id_catalogo = 2`), que `inv.id_catalogo` coincide exactamente con los valores de `id_catalogo_insumos_prodcutos` cuando este último SÍ está poblado (filas 5857 y 6270, ambas con valor 2 en ambas columnas).
+
+    Se encontró además que este mismo patrón de fallback (`inv.id_catalogo` como respaldo de `im.id_catalogo_insumos_prodcutos`) YA existe en el endpoint `/reports/input-efficiency` de `manufacturing.php` (línea 3657: `AND (inv.id_catalogo = cip._id OR im.id_catalogo_insumos_prodcutos = cip._id)`), confirmando que es el criterio correcto ya establecido en el codebase, simplemente no replicado en `orders.php`.
+
+    Se aplicó el fix: se reemplazó la columna cruda `im.id_catalogo_insumos_prodcutos` (en el SELECT y en el GROUP BY de la subconsulta `consumo_r`) por `COALESCE(im.id_catalogo_insumos_prodcutos, inv.id_catalogo)`, en ambas ramas de la consulta (PostgreSQL y MySQL).
+
+- **Inconvenientes y Desafíos:**
+    Al escribir el comentario explicativo del fix, se incluyeron nuevamente comillas dobles literales (alrededor de "N/A" y "est") dentro del literal de cadena PHP delimitado también por comillas dobles, repitiendo el mismo error de sintaxis ya visto en el fix anterior de esta sesión (`php -l` reportó `syntax error, unexpected identifier "est"`). Se corrigió reescribiendo el comentario sin comillas dobles literales.
+
+- **Decisión Final y Justificación:**
+    Se prefirió `COALESCE(im.id_catalogo_insumos_prodcutos, inv.id_catalogo)` en vez de usar únicamente `inv.id_catalogo`, para no descartar el valor directo del movimiento cuando sí está presente (ej. movimientos recientes, como las filas 5857 y 6270, que ya lo registran correctamente) y mantener consistencia con el patrón `OR`/fallback ya usado en `manufacturing.php`.
+
+- **Herramienta(s) Utilizada(s):** `Bash` (`ssh` + `psql` contra Postgres Dev para diagnóstico y verificación, `php -l`, `git diff`, `git commit`, `curl`), `Read`, `Edit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `mcp__claude-in-chrome__javascript_tool` (inspección directa de la instancia Vue en el navegador para verificar el resultado end-to-end).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Antes del fix, se ejecutó la query completa de `eficiencia_insumos` para empleado=588/departamento=3 directamente en `psql`: las 11 órdenes resultantes daban `consumo_real_total = 0` para todas excepto ninguna con valor real coincidente (JOIN roto).
+
+    Tras aplicar el fix (aún sin desplegar), se re-ejecutó la misma query con la subconsulta corregida: las órdenes 4317 y 4425 ahora mostraron `consumo_real_total = 1.394` y `0.110` respectivamente (antes 0), con el resto de las órdenes permaneciendo en 0 legítimamente (no tienen ningún movimiento de inventario registrado, lo cual es distinto del bug -- ese 0 real ahora sí refleja la ausencia genuina de dato, y el frontend lo muestra correctamente como N/A vía el fix anterior).
+
+    Se linteó (`php -l`, sin errores tras corregir las comillas), se commiteó (94681b6) y se desplegó a Contabo Dev (`deploy_backend.sh` opción 2). Se verificó en vivo:
+    ```
+    curl -s "https://api.nineteengreen.com/reportes/resumen/empleados/588/3" -H "Authorization: 194"
+    ```
+    orden 4317 -> `consumo_real_total: 1.394`; orden 4425 -> `consumo_real_total: 0.11`, coincidiendo con los valores calculados en `psql`.
+
+    Se verificó también en el navegador (Chrome, sesión conectada): se accedió a la instancia Vue del componente `ReporteEficienciaEmpleados` directamente vía `javascript_tool`, confirmando que `this.eficienciInsumos` ya trae los valores corregidos para las órdenes 4317/4425, y que `calcularEficienciaInsumos(4317)` devuelve `"81.78"` y `calcularEficienciaInsumos(4425)` devuelve `"1818.18"` (antes ambas hubieran caído en el guard de `totalReal === 0` y devuelto `'N/A'`).
+
+- **Logro Conseguido:**
+    Se corrigió un bug de integridad de datos que afectaba al 69% de los movimientos de inventario históricos de toda la empresa (no solo al departamento de Corte), restaurando la capacidad de calcular EFICIENCIA INSUMOS con datos reales para cualquier empleado/departamento cuyos movimientos de inventario carecieran del campo `id_catalogo_insumos_prodcutos`. Este bug fue detectado gracias a que el usuario cuestionó activamente un resultado que "no tenía sentido" (100% de N/A en un departamento que sí consume material), reforzando la importancia de la verificación con datos reales establecida como principio de esta sesión de auditoría.
+
+- **Observaciones:**
+    Este bug es distinto y más profundo que el bug de "0% engañoso" corregido antes en la misma sesión: aquel afectaba la interpretación visual de un valor 0 legítimo; este afecta el cálculo mismo, ya que el JOIN nunca encontraba los datos reales que sí existían en la base de datos. Vale la pena considerar, como tarea de mantenimiento de datos separada (fuera del alcance de esta tarea), un `UPDATE` que rellene retroactivamente `inventario_movimientos.id_catalogo_insumos_prodcutos` a partir de `inventario.id_catalogo` para los 2908 registros históricos afectados, de modo que futuras consultas no dependan del `COALESCE` en tiempo de ejecución -- no se realizó en esta tarea por no haber sido solicitado explícitamente por el usuario.
+
+- **Respuesta de Claude:** Se identificó y corrigió la causa raíz de que EFICIENCIA INSUMOS mostrara "N/A" en el 100% de las órdenes terminadas para el empleado "danuil - Corte": la clave usada en el JOIN de la subconsulta de consumo real (`id_catalogo_insumos_prodcutos`) está NULL en el 69% de los movimientos de inventario históricos de toda la empresa. Se corrigió usando como respaldo `inventario.id_catalogo` (siempre poblado), mismo criterio ya usado en otro endpoint del sistema. Cambio commiteado (94681b6), desplegado a Contabo Dev y verificado en vivo: las órdenes 4317 y 4425 de ese empleado ahora muestran 81.78% y 1818.18% en vez de N/A.

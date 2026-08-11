@@ -1,0 +1,50 @@
+**Tarea:** Reparar inconsistencias detectadas entre `postgresql_endpoints_status.md` (tabla resumen decía 100%) y el código real de `orders.php` y `finance.php`
+**Fecha:** 2026-07-10 18:21:00
+**Rama:** feature/postgresql-support
+**Commits:** `ff78b25`, `55a5813`, `8877e8a`
+
+### Contexto
+El usuario pidió reparar una inconsistencia que reporté: la tabla resumen de `postgresql_endpoints_status.md` marcaba `orders.php` y `finance.php` como 100% completados, pero el código real tenía patrones MySQL-only sin condicionar. Se pidió completar el código de verdad, no solo corregir el documento.
+
+### Hallazgo 1: `finance.php` — la inconsistencia era solo documental
+Auditoría completa (todas las funciones MySQL-only conocidas + sweep de patrones adicionales) no encontró NINGÚN patrón sin proteger — todo estaba ya envuelto en `if (DB_DRIVER === 'pgsql')`. Se verificaron en vivo 4 endpoints (`/reporte-de-pagos`, `/reporte-de-caja`, `/retiros`, `/balance-de-cierres`) → 200 sin error. **No se tocó código.** La lista de "Pendientes" en el doc estaba desactualizada (ya se había corregido, nunca se movió a la sección de completados).
+
+### Hallazgo 2: `orders.php` — 3 bugs reales + una cadena de descubrimientos
+Auditoría completa encontró 3 problemas reales sin proteger (de ~5882 líneas, el resto de lo que el doc marcaba "pendiente" ya estaba hecho, con line numbers desactualizados igual que en `reports.php`):
+
+1. `/comercializacion/dashboard/{id}/{dep}`: `YEARWEEK(a.moment)=YEARWEEK(NOW())` sin condicional → `EXTRACT(WEEK)/EXTRACT(YEAR)` para pgsql.
+2. `/orden/abono`: `DATE_SUB(NOW(), INTERVAL 10 SECOND)` sin condicional → `NOW() - INTERVAL '10 seconds'` para pgsql.
+3. 14 líneas con identificadores entre backticks (sintaxis MySQL-only, inválida en PDO pgsql) en `/orden/actualizar-estado`, `/orden/asignacion/{id}`, `/ordenes/nueva`, `/ordenes/nueva/custom`, `/ordenes/nueva/sport` → backticks removidos (opcionales en MySQL, no son palabras reservadas en ninguno de los dos motores).
+
+Verificación en vivo de `/orden/asignacion/{id}` (empresa 194) reveló una cadena de problemas NO relacionados con sintaxis SQL:
+
+4. **Tabla `empleados` no existe en Postgres** (confirmado con `\dt` en `api_emp_194` — solo existen tablas relacionadas como `empleados_salario`, `empleados_lotes_fabricacion`). El resto del código ya migrado usa consistentemente `api_empresas.empresas_usuarios` vía FDW. Se migraron las 7 queries de este endpoint (diseno/corte/impresion/estampado/confeccion/revision/responsable) de `JOIN empleados b ON a.dep_X = b._id` + `b.username` a `JOIN api_empresas.empresas_usuarios b ON a.dep_X = b.id_usuario` + `b.nombre`, preservando el shape de salida (alias `nombre`/`_id`). **Decisión confirmada explícitamente por el usuario.**
+
+5. Al desplegar el fix anterior apareció un **typo preexistente** sin relación con PostgreSQL: `SELECT a.cantidad, a.prodcuto,. a.idp` (coma seguida de punto) en `orden_productos_cantidad` — rompe en ambos motores por igual. Corregido.
+
+6. Al desplegar ese fix, quedó expuesto que las columnas `a.dep_diseno`, `a.dep_corte`, `a.dep_impresion`, `a.dep_estampado`, `a.dep_confeccion`, `a.dep_revision` **tampoco existen** en la tabla `ordenes` — ni en Postgres ni en MySQL. Corrección importante de fuente: la primera verificación se hizo contra la empresa 163 (MySQL), que el usuario aclaró es **legacy y no representativa** (no se toca, historia aparte). Se repitió la verificación contra la fuente correcta: **empresa 194 en producción (MariaDB, la base de datos real del negocio)**, vía `SHOW COLUMNS FROM api_emp_194.ordenes` en `vps-contabo-prod`. Resultado: tampoco existen ahí `dep_diseno`, `dep_corte`, etc., **ni tampoco sus variantes `_detalles`** (`dep_diseno_detalles`, etc.) que otra query de este mismo endpoint asumía que sí funcionaban. Es decir, el endpoint completo (`detalle_empleados` incluido) está roto en los tres entornos verificados (163 MySQL, 194 producción MariaDB, 194 desarrollo Postgres) — deuda técnica de antes de un refactor de esquema, completamente ajena a la migración a PostgreSQL. Además se confirmó que **el frontend (`app_multi`) no llama a este endpoint en ningún lugar** (`grep` sin resultados). **Por decisión del usuario, se deja así — no se sigue invirtiendo en arreglar columnas que no existen en una tabla legacy de un endpoint sin consumidores conocidos.**
+
+### Hallazgo 3 (CRÍTICO, no resuelto — reportado para tarea aparte)
+El mismo patrón de la tabla `empleados` inexistente en Postgres se repite en **8 archivos más** (~30 ocurrencias), confirmado por grep global de `JOIN empleados\b|FROM empleados\b`:
+
+| Archivo | Ocurrencias | ¿Marcado 100% en status.md? |
+|---|---|---|
+| `employees.php` | 13 | Parcial (97%) |
+| `payments.php` | 4 | ✅ Sí — 100% |
+| `manufacturing.php` | 3 | ✅ Sí — 100% |
+| `production.php` | 3 | ✅ Sí — 100% |
+| `tables.php` | 2 | ✅ Sí — 100% |
+| `inventory.php` | 2 | Pendiente (fase 4) |
+| `designs.php` | 2 | No evaluado — ambas ocurrencias parecen código muerto/comentado, no verificado a fondo |
+| `assignments.php` | 1 | No evaluado |
+
+**Esto significa que 4 archivos ya declarados "100% completado" (incluyendo `payments.php` y `tables.php`) probablemente tienen el mismo bug de tabla `empleados` inexistente que encontré en `orders.php`, sin verificar en vivo con datos que efectivamente ejerciten esos JOIN.** Por decisión explícita del usuario, esto NO se corrige en esta sesión — queda documentado como hallazgo crítico para una tarea dedicada aparte, dado el volumen (8 archivos, ~30 ocurrencias) y que probablemente reabre la verificación de archivos ya cerrados.
+
+### Validación
+- `php -l app/routes/orders.php`: sin errores en cada paso.
+- 3 commits (`ff78b25`, `55a5813`, `8877e8a`) desplegados a Desarrollo tras cada cambio.
+- `/comercializacion/dashboard/1/1` verificado en vivo: 200, sin errores embebidos (búsqueda recursiva de `status:'error'` en toda la estructura de respuesta, no solo el nivel superior — el `LocalDB::goQuery` traga errores SQL silenciosamente devolviendo `{status:'error',...}` en vez de lanzar excepción, así que un chequeo superficial de "sin campo error en la raíz" no es suficiente).
+- `/orden/asignacion/1`: mejorado progresivamente (tabla empleados resuelta, typo corregido) pero sigue devolviendo errores embebidos en 6 de sus ~13 queries por las columnas `dep_X` inexistentes — deuda preexistente aceptada, no bloqueante (endpoint sin consumidores en el frontend).
+
+### Resultado
+Parcial por decisión del usuario: `finance.php` confirmado 100% real. `orders.php` mejorado (3 bugs reales de sintaxis + 1 bug de tabla inexistente + 1 typo preexistente corregidos), con una porción de deuda técnica preexistente aceptada explícitamente sin corregir. Hallazgo crítico de la tabla `empleados` en 8 archivos más queda pendiente de decisión/planificación en una sesión futura — **no asumir que `payments.php` o `tables.php` están realmente 100% sin re-verificar en vivo.**

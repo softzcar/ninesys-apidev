@@ -1,0 +1,44 @@
+- **Solicitud del Usuario:** Tras identificar que la caja "0.00 HORAS" del Reporte de Eficiencia de Empleados estaba rota, el usuario aclaró: "Vamos a mostrar en la eficiencia del tiempo el tiempo que le tomó al empleado realizar la tarea independientemente si se pagó o no, pero si podemos mostrar en el modal el estado de esas horas con respecto al pago en badge...", y luego indicó explícitamente: "Empieza solo con la caja HORAS, y luego el modal para dejar todo listo, una cosa a la vez."
+- **Fecha y Hora:** 2026-07-22 16:54:50
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `ninesys-api/app/routes/orders.php` (endpoint `GET /reportes/resumen/empleados/{id_empleado}/{id_departamento}`, bloque `ordenes_semana`)
+- **Commits Relacionados:**
+    - Backend: b0fc601
+- **Acción Realizada:**
+    Se investigó por qué `horasTrabajadas` (computed del frontend `ReporteEficienciaEmpleados.vue`, basado en `resp.data.ordenes_semana`) siempre mostraba "0.00 HORAS" para cualquier empleado. Se encontró que el backend nunca envía la clave `ordenes_semana` en la respuesta JSON: el bloque de código que la calculaba estaba envuelto en un comentario `/* ... */` (líneas ~1367-1540) ubicado DESPUÉS de `$response->getBody()->write(...); return $response...` -- es decir, código completamente inalcanzable incluso si se descomentara, porque el endpoint ya había retornado la respuesta antes de llegar ahí.
+
+    Se descubrió, mediante un comentario en español ya presente dentro de ese mismo bloque muerto, que una sesión anterior ya había intentado corregir un bug de lógica DENTRO de ese código (`$departamento` siendo un array crudo en vez de string) sin notar que el bloque completo era inalcanzable -- ese arreglo previo nunca tuvo efecto real. Se confirmó que este bug es preexistente (no introducido por la migración a Postgres) y afecta también a producción MySQL (163), ya que el bloque muerto está fuera de cualquier condicional `DB_DRIVER`.
+
+    Se consultó con el usuario sobre la semántica correcta: el bloque muerto calculaba horas trabajadas usando la tabla legada `lotes_detalles` (un solo empleado por lote), filtrando además por `fecha_pago IS NULL` (solo "lo no pagado"). El usuario confirmó que esto es incorrecto para el propósito de la caja de horas: el trabajo ya pagado NO debe "desaparecer" de las horas trabajadas, y que la fuente correcta de fecha_inicio/fecha_terminado por empleado es `lotes_detalles_empleados_asignados` (ldea) -- la tabla vigente que soporta múltiples empleados por lote, ya usada en el resto de este mismo endpoint (en la subconsulta de `eficiencia_insumos`).
+
+    Se reemplazó el bloque muerto completo por un query nuevo (con ramas PostgreSQL y MySQL vía `DB_DRIVER`), que calcula `tiempo_transcurrido` en SEGUNDOS a partir de `lotes_detalles_empleados_asignados` para las tareas con `progreso = 'terminada'` y `fecha_terminado IS NOT NULL`, del empleado y departamento consultados, SIN filtrar por estado de pago (por decisión explícita del usuario). El resultado se asigna a `$object['ordenes_semana']`, la misma clave que el frontend ya esperaba, evitando así cualquier cambio en `ReporteEficienciaEmpleados.vue` para esta fase.
+
+- **Inconvenientes y Desafíos:**
+    Ninguno técnico en esta fase -- la investigación previa (bitácoras del mismo día sobre `eficiencia_insumos`) ya había establecido el patrón de verificación con `psql` directo antes de escribir código, lo que permitió confirmar el resultado esperado (375.32 horas para danuil/departamento Corte) antes de desplegar.
+
+- **Decisión Final y Justificación:**
+    Se eliminó por completo el bloque de código muerto en vez de dejarlo comentado, para no dejar código confuso que una futura sesión pueda intentar "arreglar" sin darse cuenta de que es inalcanzable (como ya ocurrió una vez). El nuevo query reutiliza `lotes_detalles_empleados_asignados`, consistente con el resto del endpoint, y omite deliberadamente cualquier join con `pagos` en esta fase -- el estado de pago por tarea se implementará como una fase separada (modal con badge "pagado"/"pendiente de pago"), sin mezclar ambas responsabilidades en el mismo cambio, siguiendo la instrucción explícita del usuario de ir "una cosa a la vez".
+
+- **Herramienta(s) Utilizada(s):** `Bash` (`ssh` + `psql` para diagnóstico y verificación en Postgres Dev, `php -l`, `git diff`, `git commit`, `curl`), `Read`, `Edit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo), `mcp__claude-in-chrome__*` (javascript_tool, computer/screenshot) para verificación visual en vivo.
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Antes de desplegar, se ejecutó la query nueva directamente en `psql` contra Postgres Dev para empleado=588/departamento=3 (danuil/Corte): 16 tareas terminadas recientes con `tiempo_transcurrido` correcto en segundos (ej. orden 6156: 38s, orden 6141: 31900s), y una suma total de 1,351,167 segundos = 375.32 horas sobre todo el historial.
+
+    Tras lintear (`php -l`, sin errores), commitear (b0fc601) y desplegar a Contabo Dev, se verificó en vivo:
+    ```
+    curl -s "https://api.nineteengreen.com/reportes/resumen/empleados/588/3" -H "Authorization: 194"
+    ```
+    `ordenes_semana` ahora contiene 440 registros, con suma total de 375.32 horas (coincide exactamente con el cálculo directo en `psql`).
+
+    Se verificó también en el navegador (Chrome, sesión conectada): se seleccionó "danuil - Corte" y la caja "RELACIÓN DE PAGOS" mostró **"375.32 HORAS"** en vez de "0.00 HORAS" (comportamiento previo, confirmado roto para todos los empleados probados durante esta sesión de auditoría).
+
+- **Logro Conseguido:**
+    Se restauró una métrica visible en el dashboard principal del reporte que llevaba, según la evidencia encontrada, un tiempo indeterminado completamente rota (mostrando siempre 0.00 para cualquier empleado, en cualquier departamento, tanto en desarrollo como -- según el análisis -- en producción). Se corrigió sin necesidad de tocar el frontend, reutilizando exactamente la clave de respuesta (`ordenes_semana`) que ya esperaba.
+
+- **Observaciones:**
+    Queda pendiente la Fase 2 (explícitamente solicitada por el usuario como paso siguiente): agregar a esta misma query (o a una nueva, según se decida al implementarla) el `LEFT JOIN pagos p ON p.id_lotes_detalles = ldea._id` ya verificado en esta sesión, para exponer el estado de pago (`pagado` si `fecha_pago IS NOT NULL`, `pendiente de pago` si `estatus='aprobado' AND fecha_pago IS NULL`) como badge en un modal de detalle por tarea. Se confirmó ya el hallazgo clave para esa fase: `pagos.id_lotes_detalles` en la práctica almacena el `_id` de `lotes_detalles_empleados_asignados` (no el de la tabla `lotes_detalles` a la que apunta el FK declarado en el esquema, que parece haber quedado desactualizado), dando un join 1:1 exacto sin ambigüedad.
+
+- **Respuesta de Claude:** Se restauró el cálculo de "HORAS TRABAJADAS" en el Reporte de Eficiencia de Empleados: el código que debía calcularlo estaba en un bloque de comentario ubicado después del `return` del endpoint, por lo que nunca se ejecutaba (bug preexistente en producción, no introducido por la migración). Se reemplazó por un query nuevo sobre `lotes_detalles_empleados_asignados` (la tabla vigente de asignaciones), sumando el tiempo de todas las tareas terminadas sin filtrar por estado de pago, según lo acordado con el usuario. Verificado en vivo: la caja pasó de "0.00 HORAS" a "375.32 HORAS" para el empleado danuil en el departamento Corte. Queda pendiente la Fase 2: el modal con el estado de pago por tarea (badge pagado/pendiente).

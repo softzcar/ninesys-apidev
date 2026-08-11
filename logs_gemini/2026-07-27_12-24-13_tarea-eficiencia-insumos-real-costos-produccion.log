@@ -1,0 +1,34 @@
+- **Solicitud del Usuario:** Durante la Fase 4 (Cards/KPIs) de la auditoría del Reporte de Costos de Producción, se detectó que la barra "Eficiencia Promedio de Insumos" nunca se mostraba (siempre en 0). Ante la pregunta de cómo proceder, el usuario eligió: "Investigar si se puede calcular de verdad" (en vez de dejarla como está o eliminarla).
+- **Fecha y Hora:** 2026-07-27 12:24:13
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/reports.php` (`GET /reportes/costos-produccion/{inicio}/{fin}`)
+- **Commits Relacionados:**
+    - Backend: `106312c`
+- **Acción Realizada:**
+    Se confirmó que el backend hardcodeaba `$row['eficiencia_insumos'] = 0` para todas las filas ("Integrar eficiencia como 0 por compatibilidad"), y que `insumos_resumen`/`insumos_detalles` quedaban como arrays vacíos -- placeholders de una funcionalidad nunca completada.
+
+    Se identificó que `GET /reports/input-efficiency/{id_ordenes}` (`manufacturing.php`) ya calcula exactamente esta métrica (consumo estimado vs. real de insumos) para una lista arbitraria de órdenes, con toda la lógica de corrección ya verificada y aplicada dos veces esta misma semana (rendimiento Kg->Mt condicionado a la unidad del insumo, `ABS()` en el consumo real, fallback por `inv.id_catalogo` cuando el movimiento no tiene `id_catalogo_insumos_prodcutos`).
+
+    Se adaptó esa misma lógica SQL a una nueva consulta BATCH en `reports.php`, agrupando por `id_orden` (en vez de por insumo individual como el endpoint original) y sin la ventana de "últimos 7 días" de ese endpoint (innecesaria aquí, ya que el conjunto de órdenes ya está acotado por el rango de fechas del reporte, no es un catálogo sin acotar). Se agregaron dos campos nuevos por fila: `consumo_estimado_insumos` y `consumo_real_insumos`. Se eliminó el placeholder `eficiencia_insumos = 0` (ya no aporta nada, el cálculo real se hace ahora en el frontend a partir de estos dos campos).
+
+- **Inconvenientes y Desafíos:** Ninguno significativo -- al ser una adaptación directa de una consulta ya probada y corregida esta semana, el mayor cuidado fue verificar con `psql` que la agregación por orden (SUM de todos los insumos de cada orden) reproducía exactamente los mismos valores por insumo individual ya verificados anteriormente (orden 6293: Papel 28.20/28.20 + otro insumo 28.2/29.2 = total 56.4/57.4 por orden).
+
+- **Decisión Final y Justificación:**
+    Se decidió devolver el detalle por orden (`consumo_estimado_insumos`/`consumo_real_insumos`) en vez de un solo porcentaje agregado global, para que el frontend pueda sumar dinámicamente sobre `filteredReportData` y que la eficiencia responda al filtro "Filtrar por Orden" igual que el resto de los totales del reporte -- consistente con el patrón ya establecido para `total_productos`, `costo_insumos_total`, etc.
+
+- **Herramienta(s) Utilizada(s):** `Bash` (`grep` para localizar el endpoint de referencia, `ssh`/`psql` para escribir y verificar la query adaptada con datos reales ANTES de integrarla al código, `git diff`, `git commit`, `curl` para verificación en vivo tras el despliegue), `Read`, `Edit`, `php -l`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Se escribió y verificó la query completa en `psql` contra Postgres Dev antes de tocar el código: para el rango 2026-07-01 a 2026-07-22 (414 órdenes), total estimado=4875.75, total real=3673.28, eficiencia agregada=132.74%. Se verificó también a nivel de fila individual: orden 6293 dio estimado=56.4/real=57.4, coincidiendo exactamente con la suma de sus 2 insumos ya verificados individualmente en una tarea anterior de esta semana (Papel: 28.20/28.20; otro insumo: 28.2/29.2).
+
+    Tras desplegar, se repitió la verificación vía `curl` contra la API real: mismos totales exactos (4875.75 / 3673.28 / 132.74%), y la orden 6293 devolvió `consumo_estimado_insumos: 56.4, consumo_real_insumos: 57.4`.
+
+- **Logro Conseguido:**
+    Se completó una funcionalidad que estaba dejada a medias en el código (placeholders vacíos con un comentario explícito de "por compatibilidad"), reutilizando y adaptando lógica ya verificada y corregida en otro endpoint del sistema esta misma semana, en vez de implementar el cálculo desde cero con riesgo de repetir los mismos bugs (rendimiento, ABS, fallback de catálogo) que ya costó dos rondas de corrección encontrar y arreglar.
+
+- **Observaciones:** Ver bitácora complementaria en `app_multi/logs_gemini/` para la parte de frontend (acumulación en `reportTotals`, cálculo del porcentaje final).
+
+- **Respuesta de Claude:** Se implementó el cálculo real de eficiencia de insumos para el Reporte de Costos de Producción, reutilizando la lógica ya corregida esta semana en el endpoint de eficiencia de insumos por orden. Se agregó `consumo_estimado_insumos`/`consumo_real_insumos` por fila del reporte, dejando el cálculo del porcentaje agregado en el frontend para que responda al filtro de orden. Verificado con datos reales antes y después del despliegue: eficiencia agregada del período = 132.74%.

@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** Ejecutar la migración completa autónoma de datos reales desde Producción hacia Desarrollo para la Empresa 194.
+- **Acciones Realizadas:**
+  1. Se ejecutó la clonación atómica de 83 tablas (`clone_194_prod_to_dev_postgres.sh`).
+     - Backup previo creado en `/tmp/backups_migracion_postgres/api_emp_194_pre_migracion_20260811_103720.dump`.
+     - 83 tablas extraídas de Producción (MySQL) y cargadas en PostgreSQL Desarrollo.
+     - Secuencias IDENTITY resincronizadas.
+  2. Se ejecutó la sincronización de datos centrales de la 194 (`sync_empresas_centrales_194_prod_to_dev.sh`):
+     - Backup previo en `/tmp/backups_migracion_postgres/api_empresas_pre_sync_20260811_110305.dump`.
+     - 17 usuarios, 37 departamentos y gastos sincronizados fielmente con Producción en `api_empresas`.
+  3. Se ejecutaron exitosamente los 2 scripts de backfill obligatorios post-clon:
+     - `backfill_ids_moneda_metodo_194.sh`: 8,462 filas resueltas (`id_moneda`, `id_metodo_pago`).
+     - `backfill_moment_entregada_194.sh`: 1,285 órdenes entregadas resueltas con `moment_entregada`.
+- **Verificación:**
+  - Consulta `GET https://api.nineteengreen.com/empleados/dashboard-stats/656/16` (`Authorization: 194`):
+    - `status.terminadas`: **30**
+    - `status.pendientes`: **28**
+    - `pagos_semana`: Contabilizados **$5.40** pagados el lunes `2026-08-10` en la semana actual.

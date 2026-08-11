@@ -1,0 +1,19 @@
+**Tarea:** Re-verificar el hallazgo crítico de tabla `empleados` en `payments.php` (marcado 100% en el doc de estado)
+**Fecha:** 2026-07-10 19:50:00
+**Rama:** feature/postgresql-support
+**Commits:** `b8a2b11`, `8a37578`
+
+### Resultado del hallazgo original
+Las 4 ocurrencias de `JOIN empleados`/`FROM empleados` encontradas por grep resultaron ser **falsos positivos**: las 4 estaban correctamente protegidas dentro de ramas `else` (MySQL) ya existentes, con su contraparte pgsql usando `api_empresas.empresas_usuarios`. `payments.php` sí tenía el hallazgo crítico resuelto de antemano.
+
+### Bugs reales encontrados solo probando en vivo (no visibles en grep de texto)
+1. **GROUP BY estricto de PostgreSQL**: en 3 endpoints (`/pagos/semana/vendedores`, `/pagos/historico/{semana}`, `/pagos/vendedor/{id}`) la rama pgsql agrupaba por `a._id, c.*, d.pago_abono, e.monto, d.status, e.tipo_de_pago` pero el `ORDER BY` usaba `d._id` sin incluirlo en el `GROUP BY` — MySQL lo tolera, PostgreSQL no (`SQLSTATE[42803]`). Se agregó `d._id` a los 3 `GROUP BY`.
+2. **Alias fuera de alcance (bug preexistente, afecta ambos motores)**: en `/pagos/historico/{semana}`, las subqueries de bonos, descuentos y diseñadores usan `$whereFechaPagoP` que en el flujo sin `fecha_inicio`/`fecha_fin` (solo número de semana) referencia `ps.numero_semana`, pero esas 3 queries nunca unían la tabla `pagos_salarios ps`. Esto rompería igual en MySQL si se llamara sin parámetros de fecha (que es el modo de uso principal del endpoint, dado que la ruta es `/pagos/historico/{semana}`). Se agregó `LEFT JOIN pagos_salarios ps ON ps.id_pago = p._id` (o `pa.id_pago`) a las 4 queries afectadas.
+
+### Validación
+- `php -l`: sin errores en cada paso.
+- 2 despliegues a Desarrollo.
+- Verificado en vivo (empresa 194), 6 endpoints en total: `/pagos/semana/vendedores`, `/pagos/semana/empleados`, `/pagos/semana/disenadores`, `/pagos/historico/1`, `/pagos/reporte-empleado/1`, `/pagos/vendedor/1` → todos 200, sin errores embebidos tras los fixes.
+
+### Resultado
+Éxito. `payments.php` no tenía el bug de tabla `empleados`, pero sí 2 categorías de bugs distintas que solo aparecieron al ejecutar las queries reales contra PostgreSQL — confirma que el chequeo "100% HTTP 200" documentado originalmente no alcanzó a ejercitar todos los casos (ej. el endpoint sin parámetros de fecha, o el escenario con datos que efectivamente agrupan filas de `ordenes`).

@@ -1,0 +1,30 @@
+- **Solicitud del Usuario:** Continuación de la Fase 1 (restauración de HORAS TRABAJADAS). El usuario indicó "Empieza solo con la caja HORAS, y luego el modal para dejar todo listo, una cosa a la vez" -- esta tarea es la Fase 2: exponer el estado de pago por tarea para el modal de detalle en el frontend.
+- **Fecha y Hora:** 2026-07-22 17:04:19
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `ninesys-api/app/routes/orders.php` (mismo bloque `ordenes_semana` de la Fase 1)
+- **Commits Relacionados:**
+    - Backend: 1ded6ae
+- **Acción Realizada:**
+    Se agregó `p.monto_pago`, `p.fecha_pago` y `p.estatus AS estatus_pago` a la query de `ordenes_semana` (ambas ramas PostgreSQL/MySQL), vía `LEFT JOIN pagos p ON p.id_lotes_detalles = ldea._id`. Este patrón de JOIN ya estaba confirmado en la sesión previa (Fase 1 / bitácora del mismo día): `pagos.id_lotes_detalles` almacena en la práctica el `_id` propio de `lotes_detalles_empleados_asignados` (no el de la tabla legada `lotes_detalles` a la que apunta el FK declarado en el esquema), dando un join 1:1 exacto por tarea sin ambigüedad -- mismo patrón ya usado más arriba en este mismo endpoint (líneas ~922-923) para `ordenes_terminadas`.
+
+- **Inconvenientes y Desafíos:** Ninguno -- cambio aditivo sobre una query ya verificada en la fase anterior.
+
+- **Decisión Final y Justificación:**
+    Se usó el JOIN por `ldea._id` (exacto, sin ambigüedad) en vez de un join más laxo por `id_orden + id_empleado + id_departamento` (que se había considerado en la conversación previa como respaldo ante la posibilidad de que `ldea.id_lotes_detalles` no sirviera) -- se descubrió que ese join exacto sí es viable, eliminando la necesidad de la estrategia de desambiguación "sumar todos los pagos y marcar pagado solo si todos tienen fecha_pago" que el usuario había aprobado como plan de contingencia.
+
+- **Herramienta(s) Utilizada(s):** `Bash` (`ssh` + `psql` para verificación, `php -l`, `git diff`, `git commit`), `Read`, `Edit`, script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Se verificó en `psql` antes de desplegar, tanto para tareas sin pago (`fecha_pago` vacía, `estatus='aprobado'`) como para tareas con pago real (ej. empleado 3/departamento 1, orden 3834: `fecha_pago='2026-03-06 13:45:32'`). Se confirmó vía consulta agregada que 93 de 269 tareas terminadas del empleado 3/departamento 1 tienen `fecha_pago` poblada, coincidiendo exactamente con lo que luego mostró el frontend.
+
+    Tras lintear, commitear (1ded6ae) y desplegar a Contabo Dev, se verificó en vivo vía navegador (ver bitácora correspondiente en `app_multi/logs_gemini/`): el modal nuevo (`HorasTrabajadasDetalleModal.vue`) mostró correctamente el badge amarillo "Pendiente de pago" para danuil/Corte (fecha_pago vacía en todas sus tareas recientes) y el badge verde "Pagado" para Maru/Impresión (93 tareas con fecha_pago real).
+
+- **Logro Conseguido:**
+    Se completó la base de datos necesaria para que el frontend pueda mostrar el estado de pago por tarea sin necesidad de una consulta adicional ni de resolver ambigüedades de join, gracias al hallazgo del join exacto `pagos.id_lotes_detalles = ldea._id`.
+
+- **Observaciones:** Con este commit se cierra el trabajo de backend de las dos fases (b0fc601, 1ded6ae) para la funcionalidad de horas trabajadas + estado de pago. El resto del trabajo (modal, badge, disparador de clic) es exclusivamente frontend y se documenta en la bitácora correspondiente de `app_multi`.
+
+- **Respuesta de Claude:** Se agregó el estado de pago (monto, fecha de pago, estatus) a cada tarea de `ordenes_semana`, usando el join exacto `pagos.id_lotes_detalles = ldea._id` ya confirmado en la fase anterior. Esto deja lista la información que el frontend necesita para mostrar el badge "Pagado"/"Pendiente de pago" en el modal de detalle de horas. Verificado en vivo con datos reales tanto para el caso pagado como pendiente.

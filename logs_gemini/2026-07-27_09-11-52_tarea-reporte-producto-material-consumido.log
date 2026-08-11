@@ -1,0 +1,34 @@
+- **Solicitud del Usuario:** "Sigamos con 'Productos' aquí vamos a cambiar el SELECT por un TypeHead y en la tabla tenemos dos columnas llamadas `valor_inicial` y `valor_final` vamos a cambiar esas dos columnas por una sola que se llame 'Material Consumido' y mostramos el cálculo de la diferencia de esos dos valores. Vamos a poner un filtro por número de orden y poder ordenar por orden, producto, id insumo, insumo, empleado y fecha" (continuación de la revisión del checklist de migración Postgres, sección Reportes > Productos).
+- **Fecha y Hora:** 2026-07-27 09:11:52
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:**
+    - `app/routes/inventory.php` (`GET /insumos/reporte/insumos/producto/{id_producto}`)
+- **Commits Relacionados:**
+    - Backend: `5994bb8`
+- **Acción Realizada:**
+    Se confirmó primero, con `grep`, que este endpoint es consumido ÚNICAMENTE por `pages/inventario/reportes/producto/index.vue` (ningún otro componente del frontend lo usa), permitiendo cambiar libremente la forma de la respuesta sin riesgo de romper otra pantalla.
+
+    1. Se reemplazaron las columnas `valor_inicial`/`valor_final` de ambas ramas de la consulta (PostgreSQL y MySQL) por una sola columna calculada `material_consumido = ROUND(ABS(valor_final - valor_inicial), 2)`. Se usó el mismo criterio `ABS()` ya establecido esta semana en el fix de "consumo real" del Reporte de Eficiencia de Empleados (evita valores negativos ante correcciones de inventario que incrementan el stock en vez de consumirlo).
+    2. Se reemplazó el bloque de asignación de `$object['fields']` por índice numérico (frágil, con `sortable` comentado en todas las columnas) por un array literal limpio, habilitando `sortable => true` exactamente en las 6 columnas pedidas por el usuario (orden, producto, id insumo, insumo, empleado, fecha), dejando "Material Consumido" sin esa propiedad tal como se especificó.
+    3. Al reescribir ese bloque se detectó y corrigió, como efecto directo de la limpieza (mismo array que ya se estaba tocando, no una tarea aparte), un campo `'moment'`/`'Fecha'` duplicado en el índice 8 -- error de copiar/pegar preexistente que hacía aparecer la columna "Fecha" dos veces en la tabla.
+    4. Se detectó, en el mismo bloque de código que ya se estaba modificando, una inyección SQL real: `$args['id_producto']` (route param, controlado por el atacante) se concatenaba crudo en el SQL sin ningún sanitizado (`"WHERE a.id_woo =" . $args['id_producto']`). Se corrigió envolviéndolo en `intval()`, sin cambiar el comportamiento esperado (siempre fue un código numérico de producto).
+
+- **Inconvenientes y Desafíos:**
+    Al reescribir la interpolación de `$idProducto` dentro de las cadenas SQL, se dejó por error el cierre de una de las cadenas con comilla simple (`'`) en vez de doble (`"`), heredado del patrón anterior que mezclaba concatenación (`.`) con comillas simples -- `php -l` lo detectó inmediatamente (`syntax error, unexpected identifier "SELECT"`), corregido en ambas ramas antes de continuar.
+
+- **Decisión Final y Justificación:**
+    No se agregó backend nuevo para el filtro por número de orden -- se decidió, dado que este endpoint ya devuelve todo el historial de movimientos de un producto en una sola llamada (sin paginación), implementarlo como filtro client-side en el frontend (ver bitácora correspondiente en `app_multi/logs_gemini/`), evitando una llamada adicional a la API en cada tecleo.
+
+- **Herramienta(s) Utilizada(s):** `grep` (verificación de uso del endpoint antes de cambiar su forma), `Read`, `Edit`, `php -l`, `Bash` (`git diff`, `git commit`, `ssh`/`psql` para verificar la query corregida contra datos reales en Postgres Dev antes de desplegar, `curl` para verificación en vivo tras el despliegue), script de despliegue `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo Contabo).
+
+- **Resultado:** Éxito
+
+- **Verificación:**
+    Se ejecutó la query corregida directamente en `psql` contra Postgres Dev (producto 20, "Chaqueta") antes de desplegar, confirmando que `material_consumido` se calcula correctamente (ej. 2.50, 0.50, 6.00 según cada movimiento). Tras desplegar, se repitió la consulta vía `curl` contra la API real (`/insumos/reporte/insumos/producto/20`), confirmando 187 filas con `material_consumido` poblado y el array `fields` con las 6 columnas `sortable: true` esperadas, sin la columna duplicada de Fecha.
+
+- **Logro Conseguido:**
+    Se simplificó la tabla del reporte de producto (una columna clara en vez de dos valores crudos que el usuario tenía que restar mentalmente), se habilitó una funcionalidad de ordenamiento que ya estaba prevista en comentarios del código pero nunca activada, se eliminó un bug visual preexistente (columna Fecha duplicada) y se cerró una vulnerabilidad de inyección SQL real, todo como parte de la misma tarea sin ampliar el alcance más allá de lo necesario.
+
+- **Observaciones:** Ninguna adicional -- ver bitácora complementaria en `app_multi/logs_gemini/` para la parte de frontend (TypeHead, filtro por orden).
+
+- **Respuesta de Claude:** Se modificó el endpoint del reporte de producto para devolver una columna calculada "Material Consumido" en vez de los dos valores crudos, se habilitó el ordenamiento por las 6 columnas solicitadas (ya previsto mas nunca activado en el código), se corrigió un bug preexistente de columna duplicada y se cerró una inyección SQL real en el parámetro de producto. Verificado con datos reales antes y después del despliegue.
