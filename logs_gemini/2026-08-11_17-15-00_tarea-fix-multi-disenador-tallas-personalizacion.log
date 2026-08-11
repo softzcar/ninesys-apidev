@@ -1,0 +1,28 @@
+- **Solicitud del Usuario:** Continuación de la auditoría del rol Diseño. Se encontró que "Tallas y Personalización" atribuía el pago de ajustes/personalizaciones al primer diseñador que tuviera un registro en `disenos` para una orden, o lo perdía en silencio si no existía ninguno (id_empleado=0 hardcodeado). El usuario aclaró el contexto de negocio: una orden puede tener MÁS de un diseñador asignado (ej. uno en el logo, otro en el diseño gráfico de la prenda) y pidió corregirlo.
+- **Fecha y Hora:** 2026-08-11 17:15:00
+- **Proyecto(s):** Backend (ninesys-api) + Frontend (app_multi)
+- **Archivos Involucrados:**
+    - `app/routes/designs.php` (`POST /diseno/ajustes-y-personalizaciones`)
+    - `app/routes/production.php` (`GET /sse/disenos-todo`)
+    - `components/disenosse/tallasPersonalizacionTodas.vue`
+    - `components/disenosse/tallasPersoalizacion.vue`
+- **Commits Relacionados:**
+    - Frontend: `6ca2f78`
+    - Backend: `07fcbc3`, `ad7d6e5`
+- **Acción Realizada:**
+    1. `GET /sse/disenos-todo`: acepta `id_empleado` como query param; cuando se recibe, el `LEFT JOIN` a `disenos` se acota a `d.id_empleado = <id>` en vez de solo `d.id_orden = a._id` -- antes cualquier diseñador que abriera esta pantalla para una orden ya trabajada por OTRO diseñador heredaba el `id_diseno` (y por lo tanto los datos precargados y el pago) del otro.
+    2. `POST /diseno/ajustes-y-personalizaciones`: el fallback por `id_orden` (cuando no se conoce el `id_diseno`) ahora busca/crea por `(id_orden, id_empleado)` en vez de `id_orden` solo con `LIMIT 1`. El INSERT de auto-creación ahora usa el `id_empleado` real recibido en el payload en vez del literal `0`.
+    3. **Bug preexistente descubierto al probar con datos reales**: la línea `$localConnection->lastInsertId('disenos__id_seq')` llamaba a un método que **no existe** en la clase `LocalDB` -- causaba un 500 (fatal error) cada vez que se intentaba auto-crear un diseño para una orden sin ninguno todavío. Esto significa que ese camino nunca funcionó, ni antes de esta tarea ni en el fix anterior de Antigravity para la empresa 204 (que dependía de esta misma línea). Corregido usando `insert_id` del resultado de `goQuery()`, que ya lo calculaba correctamente.
+    4. Frontend: `tallasPersonalizacionTodas.vue` envía `id_empleado` (del store) como query param al listar. `tallasPersoalizacion.vue` envía `id_empleado` al guardar, y cambia el filtro de precarga del formulario de `id_orden` a `id_diseno` -- antes, si dos diseñadores trabajaban la misma orden, el segundo veía en su formulario los ajustes YA guardados por el primero.
+- **Inconvenientes y Desafíos:** El bug de `lastInsertId()` inexistente no era visible por lectura de código sola -- se detectó solo al probar el flujo completo con curl contra datos reales (empleado 9/"Enemias", órdenes 6573 y 6567), que devolvió 500. Sin esa prueba end-to-end se habría desplegado un fix "correcto sobre el papel" pero roto en la práctica exactamente en el escenario que se quería arreglar (orden sin diseño previo).
+- **Decisión Final y Justificación:** Se optó por (id_orden, id_empleado) como llave de búsqueda/creación en vez de agregar un id_diseño explícito por producto, porque el formulario actual de "Tallas y Personalización" opera a nivel de ORDEN completa, no por producto individual dentro de la orden -- coincide con el modelo de datos actual (`disenos.id_orden` + `disenos.id_empleado`, sin restricción UNIQUE que impida múltiples filas por orden).
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (git, ssh, psql, curl, php -l), `deploy_backend.sh` (opción 2).
+- **Resultado:** Éxito.
+- **Verificación:** Probado end-to-end con datos reales y un empleado dedicado a pruebas (empleado 9, "Enemias", diseñador real):
+    - Orden sin diseño previo (6573): antes de este fix daba 500; después, crea `disenos._id=1082` con `id_empleado=9` (no 0) y genera el pago correcto ($0.20 por 1 ajuste, antes se perdía en silencio).
+    - Orden con OTRO diseñador ya asignado (6567, `disenos._id=1080`, empleado 3/Maru): el empleado 9 crea su PROPIA fila (`_id=1081`), sin tocar ni leer la de Maru -- confirmado con `GET /sse/disenos-todo?id_empleado=9` (devuelve `id_diseno=0` antes de crear, no 1080) y `GET /sse/disenos-todo?id_empleado=3` (sigue devolviendo 1080 sin cambios).
+    - Rollback completo de los datos de prueba verificado (0 filas restantes en `disenos`/`disenos_ajustes_y_personalizaciones`/`pagos` para los IDs de prueba).
+- **Logro Conseguido:** Se corrigió un bug real de comisión mal atribuida o perdida en silencio para diseñadores en órdenes con más de un diseñador asignado, y se descubrió y corrigió de paso un bug preexistente (método inexistente) que rompía por completo el camino de auto-creación de diseño para órdenes nuevas -- funcionalidad que, según la evidencia, nunca había funcionado hasta hoy.
+- **Referencias de Sesión (Contexto):** N/A (sesión de Claude Code, no Antigravity/Gemini).
+- **Observaciones de Gemini:** N/A (tarea realizada por Claude; construye sobre 2 fixes previos de Antigravity del mismo día, corrigiéndolos y completándolos).
+- **Respuesta de Gemini:** N/A (ver resumen entregado al usuario en el chat).
