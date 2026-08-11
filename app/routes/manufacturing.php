@@ -2005,15 +2005,13 @@ return function (App $app) {
       }
 
       $now = date('Y-m-d H:i:s');
-      $nombre_departamento = 'Impresión';
-
-      // Log para depuración (Archivo explicito)
-      $logFile = __DIR__ . '/debug_manufacturing.log';
-      $logData = "--------------------------------------------------\n";
-      $logData .= "Fecha: " . date('Y-m-d H:i:s') . "\n";
-      $logData .= "Lote ID: {$id_lote}\n";
-      $logData .= "Consumo Papel Raw: " . print_r($consumo_papel, true) . "\n";
-      file_put_contents($logFile, $logData, FILE_APPEND);
+      // Se usa el nombre REAL del departamento (no un literal 'Impresión' fijo):
+      // mismo criterio ya usado en finalizar-corte -- este endpoint puede ser
+      // invocado por cualquier departamento con comportamiento tipo='impresion',
+      // no solo el que se llama literalmente "Impresión".
+      $sql_nombre_dep = 'SELECT departamento FROM departamentos WHERE _id = ?';
+      $resp_nombre_dep = $localConnection->goQuery($sql_nombre_dep, [$id_departamento]);
+      $nombre_departamento = $resp_nombre_dep[0]['departamento'] ?? 'Impresión';
 
       // Atomicidad FK: todas las escrituras de la finalización van en una transacción
       $localConnection->beginTransaction();
@@ -2022,9 +2020,6 @@ return function (App $app) {
         $id_insumo_papel = intval($papel['id_insumo']);
         $cantidad_total_papel = floatval($papel['cantidad_total']);
         $id_ordenes_especificas = $papel['id_ordenes'] ?? [];
-
-        $logMsg = "Procesando Papel - Insumo ID: {$id_insumo_papel}, Cantidad: {$cantidad_total_papel}\n";
-        file_put_contents($logFile, $logMsg, FILE_APPEND);
 
         if ($cantidad_total_papel > 0) {
           $localConnection->goQuery('UPDATE inventario SET cantidad = cantidad - ? WHERE _id = ?', [$cantidad_total_papel, $id_insumo_papel]);
@@ -2048,15 +2043,9 @@ return function (App $app) {
               if ($consumo_estimado > 0) {
                 $sql_movimiento = 'INSERT INTO inventario_movimientos (id_orden, id_empleado, id_insumo, id_departamento, departamento, valor_inicial, valor_final, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
                 $localConnection->goQuery($sql_movimiento, [$order['id_orden'], $id_empleado, $id_insumo_papel, $id_departamento, $nombre_departamento, 0, $consumo_estimado, $now]);
-
-                $logMsg = "INSERTADO movimiento para Orden {$order['id_orden']}, Qty: {$consumo_estimado}\n";
-                file_put_contents($logFile, $logMsg, FILE_APPEND);
               }
             }
           }
-        } else {
-          $logMsg = "SKIPPED update/insert because cantidad_total_papel is <= 0\n";
-          file_put_contents($logFile, $logMsg, FILE_APPEND);
         }
       }
 
@@ -3110,8 +3099,13 @@ return function (App $app) {
     $localConnection = new LocalDB();
     // Reposiciones
     // Buscar orden_proceso
-    $sql = "SELECT orden_proceso FROM departamentos WHERE _id = {$args['id_departamento']}";
+    $sql = "SELECT orden_proceso, departamento FROM departamentos WHERE _id = {$args['id_departamento']}";
     $resp_orden_proceso = $localConnection->goQuery($sql);
+    // Nombre REAL del departamento que consulta (no un literal 'Impresión' fijo
+    // más abajo): mismo criterio que finalizar-impresion/finalizar-corte -- este
+    // mismo empleado podría pertenecer a un departamento distinto con
+    // comportamiento tipo='impresion' en el futuro (igual al patrón "Corte 2").
+    $nombreDepartamentoActual = $resp_orden_proceso[0]['departamento'] ?? 'Impresión';
 
     // Buscar reposiciones
     // sizes._id es entero y ordenes_productos.talla es varchar; MySQL compara con coercion
@@ -3184,8 +3178,8 @@ return function (App $app) {
             (SELECT COUNT(_id) FROM reposiciones WHERE id_departamento = {$args['id_departamento']} AND id_empleado = {$args['id_empleado']} AND terminada = 0 AND id_orden = a.id_orden) AS en_reposiciones,
             (SELECT COUNT(_id) FROM tintas WHERE id_orden = a.id_orden) AS en_tintas,
             (SELECT COUNT(_id) FROM inventario_movimientos WHERE id_orden = a.id_orden AND id_empleado = {$args['id_empleado']}) AS en_inv_mov,
-            (SELECT valor_inicial FROM inventario_movimientos WHERE id_orden = a.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_inicial,
-            (SELECT valor_final FROM inventario_movimientos WHERE id_orden = a.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_final,
+            (SELECT valor_inicial FROM inventario_movimientos WHERE id_orden = a.id_orden AND departamento = '{$nombreDepartamentoActual}' LIMIT 1) AS valor_inicial,
+            (SELECT valor_final FROM inventario_movimientos WHERE id_orden = a.id_orden AND departamento = '{$nombreDepartamentoActual}' LIMIT 1) AS valor_final,
             c.prioridad,
             (z.unidades_produccion + COALESCE((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0)) AS unidades_solicitadas,
             -- Unidades: para Corte usar piezas mandadas a cortar (inventario_corte), con fallback a ajustes y cantidad original.
