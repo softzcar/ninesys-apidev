@@ -442,40 +442,6 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // Datos para la revisiond e trabajos
-  $app->get('/revision/trabajos', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB();
-
-    $sql = "SELECT a._id id_lotes_detalles, a.id_orden, b.name producto, b.cantidad, c.nombre empleado, d.estatus, d._id id_pagos, e.status estatus_orden FROM lotes_detalles a JOIN ordenes_productos b ON a.id_ordenes_productos = b._id JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario JOIN pagos d ON d.id_lotes_detalles = a._id JOIN ordenes e ON e._id = a.id_orden WHERE (e.status = 'Activa' OR e.status = 'Pausada' OR e.status = 'En espera') AND d.estatus = 'aprobado'";
-    $object['sql'] = $sql;
-    $object['items'] = $localConnection->goQuery($sql);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
-  // Update estatus de pago
-  $app->get('/revision/actualizar-estatus-de-pago/{estatus}/{id_pago}', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB();
-
-    $sql = "UPDATE pagos SET estatus = '" . $args['estatus'] . "' WHERE _id = " . $args['id_pago'];
-    $object['sql'] = $sql;
-    $object['save'] = $localConnection->goQuery($sql);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   /** Empleados */
 
   // Guardar Treas
