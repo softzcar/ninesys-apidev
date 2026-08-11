@@ -722,15 +722,20 @@ return function (App $app) {
       } else {
         // ONLY execute main order logic if NOT a reposition (or if we want repositions to trigger main logic, but usually not)
 
+        // Auto-completar cualquier fila plantilla sin asignar (id_empleado IS NULL) para este mismo departamento y orden
+        $sqlUpdateUnassigned = "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_empleado IS NULL AND fecha_terminado IS NULL;";
+        $localConnection->goQuery($sqlUpdateUnassigned);
+
         // --- VERIFICAR SI HAY OTROS EMPLEADOS PENDIENTES ---
         // Antes de avanzar el paso de la orden, verificamos si hay otros empleados asignados a este departamento
-        // que aún no han terminado su tarea.
+        // que aún no han terminado su tarea. Se excluyen registros sin empleado asignado (NULL).
         $sqlCheckPending = "SELECT COUNT(*) as pending 
                             FROM lotes_detalles_empleados_asignados 
                             WHERE id_orden = {$miEmpleado['id_orden']} 
                             AND id_departamento = {$miEmpleado['id_departamento']} 
                             AND (progreso != 'terminada' AND progreso != 'terminado')
-                            AND id_empleado != {$miEmpleado['id_empleado']}";
+                            AND id_empleado != {$miEmpleado['id_empleado']}
+                            AND id_empleado IS NOT NULL";
         // Eliminamos filtros de reposición para asegurar que contamos tareas principales si estamos en flujo principal
         // Opcional: AND (id_reposicion IS NULL OR id_reposicion = 0)
 
@@ -3211,13 +3216,20 @@ return function (App $app) {
             (SELECT MIN(dep.orden_proceso) FROM lotes_detalles_empleados_asignados ldea JOIN departamentos dep ON ldea.id_departamento = dep._id WHERE ldea.id_orden = y.id_orden) AS orden_proceso_min,
             (SELECT orden_proceso FROM departamentos WHERE _id = {$args['id_departamento']}) AS orden_proceso_departamento,            
             (
-                -- FIX: Primer departamento donde AUN hay empleados sin terminar.
-                -- Solo avanza al siguiente cuando TODOS terminaron (fecha_terminado IS NULL).
+                -- FIX: Primer departamento donde AUN hay tareas sin terminar.
+                -- Se descartan filas sin asignar (id_empleado IS NULL) si ese departamento ya fue completado por un empleado asignado.
                 SELECT dep.orden_proceso
                 FROM lotes_detalles_empleados_asignados ldea2
                 JOIN departamentos dep ON dep._id = ldea2.id_departamento
                 WHERE ldea2.id_orden = y.id_orden
                     AND ldea2.fecha_terminado IS NULL
+                    AND NOT EXISTS (
+                        SELECT 1 
+                        FROM lotes_detalles_empleados_asignados ldea_done 
+                        WHERE ldea_done.id_orden = ldea2.id_orden 
+                          AND ldea_done.id_departamento = ldea2.id_departamento 
+                          AND ldea_done.fecha_terminado IS NOT NULL
+                    )
                 ORDER BY dep.orden_proceso ASC
                 LIMIT 1
             ) AS orden_proceso,
