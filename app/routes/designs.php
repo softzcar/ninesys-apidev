@@ -228,21 +228,31 @@ return function (App $app) {
 
     $idDiseno = intval($data['id_diseno'] ?? 0);
     $idOrden = intval($data['id_orden'] ?? 0);
+    // Empleado que realmente esta llenando el formulario ahora mismo -- una
+    // orden puede tener MAS de un diseñador asignado (ej. uno en el logo,
+    // otro en el diseño grafico de la prenda), cada uno con su propia fila
+    // en `disenos`. Sin esto, el diseño auto-creado quedaba con id_empleado=0
+    // (comision perdida en silencio) y la busqueda por id_orden solo tomaba
+    // la PRIMERA fila que encontrara, atribuyendo el pago al diseñador
+    // equivocado cuando hay mas de uno en la misma orden.
+    $idEmpleadoActual = intval($data['id_empleado'] ?? 0);
 
     $sqlord = 'SELECT id_orden, id_empleado FROM disenos WHERE _id = ?';
     $resultDiseno = $localConnection->goQuery($sqlord, [$idDiseno]);
 
     if (empty($resultDiseno) && $idOrden > 0) {
-      $sqlordByOrden = 'SELECT _id, id_orden, id_empleado FROM disenos WHERE id_orden = ? LIMIT 1';
-      $findDiseno = $localConnection->goQuery($sqlordByOrden, [$idOrden]);
+      // Buscar la fila de ESTE diseñador para esta orden (no la primera que
+      // exista, que podria pertenecer a otro diseñador asignado a la misma orden).
+      $sqlordByOrden = 'SELECT _id, id_orden, id_empleado FROM disenos WHERE id_orden = ? AND id_empleado = ? LIMIT 1';
+      $findDiseno = $localConnection->goQuery($sqlordByOrden, [$idOrden, $idEmpleadoActual]);
       if (!empty($findDiseno)) {
         $idDiseno = intval($findDiseno[0]['_id']);
         $resultDiseno = $findDiseno;
       } else {
-        $sqlCreateDiseno = "INSERT INTO disenos (id_orden, id_empleado, terminado) VALUES (?, 0, 0)";
-        $localConnection->goQuery($sqlCreateDiseno, [$idOrden]);
+        $sqlCreateDiseno = "INSERT INTO disenos (id_orden, id_empleado, terminado) VALUES (?, ?, 0)";
+        $localConnection->goQuery($sqlCreateDiseno, [$idOrden, $idEmpleadoActual]);
         $idDiseno = intval($localConnection->lastInsertId('disenos__id_seq'));
-        $resultDiseno = [['id_orden' => $idOrden, 'id_empleado' => 0]];
+        $resultDiseno = [['id_orden' => $idOrden, 'id_empleado' => $idEmpleadoActual]];
       }
     }
 

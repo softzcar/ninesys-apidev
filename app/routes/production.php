@@ -841,7 +841,19 @@ return function (App $app) {
   $app->get('/sse/disenos-todo', function (Request $request, Response $response, array $args) {  // /lotes/en-proceso
     $localConnection = new LocalDB();
 
-    $sql = "SELECT COALESCE(d._id, 0) AS id_diseno, a._id id_orden, a._id tallas_personalizacion, d.id_empleado AS id_disenador FROM ordenes a LEFT JOIN disenos d ON d.id_orden = a._id WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' ORDER BY a._id DESC";
+    // Una orden puede tener MAS de un diseñador asignado (ej. uno en el logo,
+    // otro en el diseño grafico de la prenda), cada uno con su propia fila en
+    // `disenos`. Si se recibe id_empleado, el JOIN se acota a la fila de ESE
+    // diseñador -- sin esto, cualquier diseñador que abriera "Tallas y
+    // Personalizacion" para una orden ya trabajada por otro heredaba el
+    // id_diseno (y por lo tanto el pago y los valores precargados) del OTRO
+    // diseñador.
+    $idEmpleadoParam = isset($_GET['id_empleado']) ? intval($_GET['id_empleado']) : 0;
+    $joinDisenoCondition = $idEmpleadoParam > 0
+      ? "d.id_orden = a._id AND d.id_empleado = " . $idEmpleadoParam
+      : "d.id_orden = a._id";
+
+    $sql = "SELECT COALESCE(d._id, 0) AS id_diseno, a._id id_orden, a._id tallas_personalizacion, d.id_empleado AS id_disenador FROM ordenes a LEFT JOIN disenos d ON $joinDisenoCondition WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' ORDER BY a._id DESC";
     $obj['sql_items'] = $sql;
     $obj['items'] = $localConnection->goQuery($sql);
 
