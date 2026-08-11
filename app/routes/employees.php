@@ -1124,7 +1124,7 @@ return function (App $app) {
                     AND a.id_departamento = $id_departamento 
                     AND a.fecha_inicio IS NULL
                     AND a.fecha_terminado IS NULL
-                    AND ord.status LIKE 'En espera'";
+                    AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada')";
 
                 $pendientesResult = $localConnection->goQuery($sqlPendientes);
                 $pendientes = !empty($pendientesResult) ? $pendientesResult[0]['count'] : 0;
@@ -1264,28 +1264,26 @@ return function (App $app) {
                 if (DB_DRIVER === 'pgsql') {
                     $sqlPagos = "SELECT
                             SUM(p.monto_pago) as total_pagado,
-                            TO_CHAR(MAX(ldea.fecha_terminado), 'Day') as dia,
-                            ldea.fecha_terminado::date as fecha
+                            TO_CHAR(MAX(p.moment), 'Day') as dia,
+                            p.moment::date as fecha
                         FROM pagos p
-                        JOIN lotes_detalles_empleados_asignados ldea ON p.id_lotes_detalles = ldea._id
                         WHERE p.id_empleado = $id_empleado
                         AND p.id_departamento = $id_departamento
                         AND p.estatus = 'aprobado'
-                        AND EXTRACT(WEEK FROM ldea.fecha_terminado) = EXTRACT(WEEK FROM NOW())
-                        AND EXTRACT(YEAR FROM ldea.fecha_terminado) = EXTRACT(YEAR FROM NOW())
-                        GROUP BY ldea.fecha_terminado::date";
+                        AND EXTRACT(WEEK FROM p.moment) = EXTRACT(WEEK FROM NOW())
+                        AND EXTRACT(YEAR FROM p.moment) = EXTRACT(YEAR FROM NOW())
+                        GROUP BY p.moment::date";
                 } else {
                     $sqlPagos = "SELECT
                             SUM(p.monto_pago) as total_pagado,
-                            DATE_FORMAT(ldea.fecha_terminado, '%W') as dia,
-                            DATE(ldea.fecha_terminado) as fecha
+                            DATE_FORMAT(p.moment, '%W') as dia,
+                            DATE(p.moment) as fecha
                         FROM pagos p
-                        JOIN lotes_detalles_empleados_asignados ldea ON p.id_lotes_detalles = ldea._id
                         WHERE p.id_empleado = $id_empleado
                         AND p.id_departamento = $id_departamento
                         AND p.estatus = 'aprobado'
-                        AND YEARWEEK(ldea.fecha_terminado, 1) = YEARWEEK(NOW(), 1)
-                        GROUP BY DATE(ldea.fecha_terminado)";
+                        AND YEARWEEK(p.moment, 1) = YEARWEEK(NOW(), 1)
+                        GROUP BY DATE(p.moment)";
                 }
 
                 $pagosResult = $localConnection->goQuery($sqlPagos);
