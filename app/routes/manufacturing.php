@@ -4232,8 +4232,8 @@ return function (App $app) {
               op.cantidad,
   
               -- Tiempos Reales (divididos por productos físicos para balancear la suma agrupada)
-              COALESCE(tc.tiempo_terminado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealTerminadas,
-              COALESCE(tc.tiempo_en_curso, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS totalRealEnCurso,
+              COALESCE(tc.tiempo_terminado, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS \"totalRealTerminadas\",
+              COALESCE(tc.tiempo_en_curso, 0) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS \"totalRealEnCurso\",
   
               -- Tiempos Proyectados (filtrados por departamento cuando se especifica)
               (
@@ -4241,14 +4241,14 @@ return function (App $app) {
                   FROM products_tiempos_de_produccion ptp_sub
                   WHERE ptp_sub.id_product = op.id_woo
                   AND ptp_sub.id_departamento $deptProjTerminadas
-              ) AS totalProjectedTerminadas,
+              ) AS \"totalProjectedTerminadas\",
   
               (
                   SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
                   FROM products_tiempos_de_produccion ptp_sub
                   WHERE ptp_sub.id_product = op.id_woo
                   AND ptp_sub.id_departamento $deptProjEnCurso
-              ) AS totalProjectedEnCurso,
+              ) AS \"totalProjectedEnCurso\",
   
               -- Legacy / Totales
               (COALESCE(tc.tiempo_terminado, 0) + COALESCE(tc.tiempo_en_curso, 0)) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
@@ -4296,6 +4296,7 @@ return function (App $app) {
           JOIN ordenes o ON o._id = ldea.id_orden
           $whereClause
           " . ($id_empleado ? " AND ldea.id_empleado = $id_empleado" : "") . "
+          " . ($id_departamento ? " AND ldea.id_departamento = $id_departamento" : "") . "
           AND ldea.fecha_inicio IS NOT NULL
           AND ldea.fecha_inicio >= CURRENT_DATE - INTERVAL '30 days'
           ORDER BY ldea.fecha_inicio DESC
@@ -4397,6 +4398,7 @@ return function (App $app) {
           JOIN ordenes o ON o._id = ldea.id_orden
           $whereClause
           " . ($id_empleado ? " AND ldea.id_empleado = $id_empleado" : "") . "
+          " . ($id_departamento ? " AND ldea.id_departamento = $id_departamento" : "") . "
           AND ldea.fecha_inicio IS NOT NULL
           AND ldea.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
           ORDER BY ldea.fecha_inicio DESC
