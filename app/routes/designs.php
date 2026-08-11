@@ -249,9 +249,12 @@ return function (App $app) {
         $idDiseno = intval($findDiseno[0]['_id']);
         $resultDiseno = $findDiseno;
       } else {
+        // LocalDB no tiene un metodo lastInsertId() (bug preexistente, esta
+        // linea siempre tiro un fatal error / 500 -- goQuery() ya devuelve el
+        // ID generado en insert_id, esa es la forma correcta de leerlo).
         $sqlCreateDiseno = "INSERT INTO disenos (id_orden, id_empleado, terminado) VALUES (?, ?, 0)";
-        $localConnection->goQuery($sqlCreateDiseno, [$idOrden, $idEmpleadoActual]);
-        $idDiseno = intval($localConnection->lastInsertId('disenos__id_seq'));
+        $insertResult = $localConnection->goQuery($sqlCreateDiseno, [$idOrden, $idEmpleadoActual]);
+        $idDiseno = intval($insertResult['insert_id'] ?? 0);
         $resultDiseno = [['id_orden' => $idOrden, 'id_empleado' => $idEmpleadoActual]];
       }
     }
