@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** Mejorar el modal "Datos Extra {Departamento}" que ve el empleado al hacer click en "Terminar" en la sección "Órdenes en Proceso" -- solo mostraba título y botones Enviar/Borrar, sin ninguna información de contexto. Se propusieron ideas (producto, talla, cliente, cantidad, tiempo estimado/transcurrido, fecha de entrega, prioridad, detalle de reposición, nota del departamento anterior) y el usuario pidió implementarlas todas.
+- **Fecha y Hora:** 2026-08-11 15:45:00
+- **Proyecto(s):** Backend (ninesys-api) + Frontend (app_multi)
+- **Archivos Involucrados:**
+    - `app/routes/manufacturing.php` (endpoint `GET /empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso}`)
+- **Commits Relacionados:**
+    - Frontend: `5fd8e99` (refactor/modular-routes, repo app_multi)
+    - Backend: `d04ad04` (feature/postgresql-support)
+- **Acción Realizada:**
+    1. Se agregó `d.cliente_nombre AS cliente` a la query principal de "ordenes" y `b.cliente_nombre AS cliente` a la query de "reposiciones", ambas dentro del mismo endpoint -- el resto de los campos necesarios (producto/nombre_producto, talla, unidades/piezas_actuales, prioridad, fecha_entrega, tiempo_produccion, detalle_reposicion) ya existían en la respuesta.
+    2. Verificado con curl (`Authorization: 194`) que el campo `cliente` llega correctamente antes de tocar el frontend.
+- **Inconvenientes y Desafíos:**
+    - Al verificar en vivo en el navegador (empleado 8/Gladys, departamento Limpieza), el botón real "Iniciar" no producía ningún cambio en la base de datos tras varios clicks -- se determinó que NO es un bug: la orden de prueba elegida (6573) es nueva y su paso actual es Impresión (orden_proceso 3 de 10), mientras que Limpieza es el paso 7 -- la tarea de Limpieza legítimamente no puede iniciarse todavía. Se marcó manualmente `progreso='en curso'` vía SQL directo para poder abrir el modal y verificar el resto de la mejora, y se revirtió al estado original (`por iniciar`, `fecha_inicio=NULL`) al finalizar.
+    - Hallazgo incidental, NO relacionado con este cambio: la consola del navegador mostró `RangeError: Invalid time zone specified: NULL` proveniente de `obtenerAhoraEnTimezone` (mixin-time.js), dentro del cálculo de "Eficiencia de Tiempo" en segundo plano de la misma página (SseOrdenesAsignadasV5.vue:1801). Causa raíz: `empresas.timezone` para esta empresa contiene el string literal `"NULL"` (no un NULL real de SQL), que al ser truthy en JS nunca activa el fallback `|| 'America/Caracas'`. Queda documentado como pendiente, no corregido en esta tarea (fuera de alcance, no bloquea la funcionalidad principal).
+- **Decisión Final y Justificación:** Único cambio de backend necesario fue agregar el campo `cliente` -- el resto de la implementación es puramente frontend, reutilizando datos que el endpoint ya devolvía. Se reutilizó el endpoint ya existente `GET /ordenes/notas-por-empleado/{id_orden}` para las notas de departamentos anteriores en vez de crear uno nuevo.
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (git, ssh, psql, curl, php -l), `deploy_backend.sh` (opción 2), navegador (claude-in-chrome) para verificación visual end-to-end.
+- **Resultado:** Éxito.
+- **Verificación:** Verificado visualmente en Desarrollo con datos reales (orden 6573, empleado Gladys/Limpieza): el modal mostró correctamente "Producto: Franela Sublimada — Talla: S", "Cliente: LISBETH ARAQUE", "Cantidad: 7", "Fecha de entrega: 12-08-2026", badge URGENTE, "Estimado: 1 min" / "Transcurrido: 0 min" (en verde), y el estado vacío de "notas de departamentos anteriores" se ocultó limpiamente sin dejar espacio en blanco al no encontrar ninguna.
+- **Logro Conseguido:** El modal "Datos Extra" pasó de estar completamente vacío (solo título y botones) a mostrar contexto completo de la orden en todos los departamentos, sin necesidad de cerrar el modal para consultar la tarjeta de fondo.
+- **Referencias de Sesión (Contexto):** N/A (sesión de Claude Code, no Antigravity/Gemini).
+- **Observaciones de Gemini:** N/A (tarea realizada por Claude).
+- **Respuesta de Gemini:** N/A (ver resumen entregado al usuario en el chat).
