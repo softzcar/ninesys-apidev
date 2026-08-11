@@ -1429,6 +1429,13 @@ return function (App $app) {
     // que quedó muerto tras el `return` de arriba (usaba la tabla legada
     // lotes_detalles en vez de lotes_detalles_empleados_asignados, que es la
     // fuente vigente de fecha_inicio/fecha_terminado por empleado).
+    // ⚠️ NO agregar `AND p.fecha_pago IS NULL` a este WHERE -- eso es
+    // exactamente la decision explicita del usuario que este fix revierte
+    // (commit b0fc601/1ded6ae, 2026-07-22). El estado de pago se muestra vía
+    // p.fecha_pago/p.estatus_pago ya seleccionados abajo (para un badge en el
+    // frontend), no se usa para excluir tareas. Se reintrodujo por error el
+    // 2026-08-11 (commit 8e523a5) y se revirtio el mismo dia (ver bitácora
+    // 2026-08-11 fix-horas-trabajadas-incluye-tareas-pagadas).
     // NOTA sobre el JOIN con pagos: pagos.id_lotes_detalles almacena, en la
     // practica, el _id propio de lotes_detalles_empleados_asignados (no el de
     // la tabla legada lotes_detalles a la que apunta el FK declarado en el
@@ -1450,7 +1457,6 @@ return function (App $app) {
               AND ldea.id_departamento = {$idDepartamento}
               AND ldea.progreso = 'terminada'
               AND ldea.fecha_terminado IS NOT NULL
-              AND p.fecha_pago IS NULL
             ORDER BY ldea.fecha_terminado DESC
         ";
     } else {
@@ -1468,7 +1474,6 @@ return function (App $app) {
               AND ldea.id_departamento = {$idDepartamento}
               AND ldea.progreso = 'terminada'
               AND ldea.fecha_terminado IS NOT NULL
-              AND p.fecha_pago IS NULL
             ORDER BY ldea.fecha_terminado DESC
         ";
     }
