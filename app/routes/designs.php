@@ -202,28 +202,10 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
-    $monto_ajustes = $data['ajustes'];
-    $monto_personalizacion = $data['personalizaciones'];
-    $comision_ajustes = 0.2 * intval($monto_ajustes);
-    $comision_pesonalizacion = 0.3 * intval($monto_personalizacion);
-
-    // Verificar si el registro de diseños y ajuste ya existe
-    $sql_tipo = "SELECT tipo FROM disenos_ajustes_y_personalizaciones WHERE tipo = 'ajuste' AND id_diseno = ? ORDER BY tipo ASC";
-    $dataRequest = $localConnection->goQuery($sql_tipo, [$data['id_diseno']]);
-    if (count($dataRequest) > 0) {
-      $ajuste = true;
-    } else {
-      $ajuste = false;
-    }
-
-    $sql_tipo = "SELECT tipo FROM disenos_ajustes_y_personalizaciones WHERE tipo = 'personalizacion' AND id_diseno = ? ORDER BY tipo ASC";
-    $dataRequest = $localConnection->goQuery($sql_tipo, [$data['id_diseno']]);
-    $object['personalizacion'] = count($dataRequest);
-    if (count($dataRequest) > 0) {
-      $personalizacion = true;
-    } else {
-      $personalizacion = false;
-    }
+    $monto_ajustes = intval($data['ajustes'] ?? 0);
+    $monto_personalizacion = intval($data['personalizaciones'] ?? 0);
+    $comision_ajustes = 0.2 * $monto_ajustes;
+    $comision_pesonalizacion = 0.3 * $monto_personalizacion;
 
     $idDiseno = intval($data['id_diseno'] ?? 0);
     $idOrden = intval($data['id_orden'] ?? 0);
@@ -244,6 +226,16 @@ return function (App $app) {
         $resultDiseno = [['id_orden' => $idOrden, 'id_empleado' => 0]];
       }
     }
+
+    // Verificar si el registro de diseños y ajuste ya existe
+    $sql_tipo = "SELECT tipo FROM disenos_ajustes_y_personalizaciones WHERE tipo = 'ajuste' AND id_diseno = ? ORDER BY tipo ASC";
+    $dataRequestAjustes = $localConnection->goQuery($sql_tipo, [$idDiseno]);
+    $ajuste = count($dataRequestAjustes) > 0;
+
+    $sql_tipo = "SELECT tipo FROM disenos_ajustes_y_personalizaciones WHERE tipo = 'personalizacion' AND id_diseno = ? ORDER BY tipo ASC";
+    $dataRequestPers = $localConnection->goQuery($sql_tipo, [$idDiseno]);
+    $personalizacion = count($dataRequestPers) > 0;
+    $object['personalizacion'] = count($dataRequestPers);
 
     // Atomicidad FK: ajustes/personalizaciones + sus pagos en una transacción
     $localConnection->beginTransaction();
@@ -273,25 +265,28 @@ return function (App $app) {
       );
     }
 
-    // Guardar los pagos
-    if (empty($dataRequest)) {
-      $localConnection->goQuery(
-        "INSERT INTO pagos(cantidad, id_orden, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, 'aprobado', ?, ?, 'ajuste')",
-        [$monto_ajustes, $resultDiseno[0]['id_orden'], $comision_ajustes, $resultDiseno[0]['id_empleado']]
-      );
-      $localConnection->goQuery(
-        "INSERT INTO pagos(cantidad, id_orden, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, 'aprobado', ?, ?, 'personalización')",
-        [$monto_personalizacion, $resultDiseno[0]['id_orden'], $comision_pesonalizacion, $resultDiseno[0]['id_empleado']]
-      );
-    } else {
-      $localConnection->goQuery(
-        "UPDATE pagos SET monto_pago = ?, cantidad = ? WHERE id_empleado = ? AND id_orden = ? AND detalle = 'ajuste'",
-        [$comision_ajustes, $monto_ajustes, $resultDiseno[0]['id_empleado'], $resultDiseno[0]['id_orden']]
-      );
-      $localConnection->goQuery(
-        "UPDATE pagos SET monto_pago = ?, cantidad = ? WHERE id_empleado = ? AND id_orden = ? AND detalle = 'personalización'",
-        [$comision_pesonalizacion, $monto_personalizacion, $resultDiseno[0]['id_empleado'], $resultDiseno[0]['id_orden']]
-      );
+    // Guardar los pagos sólo si existe un empleado asignado (id_empleado > 0)
+    $idEmpleadoDiseno = intval($resultDiseno[0]['id_empleado'] ?? 0);
+    if ($idEmpleadoDiseno > 0) {
+      if (!$ajuste && !$personalizacion) {
+        $localConnection->goQuery(
+          "INSERT INTO pagos(cantidad, id_orden, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, 'aprobado', ?, ?, 'ajuste')",
+          [$monto_ajustes, $resultDiseno[0]['id_orden'], $comision_ajustes, $idEmpleadoDiseno]
+        );
+        $localConnection->goQuery(
+          "INSERT INTO pagos(cantidad, id_orden, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, 'aprobado', ?, ?, 'personalización')",
+          [$monto_personalizacion, $resultDiseno[0]['id_orden'], $comision_pesonalizacion, $idEmpleadoDiseno]
+        );
+      } else {
+        $localConnection->goQuery(
+          "UPDATE pagos SET monto_pago = ?, cantidad = ? WHERE id_empleado = ? AND id_orden = ? AND detalle = 'ajuste'",
+          [$comision_ajustes, $monto_ajustes, $idEmpleadoDiseno, $resultDiseno[0]['id_orden']]
+        );
+        $localConnection->goQuery(
+          "UPDATE pagos SET monto_pago = ?, cantidad = ? WHERE id_empleado = ? AND id_orden = ? AND detalle = 'personalización'",
+          [$comision_pesonalizacion, $monto_personalizacion, $idEmpleadoDiseno, $resultDiseno[0]['id_orden']]
+        );
+      }
     }
     $localConnection->commit();
 
