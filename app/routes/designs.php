@@ -199,7 +199,26 @@ return function (App $app) {
 
   // Guardar ajustes y personalizaciones
   $app->post('/diseno/ajustes-y-personalizaciones', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
+    $rawBody = $request->getParsedBody();
+    $data = is_array($rawBody) ? $rawBody : [];
+    if (empty($data)) {
+      $input = file_get_contents('php://input');
+      if (!empty($input)) {
+        $json = json_decode($input, true);
+        if (is_array($json)) {
+          $data = $json;
+        } else {
+          parse_str($input, $parsed);
+          if (is_array($parsed)) {
+            $data = $parsed;
+          }
+        }
+      }
+    }
+    if (empty($data) && !empty($_POST)) {
+      $data = $_POST;
+    }
+
     $localConnection = new LocalDB();
 
     $monto_ajustes = intval($data['ajustes'] ?? 0);
