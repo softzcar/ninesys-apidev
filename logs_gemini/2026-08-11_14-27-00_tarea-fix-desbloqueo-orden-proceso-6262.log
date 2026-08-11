@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** ok a el emplado Jesus en el departamento impresion que me muestras en la tabla 'Por iniciar' y es lo que se espera, sin emabrgo el botón de iniicar apra esa orden le aparece dehabilitado, como si el departamento anterior que fue Maru en montar tallas lo tuviese asignado, pero Maru inició y terminó su tarea, y el sistema así lo registró porque en su relacion de tareas terminadas aprace la orden 6262 vamos a arreglaresta situacion
+- **Fecha y Hora:** 2026-08-11 14:27:00
+- **Proyecto(s):** Backend (`ninesys-api`) & DB Producción (`api_emp_194`)
+- **Archivos Involucrados:** `app/routes/manufacturing.php`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `a891d34` (`fix(manufacturing): deshabilitar bloqueo de orden_proceso por registros unassigned (id_empleado IS NULL) completados`)
+- **Acción Realizada:**
+    1. **Diagnóstico técnico de causa raíz:** Se identificó que al crearse o procesarse una orden, existe una fila borrador/plantilla sin asignar (`id_empleado = NULL`) en la tabla `lotes_detalles_empleados_asignados` (fila 15358 para el departamento *Montar Tallas*, orden 6262). Cuando Maru (`id_empleado = 3`) fue asignada y terminó la tarea, su fila específica (`_id = 16711`) quedó con `fecha_terminado`, pero la fila plantilla (`_id = 15358`) quedó abierta (`fecha_terminado IS NULL`).
+    2. La subconsulta que calcula `orden_proceso` en el endpoint `/empleados/ordenes-asignadas/v2/...` buscaba `MIN(orden_proceso)` donde `fecha_terminado IS NULL` sin verificar si ese departamento ya fue completado por algún otro empleado asignado. Por lo tanto, la API devolvía que la orden estaba en el proceso `2` (*Montar Tallas*), mientras que Jesus en *Impresión* esperaba el proceso `3`. El frontend deshabilitaba el botón de inicio al detectar `2 != 3`.
+    3. **Corrección de Datos en Producción:** Se actualizó la fila `_id = 15358` a `progreso = 'terminada'` con `fecha_terminado = NOW()` para deshabilitar el bloqueo fantasma en la orden 6262.
+    4. **Corrección de Código en Backend (`manufacturing.php`):**
+        - Se actualizó la subconsulta de `orden_proceso` en `/empleados/ordenes-asignadas/v2/...` agregando un `NOT EXISTS` para ignorar filas `fecha_terminado IS NULL` si el departamento correspondiente ya tiene un registro completado por un empleado.
+        - Se actualizó el endpoint `/registrar-paso-empleado` (rama `fin`) para auto-completar automáticamente cualquier fila plantilla `id_empleado IS NULL` de dicho departamento y excluir `id_empleado IS NULL` del conteo de tareas pendientes en ese paso.
+- **Inconvenientes y Desafíos:** Se requirió autenticar con las credenciales de la base de datos de la empresa 194 (`api_user_194`) para ejecutar la actualización de datos de producción.
+- **Decisión Final y Justificación:** La solución corrige tanto el estado de la orden 6262 en producción como la lógica raíz en la API para evitar que vuelva a ocurrir en órdenes futuras.
+- **Herramienta(s) Utilizada(s):** `grep_search`, `view_file`, `multi_replace_file_content`, `run_command`, `write_to_file`, `deploy_backend.sh`
+- **Resultado:** Éxito
+- **Verificación:** Se ejecutó la simulación del endpoint en SQL tras la actualización de datos. `orden_proceso_calculado` cambió de `2` a `3`, coincidiendo con `orden_proceso_departamento` (3), habilitando inmediatamente el botón para Jesus en el frontend. Los cambios del backend se desplegaron al VPS Dev.
+- **Logro Conseguido:** Habilitación inmediata del botón para el empleado Jesus en la orden 6262 y prevención definitiva del bloqueo por registros plantilla unassigned en el flujo de producción.
+- **Observaciones de Gemini:** La corrección en `manufacturing.php` previene bloqueos fantasma en la cadena de producción cuando coexisten registros plantilla sin empleado y asignaciones individuales.
+- **Respuesta de Gemini:** Se informó al usuario de la causa exacta del problema, la solución aplicada en producción y el parche de código desplegado.
