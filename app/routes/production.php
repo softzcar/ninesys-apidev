@@ -841,7 +841,7 @@ return function (App $app) {
   $app->get('/sse/disenos-todo', function (Request $request, Response $response, array $args) {  // /lotes/en-proceso
     $localConnection = new LocalDB();
 
-    $sql = "SELECT a._id id_orden, a._id tallas_personalizacion FROM ordenes a WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' ORDER BY a._id DESC";
+    $sql = "SELECT COALESCE(d._id, 0) AS id_diseno, a._id id_orden, a._id tallas_personalizacion, d.id_empleado AS id_disenador FROM ordenes a LEFT JOIN disenos d ON d.id_orden = a._id WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' ORDER BY a._id DESC";
     $obj['sql_items'] = $sql;
     $obj['items'] = $localConnection->goQuery($sql);
 
