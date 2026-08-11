@@ -720,7 +720,7 @@ return function (App $app) {
     $object['fields'][7] = ['key' => 'linkdrive', 'label' => 'Drive', 'sortable' => false];
     $object['fields'][8] = ['key' => 'imagen', 'label' => 'Imagen', 'sortable' => false];
 
-    $whereConditions = ["a.terminado = 1", "(b.status != 'entregada' OR b.status != 'cancelada')"];
+    $whereConditions = ["a.terminado = 1", "(b.status != 'entregada' AND b.status != 'cancelada')"];
     $sqlQueryParams = [];
 
     if ($idEmpleado) {
@@ -759,8 +759,6 @@ return function (App $app) {
             a.id_empleado = c.id_usuario
         WHERE
             {$whereSql}";
-
-    $object['sql'] = $sql;
 
     $object['items'] = $localConnection->goQuery($sql, $sqlQueryParams);
 
@@ -850,22 +848,6 @@ return function (App $app) {
   $app->get('/disenos/pendientes/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
     $sql = 'SELECT a.id_orden orden, b.cliente_nombre cliente, b.fecha_inicio, b.status FROM disenos a JOIN ordenes b ON b._id = a.id_orden WHERE a.id_empleado = ? AND terminado = 0';
-
-    $disenos = $localConnection->goQuery($sql, [(int) $args['id_empleado']]);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($disenos));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
-  // Obtener diseños terminados por diseñador
-  $app->get('/disenos/terminados/{id_empleado}', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB();
-
-    $sql = 'SELECT a.id_orden orden, b.cliente_nombre cliente, b.fecha_inicio, b.status FROM disenos a JOIN ordenes b ON b._id = a.id_orden WHERE a.id_empleado = ? AND terminado = 1';
 
     $disenos = $localConnection->goQuery($sql, [(int) $args['id_empleado']]);
 
