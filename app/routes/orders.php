@@ -1172,8 +1172,8 @@ return function (App $app) {
             LEFT JOIN reposiciones x ON x.id_orden = d._id AND x.id_empleado = y.id_empleado AND x.id_ordenes_productos = a._id
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = d._id
         WHERE  
-            (y.id_empleado = 20)
-            AND (y.id_departamento = 4)
+            (y.id_empleado = {$idEmpleado})
+            AND (y.id_departamento = {$idDepartamento})
         GROUP BY
             y.id_orden, y.id_empleado, y.id_departamento
         ORDER BY
@@ -1230,8 +1230,8 @@ return function (App $app) {
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = d._id
         -- ============================ WHERE CORREGIDO Y ALINEADO ============================
         WHERE  
-            (y.id_empleado = 20)
-            AND (y.id_departamento = 4)
+            (y.id_empleado = {$idEmpleado})
+            AND (y.id_departamento = {$idDepartamento})
         -- ========================================================================
         GROUP BY
             y.id_orden, y.id_empleado, y.id_departamento
@@ -1450,6 +1450,7 @@ return function (App $app) {
               AND ldea.id_departamento = {$idDepartamento}
               AND ldea.progreso = 'terminada'
               AND ldea.fecha_terminado IS NOT NULL
+              AND p.fecha_pago IS NULL
             ORDER BY ldea.fecha_terminado DESC
         ";
     } else {
@@ -1467,6 +1468,7 @@ return function (App $app) {
               AND ldea.id_departamento = {$idDepartamento}
               AND ldea.progreso = 'terminada'
               AND ldea.fecha_terminado IS NOT NULL
+              AND p.fecha_pago IS NULL
             ORDER BY ldea.fecha_terminado DESC
         ";
     }

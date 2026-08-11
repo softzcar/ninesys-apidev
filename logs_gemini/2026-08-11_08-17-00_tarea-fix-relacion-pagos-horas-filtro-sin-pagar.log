@@ -1,0 +1,11 @@
+- **Solicitud del Usuario:** "/plan Vamos ahora con la relación de pagos, este es un módulo que comparten varios departamentos de emplados, primero vamos a asegurarnos que el endpoint de la API que retorna los datos este entregando información cierta y correcta, luego nos aseguramos que la inforamción que se renderiza NO mienta..."
+- **Diagnóstico Realizado:**
+  1. En `ninesys-api/app/routes/orders.php`, la consulta `$sqlHoras` (`ordenes_semana`) del endpoint `GET /reportes/resumen/empleados/{id_empleado}/{id_departamento}` omitía el filtro `p.fecha_pago IS NULL`. Devolvía todo el historial de tareas terminadas del empleado desde la creación del sistema (incluso las pagadas hace meses/años), lo que provocaba que el frontend sumara todas esas horas e inflara masivamente el contador superior.
+  2. En la subconsulta `$sql` para la propiedad `ordenes`, la consulta contenía `y.id_empleado = 20 AND y.id_departamento = 4` hardcodeado en las ramas Postgres y MySQL.
+- **Acciones Realizadas:**
+  1. **Ajuste de `$sqlHoras` (`ordenes_semana`)**: Se agregó la condición `AND p.fecha_pago IS NULL` en las ramas `pgsql` y `mysql` para que únicamente retorne las tareas no pagadas del período actual.
+  2. **Parametrización de `$sql` (`ordenes`)**: Se reemplazó el valor hardcodeado `20` y `4` por `{$idEmpleado}` y `{$idDepartamento}` en las ramas `pgsql` y `mysql`.
+  3. **Despliegue a Desarrollo (`vps-contabo-dev`)**: Subido a GitHub y desplegado a `vps-contabo-dev` mediante `ninesys-hub/bin/deploy_backend.sh` (Opción 2), reseteando OPcache.
+- **Verificación:**
+  - `php -l app/routes/orders.php` verificado sin errores sintácticos.
+  - Comprobado vía `curl` contra `https://api.nineteengreen.com/reportes/resumen/empleados/588/3` que `ordenes_semana` solo contiene registros con `fecha_pago` nulo.
