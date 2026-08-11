@@ -839,11 +839,12 @@ return function (App $app) {
 
   // OBTENER DATOS PARA LA ASIGNACION DE TALLAS Y PERSONALIZACION DE TODOS LAS ORDENES ACTIVAS.
   $app->get('/sse/disenos-todo', function (Request $request, Response $response, array $args) {  // /lotes/en-proceso
-    $sql = "SELECT a._id id_orden, a._id tallas_personalizacion FROM ordenes a WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' ORDER BY a._id DESC";
-    $obj[0]['sql'] = $sql;
-    $obj[0]['name'] = 'items';
+    $localConnection = new LocalDB();
 
-    // $sql = "SELECT a.id_diseno, a.tipo, a.cantidad, b.id_orden FROM disenos_ajustes_y_personalizaciones a JOIN disenos b ON b._id = a.id_diseno;";
+    $sql = "SELECT a._id id_orden, a._id tallas_personalizacion FROM ordenes a WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' ORDER BY a._id DESC";
+    $obj['sql_items'] = $sql;
+    $obj['items'] = $localConnection->goQuery($sql);
+
     $sql = "SELECT
         a.id_diseno,
         a.tipo,
@@ -855,13 +856,12 @@ return function (App $app) {
         JOIN disenos b ON
         b._id = a.id_diseno
         WHERE o.status = 'activa' OR o.status = 'pausada' OR o.status = 'En espera' ORDER BY o._id DESC";
-    $obj[2]['sql'] = $sql;
-    $obj[2]['name'] = 'ajustes';
+    $obj['sql_ajustes'] = $sql;
+    $obj['ajustes'] = $localConnection->goQuery($sql);
 
-    $sse = new SSE($obj);
-    $events = $sse->SsePrint();
+    $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode($events));
+    $response->getBody()->write(json_encode($obj, JSON_NUMERIC_CHECK));
 
     return $response
       ->withHeader('Content-Type', 'application/json')
