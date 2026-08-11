@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** Continuación de la auditoría del rol "Diseño" dentro de Empleados, revisando el resto del sidebar (Diseños Terminados, Relación de Pagos, Tallas y Personalización). Al revisar el endpoint `GET /disenos/terminados` (que ya había sido tocado por Antigravity el 2026-08-10 para agregar filtro por diseñador logueado y por días), se encontraron 3 problemas reales al leer el código completo de la ruta.
+- **Fecha y Hora:** 2026-08-11 19:15:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+    - `app/routes/designs.php`
+- **Commits Relacionados:**
+    - Backend: `2911f0e`
+    - Frontend: N/A
+- **Acción Realizada:**
+    1. **Condición WHERE tautológica**: `(b.status != 'entregada' OR b.status != 'cancelada')` nunca excluye nada, porque ningún `status` puede ser simultáneamente `'entregada'` Y `'cancelada'` -- al menos uno de los dos `!=` siempre es verdadero. Corregido a `AND`, que sí excluye correctamente órdenes entregadas o canceladas del listado de "Diseños Terminados".
+    2. **Leak de SQL en la respuesta**: la ruta devolvía `$object['sql']` con la query completa (aunque parametrizada, no es inyección, pero es una exposición innecesaria de detalles internos de la base de datos). Eliminado.
+    3. **Ruta legada muerta**: `GET /disenos/terminados/{id_empleado}` (versión antigua con el id en la URL) quedó huérfana desde que el frontend migró a la versión con query string (`?id_empleado&dias`) el 2026-08-10 (commit `37ab41e` en app_multi). Confirmado por `grep` en todo `app_multi` que ya no tiene ninguna referencia. Eliminada.
+    4. **Hallazgo documentado pero NO corregido (bug latente, sin impacto real confirmado hoy):** el filtro `dias` de la ruta viva compara contra `disenos.moment`, que es la fecha de CREACIÓN del registro (nunca se actualiza al marcar `terminado=1` en la línea 947 del mismo archivo) -- no la fecha real de finalización. Se verificó con una consulta real en Desarrollo (`api_emp_194`) cruzando `disenos.moment` contra `MAX(revisiones.moment)` de cada diseño terminado: **0 casos hoy** donde un diseño creado hace más de 30 días fue realmente trabajado/revisado en los últimos 30 días -- por eso se decidió NO hacer un cambio de esquema (agregar columna `fecha_termino`) para un caso sin impacto confirmado actualmente. Queda documentado como pendiente de bajo impacto si se quiere una fecha de finalización 100% precisa en el futuro.
+- **Inconvenientes y Desafíos:** Ninguno técnico. Se verificó cuidadosamente el impacto real en datos de Desarrollo antes de decidir NO hacer el cambio de esquema más invasivo, siguiendo el principio de "menos invasivo posible" y "verificar uso antes de arreglar".
+- **Decisión Final y Justificación:** Se corrigieron los 2 bugs de bajo riesgo y alto valor (WHERE tautológico, leak de SQL) y se eliminó la ruta muerta, todo en un único commit acotado. Se dejó documentado pero sin tocar el problema de la columna de fecha, porque arreglarlo bien requeriría un cambio de esquema (nueva columna + backfill + actualizar la plantilla de empresa nueva) para un escenario sin ningún caso real confirmado hoy en los datos de Desarrollo.
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (git, grep, ssh, psql, curl, php -l), `deploy_backend.sh` (opción 2).
+- **Resultado:** Éxito.
+- **Verificación:** `php -l` sin errores. Desplegado a Desarrollo, verificado en vivo: la ruta viva (`/disenos/terminados?id_empleado=3&dias=9999`) responde 200 con datos correctos; la ruta eliminada (`/disenos/terminados/3`) responde 405, idéntico a una ruta que nunca existió (control de comparación con `/ruta/que/nunca/existio`, también 405) -- confirma que la eliminación fue limpia.
+- **Logro Conseguido:** Se corrigió un filtro de exclusión de órdenes que nunca funcionó (afectaba a todo el listado de "Diseños Terminados" desde que se creó la ruta), se cerró una exposición innecesaria de SQL interno, y se limpió una ruta duplicada que ya no se usaba desde el día anterior.
+- **Referencias de Sesión (Contexto):** N/A (sesión de Claude Code, no Antigravity/Gemini).
+- **Observaciones de Gemini:** N/A (tarea realizada por Claude).
+- **Respuesta de Gemini:** N/A (ver resumen entregado al usuario en el chat).
