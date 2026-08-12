@@ -537,24 +537,21 @@ return function (App $app) {
 
     $localConnection = new LocalDB();
 
-    // Sub-select de categorías compatible con ambos motores
+    $queryParams = $request->getQueryParams();
+    $fecha_inicio = $queryParams['fecha_inicio'] ?? null;
+    $fecha_fin = $queryParams['fecha_fin'] ?? null;
+    $ignorarFecha = !$fecha_inicio || !$fecha_fin
+      || (isset($queryParams['ignorar_fecha']) && $queryParams['ignorar_fecha'] !== '0' && $queryParams['ignorar_fecha'] !== '');
+    $search = trim($queryParams['search'] ?? '');
+    $idVendedor = isset($queryParams['id_vendedor']) ? (int) $queryParams['id_vendedor'] : 0;
+    $categoria = trim($queryParams['categoria'] ?? 'todas');
+    $estadoOrden = trim($queryParams['estado_orden'] ?? 'todas');
+    $cursor = (isset($queryParams['cursor']) && $queryParams['cursor'] !== '') ? (int) $queryParams['cursor'] : null;
+    $limit = isset($queryParams['limit']) ? min(100, max(1, (int) $queryParams['limit'])) : 25;
+
     if (DB_DRIVER === 'pgsql') {
-      $catSubSelect = "(
-          SELECT json_agg(json_build_object('category_name', c.nombre, 'category_total', (op.cantidad * op.precio_unitario)))
-          FROM ordenes_productos op
-          JOIN products p ON op.id_woo = p._id
-          JOIN categories c ON c._id::text = ANY(string_to_array(p.category_ids, ','))
-          WHERE op.id_orden = ord._id
-      ) AS product_categories";
       $saldo = "(ord.pago_total - COALESCE((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0))";
     } else {
-      $catSubSelect = "(
-          SELECT CONCAT('[', GROUP_CONCAT(DISTINCT JSON_OBJECT('category_name', c.nombre, 'category_total', (op.cantidad * op.precio_unitario))), ']')
-          FROM ordenes_productos op
-          JOIN products p ON op.id_woo = p._id
-          JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
-          WHERE op.id_orden = ord._id
-      ) AS product_categories";
       $saldo = "(ord.pago_total - IFNULL((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0))";
     }
 
@@ -562,7 +559,6 @@ return function (App $app) {
                 ord.responsable id_vendedor, emp.nombre vendedor,
                 ord.cliente_nombre, cus.phone, cus.email,
                 ord.pago_total total, ord.fecha_inicio, ord.fecha_entrega,
-                $catSubSelect,
                 (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
                 $saldo AS saldo_pendiente,
                 ord.status estatus";
@@ -571,19 +567,65 @@ return function (App $app) {
             LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable";
     $saldoFilter = "$saldo > 0 OR ($saldo = 0 AND ord.status != 'entregada') OR $saldo < 0";
 
-    $sqlParams = [];
-    if (strpos($departamento, 'Admin') !== false) {
-      $sql = "SELECT $baseFields $baseJoins
-            WHERE ord.status != 'cancelada' AND ($saldoFilter)
-            ORDER BY ord._id DESC";
-    } else {
-      $sql = "SELECT $baseFields $baseJoins
-            WHERE ord.responsable = ?
-                AND ord.status != 'cancelada'
-                AND ($saldoFilter)
-            ORDER BY ord._id DESC";
-      $sqlParams[] = (int) $args['id_empleado'];
+    // Filtros base (regla de negocio, siempre aplican, nunca se ignoran por búsqueda/filtros).
+    $whereClauses = ["ord.status != 'cancelada'", "($saldoFilter)"];
+    $whereParams = [];
+    if (strpos($departamento, 'Admin') === false) {
+      $whereClauses[] = 'ord.responsable = ?';
+      $whereParams[] = (int) $args['id_empleado'];
     }
+
+    // Filtros opcionales (mismo patrón que /table/ordenes-todas): fecha se ignora si no se
+    // dio rango o si hay una búsqueda/filtro activo, para que buscar/filtrar nunca dependa
+    // de si la orden está dentro del rango cargado.
+    if (!$ignorarFecha) {
+      $whereClauses[] = '((ord.fecha_inicio >= ? AND ord.fecha_inicio <= ?) OR (ord.fecha_entrega >= ? AND ord.fecha_entrega <= ?) OR (ord.fecha_inicio <= ? AND ord.fecha_entrega >= ?))';
+      array_push($whereParams, $fecha_inicio, $fecha_fin, $fecha_inicio, $fecha_fin, $fecha_inicio, $fecha_fin);
+    }
+
+    if ($idVendedor > 0) {
+      $whereClauses[] = 'ord.responsable = ?';
+      $whereParams[] = $idVendedor;
+    }
+
+    if ($estadoOrden !== '' && $estadoOrden !== 'todas') {
+      $whereClauses[] = 'LOWER(ord.status) = LOWER(?)';
+      $whereParams[] = $estadoOrden;
+    }
+
+    if ($categoria !== '' && $categoria !== 'todas') {
+      if (DB_DRIVER === 'pgsql') {
+        $whereClauses[] = "EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON op.id_woo = p._id JOIN categories c ON c._id::text = ANY(string_to_array(p.category_ids, ',')) WHERE op.id_orden = ord._id AND LOWER(c.nombre) = LOWER(?))";
+      } else {
+        $whereClauses[] = "EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON op.id_woo = p._id JOIN categories c ON FIND_IN_SET(c._id, p.category_ids) WHERE op.id_orden = ord._id AND LOWER(c.nombre) = LOWER(?))";
+      }
+      $whereParams[] = $categoria;
+    }
+
+    if ($search !== '') {
+      $likeOp = DB_DRIVER === 'pgsql' ? 'ILIKE' : 'LIKE';
+      $castOrden = DB_DRIVER === 'pgsql' ? 'CAST(ord._id AS TEXT)' : 'CAST(ord._id AS CHAR)';
+      $whereClauses[] = "($castOrden $likeOp ? OR ord.cliente_nombre $likeOp ?)";
+      $searchLike = '%' . $search . '%';
+      $whereParams[] = $searchLike;
+      $whereParams[] = $searchLike;
+    }
+
+    $whereSqlBase = 'WHERE ' . implode(' AND ', $whereClauses);
+
+    $totalCount = null;
+    if ($cursor === null) {
+      $countResult = $localConnection->goQuery("SELECT COUNT(*) AS total FROM ordenes ord $whereSqlBase", $whereParams);
+      $totalCount = (int) ($countResult[0]['total'] ?? 0);
+    }
+
+    $pageWhereClauses = $whereClauses;
+    $pageWhereParams = $whereParams;
+    if ($cursor !== null) {
+      $pageWhereClauses[] = 'ord._id < ?';
+      $pageWhereParams[] = $cursor;
+    }
+    $whereSql = 'WHERE ' . implode(' AND ', $pageWhereClauses);
 
     // Cabeceras de la tabla
     $object['fields'][0]['key'] = 'orden';
@@ -614,13 +656,59 @@ return function (App $app) {
     $object['fields'][6]['label'] = 'Acciones';
     $object['fields'][6]['sortable'] = false;
 
+    // product_categories se calculaba antes con una subconsulta correlacionada por fila
+    // (mismo patrón N+1 ya corregido en /table/ordenes-todas) -- ahora se calcula en un
+    // solo query por lote, después de tener los ids de esta página.
+    $sql = "SELECT $baseFields $baseJoins
+        $whereSql
+        ORDER BY ord._id DESC
+        LIMIT ?";
+    $sqlParams = array_merge($pageWhereParams, [$limit + 1]);
     $items = $localConnection->goQuery($sql, $sqlParams);
-    foreach ($items as &$item) {
-      if (isset($item['product_categories'])) {
-        $item['product_categories'] = json_decode($item['product_categories']);
+
+    $nextCursor = null;
+    if (count($items) > $limit) {
+      $items = array_slice($items, 0, $limit);
+      $lastItem = end($items);
+      $nextCursor = (int) $lastItem['orden'];
+    }
+
+    $categoriesByOrder = [];
+    $ids = array_column($items, 'orden');
+    if (!empty($ids)) {
+      $placeholders = implode(',', array_fill(0, count($ids), '?'));
+      if (DB_DRIVER === 'pgsql') {
+        $sqlCats = "SELECT op.id_orden, c.nombre AS category_name, SUM(op.cantidad * op.precio_unitario) AS category_total
+            FROM ordenes_productos op
+            JOIN products p ON op.id_woo = p._id
+            JOIN categories c ON c._id::text = ANY(string_to_array(p.category_ids, ','))
+            WHERE op.id_orden IN ($placeholders)
+            GROUP BY op.id_orden, c.nombre";
+      } else {
+        $sqlCats = "SELECT op.id_orden, c.nombre AS category_name, SUM(op.cantidad * op.precio_unitario) AS category_total
+            FROM ordenes_productos op
+            JOIN products p ON op.id_woo = p._id
+            JOIN categories c ON FIND_IN_SET(c._id, p.category_ids)
+            WHERE op.id_orden IN ($placeholders)
+            GROUP BY op.id_orden, c.nombre";
+      }
+      $catRows = $localConnection->goQuery($sqlCats, $ids);
+      foreach ($catRows as $catRow) {
+        $categoriesByOrder[(int) $catRow['id_orden']][] = [
+          'category_name' => $catRow['category_name'],
+          'category_total' => $catRow['category_total'],
+        ];
       }
     }
+
+    foreach ($items as &$item) {
+      $item['product_categories'] = $categoriesByOrder[(int) $item['orden']] ?? null;
+    }
     $object['items'] = $items;
+    $object['next_cursor'] = $nextCursor;
+    if ($totalCount !== null) {
+      $object['total_count'] = $totalCount;
+    }
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
