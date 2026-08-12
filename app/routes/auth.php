@@ -76,6 +76,50 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
 
+        // Paso 2.5: Resolver a qué empresa se conecta esta identidad -- una persona puede
+        // estar asignada a más de una empresa (empresas_usuarios_empresas, ej. Zenaida
+        // vendedora en 194 y 204). El sistema solo permite una sesión-empresa activa a la
+        // vez (como elegir cuenta de Google): si hay más de una asignación activa y el
+        // cliente no indicó cuál usar, se le pide elegir antes de completar el login, sin
+        // devolver datos de sesión todavía.
+        $sql_asignaciones = 'SELECT eue.id_empresa, e.nombre FROM empresas_usuarios_empresas eue JOIN empresas e ON e.id_empresa = eue.id_empresa WHERE eue.id_usuario = ? AND eue.activo = 1';
+        $asignaciones = $localConnection->goQuery($sql_asignaciones, [$usuario_data['id_usuario']]);
+
+        if (!empty($asignaciones)) {
+            $idsAsignados = array_map('intval', array_column($asignaciones, 'id_empresa'));
+            $idEmpresaSolicitada = (isset($datosAcceso['id_empresa']) && $datosAcceso['id_empresa'] !== '')
+                ? (int) $datosAcceso['id_empresa']
+                : null;
+
+            if ($idEmpresaSolicitada === null) {
+                if (count($asignaciones) > 1) {
+                    $object['requiere_seleccion_empresa'] = true;
+                    $object['empresas'] = array_map(function ($a) {
+                        return ['id_empresa' => (int) $a['id_empresa'], 'nombre' => $a['nombre']];
+                    }, $asignaciones);
+                    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+                    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+                }
+                $idEmpresaFinal = $idsAsignados[0];
+            } else {
+                if (!in_array($idEmpresaSolicitada, $idsAsignados, true)) {
+                    $object['msg'] = 'No tiene acceso a la empresa solicitada.';
+                    $object['data']['access'] = false;
+                    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+                    return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+                }
+                $idEmpresaFinal = $idEmpresaSolicitada;
+            }
+
+            if ($idEmpresaFinal != $usuario_data['id_empresa']) {
+                $localConnection->goQuery('UPDATE empresas_usuarios SET id_empresa = ? WHERE id_usuario = ?', [$idEmpresaFinal, $usuario_data['id_usuario']]);
+            }
+            $usuario_data['id_empresa'] = $idEmpresaFinal;
+        }
+        // Si no hay ninguna fila en empresas_usuarios_empresas (identidad huérfana o dato
+        // preexistente sin backfill), se sigue usando el id_empresa que ya traía la fila --
+        // mismo comportamiento que antes de este cambio.
+
         // Paso 3: Obtener datos de la empresa
         $sql_empresa = 'SELECT id_empresa, nombre, direccion, telefono, email, pais, id_pais, timezone, numero_registro_legal, horario_laboral, tipos_de_monedas, activo, db_host, db_user, db_password, db_name FROM empresas WHERE id_empresa = ?';
         $object['debug'][] = 'Obteniendo datos de la empresa.';

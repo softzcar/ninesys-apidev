@@ -41,6 +41,7 @@ return function (App $app) {
                 COALESCE(carga.carga_familiar, \'[]\') AS carga_familiar
             FROM
                 api_empresas.empresas_usuarios a
+            JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = a.id_usuario AND eue.id_empresa = ' . ID_EMPRESA . '
             LEFT JOIN (
                 SELECT
                     p1.id_empleado,
@@ -75,6 +76,7 @@ return function (App $app) {
                 FROM
                     api_empresas.empresas_usuarios_departamentos b
                 INNER JOIN departamentos c ON c._id = b.id_departamento AND c.eliminado = 0
+                WHERE b.id_empresa = ' . ID_EMPRESA . '
                 GROUP BY
                     b.id_empleado
             ) deps ON deps.id_empleado = a.id_usuario
@@ -91,7 +93,7 @@ return function (App $app) {
                     d.id_empleado
             ) carga ON carga.id_empleado = a.id_usuario
             WHERE
-                a.activo = 1 AND a.id_empresa = ' . ID_EMPRESA . ';';
+                eue.activo = 1;';
         } else {
             $sql = 'SELECT
                 a.id_usuario AS _id,
@@ -218,14 +220,17 @@ return function (App $app) {
     });
 
 
-    // Nuevo Empleado
+    // Activación/Desactivación de Empleados
     $app->post('/empleados/activacion', function (Request $request, Response $response) {
         $miEmpleado = $request->getParsedBody();
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
-        // Actualizar estado del empleado
-        $sql = "UPDATE api_empresas.empresas_usuarios SET activo = '{$miEmpleado['activo']}' WHERE id_usuario = {$miEmpleado['id_empleado']}";
-        $object['response'] = $localConnection->goQuery($sql);
+        // Actualizar la asignación a ESTA empresa (no la identidad global -- una
+        // identidad puede estar asignada a más de una empresa, ver /login y
+        // /empleados/nuevo, 2026-08-12). De paso se parametriza (antes interpolado
+        // directo en el SQL).
+        $sql = 'UPDATE api_empresas.empresas_usuarios_empresas SET activo = ? WHERE id_usuario = ? AND id_empresa = ?';
+        $object['response'] = $localConnection->goQuery($sql, [(int) $miEmpleado['activo'], (int) $miEmpleado['id_empleado'], ID_EMPRESA]);
 
         $localConnection->disconnect();
 
@@ -240,29 +245,103 @@ return function (App $app) {
     $app->post('/empleados/nuevo', function (Request $request, Response $response) {
         $miEmpleado = $request->getParsedBody();
 
-        /* $response->getBody()->write(json_encode($miEmpleado));
-
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(200); */
-
-        // ////////////////////////////////
-
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
-        // Validar que el email no exista
-        $checkEmailSql = 'SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE email = ?';
-        $emailCheck = $localConnection->goQuery($checkEmailSql, [$miEmpleado['email']]);
+        // Una identidad (email/password) puede estar asignada a más de una empresa --
+        // ver empresas_usuarios_empresas y el rediseño de /login (2026-08-12, caso real:
+        // Zenaida, vendedora en 194, contratada también en 204). El email/teléfono ya NO
+        // se validan de forma global: una identidad existente se puede "agregar" a una
+        // empresa nueva sin duplicar la fila de empresas_usuarios.
 
-        if (isset($emailCheck[0]['count']) && $emailCheck[0]['count'] > 0) {
+        $reactivarId = (isset($miEmpleado['reactivar_id']) && $miEmpleado['reactivar_id'] !== '') ? (int) $miEmpleado['reactivar_id'] : null;
+
+        if ($reactivarId) {
+            // La identidad ya tenía una asignación INACTIVA a esta empresa (mismo
+            // email, empresa ya usada antes) -- reactivarla en vez de bloquear para
+            // siempre. Mismo patrón ya usado en Gastos/Tallas/Telas/Categorías.
+            $asignacion = $localConnection->goQuery(
+                'SELECT _id FROM api_empresas.empresas_usuarios_empresas WHERE id_usuario = ? AND id_empresa = ?',
+                [$reactivarId, ID_EMPRESA]
+            );
+            if (empty($asignacion)) {
+                $localConnection->disconnect();
+                $response->getBody()->write(json_encode(['error' => 'No se encontró la asignación a reactivar.']));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+            }
+            $localConnection->goQuery('UPDATE api_empresas.empresas_usuarios_empresas SET activo = 1 WHERE _id = ?', [$asignacion[0]['_id']]);
+
+            $localConnection->goQuery('DELETE FROM api_empresas.empresas_usuarios_departamentos WHERE id_empleado = ? AND id_empresa = ?', [$reactivarId, ID_EMPRESA]);
+            foreach (explode(',', $miEmpleado['departamentos'] ?? '') as $idDep) {
+                if ($idDep === '') continue;
+                $localConnection->goQuery(
+                    'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, ?, ?)',
+                    [$reactivarId, $idDep, ID_EMPRESA]
+                );
+            }
+
             $localConnection->disconnect();
-            $response->getBody()->write(json_encode(['error' => 'El email ya se encuentra registrado.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            $response->getBody()->write(json_encode(['message' => 'Empleado reactivado en esta empresa.', 'id_usuario' => $reactivarId]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         }
 
-        // Validar que el teléfono no exista (comparando los últimos 10 dígitos,
-        // para reconocer el mismo número aunque tenga distinto formato/prefijo,
-        // igual que la validación de teléfono de clientes en woome.php)
+        // ¿Ya existe una identidad con este email, en cualquier empresa?
+        $identidadExistente = $localConnection->goQuery(
+            'SELECT id_usuario FROM api_empresas.empresas_usuarios WHERE email = ?',
+            [$miEmpleado['email']]
+        );
+
+        if (!empty($identidadExistente)) {
+            $idUsuarioExistente = (int) $identidadExistente[0]['id_usuario'];
+
+            $asignacionActual = $localConnection->goQuery(
+                'SELECT _id, activo FROM api_empresas.empresas_usuarios_empresas WHERE id_usuario = ? AND id_empresa = ?',
+                [$idUsuarioExistente, ID_EMPRESA]
+            );
+
+            if (!empty($asignacionActual)) {
+                if ((int) $asignacionActual[0]['activo'] === 1) {
+                    $localConnection->disconnect();
+                    $response->getBody()->write(json_encode(['error' => 'Ya existe un empleado activo con ese email en esta empresa.']));
+                    return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+                }
+                // Inactiva en ESTA empresa -- ofrecer reactivar (409, mismo patrón que
+                // Gastos/Tallas/Telas), en vez de bloquear sin salida (reporte real de
+                // Ricardo: "no se pueden eliminar empleados, sigue registrado").
+                $localConnection->disconnect();
+                $response->getBody()->write(json_encode([
+                    'eliminado_existente' => true,
+                    'id_usuario' => $idUsuarioExistente,
+                ]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+            }
+
+            // La identidad existe pero nunca tuvo asignación a ESTA empresa -- caso
+            // Zenaida: agregarla a esta empresa sin duplicar su fila de
+            // empresas_usuarios (comparte password/nombre/teléfono/comisión/salario
+            // con su(s) otra(s) empresa(s), por decisión explícita del usuario).
+            $localConnection->goQuery(
+                'INSERT INTO api_empresas.empresas_usuarios_empresas (id_usuario, id_empresa, activo) VALUES (?, ?, 1)',
+                [$idUsuarioExistente, ID_EMPRESA]
+            );
+
+            $object = ['response_deps' => []];
+            foreach (explode(',', $miEmpleado['departamentos'] ?? '') as $idDep) {
+                if ($idDep === '') continue;
+                $sqlDep = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, ?, ?)';
+                $object['response_deps'][] = $localConnection->goQuery($sqlDep, [$idUsuarioExistente, $idDep, ID_EMPRESA]);
+            }
+
+            $localConnection->disconnect();
+            $object['message'] = 'El email ya pertenecía a un empleado de otra empresa -- se agregó como empleado de esta empresa (mismos datos de acceso).';
+            $object['id_usuario'] = $idUsuarioExistente;
+            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        }
+
+        // Identidad genuinamente nueva (ningún email coincidente en ninguna empresa) --
+        // validar teléfono de forma global (sigue siendo el mismo check de siempre,
+        // porque a esta altura no hay ninguna identidad existente con la que asociarlo)
+        // y crear todo como antes.
         $telefonoDigits = preg_replace('/\D/', '', $miEmpleado['telefono']);
         if (strlen($telefonoDigits) >= 7) {
             $telefonoLast10 = substr($telefonoDigits, -10);
@@ -319,15 +398,22 @@ return function (App $app) {
         ]);
         $lastInsert = $object['response']['insert_id'];
 
-        // Guardar departamentos asignados al empleado
-        $sql = 'DELETE FROM api_empresas.empresas_usuarios_departamentos WHERE id_empleado = ?';
-        $object['response_delete'] = $localConnection->goQuery($sql, [$lastInsert]);
+        // Asignación a esta empresa (empresas_usuarios_empresas) -- misma identidad
+        // podrá agregarse a otras empresas más adelante sin duplicar esta fila.
+        $localConnection->goQuery(
+            'INSERT INTO api_empresas.empresas_usuarios_empresas (id_usuario, id_empresa, activo) VALUES (?, ?, 1)',
+            [$lastInsert, ID_EMPRESA]
+        );
+
+        // Guardar departamentos asignados al empleado (en ESTA empresa)
+        $sql = 'DELETE FROM api_empresas.empresas_usuarios_departamentos WHERE id_empleado = ? AND id_empresa = ?';
+        $object['response_delete'] = $localConnection->goQuery($sql, [$lastInsert, ID_EMPRESA]);
 
         $departamentos = explode(',', $miEmpleado['departamentos']);
         $object['response_deps'] = [];
         foreach ($departamentos as $id) {
-            $sqlDep = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES (?, ?)';
-            $object['response_deps'][] = $localConnection->goQuery($sqlDep, [$lastInsert, $id]);
+            $sqlDep = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, ?, ?)';
+            $object['response_deps'][] = $localConnection->goQuery($sqlDep, [$lastInsert, $id, ID_EMPRESA]);
         }
 
         // Procesar carga familiar si existe
@@ -424,9 +510,10 @@ return function (App $app) {
         ];
         $object['response'] = json_encode($localConnection->goQuery($sql, $params));
 
-        // Limpiar registros anteriores
-        $sql = 'DELETE FROM api_empresas.empresas_usuarios_departamentos WHERE id_empleado = ?';
-        $object['response_delete'] = json_encode($localConnection->goQuery($sql, [(int) $miEmpleado['_id']]));
+        // Limpiar registros anteriores -- SOLO de esta empresa (una identidad puede
+        // tener asignaciones de departamento en otra(s) empresa(s) también, no se tocan).
+        $sql = 'DELETE FROM api_empresas.empresas_usuarios_departamentos WHERE id_empleado = ? AND id_empresa = ?';
+        $object['response_delete'] = json_encode($localConnection->goQuery($sql, [(int) $miEmpleado['_id'], ID_EMPRESA]));
 
         // Insertar nuevas asiganciones de departamentos
         $misDeps = explode(',', $miEmpleado['departamentos']);
@@ -434,9 +521,9 @@ return function (App $app) {
         $object['sql_update'] = [];
         $object['response_update'] = [];
         foreach ($misDeps as $id_dep) {
-            $sql = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES (?, ?)';
+            $sql = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, ?, ?)';
             $object['sql_update'][] = $sql;
-            $object['response_update'][] = json_encode($localConnection->goQuery($sql, [(int) $miEmpleado['_id'], (int) $id_dep]));
+            $object['response_update'][] = json_encode($localConnection->goQuery($sql, [(int) $miEmpleado['_id'], (int) $id_dep, ID_EMPRESA]));
         }
 
         $localConnection = new LocalDB();
@@ -532,17 +619,20 @@ return function (App $app) {
             $sql = 'DELETE FROM lotes_detalles_empleados_asignados WHERE id_empleado = ? AND terminado = 0 AND fecha_inicio IS NULL';
             $object['response_lotes_detalles'] = json_encode($localConnection->goQuery($sql, [$id_empleado]));
 
-            // Eliminar departamentos y desactivar usuario en una sola transacción (misma
-            // conexión, BD central) para no dejar un estado a medias entre ambas operaciones.
+            // Eliminar departamentos y desactivar la asignación a ESTA empresa en una sola
+            // transacción (misma conexión, BD central) para no dejar un estado a medias.
+            // Una identidad puede estar asignada a más de una empresa (Zenaida, 2026-08-12)
+            // -- desactivar aquí NO debe afectar su acceso a otras empresas, así que se
+            // desactiva la asignación (empresas_usuarios_empresas), no la identidad completa.
             $localConnection2->beginTransaction();
 
-            $sql = 'DELETE FROM empresas_usuarios_departamentos WHERE id_empleado = ?';
-            $object['response_departamentos'] = json_encode($localConnection2->goQuery($sql, [$id_empleado]));
+            $sql = 'DELETE FROM empresas_usuarios_departamentos WHERE id_empleado = ? AND id_empresa = ?';
+            $object['response_departamentos'] = json_encode($localConnection2->goQuery($sql, [$id_empleado, ID_EMPRESA]));
 
-            // Desactivar al empleado (misma lógica que POST /empleados/activacion con activo=0),
-            // para que deje de listarse como activo en Gestión de Empleados y en el resto del sistema.
-            $sql = 'UPDATE api_empresas.empresas_usuarios SET activo = 0 WHERE id_usuario = ?';
-            $object['response_desactivacion'] = json_encode($localConnection2->goQuery($sql, [$id_empleado]));
+            // Desactivar la asignación a esta empresa (no la identidad global -- si tuviera
+            // asignación a otra empresa, sigue intacta ahí).
+            $sql = 'UPDATE api_empresas.empresas_usuarios_empresas SET activo = 0 WHERE id_usuario = ? AND id_empresa = ?';
+            $object['response_desactivacion'] = json_encode($localConnection2->goQuery($sql, [$id_empleado, ID_EMPRESA]));
 
             $localConnection2->commit();
         } catch (Exception $e) {

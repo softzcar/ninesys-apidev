@@ -756,17 +756,19 @@ return function (App $app) {
     $estadosOrdenNombres = array_values($estadosSeen);
     sort($estadosOrdenNombres);
 
-    // Misma consulta ya usada en /reporte-de-pagos (finance.php) para el select de vendedores.
+    // Misma consulta ya usada en /reporte-de-pagos (finance.php) para el select de
+    // vendedores -- JOIN contra empresas_usuarios_empresas (no a.id_empresa directo,
+    // una identidad puede estar asignada a más de una empresa, ver /login 2026-08-12).
     $sqlVendedores = "SELECT DISTINCT
-        id_usuario _id,
-        nombre
+        a.id_usuario _id,
+        a.nombre
     FROM
         api_empresas.empresas_usuarios a
-    JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado
+    JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = a.id_usuario AND eue.id_empresa = " . ID_EMPRESA . " AND eue.activo = 1
+    JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado AND b.id_empresa = " . ID_EMPRESA . "
     WHERE
         b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Comecialización', 'Administración'))
-        AND a.id_empresa = " . ID_EMPRESA . "
-    ORDER BY nombre";
+    ORDER BY a.nombre";
     $vendedores = $localConnection->goQuery($sqlVendedores);
 
     $localConnection->disconnect();

@@ -307,17 +307,21 @@ return function (App $app) {
     }
     $object['pagos'] = $pagos;
 
-    // Buscar todos los empleados que sean vendedres o administradores
+    // Buscar todos los empleados que sean vendedres o administradores -- JOIN contra
+    // empresas_usuarios_empresas (no a.id_empresa/a.activo directo) porque una identidad
+    // puede estar asignada a más de una empresa; a.id_empresa hoy es solo "la empresa
+    // activa en el último login", no "pertenece a esta empresa" (ver /login, 2026-08-12).
+    // También se quitó el leak de SQL completo en la respuesta.
     $sqlv = "SELECT DISTINCT
-        id_usuario _id,
-        nombre
+        a.id_usuario _id,
+        a.nombre
     FROM
-        api_empresas.empresas_usuarios a 
-    JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado
+        api_empresas.empresas_usuarios a
+    JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = a.id_usuario AND eue.id_empresa = " . ID_EMPRESA . " AND eue.activo = 1
+    JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado AND b.id_empresa = " . ID_EMPRESA . "
     WHERE
-        b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Comecialización', 'Administración'))  AND a.id_empresa = " . ID_EMPRESA;
+        b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Comecialización', 'Administración'))";
     $object['vendedores'] = $localConnection->goQuery($sqlv);
-    $object['SQL'] = $sqlv;
 
     $localConnection->disconnect();
 
@@ -613,16 +617,18 @@ return function (App $app) {
     );
     $object['monedaBase'] = !empty($monedaBaseRow) ? $monedaBaseRow[0] : null;
 
-    // Obtener lista de vendedores para el select del frontend
+    // Obtener lista de vendedores para el select del frontend -- mismo criterio ya
+    // corregido arriba (JOIN contra empresas_usuarios_empresas, no a.id_empresa directo).
     $sqlv = "SELECT DISTINCT
-                id_usuario _id,
-                nombre
+                a.id_usuario _id,
+                a.nombre
             FROM
-                api_empresas.empresas_usuarios a 
-            JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado
+                api_empresas.empresas_usuarios a
+            JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = a.id_usuario AND eue.id_empresa = " . ID_EMPRESA . " AND eue.activo = 1
+            JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado AND b.id_empresa = " . ID_EMPRESA . "
             WHERE
-                b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Comecialización', 'Administración')) AND a.id_empresa = " . ID_EMPRESA . " 
-            ORDER BY nombre ASC";
+                b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Comecialización', 'Administración'))
+            ORDER BY a.nombre ASC";
     $object['vendedores'] = $localConnection->goQuery($sqlv);
 
     $localConnection->disconnect();
