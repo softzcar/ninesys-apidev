@@ -1,0 +1,32 @@
+- **Solicitud del Usuario:** "ok vamos por partes, aun no vamos a desplegar postgree n porducción elimina ese pendiente. y vamos a fixear el punto 1 y planificar como podemos iplementar la sesión unica por usuario" (sesión anterior, 2026-08-11) -- diseño completo aprobado y diferido para hoy. Hoy (2026-08-12): "vamos a comenzar a trabajatr Hoy!" -> al preguntar por dónde empezar, elegido explícitamente "Fix /empleados/eliminar" entre las opciones presentadas.
+- **Fecha y Hora:** 2026-08-12 08:29:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - `app/routes/employees.php` (endpoint `POST /empleados/eliminar`, líneas ~482-565)
+- **Commits Relacionados:**
+  - Frontend: 0696425 (mensaje real de error 409 en gestion/index.vue)
+  - Backend: 54180f2
+- **Acción Realizada:**
+  El endpoint `POST /empleados/eliminar` hacía 3 operaciones sin ninguna validación de estado ni transacción: `UPDATE lotes_detalles_empleados_asignados SET id_empleado = NULL WHERE id_empleado = ?` (anulaba TODAS las tareas del empleado, terminadas o no), `DELETE FROM empresas_usuarios_departamentos`, y `UPDATE ... activo = 0`. Esto ya había causado un incidente real (orden 6457, empleado Yervin, reparado a mano el 2026-08-10).
+
+  Reescrito el handler con 3 fases:
+  1. Chequeo de bloqueo: `SELECT COUNT(*) ... WHERE id_empleado = ? AND terminado = 1` -- si > 0, responde 409 sin tocar nada, mensaje indicando cuántas tareas terminadas tiene.
+  2. Chequeo de tareas en curso: `SELECT COUNT(*) ... WHERE id_empleado = ? AND terminado = 0 AND fecha_inicio IS NOT NULL` -- si > 0, responde 409 pidiendo reasignar primero (vía el endpoint ya existente `POST /lotes/empleados/reasignar-masiva`, no se reinventa lógica de reasignación).
+  3. Si ambos chequeos pasan (solo quedan tareas pendientes sin iniciar), se ejecuta el desvinculado real: `DELETE FROM lotes_detalles_empleados_asignados WHERE id_empleado = ? AND terminado = 0 AND fecha_inicio IS NULL` (DELETE de la fila, no `SET NULL`, para que `GET /ordenes-sin-asignar` la vuelva a detectar como "sin asignar" -- ese endpoint detecta por ausencia de fila, no por `id_empleado IS NULL`). Las 2 operaciones restantes (`DELETE` de departamentos + `UPDATE activo=0`), que comparten la misma conexión a la BD central, se envuelven en una transacción (`beginTransaction`/`commit`/`rollback`) para no dejar un estado a medias entre ellas.
+
+  Nota de diseño: la operación sobre `lotes_detalles_empleados_asignados` vive en una conexión PDO distinta (BD de la empresa) de las otras dos (BD central `api_empresas`) -- no es posible una transacción PDO única entre dos bases de datos distintas sin `dblink`/`postgres_fdw`. Se optó por la atomicidad alcanzable: cada DELETE/UPDATE individual ya es atómico por sí mismo (una sola sentencia), y las 2 operaciones que sí comparten conexión quedan agrupadas en una transacción real.
+
+- **Inconvenientes y Desafíos:** Ninguno bloqueante. Se investigó primero el patrón ya usado en endpoints hermanos (`products.php:1766` `reasignar-masiva`, y `dashboard-stats` del propio `employees.php`) para mantener consistencia en el criterio `terminado`/`fecha_inicio` y en el estilo de transacción (`beginTransaction`/`inTransaction`/`rollback`/`finally{disconnect}`).
+- **Decisión Final y Justificación:** Se usó el criterio de negocio ya confirmado con el propio QA del usuario (`app_multi/docs/QA_soft_delete_clientes.md:23`): terminada -> bloquear del todo; en curso -> bloquear, exigir reasignar; pendiente sin iniciar -> seguro, eliminar la fila. Se descartó explícitamente tocar otras tablas huérfanas (`disenos`, `reposiciones`, `pagos`, etc.) -- fuera de alcance de este fix puntual, documentado ya en la memoria del proyecto.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (`php -l`, `git commit`/`push`, `ssh`/`psql` para pruebas).
+- **Resultado:** Éxito.
+- **Verificación:** Desplegado a Desarrollo (Contabo Dev, HEAD 54180f2) y probado en vivo contra `api.nineteengreen.com` con un empleado de prueba desechable (id_usuario=665, creado y borrado en esta misma sesión):
+  1. Con 1 tarea `terminado=1` -> `POST /empleados/eliminar` respondió HTTP 409 con mensaje "tiene 1 tarea(s) terminada(s)...".
+  2. Con 1 tarea `terminado=0, fecha_inicio` seteado (en curso) -> HTTP 409 "tiene 1 tarea(s) en curso...".
+  3. Con 1 tarea `terminado=0, fecha_inicio` NULL (pendiente sin iniciar) -> HTTP 200, y se verificó por SQL directo que la fila de la tarea fue eliminada, el vínculo de departamento fue borrado, y `activo` pasó a 0.
+  Todos los datos de prueba (empleado, departamento, tarea) fueron eliminados al final, confirmado por SELECT vacío.
+- **Logro Conseguido:** Se cerró un bug destructivo real (ya había afectado a un empleado en producción) que dejaba tareas en curso/pendientes en un limbo irrecuperable al desactivar un empleado. Ahora el sistema bloquea la acción con un mensaje claro en los casos peligrosos, y solo permite la desactivación cuando es segura -- verificado end-to-end con los 3 estados posibles.
+- **Referencias de Sesión (Contexto):**
+  - Plan: [he-estado-trabajanod-con-hazy-pascal.md](file:///home/developer/.claude/plans/he-estado-trabajanod-con-hazy-pascal.md)
+- **Observaciones de Gemini:** N/A (tarea realizada por Claude Code, no por Antigravity).
+- **Respuesta de Gemini:** N/A
