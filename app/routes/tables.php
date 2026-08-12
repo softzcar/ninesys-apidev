@@ -634,8 +634,36 @@ return function (App $app) {
   $app->get('/table/ordenes-todas/opciones', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
 
-    $categorias = $localConnection->goQuery('SELECT nombre FROM categories WHERE eliminado = 0 ORDER BY nombre');
-    $estadosOrden = $localConnection->goQuery('SELECT DISTINCT status FROM ordenes WHERE status IS NOT NULL ORDER BY status');
+    // Deduplicado case-insensitive en PHP -- datos reales confirmados con nombres/estados
+    // duplicados por casing distinto ('cancelada'/'Cancelada') o filas realmente repetidas
+    // (2 categorías "Banderines" con _id distinto, mismo nombre exacto) que de otro modo
+    // aparecen 2 veces en el dropdown de filtro con el mismo value, mostrando ambas
+    // "seleccionadas" a la vez al elegir cualquiera.
+    $categoriasRaw = $localConnection->goQuery('SELECT nombre FROM categories WHERE eliminado = 0');
+    $categoriasSeen = [];
+    foreach ($categoriasRaw as $row) {
+      $nombre = trim($row['nombre'] ?? '');
+      if ($nombre === '') continue;
+      $key = mb_strtolower($nombre);
+      if (!isset($categoriasSeen[$key])) {
+        $categoriasSeen[$key] = $nombre;
+      }
+    }
+    $categoriasNombres = array_values($categoriasSeen);
+    sort($categoriasNombres);
+
+    $estadosOrdenRaw = $localConnection->goQuery('SELECT DISTINCT status FROM ordenes WHERE status IS NOT NULL');
+    $estadosSeen = [];
+    foreach ($estadosOrdenRaw as $row) {
+      $status = trim($row['status'] ?? '');
+      if ($status === '') continue;
+      $key = mb_strtolower($status);
+      if (!isset($estadosSeen[$key])) {
+        $estadosSeen[$key] = mb_convert_case($key, MB_CASE_TITLE);
+      }
+    }
+    $estadosOrdenNombres = array_values($estadosSeen);
+    sort($estadosOrdenNombres);
 
     // Misma consulta ya usada en /reporte-de-pagos (finance.php) para el select de vendedores.
     $sqlVendedores = "SELECT DISTINCT
@@ -653,8 +681,8 @@ return function (App $app) {
     $localConnection->disconnect();
 
     $object = [
-      'categorias' => array_column($categorias, 'nombre'),
-      'estados_orden' => array_column($estadosOrden, 'status'),
+      'categorias' => $categoriasNombres,
+      'estados_orden' => $estadosOrdenNombres,
       'vendedores' => $vendedores,
     ];
 
@@ -699,15 +727,17 @@ return function (App $app) {
     }
 
     if ($estadoOrden !== '' && $estadoOrden !== 'todas') {
-      $whereClauses[] = 'ord.status = ?';
+      // Insensible a mayúsculas -- datos reales confirmados con 'cancelada'/'Cancelada'
+      // coexistiendo en la misma tabla (mismo patrón ya conocido en BadgeEstatusOrden.vue).
+      $whereClauses[] = 'LOWER(ord.status) = LOWER(?)';
       $whereParams[] = $estadoOrden;
     }
 
     if ($categoria !== '' && $categoria !== 'todas') {
       if (DB_DRIVER === 'pgsql') {
-        $whereClauses[] = "EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON op.id_woo = p._id JOIN categories c ON c._id::text = ANY(string_to_array(p.category_ids, ',')) WHERE op.id_orden = ord._id AND c.nombre = ?)";
+        $whereClauses[] = "EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON op.id_woo = p._id JOIN categories c ON c._id::text = ANY(string_to_array(p.category_ids, ',')) WHERE op.id_orden = ord._id AND LOWER(c.nombre) = LOWER(?))";
       } else {
-        $whereClauses[] = "EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON op.id_woo = p._id JOIN categories c ON FIND_IN_SET(c._id, p.category_ids) WHERE op.id_orden = ord._id AND c.nombre = ?)";
+        $whereClauses[] = "EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON op.id_woo = p._id JOIN categories c ON FIND_IN_SET(c._id, p.category_ids) WHERE op.id_orden = ord._id AND LOWER(c.nombre) = LOWER(?))";
       }
       $whereParams[] = $categoria;
     }
