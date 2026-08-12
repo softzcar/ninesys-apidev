@@ -1599,41 +1599,27 @@ return function (App $app) {
     $object['data']['empleados'] = $localConnection->goQuery($sql, $paramsFecha);
 
     // DISENADORES
-    if (DB_DRIVER === 'pgsql') {
-      $sql = 'SELECT
-              p.id_orden,
-              r._id id_revision,
-              p.monto_pago,
-              p.id_empleado,
-              p.fecha_pago,
-              (SELECT departamento FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado) departamento,
-              (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado) nombre,
-              (SELECT product producto FROM products WHERE _id = r.id_product) producto
-          FROM
-              pagos p
-          JOIN revisiones r ON p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado
-          LEFT JOIN pagos_salarios ps ON ps.id_pago = p._id
-          WHERE ' . $whereFechaPagoP . ' AND p.fecha_pago IS NOT NULL
-          GROUP BY p._id, p.id_orden, r._id, p.monto_pago, p.id_empleado, p.fecha_pago, r.id_product
-          ';
-    } else {
-      $sql = 'SELECT
-              p.id_orden,
-              r._id id_revision,
-              p.monto_pago,
-              p.id_empleado,
-              p.fecha_pago,
-              (SELECT departamento FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado) departamento,
-              (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = r.id_empleado) nombre,
-              (SELECT product producto FROM products WHERE _id = r.id_product) producto
-          FROM
-              pagos p
-          JOIN revisiones r ON p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado
-          LEFT JOIN pagos_salarios ps ON ps.id_pago = p._id
-          WHERE ' . $whereFechaPagoP . ' AND p.fecha_pago IS NOT NULL
-          GROUP BY p._id
-          ';
-    }
+    // NOTA: antes se hacia JOIN revisiones r ON p.id_orden = r.id_orden AND p.id_empleado = r.id_empleado.
+    // Si un pago tenia mas de una revision coincidente (caso real: hasta 4), ese JOIN multiplicaba la
+    // fila y su monto_pago se sumaba varias veces en el frontend -- inflaba el total real hasta 4x en
+    // casos confirmados contra datos reales de la 194. Corregido con EXISTS (no multiplica filas) +
+    // subconsulta para tomar solo la revision mas reciente al mostrar id_revision/producto.
+    $sql = 'SELECT
+            p.id_orden,
+            (SELECT r._id FROM revisiones r WHERE r.id_orden = p.id_orden AND r.id_empleado = p.id_empleado ORDER BY r._id DESC LIMIT 1) id_revision,
+            p.monto_pago,
+            p.id_empleado,
+            p.fecha_pago,
+            (SELECT departamento FROM api_empresas.empresas_usuarios WHERE id_usuario = p.id_empleado) departamento,
+            (SELECT nombre FROM api_empresas.empresas_usuarios WHERE id_usuario = p.id_empleado) nombre,
+            (SELECT product FROM products WHERE _id = (
+                SELECT r.id_product FROM revisiones r WHERE r.id_orden = p.id_orden AND r.id_empleado = p.id_empleado ORDER BY r._id DESC LIMIT 1
+            )) producto
+        FROM pagos p
+        LEFT JOIN pagos_salarios ps ON ps.id_pago = p._id
+        WHERE ' . $whereFechaPagoP . ' AND p.fecha_pago IS NOT NULL
+        AND EXISTS (SELECT 1 FROM revisiones r WHERE r.id_orden = p.id_orden AND r.id_empleado = p.id_empleado)
+        ';
     $object['data']['diseno'] = $localConnection->goQuery($sql, $paramsFecha);
 
     /* if (!empty($object['data']['diseno'])) {
