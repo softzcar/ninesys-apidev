@@ -1383,23 +1383,27 @@ return function (App $app) {
 
     if (DB_DRIVER === 'pgsql') {
       if ($fechaInicio && $fechaFin) {
-        $whereFechaPago  = "a.fecha_pago::date BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
-        $whereFechaPagoP = "p.fecha_pago::date BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+        $whereFechaPago  = "a.fecha_pago::date BETWEEN ? AND ?";
+        $whereFechaPagoP = "p.fecha_pago::date BETWEEN ? AND ?";
+        $paramsFecha = [$fechaInicio, $fechaFin];
       } else {
         $semana = intval($args['semana']);
         $anioActual = intval(date('Y'));
-        $whereFechaPago  = "ps.numero_semana = {$semana} AND EXTRACT(YEAR FROM a.fecha_pago) = {$anioActual}";
-        $whereFechaPagoP = "ps.numero_semana = {$semana} AND EXTRACT(YEAR FROM p.fecha_pago) = {$anioActual}";
+        $whereFechaPago  = "ps.numero_semana = ? AND EXTRACT(YEAR FROM a.fecha_pago) = ?";
+        $whereFechaPagoP = "ps.numero_semana = ? AND EXTRACT(YEAR FROM p.fecha_pago) = ?";
+        $paramsFecha = [$semana, $anioActual];
       }
     } else {
       if ($fechaInicio && $fechaFin) {
-        $whereFechaPago  = "DATE(a.fecha_pago) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
-        $whereFechaPagoP = "DATE(p.fecha_pago) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+        $whereFechaPago  = "DATE(a.fecha_pago) BETWEEN ? AND ?";
+        $whereFechaPagoP = "DATE(p.fecha_pago) BETWEEN ? AND ?";
+        $paramsFecha = [$fechaInicio, $fechaFin];
       } else {
         $semana = intval($args['semana']);
         $anioActual = intval(date('Y'));
-        $whereFechaPago  = "ps.numero_semana = {$semana} AND YEAR(a.fecha_pago) = {$anioActual}";
-        $whereFechaPagoP = "ps.numero_semana = {$semana} AND YEAR(p.fecha_pago) = {$anioActual}";
+        $whereFechaPago  = "ps.numero_semana = ? AND YEAR(a.fecha_pago) = ?";
+        $whereFechaPagoP = "ps.numero_semana = ? AND YEAR(p.fecha_pago) = ?";
+        $paramsFecha = [$semana, $anioActual];
       }
     }
 
@@ -1471,8 +1475,7 @@ return function (App $app) {
           d._id ASC, a._id DESC;
           ";
     }
-    $object['sql_pagos_vendedores'] = $sql;
-    $object['data']['vendedores'] = $localConnection->goQuery($sql);
+    $object['data']['vendedores'] = $localConnection->goQuery($sql, $paramsFecha);
 
     // CONSULTAS ADICIONALES PARA DETALLES DE RECIBO (Salarios, Bonos, Descuentos)
 
@@ -1497,7 +1500,7 @@ return function (App $app) {
           GROUP BY p.id_empleado";
     }
 
-    $salariosData = $localConnection->goQuery($sqlSalarios);
+    $salariosData = $localConnection->goQuery($sqlSalarios, $paramsFecha);
     $object['data']['salarios_detalles'] = $salariosData ?: [];
 
     // 2. Bonos (Abonos extra)
@@ -1510,7 +1513,7 @@ return function (App $app) {
         LEFT JOIN pagos_salarios ps ON ps.id_pago = p._id
         WHERE {$whereFechaPagoP} AND p.fecha_pago IS NOT NULL";
 
-    $bonosData = $localConnection->goQuery($sqlBonos);
+    $bonosData = $localConnection->goQuery($sqlBonos, $paramsFecha);
     $object['data']['bonos_detalles'] = $bonosData ?: [];
 
     // 3. Descuentos
@@ -1523,7 +1526,7 @@ return function (App $app) {
         LEFT JOIN pagos_salarios ps ON ps.id_pago = p._id
         WHERE {$whereFechaPagoP} AND p.fecha_pago IS NOT NULL";
 
-    $descuentosData = $localConnection->goQuery($sqlDescuentos);
+    $descuentosData = $localConnection->goQuery($sqlDescuentos, $paramsFecha);
     $object['data']['descuentos_detalles'] = $descuentosData ?: [];
 
 
@@ -1593,8 +1596,7 @@ return function (App $app) {
               a.id_orden ASC,
               a._id ASC;';
     }
-    $object['data']['empleados'] = $localConnection->goQuery($sql);
-    $object['sql_pagos_empleados'] = $sql;
+    $object['data']['empleados'] = $localConnection->goQuery($sql, $paramsFecha);
 
     // DISENADORES
     if (DB_DRIVER === 'pgsql') {
@@ -1632,8 +1634,7 @@ return function (App $app) {
           GROUP BY p._id
           ';
     }
-    $object['sql_disenos'] = $sql;
-    $object['data']['diseno'] = $localConnection->goQuery($sql);
+    $object['data']['diseno'] = $localConnection->goQuery($sql, $paramsFecha);
 
     /* if (!empty($object['data']['diseno'])) {
         foreach ($object['data']['diseno'] as $key => $value) {
