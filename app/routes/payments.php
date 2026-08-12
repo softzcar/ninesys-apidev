@@ -1618,6 +1618,7 @@ return function (App $app) {
         FROM pagos p
         LEFT JOIN pagos_salarios ps ON ps.id_pago = p._id
         WHERE ' . $whereFechaPagoP . ' AND p.fecha_pago IS NOT NULL
+        AND p.detalle IN (\'Diseño\', \'ajuste\', \'personalización\')
         AND EXISTS (SELECT 1 FROM revisiones r WHERE r.id_orden = p.id_orden AND r.id_empleado = p.id_empleado)
         ';
     $object['data']['diseno'] = $localConnection->goQuery($sql, $paramsFecha);
