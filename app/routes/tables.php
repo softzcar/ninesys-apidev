@@ -629,6 +629,41 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  // OPCIONES DE FILTRO PARA "TODAS LAS ORDENES" -- catálogo completo, desacoplado de la
+  // paginación (las opciones de un filtro no pueden depender de qué página esté cargada).
+  $app->get('/table/ordenes-todas/opciones', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+
+    $categorias = $localConnection->goQuery('SELECT nombre FROM categories WHERE eliminado = 0 ORDER BY nombre');
+    $estadosOrden = $localConnection->goQuery('SELECT DISTINCT status FROM ordenes WHERE status IS NOT NULL ORDER BY status');
+
+    // Misma consulta ya usada en /reporte-de-pagos (finance.php) para el select de vendedores.
+    $sqlVendedores = "SELECT DISTINCT
+        id_usuario _id,
+        nombre
+    FROM
+        api_empresas.empresas_usuarios a
+    JOIN api_empresas.empresas_usuarios_departamentos b ON a.id_usuario = b.id_empleado
+    WHERE
+        b.id_departamento IN (SELECT _id FROM departamentos WHERE departamento IN ('Comercialización', 'Comecialización', 'Administración'))
+        AND a.id_empresa = " . ID_EMPRESA . "
+    ORDER BY nombre";
+    $vendedores = $localConnection->goQuery($sqlVendedores);
+
+    $localConnection->disconnect();
+
+    $object = [
+      'categorias' => array_column($categorias, 'nombre'),
+      'estados_orden' => array_column($estadosOrden, 'status'),
+      'vendedores' => $vendedores,
+    ];
+
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   // TODAS LAS ORDENES
   $app->get('/table/ordenes-todas', function (Request $request, Response $response) {
     $params = $request->getQueryParams();
