@@ -482,29 +482,86 @@ return function (App $app) {
     // Eliminar Empleados
     $app->post('/empleados/eliminar', function (Request $request, Response $response) {
         $miEmpleado = $request->getParsedBody();
+        $id_empleado = (int) $miEmpleado['id'];
         $localConnection = new LocalDB();
         $localConnection2 = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
-        // 1. VERIFICAR ASIGNACIÓN DE EMPLEADOS `Si ya tiene registrado pagos no se puede eliminar`
+        // 1. VERIFICAR ASIGNACIÓN DE TAREAS: si ya tiene tareas terminadas, no se puede
+        // desactivar -- ese historial (comisiones, reportes) no puede perderse.
+        $sqlTerminadas = 'SELECT COUNT(*) total FROM lotes_detalles_empleados_asignados WHERE id_empleado = ? AND terminado = 1';
+        $terminadasResult = $localConnection->goQuery($sqlTerminadas, [$id_empleado]);
+        $tareasTerminadas = (int) ($terminadasResult[0]['total'] ?? 0);
 
-        // 1. DESVINCULAR EMPLEADO Y DESACTIVARLO (No se borra físicamente)
+        if ($tareasTerminadas > 0) {
+            $localConnection->disconnect();
+            $localConnection2->disconnect();
+            $object = [
+                'message' => "No se puede desactivar: el empleado tiene {$tareasTerminadas} tarea(s) terminada(s) asociada(s), y ese historial no puede eliminarse ni anularse.",
+                'eliminado' => false,
+            ];
+            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+        }
 
-        // Eliminar asignación de tareas
-        $sql = 'UPDATE lotes_detalles_empleados_asignados SET id_empleado = NULL WHERE id_empleado = ?';
-        $object['response_lotes_detalles'] = json_encode($localConnection->goQuery($sql, [$miEmpleado['id']]));
+        // Si tiene tareas ya iniciadas (pero no terminadas), tampoco se puede desactivar
+        // directamente -- primero hay que reasignarlas a otro empleado (endpoint existente
+        // POST /lotes/empleados/reasignar-masiva) para no dejarlas en curso sin nadie a cargo.
+        $sqlEnCurso = 'SELECT COUNT(*) total FROM lotes_detalles_empleados_asignados WHERE id_empleado = ? AND terminado = 0 AND fecha_inicio IS NOT NULL';
+        $enCursoResult = $localConnection->goQuery($sqlEnCurso, [$id_empleado]);
+        $tareasEnCurso = (int) ($enCursoResult[0]['total'] ?? 0);
 
-        // Eliminar de departamentos del usuario
-        $sql = 'DELETE FROM empresas_usuarios_departamentos WHERE id_empleado = ?';
-        $object['response_departamentos'] = json_encode($localConnection2->goQuery($sql, [$miEmpleado['id']]));
+        if ($tareasEnCurso > 0) {
+            $localConnection->disconnect();
+            $localConnection2->disconnect();
+            $object = [
+                'message' => "No se puede desactivar: el empleado tiene {$tareasEnCurso} tarea(s) en curso. Reasígnelas a otro empleado antes de desactivarlo.",
+                'eliminado' => false,
+            ];
+            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+        }
 
-        // Desactivar al empleado (misma lógica que POST /empleados/activacion con activo=0),
-        // para que deje de listarse como activo en Gestión de Empleados y en el resto del sistema.
-        $sql = 'UPDATE api_empresas.empresas_usuarios SET activo = 0 WHERE id_usuario = ?';
-        $object['response_desactivacion'] = json_encode($localConnection2->goQuery($sql, [$miEmpleado['id']]));
+        try {
+            // 2. DESVINCULAR EMPLEADO Y DESACTIVARLO (no se borra físicamente el usuario).
+            // A esta altura, por descarte, las tareas restantes del empleado son pendientes
+            // sin iniciar (terminado=0 AND fecha_inicio IS NULL) -- se elimina la fila en vez
+            // de anular id_empleado con SET NULL, para que GET /ordenes-sin-asignar la vuelva
+            // a detectar como "sin asignar" (ese endpoint detecta por ausencia de fila, no por
+            // id_empleado IS NULL -- si se dejara la fila huérfana, la tarea queda invisible
+            // también para ese mecanismo de recuperación).
+            $sql = 'DELETE FROM lotes_detalles_empleados_asignados WHERE id_empleado = ? AND terminado = 0 AND fecha_inicio IS NULL';
+            $object['response_lotes_detalles'] = json_encode($localConnection->goQuery($sql, [$id_empleado]));
+
+            // Eliminar departamentos y desactivar usuario en una sola transacción (misma
+            // conexión, BD central) para no dejar un estado a medias entre ambas operaciones.
+            $localConnection2->beginTransaction();
+
+            $sql = 'DELETE FROM empresas_usuarios_departamentos WHERE id_empleado = ?';
+            $object['response_departamentos'] = json_encode($localConnection2->goQuery($sql, [$id_empleado]));
+
+            // Desactivar al empleado (misma lógica que POST /empleados/activacion con activo=0),
+            // para que deje de listarse como activo en Gestión de Empleados y en el resto del sistema.
+            $sql = 'UPDATE api_empresas.empresas_usuarios SET activo = 0 WHERE id_usuario = ?';
+            $object['response_desactivacion'] = json_encode($localConnection2->goQuery($sql, [$id_empleado]));
+
+            $localConnection2->commit();
+        } catch (Exception $e) {
+            if ($localConnection2->inTransaction()) {
+                $localConnection2->rollback();
+            }
+            $localConnection->disconnect();
+            $localConnection2->disconnect();
+            $object = [
+                'message' => 'Ocurrió un error al desactivar al empleado: ' . $e->getMessage(),
+                'eliminado' => false,
+            ];
+            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
 
         // Ya no se toca la tabla empresas_usuarios de forma física, solo se desactiva
 
-        $object['message'] = "El empleado ha sido desvinculado de tareas y departamentos, y ha sido desactivado. El registro de usuario permanece intacto y puede reactivarse desde 'Activación de Empleados'.";
+        $object['message'] = "El empleado ha sido desvinculado de sus tareas pendientes y departamentos, y ha sido desactivado. El registro de usuario permanece intacto y puede reactivarse desde 'Activación de Empleados'.";
         $eliminado = false;
         $object['eliminado'] = $eliminado;
 
