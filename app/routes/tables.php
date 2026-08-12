@@ -669,14 +669,82 @@ return function (App $app) {
     $params = $request->getQueryParams();
     $fecha_inicio = $params['fecha_inicio'] ?? date('Y-m-01');
     $fecha_fin = $params['fecha_fin'] ?? date('Y-m-d');
+    // ignorar_fecha=1 se usa cuando hay una búsqueda activa (search) -- así la búsqueda
+    // encuentra órdenes de CUALQUIER fecha, no solo las del rango seleccionado (bug real
+    // reportado: la página se llama "Todas las Órdenes" pero el buscador solo encontraba
+    // lo que ya estaba cargado dentro del rango).
+    $ignorarFecha = isset($params['ignorar_fecha']) && $params['ignorar_fecha'] !== '0' && $params['ignorar_fecha'] !== '';
+    $search = trim($params['search'] ?? '');
+    $idVendedor = isset($params['id_vendedor']) ? (int) $params['id_vendedor'] : 0;
+    $categoria = trim($params['categoria'] ?? 'todas');
+    $estadoOrden = trim($params['estado_orden'] ?? 'todas');
+    $cursor = (isset($params['cursor']) && $params['cursor'] !== '') ? (int) $params['cursor'] : null;
+    $limit = isset($params['limit']) ? min(100, max(1, (int) $params['limit'])) : 25;
 
     $localConnection = new LocalDB();
+
+    // Filtros base (sin el cursor -- el cursor se agrega aparte porque el conteo total
+    // de la primera página se calcula SIN él, ver más abajo).
+    $whereClauses = [];
+    $whereParams = [];
+
+    if (!$ignorarFecha) {
+      $whereClauses[] = '((ord.fecha_inicio >= ? AND ord.fecha_inicio <= ?) OR (ord.fecha_entrega >= ? AND ord.fecha_entrega <= ?) OR (ord.fecha_inicio <= ? AND ord.fecha_entrega >= ?))';
+      array_push($whereParams, $fecha_inicio, $fecha_fin, $fecha_inicio, $fecha_fin, $fecha_inicio, $fecha_fin);
+    }
+
+    if ($idVendedor > 0) {
+      $whereClauses[] = 'ord.responsable = ?';
+      $whereParams[] = $idVendedor;
+    }
+
+    if ($estadoOrden !== '' && $estadoOrden !== 'todas') {
+      $whereClauses[] = 'ord.status = ?';
+      $whereParams[] = $estadoOrden;
+    }
+
+    if ($categoria !== '' && $categoria !== 'todas') {
+      if (DB_DRIVER === 'pgsql') {
+        $whereClauses[] = "EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON op.id_woo = p._id JOIN categories c ON c._id::text = ANY(string_to_array(p.category_ids, ',')) WHERE op.id_orden = ord._id AND c.nombre = ?)";
+      } else {
+        $whereClauses[] = "EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON op.id_woo = p._id JOIN categories c ON FIND_IN_SET(c._id, p.category_ids) WHERE op.id_orden = ord._id AND c.nombre = ?)";
+      }
+      $whereParams[] = $categoria;
+    }
+
+    if ($search !== '') {
+      $likeOp = DB_DRIVER === 'pgsql' ? 'ILIKE' : 'LIKE';
+      $castOrden = DB_DRIVER === 'pgsql' ? 'CAST(ord._id AS TEXT)' : 'CAST(ord._id AS CHAR)';
+      $whereClauses[] = "($castOrden $likeOp ? OR ord.cliente_nombre $likeOp ?)";
+      $searchLike = '%' . $search . '%';
+      $whereParams[] = $searchLike;
+      $whereParams[] = $searchLike;
+    }
+
+    $whereSqlBase = $whereClauses ? ('WHERE ' . implode(' AND ', $whereClauses)) : '';
+
+    // total_count solo se calcula en la primera página de cada combinación de filtros
+    // (cursor ausente) -- no tiene sentido repetir un COUNT en cada "cargar más".
+    $totalCount = null;
+    if ($cursor === null) {
+      $countResult = $localConnection->goQuery("SELECT COUNT(*) AS total FROM ordenes ord $whereSqlBase", $whereParams);
+      $totalCount = (int) ($countResult[0]['total'] ?? 0);
+    }
+
+    $pageWhereClauses = $whereClauses;
+    $pageWhereParams = $whereParams;
+    if ($cursor !== null) {
+      $pageWhereClauses[] = 'ord._id < ?';
+      $pageWhereParams[] = $cursor;
+    }
+    $whereSql = $pageWhereClauses ? ('WHERE ' . implode(' AND ', $pageWhereClauses)) : '';
 
     // product_categories se calculaba antes con una subconsulta correlacionada (una vez POR
     // fila, patrón N+1) -- confirmado con EXPLAIN ANALYZE que eso multiplicaba el tiempo de
     // esta consulta por 5.5x (68ms -> 376ms con 3041 órdenes en Desarrollo), dominado por un
     // Seq Scan sobre categories ejecutado dentro del loop. Ahora se calcula en un segundo query
     // por lote (una sola pasada) después de tener los ids de esta página, ver más abajo.
+    // Se pide limit+1 filas para saber si hay una página siguiente sin un COUNT aparte.
     $sql = "SELECT
     ord.responsable,
     ord._id orden,
@@ -697,14 +765,19 @@ FROM
     ordenes ord
 JOIN customers cus ON ord.id_wp = cus._id
 LEFT JOIN api_empresas.empresas_usuarios emp ON emp.id_usuario = ord.responsable
-WHERE
-    (ord.fecha_inicio >= ? AND ord.fecha_inicio <= ?) OR
-    (ord.fecha_entrega >= ? AND ord.fecha_entrega <= ?) OR
-    (ord.fecha_inicio <= ? AND ord.fecha_entrega >= ?)
-ORDER BY ord._id DESC";
+$whereSql
+ORDER BY ord._id DESC
+LIMIT ?";
 
-    $sqlParams = [$fecha_inicio, $fecha_fin, $fecha_inicio, $fecha_fin, $fecha_inicio, $fecha_fin];
+    $sqlParams = array_merge($pageWhereParams, [$limit + 1]);
     $items = $localConnection->goQuery($sql, $sqlParams);
+
+    $nextCursor = null;
+    if (count($items) > $limit) {
+      $items = array_slice($items, 0, $limit);
+      $lastItem = end($items);
+      $nextCursor = (int) $lastItem['orden'];
+    }
 
     // Categorías de producto por orden, en un solo query por lote (no por fila).
     $categoriesByOrder = [];
@@ -740,6 +813,10 @@ ORDER BY ord._id DESC";
       $item['product_categories'] = $categoriesByOrder[(int) $item['orden']] ?? null;
     }
     $object['items'] = $items;
+    $object['next_cursor'] = $nextCursor;
+    if ($totalCount !== null) {
+      $object['total_count'] = $totalCount;
+    }
     $localConnection->disconnect();
 
     // Cabeceras de la tabla
