@@ -568,7 +568,10 @@ return function (App $app) {
     $saldoFilter = "$saldo > 0 OR ($saldo = 0 AND ord.status != 'entregada') OR $saldo < 0";
 
     // Filtros base (regla de negocio, siempre aplican, nunca se ignoran por búsqueda/filtros).
-    $whereClauses = ["ord.status != 'cancelada'", "($saldoFilter)"];
+    // LOWER() -- mismos datos reales con 'cancelada'/'Cancelada' inconsistentes ya
+    // confirmados hoy (ver /table/ordenes-todas/opciones). La comparacion exacta dejaba
+    // pasar 4 ordenes canceladas reales (status='Cancelada') hacia "Ordenes en Curso".
+    $whereClauses = ["LOWER(ord.status) != 'cancelada'", "($saldoFilter)"];
     $whereParams = [];
     if (strpos($departamento, 'Admin') === false) {
       $whereClauses[] = 'ord.responsable = ?';
@@ -1002,7 +1005,7 @@ LIMIT ?";
          WHERE c.id_orden = a._id
          ) AS total_deuda
         FROM ordenes AS a
-        WHERE a.status != 'cancelada'
+        WHERE LOWER(a.status) != 'cancelada'
         AND (
          SELECT
          $pagoTotalExpr - SUM(c.abono) - SUM(c.descuento) + SUM(c.nota_credito) AS total_deuda
