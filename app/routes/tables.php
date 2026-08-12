@@ -656,6 +656,7 @@ return function (App $app) {
     ord.fecha_entrega,
     ord.pago_total AS total,
     (SELECT SUM(descuento) FROM abonos WHERE id_orden = ord._id) AS descuento_total,
+    (SELECT SUM(monto / COALESCE(NULLIF(tasa, 0), 1)) FROM metodos_de_pago WHERE id_orden = ord._id) AS total_abonado_base,
     ord.status estatus
 FROM
     ordenes ord
