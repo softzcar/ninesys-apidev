@@ -3374,6 +3374,19 @@ return function (App $app) {
     // (orden+departamento) en su lugar. La consulta 'items' de esta ruta no
     // la consume el frontend (solo lee trabajos_en_curso) y compartía el
     // mismo bug, así que se elimina en vez de repararla.
+    // ?todos=1: mismo caso que /sse/produccion/corte -- el Jefe de Producción
+    // no tiene tareas propias asignadas, así que ve el total de la empresa.
+    $verTodos = !empty($request->getQueryParams()['todos']);
+    $filtroEmpleado = $verTodos ? '' : "
+            AND EXISTS (
+                SELECT 1 FROM lotes_detalles_empleados_asignados ldea
+                JOIN departamentos dep ON dep._id = ldea.id_departamento
+                WHERE ldea.id_orden = a.id_orden
+                AND dep.departamento = b.departamento
+                AND ldea.id_empleado = {$args['id_empleado']}
+                AND ldea.terminado = 0
+            )";
+
     $sql = "SELECT
             c.prioridad,
             a.cantidad unidades_solicitadas,
@@ -3404,14 +3417,7 @@ return function (App $app) {
             LEFT JOIN lotes c
             ON c.id_orden = b.id_orden
             WHERE b.progreso = 'en curso'
-            AND EXISTS (
-                SELECT 1 FROM lotes_detalles_empleados_asignados ldea
-                JOIN departamentos dep ON dep._id = ldea.id_departamento
-                WHERE ldea.id_orden = a.id_orden
-                AND dep.departamento = b.departamento
-                AND ldea.id_empleado = {$args['id_empleado']}
-                AND ldea.terminado = 0
-            )
+            $filtroEmpleado
         ";
     $object['trabajos_en_curso'] = $localConnection->goQuery($sql);
 
