@@ -2324,6 +2324,7 @@ CREATE TABLE IF NOT EXISTS wa_ai_settings (
   updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
   respond_in_groups SMALLINT NOT NULL DEFAULT 0,
   always_ai         SMALLINT NOT NULL DEFAULT 0 ,
+  notify_vendors_whatsapp SMALLINT NOT NULL DEFAULT 1,
   PRIMARY KEY (id),
   CONSTRAINT wa_ai_settings_singleton CHECK (id = 1)
 );

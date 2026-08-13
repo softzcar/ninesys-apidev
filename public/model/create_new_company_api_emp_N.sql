@@ -2679,6 +2679,7 @@ CREATE TABLE IF NOT EXISTS `wa_ai_settings` (
   `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `respond_in_groups` TINYINT(1) NOT NULL DEFAULT 0,
   `always_ai`         TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0=handoff normal; 1=IA siempre activa (solo notifica, no pasa a modo humano)',
+  `notify_vendors_whatsapp` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1=envia avisos automaticos de asignacion por WhatsApp al vendedor; 0=silencia esos avisos automaticos',
   PRIMARY KEY (`id`),
   CONSTRAINT `wa_ai_settings_singleton` CHECK (`id` = 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
