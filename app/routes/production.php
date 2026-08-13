@@ -168,39 +168,41 @@ return function (App $app) {
   // SSE PRODUCCION
   $app->get('/sse/produccion/ordenes-activas', function (Request $request, Response $response, array $args) {  // /lotes/en-proceso
     $localConnection = new LocalDB();
+    // Reescrito 2026-08-13: la consulta original unía por lotes_detalles.id_empleado
+    // y lotes_detalles.id_ordenes_productos -- ambas columnas quedaron en desuso
+    // hace tiempo (el flujo real de asignación vive en
+    // lotes_detalles_empleados_asignados, LDEA) y estaban en NULL para el 100% de
+    // las asignaciones activas reales (confirmado con datos de la 194), asi que el
+    // INNER JOIN filtraba todo silenciosamente -- la página nunca mostraba nada.
+    // LDEA no guarda un vinculo confiable a un producto/línea especifica de la
+    // orden (una orden puede tener varios productos), así que el detalle por
+    // producto/talla/corte/tela se quitó -- se muestra orden + empleado +
+    // departamento, que sí es información confiable hoy.
     if (DB_DRIVER === 'pgsql') {
-      $sql = "SELECT 
-              a.id_orden orden, 
-              b.nombre AS empleado, 
-              c.name producto, 
-              c.cantidad, 
-              c.talla, 
-              c.corte, 
-              c.tela, 
-              TO_CHAR(a.fecha_inicio, 'HH12:MI:SS AM') AS hora,
-              TO_CHAR(a.fecha_inicio, 'DD-MM-YYYY') AS fecha
-              FROM lotes_detalles a
-              JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario
-              JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
-              WHERE a.progreso = 'en curso' 
-              ORDER BY a.fecha_inicio DESC, b.nombre ASC
+      $sql = "SELECT
+              ldea.id_orden AS orden,
+              b.nombre AS empleado,
+              dep.departamento AS departamento,
+              TO_CHAR(ldea.fecha_inicio, 'HH12:MI:SS AM') AS hora,
+              TO_CHAR(ldea.fecha_inicio, 'DD-MM-YYYY') AS fecha
+              FROM lotes_detalles_empleados_asignados ldea
+              JOIN api_empresas.empresas_usuarios b ON ldea.id_empleado = b.id_usuario
+              JOIN departamentos dep ON dep._id = ldea.id_departamento
+              WHERE ldea.terminado = 0 AND ldea.fecha_inicio IS NOT NULL AND ldea.fecha_terminado IS NULL
+              ORDER BY ldea.fecha_inicio DESC, b.nombre ASC
           ";
     } else {
-      $sql = "SELECT 
-              a.id_orden orden, 
-              b.nombre AS empleado, 
-              c.name producto, 
-              c.cantidad, 
-              c.talla, 
-              c.corte, 
-              c.tela, 
-              DATE_FORMAT(a.fecha_inicio, '%h:%i:%s %p') AS hora, 
-              DATE_FORMAT(a.fecha_inicio, '%d-%m-%Y') AS fecha 
-              FROM lotes_detalles a 
-              JOIN empleados b ON a.id_empleado = b._id 
-              JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
-              WHERE a.progreso = 'en curso' 
-              ORDER BY a.fecha_inicio DESC, b.nombre ASC
+      $sql = "SELECT
+              ldea.id_orden AS orden,
+              b.nombre AS empleado,
+              dep.departamento AS departamento,
+              DATE_FORMAT(ldea.fecha_inicio, '%h:%i:%s %p') AS hora,
+              DATE_FORMAT(ldea.fecha_inicio, '%d-%m-%Y') AS fecha
+              FROM lotes_detalles_empleados_asignados ldea
+              JOIN empleados b ON ldea.id_empleado = b._id
+              JOIN departamentos dep ON dep._id = ldea.id_departamento
+              WHERE ldea.terminado = 0 AND ldea.fecha_inicio IS NOT NULL AND ldea.fecha_terminado IS NULL
+              ORDER BY ldea.fecha_inicio DESC, b.nombre ASC
           ";
     }
     $object['items'] = $localConnection->goQuery($sql);
