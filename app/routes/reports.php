@@ -1421,12 +1421,19 @@ return function (App $app) {
                 // incluyendo el caso real < 0 por datos inconsistentes), no hay con qué
                 // comparar la meta -- antes esto se mostraba como "100% eficiencia"
                 // (perfecto), enmascarando que en realidad no se registró nada.
+                // Se exponen además los valores crudos (meta_real/consumo_real) para que
+                // el frontend pueda promediar sumando totales en vez de promediar
+                // porcentajes ya calculados (ver nota de eficiencia_tiempo abajo).
                 $matMatch = array_filter($matEff, function($me) use ($currentId) { return (string)$me['id_orden'] === $currentId; });
                 if (!empty($matMatch)) {
                     $mVal = array_values($matMatch)[0];
                     $order['eficiencia_material'] = ($mVal['real'] > 0) ? round(($mVal['meta'] / $mVal['real']) * 100, 2) : 'N/A';
+                    $order['material_meta_cantidad'] = (float) $mVal['meta'];
+                    $order['material_real_cantidad'] = (float) $mVal['real'];
                 } else {
                     $order['eficiencia_material'] = 'N/A';
+                    $order['material_meta_cantidad'] = 0;
+                    $order['material_real_cantidad'] = 0;
                 }
 
                 // Eficiencia Tiempo: mismo criterio -- sin tiempo real registrado
@@ -1435,16 +1442,36 @@ return function (App $app) {
                 // Umbral adicional (2026-08-13): un empleado que nunca marca "inicio"
                 // en el sistema y solo lo hace justo al terminar (inicio≈fin) deja un
                 // tiempo real de unos pocos segundos frente a un proyectado de minutos
-                // u horas -- produce porcentajes absurdos (ej. 117.000%) que además
-                // arrastran el promedio de toda la página. Un tiempo real menor a 60s
-                // no es una medición confiable del trabajo real, se trata igual que
-                // "sin registrar" (N/A) en vez de calcular una eficiencia con eso.
+                // u horas -- produce porcentajes absurdos (ej. 117.000% en una orden
+                // real de la 194) por orden individual. Un tiempo real menor a 60s no
+                // es una medición confiable del trabajo real, se trata igual que "sin
+                // registrar" (N/A) en vez de calcular una eficiencia con eso.
+                //
+                // Además: promediar estos porcentajes por orden (media simple) sigue
+                // siendo engañoso aunque cada uno individualmente sea válido -- una
+                // orden de 2 minutos con 17.000% de "eficiencia" pesa igual que una de
+                // 3 horas con 90%, distorsionando el promedio de toda la página.
+                // Confirmado con datos reales (194, semana del 10-16/08): el promedio
+                // simple de porcentajes daba >2000%, mientras que sumar todos los
+                // segundos reales/proyectados de las órdenes con tiempo medible y
+                // sacar el porcentaje AL FINAL da 66.7% (número creíble). Por eso se
+                // exponen también los segundos crudos -- el frontend agrega sumando
+                // totales, no promediando porcentajes ya calculados.
                 $timeMatch = array_filter($timeEff, function($te) use ($currentId) { return (string)$te['id_orden'] === $currentId; });
                 if (!empty($timeMatch)) {
                     $tVal = array_values($timeMatch)[0];
-                    $order['eficiencia_tiempo'] = ($tVal['real'] > 60) ? round(($tVal['projected'] / $tVal['real']) * 100, 2) : 'N/A';
+                    $tiempoMedible = $tVal['real'] > 60;
+                    $order['eficiencia_tiempo'] = $tiempoMedible ? round(($tVal['projected'] / $tVal['real']) * 100, 2) : 'N/A';
+                    // Ambos en 0 juntos cuando no es medible -- si solo se excluyera
+                    // "real" y se dejara "proyectado" completo, la orden restaría del
+                    // lado equivocado de la suma agregada (empeoraría el promedio en
+                    // vez de simplemente no contar).
+                    $order['tiempo_proyectado_segundos'] = $tiempoMedible ? (float) $tVal['projected'] : 0;
+                    $order['tiempo_real_segundos'] = $tiempoMedible ? (float) $tVal['real'] : 0;
                 } else {
                     $order['eficiencia_tiempo'] = 'N/A';
+                    $order['tiempo_proyectado_segundos'] = 0;
+                    $order['tiempo_real_segundos'] = 0;
                 }
 
                 $finalItems[] = $order;
