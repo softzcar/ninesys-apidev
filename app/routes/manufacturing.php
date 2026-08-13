@@ -3356,7 +3356,9 @@ return function (App $app) {
   // declaró (solo recibe id_empleado), y una tercera consulta ('ordenes_asignadas')
   // con el id_empleado hardcodeado en 24 -- ninguno de los dos era consumido
   // por el frontend, así que se eliminan en vez de repararlos. Se devuelve
-  // JSON limpio con solo lo que sí se usa: items y trabajos_en_curso.
+  // JSON limpio con solo lo que sí se usa: trabajos_en_curso (ver nota más
+  // abajo sobre el fix de b.id_empleado, que originalmente también incluía
+  // una consulta 'items' con el mismo bug pero sin ningún consumidor).
   $app->get('/sse/empleados/ordenes-asignadas/{id_empleado}', function (Request $request, Response $response, array $args) {
     if (DB_DRIVER === 'pgsql') {
       $fechaEntregaSelect = "TO_CHAR(NULLIF(d.fecha_entrega, '')::timestamp, 'DD-MM-YYYY') AS fecha_entrega";
@@ -3366,41 +3368,12 @@ return function (App $app) {
 
     $localConnection = new LocalDB();
 
-    $sql = "SELECT
-            c.prioridad,
-            a.cantidad unidades_solicitadas,
-            a.cantidad unidades,
-            a.cantidad piezas_actuales,
-            b.fecha_inicio,
-            b.fecha_terminado,
-            $fechaEntregaSelect,
-            b._id id_lotes_detalles,
-            b.departamento,
-            a.id_orden,
-            a.id_orden orden,
-            a.id_woo,
-            a._id id_ordenes_productos,
-            a.name producto,
-            b.id_empleado,
-            a.talla,
-            a.corte,
-            a.tela,
-            b.departamento,
-            c.prioridad,
-            c.paso,
-            d.status,
-            b.progreso,
-            b.detalles detalles_revision
-            FROM ordenes_productos a
-            JOIN lotes_detalles b
-            ON a._id = b.id_ordenes_productos
-            JOIN ordenes d ON a.id_orden = d._id
-            LEFT JOIN lotes c
-            ON c.id_orden = b.id_orden
-            WHERE (b.id_empleado = " . $args['id_empleado'] . " AND b.progreso NOT LIKE 'terminada') AND (d.status LIKE 'En espera' OR d.status LIKE 'activa') ORDER BY c.prioridad DESC, b.progreso ASC, b.id_orden ASC
-        ";
-    $object['items'] = $localConnection->goQuery($sql);
-
+    // 2026-08-13: b.id_empleado (lotes_detalles) es la misma columna legacy
+    // que en /sse/produccion/corte -- ya no se puebla (0 de 1552 filas
+    // pendientes reales la tienen distinta de NULL). Se filtra por LDEA
+    // (orden+departamento) en su lugar. La consulta 'items' de esta ruta no
+    // la consume el frontend (solo lee trabajos_en_curso) y compartía el
+    // mismo bug, así que se elimina en vez de repararla.
     $sql = "SELECT
             c.prioridad,
             a.cantidad unidades_solicitadas,
@@ -3430,7 +3403,15 @@ return function (App $app) {
             JOIN ordenes d ON a.id_orden = d._id
             LEFT JOIN lotes c
             ON c.id_orden = b.id_orden
-            WHERE b.id_empleado = " . $args['id_empleado'] . " AND b.progreso = 'en curso'
+            WHERE b.progreso = 'en curso'
+            AND EXISTS (
+                SELECT 1 FROM lotes_detalles_empleados_asignados ldea
+                JOIN departamentos dep ON dep._id = ldea.id_departamento
+                WHERE ldea.id_orden = a.id_orden
+                AND dep.departamento = b.departamento
+                AND ldea.id_empleado = {$args['id_empleado']}
+                AND ldea.terminado = 0
+            )
         ";
     $object['trabajos_en_curso'] = $localConnection->goQuery($sql);
 
