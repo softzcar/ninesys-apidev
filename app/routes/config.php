@@ -1040,8 +1040,14 @@ return function (App $app) {
             if (empty($current)) throw new Exception('Registro no encontrado.');
             $monto_anterior = $current[0]['monto'];
 
-            $sqlAudit = 'INSERT INTO gastos_auditoria 
-                (id_registro, accion, id_usuario, nombre_usuario, monto_anterior, monto_nuevo, detalle) 
+            // Atomicidad: el INSERT de auditoría y el DELETE deben quedar
+            // juntos o ninguno -- sin transacción, si el DELETE fallara
+            // después de registrar la auditoría, quedaría un "eliminado" en
+            // la bitácora para un registro que en realidad sigue existiendo.
+            $db->beginTransaction();
+
+            $sqlAudit = 'INSERT INTO gastos_auditoria
+                (id_registro, accion, id_usuario, nombre_usuario, monto_anterior, monto_nuevo, detalle)
                 VALUES (?, ?, ?, ?, ?, ?, ?)';
 
             $id_usuario_delete = (isset($auditData['id_usuario']) && is_numeric($auditData['id_usuario'])) ? (int)$auditData['id_usuario'] : null;
@@ -1057,11 +1063,16 @@ return function (App $app) {
             ]);
 
             $db->goQuery('DELETE FROM gastos_registros WHERE _id = ?', [$id_registro]);
+
+            $db->commit();
             $db->disconnect();
 
             $response->getBody()->write(json_encode(['message' => 'Registro eliminado y auditado correctamente.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         } catch (Exception $e) {
+            if (isset($db) && $db->inTransaction()) {
+                $db->rollback();
+            }
             $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
             return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
         }
