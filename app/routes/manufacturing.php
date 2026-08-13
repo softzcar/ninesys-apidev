@@ -3348,6 +3348,15 @@ return function (App $app) {
   });
 
   // SSE Obtener ordenes asociadas a los empleados via SSE
+  // 2026-08-13: igual que /sse/produccion/corte, esta ruta usaba la clase SSE
+  // (headers text/event-stream + echo/flush directo) en paralelo a una
+  // respuesta JSON de Slim -- el navegador no podía interpretar la respuesta
+  // resultante (EventSource fallaba con "Error in SSE connection"). Además
+  // referenciaba {$args['id_departamento']}, un parámetro que esta ruta nunca
+  // declaró (solo recibe id_empleado), y una tercera consulta ('ordenes_asignadas')
+  // con el id_empleado hardcodeado en 24 -- ninguno de los dos era consumido
+  // por el frontend, así que se eliminan en vez de repararlos. Se devuelve
+  // JSON limpio con solo lo que sí se usa: items y trabajos_en_curso.
   $app->get('/sse/empleados/ordenes-asignadas/{id_empleado}', function (Request $request, Response $response, array $args) {
     if (DB_DRIVER === 'pgsql') {
       $fechaEntregaSelect = "TO_CHAR(NULLIF(d.fecha_entrega, '')::timestamp, 'DD-MM-YYYY') AS fecha_entrega";
@@ -3355,103 +3364,79 @@ return function (App $app) {
       $fechaEntregaSelect = "DATE_FORMAT(d.fecha_entrega, '%d-%m-%Y') AS fecha_entrega";
     }
 
-    $sql = "SELECT 
-            c.prioridad, 
-            a.cantidad unidades_solicitadas, 
-            a.cantidad unidades, 
-            a.cantidad piezas_actuales, 
-            b.fecha_inicio, 
-            b.fecha_terminado, 
+    $localConnection = new LocalDB();
+
+    $sql = "SELECT
+            c.prioridad,
+            a.cantidad unidades_solicitadas,
+            a.cantidad unidades,
+            a.cantidad piezas_actuales,
+            b.fecha_inicio,
+            b.fecha_terminado,
             $fechaEntregaSelect,
-            b._id id_lotes_detalles, 
-            b.departamento, 
-            a.id_orden, 
-            a.id_orden orden, 
-            a.id_woo, 
-            a._id id_ordenes_productos, 
-            a.name producto, 
-            b.id_empleado, 
-            (SELECT orden_proceso FROM departamentos WHERE _id = {$args['id_departamento']}) orden_proceso,
-            a.talla, 
-            a.corte, 
-            a.tela, 
-            b.departamento, 
+            b._id id_lotes_detalles,
+            b.departamento,
+            a.id_orden,
+            a.id_orden orden,
+            a.id_woo,
+            a._id id_ordenes_productos,
+            a.name producto,
+            b.id_empleado,
+            a.talla,
+            a.corte,
+            a.tela,
+            b.departamento,
             c.prioridad,
             c.paso,
             d.status,
-            b.progreso, 
-            b.detalles detalles_revision 
-            FROM ordenes_productos a 
-            JOIN lotes_detalles b 
-            ON a._id = b.id_ordenes_productos 
+            b.progreso,
+            b.detalles detalles_revision
+            FROM ordenes_productos a
+            JOIN lotes_detalles b
+            ON a._id = b.id_ordenes_productos
             JOIN ordenes d ON a.id_orden = d._id
-            LEFT JOIN lotes c 
-            ON c.id_orden = b.id_orden 
+            LEFT JOIN lotes c
+            ON c.id_orden = b.id_orden
             WHERE (b.id_empleado = " . $args['id_empleado'] . " AND b.progreso NOT LIKE 'terminada') AND (d.status LIKE 'En espera' OR d.status LIKE 'activa') ORDER BY c.prioridad DESC, b.progreso ASC, b.id_orden ASC
         ";
-    $obj[0]['sql'] = $sql;
-    $obj[0]['name'] = 'items';
+    $object['items'] = $localConnection->goQuery($sql);
 
-    $sql = 'SELECT a._id id_lotes_detalles, a.id_orden orden, a.id_woo, b.name producto,  a.unidades_solicitadas unidades, a.unidades_solicitadas piezas_actuales, b.talla talla, b.corte, b.tela FROM lotes_detalles a JOIN ordenes_productos b ON a.id_ordenes_productos = b._id WHERE id_empleado = ' . $args['id_empleado'] . " AND progreso = 'en curso'";
-    $sql = "SELECT 
-            c.prioridad, 
-            a.cantidad unidades_solicitadas, 
-            a.cantidad unidades, 
-            a.cantidad piezas_actuales, 
-            b.fecha_inicio, 
-            b.fecha_terminado, 
+    $sql = "SELECT
+            c.prioridad,
+            a.cantidad unidades_solicitadas,
+            a.cantidad unidades,
+            a.cantidad piezas_actuales,
+            b.fecha_inicio,
+            b.fecha_terminado,
             $fechaEntregaSelect,
-            b._id id_lotes_detalles, 
-            b.departamento, 
-            (SELECT orden_proceso FROM departamentos WHERE _id = {$args['id_departamento']}) orden_proceso,
-            a.id_orden, 
-            a.id_orden orden, 
-            a.id_woo, 
-            a._id id_ordenes_productos, 
-            a.name producto, 
-            b.id_empleado, 
-            a.talla, 
-            a.corte, 
-            a.tela, 
-            b.departamento, 
-            c.prioridad, 
-            b.progreso, 
-            b.detalles detalles_revision 
-            FROM ordenes_productos a 
-            JOIN lotes_detalles b 
-            ON a._id = b.id_ordenes_productos 
+            b._id id_lotes_detalles,
+            b.departamento,
+            a.id_orden,
+            a.id_orden orden,
+            a.id_woo,
+            a._id id_ordenes_productos,
+            a.name producto,
+            b.id_empleado,
+            a.talla,
+            a.corte,
+            a.tela,
+            b.departamento,
+            c.prioridad,
+            b.progreso,
+            b.detalles detalles_revision
+            FROM ordenes_productos a
+            JOIN lotes_detalles b
+            ON a._id = b.id_ordenes_productos
             JOIN ordenes d ON a.id_orden = d._id
-            LEFT JOIN lotes c 
-            ON c.id_orden = b.id_orden 
+            LEFT JOIN lotes c
+            ON c.id_orden = b.id_orden
             WHERE b.id_empleado = " . $args['id_empleado'] . " AND b.progreso = 'en curso'
         ";
+    $object['trabajos_en_curso'] = $localConnection->goQuery($sql);
 
-    // $object['sql_en_curso'] = $sql;
-    // $object['trabajos_en_curso'] = $localConnection->goQuery();
+    $localConnection->disconnect();
 
-    $obj[1]['sql'] = $sql;
-    $obj[1]['name'] = 'trabajos_en_curso';
-
-    // BUSCAR ORDENES ACTIVAS ASIGNADAS AL EMPLEADO
-    $sql = "SELECT DISTINCT a.id_orden FROM lotes_detalles a JOIN ordenes b ON b._id = a.id_orden WHERE (a.id_empleado = 24 AND a.progreso NOT LIKE 'terminada') AND (b.status LIKE 'En espera' OR b.status LIKE 'activa') ORDER BY a.id_orden ASC";
-    $obj[2]['sql'] = $sql;
-    $obj[2]['name'] = 'ordenes_asignadas';
-
-    $sql = 'SELECT COUNT(_id) FROM ';
-
-    $sse = new SSE($obj);
-    $sse->SsePrint();
-
-    $object['fields'][0]['key'] = 'nombre';
-    $object['fields'][0]['label'] = 'Nombre';
-    $object['fields'][1]['key'] = 'username';
-    $object['fields'][1]['label'] = 'Usuario';
-    $object['fields'][2]['key'] = 'departamento';
-    $object['fields'][2]['label'] = 'Departamento';
-    $object['fields'][3]['key'] = 'acciones';
-    $object['fields'][3]['label'] = 'Acciones';
-
-    $response->getBody()->write(json_encode($object));
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
 
     return $response
       ->withHeader('Content-Type', 'application/json')

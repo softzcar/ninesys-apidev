@@ -743,10 +743,18 @@ return function (App $app) {
     $obj[1]['sql'] = $sql;
     $obj[1]['name'] = 'empleados';
 
-    $sse = new SSE($obj);
-    $events = $sse->SsePrint();
+    // 2026-08-13: la clase SSE (SsePrint) manda headers de text/event-stream y
+    // hace echo/flush directo, en paralelo a la respuesta JSON normal que
+    // arma Slim mas abajo -- el navegador nunca pudo interpretar la respuesta
+    // resultante como una conexión SSE válida (EventSource fallaba con
+    // "Error in SSE connection"). Se ejecutan las mismas consultas
+    // directamente y se devuelve JSON limpio, igual que /sse/diseno/{id_empleado}.
+    $localConnection = new LocalDB();
+    $object['items'] = $localConnection->goQuery($obj[0]['sql']);
+    $object['empleados'] = $localConnection->goQuery($obj[1]['sql']);
+    $localConnection->disconnect();
 
-    $response->getBody()->write(json_encode($events));
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
 
     return $response
       ->withHeader('Content-Type', 'application/json')
