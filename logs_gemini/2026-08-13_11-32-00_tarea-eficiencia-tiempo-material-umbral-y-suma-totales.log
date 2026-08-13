@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** Corregir los gráficos de "Reporte General de Eficiencia" (Producción) para que no exageren la eficiencia cuando un empleado inicia y termina una tarea en el mismo instante (no la inició en tiempo real en el sistema).
+- **Fecha y Hora:** 2026-08-13 11:32:00 - 11:38:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/reports.php` (`GET /reportes/general-eficiencia-detallado`)
+- **Commits Relacionados:**
+    - Frontend: `9c50ca4`, `faa0347` (app_multi)
+    - Backend: `2adf72d`, `d694444`
+- **Acción Realizada:** (1) `2adf72d`: se agregó un umbral de 60 segundos -- mediciones de tiempo real por debajo de ese umbral se marcan como no medibles (`'N/A'`) en vez de calcular un porcentaje de eficiencia absurdo (ej. 2032.5%). (2) `d694444`: verificado en vivo que el umbral solo no bastaba (el agregado del dashboard apenas se movió), se encontró la causa raíz real -- el endpoint devolvía únicamente el porcentaje ya calculado por orden, forzando al frontend a promediar porcentajes en vez de sumar totales primero. Se restructuró la respuesta para emitir también los valores crudos (`material_meta_cantidad`, `material_real_cantidad`, `tiempo_proyectado_segundos`, `tiempo_real_segundos`) además del porcentaje individual, permitiendo que el frontend calcule el agregado correctamente como (suma de proyectado / suma de real) en vez de promediar razones. Cuando el tiempo real es <=60s, tanto el proyectado como el real se devuelven en 0 para no sesgar el agregado con un dato no confiable de un solo lado.
+- **Inconvenientes y Desafíos:** El primer fix (solo el umbral) no fue suficiente por sí solo -- requirió una segunda ronda de investigación para encontrar el error estadístico real en cómo se agregaban los porcentajes en el frontend.
+- **Decisión Final y Justificación:** Exponer los valores crudos en vez de solo el porcentaje calculado -- deja al frontend calcular el agregado correctamente sin necesidad de volver a consultar el backend, y es reutilizable para cualquier otro agregado futuro sobre los mismos datos.
+- **Herramienta(s) Utilizada(s):** Edit, Bash (curl/SQL de verificación).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado en vivo contra datos reales de la empresa 194: Eficiencia Tiempo del dashboard agregado pasó de 2032.5% a 21.0% tras el segundo fix.
+- **Logro Conseguido:** El backend ahora entrega datos que permiten calcular agregados de eficiencia estadísticamente correctos, sin exagerar por errores de captura de datos ni por un método de agregación incorrecto en el consumidor.
+
+- **Observaciones de Claude:** El patrón "promedio de porcentajes en vez de suma de totales" es un error estadístico recurrente -- vale la pena revisar si otros endpoints de reportes agregados del sistema tienen el mismo problema.
+- **Respuesta de Claude:** Backend corregido en 2 rondas: umbral de medición confiable + exposición de valores crudos para agregación correcta en el frontend.

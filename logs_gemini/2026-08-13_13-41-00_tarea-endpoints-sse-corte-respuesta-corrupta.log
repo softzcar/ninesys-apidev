@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** "Vamos a arreglar los 8 archivos con EventSource" (lista de archivos del frontend flaggeados en la tarea de Órdenes Activas como posibles portadores del mismo bug).
+- **Fecha y Hora:** 2026-08-13 13:41:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/production.php` (`/sse/produccion/corte/{id_empleado}`), `app/routes/manufacturing.php` (`/sse/empleados/ordenes-asignadas/{id_empleado}`)
+- **Commits Relacionados:**
+    - Frontend: `4243d39` (app_multi)
+    - Backend: `e532fb8`
+- **Acción Realizada:** Diagnóstico: a diferencia del caso más simple de Órdenes Activas (JSON plano bajo un protocolo EventSource), estos 2 endpoints usaban una clase `SSE` que manda headers `text/event-stream` + `echo`/`flush()` directo -- EN PARALELO a una respuesta JSON normal armada después por Slim. El navegador no podía interpretar la respuesta resultante de ninguna forma. Se ejecutan ahora las mismas consultas directamente contra la base y se devuelve JSON limpio (mismo patrón ya usado en `/sse/diseno`), eliminando el uso de la clase `SSE`. De paso, en `/sse/empleados/ordenes-asignadas` se eliminó una subconsulta que referenciaba `{$args['id_departamento']}` (parámetro que esa ruta nunca declaraba -- solo recibe `id_empleado`) y una tercera consulta muerta con el `id_empleado` hardcodeado en 24; ninguna de las dos era consumida por el frontend.
+- **Inconvenientes y Desafíos:** Detectar que el bug no era solo de protocolo (como en Órdenes Activas) sino una respuesta genuinamente corrupta (2 mecanismos de envío distintos compitiendo) requirió leer el código completo de la clase `SSE` compartida.
+- **Decisión Final y Justificación:** Eliminar el uso de la clase `SSE` (ya deprecada de facto, con al menos otro endpoint hermano ya migrado antes) en vez de intentar repararla -- es un patrón ya migrado exitosamente en otras partes del código.
+- **Herramienta(s) Utilizada(s):** Edit, Bash (lectura de la clase compartida, curl).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado en navegador sin errores de consola tras el fix (aunque la tabla seguía mostrando pocos datos por un segundo bug, atendido en la siguiente tarea del mismo día).
+- **Logro Conseguido:** Eliminado un patrón de respuesta HTTP corrupta que afectaba a 2 endpoints reales, dejando el transporte de datos consistente con el resto de la API.
+
+- **Observaciones de Claude:** La clase `SSE` compartida (`app/lib/sse.php`) puede tener más usos en el código no auditados aún -- cualquier endpoint que la use probablemente comparta este mismo problema de respuesta corrupta.
+- **Respuesta de Claude:** Corregido el mecanismo de transporte roto en ambos endpoints; el problema de datos vacíos remanente se investigó y corrigió en la tarea siguiente del mismo día.

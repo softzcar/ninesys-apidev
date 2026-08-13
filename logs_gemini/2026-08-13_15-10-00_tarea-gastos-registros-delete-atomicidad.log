@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** Auditoría de las últimas 2 páginas pendientes del checklist de Administración: "Historial de Pagos" y "Bitácora de Gastos" de la sección Gastos, tras verificación reforzada pedida por el usuario ("asegúrate de verificarlo bien, no entiendo por qué...").
+- **Fecha y Hora:** 2026-08-13 15:10:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/config.php` (`GET/POST/PUT/DELETE /gastos/registros`, `GET /gastos/auditoria`)
+- **Commits Relacionados:**
+    - Frontend: `4a5205c` (app_multi)
+    - Backend: `8678497`
+- **Acción Realizada:** Se auditó el backend detrás de ambas páginas (ya endurecido en la auditoría previa de Gastos Fijos/Variables/Adicionales, que usó estos mismos endpoints como referencia). Se encontró que `DELETE /gastos/registros/{id}` insertaba la fila de auditoría y luego eliminaba el registro real como 2 operaciones sueltas, sin transacción -- si el `DELETE` fallara después de auditar, quedaría un "eliminado" fantasma en la bitácora para un registro que en realidad seguía existiendo. Se envolvió ambas operaciones en una transacción (`beginTransaction`/`commit`/`rollback`), mismo patrón que ya tenía el `PUT` hermano del mismo endpoint.
+- **Inconvenientes y Desafíos:** Ninguno -- hallazgo encontrado por revisión de código, no por un fallo reproducido en producción.
+- **Decisión Final y Justificación:** Consistencia con el patrón ya establecido en el `PUT` hermano -- ambas operaciones destructivas/auditadas del mismo endpoint deben tener la misma garantía de atomicidad.
+- **Herramienta(s) Utilizada(s):** Edit, Bash (curl end-to-end con datos desechables).
+- **Resultado:** Éxito.
+- **Verificación:** Ciclo completo probado con curl y un registro 100% desechable: crear → editar (auditoría "editado" con monto_anterior/nuevo correctos) → eliminar (auditoría "eliminado", registro realmente borrado) → los 3 pagos reales de la empresa nunca se tocaron. Los 2 registros de auditoría generados por la prueba se limpiaron de la base de datos al terminar.
+- **Logro Conseguido:** Cierre del pendiente de auditoría de Gastos abierto desde el 2026-08-06 -- las 5 subsecciones de Gastos (Fijos, Variables, Adicionales, Historial de Pagos, Bitácora de Gastos) quedan completamente auditadas.
+
+- **Observaciones de Claude:** El bug encontrado no tenía impacto real observado (0 acciones de auditoría existían todavía en producción/desarrollo), pero es exactamente el tipo de inconsistencia silenciosa que se vuelve difícil de diagnosticar una vez que hay volumen real de datos.
+- **Respuesta de Claude:** Corregida la falta de atomicidad en DELETE; verificado end-to-end el ciclo completo de auditoría de gastos.

@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** Auditar "Órdenes Activas" (Producción). Reportado: endpoint devuelve "(canceled)" sin código numérico, página solo muestra el título.
+- **Fecha y Hora:** 2026-08-13 12:10:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/production.php` (`GET /sse/produccion/ordenes-activas`)
+- **Commits Relacionados:**
+    - Frontend: `446249f`, `1c7eff7`, `9439f67` (app_multi)
+    - Backend: `1af6ac7`
+- **Acción Realizada:** Confirmado por SQL directo que `lotes_detalles.id_empleado` está NULL en el 100% de las 176 filas reales "en curso" -- el INNER JOIN original (`JOIN lotes_detalles a ON a.id_empleado = b.id_usuario`) siempre devolvía 0 filas por esa columna legacy en desuso. La asignación real vive en `lotes_detalles_empleados_asignados` (LDEA). Se reescribió la consulta para leer LDEA directamente (`WHERE ldea.terminado = 0 AND ldea.fecha_inicio IS NOT NULL AND ldea.fecha_terminado IS NULL`), devolviendo `orden, empleado, departamento, hora, fecha` (sin detalle de producto/talla/corte/tela, no reconstruible desde LDEA para estas filas).
+- **Inconvenientes y Desafíos:** El bug de protocolo (EventSource vs JSON plano, ver bitácora hermana de frontend) enmascaraba este segundo bug -- hasta corregir el transporte no era evidente que además había un problema de datos.
+- **Decisión Final y Justificación:** Consultar LDEA directamente en vez de intentar reparar el JOIN legacy -- es la tabla que efectivamente se puebla hoy para el seguimiento de asignaciones activas.
+- **Herramienta(s) Utilizada(s):** Edit, Bash (SQL directo contra Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado devolviendo exactamente 10 filas, coincidentes con la base de datos real y con lo observado en pantalla.
+- **Logro Conseguido:** El endpoint pasó de devolver siempre 0 filas a reflejar correctamente quién está trabajando en qué orden y departamento ahora mismo.
+
+- **Observaciones de Claude:** Mismo patrón de causa raíz (columna `lotes_detalles.id_empleado` obsoleta) que se repitió 2 veces más el mismo día en otras páginas (Fechas de Entrega, Cortar Piezas) -- indicio de que el modelo de datos migró de `lotes_detalles` a LDEA sin actualizar todos los consumidores.
+- **Respuesta de Claude:** Corregida la consulta para usar la tabla de asignación real (LDEA) en vez de la columna legacy vacía.

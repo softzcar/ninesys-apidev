@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** Tras el fix del filtro legacy, el usuario notó que el Jefe de Producción (quien no tiene tareas de corte asignadas a sí mismo, ya que su trabajo es asignarlas, no ejecutarlas) seguía viendo la página vacía -- correcto para su caso individual, pero inútil como panel de supervisión.
+- **Fecha y Hora:** 2026-08-13 14:08:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/production.php`, `app/routes/manufacturing.php`
+- **Commits Relacionados:**
+    - Frontend: `4792394` (app_multi)
+    - Backend: `fb8281a`
+- **Acción Realizada:** Se agregó el parámetro de query `?todos=1` a `/sse/produccion/corte/{id_empleado}` y `/sse/empleados/ordenes-asignadas/{id_empleado}`: cuando está presente, se omite por completo el filtro `EXISTS` contra LDEA y se devuelve el total de tareas pendientes de la empresa, sin filtrar por empleado.
+- **Inconvenientes y Desafíos:** Ninguno -- cambio aditivo y acotado sobre el fix recién aplicado.
+- **Decisión Final y Justificación:** Parámetro opcional en vez de un endpoint separado -- mantiene un solo punto de consulta y lógica compartida entre el modo "mi cola" y el modo "vista total".
+- **Herramienta(s) Utilizada(s):** Edit, Bash (curl).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado con curl: empleado 21 (Tahilin, no es de Corte) con `?todos=1` devuelve 5247 items, coincidente exacto con el conteo SQL directo del total de tareas de corte pendientes de la empresa; sin el parámetro, el empleado real de Corte (id 5) sigue viendo solo sus propias 2110 tareas.
+- **Logro Conseguido:** El Jefe de Producción ahora tiene un panorama completo del trabajo de corte pendiente de toda la empresa, sin comprometer la vista individual de cada cortador real.
+
+- **Observaciones de Claude:** N/A
+- **Respuesta de Claude:** Agregada la vista total vía parámetro opcional, verificada con datos reales contra el total exacto de tareas pendientes.

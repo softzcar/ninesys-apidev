@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** El usuario reportó que `.../sse/produccion/corte/21` devolvía `items: []` para un empleado real. Se verificó que empíricamente había miles de tareas de corte reales pendientes en la empresa.
+- **Fecha y Hora:** 2026-08-13 13:55:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/production.php` (`GET /sse/produccion/corte/{id_empleado}`)
+- **Commits Relacionados:**
+    - Frontend: `4792394` (app_multi)
+    - Backend: `0659d9a`
+- **Acción Realizada:** Verificación SQL directa: `lotes_detalles.id_empleado` está 100% NULL para las 5247 tareas de corte realmente pendientes de la empresa (mismo patrón de causa raíz ya encontrado 2 veces antes ese día, pero aquí con un impacto de volumen mucho mayor). Se reescribió el filtro con `EXISTS` contra `lotes_detalles_empleados_asignados` (LDEA), uniendo por `id_orden` + nombre de departamento (ya que LDEA guarda `id_departamento` numérico y `lotes_detalles.departamento` es texto), en vez de comparar directo la columna legacy.
+- **Inconvenientes y Desafíos:** Ninguno mayor -- el patrón de causa raíz ya era conocido de tareas anteriores del mismo día, acelerando el diagnóstico.
+- **Decisión Final y Justificación:** `EXISTS` en vez de `JOIN` directo contra LDEA para no generar fan-out de filas cuando una orden tiene múltiples filas de asignación para el mismo departamento.
+- **Herramienta(s) Utilizada(s):** Edit, Bash (SQL directo, curl).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado con curl: el empleado real "Jesus" (id 5, departamento Corte) pasó de 0 a 2110 filas reales (606 órdenes), coincidente exacto con el conteo SQL directo de sus tareas pendientes en LDEA.
+- **Logro Conseguido:** Corregido un bug que dejaba la cola de trabajo de TODOS los empleados de Corte permanentemente vacía, sin importar cuánto trabajo real tuvieran pendiente.
+
+- **Observaciones de Claude:** Tercer caso del mismo día del mismo patrón de causa raíz (columna `lotes_detalles.id_empleado` obsoleta) -- sugiere revisar sistemáticamente cualquier otra consulta del sistema que aún filtre por esa columna.
+- **Respuesta de Claude:** Corregido el filtro legacy; verificado con datos reales que la cola de trabajo de un empleado de Corte real ahora refleja su carga de trabajo genuina.

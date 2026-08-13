@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** Parte de la implementación del switch "Enviar avisos automáticos por WhatsApp a vendedores" (ver bitácoras de app_multi y msg_ninesys para el resto de la historia) -- garantía de esquema: cualquier columna nueva debe reflejarse en la plantilla de empresa nueva.
+- **Fecha y Hora:** 2026-08-13 16:16:00
+- **Proyecto(s):** Backend (solo plantillas, sin cambio de rutas/lógica de este repo)
+- **Archivos Involucrados:** `public/model/create_new_company_api_emp_N_postgres.sql`, `public/model/create_new_company_api_emp_N.sql`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `db8d97a`
+- **Acción Realizada:** Se agregó la columna `notify_vendors_whatsapp` (default 1, sin cambio de comportamiento) a la definición de `wa_ai_settings` en ambas plantillas (Postgres y MySQL), siguiendo la regla de "Garantía de Esquema" del proyecto -- cualquier cambio de estructura de base de datos debe reflejarse en la plantilla usada para provisionar empresas nuevas.
+- **Inconvenientes y Desafíos:** El commit del cambio de plantilla se hizo sin desplegar el backend inmediatamente después -- se descubrió más tarde el mismo día (a pedido de verificación del usuario) que el archivo en el servidor de Desarrollo seguía sin la columna nueva pese a estar en GitHub, hasta correr `deploy_backend.sh` explícitamente.
+- **Decisión Final y Justificación:** Mantener ambas plantillas (Postgres/MySQL) sincronizadas aunque Producción hoy solo usa MySQL -- consistencia a futuro si se migra o se crea una empresa nueva en cualquiera de los 2 motores.
+- **Herramienta(s) Utilizada(s):** Edit, Bash (grep contra el archivo real en el servidor vía ssh), deploy_backend.sh.
+- **Resultado:** Éxito (tras una corrección de despliegue).
+- **Verificación:** El usuario preguntó explícitamente "¿esto ya está aplicado... así como habilitado para que funcione al crear una nueva empresa?" -- se verificó por `grep` que el archivo en el servidor real de Desarrollo NO tenía la columna todavía (commit sin desplegar), se corrió `deploy_backend.sh` y se reverificó por `grep` directo contra el servidor que ambas plantillas ya la tienen.
+- **Logro Conseguido:** Cualquier empresa nueva creada desde el portal `setup_company` en Desarrollo a partir de ahora nace con el switch de notificaciones de WhatsApp en su estado por defecto correcto, sin requerir una migración manual posterior.
+
+- **Observaciones de Claude:** Confirma la importancia de no dar por completado un cambio de código solo por estar commiteado/pusheado -- la pregunta directa del usuario destapó que faltaba el paso de despliegue real al servidor.
+- **Respuesta de Claude:** Plantilla actualizada y verificada como realmente desplegada en el servidor de Desarrollo, no solo commiteada en GitHub.
