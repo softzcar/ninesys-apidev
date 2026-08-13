@@ -1432,10 +1432,17 @@ return function (App $app) {
                 // Eficiencia Tiempo: mismo criterio -- sin tiempo real registrado
                 // (o negativo, por una fecha_terminado anterior a fecha_inicio) no se
                 // puede calcular una eficiencia real, se marca N/A en vez de 100%.
+                // Umbral adicional (2026-08-13): un empleado que nunca marca "inicio"
+                // en el sistema y solo lo hace justo al terminar (inicio≈fin) deja un
+                // tiempo real de unos pocos segundos frente a un proyectado de minutos
+                // u horas -- produce porcentajes absurdos (ej. 117.000%) que además
+                // arrastran el promedio de toda la página. Un tiempo real menor a 60s
+                // no es una medición confiable del trabajo real, se trata igual que
+                // "sin registrar" (N/A) en vez de calcular una eficiencia con eso.
                 $timeMatch = array_filter($timeEff, function($te) use ($currentId) { return (string)$te['id_orden'] === $currentId; });
                 if (!empty($timeMatch)) {
                     $tVal = array_values($timeMatch)[0];
-                    $order['eficiencia_tiempo'] = ($tVal['real'] > 0) ? round(($tVal['projected'] / $tVal['real']) * 100, 2) : 'N/A';
+                    $order['eficiencia_tiempo'] = ($tVal['real'] > 60) ? round(($tVal['projected'] / $tVal['real']) * 100, 2) : 'N/A';
                 } else {
                     $order['eficiencia_tiempo'] = 'N/A';
                 }
