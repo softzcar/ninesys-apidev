@@ -418,7 +418,7 @@ return function (App $app) {
             b.id_orden = a._id
         LEFT JOIN products_comisiones pc ON pc.id_product = b.id_woo
         WHERE
-            (a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera') AND b.category_name != 'Diseños'
+            (a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera') AND p.fisico = 1
         ORDER BY b._id DESC, c.piezas_actuales DESC";
 
     $obj['orden_productos'] = $localConnection->goQuery($sql);
