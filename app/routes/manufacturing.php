@@ -2982,6 +2982,23 @@ return function (App $app) {
     $porcentaje = floatval($asignacion[0]['procentaje_comision']) > 0 ? floatval($asignacion[0]['procentaje_comision']) : 100;
     $id_departamento = intval($asignacion[0]['id_departamento']);
 
+    // Asignación granular real por producto (si existe): cuando el jefe de producción
+    // asignó explícitamente qué línea/cantidad le toca a este empleado (tabla nueva
+    // lotes_detalles_empleados_productos), esa cantidad exacta reemplaza la
+    // aproximación de "cantidad_total * porcentaje / 100" -- la aproximación por
+    // porcentaje no sabe distinguir qué línea específica es de este empleado y cuál
+    // es de otro, solo reparte el total de la orden proporcionalmente por línea.
+    $sqlGranular = "SELECT ldep.id_ordenes_productos, ldep.cantidad_asignada
+        FROM lotes_detalles_empleados_productos ldep
+        JOIN lotes_detalles_empleados_asignados ldea ON ldea._id = ldep.id_lotes_detalles_empleados_asignados
+        WHERE ldea.id_orden = {$args['id_orden']} AND ldea.id_empleado = {$args['id_empleado']} AND ldea.id_departamento = {$id_departamento}";
+    $granularRows = $localConnection->goQuery($sqlGranular);
+    $granularMap = [];
+    foreach ($granularRows as $g) {
+      $granularMap[intval($g['id_ordenes_productos'])] = floatval($g['cantidad_asignada']);
+    }
+    $tieneAsignacionGranular = count($granularMap) > 0;
+
     // Obtener productos base de la orden
     $sqlProductos = "SELECT
         op._id AS id_ordenes_productos,
@@ -3035,7 +3052,21 @@ return function (App $app) {
         $cantidad_total = $cantidad_base;
       }
 
-      $cantidad_asignada = $cantidad_total * ($porcentaje / 100);
+      if ($tieneAsignacionGranular) {
+        // La cantidad real asignada a este empleado para esta línea específica --
+        // si no aparece en el mapa, esta línea sencillamente no es suya (0, no un error).
+        $cantidad_asignada = $granularMap[$id_op] ?? 0;
+      } else {
+        // Sin asignación granular (caso legado/simple): aproximación por porcentaje,
+        // igual que siempre.
+        $cantidad_asignada = $cantidad_total * ($porcentaje / 100);
+      }
+
+      // Ocultar líneas con 0 piezas asignadas a este empleado -- no aportan información
+      // y, con asignación granular, significan explícitamente "esta línea es de otro".
+      if (round($cantidad_asignada, 0) <= 0) {
+        continue;
+      }
 
       $result[] = [
         'id_ordenes_productos' => $id_op,
