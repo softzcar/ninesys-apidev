@@ -1116,16 +1116,20 @@ return function (App $app) {
                         TiemposEstimados AS (
                             SELECT
                                 op.id_orden,
-                                SUM(ptp.tiempo * op.cantidad) AS tiempo_estimado_orden
+                                SUM(ptp.tiempo * COALESCE(ldep.cantidad_asignada, op.cantidad)) AS tiempo_estimado_orden
                             FROM ordenes_productos op
                             INNER JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_orden = op.id_orden
                             INNER JOIN products p ON p._id = op.id_woo AND p.fisico = 1
                             INNER JOIN products_tiempos_de_produccion ptp
                                 ON ptp.id_product = op.id_woo
                                 AND ptp.id_departamento = $id_departamento
+                            LEFT JOIN lotes_detalles_empleados_productos ldep
+                                ON ldep.id_lotes_detalles_empleados_asignados = ldea._id
+                                AND ldep.id_ordenes_productos = op._id
                             WHERE ldea.id_empleado = $id_empleado
                               AND ldea.id_departamento = $id_departamento
                               AND ldea.fecha_inicio IS NOT NULL
+                              AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep6 WHERE ldep6.id_lotes_detalles_empleados_asignados = ldea._id))
                             GROUP BY op.id_orden
                         )
                         SELECT
@@ -1164,16 +1168,20 @@ return function (App $app) {
                         TiemposEstimados AS (
                             SELECT
                                 op.id_orden,
-                                SUM(ptp.tiempo * op.cantidad) AS tiempo_estimado_orden
+                                SUM(ptp.tiempo * COALESCE(ldep.cantidad_asignada, op.cantidad)) AS tiempo_estimado_orden
                             FROM ordenes_productos op
                             INNER JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_orden = op.id_orden
                             INNER JOIN products p ON p._id = op.id_woo AND p.fisico = 1
                             INNER JOIN products_tiempos_de_produccion ptp
                                 ON ptp.id_product = op.id_woo
                                 AND ptp.id_departamento = $id_departamento
+                            LEFT JOIN lotes_detalles_empleados_productos ldep
+                                ON ldep.id_lotes_detalles_empleados_asignados = ldea._id
+                                AND ldep.id_ordenes_productos = op._id
                             WHERE ldea.id_empleado = $id_empleado
                               AND ldea.id_departamento = $id_departamento
                               AND ldea.fecha_inicio IS NOT NULL
+                              AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep6 WHERE ldep6.id_lotes_detalles_empleados_asignados = ldea._id))
                             GROUP BY op.id_orden
                         )
                         SELECT
@@ -1326,16 +1334,20 @@ return function (App $app) {
                         TiemposEstimados AS (
                             SELECT
                                 op.id_orden,
-                                SUM(ptp.tiempo * op.cantidad) AS tiempo_estimado_orden
+                                SUM(ptp.tiempo * COALESCE(ldep.cantidad_asignada, op.cantidad)) AS tiempo_estimado_orden
                             FROM ordenes_productos op
                             INNER JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_orden = op.id_orden
                             INNER JOIN products p ON p._id = op.id_woo AND p.fisico = 1
                             INNER JOIN products_tiempos_de_produccion ptp
                                 ON ptp.id_product = op.id_woo
                                 AND ptp.id_departamento = $id_departamento
+                            LEFT JOIN lotes_detalles_empleados_productos ldep
+                                ON ldep.id_lotes_detalles_empleados_asignados = ldea._id
+                                AND ldep.id_ordenes_productos = op._id
                             WHERE ldea.id_empleado = $id_empleado
                               AND ldea.id_departamento = $id_departamento
                               AND ldea.fecha_inicio IS NOT NULL
+                              AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep6 WHERE ldep6.id_lotes_detalles_empleados_asignados = ldea._id))
                             GROUP BY op.id_orden
                         )
                         SELECT
@@ -1372,18 +1384,22 @@ return function (App $app) {
                             GROUP BY sub_ldea.id_orden
                         ),
                         TiemposEstimados AS (
-                            SELECT 
+                            SELECT
                                 op.id_orden,
-                                SUM(ptp.tiempo * op.cantidad) AS tiempo_estimado_orden
+                                SUM(ptp.tiempo * COALESCE(ldep.cantidad_asignada, op.cantidad)) AS tiempo_estimado_orden
                             FROM ordenes_productos op
                             INNER JOIN lotes_detalles_empleados_asignados ldea ON ldea.id_orden = op.id_orden
                             INNER JOIN products p ON p._id = op.id_woo AND p.fisico = 1
-                            INNER JOIN products_tiempos_de_produccion ptp 
-                                ON ptp.id_product = op.id_woo 
+                            INNER JOIN products_tiempos_de_produccion ptp
+                                ON ptp.id_product = op.id_woo
                                 AND ptp.id_departamento = $id_departamento
+                            LEFT JOIN lotes_detalles_empleados_productos ldep
+                                ON ldep.id_lotes_detalles_empleados_asignados = ldea._id
+                                AND ldep.id_ordenes_productos = op._id
                             WHERE ldea.id_empleado = $id_empleado
                               AND ldea.id_departamento = $id_departamento
                               AND ldea.fecha_inicio IS NOT NULL
+                              AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep7 WHERE ldep7.id_lotes_detalles_empleados_asignados = ldea._id))
                             GROUP BY op.id_orden
                         )
                         SELECT 

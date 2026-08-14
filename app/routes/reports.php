@@ -1519,11 +1519,17 @@ return function (App $app) {
                     ldea.fecha_inicio,
                     ldea.fecha_terminado,
                     (
-                        SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                        -- Cantidad real a proyectar: si esta asignación (ldea) tiene
+                        -- productos/cantidades granularmente asignados, se usa esa cantidad
+                        -- real (y se excluyen los productos que no le corresponden); si no,
+                        -- se mantiene el comportamiento de siempre (cantidad total de la línea).
+                        SELECT COALESCE(SUM(ptp_sub.tiempo * COALESCE(ldep.cantidad_asignada, op.cantidad)), 0)
                         FROM products_tiempos_de_produccion ptp_sub
                         JOIN ordenes_productos op ON ptp_sub.id_product = op.id_woo
+                        LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = ldea._id AND ldep.id_ordenes_productos = op._id
                         WHERE ptp_sub.id_departamento = ldea.id_departamento
                         AND op.id_orden = ldea.id_orden
+                        AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep5 WHERE ldep5.id_lotes_detalles_empleados_asignados = ldea._id))
                     ) AS projected_seconds
                 FROM lotes_detalles_empleados_asignados ldea
                 JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado

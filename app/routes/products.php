@@ -382,16 +382,18 @@ return function (App $app) {
                   COALESCE(pc.comision, 0) *
                   ( CASE WHEN a.id_departamento = 3
                       THEN COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op._id), 0), op.cantidad)
-                      ELSE op.cantidad
+                      ELSE COALESCE(ldep.cantidad_asignada, op.cantidad)
                     END ) *
-                  (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END / 100)
+                  (CASE WHEN ldep._id IS NOT NULL OR EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk WHERE ldep_chk.id_lotes_detalles_empleados_asignados = a._id) THEN 100 WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END / 100)
               )
               FROM ordenes_productos op
               JOIN products p_woo ON op.id_woo = p_woo._id
               LEFT JOIN products_comisiones pc ON pc.id_product = op.id_woo AND pc.id_departamento = a.id_departamento
+              LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = op._id
               WHERE op.id_orden = a.id_orden
                 AND (p_woo.fisico = 1 OR p_woo.fisico IS NULL)
                 AND (p_woo.es_diseno = 0 OR p_woo.es_diseno IS NULL)
+                AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk2 WHERE ldep_chk2.id_lotes_detalles_empleados_asignados = a._id))
           ),
           comision = (
               SELECT MAX(COALESCE(pc2.comision, 0))
@@ -406,15 +408,17 @@ return function (App $app) {
               SELECT SUM(
                   ( CASE WHEN a.id_departamento = 3
                       THEN COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op3._id), 0), op3.cantidad)
-                      ELSE op3.cantidad
+                      ELSE COALESCE(ldep3.cantidad_asignada, op3.cantidad)
                     END ) *
-                  (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END / 100)
+                  (CASE WHEN ldep3._id IS NOT NULL OR EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk3 WHERE ldep_chk3.id_lotes_detalles_empleados_asignados = a._id) THEN 100 WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END / 100)
               )
               FROM ordenes_productos op3
               JOIN products p_woo3 ON op3.id_woo = p_woo3._id
+              LEFT JOIN lotes_detalles_empleados_productos ldep3 ON ldep3.id_lotes_detalles_empleados_asignados = a._id AND ldep3.id_ordenes_productos = op3._id
               WHERE op3.id_orden = a.id_orden
                 AND (p_woo3.fisico = 1 OR p_woo3.fisico IS NULL)
                 AND (p_woo3.es_diseno = 0 OR p_woo3.es_diseno IS NULL)
+                AND (ldep3._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk4 WHERE ldep_chk4.id_lotes_detalles_empleados_asignados = a._id))
           )
         FROM lotes_detalles_empleados_asignados a
         WHERE p.id_lotes_detalles = a._id
@@ -439,16 +443,18 @@ return function (App $app) {
                   IFNULL(pc.comision, 0) *
                   ( IF(a.id_departamento = 3,
                       COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op._id), 0), op.cantidad),
-                      op.cantidad
+                      COALESCE(ldep.cantidad_asignada, op.cantidad)
                     ) ) *
-                  (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
+                  (IF(ldep._id IS NOT NULL OR EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk WHERE ldep_chk.id_lotes_detalles_empleados_asignados = a._id), 100, IF(a.procentaje_comision > 0, a.procentaje_comision, 100)) / 100)
               )
               FROM ordenes_productos op
               JOIN products p_woo ON op.id_woo = p_woo._id
               LEFT JOIN products_comisiones pc ON pc.id_product = op.id_woo AND pc.id_departamento = a.id_departamento
+              LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = op._id
               WHERE op.id_orden = a.id_orden
                 AND (p_woo.fisico = 1 OR p_woo.fisico IS NULL)
                 AND (p_woo.es_diseno = 0 OR p_woo.es_diseno IS NULL)
+                AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk2 WHERE ldep_chk2.id_lotes_detalles_empleados_asignados = a._id))
           ),
           p.comision = (
               SELECT MAX(IFNULL(pc2.comision, 0))
@@ -463,15 +469,17 @@ return function (App $app) {
               SELECT SUM(
                   ( IF(a.id_departamento = 3,
                       COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op3._id), 0), op3.cantidad),
-                      op3.cantidad
+                      COALESCE(ldep3.cantidad_asignada, op3.cantidad)
                     ) ) *
-                  (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
+                  (IF(ldep3._id IS NOT NULL OR EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk3 WHERE ldep_chk3.id_lotes_detalles_empleados_asignados = a._id), 100, IF(a.procentaje_comision > 0, a.procentaje_comision, 100)) / 100)
               )
               FROM ordenes_productos op3
               JOIN products p_woo3 ON op3.id_woo = p_woo3._id
+              LEFT JOIN lotes_detalles_empleados_productos ldep3 ON ldep3.id_lotes_detalles_empleados_asignados = a._id AND ldep3.id_ordenes_productos = op3._id
               WHERE op3.id_orden = a.id_orden
                 AND (p_woo3.fisico = 1 OR p_woo3.fisico IS NULL)
                 AND (p_woo3.es_diseno = 0 OR p_woo3.es_diseno IS NULL)
+                AND (ldep3._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk4 WHERE ldep_chk4.id_lotes_detalles_empleados_asignados = a._id))
           )
         WHERE p.fecha_pago IS NULL
           AND p.comision_tipo = 'variable'
@@ -570,16 +578,18 @@ return function (App $app) {
                   COALESCE(pc.comision, 0) *
                   ( CASE WHEN a.id_departamento = 3
                       THEN COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op._id), 0), op.cantidad)
-                      ELSE op.cantidad
+                      ELSE COALESCE(ldep.cantidad_asignada, op.cantidad)
                     END ) *
-                  (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END / 100)
+                  (CASE WHEN ldep._id IS NOT NULL OR EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk WHERE ldep_chk.id_lotes_detalles_empleados_asignados = a._id) THEN 100 WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END / 100)
               )
               FROM ordenes_productos op
               JOIN products p_woo ON op.id_woo = p_woo._id
               LEFT JOIN products_comisiones pc ON pc.id_product = op.id_woo AND pc.id_departamento = a.id_departamento
+              LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = op._id
               WHERE op.id_orden = a.id_orden
                 AND (p_woo.fisico = 1 OR p_woo.fisico IS NULL)
                 AND (p_woo.es_diseno = 0 OR p_woo.es_diseno IS NULL)
+                AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk2 WHERE ldep_chk2.id_lotes_detalles_empleados_asignados = a._id))
           ),
           comision = (
               SELECT MAX(COALESCE(pc2.comision, 0))
@@ -594,15 +604,17 @@ return function (App $app) {
               SELECT SUM(
                   ( CASE WHEN a.id_departamento = 3
                       THEN COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op3._id), 0), op3.cantidad)
-                      ELSE op3.cantidad
+                      ELSE COALESCE(ldep3.cantidad_asignada, op3.cantidad)
                     END ) *
-                  (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END / 100)
+                  (CASE WHEN ldep3._id IS NOT NULL OR EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk3 WHERE ldep_chk3.id_lotes_detalles_empleados_asignados = a._id) THEN 100 WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END / 100)
               )
               FROM ordenes_productos op3
               JOIN products p_woo3 ON op3.id_woo = p_woo3._id
+              LEFT JOIN lotes_detalles_empleados_productos ldep3 ON ldep3.id_lotes_detalles_empleados_asignados = a._id AND ldep3.id_ordenes_productos = op3._id
               WHERE op3.id_orden = a.id_orden
                 AND (p_woo3.fisico = 1 OR p_woo3.fisico IS NULL)
                 AND (p_woo3.es_diseno = 0 OR p_woo3.es_diseno IS NULL)
+                AND (ldep3._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk4 WHERE ldep_chk4.id_lotes_detalles_empleados_asignados = a._id))
           )
         FROM lotes_detalles_empleados_asignados a
         WHERE p.id_lotes_detalles = a._id
@@ -627,16 +639,18 @@ return function (App $app) {
                   IFNULL(pc.comision, 0) *
                   ( IF(a.id_departamento = 3,
                       COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op._id), 0), op.cantidad),
-                      op.cantidad
+                      COALESCE(ldep.cantidad_asignada, op.cantidad)
                     ) ) *
-                  (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
+                  (IF(ldep._id IS NOT NULL OR EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk WHERE ldep_chk.id_lotes_detalles_empleados_asignados = a._id), 100, IF(a.procentaje_comision > 0, a.procentaje_comision, 100)) / 100)
               )
               FROM ordenes_productos op
               JOIN products p_woo ON op.id_woo = p_woo._id
               LEFT JOIN products_comisiones pc ON pc.id_product = op.id_woo AND pc.id_departamento = a.id_departamento
+              LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = op._id
               WHERE op.id_orden = a.id_orden
                 AND (p_woo.fisico = 1 OR p_woo.fisico IS NULL)
                 AND (p_woo.es_diseno = 0 OR p_woo.es_diseno IS NULL)
+                AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk2 WHERE ldep_chk2.id_lotes_detalles_empleados_asignados = a._id))
           ),
           p.comision = (
               SELECT MAX(IFNULL(pc2.comision, 0))
@@ -651,15 +665,17 @@ return function (App $app) {
               SELECT SUM(
                   ( IF(a.id_departamento = 3,
                       COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = op3._id), 0), op3.cantidad),
-                      op3.cantidad
+                      COALESCE(ldep3.cantidad_asignada, op3.cantidad)
                     ) ) *
-                  (IF(a.procentaje_comision > 0, a.procentaje_comision, 100) / 100)
+                  (IF(ldep3._id IS NOT NULL OR EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk3 WHERE ldep_chk3.id_lotes_detalles_empleados_asignados = a._id), 100, IF(a.procentaje_comision > 0, a.procentaje_comision, 100)) / 100)
               )
               FROM ordenes_productos op3
               JOIN products p_woo3 ON op3.id_woo = p_woo3._id
+              LEFT JOIN lotes_detalles_empleados_productos ldep3 ON ldep3.id_lotes_detalles_empleados_asignados = a._id AND ldep3.id_ordenes_productos = op3._id
               WHERE op3.id_orden = a.id_orden
                 AND (p_woo3.fisico = 1 OR p_woo3.fisico IS NULL)
                 AND (p_woo3.es_diseno = 0 OR p_woo3.es_diseno IS NULL)
+                AND (ldep3._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk4 WHERE ldep_chk4.id_lotes_detalles_empleados_asignados = a._id))
           )
         WHERE p.fecha_pago IS NULL
           AND p.comision_tipo = 'variable'

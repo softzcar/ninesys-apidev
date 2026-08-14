@@ -964,6 +964,14 @@ return function (App $app) {
     $datosEmpleado = $localConnection->goQuery($sqlEmpleado, [$idEmpleado]);
     $object['datos_empleado'] = !empty($datosEmpleado) ? $datosEmpleado[0] : null;
 
+    // Cantidad real por producto: si el empleado tiene asignación granular
+    // (lotes_detalles_empleados_productos) para esta fila de asignación (a._id),
+    // se usa su cantidad_asignada real y se excluyen las líneas ajenas; si no
+    // tiene ninguna asignación granular para esa orden+departamento, se mantiene
+    // el comportamiento de siempre (cantidad total de la línea).
+    $cantidadGranularSql = 'COALESCE(ldep.cantidad_asignada, b.cantidad)';
+    $granularWhereResumenSql = '(ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep2 WHERE ldep2.id_lotes_detalles_empleados_asignados = a._id))';
+
     if (DB_DRIVER === 'pgsql') {
       $sql = "SELECT DISTINCT
                 a._id id_lote_detalles,
@@ -980,9 +988,9 @@ return function (App $app) {
                 eu.salario_monto,
                 eu.salario_periodo,
                 EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int AS tiempo_empleado,
-                SUM(c.tiempo * b.cantidad) AS tiempo_estimado_de_produccion,
-                (EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int - SUM(c.tiempo * b.cantidad)) rendimiento,
-                SUM(b.cantidad) unidades,
+                SUM(c.tiempo * $cantidadGranularSql) AS tiempo_estimado_de_produccion,
+                (EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int - SUM(c.tiempo * $cantidadGranularSql)) rendimiento,
+                SUM($cantidadGranularSql) unidades,
                 (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$idDepartamento}) cantidad_empleados_asigandos,
                 string_agg(DISTINCT b.id_woo::text, ',') id_producto,
                 'EficienciaInsumos' eficiencia_insumos,
@@ -993,10 +1001,12 @@ return function (App $app) {
             JOIN products e ON e._id = b.id_woo
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios eu ON a.id_empleado = eu.id_usuario
-            WHERE a.id_empleado = {$idEmpleado} 
-              AND a.id_departamento = {$idDepartamento} 
-              AND a.fecha_terminado IS NOT NULL 
+            LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = b._id
+            WHERE a.id_empleado = {$idEmpleado}
+              AND a.id_departamento = {$idDepartamento}
+              AND a.fecha_terminado IS NOT NULL
               AND EXISTS (SELECT 1 FROM pagos WHERE id_lotes_detalles = a._id AND fecha_pago IS NULL)
+              AND $granularWhereResumenSql
             GROUP BY a._id, a.id_orden, a.fecha_inicio, a.fecha_terminado, a.progreso, eu.salario_tipo, eu.salario_monto, eu.salario_periodo
             ORDER BY a.id_orden ASC
         ";
@@ -1016,9 +1026,9 @@ return function (App $app) {
                 eu.salario_monto,
                 eu.salario_periodo,
                 TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) AS tiempo_empleado,
-                SUM(c.tiempo * b.cantidad) AS tiempo_estimado_de_produccion,
-                (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - SUM(c.tiempo * b.cantidad)) rendimiento,
-                SUM(b.cantidad) unidades,
+                SUM(c.tiempo * $cantidadGranularSql) AS tiempo_estimado_de_produccion,
+                (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - SUM(c.tiempo * $cantidadGranularSql)) rendimiento,
+                SUM($cantidadGranularSql) unidades,
                 (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$idDepartamento}) cantidad_empleados_asigandos,
                 GROUP_CONCAT(DISTINCT b.id_woo) id_producto,
                 'EficienciaInsumos' eficiencia_insumos,
@@ -1029,10 +1039,12 @@ return function (App $app) {
             JOIN products e ON e._id = b.id_woo
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios eu ON a.id_empleado = eu.id_usuario
-            WHERE a.id_empleado = {$idEmpleado} 
-              AND a.id_departamento = {$idDepartamento} 
-              AND a.fecha_terminado IS NOT NULL 
+            LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = b._id
+            WHERE a.id_empleado = {$idEmpleado}
+              AND a.id_departamento = {$idDepartamento}
+              AND a.fecha_terminado IS NOT NULL
               AND EXISTS (SELECT 1 FROM pagos WHERE id_lotes_detalles = a._id AND fecha_pago IS NULL)
+              AND $granularWhereResumenSql
             GROUP BY a.id_orden
             ORDER BY a.id_orden ASC
         ";
@@ -1043,6 +1055,10 @@ return function (App $app) {
     $object['ordenes_terminadas'] = $pagos;
 
     // ORDENES PENDIENTES  ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable,
+    // Mismo criterio granular que el bloque de "ordenes_terminadas" arriba: usar
+    // cantidad_asignada real (y excluir líneas ajenas) cuando exista asignación
+    // granular; sin ella, comportamiento de siempre (cantidad total de la línea).
+    $procentajePendienteSql = "(CASE WHEN ldep._id IS NOT NULL OR EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep3 WHERE ldep3.id_lotes_detalles_empleados_asignados = a._id) THEN 100 WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END)";
     if (DB_DRIVER === 'pgsql') {
       $sql = "SELECT DISTINCT
                 a._id id_lote_detalles,
@@ -1055,8 +1071,8 @@ return function (App $app) {
                 EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int AS tiempo_empleado,
                 c.tiempo tiempo_estimado_de_produccion,
                 (EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int - c.tiempo) rendimiento,
-                b.cantidad unidades,
-                SUM(b.cantidad) total_productos,
+                $cantidadGranularSql unidades,
+                SUM($cantidadGranularSql) total_productos,
                 (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$idDepartamento}) cantidad_empleados_asigandos,
                 b.id_woo id_producto,
                 e.product,
@@ -1070,8 +1086,10 @@ return function (App $app) {
                 -- que un lote pendiente tenga mas de un empleado asignado
                 -- (verificado: no ocurre en los datos actuales, pero si en 130
                 -- asignaciones historicas ya terminadas con reparto real).
-                ((SUM(b.cantidad) * e.comision) * (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_variable,
-                ((SUM(b.cantidad) * d.comision) * (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_fija
+                -- Con asignación granular, cantidad ya es la porción real del
+                -- empleado y el % se trata como 100 (ver $procentajePendienteSql).
+                ((SUM($cantidadGranularSql) * e.comision) * $procentajePendienteSql / 100) AS total_comision_variable,
+                ((SUM($cantidadGranularSql) * d.comision) * $procentajePendienteSql / 100) AS total_comision_fija
             FROM
                 lotes_detalles_empleados_asignados a
             JOIN ordenes ord ON ord._id = a.id_orden
@@ -1080,8 +1098,10 @@ return function (App $app) {
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios d ON d.id_usuario = a.id_empleado
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = ord._id
+            LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = b._id
             WHERE a.id_empleado = {$idEmpleado} AND a.id_departamento = {$idDepartamento} AND a.progreso != 'terminada' AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
-            GROUP BY a._id, a.id_orden, ord.cliente_nombre, a.fecha_inicio, a.fecha_terminado, a.progreso, d.comision_tipo, c.tiempo, b.cantidad, b.id_woo, e.product, b.talla, ofo.orden_fila, e.comision, d.comision
+              AND $granularWhereResumenSql
+            GROUP BY a._id, a.id_orden, ord.cliente_nombre, a.fecha_inicio, a.fecha_terminado, a.progreso, d.comision_tipo, c.tiempo, b.cantidad, b.id_woo, e.product, b.talla, ofo.orden_fila, e.comision, d.comision, ldep.cantidad_asignada, ldep._id
             ORDER BY ofo.orden_fila ASC, a.id_orden DESC, a.progreso ASC
         ";
     } else {
@@ -1096,16 +1116,16 @@ return function (App $app) {
                 TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) AS tiempo_empleado,
                 c.tiempo tiempo_estimado_de_produccion,
                 (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - c.tiempo) rendimiento,
-                b.cantidad unidades,
-                SUM(b.cantidad) total_productos,
+                $cantidadGranularSql unidades,
+                SUM($cantidadGranularSql) total_productos,
                 (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$idDepartamento}) cantidad_empleados_asigandos,
                 b.id_woo id_producto,
                 e.product,
                 b.talla,
                 -- Mismo criterio de la rama pgsql (ver comentario arriba): 0 en
                 -- procentaje_comision significa aun no asignado, se trata como 100.
-                ((SUM(b.cantidad) * e.comision) * (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_variable,
-                ((SUM(b.cantidad) * d.comision) * (CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_fija
+                ((SUM($cantidadGranularSql) * e.comision) * $procentajePendienteSql / 100) AS total_comision_variable,
+                ((SUM($cantidadGranularSql) * d.comision) * $procentajePendienteSql / 100) AS total_comision_fija
             FROM
                 lotes_detalles_empleados_asignados a
             JOIN ordenes ord ON ord._id = a.id_orden
@@ -1114,7 +1134,9 @@ return function (App $app) {
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios d ON d.id_usuario = a.id_empleado
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = ord._id
+            LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = b._id
             WHERE a.id_empleado = {$idEmpleado} AND a.id_departamento = {$idDepartamento} AND a.progreso != 'terminada' AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
+              AND $granularWhereResumenSql
             GROUP BY a.id_orden ORDER BY ofo.orden_fila ASC, a.id_orden DESC, a.progreso ASC
         ";
     }
@@ -1271,8 +1293,8 @@ return function (App $app) {
                     string_agg(DISTINCT s.nombre, ', ') AS talla,
                     cip.nombre AS nombre_insumo,
                     pia.id_catalogo_insumos_productos,
-                    SUM(op.cantidad) AS cantidad_piezas,
-                    SUM(op.cantidad * COALESCE(pia.cantidad, 0)) AS consumo_estimado_total,
+                    SUM(COALESCE(ldep.cantidad_asignada, op.cantidad)) AS cantidad_piezas,
+                    SUM(COALESCE(ldep.cantidad_asignada, op.cantidad) * COALESCE(pia.cantidad, 0)) AS consumo_estimado_total,
                     eu.nombre AS nombre_empleado,
                     dep.departamento AS nombre_departamento,
                     ldea.fecha_inicio AS fecha_asignacion
@@ -1282,15 +1304,17 @@ return function (App $app) {
                 JOIN products p ON op.id_woo = p._id
                 LEFT JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
                 LEFT JOIN departamentos dep ON ldea.id_departamento = dep._id
-                LEFT JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product 
+                LEFT JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product
                                                         AND op.id_size = pia.id_talla
                                                         AND ldea.id_departamento = pia.id_departamento
                 LEFT JOIN sizes s ON op.id_size = s._id
                 LEFT JOIN catalogo_insumos_productos cip ON pia.id_catalogo_insumos_productos = cip._id
+                LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = ldea._id AND ldep.id_ordenes_productos = op._id
                 WHERE
                     ldea.id_empleado = {$idEmpleado}
                     AND ldea.id_departamento = {$idDepartamento}
                     AND pia.id_catalogo_insumos_productos IS NOT NULL
+                    AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep4 WHERE ldep4.id_lotes_detalles_empleados_asignados = ldea._id))
                 GROUP BY
                     ldea.id_orden, ldea.id_empleado, ldea.id_departamento,
                     cip.nombre, pia.id_catalogo_insumos_productos,
@@ -1356,8 +1380,8 @@ return function (App $app) {
                     GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') AS talla,
                     cip.nombre AS nombre_insumo,
                     pia.id_catalogo_insumos_productos,
-                    SUM(op.cantidad) AS cantidad_piezas,
-                    SUM(op.cantidad * COALESCE(pia.cantidad, 0)) AS consumo_estimado_total,
+                    SUM(COALESCE(ldep.cantidad_asignada, op.cantidad)) AS cantidad_piezas,
+                    SUM(COALESCE(ldep.cantidad_asignada, op.cantidad) * COALESCE(pia.cantidad, 0)) AS consumo_estimado_total,
                     eu.nombre AS nombre_empleado,
                     dep.departamento AS nombre_departamento,
                     ldea.fecha_inicio AS fecha_asignacion
@@ -1367,15 +1391,17 @@ return function (App $app) {
                 JOIN products p ON op.id_woo = p._id
                 LEFT JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
                 LEFT JOIN departamentos dep ON ldea.id_departamento = dep._id
-                LEFT JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product 
+                LEFT JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product
                                                         AND op.id_size = pia.id_talla
                                                         AND ldea.id_departamento = pia.id_departamento
                 LEFT JOIN sizes s ON op.id_size = s._id
                 LEFT JOIN catalogo_insumos_productos cip ON pia.id_catalogo_insumos_productos = cip._id
+                LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = ldea._id AND ldep.id_ordenes_productos = op._id
                 WHERE
                     ldea.id_empleado = {$idEmpleado}
                     AND ldea.id_departamento = {$idDepartamento}
                     AND pia.id_catalogo_insumos_productos IS NOT NULL
+                    AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep4 WHERE ldep4.id_lotes_detalles_empleados_asignados = ldea._id))
                 GROUP BY
                     ldea.id_orden, ldea.id_empleado, ldea.id_departamento,
                     cip.nombre, pia.id_catalogo_insumos_productos,

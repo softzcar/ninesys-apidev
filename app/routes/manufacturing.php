@@ -1796,6 +1796,20 @@ return function (App $app) {
           $id_lotes_detalles = $asignacion['id_lotes_detalles'];
           $procentaje_comision_asignado = floatval($asignacion['procentaje_comision']);
 
+          // Asignación granular por producto (si existe) para esta fila específica --
+          // mismo criterio ya aplicado en /registrar-paso-empleado: si el empleado
+          // tiene productos/cantidades específicas asignadas, se usan esas en vez de
+          // repartir el total de la orden por el % general (ver nota completa en
+          // /registrar-paso-empleado, línea ~805).
+          $chkGranularLote = $localConnection->goQuery('SELECT COUNT(*) as cnt FROM lotes_detalles_empleados_productos WHERE id_lotes_detalles_empleados_asignados = ?', [$id_lotes_detalles]);
+          $tieneGranularLote = !empty($chkGranularLote) && intval($chkGranularLote[0]['cnt']) > 0;
+          $granularJoinLoteSql = $tieneGranularLote
+            ? "LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = {$id_lotes_detalles} AND ldep.id_ordenes_productos = c._id"
+            : '';
+          $granularWhereLoteSql = $tieneGranularLote ? 'AND ldep._id IS NOT NULL' : '';
+          $cantidadRealLoteSql = $tieneGranularLote ? 'COALESCE(ldep.cantidad_asignada, c.cantidad)' : 'c.cantidad';
+          $procentajeLoteEfectivo = $tieneGranularLote ? 100 : $procentaje_comision_asignado;
+
           // 2. Obtener tipo de comisión del empleado actual del loop
           $sql_comision_emp = 'SELECT comision, comision_tipo, comision_porcentaje, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
           $resp_emp = $localConnection->goQuery($sql_comision_emp, [$id_emp_asignado]);
@@ -1810,22 +1824,22 @@ return function (App $app) {
           $comision_guardar = $comision_value_emp;
 
           if ($comision_tipo === 'porcentaje') {
-            $sql_calc = "SELECT SUM(c.cantidad) as total_piezas, SUM(c.cantidad * c.precio_unitario * ($comision_value_emp / 100)) AS total_monto FROM ordenes_productos c JOIN products p ON c.id_woo = p._id WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+            $sql_calc = "SELECT SUM($cantidadRealLoteSql) as total_piezas, SUM($cantidadRealLoteSql * c.precio_unitario * ($comision_value_emp / 100)) AS total_monto FROM ordenes_productos c JOIN products p ON c.id_woo = p._id $granularJoinLoteSql WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL) $granularWhereLoteSql";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual]);
             $cantidad_piezas = $res_calc[0]['total_piezas'] ?? 0;
-            $total_monto_pago = ($res_calc[0]['total_monto'] ?? 0) * ($procentaje_comision_asignado / 100);
+            $total_monto_pago = ($res_calc[0]['total_monto'] ?? 0) * ($procentajeLoteEfectivo / 100);
           } elseif ($comision_tipo === 'fija') {
-            $sql_calc = "SELECT SUM(c.cantidad) as total_piezas FROM ordenes_productos c JOIN products p ON c.id_woo = p._id WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+            $sql_calc = "SELECT SUM($cantidadRealLoteSql) as total_piezas FROM ordenes_productos c JOIN products p ON c.id_woo = p._id $granularJoinLoteSql WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL) $granularWhereLoteSql";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual]);
             $cantidad_piezas = $res_calc[0]['total_piezas'] ?? 0;
-            $total_monto_pago = ($cantidad_piezas * $comision_value_emp) * ($procentaje_comision_asignado / 100);
+            $total_monto_pago = ($cantidad_piezas * $comision_value_emp) * ($procentajeLoteEfectivo / 100);
           } else { // Variable (por producto - usando comision departamental)
-            $sql_calc = "SELECT c.cantidad, COALESCE(pc.comision, 0) AS com_prod FROM ordenes_productos c JOIN products p ON c.id_woo = p._id LEFT JOIN products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = ? WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL)";
+            $sql_calc = "SELECT $cantidadRealLoteSql AS cantidad, COALESCE(pc.comision, 0) AS com_prod FROM ordenes_productos c JOIN products p ON c.id_woo = p._id LEFT JOIN products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = ? $granularJoinLoteSql WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL) $granularWhereLoteSql";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_departamento, $id_orden_actual]);
             $comision_guardar = $res_calc[0]['com_prod'] ?? 0; // Referencia visual de la tabla
             foreach ($res_calc as $prod) {
               $cantidad_piezas += $prod['cantidad'];
-              $total_monto_pago += ($prod['cantidad'] * $prod['com_prod']) * ($procentaje_comision_asignado / 100);
+              $total_monto_pago += ($prod['cantidad'] * $prod['com_prod']) * ($procentajeLoteEfectivo / 100);
             }
           }
 
@@ -2105,7 +2119,21 @@ return function (App $app) {
         // este empleado/orden/departamento, la unión con ordenes_productos
         // hace fan-out y multiplica el pago (mismo bug real corregido en
         // /registrar-paso-empleado el 2026-08-06, orden 6299).
-        $sql_calculo_pago = 'SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM(c.cantidad) * d.comision) * a.procentaje_comision / 100) AS total_comision_variable, ((SUM(c.cantidad) * eu.comision) * a.procentaje_comision / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND a.id_reposicion IS NULL AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) GROUP BY a._id, a.procentaje_comision';
+        // Asignación granular (si existe) -- mismo criterio que /registrar-paso-empleado.
+        $sqlLdeaImp = 'SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion IS NULL LIMIT 1';
+        $ldeaImpRes = $localConnection->goQuery($sqlLdeaImp, [$id_orden_actual, $id_empleado, $id_departamento]);
+        $idLdeaImp = !empty($ldeaImpRes) ? intval($ldeaImpRes[0]['_id']) : null;
+        $tieneGranularImp = false;
+        if ($idLdeaImp) {
+          $chkGranularImp = $localConnection->goQuery('SELECT COUNT(*) as cnt FROM lotes_detalles_empleados_productos WHERE id_lotes_detalles_empleados_asignados = ?', [$idLdeaImp]);
+          $tieneGranularImp = !empty($chkGranularImp) && intval($chkGranularImp[0]['cnt']) > 0;
+        }
+        $granularJoinImpSql = $tieneGranularImp ? 'LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = c._id' : '';
+        $granularWhereImpSql = $tieneGranularImp ? 'AND ldep._id IS NOT NULL' : '';
+        $cantidadRealImpSql = $tieneGranularImp ? 'COALESCE(ldep.cantidad_asignada, c.cantidad)' : 'c.cantidad';
+        $porcentajeCaseImpSql = $tieneGranularImp ? '100' : 'a.procentaje_comision';
+
+        $sql_calculo_pago = "SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM($cantidadRealImpSql) * d.comision) * $porcentajeCaseImpSql / 100) AS total_comision_variable, ((SUM($cantidadRealImpSql) * eu.comision) * $porcentajeCaseImpSql / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo $granularJoinImpSql WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND a.id_reposicion IS NULL AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) $granularWhereImpSql GROUP BY a._id, a.procentaje_comision";
         $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
         if (!empty($resp_comision)) {
           $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
@@ -4230,6 +4258,28 @@ return function (App $app) {
                 )";
       }
 
+      // Cantidad real a proyectar por producto: si el empleado tiene asignación
+      // granular para el departamento de esa proyección (ptp_sub.id_departamento,
+      // que varía por fila cuando no se especifica id_departamento), se usa su
+      // cantidad_asignada real -- si tiene asignación granular en ese departamento
+      // pero NO para este producto puntual, es 0 (no es su producto); si no tiene
+      // ninguna asignación granular ahí, cae al comportamiento de siempre
+      // (op.cantidad, la línea completa). Sin id_empleado no hay "este empleado"
+      // al cual acotar, se deja el comportamiento agregado de siempre.
+      $cantidadProyeccionSql = $id_empleado
+        ? "COALESCE(
+              (SELECT ldep_g.cantidad_asignada FROM lotes_detalles_empleados_productos ldep_g
+                JOIN lotes_detalles_empleados_asignados ldea_g ON ldea_g._id = ldep_g.id_lotes_detalles_empleados_asignados
+                WHERE ldea_g.id_orden = o._id AND ldea_g.id_departamento = ptp_sub.id_departamento
+                  AND ldea_g.id_empleado = $id_empleado AND ldep_g.id_ordenes_productos = op._id),
+              CASE WHEN EXISTS (
+                  SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk
+                  JOIN lotes_detalles_empleados_asignados ldea_chk ON ldea_chk._id = ldep_chk.id_lotes_detalles_empleados_asignados
+                  WHERE ldea_chk.id_orden = o._id AND ldea_chk.id_departamento = ptp_sub.id_departamento AND ldea_chk.id_empleado = $id_empleado
+              ) THEN 0 ELSE op.cantidad END
+          )"
+        : 'op.cantidad';
+
       if (DB_DRIVER === 'pgsql') {
         $sql = "
           WITH TiemposCalculados AS (
@@ -4268,14 +4318,14 @@ return function (App $app) {
   
               -- Tiempos Proyectados (filtrados por departamento cuando se especifica)
               (
-                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * ({$cantidadProyeccionSql})), 0)
                   FROM products_tiempos_de_produccion ptp_sub
                   WHERE ptp_sub.id_product = op.id_woo
                   AND ptp_sub.id_departamento $deptProjTerminadas
               ) AS \"totalProjectedTerminadas\",
   
               (
-                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * ({$cantidadProyeccionSql})), 0)
                   FROM products_tiempos_de_produccion ptp_sub
                   WHERE ptp_sub.id_product = op.id_woo
                   AND ptp_sub.id_departamento $deptProjEnCurso
@@ -4284,7 +4334,7 @@ return function (App $app) {
               -- Legacy / Totales
               (COALESCE(tc.tiempo_terminado, 0) + COALESCE(tc.tiempo_en_curso, 0)) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
               (
-                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * ({$cantidadProyeccionSql})), 0)
                   FROM products_tiempos_de_produccion ptp_sub
                   WHERE ptp_sub.id_product = op.id_woo
                   AND ptp_sub.id_departamento $deptProjTotal
@@ -4370,14 +4420,14 @@ return function (App $app) {
   
               -- Tiempos Proyectados (filtrados por departamento cuando se especifica)
               (
-                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * ({$cantidadProyeccionSql})), 0)
                   FROM products_tiempos_de_produccion ptp_sub
                   WHERE ptp_sub.id_product = op.id_woo
                   AND ptp_sub.id_departamento $deptProjTerminadas
               ) AS totalProjectedTerminadas,
   
               (
-                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * ({$cantidadProyeccionSql})), 0)
                   FROM products_tiempos_de_produccion ptp_sub
                   WHERE ptp_sub.id_product = op.id_woo
                   AND ptp_sub.id_departamento $deptProjEnCurso
@@ -4386,7 +4436,7 @@ return function (App $app) {
               -- Legacy / Totales
               (COALESCE(tc.tiempo_terminado, 0) + COALESCE(tc.tiempo_en_curso, 0)) / (SELECT COUNT(*) FROM ordenes_productos op_count JOIN products p_count ON p_count._id = op_count.id_woo AND p_count.fisico = 1 WHERE op_count.id_orden = o._id) AS tiempo_total_segundos,
               (
-                  SELECT COALESCE(SUM(ptp_sub.tiempo * op.cantidad), 0)
+                  SELECT COALESCE(SUM(ptp_sub.tiempo * ({$cantidadProyeccionSql})), 0)
                   FROM products_tiempos_de_produccion ptp_sub
                   WHERE ptp_sub.id_product = op.id_woo
                   AND ptp_sub.id_departamento $deptProjTotal
