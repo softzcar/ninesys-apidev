@@ -295,14 +295,23 @@ return function (App $app) {
             //     Los registros LDEA abiertos (sin fecha_terminado) se cierran con la fecha estimada de
             //     la orden (fecha_entrega), no con NOW(), para no inflar el tiempo de tareas viejas.
             $horarioObj = $getHorarioLaboral($dbEmpresas, $id_empresa);
+            // Asignación granular: si el empleado de esta tarea (ldea) tiene productos
+            // específicos asignados (lotes_detalles_empleados_productos), el tiempo real
+            // que trabajó se reparte SOLO entre esos productos (con su cantidad_asignada
+            // real como peso) -- no entre todos los productos de la orden, que
+            // contaminaría el costo de un producto con tiempo gastado en otro trabajado
+            // por un empleado distinto. Sin asignación granular (caso legado), el reparto
+            // proporcional entre todos los productos de la orden se mantiene igual que siempre.
             $ldeaRaw = $db->goQuery("
                 SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre,
-                       op.id_woo AS id_producto, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                       op.id_woo AS id_producto, COALESCE(ldep.cantidad_asignada, op.cantidad) AS cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
                 FROM lotes_detalles_empleados_asignados ldea
                 JOIN ordenes o ON ldea.id_orden = o._id
                 JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
                 LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
+                LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = ldea._id AND ldep.id_ordenes_productos = op._id
                 WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL $dateCond
+                  AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_x1 WHERE ldep_x1.id_lotes_detalles_empleados_asignados = ldea._id))
             ", $params);
 
             $realTiempoMap = [];
@@ -335,14 +344,16 @@ return function (App $app) {
             $costoHoraMap = $getSalarios($db, $dbEmpresas, $id_empresa);
             $ldeaSalarioRaw = $db->goQuery("
                 SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre, ldea.id_empleado,
-                       op.id_woo AS id_producto, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                       op.id_woo AS id_producto, COALESCE(ldep2.cantidad_asignada, op.cantidad) AS cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
                 FROM lotes_detalles_empleados_asignados ldea
                 JOIN ordenes o ON ldea.id_orden = o._id
                 JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
                 LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
                 JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                LEFT JOIN lotes_detalles_empleados_productos ldep2 ON ldep2.id_lotes_detalles_empleados_asignados = ldea._id AND ldep2.id_ordenes_productos = op._id
                 WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL
                   AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond
+                  AND (ldep2._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_x2 WHERE ldep_x2.id_lotes_detalles_empleados_asignados = ldea._id))
             ", $params);
 
             $realSalarioFijoMap = [];
@@ -673,14 +684,23 @@ return function (App $app) {
             // ordenes_productos + departamento (tiempo teórico x cantidad). Horas vía
             // calcularHorasLaboradasReales(), ver detalle en el endpoint de productos.
             $horarioObj = $getHorarioLaboral($dbEmpresas, $id_empresa);
+            // Asignación granular: si el empleado de esta tarea (ldea) tiene productos
+            // específicos asignados (lotes_detalles_empleados_productos), el tiempo real
+            // que trabajó se reparte SOLO entre esos productos (con su cantidad_asignada
+            // real como peso) -- no entre todos los productos de la orden, que
+            // contaminaría el costo de un producto con tiempo gastado en otro trabajado
+            // por un empleado distinto. Sin asignación granular (caso legado), el reparto
+            // proporcional entre todos los productos de la orden se mantiene igual que siempre.
             $ldeaRaw = $db->goQuery("
                 SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre,
-                       op.id_woo AS id_producto, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                       op.id_woo AS id_producto, COALESCE(ldep.cantidad_asignada, op.cantidad) AS cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
                 FROM lotes_detalles_empleados_asignados ldea
                 JOIN ordenes o ON ldea.id_orden = o._id
                 JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
                 LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
+                LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = ldea._id AND ldep.id_ordenes_productos = op._id
                 WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL $dateCond
+                  AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_x1 WHERE ldep_x1.id_lotes_detalles_empleados_asignados = ldea._id))
             ", $params);
 
             $realTiempoMap = [];
@@ -713,14 +733,16 @@ return function (App $app) {
             $costoHoraMap = $getSalarios($db, $dbEmpresas, $id_empresa);
             $ldeaSalarioRaw = $db->goQuery("
                 SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre, ldea.id_empleado,
-                       op.id_woo AS id_producto, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                       op.id_woo AS id_producto, COALESCE(ldep2.cantidad_asignada, op.cantidad) AS cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
                 FROM lotes_detalles_empleados_asignados ldea
                 JOIN ordenes o ON ldea.id_orden = o._id
                 JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
                 LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
                 JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                LEFT JOIN lotes_detalles_empleados_productos ldep2 ON ldep2.id_lotes_detalles_empleados_asignados = ldea._id AND ldep2.id_ordenes_productos = op._id
                 WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL
                   AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond
+                  AND (ldep2._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_x2 WHERE ldep_x2.id_lotes_detalles_empleados_asignados = ldea._id))
             ", $params);
 
             $realSalarioFijoMap = [];
@@ -998,13 +1020,15 @@ return function (App $app) {
             $horarioObj = $getHorarioLaboral($dbEmpresas, $id_empresa);
             $ldeaRaw = $db->goQuery("
                 SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre,
-                       op.id_woo, op.id_size AS id_talla, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                       op.id_woo, op.id_size AS id_talla, COALESCE(ldep.cantidad_asignada, op.cantidad) AS cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
                 FROM lotes_detalles_empleados_asignados ldea
                 JOIN ordenes o ON ldea.id_orden = o._id
                 JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
                 LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
+                LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = ldea._id AND ldep.id_ordenes_productos = op._id
                 WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL $dateCond
                   AND ldea.id_orden IN (SELECT id_orden FROM ordenes_productos WHERE id_woo = :id_producto)
+                  AND (ldep._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_x1 WHERE ldep_x1.id_lotes_detalles_empleados_asignados = ldea._id))
             ", $params);
 
             $realTiempoMap = [];
@@ -1067,15 +1091,17 @@ return function (App $app) {
             $costoHoraMap = $getSalarios($db, $dbEmpresas, $id_empresa);
             $ldeaSalarioRaw = $db->goQuery("
                 SELECT ldea._id AS id_ldea, ldea.fecha_inicio, $fechaCierreExpr AS fecha_cierre, ldea.id_empleado,
-                       op.id_woo, op.id_size AS id_talla, op.cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
+                       op.id_woo, op.id_size AS id_talla, COALESCE(ldep2.cantidad_asignada, op.cantidad) AS cantidad, COALESCE(pt.tiempo, 0) AS tiempo_teorico
                 FROM lotes_detalles_empleados_asignados ldea
                 JOIN ordenes o ON ldea.id_orden = o._id
                 JOIN ordenes_productos op ON op.id_orden = ldea.id_orden
                 LEFT JOIN products_tiempos_de_produccion pt ON pt.id_product = op.id_woo AND pt.id_departamento = ldea.id_departamento
                 JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = ldea.id_empleado
+                LEFT JOIN lotes_detalles_empleados_productos ldep2 ON ldep2.id_lotes_detalles_empleados_asignados = ldea._id AND ldep2.id_ordenes_productos = op._id
                 WHERE o.status IN ('terminada', 'entregada') AND ldea.fecha_inicio IS NOT NULL
                   AND eu.salario_tipo IN ('Salario', 'Salario más Comisión') $dateCond
                   AND ldea.id_orden IN (SELECT id_orden FROM ordenes_productos WHERE id_woo = :id_producto)
+                  AND (ldep2._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep_x2 WHERE ldep_x2.id_lotes_detalles_empleados_asignados = ldea._id))
             ", $params);
 
             $realSalarioFijoMap = [];
