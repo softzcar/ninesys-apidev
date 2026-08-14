@@ -801,20 +801,49 @@ return function (App $app) {
         ? ' AND a.id_reposicion = ' . intval($miEmpleado['id_reposicion'])
         : ' AND a.id_reposicion IS NULL';
 
+      // Asignación granular por producto (si existe): las 3 ramas de cálculo de
+      // comisión de abajo (porcentaje/fija/variable) unían ordenes_productos por
+      // id_orden completo y aplicaban el % general del empleado sobre el TOTAL de
+      // la orden -- correcto solo si todos los productos tuvieran la misma
+      // comisión, pero incorrecto en la práctica (bug real confirmado con datos
+      // reales: orden 6416, un producto con comisión $0 mezclado con otro a
+      // $0.11 hizo que un empleado cobrara de más y el otro de menos, aunque el
+      // total pagado por la orden cuadrara). Cuando existe asignación granular
+      // para este empleado, se filtra ordenes_productos a solo SUS líneas y se
+      // usa su cantidad_asignada real (no la cantidad total de la línea), sin
+      // aplicar de nuevo el % general (ya está implícito en qué le tocó).
+      $sqlLdeaActual = "SELECT _id FROM lotes_detalles_empleados_asignados a WHERE a.id_orden = {$miEmpleado['id_orden']} AND a.id_empleado = {$miEmpleado['id_empleado']} AND a.id_departamento = {$miEmpleado['id_departamento']} {$idReposicionScopeSql} LIMIT 1";
+      $ldeaActualRes = $localConnection->goQuery($sqlLdeaActual);
+      $idLdeaActual = !empty($ldeaActualRes) ? intval($ldeaActualRes[0]['_id']) : null;
+      $tieneAsignacionGranular = false;
+      if ($idLdeaActual) {
+        $chkGranular = $localConnection->goQuery('SELECT COUNT(*) as cnt FROM lotes_detalles_empleados_productos WHERE id_lotes_detalles_empleados_asignados = ?', [$idLdeaActual]);
+        $tieneAsignacionGranular = !empty($chkGranular) && intval($chkGranular[0]['cnt']) > 0;
+      }
+      // Fragmentos SQL reutilizados en las 3 ramas: JOIN opcional a la asignación
+      // granular, filtro para excluir líneas ajenas, y cantidad real a usar.
+      $granularJoinSql = $tieneAsignacionGranular
+        ? "LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = c._id"
+        : '';
+      $granularWhereSql = $tieneAsignacionGranular ? 'AND ldep._id IS NOT NULL' : '';
+      $cantidadRealSql = $tieneAsignacionGranular ? 'COALESCE(ldep.cantidad_asignada, c.cantidad)' : 'c.cantidad';
+      $porcentajeCaseSql = $tieneAsignacionGranular ? '100' : '(CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END)';
+
       // Consulta para obtener datos de comisión y otros datos relacionados
       if ($comisionTipo === 'porcentaje') {
         // Para comisión por porcentaje: calcular basado en precio del producto
         $sql = "SELECT
               a._id AS id_lotes_detalles,
               a.procentaje_comision,
-              SUM(c.cantidad) AS total_productos_empleado,
-              SUM(c.cantidad * c.precio_unitario * ($comisionValue / 100)) AS total_comision_porcentaje
+              SUM($cantidadRealSql) AS total_productos_empleado,
+              SUM($cantidadRealSql * c.precio_unitario * ($comisionValue / 100)) AS total_comision_porcentaje
           FROM
               lotes_detalles_empleados_asignados a
           JOIN
               ordenes_productos c ON c.id_orden = a.id_orden
           JOIN
               products p ON c.id_woo = p._id
+          $granularJoinSql
           WHERE
               a.id_empleado = {$miEmpleado['id_empleado']}
               AND a.id_orden = {$miEmpleado['id_orden']}
@@ -822,6 +851,7 @@ return function (App $app) {
               {$idReposicionScopeSql}
               AND (p.fisico = 1 OR p.fisico IS NULL)
               AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+              $granularWhereSql
           GROUP BY
               a._id
           ;
@@ -835,7 +865,9 @@ return function (App $app) {
         $totalComimision = $respComision[0]['total_comision_porcentaje'];
 
         // CORRECCIÓN: Aplicar porcentaje asignado (si trabajan 2 personas al 50%, se paga 50%)
-        $porcentajeAsignado = floatval($respComision[0]['procentaje_comision']);
+        // -- salvo que ya se haya filtrado por asignación granular real, en cuyo caso la
+        // cantidad ya es exactamente lo que le toca a este empleado y NO debe reescalarse.
+        $porcentajeAsignado = $tieneAsignacionGranular ? 100 : floatval($respComision[0]['procentaje_comision']);
         if ($porcentajeAsignado <= 0)
           $porcentajeAsignado = 100; // Legacy support
 
@@ -896,8 +928,8 @@ return function (App $app) {
               a._id AS id_lotes_detalles,
               a.procentaje_comision,
               b.comision AS comision_fija,
-              SUM(c.cantidad) AS total_productos_empleado,
-              (SUM(c.cantidad) * b.comision) * ((CASE WHEN a.procentaje_comision > 0 THEN a.procentaje_comision ELSE 100 END) / 100) AS total_comision_fija
+              SUM($cantidadRealSql) AS total_productos_empleado,
+              (SUM($cantidadRealSql) * b.comision) * ($porcentajeCaseSql / 100) AS total_comision_fija
           FROM
               lotes_detalles_empleados_asignados a
           JOIN
@@ -906,6 +938,7 @@ return function (App $app) {
               ordenes_productos c ON c.id_orden = a.id_orden
           JOIN
               products p ON c.id_woo = p._id
+          $granularJoinSql
           WHERE
               a.id_empleado = {$miEmpleado['id_empleado']}
               AND a.id_orden = {$miEmpleado['id_orden']}
@@ -913,6 +946,7 @@ return function (App $app) {
               {$idReposicionScopeSql}
               AND (p.fisico = 1 OR p.fisico IS NULL)
               AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+              $granularWhereSql
           GROUP BY
               a._id,
               a.procentaje_comision,
@@ -981,13 +1015,13 @@ return function (App $app) {
               a.procentaje_comision,
               ( CASE WHEN a.id_departamento = 3 THEN
                   COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad)
-                  ELSE c.cantidad
+                  ELSE $cantidadRealSql
                 END ) AS cantidad,
               COALESCE(pc.comision, 0) AS comision_producto,
               1 AS factor_empleado,
               ( CASE WHEN a.id_departamento = 3 THEN
                   COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad)
-                  ELSE c.cantidad
+                  ELSE $cantidadRealSql
                 END * COALESCE(pc.comision, 0) ) AS monto_comision_por_producto,
               c.id_woo AS id_producto
           FROM
@@ -1000,6 +1034,7 @@ return function (App $app) {
               products p ON c.id_woo = p._id
           LEFT JOIN
               products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = a.id_departamento
+          $granularJoinSql
           WHERE
               a.id_empleado = {$miEmpleado['id_empleado']}
               AND a.id_orden = {$miEmpleado['id_orden']}
@@ -1007,6 +1042,7 @@ return function (App $app) {
               {$idReposicionScopeSql}
               AND (p.fisico = 1 OR p.fisico IS NULL)
               AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
+              $granularWhereSql
           ;
         ";
         $object['sql_comision_variable'] = $sql;
@@ -1033,7 +1069,10 @@ return function (App $app) {
 
         foreach ($respComision as $producto) {
           $montoProd = floatval($producto['monto_comision_por_producto']);
-          $porc = floatval($producto['procentaje_comision']) > 0 ? floatval($producto['procentaje_comision']) : 100;
+          // Con asignación granular la "cantidad" que devolvió la consulta ya es la
+          // porción real de este empleado (o la excluyó por completo si no es suya) --
+          // aplicar el % de nuevo la distorsionaría, ver nota en el bloque de arriba.
+          $porc = $tieneAsignacionGranular ? 100 : (floatval($producto['procentaje_comision']) > 0 ? floatval($producto['procentaje_comision']) : 100);
           $montoTotalVariable += ($montoProd * ($porc / 100));
           $piezasTotales += (floatval($producto['cantidad']) * ($porc / 100));
         }
