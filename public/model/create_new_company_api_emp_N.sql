@@ -690,6 +690,13 @@ CREATE TABLE `lotes_detalles_empleados_asignados_pausas` (
   `pausa_fin` timestamp NULL DEFAULT NULL,
   `motivo` mediumtext NOT NULL
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci;
+CREATE TABLE `lotes_detalles_empleados_productos` (
+  `_id` int(11) NOT NULL,
+  `id_lotes_detalles_empleados_asignados` int(11) NOT NULL COMMENT 'FK a lotes_detalles_empleados_asignados',
+  `id_ordenes_productos` int(11) NOT NULL COMMENT 'FK a ordenes_productos: línea de producto asignada',
+  `cantidad_asignada` int(11) NOT NULL COMMENT 'Unidades de esa línea asignadas a este empleado',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Asignación granular de productos/cantidades por empleado dentro de una tarea de lote';
 CREATE TABLE `lotes_fisicos` (
   `_id` int(11) NOT NULL,
   `id_orden` int(11) DEFAULT NULL COMMENT 'id de la orden',
@@ -1428,6 +1435,10 @@ ADD PRIMARY KEY (`_id`),
   ADD KEY `idx_id_orden` (`id_orden`),
   ADD KEY `idx_id_departamento` (`id_departamento`),
   ADD KEY `idx_empleado_orden_depto` (`id_empleado`, `id_orden`, `id_departamento`);
+ALTER TABLE `lotes_detalles_empleados_productos`
+ADD PRIMARY KEY (`_id`),
+  ADD KEY `idx_id_ldea` (`id_lotes_detalles_empleados_asignados`),
+  ADD KEY `idx_id_ordenes_productos` (`id_ordenes_productos`);
 ALTER TABLE `lotes_detalles_empleados_asignados_pausas`
 ADD PRIMARY KEY (`_id`);
 ALTER TABLE `lotes_fisicos`
@@ -1613,6 +1624,8 @@ ALTER TABLE `lotes_detalles_empleados_asignados`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `lotes_detalles_empleados_asignados_pausas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
+ALTER TABLE `lotes_detalles_empleados_productos`
+MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `lotes_fisicos`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `lotes_historico_solicitadas`
@@ -1792,6 +1805,11 @@ ADD CONSTRAINT `ldea_ibfk_3` FOREIGN KEY (`id_departamento`) REFERENCES `departa
 -- lotes_detalles_empleados_asignados_pausas
 ALTER TABLE `lotes_detalles_empleados_asignados_pausas`
 ADD CONSTRAINT `ldea_pausas_ibfk_1` FOREIGN KEY (`id_lotes_detalles_empleados_asignados`) REFERENCES `lotes_detalles_empleados_asignados` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- lotes_detalles_empleados_productos
+ALTER TABLE `lotes_detalles_empleados_productos`
+ADD CONSTRAINT `ldep_ibfk_1` FOREIGN KEY (`id_lotes_detalles_empleados_asignados`) REFERENCES `lotes_detalles_empleados_asignados` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD CONSTRAINT `ldep_ibfk_2` FOREIGN KEY (`id_ordenes_productos`) REFERENCES `ordenes_productos` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- lotes_fisicos
 ALTER TABLE `lotes_fisicos`

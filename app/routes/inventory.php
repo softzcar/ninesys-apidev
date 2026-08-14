@@ -2045,15 +2045,58 @@ return function (App $app) {
         $sizeMatchExpr = DB_DRIVER === 'pgsql' ? 'CAST(_id AS VARCHAR) = a.talla' : '_id = a.talla';
         $sizeJoinExpr = DB_DRIVER === 'pgsql' ? 'CAST(b.id_size AS VARCHAR) = a.talla' : 'b.id_size = a.talla';
 
+        // Parámetros opcionales: cuando el llamador (el modal de finalización de un
+        // empleado específico) los envía, la cantidad de "unidades" de cada producto se
+        // acota a lo que ESE empleado tiene realmente asignado (asignación granular por
+        // producto), en vez de la cantidad total del producto en la orden. Sin estos
+        // parámetros el comportamiento es idéntico al de siempre (otros llamadores no se
+        // ven afectados).
+        $queryParams = $request->getQueryParams();
+        $idEmpleadoParam = isset($queryParams['id_empleado']) ? intval($queryParams['id_empleado']) : null;
+        $idDepartamentoParam = isset($queryParams['id_departamento']) ? intval($queryParams['id_departamento']) : null;
+        $granularSelect = 'NULL';
+        $granularWhere = '1=1';
+        $params = [];
+        $paramsWhere = [];
+        if ($idEmpleadoParam && $idDepartamentoParam) {
+            $granularSelect = '(SELECT ldep.cantidad_asignada FROM lotes_detalles_empleados_productos ldep
+                JOIN lotes_detalles_empleados_asignados ldea ON ldea._id = ldep.id_lotes_detalles_empleados_asignados
+                WHERE ldea.id_orden = a.id_orden AND ldea.id_departamento = ? AND ldea.id_empleado = ? AND ldep.id_ordenes_productos = a._id)';
+            $params = [$idDepartamentoParam, $idEmpleadoParam];
+
+            // Si este empleado tiene asignación granular en esta orden+departamento, excluir
+            // por completo las líneas de producto que NO le tocan a él (sin esto, una línea
+            // ajena caería en el fallback "a.cantidad" de más abajo y mostraría/exigiría
+            // insumos de un producto que el empleado no trabajó). Si NO tiene ninguna
+            // asignación granular (caso legado/simple), no se excluye nada -- se ve todo,
+            // como siempre.
+            $granularWhere = '(
+                NOT EXISTS (
+                    SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk
+                    JOIN lotes_detalles_empleados_asignados ldea_chk ON ldea_chk._id = ldep_chk.id_lotes_detalles_empleados_asignados
+                    WHERE ldea_chk.id_orden = a.id_orden AND ldea_chk.id_departamento = ? AND ldea_chk.id_empleado = ?
+                )
+                OR EXISTS (
+                    SELECT 1 FROM lotes_detalles_empleados_productos ldep_chk2
+                    JOIN lotes_detalles_empleados_asignados ldea_chk2 ON ldea_chk2._id = ldep_chk2.id_lotes_detalles_empleados_asignados
+                    WHERE ldea_chk2.id_orden = a.id_orden AND ldea_chk2.id_departamento = ? AND ldea_chk2.id_empleado = ? AND ldep_chk2.id_ordenes_productos = a._id
+                )
+            )';
+            $paramsWhere = [$idDepartamentoParam, $idEmpleadoParam, $idDepartamentoParam, $idEmpleadoParam];
+        }
+
         $sql = "SELECT
                       a._id id_ordenes_productos,
                       a.id_woo id_product,
                       a.name producto,
                       (SELECT nombre FROM sizes WHERE $sizeMatchExpr) talla,
                       a.cantidad AS cantidad_original,
-                      CASE WHEN (SELECT tipo FROM departamentos WHERE _id = b.id_departamento) = 'corte' THEN
-                          COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = a._id), 0), a.cantidad)
-                          ELSE a.cantidad END AS unidades,
+                      COALESCE(
+                          $granularSelect,
+                          CASE WHEN (SELECT tipo FROM departamentos WHERE _id = b.id_departamento) = 'corte' THEN
+                              COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = a._id), 0), a.cantidad)
+                              ELSE a.cantidad END
+                      ) AS unidades,
                       (SELECT tela FROM catalogo_telas WHERE _id = a.id_tela) AS tela_vendedor,
                       b.id_departamento,
                       (SELECT departamento FROM departamentos WHERE _id = b.id_departamento) departamento,
@@ -2069,9 +2112,10 @@ return function (App $app) {
                   LEFT JOIN products_tiempos_de_produccion tp ON tp.id_product = a.id_woo AND tp.id_departamento = b.id_departamento
                   WHERE
                       a.id_orden = {$args['id_orden']}
+                      AND $granularWhere
                   ORDER BY a.talla ASC";
 
-        $object['insumos_asignados'] = $localConnection->goQuery($sql);
+        $object['insumos_asignados'] = $localConnection->goQuery($sql, array_merge($params, $paramsWhere));
         // $object['insumos_asignados'] = null;
 
         $sql = "SELECT

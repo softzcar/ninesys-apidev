@@ -1763,6 +1763,154 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  // Asignación granular de productos/cantidades por empleado, para órdenes con varios
+  // productos distintos repartidos entre 2+ empleados en un mismo departamento (ej. DTF
+  // a un impresor, Sublimación a otro; o 1000 piezas de un mismo producto repartidas entre
+  // varios). Endpoint nuevo y separado de /lotes/empleados/reasignar (que sigue intacto
+  // para sus otros usos) porque necesita validar el TOTAL de las asignaciones de una sola
+  // vez (cobertura completa + sin duplicados), algo que un endpoint por-empleado no puede
+  // garantizar por sí solo.
+  $app->get('/lotes/{id_orden}/{id_departamento}/asignaciones-productos', function (Request $request, Response $response, $args) {
+    $localConnection = new LocalDB();
+    $sql = 'SELECT ldep.id_ordenes_productos, ldep.cantidad_asignada, ldea.id_empleado
+            FROM lotes_detalles_empleados_productos ldep
+            JOIN lotes_detalles_empleados_asignados ldea ON ldea._id = ldep.id_lotes_detalles_empleados_asignados
+            WHERE ldea.id_orden = ? AND ldea.id_departamento = ?';
+    $object['asignaciones_productos'] = $localConnection->goQuery($sql, [$args['id_orden'], $args['id_departamento']]);
+    $localConnection->disconnect();
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
+  $app->post('/lotes/empleados/asignar-productos', function (Request $request, Response $response, $args) {
+    $body = $request->getParsedBody();
+    $id_orden = intval($body['id_orden'] ?? 0);
+    $id_departamento = intval($body['id_departamento'] ?? 0);
+    $asignaciones = $body['asignaciones'] ?? null;
+    if (is_string($asignaciones)) {
+      $asignaciones = json_decode($asignaciones, true);
+    }
+
+    if (!$id_orden || !$id_departamento || empty($asignaciones) || !is_array($asignaciones)) {
+      $response->getBody()->write(json_encode(['error' => 'Faltan parámetros requeridos: id_orden, id_departamento y asignaciones son obligatorios.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection = new LocalDB();
+
+    // Líneas reales de la orden -- fuente de verdad de las cantidades a cubrir
+    $sqlLineas = 'SELECT _id, cantidad FROM ordenes_productos WHERE id_orden = ?';
+    $lineas = $localConnection->goQuery($sqlLineas, [$id_orden]);
+    if (empty($lineas)) {
+      $response->getBody()->write(json_encode(['error' => 'La orden no tiene productos.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+    $cantidadPorLinea = [];
+    $unidadesTotales = 0;
+    foreach ($lineas as $l) {
+      $cantidadPorLinea[intval($l['_id'])] = intval($l['cantidad']);
+      $unidadesTotales += intval($l['cantidad']);
+    }
+
+    // Validar: cada línea referenciada debe pertenecer a la orden, cantidad > 0,
+    // y la suma por línea a través de TODOS los empleados debe cubrir exactamente
+    // la cantidad real -- esto garantiza a la vez que no queden piezas sin asignar
+    // (huérfanas) y que ninguna pieza se cuente para más de un empleado (duplicada).
+    $sumaPorLinea = [];
+    foreach ($asignaciones as $asig) {
+      if (empty($asig['id_empleado']) || empty($asig['productos']) || !is_array($asig['productos'])) {
+        $response->getBody()->write(json_encode(['error' => 'Cada asignación requiere id_empleado y una lista de productos.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
+      foreach ($asig['productos'] as $p) {
+        $idLinea = intval($p['id_ordenes_productos'] ?? 0);
+        $cant = intval($p['cantidad_asignada'] ?? 0);
+        if (!isset($cantidadPorLinea[$idLinea])) {
+          $response->getBody()->write(json_encode(['error' => "La línea de producto {$idLinea} no pertenece a la orden {$id_orden}."]));
+          return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+        if ($cant <= 0) {
+          $response->getBody()->write(json_encode(['error' => "La cantidad asignada debe ser mayor a 0 (línea {$idLinea})."]));
+          return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+        $sumaPorLinea[$idLinea] = ($sumaPorLinea[$idLinea] ?? 0) + $cant;
+      }
+    }
+    foreach ($cantidadPorLinea as $idLinea => $cantidadReal) {
+      $asignado = $sumaPorLinea[$idLinea] ?? 0;
+      if ($asignado !== $cantidadReal) {
+        $response->getBody()->write(json_encode([
+          'error' => 'La asignación no cubre exactamente las unidades de cada producto.',
+          'id_ordenes_productos' => $idLinea,
+          'cantidad_requerida' => $cantidadReal,
+          'cantidad_asignada' => $asignado,
+        ]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
+    }
+
+    $sqlDep = 'SELECT departamento FROM departamentos WHERE _id = ?';
+    $respDep = $localConnection->goQuery($sqlDep, [$id_departamento]);
+    $nombreDepartamento = $respDep[0]['departamento'] ?? '';
+
+    $localConnection->beginTransaction();
+    try {
+      $resultados = [];
+      foreach ($asignaciones as $asig) {
+        $id_empleado = intval($asig['id_empleado']);
+        $unidadesEmpleado = 0;
+        foreach ($asig['productos'] as $p) {
+          $unidadesEmpleado += intval($p['cantidad_asignada']);
+        }
+        $porcentaje = $unidadesTotales > 0 ? round(($unidadesEmpleado / $unidadesTotales) * 100, 2) : 0;
+
+        $sqlExiste = 'SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ?';
+        $existe = $localConnection->goQuery($sqlExiste, [$id_orden, $id_empleado, $id_departamento]);
+
+        if (empty($existe)) {
+          $sqlIns = 'INSERT INTO lotes_detalles_empleados_asignados (id_orden, id_departamento, id_empleado, procentaje_comision) VALUES (?, ?, ?, ?)';
+          $insResult = $localConnection->goQuery($sqlIns, [$id_orden, $id_departamento, $id_empleado, $porcentaje]);
+          $idLdea = $insResult['insert_id'];
+        } else {
+          $idLdea = $existe[0]['_id'];
+          $sqlUpd = 'UPDATE lotes_detalles_empleados_asignados SET procentaje_comision = ? WHERE _id = ?';
+          $localConnection->goQuery($sqlUpd, [$porcentaje, $idLdea]);
+        }
+
+        // Reemplazar el detalle de productos de ESTE empleado (no toca los de otros
+        // empleados que no vinieron en este payload -- la eliminación de un empleado
+        // completo sigue haciéndose vía /lotes/empleados/eliminar, sin cambios).
+        $localConnection->goQuery('DELETE FROM lotes_detalles_empleados_productos WHERE id_lotes_detalles_empleados_asignados = ?', [$idLdea]);
+        foreach ($asig['productos'] as $p) {
+          $sqlInsProd = 'INSERT INTO lotes_detalles_empleados_productos (id_lotes_detalles_empleados_asignados, id_ordenes_productos, cantidad_asignada) VALUES (?, ?, ?)';
+          $localConnection->goQuery($sqlInsProd, [$idLdea, intval($p['id_ordenes_productos']), intval($p['cantidad_asignada'])]);
+        }
+
+        $resultados[] = ['id_empleado' => $id_empleado, 'procentaje_comision' => $porcentaje, 'unidades_asignadas' => $unidadesEmpleado];
+      }
+
+      // Mismo mantenimiento de lotes_detalles.unidades_solicitadas que /lotes/empleados/reasignar
+      $sqlCheckDetail = 'SELECT _id FROM lotes_detalles WHERE id_departamento = ? AND id_orden = ?';
+      $detailExists = $localConnection->goQuery($sqlCheckDetail, [$id_departamento, $id_orden]);
+      if (empty($detailExists)) {
+        $localConnection->goQuery('INSERT INTO lotes_detalles (id_orden, id_departamento, departamento, unidades_solicitadas) VALUES (?, ?, ?, ?)', [$id_orden, $id_departamento, $nombreDepartamento, $unidadesTotales]);
+      } else {
+        $localConnection->goQuery('UPDATE lotes_detalles SET departamento = ?, unidades_solicitadas = ? WHERE id_departamento = ? AND id_orden = ?', [$nombreDepartamento, $unidadesTotales, $id_departamento, $id_orden]);
+      }
+
+      $localConnection->commit();
+    } catch (Exception $e) {
+      $localConnection->rollBack();
+      $response->getBody()->write(json_encode(['error' => 'No se pudo guardar la asignación: ' . $e->getMessage()]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+    }
+
+    $localConnection->disconnect();
+    $object = ['success' => true, 'resultados' => $resultados];
+    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
   $app->post('/lotes/empleados/reasignar-masiva', function (Request $request, Response $response, $args) {
     $data = $request->getParsedBody();
 

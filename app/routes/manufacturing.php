@@ -3150,13 +3150,17 @@ return function (App $app) {
             c.prioridad,
             (z.unidades_produccion + COALESCE((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0)) AS unidades_solicitadas,
             -- Unidades: para Corte usar piezas mandadas a cortar (inventario_corte), con fallback a ajustes y cantidad original.
+            -- Para el resto de departamentos, si el empleado tiene una asignación granular
+            -- (ldep) para esta línea de producto, usar esa cantidad asignada en vez de la
+            -- cantidad total del producto -- así un empleado que solo tiene 400 de 1000
+            -- piezas asignadas ve y reporta sobre 400, no sobre las 1000.
             CASE WHEN {$args['id_departamento']} = 3 THEN
                 COALESCE(
                     (SELECT SUM(ic2.cantidad) FROM inventario_corte ic2 WHERE ic2.id_ordenes_productos = a._id AND ic2.id_orden = a.id_orden),
                     (a.cantidad + COALESCE((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0))
                 )
             ELSE
-                a.cantidad
+                COALESCE(ldep.cantidad_asignada, a.cantidad)
             END AS unidades,
             CASE WHEN {$args['id_departamento']} = 3 THEN
                 COALESCE(
@@ -3164,8 +3168,9 @@ return function (App $app) {
                     (a.cantidad + COALESCE((SELECT (lca.cantidad_ajustada - lca.cantidad_solicitada) FROM lotes_corte_ajustes lca WHERE lca.id_ordenes_productos = a._id AND lca.id_orden = a.id_orden LIMIT 1), 0))
                 )
             ELSE
-                a.cantidad
+                COALESCE(ldep.cantidad_asignada, a.cantidad)
             END AS piezas_actuales,
+            ldep.cantidad_asignada AS cantidad_asignada_empleado,
             y.fecha_inicio,
             y.fecha_terminado,
             $fechaEntregaSelect,
@@ -3218,6 +3223,8 @@ return function (App $app) {
             lotes_detalles_empleados_asignados y
             -- Unimos con los productos a través del id_orden (menos preciso, pero necesario con los datos actuales)
             JOIN ordenes_productos a ON y.id_orden = a.id_orden
+            -- Asignación granular por producto (si existe) para esta asignación de empleado + esta línea
+            LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = y._id AND ldep.id_ordenes_productos = a._id
             -- ========================================================================
             JOIN ordenes d ON a.id_orden = d._id
             LEFT JOIN lotes c ON c.id_orden = y.id_orden -- Unido a través de 'y'
@@ -3226,12 +3233,20 @@ return function (App $app) {
             LEFT JOIN products_tiempos_de_produccion tp ON tp.id_product = p._id AND tp.id_departamento = {$args['id_departamento']}
             LEFT JOIN reposiciones x ON x.id_orden = d._id AND x.id_empleado = y.id_empleado AND x.id_ordenes_productos = a._id
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = d._id
-        WHERE  
+        WHERE
             (y.id_empleado = {$args['id_empleado']})
             AND (d.status LIKE 'En espera' OR d.status LIKE 'activa' OR d.status LIKE 'pausada')
-            AND p.fisico = 1 
+            AND p.fisico = 1
             AND y.id_departamento = {$args['id_departamento']} -- El filtro del departamento ahora se aplica sobre la tabla 'y'
             AND y.fecha_terminado IS NULL -- Excluir tareas terminadas
+            AND (
+                -- Si esta asignación de empleado tiene desglose granular por producto,
+                -- solo mostrar las líneas que le corresponden a él. Si NO tiene desglose
+                -- (asignación simple/legada), mostrar todos los productos de la orden
+                -- como siempre (comportamiento sin cambios).
+                ldep._id IS NOT NULL
+                OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep2 WHERE ldep2.id_lotes_detalles_empleados_asignados = y._id)
+            )
         ORDER BY
             ofo.orden_fila ASC,
             a.id_orden DESC,
