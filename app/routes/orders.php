@@ -1157,8 +1157,8 @@ return function (App $app) {
             (SELECT valor_final FROM inventario_movimientos WHERE id_orden = y.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_final,
             MAX(c.prioridad) AS prioridad,
             MAX(z.unidades_produccion) AS unidades_solicitadas,
-            SUM(a.cantidad) AS unidades,
-            SUM(a.cantidad) AS piezas_actuales,
+            SUM(COALESCE(ldep5.cantidad_asignada, a.cantidad)) AS unidades,
+            SUM(COALESCE(ldep5.cantidad_asignada, a.cantidad)) AS piezas_actuales,
             MAX(y.fecha_inicio) AS fecha_inicio,
             MAX(y.fecha_terminado) AS fecha_terminado,
             MAX(TO_CHAR(NULLIF(d.fecha_entrega, '')::date, 'DD-MM-YYYY')) AS fecha_entrega,
@@ -1193,9 +1193,11 @@ return function (App $app) {
             LEFT JOIN lotes_historico_solicitadas z ON z.id_orden = a.id_orden
             LEFT JOIN reposiciones x ON x.id_orden = d._id AND x.id_empleado = y.id_empleado AND x.id_ordenes_productos = a._id
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = d._id
-        WHERE  
+            LEFT JOIN lotes_detalles_empleados_productos ldep5 ON ldep5.id_lotes_detalles_empleados_asignados = y._id AND ldep5.id_ordenes_productos = a._id
+        WHERE
             (y.id_empleado = {$idEmpleado})
             AND (y.id_departamento = {$idDepartamento})
+            AND (ldep5._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep5_chk WHERE ldep5_chk.id_lotes_detalles_empleados_asignados = y._id))
         GROUP BY
             y.id_orden, y.id_empleado, y.id_departamento
         ORDER BY
@@ -1214,8 +1216,8 @@ return function (App $app) {
             (SELECT valor_final FROM inventario_movimientos WHERE id_orden = y.id_orden AND departamento = 'Impresión' LIMIT 1) AS valor_final,
             MAX(c.prioridad) AS prioridad,
             MAX(z.unidades_produccion) AS unidades_solicitadas,
-            SUM(a.cantidad) AS unidades,
-            SUM(a.cantidad) AS piezas_actuales,
+            SUM(COALESCE(ldep5.cantidad_asignada, a.cantidad)) AS unidades,
+            SUM(COALESCE(ldep5.cantidad_asignada, a.cantidad)) AS piezas_actuales,
             MAX(y.fecha_inicio) AS fecha_inicio,
             MAX(y.fecha_terminado) AS fecha_terminado,
             MAX(DATE_FORMAT(d.fecha_entrega, '%d-%m-%Y')) AS fecha_entrega,
@@ -1250,10 +1252,12 @@ return function (App $app) {
             LEFT JOIN lotes_historico_solicitadas z ON z.id_orden = a.id_orden
             LEFT JOIN reposiciones x ON x.id_orden = d._id AND x.id_empleado = y.id_empleado AND x.id_ordenes_productos = a._id
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = d._id
+            LEFT JOIN lotes_detalles_empleados_productos ldep5 ON ldep5.id_lotes_detalles_empleados_asignados = y._id AND ldep5.id_ordenes_productos = a._id
         -- ============================ WHERE CORREGIDO Y ALINEADO ============================
-        WHERE  
+        WHERE
             (y.id_empleado = {$idEmpleado})
             AND (y.id_departamento = {$idDepartamento})
+            AND (ldep5._id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM lotes_detalles_empleados_productos ldep5_chk WHERE ldep5_chk.id_lotes_detalles_empleados_asignados = y._id))
         -- ========================================================================
         GROUP BY
             y.id_orden, y.id_empleado, y.id_departamento

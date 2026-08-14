@@ -1504,20 +1504,29 @@ return function (App $app) {
     $es_supervisor = isset($data['creado_por_supervisor']) && $data['creado_por_supervisor'] == '1';
 
     // 2. OBTENER ORDEN PROCESO ACTUAL DE LA ORDEN PRINCIPAL, ASÍ COMO EL DEPARTAMENTO Y OPERARIO ACTIVOS
+    // Con asignación granular (2+ empleados en el mismo departamento, cada uno con
+    // productos distintos), puede haber varias filas de lotes_detalles_empleados_asignados
+    // para el mismo departamento -- se prefiere al empleado cuya asignación granular
+    // incluye EL PRODUCTO de esta reposición ($producto['_id']), en vez de tomar
+    // arbitrariamente el primero (LIMIT 1 sin criterio de desempate). Si nadie tiene
+    // asignación granular para este producto (caso legado/simple), el desempate no
+    // cambia nada y se mantiene el comportamiento de siempre.
     $sqlActiveDepts = "SELECT dep.orden_proceso, dep.departamento, ldea.id_departamento, ldea.id_empleado
                        FROM lotes_detalles_empleados_asignados ldea
                        JOIN departamentos dep ON dep._id = ldea.id_departamento
+                       LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = ldea._id AND ldep.id_ordenes_productos = {$producto['_id']}
                        WHERE ldea.id_orden = {$id_orden} AND ldea.fecha_terminado IS NULL
-                       ORDER BY dep.orden_proceso ASC LIMIT 1";
+                       ORDER BY dep.orden_proceso ASC, (CASE WHEN ldep._id IS NOT NULL THEN 0 ELSE 1 END) ASC LIMIT 1";
     $activeDeptRes = $localConnection->goQuery($sqlActiveDepts);
-    
+
     // Si no hay tareas pendientes de la orden, buscamos el departamento de mayor orden_proceso de la orden ya terminado
     if (empty($activeDeptRes)) {
       $sqlMaxFinished = "SELECT dep.orden_proceso, dep.departamento, ldea.id_departamento, ldea.id_empleado
                          FROM lotes_detalles_empleados_asignados ldea
                          JOIN departamentos dep ON dep._id = ldea.id_departamento
+                         LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = ldea._id AND ldep.id_ordenes_productos = {$producto['_id']}
                          WHERE ldea.id_orden = {$id_orden}
-                         ORDER BY dep.orden_proceso DESC LIMIT 1";
+                         ORDER BY dep.orden_proceso DESC, (CASE WHEN ldep._id IS NOT NULL THEN 0 ELSE 1 END) ASC LIMIT 1";
       $activeDeptRes = $localConnection->goQuery($sqlMaxFinished);
     }
 
@@ -1910,12 +1919,22 @@ return function (App $app) {
       }
 
       // CALCULAR PROGRESO DESDE lotes_detalles_empleados_asignados
+      // Un departamento solo cuenta como terminado cuando TODOS los empleados
+      // asignados a él (puede haber 2+ desde la asignación granular por
+      // producto) tienen fecha_terminado -- MAX() solo, sin esta guardia,
+      // ignoraba el NULL de un empleado que aún no había terminado su parte
+      // en cuanto CUALQUIER otro sí, inflando el progreso mostrado (incluso
+      // al cliente final vía clientes-progreso.vue). Mismo patrón ya usado
+      // en /ordenes/proyeccion-entrega (manufacturing.php).
       $sql = "SELECT
                 ldea.id_departamento,
                 MAX(dep.departamento) AS departamento,
                 MAX(dep.orden_proceso) AS orden_proceso,
                 MIN(ldea.fecha_inicio) AS fecha_inicio,
-                MAX(ldea.fecha_terminado) AS fecha_terminado
+                CASE
+                    WHEN COUNT(ldea.id_empleado) = COUNT(ldea.fecha_terminado) THEN MAX(ldea.fecha_terminado)
+                    ELSE NULL
+                END AS fecha_terminado
               FROM lotes_detalles_empleados_asignados ldea
               JOIN departamentos dep ON dep._id = ldea.id_departamento
               WHERE ldea.id_orden = " . $args['id_orden'] . "
