@@ -455,6 +455,24 @@ return function (App $app) {
                 // Empresa aún no migrada a catalogo_monedas -- no es un error real.
             }
             // FIN DE DATOS ADICIONALES PARA EL WIZARD
+
+            // WIZARD OPERATIVO (fase 2, posterior al institucional) -- se envuelve en
+            // try/catch porque empresas creadas antes de esta funcionalidad todavía no
+            // tienen las columnas wizard_operativo_* en su tabla config.
+            try {
+                $sql_wizard_operativo = 'SELECT wizard_operativo_departamentos, wizard_operativo_empleados,
+                    wizard_operativo_categorias, wizard_operativo_productos, wizard_operativo_insumos,
+                    wizard_operativo_comisiones, wizard_operativo_impresoras, wizard_operativo_tintas,
+                    wizard_operativo_tallas_telas, wizard_operativo_whatsapp, wizard_operativo_completo,
+                    wizard_operativo_omitido_en
+                    FROM config WHERE _id = 1';
+                $wizard_data = $localConnection->goQuery($sql_wizard_operativo);
+                if (!empty($wizard_data)) {
+                    $object['wizard_operativo'] = array_map('boolval', $wizard_data[0]);
+                }
+            } catch (\Exception $e) {
+                // Empresa creada antes del wizard operativo -- no es un error real.
+            }
         } else {
             $object['msg'] = 'Error durante el inicio de sesión. No se pudieron cargar todos los datos de la empresa.';
             $object['errors'] = $error_messages;
@@ -585,6 +603,24 @@ return function (App $app) {
                 }
             } catch (\Exception $e) {
                 // Empresa aún no migrada a catalogo_monedas -- no es un error real.
+            }
+
+            // WIZARD OPERATIVO (fase 2, posterior al institucional) -- ver comentario
+            // equivalente en /login. Permite que el frontend vuelva a evaluar el gate
+            // tras un F5 a mitad del wizard operativo.
+            try {
+                $sql_wizard_operativo = 'SELECT wizard_operativo_departamentos, wizard_operativo_empleados,
+                    wizard_operativo_categorias, wizard_operativo_productos, wizard_operativo_insumos,
+                    wizard_operativo_comisiones, wizard_operativo_impresoras, wizard_operativo_tintas,
+                    wizard_operativo_tallas_telas, wizard_operativo_whatsapp, wizard_operativo_completo,
+                    wizard_operativo_omitido_en
+                    FROM config WHERE _id = 1';
+                $wizard_data = $localConnection->goQuery($sql_wizard_operativo);
+                if (!empty($wizard_data)) {
+                    $object['wizard_operativo'] = array_map('boolval', $wizard_data[0]);
+                }
+            } catch (\Exception $e) {
+                // Empresa creada antes del wizard operativo -- no es un error real.
             }
         }
 

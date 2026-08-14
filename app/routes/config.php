@@ -4,6 +4,62 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
 
+// Claves válidas de pasos del wizard operativo (fase 2, posterior al wizard institucional).
+// Cada clave corresponde a la columna config.wizard_operativo_{clave}.
+const WIZARD_OPERATIVO_PASOS = [
+    'departamentos', 'empleados', 'categorias', 'productos', 'insumos',
+    'comisiones', 'impresoras', 'tintas', 'tallas_telas', 'whatsapp',
+];
+
+// Pasos que se marcan automáticamente como "no aplica" cuando el cliente desactivó
+// (en departamentos, paso 1) todos los departamentos de tipo impresión/estampado.
+const WIZARD_OPERATIVO_PASOS_CONDICIONALES = ['impresoras', 'tintas'];
+
+/**
+ * Calcula el estado completo del wizard operativo: qué pasos están revisados,
+ * cuáles no aplican (según los departamentos activos) y si el wizard, en su
+ * conjunto, ya puede considerarse completo.
+ */
+function obtenerEstadoWizardOperativo(LocalDB $db): array
+{
+    $columnas = array_map(fn($paso) => 'wizard_operativo_' . $paso, WIZARD_OPERATIVO_PASOS);
+    $sql = 'SELECT ' . implode(', ', $columnas) . ', wizard_operativo_omitido_en FROM config WHERE _id = 1';
+    $configRows = $db->goQuery($sql);
+    $configRow = !empty($configRows) ? $configRows[0] : [];
+
+    $departamentosActivos = $db->goQuery('SELECT tipo FROM departamentos WHERE eliminado = 0');
+    $tiposActivos = array_map(
+        fn($d) => $d['tipo'] ?? null,
+        is_array($departamentosActivos) ? $departamentosActivos : []
+    );
+    $impresionAplica = count(array_intersect($tiposActivos, ['impresion', 'estampado'])) > 0;
+
+    $pasos = [];
+    $completo = true;
+    foreach (WIZARD_OPERATIVO_PASOS as $paso) {
+        $columna = 'wizard_operativo_' . $paso;
+        $revisado = !empty($configRow[$columna]);
+        $noAplica = in_array($paso, WIZARD_OPERATIVO_PASOS_CONDICIONALES, true) && !$impresionAplica;
+        $satisfecho = $revisado || $noAplica;
+
+        $pasos[$paso] = [
+            'revisado' => $revisado,
+            'no_aplica' => $noAplica,
+            'satisfecho' => $satisfecho,
+        ];
+
+        if (!$satisfecho) {
+            $completo = false;
+        }
+    }
+
+    return [
+        'pasos' => $pasos,
+        'wizard_operativo_completo' => $completo,
+        'wizard_operativo_omitido_en' => $configRow['wizard_operativo_omitido_en'] ?? null,
+    ];
+}
+
 return function (App $app) {
 
 
@@ -1230,6 +1286,112 @@ return function (App $app) {
 
         $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
         return $response->withHeader('Content-Type', 'application/json')->withStatus($statusCode);
+    });
+
+    // WIZARD OPERATIVO (fase 2 de configuración inicial) --------------------
+    // Circuito normal autenticado (Authorization: <id_empresa> vía IdEmpresaMiddleware),
+    // a diferencia del wizard institucional que corre antes de tener sesión.
+
+    $app->get('/wizard-operativo/estado', function (Request $request, Response $response) {
+        if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
+            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        try {
+            $db = new LocalDB();
+            $estado = obtenerEstadoWizardOperativo($db);
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode($estado, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error en la base de datos: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    $app->post('/wizard-operativo/paso/{clave}/completar', function (Request $request, Response $response, array $args) {
+        if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
+            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        $clave = $args['clave'];
+        if (!in_array($clave, WIZARD_OPERATIVO_PASOS, true)) {
+            $response->getBody()->write(json_encode(['error' => 'Paso de wizard operativo desconocido: ' . $clave]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        try {
+            $db = new LocalDB();
+
+            $columna = 'wizard_operativo_' . $clave;
+            $db->goQuery("UPDATE config SET {$columna} = 1 WHERE _id = 1");
+
+            $estado = obtenerEstadoWizardOperativo($db);
+            $db->goQuery(
+                'UPDATE config SET wizard_operativo_completo = ? WHERE _id = 1',
+                [$estado['wizard_operativo_completo'] ? 1 : 0]
+            );
+
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode($estado, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error en la base de datos: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    $app->post('/wizard-operativo/continuar-mas-tarde', function (Request $request, Response $response) {
+        if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
+            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        try {
+            $db = new LocalDB();
+            $db->goQuery('UPDATE config SET wizard_operativo_omitido_en = NOW() WHERE _id = 1');
+            $estado = obtenerEstadoWizardOperativo($db);
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode($estado, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error en la base de datos: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
+    // Solo para QA/soporte interno (no expuesto en la UI): permite volver a probar
+    // el wizard operativo en una empresa de prueba sin recrearla desde cero.
+    $app->post('/wizard-operativo/reset', function (Request $request, Response $response) {
+        if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
+            $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        try {
+            $db = new LocalDB();
+            $columnasReset = implode(', ', array_map(
+                fn($paso) => "wizard_operativo_{$paso} = 0",
+                WIZARD_OPERATIVO_PASOS
+            ));
+            $db->goQuery(
+                "UPDATE config SET {$columnasReset}, wizard_operativo_completo = 0, wizard_operativo_omitido_en = NULL WHERE _id = 1"
+            );
+
+            $estado = obtenerEstadoWizardOperativo($db);
+            $db->disconnect();
+
+            $response->getBody()->write(json_encode($estado, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode(['error' => 'Error en la base de datos: ' . $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
     });
 
 };
