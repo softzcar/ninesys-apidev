@@ -1783,7 +1783,20 @@ return function (App $app) {
   });
 
   $app->post('/lotes/empleados/asignar-productos', function (Request $request, Response $response, $args) {
+    // Esta app no tiene BodyParsingMiddleware para JSON (el resto de endpoints usa
+    // form-urlencoded), así que un payload enviado como application/json (el caso de
+    // este endpoint, por la estructura anidada de "asignaciones") llega vacío por
+    // getParsedBody(). Se lee el cuerpo crudo como respaldo, sin tocar la configuración
+    // global de Slim ni afectar a ningún otro endpoint.
     $body = $request->getParsedBody();
+    if (empty($body)) {
+      $raw = (string) $request->getBody();
+      $decoded = json_decode($raw, true);
+      if (is_array($decoded)) {
+        $body = $decoded;
+      }
+    }
+    $body = $body ?? [];
     $id_orden = intval($body['id_orden'] ?? 0);
     $id_departamento = intval($body['id_departamento'] ?? 0);
     $asignaciones = $body['asignaciones'] ?? null;
