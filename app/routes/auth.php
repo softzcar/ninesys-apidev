@@ -134,118 +134,10 @@ return function (App $app) {
 
         $empresa_data = $data_empresa[0];
 
-        // Paso 4: Ejecutar la validación de configuración
-        $datos_faltantes = [];
-
-        // Verificar datos de la empresa (siempre se verifica)
-        if (empty(trim($empresa_data['nombre'] ?? ''))) {
-            $datos_faltantes[] = 'Nombre de la empresa (en empresas)';
-        }
-        if (empty(trim($empresa_data['numero_registro_legal'] ?? ''))) {
-            $datos_faltantes[] = 'Número de registro legal de la empresa (en empresas)';
-        }
-        if (empty(trim($empresa_data['direccion'] ?? ''))) {
-            $datos_faltantes[] = 'Dirección de la empresa (en empresas)';
-        }
-        if (empty(trim($empresa_data['telefono'] ?? ''))) {
-            $datos_faltantes[] = 'Teléfono de la empresa (en empresas)';
-        }
-        if (empty(trim($empresa_data['email'] ?? ''))) {
-            $datos_faltantes[] = 'Email de la empresa (en empresas)';
-        }
-        if (empty($empresa_data['id_pais'])) {
-            $datos_faltantes[] = 'País de la empresa (en empresas)';
-        }
-
-        // Verificar que al menos UN administrador tenga teléfono
-        $sql_admin_check = "SELECT id_usuario FROM empresas_usuarios WHERE id_empresa = ? AND departamento = 'Administración' AND telefono IS NOT NULL AND telefono != '' LIMIT 1";
-        $admin_with_phone = $localConnection->goQuery($sql_admin_check, [$usuario_data['id_empresa']]);
-
-        if (empty($admin_with_phone)) {
-            $datos_faltantes[] = 'Teléfono del usuario administrador';
-        }
-
-        // Paso 4: Decisión crítica
-        if (!empty($datos_faltantes)) {
-            $error_response_object = [
-                'company_full_config' => false,
-                'datos_faltantes' => $datos_faltantes,
-                'datos_empresa' => [
-                    'nombre' => $empresa_data['nombre'],
-                    'numero_registro_legal' => $empresa_data['numero_registro_legal'],
-                    'direccion' => $empresa_data['direccion'],
-                    'telefono' => $empresa_data['telefono'],
-                    'email' => $empresa_data['email'],
-                    'pais' => $empresa_data['pais'],
-                    'id_pais' => $empresa_data['id_pais'] !== null ? (int) $empresa_data['id_pais'] : null,
-                    'timezone' => resolverTimezoneEmpresa($localConnection, $empresa_data)
-                ],
-                'datos_usuario' => [
-                    'nombre' => $usuario_data['nombre'],
-                    'telefono' => $usuario_data['telefono'],
-                    'id_empleado' => $usuario_data['id_usuario']
-                ]
-            ];
-
-            // AÑADIR DATOS ADICIONALES SI LA CONFIGURACIÓN ESTÁ INCOMPLETA
-            $error_response_object['datos_empresa']['horario_laboral'] = json_decode($empresa_data['horario_laboral']);
-            $error_response_object['datos_empresa']['tipos_de_monedas'] = json_decode($empresa_data['tipos_de_monedas']);
-
-            // Consultar gastos fijos de la empresa
-            $sql_gastos = "SELECT _id, nombre, descripcion, monto, moneda, periodicidad, estatus FROM api_empresas.empresas_gastos WHERE id_empresa = ? AND estatus = 'activo'";
-            $gastos_data = $localConnection->goQuery($sql_gastos, [$usuario_data['id_empresa']]);
-
-            if (!empty($gastos_data)) {
-                $error_response_object['datos_empresa']['gastos_fijos'] = $gastos_data;
-            }
-
-            $connectionDetails = $localConnection->getConnectionDetails($usuario_data['id_empresa']);
-            if ($connectionDetails) {
-                $companyDsn = (DB_DRIVER === 'pgsql') 
-                    ? 'pgsql:host=' . $connectionDetails['db_host'] . ';port=' . (getenv('DB_PORT') ?: '5432') . ';dbname=' . $connectionDetails['db_name']
-                    : 'mysql:host=' . $connectionDetails['db_host'] . ';dbname=' . $connectionDetails['db_name'];
-                $localConnection->switchDatabase($companyDsn, $connectionDetails['db_user'], $connectionDetails['db_password']);
-
-                $sql_config = 'SELECT sys_mostrar_detalle_terminar_indicidual, sys_mostrar_rollo_en_empleado_corte, sys_mostrar_rollo_en_empleado_estampado, sys_mostrar_insumo_en_empleado_costura, sys_mostrar_insumo_en_empleado_limpieza, sys_mostrar_insumo_en_empleado_revision, sys_comision_de_costura, multiplicador_precio FROM config WHERE _id = 1';
-                $config_data = $localConnection->goQuery($sql_config);
-
-                if (!empty($config_data)) {
-                    $error_response_object['datos_personalizacion'] = [
-                        'sys_mostrar_detalle_terminar_indicidual' => (bool) $config_data[0]['sys_mostrar_detalle_terminar_indicidual'],
-                        'sys_mostrar_rollo_en_empleado_corte' => (bool) $config_data[0]['sys_mostrar_rollo_en_empleado_corte'],
-                        'sys_mostrar_rollo_en_empleado_estampado' => (bool) $config_data[0]['sys_mostrar_rollo_en_empleado_estampado'],
-                        'sys_mostrar_insumo_en_empleado_costura' => (bool) $config_data[0]['sys_mostrar_insumo_en_empleado_costura'],
-                        'sys_mostrar_insumo_en_empleado_limpieza' => (bool) $config_data[0]['sys_mostrar_insumo_en_empleado_limpieza'],
-                        'sys_mostrar_insumo_en_empleado_revision' => (bool) $config_data[0]['sys_mostrar_insumo_en_empleado_revision'],
-                        'sys_comision_de_costura' => (bool) $config_data[0]['sys_comision_de_costura'],
-                        'multiplicador_precio' => (float) $config_data[0]['multiplicador_precio'],
-                    ];
-                }
-
-                // Moneda base real de la empresa (Fase 4 del rediseño de monedas) --
-                // reemplaza la asunción hardcodeada de que el dólar siempre es la base.
-                // catalogo_monedas solo existe hoy en empresas ya migradas (Fase 2, ej.
-                // 194); en el resto la tabla no existe todavía -- se captura ese caso
-                // puntual para no romper el login de empresas aún no migradas.
-                try {
-                    $sql_moneda_base = 'SELECT codigo, nombre, simbolo FROM catalogo_monedas WHERE es_base = 1 AND eliminado = 0 LIMIT 1';
-                    $moneda_base_data = $localConnection->goQuery($sql_moneda_base);
-                    if (!empty($moneda_base_data)) {
-                        $error_response_object['datos_empresa']['moneda_base'] = [
-                            'codigo' => $moneda_base_data[0]['codigo'],
-                            'nombre' => $moneda_base_data[0]['nombre'],
-                            'simbolo' => $moneda_base_data[0]['simbolo'],
-                        ];
-                    }
-                } catch (\Exception $e) {
-                    // Empresa aún no migrada a catalogo_monedas -- no es un error real.
-                }
-            }
-            // FIN DE DATOS ADICIONALES
-
-            $response->getBody()->write(json_encode($error_response_object, JSON_NUMERIC_CHECK));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
-        }
+        // Los datos institucionales (empresa, admin, monedas, horario, personalización,
+        // gastos) ya NO bloquean el login -- se fusionaron con el wizard operativo
+        // (fase 2) como pasos posponibles con valor por defecto. Ver
+        // OperativaWizard.vue y la tabla config.wizard_operativo_*.
 
         // Paso 5: Si la configuración está completa, continuar con el login normal
 
@@ -460,7 +352,9 @@ return function (App $app) {
             // try/catch porque empresas creadas antes de esta funcionalidad todavía no
             // tienen las columnas wizard_operativo_* en su tabla config.
             try {
-                $sql_wizard_operativo = 'SELECT wizard_operativo_departamentos, wizard_operativo_empleados,
+                $sql_wizard_operativo = 'SELECT wizard_operativo_admin, wizard_operativo_empresa,
+                    wizard_operativo_monedas, wizard_operativo_horario, wizard_operativo_personalizacion,
+                    wizard_operativo_gastos, wizard_operativo_departamentos, wizard_operativo_empleados,
                     wizard_operativo_categorias, wizard_operativo_productos, wizard_operativo_insumos,
                     wizard_operativo_comisiones, wizard_operativo_impresoras, wizard_operativo_tintas,
                     wizard_operativo_tallas_telas, wizard_operativo_whatsapp, wizard_operativo_completo,
@@ -609,7 +503,9 @@ return function (App $app) {
             // equivalente en /login. Permite que el frontend vuelva a evaluar el gate
             // tras un F5 a mitad del wizard operativo.
             try {
-                $sql_wizard_operativo = 'SELECT wizard_operativo_departamentos, wizard_operativo_empleados,
+                $sql_wizard_operativo = 'SELECT wizard_operativo_admin, wizard_operativo_empresa,
+                    wizard_operativo_monedas, wizard_operativo_horario, wizard_operativo_personalizacion,
+                    wizard_operativo_gastos, wizard_operativo_departamentos, wizard_operativo_empleados,
                     wizard_operativo_categorias, wizard_operativo_productos, wizard_operativo_insumos,
                     wizard_operativo_comisiones, wizard_operativo_impresoras, wizard_operativo_tintas,
                     wizard_operativo_tallas_telas, wizard_operativo_whatsapp, wizard_operativo_completo,

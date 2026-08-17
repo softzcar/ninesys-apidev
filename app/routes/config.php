@@ -4,9 +4,11 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
 
-// Claves válidas de pasos del wizard operativo (fase 2, posterior al wizard institucional).
-// Cada clave corresponde a la columna config.wizard_operativo_{clave}.
+// Claves válidas de pasos del wizard de configuración (institucionales + operativos,
+// fusionados en un solo wizard). Cada clave corresponde a la columna
+// config.wizard_operativo_{clave}.
 const WIZARD_OPERATIVO_PASOS = [
+    'admin', 'empresa', 'monedas', 'horario', 'personalizacion', 'gastos',
     'departamentos', 'empleados', 'categorias', 'productos', 'insumos',
     'comisiones', 'impresoras', 'tintas', 'tallas_telas', 'whatsapp',
 ];

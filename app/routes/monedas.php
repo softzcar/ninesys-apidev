@@ -9,6 +9,11 @@ return function (App $app) {
   /** * CATALOGO_MONEDAS (Fase 5 del rediseño de monedas/métodos de pago) */
 
   $app->get('/monedas', function (Request $request, Response $response) {
+    if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
+      $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
+
     $localConnection = new LocalDB();
     $sql = 'SELECT * FROM catalogo_monedas WHERE eliminado = 0 ORDER BY es_base DESC, nombre';
     $rows = $localConnection->goQuery($sql);
