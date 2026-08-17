@@ -501,10 +501,12 @@ return function (App $app) {
     $object['disenos']['asignados'] = $localConnection->goQuery($sql);
 
     // BUSCAR PRODUCTOS DE DISEñO
+    // "price" ya no es columna de products desde el rediseño de precios (viven
+    // en products_prices, uno por tramo de cantidad) -- no se usaba en ningún
+    // lado del frontend, así que se quita en vez de agregar un JOIN sin uso real.
     $sql = "SELECT
             a._id id_producto,
             a.product,
-            a.price,
             a.comision
         FROM
             products a
