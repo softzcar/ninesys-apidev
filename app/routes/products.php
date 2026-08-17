@@ -1827,8 +1827,15 @@ return function (App $app) {
 
     $localConnection = new LocalDB();
 
-    // Líneas reales de la orden -- fuente de verdad de las cantidades a cubrir
-    $sqlLineas = 'SELECT _id, cantidad FROM ordenes_productos WHERE id_orden = ?';
+    // Líneas reales de la orden -- fuente de verdad de las cantidades a cubrir.
+    // Se excluyen los productos no físicos (diseño gráfico, productos digitales)
+    // vía products.fisico = 1: no se fabrican, así que no deben exigir asignación
+    // de personal ni contar hacia el total de unidades a cubrir en manufactura
+    // (mismo criterio ya aplicado en la asignación granular de productos).
+    $sqlLineas = 'SELECT op._id, op.cantidad
+      FROM ordenes_productos op
+      JOIN products p ON p._id = op.id_woo
+      WHERE op.id_orden = ? AND p.fisico = 1';
     $lineas = $localConnection->goQuery($sqlLineas, [$id_orden]);
     if (empty($lineas)) {
       $response->getBody()->write(json_encode(['error' => 'La orden no tiene productos.']));
