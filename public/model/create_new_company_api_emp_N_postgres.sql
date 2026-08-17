@@ -2554,6 +2554,7 @@ SELECT setval(pg_get_serial_sequence('catalogo_insumos_productos', '_id'), COALE
 SELECT setval(pg_get_serial_sequence('catalogo_telas', '_id'), COALESCE((SELECT MAX(_id) FROM catalogo_telas), 1));
 SELECT setval(pg_get_serial_sequence('catalogo_tintas', '_id'), COALESCE((SELECT MAX(_id) FROM catalogo_tintas), 1));
 SELECT setval(pg_get_serial_sequence('categories', '_id'), COALESCE((SELECT MAX(_id) FROM categories), 1));
+SELECT setval(pg_get_serial_sequence('products', '_id'), COALESCE((SELECT MAX(_id) FROM products), 1));
 SELECT setval(pg_get_serial_sequence('inventario', '_id'), COALESCE((SELECT MAX(_id) FROM inventario), 1));
 SELECT setval(pg_get_serial_sequence('products_attributes', '_id'), COALESCE((SELECT MAX(_id) FROM products_attributes), 1));
 SELECT setval(pg_get_serial_sequence('products_prices', '_id'), COALESCE((SELECT MAX(_id) FROM products_prices), 1));

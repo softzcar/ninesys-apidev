@@ -766,7 +766,17 @@ class WooMe
                 '" . $es_diseno . "',
                 '" . $stock_quantity . "'
             );";
-      $localConnection->goQuery($sql);
+      $insertResult = $localConnection->goQuery($sql);
+      // goQuery() devuelve un array "suave" con status=error para
+      // violaciones de índice único (ej. secuencia identity desincronizada
+      // por datos precargados con _id explícito) en vez de lanzar excepción.
+      // Si no se valida aquí, el SELECT MAX(_id) de abajo encuentra el
+      // producto existente más reciente y esta función lo devuelve como si
+      // fuera el recién creado -- un falso éxito silencioso.
+      if (is_array($insertResult) && ($insertResult['status'] ?? null) === 'error') {
+        $localConnection->disconnect();
+        return ['error' => 'No se pudo crear el producto: ' . $insertResult['message']];
+      }
       $sql = 'SELECT MAX(_id) id from products';
       $requestNewProduct['product'] = $localConnection->goQuery($sql);
       $newID = $requestNewProduct['product'][0]['id'];
