@@ -606,8 +606,10 @@ return function (App $app) {
 
       // 3. Eliminar referencias en api_empresas. empresas_usuarios y
       // empresas_gastos tienen ON DELETE CASCADE real desde empresas (se
-      // limpian solos); empresas_usuarios_departamentos no tiene FK, se
-      // limpia a mano.
+      // limpian solos); empresas_usuarios_departamentos y
+      // empresas_usuarios_empresas no tienen FK, se limpian a mano.
+      $stmt = $pdo->prepare('DELETE FROM empresas_usuarios_empresas WHERE id_empresa = ?');
+      $stmt->execute([$id_empresa]);
       $stmt = $pdo->prepare('DELETE FROM empresas_usuarios_departamentos WHERE id_empleado IN (SELECT id_usuario FROM empresas_usuarios WHERE id_empresa = ?)');
       $stmt->execute([$id_empresa]);
       $stmt = $pdo->prepare('DELETE FROM empresas WHERE id_empresa = ?');
@@ -798,8 +800,13 @@ return function (App $app) {
       }
 
       // 5. Crear registro en empresas_usuarios_departamentos
-      $stmt_dept = $pdo->prepare('INSERT INTO empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES (?, 5)');
-      $stmt_dept->execute([$id_usuario]);
+      $stmt_dept = $pdo->prepare('INSERT INTO empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, 5, ?)');
+      $stmt_dept->execute([$id_usuario, $id_empresa]);
+
+      // 5b. Crear registro en empresas_usuarios_empresas (requerido por el JOIN
+      // de GET /empleados; sin esta fila el empleado no aparece en ningún listado)
+      $stmt_ue = $pdo->prepare('INSERT INTO empresas_usuarios_empresas (id_usuario, id_empresa, activo) VALUES (?, ?, 1)');
+      $stmt_ue->execute([$id_usuario, $id_empresa]);
 
       // 6. Crear empleados de ejemplo
       error_log("DEBUG: Creando empleados de ejemplo");
@@ -809,7 +816,7 @@ return function (App $app) {
         [
           'nombre' => 'Empleado Impresión',
           'email' => 'impresion@empresa' . $id_empresa . '.com',
-          'telefono' => '5841255501820',
+          'telefono' => '584121000001',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Impresión',
           'id_departamento' => 1,
@@ -823,7 +830,7 @@ return function (App $app) {
         [
           'nombre' => 'Empleado Estampado',
           'email' => 'estampado@empresa' . $id_empresa . '.com',
-          'telefono' => '5841487633910',
+          'telefono' => '584141000002',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Estampado',
           'id_departamento' => 2,
@@ -836,7 +843,7 @@ return function (App $app) {
         [
           'nombre' => 'Empleado Corte',
           'email' => 'corte@empresa' . $id_empresa . '.com',
-          'telefono' => '5841623477050',
+          'telefono' => '584161000003',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Corte',
           'id_departamento' => 3,
@@ -849,7 +856,7 @@ return function (App $app) {
         [
           'nombre' => 'Empleado Costura',
           'email' => 'costura@empresa' . $id_empresa . '.com',
-          'telefono' => '5842211299380',
+          'telefono' => '584241000004',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Costura',
           'id_departamento' => 4,
@@ -862,7 +869,7 @@ return function (App $app) {
         [
           'nombre' => 'Empleado Diseño',
           'email' => 'diseno@empresa' . $id_empresa . '.com',
-          'telefono' => '5842460154200',
+          'telefono' => '584261000005',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Diseño',
           'id_departamento' => 7,
@@ -875,7 +882,7 @@ return function (App $app) {
         [
           'nombre' => 'Empleado Comercialización',
           'email' => 'comercializacion@empresa' . $id_empresa . '.com',
-          'telefono' => '5841472588060',
+          'telefono' => '584121000006',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Comercialización',
           'id_departamento' => 6,
@@ -888,7 +895,7 @@ return function (App $app) {
         [
           'nombre' => 'Empleado Producción',
           'email' => 'produccion@empresa' . $id_empresa . '.com',
-          'telefono' => '5841298745630',
+          'telefono' => '584141000007',
           'password' => bin2hex(random_bytes(8)),
           'departamento' => 'Producción',
           'id_departamento' => 8,
@@ -923,8 +930,13 @@ return function (App $app) {
         $id_empleado = $pdo->lastInsertId();
 
         // Crear registro en empresas_usuarios_departamentos
-        $stmt_dept = $pdo->prepare('INSERT INTO empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES (?, ?)');
-        $stmt_dept->execute([$id_empleado, $empleado_data['id_departamento']]);
+        $stmt_dept = $pdo->prepare('INSERT INTO empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, ?, ?)');
+        $stmt_dept->execute([$id_empleado, $empleado_data['id_departamento'], $id_empresa]);
+
+        // Crear registro en empresas_usuarios_empresas (requerido por el JOIN
+        // de GET /empleados; sin esta fila el empleado no aparece en ningún listado)
+        $stmt_ue = $pdo->prepare('INSERT INTO empresas_usuarios_empresas (id_usuario, id_empresa, activo) VALUES (?, ?, 1)');
+        $stmt_ue->execute([$id_empleado, $id_empresa]);
 
         $empleados_creados[] = [
           'id_empleado' => $id_empleado,
