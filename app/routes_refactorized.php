@@ -827,6 +827,11 @@ return function (App $app) {
       $stmt_dept = $pdo->prepare('INSERT INTO empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES (?, 5)');
       $stmt_dept->execute([$id_usuario]);
 
+      // 5b. Crear registro en empresas_usuarios_empresas (requerido por el JOIN
+      // de GET /empleados; sin esta fila el empleado no aparece en ningún listado)
+      $stmt_ue = $pdo->prepare('INSERT INTO empresas_usuarios_empresas (id_usuario, id_empresa, activo) VALUES (?, ?, 1)');
+      $stmt_ue->execute([$id_usuario, $id_empresa]);
+
       // 6. Crear empleados de ejemplo
       error_log("DEBUG: Creando empleados de ejemplo");
 
@@ -938,6 +943,11 @@ return function (App $app) {
         // Crear registro en empresas_usuarios_departamentos
         $stmt_dept = $pdo->prepare('INSERT INTO empresas_usuarios_departamentos (id_empleado, id_departamento) VALUES (?, ?)');
         $stmt_dept->execute([$id_empleado, $empleado_data['id_departamento']]);
+
+        // Crear registro en empresas_usuarios_empresas (requerido por el JOIN
+        // de GET /empleados; sin esta fila el empleado no aparece en ningún listado)
+        $stmt_ue = $pdo->prepare('INSERT INTO empresas_usuarios_empresas (id_usuario, id_empresa, activo) VALUES (?, ?, 1)');
+        $stmt_ue->execute([$id_empleado, $id_empresa]);
 
         $empleados_creados[] = [
           'id_empleado' => $id_empleado,
