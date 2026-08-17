@@ -231,6 +231,7 @@ CREATE TABLE `config` (
   `wizard_operativo_insumos` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Wizard operativo: paso Insumos de productos revisado por el cliente',
   `wizard_operativo_comisiones` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Wizard operativo: paso Comisiones de productos revisado por el cliente',
   `wizard_operativo_impresoras` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Wizard operativo: paso Impresoras revisado por el cliente (o no aplica)',
+  `wizard_operativo_inventario_tintas` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Wizard operativo: paso Inventario de Tintas revisado por el cliente (o no aplica)',
   `wizard_operativo_tintas` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Wizard operativo: paso Recarga de tintas revisado por el cliente (o no aplica)',
   `wizard_operativo_tallas_telas` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Wizard operativo: paso Tallas y telas revisado por el cliente',
   `wizard_operativo_whatsapp` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Wizard operativo: paso WhatsApp revisado por el cliente',

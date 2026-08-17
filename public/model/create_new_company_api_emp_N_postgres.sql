@@ -316,6 +316,7 @@ CREATE TABLE config (
   wizard_operativo_insumos SMALLINT NOT NULL DEFAULT 0,
   wizard_operativo_comisiones SMALLINT NOT NULL DEFAULT 0,
   wizard_operativo_impresoras SMALLINT NOT NULL DEFAULT 0,
+  wizard_operativo_inventario_tintas SMALLINT NOT NULL DEFAULT 0,
   wizard_operativo_tintas SMALLINT NOT NULL DEFAULT 0,
   wizard_operativo_tallas_telas SMALLINT NOT NULL DEFAULT 0,
   wizard_operativo_whatsapp SMALLINT NOT NULL DEFAULT 0,

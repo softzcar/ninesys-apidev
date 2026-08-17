@@ -10,12 +10,12 @@ use Slim\App;
 const WIZARD_OPERATIVO_PASOS = [
     'admin', 'empresa', 'monedas', 'horario', 'personalizacion', 'gastos',
     'departamentos', 'empleados', 'categorias', 'productos', 'insumos',
-    'comisiones', 'impresoras', 'tintas', 'tallas_telas', 'whatsapp',
+    'comisiones', 'impresoras', 'inventario_tintas', 'tintas', 'tallas_telas', 'whatsapp',
 ];
 
 // Pasos que se marcan automáticamente como "no aplica" cuando el cliente desactivó
 // (en departamentos, paso 1) todos los departamentos de tipo impresión/estampado.
-const WIZARD_OPERATIVO_PASOS_CONDICIONALES = ['impresoras', 'tintas'];
+const WIZARD_OPERATIVO_PASOS_CONDICIONALES = ['impresoras', 'inventario_tintas', 'tintas'];
 
 /**
  * Calcula el estado completo del wizard operativo: qué pasos están revisados,

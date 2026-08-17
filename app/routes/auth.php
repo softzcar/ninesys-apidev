@@ -356,7 +356,7 @@ return function (App $app) {
                     wizard_operativo_monedas, wizard_operativo_horario, wizard_operativo_personalizacion,
                     wizard_operativo_gastos, wizard_operativo_departamentos, wizard_operativo_empleados,
                     wizard_operativo_categorias, wizard_operativo_productos, wizard_operativo_insumos,
-                    wizard_operativo_comisiones, wizard_operativo_impresoras, wizard_operativo_tintas,
+                    wizard_operativo_comisiones, wizard_operativo_impresoras, wizard_operativo_inventario_tintas, wizard_operativo_tintas,
                     wizard_operativo_tallas_telas, wizard_operativo_whatsapp, wizard_operativo_completo,
                     wizard_operativo_omitido_en
                     FROM config WHERE _id = 1';
@@ -507,7 +507,7 @@ return function (App $app) {
                     wizard_operativo_monedas, wizard_operativo_horario, wizard_operativo_personalizacion,
                     wizard_operativo_gastos, wizard_operativo_departamentos, wizard_operativo_empleados,
                     wizard_operativo_categorias, wizard_operativo_productos, wizard_operativo_insumos,
-                    wizard_operativo_comisiones, wizard_operativo_impresoras, wizard_operativo_tintas,
+                    wizard_operativo_comisiones, wizard_operativo_impresoras, wizard_operativo_inventario_tintas, wizard_operativo_tintas,
                     wizard_operativo_tallas_telas, wizard_operativo_whatsapp, wizard_operativo_completo,
                     wizard_operativo_omitido_en
                     FROM config WHERE _id = 1';
