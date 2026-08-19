@@ -988,8 +988,8 @@ return function (App $app) {
                 eu.salario_monto,
                 eu.salario_periodo,
                 EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int AS tiempo_empleado,
-                SUM(c.tiempo * $cantidadGranularSql) AS tiempo_estimado_de_produccion,
-                (EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int - SUM(c.tiempo * $cantidadGranularSql)) rendimiento,
+                SUM(COALESCE(c.tiempo, 0) * $cantidadGranularSql) AS tiempo_estimado_de_produccion,
+                (EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp))::int - SUM(COALESCE(c.tiempo, 0) * $cantidadGranularSql)) rendimiento,
                 SUM($cantidadGranularSql) unidades,
                 (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$idDepartamento}) cantidad_empleados_asigandos,
                 string_agg(DISTINCT b.id_woo::text, ',') id_producto,
@@ -999,7 +999,11 @@ return function (App $app) {
                 lotes_detalles_empleados_asignados a
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
-            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
+            -- LEFT JOIN (antes INNER): si el producto no tiene tiempo de
+            -- produccion configurado para este departamento, la tarea
+            -- terminada y ya pagada no debe desaparecer del reporte -- solo
+            -- se pierde el dato de tiempo estimado (queda en 0 via COALESCE).
+            LEFT JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios eu ON a.id_empleado = eu.id_usuario
             LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = b._id
             WHERE a.id_empleado = {$idEmpleado}
@@ -1026,8 +1030,8 @@ return function (App $app) {
                 eu.salario_monto,
                 eu.salario_periodo,
                 TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) AS tiempo_empleado,
-                SUM(c.tiempo * $cantidadGranularSql) AS tiempo_estimado_de_produccion,
-                (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - SUM(c.tiempo * $cantidadGranularSql)) rendimiento,
+                SUM(COALESCE(c.tiempo, 0) * $cantidadGranularSql) AS tiempo_estimado_de_produccion,
+                (TIMESTAMPDIFF(SECOND, a.fecha_inicio, a.fecha_terminado) - SUM(COALESCE(c.tiempo, 0) * $cantidadGranularSql)) rendimiento,
                 SUM($cantidadGranularSql) unidades,
                 (SELECT COUNT(id_empleado) FROM lotes_detalles_empleados_asignados WHERE id_orden = a.id_orden AND id_departamento = {$idDepartamento}) cantidad_empleados_asigandos,
                 GROUP_CONCAT(DISTINCT b.id_woo) id_producto,
@@ -1037,7 +1041,8 @@ return function (App $app) {
                 lotes_detalles_empleados_asignados a
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
-            JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
+            -- LEFT JOIN (antes INNER): ver comentario en la rama pgsql arriba.
+            LEFT JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios eu ON a.id_empleado = eu.id_usuario
             LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = b._id
             WHERE a.id_empleado = {$idEmpleado}
