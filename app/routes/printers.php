@@ -166,7 +166,6 @@ return function (App $app) {
         $row['tintas_recargas'] = json_decode($row['tintas_recargas'] ?? '[]', true);
         if (!$row['tintas_recargas'] || (count($row['tintas_recargas']) == 1 && $row['tintas_recargas'][0]['id'] === null)) {
           $row['tintas_recargas'] = [];
-          continue;
         }
 
         // Agrupar recargas por color
@@ -224,11 +223,47 @@ return function (App $app) {
                 $procesadas[] = $curr;
             }
         }
-        
+
+        // Colores configurados para esta impresora (canales_colores) que
+        // todavía no tienen NINGUNA recarga registrada -- sin esto, un color
+        // con consumo real (via tintas, ej. modo automático) pero sin recarga
+        // nunca aparece en la tabla, aunque sí tenga tinta gastada. Se agrega
+        // como fila informativa: todo el consumo histórico de ese color va
+        // "abierto" (sin ciclo cerrado por recarga, sin desperdicio/ajuste
+        // calculable porque no hay un nivel de tanque inicial conocido).
+        $coloresConRecarga = array_keys($recargasPorColor);
+        foreach ($row['canales_colores'] as $canal) {
+            $codigoCanal = $canal['codigo'];
+            if (in_array($codigoCanal, $coloresConRecarga, true)) continue;
+
+            $consumoTotal = 0;
+            if (is_array($allConsumos)) {
+                foreach ($allConsumos as $c) {
+                    if ($c['id_catalogo_impresoras'] == $row['_id'] && $c['color'] == $codigoCanal) {
+                        $consumoTotal += (float)$c['cantidad'];
+                    }
+                }
+            }
+
+            $procesadas[] = [
+                'id' => null,
+                'id_catalogo_impresora' => $row['_id'],
+                'id_insumo' => null,
+                'color' => $codigoCanal,
+                'cantidad' => null,
+                'nivel_tanque_previo' => null,
+                'fecha_recarga' => null,
+                'restante_post_recarga' => null,
+                'consumido_en_ciclo' => $consumoTotal,
+                'desperdicio_ajuste' => null,
+            ];
+        }
+
         $row['tintas_recargas'] = $procesadas;
-        // Ordenamos DESC para la tabla del frontend
+        // Ordenamos DESC para la tabla del frontend (las filas sin recarga,
+        // fecha_recarga null, quedan al final)
         usort($row['tintas_recargas'], function($a, $b) {
-            return strcmp($b['fecha_recarga'], $a['fecha_recarga']);
+            return strcmp($b['fecha_recarga'] ?? '', $a['fecha_recarga'] ?? '');
         });
       }
 
