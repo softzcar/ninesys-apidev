@@ -74,7 +74,7 @@ CREATE TABLE `catalogo_impresoras` (
   `estado` varchar(20) NOT NULL DEFAULT 'activa' COMMENT 'Estado actual. Ej: activa, inactiva, en_mantenimiento',
   `notas` text DEFAULT NULL COMMENT 'Cualquier información adicional relevante.',
   `ml_tinta_por_metro` decimal(6, 2) NOT NULL DEFAULT 12.00 COMMENT 'Estimado de ml de tinta por metro de material (full print, sin considerar saturación). Solo referencia visual en el modal de Impresión, no autocompleta ni valida.',
-  `mostrar_tinta_estimada` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Si esta impresora muestra la leyenda de tinta estimada en el modal de Impresión.',
+  `ingresar_tinta_manual` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Si el empleado debe ingresar manualmente los ml de tinta por color al finalizar. Si es 0, el formulario de captura no se muestra para esta impresora (modo automático).',
   `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Catálogo de impresoras de la empresa. Almacena información de equipos de impresión para asignación de trabajos y control de producción.';
 INSERT INTO `catalogo_impresoras` (`_id`, `codigo_interno`, `marca`, `modelo`, `capacidad_contenedor`, `ubicacion`, `tipo_tecnologia`, `id_catalogo_tintas`, `estado`, `notas`, `moment`) VALUES
