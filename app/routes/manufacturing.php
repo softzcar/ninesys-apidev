@@ -833,7 +833,7 @@ return function (App $app) {
       if ($comisionTipo === 'porcentaje') {
         // Para comisión por porcentaje: calcular basado en precio del producto
         $sql = "SELECT
-              (SELECT ld._id FROM lotes_detalles ld WHERE ld.id_orden = a.id_orden AND ld.id_departamento = a.id_departamento LIMIT 1) AS id_lotes_detalles,
+              a._id AS id_lotes_detalles,
               a.procentaje_comision,
               SUM($cantidadRealSql) AS total_productos_empleado,
               SUM($cantidadRealSql * c.precio_unitario * ($comisionValue / 100)) AS total_comision_porcentaje
@@ -925,7 +925,7 @@ return function (App $app) {
       } elseif ($comisionTipo === 'fija') {
         // Para comisión fija: consulta agrupada para obtener total
         $sql = "SELECT
-              (SELECT ld._id FROM lotes_detalles ld WHERE ld.id_orden = a.id_orden AND ld.id_departamento = a.id_departamento LIMIT 1) AS id_lotes_detalles,
+              a._id AS id_lotes_detalles,
               a.procentaje_comision,
               b.comision AS comision_fija,
               SUM($cantidadRealSql) AS total_productos_empleado,
@@ -1011,7 +1011,7 @@ return function (App $app) {
         // Para comisión variable: consulta por producto individual usando comisión por departamento
         // Usamos COALESCE para tomar las piezas de la lotificación (si existen) o de la orden
         $sql = "SELECT
-              (SELECT ld._id FROM lotes_detalles ld WHERE ld.id_orden = a.id_orden AND ld.id_departamento = a.id_departamento LIMIT 1) AS id_lotes_detalles,
+              a._id AS id_lotes_detalles,
               a.procentaje_comision,
               ( CASE WHEN a.id_departamento = 3 THEN
                   COALESCE(NULLIF((SELECT SUM(ic.cantidad) FROM inventario_corte ic WHERE ic.id_orden = a.id_orden AND ic.id_ordenes_productos = c._id), 0), c.cantidad)
@@ -1052,21 +1052,15 @@ return function (App $app) {
         $montoTotalVariable = 0;
         $piezasTotales = 0;
 
-        // pagos.id_lotes_detalles tiene FK hacia lotes_detalles(_id) -- NO hacia
-        // lotes_detalles_empleados_asignados(_id), aunque el alias de la query de
-        // arriba (a._id AS id_lotes_detalles) sugería lo contrario. Coincidía por
-        // casualidad mientras cada departamento tenía un solo empleado asignado
-        // (ambas tablas arrancaban en 1 y crecían en paralelo); con reparto
-        // granular (2+ empleados en el mismo departamento) los IDs divergen y el
-        // INSERT de pagos viola la FK (409). Ver también el fix de las 3 ramas de
-        // comisión más arriba, que resuelven este mismo valor con un subquery.
+        // Para multi-asignaciones, id_lotes_detalles de la asignación es NULL.
+        // La query retorna a._id (el ID de la asignación) como 'id_lotes_detalles'.
+        // Esto es lo que debemos guardar en pagos para poder hacer JOIN después.
         $id_lotes_detalles_principal = !empty($respComision) ? $respComision[0]['id_lotes_detalles'] : 'NULL';
         $comision_referencial = !empty($respComision) ? $respComision[0]['comision_producto'] : 0;
 
-        // Si la query no retornó (sin productos configurados), buscar el _id real
-        // de lotes_detalles directamente.
+        // Si la query no retornó (sin productos configurados), buscar el _id de la asignación directamente
         if ($id_lotes_detalles_principal === 'NULL') {
-          $sqlAsig = "SELECT _id FROM lotes_detalles WHERE id_orden = {$miEmpleado['id_orden']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
+          $sqlAsig = "SELECT _id FROM lotes_detalles_empleados_asignados WHERE id_empleado = {$miEmpleado['id_empleado']} AND id_orden = {$miEmpleado['id_orden']} AND id_departamento = {$miEmpleado['id_departamento']} LIMIT 1";
           $resAsig = $localConnection->goQuery($sqlAsig);
           if (!empty($resAsig)) {
             $id_lotes_detalles_principal = $resAsig[0]['_id'];
@@ -1127,7 +1121,7 @@ return function (App $app) {
               lca.id_ordenes_productos,
               (lca.cantidad_ajustada - lca.cantidad_solicitada) AS excedente,
               COALESCE(pc.comision, 0) AS comision_producto,
-              (SELECT ld._id FROM lotes_detalles ld WHERE ld.id_orden = a.id_orden AND ld.id_departamento = a.id_departamento LIMIT 1) AS id_lotes_detalles,
+              a._id AS id_lotes_detalles,
               a.procentaje_comision
             FROM lotes_corte_ajustes lca
             JOIN lotes_detalles_empleados_asignados a ON a.id_orden = lca.id_orden AND a.id_empleado = {$miEmpleado['id_empleado']} AND a.id_departamento = {$miEmpleado['id_departamento']}
