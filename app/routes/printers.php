@@ -18,7 +18,7 @@ return function (App $app) {
         return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
       }
 
-      $sql = 'INSERT INTO catalogo_impresoras (codigo_interno, marca, modelo, ubicacion, tipo_tecnologia, id_catalogo_tintas, capacidad_contenedor, estado, notas) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+      $sql = 'INSERT INTO catalogo_impresoras (codigo_interno, marca, modelo, ubicacion, tipo_tecnologia, id_catalogo_tintas, capacidad_contenedor, estado, notas, ml_tinta_por_metro, mostrar_tinta_estimada) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
       $params = [
         $data['codigo_interno'],
@@ -29,7 +29,9 @@ return function (App $app) {
         (isset($data['id_catalogo_tintas']) && $data['id_catalogo_tintas'] !== 'null' && $data['id_catalogo_tintas'] !== '') ? intval($data['id_catalogo_tintas']) : null,
         (isset($data['capacidad_contenedor']) && $data['capacidad_contenedor'] !== 'null' && $data['capacidad_contenedor'] !== '') ? floatval($data['capacidad_contenedor']) : null,
         $data['estado'] ?? 'activa',  // Valor por defecto 'activa'
-        $data['notas'] ?? $data['notes'] ?? null
+        $data['notas'] ?? $data['notes'] ?? null,
+        (isset($data['ml_tinta_por_metro']) && $data['ml_tinta_por_metro'] !== 'null' && $data['ml_tinta_por_metro'] !== '') ? floatval($data['ml_tinta_por_metro']) : 12.00,
+        filter_var($data['mostrar_tinta_estimada'] ?? true, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
       ];
 
       $localConnection->goQuery($sql, $params);
@@ -126,20 +128,22 @@ return function (App $app) {
                     ctt.nombre AS tecnologia_nombre,
                     ci.estado,
                     ci.notas,
+                    ci.ml_tinta_por_metro,
+                    ci.mostrar_tinta_estimada,
                     ci.moment,
                     $canalesColoresExpr,
                     $tintasRecargasExpr
                 FROM
                     catalogo_impresoras ci
-                LEFT JOIN 
+                LEFT JOIN
                     catalogo_tintas ctt ON ci.id_catalogo_tintas = ctt._id
-                LEFT JOIN 
+                LEFT JOIN
                     tintas_recargas tr ON ci._id = tr.id_catalogo_impresora
                 LEFT JOIN
                     catalogo_colores_tintas cct_tr ON tr.id_color_tinta = cct_tr._id
                 {$estadoWhere}
                 GROUP BY
-                    ci._id, ci.codigo_interno, ci.marca, ci.modelo, ci.capacidad_contenedor, ci.ubicacion, ci.tipo_tecnologia, ci.id_catalogo_tintas, ctt.nombre, ci.estado, ci.notas, ci.moment
+                    ci._id, ci.codigo_interno, ci.marca, ci.modelo, ci.capacidad_contenedor, ci.ubicacion, ci.tipo_tecnologia, ci.id_catalogo_tintas, ctt.nombre, ci.estado, ci.notas, ci.ml_tinta_por_metro, ci.mostrar_tinta_estimada, ci.moment
                 ORDER BY
                     ci._id DESC";
       $data = $localConnection->goQuery($sql);
@@ -400,7 +404,7 @@ return function (App $app) {
       // Construir la consulta de actualización dinámicamente
       $fields = [];
       $params = [];
-      $allowed_fields = ['codigo_interno', 'marca', 'modelo', 'ubicacion', 'tipo_tecnologia', 'id_catalogo_tintas', 'capacidad_contenedor', 'estado', 'notas'];
+      $allowed_fields = ['codigo_interno', 'marca', 'modelo', 'ubicacion', 'tipo_tecnologia', 'id_catalogo_tintas', 'capacidad_contenedor', 'estado', 'notas', 'ml_tinta_por_metro', 'mostrar_tinta_estimada'];
 
       foreach ($data as $key => $value) {
         if (in_array($key, $allowed_fields)) {

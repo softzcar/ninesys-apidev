@@ -152,6 +152,8 @@ CREATE TABLE catalogo_impresoras (
   id_catalogo_tintas INTEGER DEFAULT NULL ,
   estado varchar(20) NOT NULL DEFAULT 'activa' ,
   notas text DEFAULT NULL ,
+  ml_tinta_por_metro decimal(6, 2) NOT NULL DEFAULT 12.00 ,
+  mostrar_tinta_estimada SMALLINT NOT NULL DEFAULT 1 ,
   moment timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (_id)
 );
