@@ -1331,8 +1331,17 @@ CREATE TABLE `tintas` (
   `id_empleado` int(11) DEFAULT NULL COMMENT 'ID del empleado que imprimió',
   `id_color_tinta` int(11) NOT NULL COMMENT 'ID del color de la tinta consumida',
   `cantidad` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Cantidad consumida en ml/g',
+  `es_estimado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Si es 1, el valor fue calculado automáticamente (impresora en modo automático), no capturado a mano por el empleado.',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registra el consumo de tintas por orden';
+CREATE TABLE `tintas_calibracion_colores` (
+  `_id` int(11) NOT NULL,
+  `id_catalogo_impresora` int(11) NOT NULL,
+  `id_color_tinta` int(11) NOT NULL,
+  `ml_por_metro` decimal(6, 2) NOT NULL COMMENT 'Ratio calibrado automáticamente por color, a partir del consumo real medido en niveles de tanque entre 2 recargas y los metros reales impresos en ese mismo período.',
+  `moment` timestamp NOT NULL DEFAULT current_timestamp(),
+  UNIQUE KEY `uk_tintas_calib_impresora_color` (`id_catalogo_impresora`, `id_color_tinta`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Calibración automática de ml de tinta por metro de material, por impresora y color.';
 CREATE TABLE `tintas_recargas` (
   `_id` int(11) NOT NULL,
   `id_insumo` int(11) DEFAULT NULL,
@@ -1562,6 +1571,8 @@ ALTER TABLE `tintas`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `idx_tintas_color` (`id_color_tinta`),
   ADD KEY `idx_tintas_impresora` (`id_catalogo_impresoras`);
+ALTER TABLE `tintas_calibracion_colores`
+ADD PRIMARY KEY (`_id`);
 ALTER TABLE `tintas_recargas`
 ADD PRIMARY KEY (`_id`),
   ADD KEY `idx_recargas_color` (`id_color_tinta`),
@@ -1701,6 +1712,8 @@ ALTER TABLE `catalogo_colores_tintas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID único del color de tinta',
   AUTO_INCREMENT = 13;
 ALTER TABLE `tintas`
+MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
+ALTER TABLE `tintas_calibracion_colores`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
 ALTER TABLE `tintas_recargas`
 MODIFY `_id` int(11) NOT NULL AUTO_INCREMENT;
@@ -1984,6 +1997,11 @@ ALTER TABLE `tintas`
   ADD CONSTRAINT `tintas_ibfk_1` FOREIGN KEY (`id_catalogo_impresoras`) REFERENCES `catalogo_impresoras` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `tintas_ibfk_2` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_tintas_color` FOREIGN KEY (`id_color_tinta`) REFERENCES `catalogo_colores_tintas` (`_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- tintas_calibracion_colores
+ALTER TABLE `tintas_calibracion_colores`
+  ADD CONSTRAINT `tintas_calib_ibfk_1` FOREIGN KEY (`id_catalogo_impresora`) REFERENCES `catalogo_impresoras` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `tintas_calib_ibfk_2` FOREIGN KEY (`id_color_tinta`) REFERENCES `catalogo_colores_tintas` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- tintas_recargas
 ALTER TABLE `tintas_recargas`

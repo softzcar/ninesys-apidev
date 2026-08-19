@@ -372,7 +372,7 @@ return function (App $app) {
                 // 8. BATCH: Tintas
                 $tintasRaw = [];
                 if (!empty($orderIds)) {
-                    $tintasSql = "SELECT t.id_orden, t.moment, cct.codigo AS color_code, t.cantidad, t.id_catalogo_impresoras 
+                    $tintasSql = "SELECT t.id_orden, t.moment, cct.codigo AS color_code, t.cantidad, t.id_catalogo_impresoras, t.es_estimado
                                   FROM $companyDB.tintas t
                                   JOIN $companyDB.catalogo_colores_tintas cct ON t.id_color_tinta = cct._id
                                   WHERE t.id_orden IN ($orderIdsStr)";
@@ -420,24 +420,32 @@ return function (App $app) {
                         $cost_total = ($ml * $costMl);
 
                         if (!isset($tintasResumenMap[$id])) {
-                            $tintasResumenMap[$id] = ['ml' => 0, 'cost' => 0];
+                            $tintasResumenMap[$id] = ['ml' => 0, 'cost' => 0, 'es_estimado' => 0];
                         }
                         $tintasResumenMap[$id]['ml'] += $ml;
                         $tintasResumenMap[$id]['cost'] += $cost_total;
+                        // Si CUALQUIER fila que contribuye a esta orden es estimada
+                        // (impresora en modo automático), el total se etiqueta como
+                        // estimado -- mismo criterio que /reporte/insumos-cosumidos-por-orden.
+                        if (!empty($t['es_estimado'])) {
+                            $tintasResumenMap[$id]['es_estimado'] = 1;
+                        }
                     }
                 }
 
                 $tintasResumenFinal = [];
                 foreach ($tintasResumenMap as $id => $data) {
                     $tintasDetalle[] = [
-                        'id_orden' => $id, 
-                        'total_tinta_consumo_ml' => round($data['ml'], 2), 
-                        'total_tinta_costo' => round($data['cost'], 2)
+                        'id_orden' => $id,
+                        'total_tinta_consumo_ml' => round($data['ml'], 2),
+                        'total_tinta_costo' => round($data['cost'], 2),
+                        'es_estimado' => (int)$data['es_estimado'],
                     ];
                     $tintasResumenFinal[] = [
-                        'id_orden' => $id, 
-                        'total_tinta_consumo_ml' => round($data['ml'], 2), 
-                        'total_tinta_costo' => round($data['cost'], 2)
+                        'id_orden' => $id,
+                        'total_tinta_consumo_ml' => round($data['ml'], 2),
+                        'total_tinta_costo' => round($data['cost'], 2),
+                        'es_estimado' => (int)$data['es_estimado'],
                     ];
                 }
 

@@ -77,9 +77,10 @@ return function (App $app) {
 
       if (DB_DRIVER === 'pgsql') {
         $canalesColoresExpr = "(
-                        SELECT (json_agg(json_build_object('id_color', ic.id_color_tinta, 'codigo', cct.codigo, 'nombre', cct.nombre, 'color_hex', cct.color_hex)))::text
+                        SELECT (json_agg(json_build_object('id_color', ic.id_color_tinta, 'codigo', cct.codigo, 'nombre', cct.nombre, 'color_hex', cct.color_hex, 'ml_por_metro', tcc.ml_por_metro)))::text
                         FROM impresoras_colores ic
                         JOIN catalogo_colores_tintas cct ON ic.id_color_tinta = cct._id
+                        LEFT JOIN tintas_calibracion_colores tcc ON tcc.id_catalogo_impresora = ci._id AND tcc.id_color_tinta = ic.id_color_tinta
                         WHERE ic.id_catalogo_impresora = ci._id
                     ) AS canales_colores";
         $tintasRecargasExpr = "(json_agg(
@@ -95,9 +96,10 @@ return function (App $app) {
                     ))::text AS tintas_recargas";
       } else {
         $canalesColoresExpr = "(
-                        SELECT CONCAT('[', GROUP_CONCAT(JSON_OBJECT('id_color', ic.id_color_tinta, 'codigo', cct.codigo, 'nombre', cct.nombre, 'color_hex', cct.color_hex)), ']')
+                        SELECT CONCAT('[', GROUP_CONCAT(JSON_OBJECT('id_color', ic.id_color_tinta, 'codigo', cct.codigo, 'nombre', cct.nombre, 'color_hex', cct.color_hex, 'ml_por_metro', tcc.ml_por_metro)), ']')
                         FROM impresoras_colores ic
                         JOIN catalogo_colores_tintas cct ON ic.id_color_tinta = cct._id
+                        LEFT JOIN tintas_calibracion_colores tcc ON tcc.id_catalogo_impresora = ci._id AND tcc.id_color_tinta = ic.id_color_tinta
                         WHERE ic.id_catalogo_impresora = ci._id
                     ) AS canales_colores";
         $tintasRecargasExpr = "CONCAT(
@@ -524,6 +526,72 @@ return function (App $app) {
       $new_cantidad = $current_cantidad - $mililitros_a_restar;
       $sql_update_inventario = 'UPDATE inventario SET cantidad = ? WHERE _id = ?';
       $localConnection->goQuery($sql_update_inventario, [$new_cantidad, $data['id_insumo']]);
+
+      // Auto-calibración de ml_tinta_por_metro, POR COLOR, a partir de datos
+      // 100% reales (niveles de tanque medidos en 2 recargas consecutivas del
+      // MISMO color -- nunca de lo que el empleado haya tipeado a mano, para
+      // que también funcione con impresoras que nunca dan ese dato). Si esta
+      // es la primera recarga registrada de este color, no hay ciclo cerrado
+      // que medir todavía y no se hace nada.
+      $sql_recarga_anterior = 'SELECT cantidad, nivel_tanque_previo, fecha_recarga FROM tintas_recargas WHERE id_catalogo_impresora = ? AND id_color_tinta = ? AND _id != ? ORDER BY fecha_recarga DESC LIMIT 1';
+      $recargaAnteriorRes = $localConnection->goQuery($sql_recarga_anterior, [$data['id_impresora'], $id_color_tinta, $new_id]);
+
+      if (!empty($recargaAnteriorRes)) {
+        $recargaAnterior = $recargaAnteriorRes[0];
+        $nivelPrevioAnterior = (float) $recargaAnterior['nivel_tanque_previo'];
+        $cantidadAnterior = (float) $recargaAnterior['cantidad'];
+        $nivelPrevioNuevo = (float) ($data['nivel_tanque_previo'] ?? 0);
+        // Nivel justo después de la recarga anterior, menos nivel justo antes
+        // de esta recarga = todo lo que salió del tanque en el ciclo (consumo
+        // real de impresión + desperdicio, sin distinguir uno de otro).
+        $consumoRealMl = ($nivelPrevioAnterior + $cantidadAnterior) - $nivelPrevioNuevo;
+
+        if ($consumoRealMl > 0) {
+          $fechaInicioCiclo = $recargaAnterior['fecha_recarga'];
+          $fechaFinCiclo = $now;
+
+          // Qué órdenes se imprimieron en ESTA impresora durante el ciclo --
+          // sin filtrar por es_estimado: solo sirve para saber qué orden pasó
+          // por qué impresora, no para el valor de ml (ese siempre sale de
+          // arriba, de los niveles de tanque), así que funciona igual si la
+          // impresora estuvo en modo automático durante el ciclo.
+          $sql_ordenes_ciclo = 'SELECT DISTINCT id_orden FROM tintas WHERE id_catalogo_impresoras = ? AND moment >= ? AND moment < ? AND id_orden IS NOT NULL';
+          $ordenesCicloRes = $localConnection->goQuery($sql_ordenes_ciclo, [$data['id_impresora'], $fechaInicioCiclo, $fechaFinCiclo]);
+          $idsOrdenesCiclo = array_map(function ($row) {
+            return intval($row['id_orden']);
+          }, $ordenesCicloRes ?: []);
+
+          if (!empty($idsOrdenesCiclo)) {
+            $idsOrdenesStr = implode(',', $idsOrdenesCiclo);
+            $likeOperator = DB_DRIVER === 'pgsql' ? 'ILIKE' : 'LIKE';
+            $sql_metros_ciclo = "SELECT COALESCE(SUM((im.valor_final - im.valor_inicial) *
+                                        CASE WHEN i.unidad = 'Kg' AND i.rendimiento IS NOT NULL THEN i.rendimiento ELSE 1 END), 0) AS metros
+                                  FROM inventario_movimientos im
+                                  JOIN inventario i ON im.id_insumo = i._id
+                                  JOIN departamentos d ON d._id = im.id_departamento
+                                  WHERE im.id_orden IN ({$idsOrdenesStr})
+                                    AND d.tipo = 'impresion'
+                                    AND (im.valor_final - im.valor_inicial) > 0
+                                    AND (i.tipo_insumo IN ('papel', 'tela') OR i.insumo {$likeOperator} '%papel%' OR i.unidad = 'Mts')";
+            $metrosRes = $localConnection->goQuery($sql_metros_ciclo);
+            $metrosCiclo = floatval($metrosRes[0]['metros'] ?? 0);
+
+            // Umbral mínimo para no calibrar con una sola pieza atípica.
+            $UMBRAL_MINIMO_METROS_CALIBRACION = 2;
+            if ($metrosCiclo >= $UMBRAL_MINIMO_METROS_CALIBRACION) {
+              $nuevoRatioColor = round($consumoRealMl / $metrosCiclo, 2);
+              if (DB_DRIVER === 'pgsql') {
+                $sql_upsert_calib = 'INSERT INTO tintas_calibracion_colores (id_catalogo_impresora, id_color_tinta, ml_por_metro) VALUES (?, ?, ?)
+                                      ON CONFLICT (id_catalogo_impresora, id_color_tinta) DO UPDATE SET ml_por_metro = EXCLUDED.ml_por_metro, moment = CURRENT_TIMESTAMP';
+              } else {
+                $sql_upsert_calib = 'INSERT INTO tintas_calibracion_colores (id_catalogo_impresora, id_color_tinta, ml_por_metro) VALUES (?, ?, ?)
+                                      ON DUPLICATE KEY UPDATE ml_por_metro = VALUES(ml_por_metro), moment = CURRENT_TIMESTAMP';
+              }
+              $localConnection->goQuery($sql_upsert_calib, [$data['id_impresora'], $id_color_tinta, $nuevoRatioColor]);
+            }
+          }
+        }
+      }
 
       $localConnection->commit();
       $response->getBody()->write(json_encode(['message' => 'Recarga de tinta registrada exitosamente y cantidad de insumo actualizada.', 'id' => $new_id]));

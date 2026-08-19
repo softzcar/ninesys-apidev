@@ -761,7 +761,7 @@ return function (App $app) {
         // 3. Procesamiento de consumos de tintas
         if (!is_null($id_orden) && intval($id_orden) > 0) {
             // Obtener consumos de tintas agrupados por impresora
-            $tintasRawRows = $localConnection->goQuery("SELECT t.id_orden, t.id_catalogo_impresoras, cct.codigo AS color_code, t.cantidad FROM tintas t JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id WHERE t.id_orden = $id_orden");
+            $tintasRawRows = $localConnection->goQuery("SELECT t.id_orden, t.id_catalogo_impresoras, cct.codigo AS color_code, t.cantidad, t.es_estimado FROM tintas t JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id WHERE t.id_orden = $id_orden");
             $tintasRows = [];
             if (is_array($tintasRawRows) && !isset($tintasRawRows['status'])) {
                 $grouped = [];
@@ -771,11 +771,18 @@ return function (App $app) {
                         $grouped[$pid] = [
                             'id_orden' => $row['id_orden'],
                             'id_catalogo_impresoras' => $pid,
-                            'colores_dinamicos' => []
+                            'colores_dinamicos' => [],
+                            'es_estimado' => 0
                         ];
                     }
                     $code = strtoupper(trim($row['color_code']));
                     $grouped[$pid]['colores_dinamicos'][$code] = (float)$row['cantidad'];
+                    // Si CUALQUIER fila que contribuye a este grupo (impresora) es
+                    // estimada, el total se etiqueta como estimado -- así queda
+                    // claro en el reporte que no es una medición real completa.
+                    if (!empty($row['es_estimado'])) {
+                        $grouped[$pid]['es_estimado'] = 1;
+                    }
                 }
                 $tintasRows = array_values($grouped);
             }
@@ -847,6 +854,7 @@ return function (App $app) {
                         'total_tinta' => round($totalMl, 2),
                         'total_tinta_consumo_ml' => round($totalMl, 2),
                         'total_tinta_costo' => round($totalCost, 2),
+                        'es_estimado' => (int)($tr['es_estimado'] ?? 0),
                     ], $dynamicData);
                 }
 

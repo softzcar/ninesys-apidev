@@ -504,6 +504,7 @@ return function (App $app) {
     $id_empleado = intval($misTintas['id_empleado'] ?? 0);
     $id_impresora = intval($misTintas['id_impresora'] ?? 0);
     $colores = $misTintas['colores'] ?? []; // Mapa de [id_color_tinta => cantidad]
+    $es_estimado = filter_var($misTintas['es_estimado'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
 
     $object = [];
 
@@ -512,8 +513,8 @@ return function (App $app) {
         foreach ($colores as $id_color => $cantidad) {
           $cantidad = floatval($cantidad);
           if ($cantidad > 0) {
-            $sql = 'INSERT INTO tintas (id_catalogo_impresoras, id_orden, id_empleado, id_color_tinta, cantidad) VALUES (?, ?, ?, ?, ?)';
-            $localConnection->goQuery($sql, [$id_impresora, $id_orden, $id_empleado, intval($id_color), $cantidad]);
+            $sql = 'INSERT INTO tintas (id_catalogo_impresoras, id_orden, id_empleado, id_color_tinta, cantidad, es_estimado) VALUES (?, ?, ?, ?, ?, ?)';
+            $localConnection->goQuery($sql, [$id_impresora, $id_orden, $id_empleado, intval($id_color), $cantidad, $es_estimado]);
           }
         }
       }
