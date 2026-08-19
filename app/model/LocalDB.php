@@ -317,7 +317,7 @@ class LocalDB
       $foreignKeyErrnos = [1451, 1452, 1216, 1217];
       if ($sqlState === '23503' || in_array($driverErrno, $foreignKeyErrnos, true)) {
         throw new \App\Application\Exceptions\DatabaseConstraintException(
-          'No se puede completar la operación porque viola una relación de datos (clave foránea).',
+          'No se puede completar la operación porque viola una relación de datos (clave foránea). DEBUG_TEMPORAL: ' . $e->getMessage(),
           0,
           $e
         );
