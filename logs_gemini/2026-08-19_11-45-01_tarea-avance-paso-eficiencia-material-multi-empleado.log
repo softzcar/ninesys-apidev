@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** [Reconstruido desde el mensaje de commit -- reportado por el usuario al probar por primera vez una orden real con el departamento de Impresión repartido entre 2 empleados mediante la asignación granular]: el botón "Iniciar" de un empleado aparecía deshabilitado sin motivo aparente, y la eficiencia de consumo de material mostraba un porcentaje inflado e incorrecto.
+- **Fecha y Hora:** 2026-08-19 11:45:01
+- **Proyecto(s):** Backend (Desarrollo, rama `feature/postgresql-support`, Postgres)
+- **Archivos Involucrados:** `app/routes/manufacturing.php`
+- **Commits Relacionados:**
+    - Backend: `3b1bd21`
+    - Frontend: N/A
+- **Acción Realizada:**
+  1. `GET /empleados/ordenes-asignadas/v2`: se encontró que el cálculo del "paso actual" de la orden descartaba TODO un departamento en cuanto CUALQUIER empleado lo terminaba, sin comprobar si a otro empleado real le quedaba trabajo pendiente ahí mismo -- la orden "avanzaba" de paso antes de tiempo y el botón "Iniciar" del empleado que aún no había trabajado aparecía deshabilitado. Corregido para que una fila pendiente con empleado real asignado siempre bloquee el avance, sin importar si otra fila del mismo departamento ya terminó.
+  2. `GET /reports/input-efficiency`: la Meta de consumo de material usaba siempre la cantidad TOTAL de la orden (`op.cantidad`), aunque el departamento estuviera repartido y solo una parte se hubiera completado -- inflaba la eficiencia mostrada (ej. Meta=12 unidades vs 7 realmente completadas y consumidas = 169% en vez de ~99%). Corregido para usar la cantidad ya completada según la asignación granular (`lotes_detalles_empleados_productos`) cuando existe, con el mismo fallback a `op.cantidad` para líneas sin reparto.
+- **Inconvenientes y Desafíos:** Ninguno registrado.
+- **Decisión Final y Justificación:** Ambos cálculos asumían implícitamente "un solo empleado por departamento", una suposición que dejó de ser válida en cuanto se probó la asignación granular con datos reales.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (ssh + psql para verificación directa, git), `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado contra datos reales de la orden 1 (empresa 206, Dev): paso correcto = 1 (Impresión), Meta correcta = 7 (antes 12).
+- **Logro Conseguido:** La asignación granular de personal por departamento (repartir un mismo departamento entre 2+ empleados) ya funciona correctamente tanto para el flujo de avance de paso como para el reporte de eficiencia de material.
+- **Observaciones de Claude:** Esta entrada se reconstruyó a partir del mensaje de commit `3b1bd21`, ya que no se generó un log `.log` en el momento (la sesión original que hizo este trabajo no está en el historial de conversación disponible).
+- **Respuesta de Claude:** N/A (reconstruido desde git log).

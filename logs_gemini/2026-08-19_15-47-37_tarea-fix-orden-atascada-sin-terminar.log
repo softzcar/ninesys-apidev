@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** "he creado la orden 3 con el producto 'impresión DTF' en este caso la orden tiene un único paso 'Impresión' el empleado de impresión terminó su tarea pero aunque se registró correctamente la fecha de terminado según veo NO se cambió el status de la orden a 'terminado' quedó 'activa'".
+- **Fecha y Hora:** 2026-08-19 15:47:37
+- **Proyecto(s):** Backend (Desarrollo, rama `feature/postgresql-support`, Postgres)
+- **Archivos Involucrados:** `app/routes/manufacturing.php`
+- **Commits Relacionados:**
+    - Backend: `8f40dee`
+    - Frontend: N/A
+- **Acción Realizada:**
+  1. Se investigó `/registrar-paso-empleado`: al terminar el último departamento CON TRABAJO ASIGNADO de una orden, la búsqueda del "siguiente departamento" recorría la cadena de producción configurada GLOBALMENTE en la empresa (cualquier departamento con `asignar_numero_de_paso=1` y `orden_proceso` mayor), sin verificar si esta orden en particular tenía algo que hacer ahí.
+  2. Causa raíz confirmada: un producto que solo requiere Impresión (sin Estampado/Bordado/Corte, ej. "Impresión DTF") terminaba "empujado" al siguiente departamento de la cadena global igual, quedando con `lotes.paso='Estampado'` pero sin ningún empleado asignado ahí -- la orden quedaba atascada en `status='activa'` para siempre, porque nunca se cumplía la condición de "es el último paso".
+  3. Corregido agregando `EXISTS` contra `lotes_detalles_empleados_asignados`: solo se considera "siguiente departamento" uno que la orden realmente tiene asignado.
+  4. Corrección manual de los datos ya rotos de la orden 3: `UPDATE lotes SET paso='terminado', id_departamento_actual=NULL...; UPDATE ordenes SET status='terminada'...`.
+- **Inconvenientes y Desafíos:** El bug afecta a CUALQUIER orden cuyo producto no pase por todos los departamentos configurados globalmente en la cadena de producción de la empresa, no solo al caso específico de "Impresión DTF" -- se corrigió a nivel estructural, no como un caso especial.
+- **Decisión Final y Justificación:** Verificar `lotes_detalles_empleados_asignados` (la asignación REAL de trabajo para esta orden) en vez de seguir confiando únicamente en `orden_proceso` (la configuración GLOBAL de la empresa), ya que ambas cosas pueden divergir legítimamente quando un producto no requiere todos los departamentos.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (ssh + psql para verificación y corrección manual directa, git), `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado contra datos reales: orden 3 (empresa 206), único paso Impresión ya terminado -- antes la consulta encontraba Estampado como "siguiente", con el fix devuelve vacío (dispara correctamente el cierre de la orden). Datos de la orden 3 corregidos manualmente y verificados en estado consistente tras el fix.
+- **Logro Conseguido:** Cualquier orden cuyo producto no requiera todos los departamentos configurados en la cadena de producción de la empresa ahora se cierra correctamente al terminar su último paso real, en vez de quedar atascada en "activa" para siempre.
+- **Observaciones de Claude:** Bug estructural que probablemente afectaba a órdenes anteriores a esta corrección sin que el usuario lo hubiera detectado -- solo se corrigieron manualmente los datos de la orden 3, reportada explícitamente por el usuario.
+- **Respuesta de Claude:** Corregida la causa raíz: la orden se atascaba porque el sistema la empujaba a un departamento que no le correspondía según su producto. La orden 3 ya quedó cerrada correctamente y el bug no debería repetirse para ninguna orden futura.

@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** Convertir el interruptor "mostrar tinta estimada" (solo visual) en un modo real manual/automático: si la impresora está en modo automático, el empleado ya no debe tener que capturar manualmente los ml por color al finalizar la tarea.
+- **Fecha y Hora:** 2026-08-19 10:17:50
+- **Proyecto(s):** Ambos
+- **Archivos Involucrados:** `app/routes/printers.php`, `public/model/create_new_company_api_emp_N.sql`, `public/model/create_new_company_api_emp_N_postgres.sql`
+- **Commits Relacionados:**
+    - Backend: `74d2a05`
+    - Frontend: `5f35225`
+- **Acción Realizada:**
+  1. Columna `mostrar_tinta_estimada` renombrada a `ingresar_tinta_manual` en `catalogo_impresoras` (mismo tipo/default, sin migración de datos ya que es un renombre 1:1).
+  2. Actualizado en ambas plantillas de creación de empresa y en el CRUD de `printers.php`.
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** El interruptor pasa de controlar solo la visibilidad de la referencia a controlar el comportamiento real del formulario (si el empleado debe capturar ml por color o no), por eso se renombra para reflejar su nuevo propósito en vez de mantener un nombre que ya no describe lo que hace.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (git), `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** Columna renombrada verificada en las 3 empresas reales de Desarrollo.
+- **Logro Conseguido:** Base de esquema para el modo automático de captura de tinta, que el frontend usa para ocultar el formulario cuando corresponde.
+- **Observaciones de Claude:** Parte 2 de la "Fase 1" de tinta (parte 1 a las 09:49). La Fase 2 (guardar el estimado en modo automático en vez de perderlo) se completó más tarde, a las 15:12.
+- **Respuesta de Claude:** Renombrada la columna de configuración de impresora para reflejar su nuevo rol como interruptor de modo manual/automático de captura de tinta.

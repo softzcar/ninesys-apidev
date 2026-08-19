@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** Configurar un valor de referencia de consumo de tinta (ml por metro) por impresora, visible como estimado al capturar los datos de una tarea de Impresión, ya que distintas marcas/tecnologías de impresión consumen tinta de forma distinta.
+- **Fecha y Hora:** 2026-08-19 09:49:13
+- **Proyecto(s):** Ambos
+- **Archivos Involucrados:** `app/routes/printers.php`, `public/model/create_new_company_api_emp_N.sql`, `public/model/create_new_company_api_emp_N_postgres.sql`
+- **Commits Relacionados:**
+    - Backend: `4fd19e8`
+    - Frontend: `c20d2a9`
+- **Acción Realizada:**
+  1. Se agregaron 2 columnas nuevas a `catalogo_impresoras` en ambas plantillas de creación de empresa: `ml_tinta_por_metro` (decimal, default 12.00) y `mostrar_tinta_estimada` (smallint, default 1).
+  2. `POST`/`PUT`/`GET /impresoras` (`printers.php`) actualizados para incluir las 2 columnas nuevas en el INSERT, la whitelist de campos editables y el SELECT de listado.
+  3. Se decidió que el valor fuera constante POR IMPRESORA (no global de la empresa), ya que distintas marcas/tecnologías consumen tinta de forma distinta.
+  4. Migración de esquema aplicada contra las empresas reales de Desarrollo (194, 204, 206 -- 163 excluida).
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** Constante editable por impresora en vez de un valor global, para no forzar el mismo ratio a tecnologías de impresión distintas (ej. DTF vs sublimación).
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (ssh + psql, git), `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** Migración de esquema verificada contra 194/204/206. Endpoints de impresoras probados devolviendo las columnas nuevas.
+- **Logro Conseguido:** Primera pieza de la funcionalidad de estimación de tinta -- cada impresora puede configurar su propio ratio ml/metro como referencia.
+- **Observaciones de Claude:** Este es el punto de partida ("Fase 1") de una funcionalidad que se completó en varias iteraciones a lo largo del día (interruptor manual/automático a las 10:17, Fase 2 con auto-calibración a las 15:12).
+- **Respuesta de Claude:** Agregado el campo de tinta estimada por metro configurable por impresora, con su columna de esquema replicada en ambas plantillas de empresa nueva y desplegado en Desarrollo.

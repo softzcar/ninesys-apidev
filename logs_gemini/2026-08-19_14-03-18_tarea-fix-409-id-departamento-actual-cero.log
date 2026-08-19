@@ -1,0 +1,21 @@
+- **Solicitud del Usuario:** [Reconstruido desde el mensaje de commit -- reportado por el usuario]: seguía apareciendo un 409 al completar el último paso de una orden, distinto al ya corregido de la FK de pagos.
+- **Fecha y Hora:** 2026-08-19 14:03:18 (fix real a las 14:05:26)
+- **Proyecto(s):** Backend (Desarrollo, rama `feature/postgresql-support`, Postgres)
+- **Archivos Involucrados:** `app/model/LocalDB.php`, `app/routes/manufacturing.php`
+- **Commits Relacionados:**
+    - Backend: `6e9f690` (debug temporal), `ae57dfe` (fix real)
+    - Frontend: N/A
+- **Acción Realizada:**
+  1. Se expuso temporalmente el mensaje real de `PDOException` en violaciones de FK vía `LocalDB.php` (patrón ya usado en sesiones previas para diagnosticar errores de FK sin mensaje claro en el 500/409 genérico).
+  2. Diagnóstico real: al completar el ÚLTIMO departamento configurado en la cadena de producción de una orden, `manufacturing.php` hacía `UPDATE lotes SET id_departamento_actual = 0` como valor centinela de "terminado" -- pero esa columna tiene FK hacia `departamentos(_id)`, y 0 nunca es un ID de departamento válido. Rompía en CUALQUIER orden al llegar a su último paso real, no solo en el caso reportado; se disparó porque la empresa de pruebas no tiene "Costura" marcada como parte de la cadena (`asignar_numero_de_paso=0`), así que Corte queda como último paso real.
+  3. Se confirmó que `id_departamento_actual` SÍ es nullable, y que el resto del código YA usa NULL para el mismo estado "sin departamento" (INSERT inicial del lote en `orders.php:5583`, y un comentario explícito en `products.php` tratando "NULL o 0" como equivalentes) -- 0 era el valor inconsistente.
+  4. Corregido a NULL en los 4 puntos donde ocurre (`registrar-paso-empleado` y los 3 `finalizar-lote-*`).
+  5. Revertido el debug temporal de `LocalDB.php`.
+- **Inconvenientes y Desafíos:** El error 409 sin mensaje detallado no daba pistas de la causa real; fue necesario el patrón de exponer temporalmente el mensaje de PDOException para identificar la FK específica que fallaba.
+- **Decisión Final y Justificación:** NULL en vez de 0, para ser consistente con el resto del código que ya trata "sin departamento actual" como NULL, en vez de introducir un segundo valor centinela distinto.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (ssh + psql para verificación directa con UPDATE real revertido, git), `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado con UPDATE real (revertido) contra la orden de prueba.
+- **Logro Conseguido:** Completar el último paso real de una orden (cuando no todos los departamentos configurados globalmente aplican a esa orden) ya no revienta con 409.
+- **Observaciones de Claude:** Esta entrada se reconstruyó a partir de los 2 mensajes de commit, ya que no se generó un log `.log` en el momento.
+- **Respuesta de Claude:** N/A (reconstruido desde git log).

@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** [Reconstruido desde el mensaje de commit -- reportado por el usuario]: una tarea terminada y ya pagada desaparecía de "Relación de Trabajos" en vez de mostrarse.
+- **Fecha y Hora:** 2026-08-19 12:33:03
+- **Proyecto(s):** Backend (Desarrollo, rama `feature/postgresql-support`, Postgres)
+- **Archivos Involucrados:** `app/routes/orders.php`
+- **Commits Relacionados:**
+    - Backend: `033a3bb`
+    - Frontend: N/A
+- **Acción Realizada:**
+  1. `GET /reportes/resumen/empleados/{id_empleado}/{id_departamento}`: la consulta de "ordenes_terminadas" hacía INNER JOIN a `products_tiempos_de_produccion`. Si el producto no tenía tiempo de producción configurado para ESE departamento (caso real: producto con tiempo solo cargado para Impresión, sin nada para Bordado), la fila completa desaparecía del reporte aunque la tarea estuviera terminada y ya generado su pago.
+  2. Cambiado a LEFT JOIN + `COALESCE(c.tiempo, 0)`: la tarea vuelve a aparecer, solo se pierde el dato de tiempo estimado (queda en 0) cuando falta esa configuración.
+- **Inconvenientes y Desafíos:** Causa raíz no relacionada con los cambios de tinta/pausa del resto del día -- dato de configuración faltante (tiempo de producción no cargado para ese departamento) que el INNER JOIN nunca toleró.
+- **Decisión Final y Justificación:** LEFT JOIN + COALESCE en vez de exigir completar la ficha técnica de tiempos para todos los productos/departamentos, ya que el reporte debe reflejar el trabajo real hecho aunque falte ese dato específico.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (ssh + psql para verificación directa, git), `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado contra datos reales: empleado 682, orden 1, departamento Bordado -- antes 0 filas, ahora 1 fila.
+- **Logro Conseguido:** El reporte "Relación de Trabajos" vuelve a mostrar todas las tareas terminadas y pagadas, independientemente de si el producto tiene o no configurado un tiempo de producción para ese departamento específico.
+- **Observaciones de Claude:** Esta entrada se reconstruyó a partir del mensaje de commit `033a3bb`, ya que no se generó un log `.log` en el momento.
+- **Respuesta de Claude:** N/A (reconstruido desde git log).

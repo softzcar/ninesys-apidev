@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "ya lo revisé en el navegador... vimos en los datos que verificaste que el consumo de 24ml se había registrado para todos los colores, en este reporte K y W aparecen en CERO y Y ni siquiera aparece, vamos a ver que le sucede a este reporte en la página `/reporte-impresoras`". Tras el primer fix: "se ve bien pero antes cuando no tenía datos deshabilitábamos el botón 'Mostrar Recargas' ahora está activo y al abrirlo muestra NaN en las columnas y ahora si aparece el color Y pero no muestra datos ¿que sucede?".
+- **Fecha y Hora:** 2026-08-19 17:15:30 (segunda corrección a las 17:19:10)
+- **Proyecto(s):** Ambos
+- **Archivos Involucrados:** `app/routes/printers.php`
+- **Commits Relacionados:**
+    - Backend: `c6500e0`, `448c4a3`
+    - Frontend: `463aa08`
+- **Acción Realizada:**
+  1. **Bug 1 (comparación de fechas rota):** `fecha_recarga` llega serializada por `json_build_object`/`json_agg` en formato ISO con "T" (`2026-08-19T15:30:17`), mientras que `tintas.moment` sale de una consulta cruda con espacio (`2026-08-19 15:42:48`). Compararlos como texto plano fallaba siempre que recarga y consumo cayeran el mismo día calendario -- el espacio ordena antes que la "T" sin importar la hora real, así que el consumo quedaba excluido del ciclo (caso real: K y W recargadas el mismo día que el consumo). Normalizado con `strtotime()` antes de comparar.
+  2. **Bug 2 (colores sin recarga invisibles):** un color con consumo real (ej. capturado en modo automático) pero sin ninguna recarga registrada en `tintas_recargas` simplemente no aparecía en la tabla, aunque sí tuviera tinta gastada (caso real: color Y, nunca recargado). Corregido sembrando una fila por cada color de `canales_colores` que aún no tenga recarga, mostrando su consumo histórico total como ciclo abierto.
+- **Inconvenientes y Desafíos:** El diagnóstico del bug de fechas requirió verificar directamente contra la base de datos el orden real de recargas vs. consumo (K/W recargadas el mismo día 19/08, DESPUÉS del consumo de la orden 3, mientras que M/C fueron recargadas el 17/08, un día distinto -- por eso M/C funcionaban "por casualidad" y K/W no).
+- **Decisión Final y Justificación:** `strtotime()` en vez de reformatear el string en origen, para no depender de que ambas fuentes de fecha mantengan el mismo formato en el futuro.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (ssh + psql para verificación directa del orden real de recargas/consumo, curl, git), `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado con curl real contra `GET /impresoras` (empresa 206): los 4 colores con recarga (K, W, M, C) muestran 24.00 ml consumidos consistentemente; el color Y (sin recarga) aparece con su fila sintética y consumo total.
+- **Logro Conseguido:** El Reporte de Impresoras ya refleja correctamente el consumo real de tinta para cualquier color, sin importar si la recarga y el consumo cayeron el mismo día calendario, y sin ocultar colores que aún no tienen historial de recarga.
+- **Observaciones de Claude:** Esta corrección reveló un tercer bug (NaN en las columnas del color sin recarga), corregido inmediatamente después -- ver log de las 17:38.
+- **Respuesta de Claude:** Corregidos 2 bugs reales en el Reporte de Impresoras: la comparación de fechas que excluía el consumo del mismo día del ciclo, y los colores sin recarga histórica que no aparecían aunque tuvieran consumo real.
