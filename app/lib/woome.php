@@ -254,6 +254,7 @@ class WooMe
       $data[$key]['prices'] = json_decode($product['prices']);
       $data[$key]['producto_fisico'] = json_decode($product['producto_fisico']);
       $data[$key]['es_diseno'] = json_decode($product['es_diseno']);
+      $data[$key]['requiere_talla_corte_tela'] = json_decode($product['requiere_talla_corte_tela']);
       $data[$key]['comisiones'] = json_decode($product['comisiones']);
       $data[$key]['categories'] = json_decode($product['categories'], true);
 
