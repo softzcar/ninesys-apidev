@@ -3300,18 +3300,29 @@ return function (App $app) {
             (SELECT orden_proceso FROM departamentos WHERE _id = {$args['id_departamento']}) AS orden_proceso_departamento,            
             (
                 -- FIX: Primer departamento donde AUN hay tareas sin terminar.
-                -- Se descartan filas sin asignar (id_empleado IS NULL) si ese departamento ya fue completado por un empleado asignado.
+                -- Se descartan filas sin asignar (id_empleado IS NULL) si ese departamento
+                -- ya fue completado por un empleado asignado -- pero si la fila pendiente
+                -- SÍ tiene un empleado real asignado (asignación granular: el departamento
+                -- se repartió entre varios empleados y alguno ya terminó su parte pero otro
+                -- no), esa fila SIEMPRE bloquea el avance, sin importar si otra fila del
+                -- mismo departamento ya está terminada. Antes, con reparto granular, un
+                -- departamento se descartaba en cuanto CUALQUIER empleado lo terminaba,
+                -- aunque a otro empleado real le quedara trabajo pendiente en ese mismo
+                -- departamento -- la orden avanzaba al siguiente paso antes de tiempo.
                 SELECT dep.orden_proceso
                 FROM lotes_detalles_empleados_asignados ldea2
                 JOIN departamentos dep ON dep._id = ldea2.id_departamento
                 WHERE ldea2.id_orden = y.id_orden
                     AND ldea2.fecha_terminado IS NULL
-                    AND NOT EXISTS (
-                        SELECT 1 
-                        FROM lotes_detalles_empleados_asignados ldea_done 
-                        WHERE ldea_done.id_orden = ldea2.id_orden 
-                          AND ldea_done.id_departamento = ldea2.id_departamento 
-                          AND ldea_done.fecha_terminado IS NOT NULL
+                    AND (
+                        ldea2.id_empleado IS NOT NULL
+                        OR NOT EXISTS (
+                            SELECT 1
+                            FROM lotes_detalles_empleados_asignados ldea_done
+                            WHERE ldea_done.id_orden = ldea2.id_orden
+                              AND ldea_done.id_departamento = ldea2.id_departamento
+                              AND ldea_done.fecha_terminado IS NOT NULL
+                        )
                     )
                 ORDER BY dep.orden_proceso ASC
                 LIMIT 1
@@ -3758,7 +3769,22 @@ return function (App $app) {
                 GROUP BY id_ordenes_productos
             ) ic_corte ON ic_corte.id_ordenes_productos = op._id";
 
-    $piezas_expr = "COALESCE(ic_corte.cantidad_cortada, op.cantidad)";
+    // Cuando la línea de producto está repartida entre varios empleados (asignación
+    // granular), la Meta no debe ser la cantidad TOTAL de la orden -- eso infla
+    // artificialmente la eficiencia mientras falten empleados por terminar su parte
+    // (ej. Meta=12 unidades pero solo se han completado e informado 7 => eficiencia
+    // 169% en vez de ~99%). Se usa la suma de lo YA completado (fecha_terminado NO
+    // nulo) según la asignación granular; si no hay reparto granular para esa línea,
+    // cae a op.cantidad como antes.
+    $ldep_join = "LEFT JOIN (
+                SELECT ldep.id_ordenes_productos, SUM(ldep.cantidad_asignada) AS cantidad_completada
+                FROM lotes_detalles_empleados_productos ldep
+                JOIN lotes_detalles_empleados_asignados ldea ON ldea._id = ldep.id_lotes_detalles_empleados_asignados
+                WHERE ldea.id_orden IN ($idsString) AND ldea.fecha_terminado IS NOT NULL
+                GROUP BY ldep.id_ordenes_productos
+            ) ldep_completado ON ldep_completado.id_ordenes_productos = op._id";
+
+    $piezas_expr = "COALESCE(ic_corte.cantidad_cortada, ldep_completado.cantidad_completada, op.cantidad)";
     $sieteDiasExpr = DB_DRIVER === 'pgsql' ? "CURRENT_DATE - INTERVAL '7 days'" : 'DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
 
     $sql = "
@@ -3818,6 +3844,7 @@ return function (App $app) {
 
             FROM ordenes_productos op
             $ic_join
+            $ldep_join
             -- Deduplicar product_insumos_asignados por (producto, talla, catálogo) para evitar duplicados.
             JOIN (
                 SELECT id_product, id_talla, id_catalogo_insumos_productos,
