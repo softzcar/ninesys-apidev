@@ -1879,7 +1879,7 @@ ADD CONSTRAINT `pagos_ibfk_1` FOREIGN KEY (`id_orden`) REFERENCES `ordenes` (`_i
 ADD CONSTRAINT `pagos_ibfk_2` FOREIGN KEY (`id_reposicion`) REFERENCES `reposiciones` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
 ADD CONSTRAINT `pagos_ibfk_3` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
 ADD CONSTRAINT `pagos_ibfk_4` FOREIGN KEY (`id_metodos_de_pago`) REFERENCES `metodos_de_pago` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-ADD CONSTRAINT `pagos_ibfk_5` FOREIGN KEY (`id_lotes_detalles`) REFERENCES `lotes_detalles` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `pagos_ibfk_5` FOREIGN KEY (`id_lotes_detalles`) REFERENCES `lotes_detalles_empleados_asignados` (`_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- pagos_abonos
 ALTER TABLE `pagos_abonos`
