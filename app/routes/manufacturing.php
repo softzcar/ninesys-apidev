@@ -722,14 +722,26 @@ return function (App $app) {
 
           $current_orden_proceso = intval($miEmpleado['orden_proceso']);
 
-          // LÓGICA CORREGIDA: Buscar el siguiente departamento en la secuencia de producción
-          $sqlDep = 'SELECT _id AS id_departamento, departamento, orden_proceso
-                     FROM departamentos
-                     WHERE asignar_numero_de_paso = 1 AND orden_proceso > ?
-                     ORDER BY orden_proceso ASC
+          // Buscar el siguiente departamento en la secuencia de producción --
+          // SOLO entre los que esta orden realmente tiene asignados (existe
+          // fila en lotes_detalles_empleados_asignados para ese departamento).
+          // Antes recorría la cadena configurada GLOBALMENTE en la empresa sin
+          // verificar si la orden tenía algo que hacer ahí: un producto que
+          // solo pasa por Impresión (sin Estampado/Corte/etc.) igual se
+          // "empujaba" al siguiente departamento de la cadena global (ej.
+          // Estampado), quedando atascado para siempre en 'activa' porque
+          // ningún empleado tiene esa orden asignada en ese departamento.
+          $sqlDep = 'SELECT d._id AS id_departamento, d.departamento, d.orden_proceso
+                     FROM departamentos d
+                     WHERE d.asignar_numero_de_paso = 1 AND d.orden_proceso > ?
+                       AND EXISTS (
+                         SELECT 1 FROM lotes_detalles_empleados_asignados ldea
+                         WHERE ldea.id_orden = ? AND ldea.id_departamento = d._id
+                       )
+                     ORDER BY d.orden_proceso ASC
                      LIMIT 1';
           $object['sql_select_next_departament'] = $sqlDep;
-          $response_departamentos = $localConnection->goQuery($sqlDep, [$current_orden_proceso]);
+          $response_departamentos = $localConnection->goQuery($sqlDep, [$current_orden_proceso, $miEmpleado['id_orden']]);
 
           // Verificar si existe el departamento, de no ser así indica que es el último paso.
           if (empty($response_departamentos)) {
