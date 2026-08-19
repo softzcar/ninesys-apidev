@@ -191,15 +191,20 @@ return function (App $app) {
                 // Nivel total en tanque al terminar esta recarga
                 $curr['restante_post_recarga'] = (float)$curr['nivel_tanque_previo'] + (float)$curr['cantidad'];
                 
-                // El ciclo de este insumo va desde que se echa hasta que se vuelve a recargar ese color
-                $inicio = $curr['fecha_recarga'];
-                $fin = $next ? $next['fecha_recarga'] : date('Y-m-d H:i:s');
-                
+                // El ciclo de este insumo va desde que se echa hasta que se vuelve a recargar ese color.
+                // fecha_recarga llega serializada por json_build_object/json_agg (formato "YYYY-MM-DDTHH:MM:SS"),
+                // mientras que t.moment viene de una consulta cruda (formato "YYYY-MM-DD HH:MM:SS[.u]") --
+                // comparar ambos como texto sin normalizar falla siempre que caigan el mismo día calendario,
+                // porque el espacio (0x20) ordena antes que la "T" (0x54) sin importar la hora real.
+                $inicio = strtotime($curr['fecha_recarga']);
+                $fin = $next ? strtotime($next['fecha_recarga']) : time();
+
                 $consumoCiclo = 0;
                 if (is_array($allConsumos)) {
                     foreach ($allConsumos as $c) {
                         if ($c['id_catalogo_impresoras'] == $row['_id'] && $c['color'] == $color) {
-                            if ($c['moment'] >= $inicio && $c['moment'] < $fin) {
+                            $momentTs = strtotime($c['moment']);
+                            if ($momentTs >= $inicio && $momentTs < $fin) {
                                 $consumoCiclo += (float)$c['cantidad'];
                             }
                         }
