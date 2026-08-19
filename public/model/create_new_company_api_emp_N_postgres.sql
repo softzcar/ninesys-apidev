@@ -1160,6 +1160,7 @@ CREATE TABLE products (
   sku varchar(255) DEFAULT NULL,
   fisico SMALLINT NOT NULL DEFAULT 1 ,
   es_diseno SMALLINT NOT NULL DEFAULT 0 ,
+  requiere_talla_corte_tela SMALLINT NOT NULL DEFAULT 1 ,
   comision decimal(7, 2) DEFAULT 0.00 ,
   stock_quantity INTEGER DEFAULT 0 ,
   product_description text DEFAULT NULL ,

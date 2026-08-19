@@ -216,6 +216,7 @@ return function (App $app) {
             pr.sku AS sku,
             pr._id AS cod,
             pr.fisico AS producto_fisico,
+            pr.requiere_talla_corte_tela,
             op.id_woo,
             op.cantidad,
             op.id_size AS id_talla,

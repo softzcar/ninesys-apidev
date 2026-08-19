@@ -95,6 +95,7 @@ class WooMe
             p.comision,
             p.fisico AS producto_fisico,
             p.es_diseno,
+            p.requiere_talla_corte_tela,
             COALESCE(pp_agg.prices_json, '[]'::jsonb) AS prices,
             COALESCE(pc_agg.comisiones_json, '[]'::jsonb) AS comisiones,
             COALESCE(cat_agg.categories_json, '[]'::jsonb) AS categories
@@ -159,6 +160,7 @@ class WooMe
             p.price,
             p.fisico producto_fisico,
             p.es_diseno,
+            p.requiere_talla_corte_tela,
             COALESCE(pp_agg.prices_json, '[]') AS prices,
             COALESCE(pc_agg.comisiones_json, '[]') AS comisiones,
             COALESCE(cat_agg.categories_json, '[]') AS categories
@@ -700,7 +702,7 @@ class WooMe
     return json_encode($this->woocommerce->post('products', $data));
   }
 
-  public function createProductLite($name, $pricesDat, $category, $sku, $producto_fisico = 0, $es_diseno = 0, $stock_quantity = 0, $reactivar_id = null)
+  public function createProductLite($name, $pricesDat, $category, $sku, $producto_fisico = 0, $es_diseno = 0, $stock_quantity = 0, $reactivar_id = null, $requiere_talla_corte_tela = 1)
   {
     $localConnection = new LocalDB();
 
@@ -743,8 +745,8 @@ class WooMe
     if ($reactivar_id) {
       // Reactivar el producto existente, aplicando la configuración indicada
       // en el formulario (puede haber cambiado respecto al original).
-      $sql = 'UPDATE products SET product = ?, sku = ?, category_ids = ?, fisico = ?, es_diseno = ?, stock_quantity = ?, eliminado = 0 WHERE _id = ?';
-      $localConnection->goQuery($sql, [$nombreTrim, $skuTrim, $category, $producto_fisico, $es_diseno, $stock_quantity, $reactivar_id]);
+      $sql = 'UPDATE products SET product = ?, sku = ?, category_ids = ?, fisico = ?, es_diseno = ?, stock_quantity = ?, requiere_talla_corte_tela = ?, eliminado = 0 WHERE _id = ?';
+      $localConnection->goQuery($sql, [$nombreTrim, $skuTrim, $category, $producto_fisico, $es_diseno, $stock_quantity, $requiere_talla_corte_tela, $reactivar_id]);
       $newID = $reactivar_id;
       // Reemplazar precios anteriores por los indicados ahora en el formulario
       $localConnection->goQuery('DELETE FROM products_prices WHERE id_product = ?', [$newID]);
@@ -756,7 +758,8 @@ class WooMe
                 category_ids,
                 fisico,
                 es_diseno,
-                stock_quantity
+                stock_quantity,
+                requiere_talla_corte_tela
             )
             VALUES(
                 '" . $nombreTrim . "',
@@ -764,7 +767,8 @@ class WooMe
                 '" . $category . "',
                 '" . $producto_fisico . "',
                 '" . $es_diseno . "',
-                '" . $stock_quantity . "'
+                '" . $stock_quantity . "',
+                '" . $requiere_talla_corte_tela . "'
             );";
       $insertResult = $localConnection->goQuery($sql);
       // goQuery() devuelve un array "suave" con status=error para
@@ -829,7 +833,7 @@ class WooMe
     // --- FIN DE LA CORRECCIÓN ---
   }
 
-  public function updateProductLite($id, $name, $sku, $category, $producto_fisico = 0, $es_diseno = 0, $stock_quantity = 0)
+  public function updateProductLite($id, $name, $sku, $category, $producto_fisico = 0, $es_diseno = 0, $stock_quantity = 0, $requiere_talla_corte_tela = 1)
   {
     $localConnection = new LocalDB();
 
@@ -840,7 +844,8 @@ class WooMe
                 category_ids = '" . $category . "',
                 fisico = '" . $producto_fisico . "',
                 es_diseno = '" . $es_diseno . "',
-                stock_quantity = '" . $stock_quantity . "'
+                stock_quantity = '" . $stock_quantity . "',
+                requiere_talla_corte_tela = '" . $requiere_talla_corte_tela . "'
             WHERE _id = " . $id;
 
     $resp = $localConnection->goQuery($sql);
