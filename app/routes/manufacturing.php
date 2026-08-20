@@ -3278,6 +3278,16 @@ return function (App $app) {
                 JOIN departamentos dep ON dep._id = ldea2.id_departamento
                 WHERE ldea2.id_orden = y.id_orden
                     AND ldea2.fecha_terminado IS NULL
+                    AND (
+                        ldea2.id_empleado = y.id_empleado
+                        OR NOT EXISTS (
+                            SELECT 1
+                            FROM lotes_detalles_empleados_asignados ldea_done
+                            WHERE ldea_done.id_orden = ldea2.id_orden
+                              AND ldea_done.id_departamento = ldea2.id_departamento
+                              AND ldea_done.fecha_terminado IS NOT NULL
+                        )
+                    )
                 ORDER BY dep.orden_proceso ASC
                 LIMIT 1
             ) AS orden_proceso,
