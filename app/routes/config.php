@@ -102,49 +102,107 @@ function formatearHoraDecimalAmPm($horaDecimal)
     return sprintf('%02d:%02d %s', $horas12, $minutos, $periodo);
 }
 
+// Sanitiza el mapa de excepciones por día de un turno (overridesManana/
+// Tarde/Noche): claves día 0-6, valores {horaInicio, horaFin} numéricos.
+// Entradas con clave o valores inválidos se descartan silenciosamente (mismo
+// criterio permisivo que sanitizarDiasArray) -- los valores que SÍ pasan la
+// sanitización estructural igual se validan (rango, fin>inicio) más abajo en
+// validarHorarioLaboral, así que un valor fuera de rango no se pierde sin
+// avisar, se rechaza con un mensaje claro.
+function sanitizarOverrides($overrides)
+{
+    if (!is_array($overrides)) {
+        return [];
+    }
+    $limpio = [];
+    foreach ($overrides as $dia => $rango) {
+        if (!is_numeric($dia) || (int)$dia < 0 || (int)$dia > 6 || !is_array($rango)) {
+            continue;
+        }
+        if (!isset($rango['horaInicio']) || !isset($rango['horaFin']) ||
+            !is_numeric($rango['horaInicio']) || !is_numeric($rango['horaFin'])) {
+            continue;
+        }
+        $limpio[(int)$dia] = ['horaInicio' => (float)$rango['horaInicio'], 'horaFin' => (float)$rango['horaFin']];
+    }
+    return $limpio;
+}
+
+function nombreDiaSemana(int $dia): string
+{
+    $nombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    return $nombres[$dia] ?? "día {$dia}";
+}
+
+// Horas efectivas de un turno en un día específico: si ese día tiene una
+// excepción en overridesX, se usa esa; si no, se usa la hora base del turno
+// (horaInicioX/horaFinX). En ambos casos, el día debe estar en diasX para
+// que el turno aplique -- si no, devuelve null (turno omitido ese día).
+// Única función que conoce esta regla de resolución; se reutiliza en todos
+// los cálculos de horas del backend (reports.php) para no duplicarla.
+function resolverHorasEfectivasDia(array $horario, string $turno, int $dia): ?array
+{
+    $dias = $horario["dias{$turno}"] ?? $horario['diasLaborales'] ?? [];
+    if (!in_array($dia, $dias, true)) {
+        return null;
+    }
+    $overrides = $horario["overrides{$turno}"] ?? [];
+    if (isset($overrides[$dia])) {
+        return ['inicio' => (float)$overrides[$dia]['horaInicio'], 'fin' => (float)$overrides[$dia]['horaFin']];
+    }
+    $inicio = $horario["horaInicio{$turno}"] ?? null;
+    $fin = $horario["horaFin{$turno}"] ?? null;
+    if ($inicio === null || $fin === null) {
+        return null;
+    }
+    return ['inicio' => (float)$inicio, 'fin' => (float)$fin];
+}
+
 /**
- * Valida los 3 turnos de un horario laboral: cada uno con hora de fin después
- * de la de inicio, y sin solaparse entre sí. Un turno con horaInicio/horaFin
- * null se considera "no configurado" y se omite de la validación. Devuelve
- * ['valido' => bool, 'mensaje' => string|null] con un mensaje claro en
- * español, listo para mostrar al usuario o devolver en la respuesta HTTP.
+ * Valida los 3 turnos de un horario laboral, día por día (0-6): cada turno
+ * activo ese día debe tener fin > inicio, y ningún par de turnos activos el
+ * mismo día puede solaparse en su rango horario -- las excepciones por día
+ * (overridesManana/Tarde/Noche) pueden hacer que un turno se solape con otro
+ * SOLO en un día puntual, por eso la validación no puede ser una sola vez
+ * para toda la semana como antes. Devuelve ['valido' => bool, 'mensaje' =>
+ * string|null] con un mensaje claro en español, listo para mostrar al
+ * usuario o devolver en la respuesta HTTP.
  */
 function validarHorarioLaboral(array $horario): array
 {
-    $turnos = [
-        ['nombre' => 'Mañana', 'inicio' => $horario['horaInicioManana'] ?? null, 'fin' => $horario['horaFinManana'] ?? null],
-        ['nombre' => 'Tarde', 'inicio' => $horario['horaInicioTarde'] ?? null, 'fin' => $horario['horaFinTarde'] ?? null],
-        ['nombre' => 'Noche', 'inicio' => $horario['horaInicioNoche'] ?? null, 'fin' => $horario['horaFinNoche'] ?? null],
-    ];
+    $nombresTurno = ['Manana' => 'Mañana', 'Tarde' => 'Tarde', 'Noche' => 'Noche'];
 
-    $activos = [];
-    foreach ($turnos as $turno) {
-        if ($turno['inicio'] === null || $turno['fin'] === null) {
-            continue; // turno no configurado, no participa en la validación
+    foreach (range(0, 6) as $dia) {
+        $activos = [];
+        foreach ($nombresTurno as $turnoKey => $turnoLabel) {
+            $rango = resolverHorasEfectivasDia($horario, $turnoKey, $dia);
+            if ($rango === null) {
+                continue;
+            }
+            if (!is_numeric($rango['inicio']) || !is_numeric($rango['fin']) ||
+                $rango['inicio'] < 0 || $rango['inicio'] > 24 || $rango['fin'] < 0 || $rango['fin'] > 24) {
+                return ['valido' => false, 'mensaje' => "El turno \"{$turnoLabel}\" el " . nombreDiaSemana($dia) . " tiene una hora fuera de rango."];
+            }
+            if ($rango['fin'] <= $rango['inicio']) {
+                return ['valido' => false, 'mensaje' => "El turno \"{$turnoLabel}\" el " . nombreDiaSemana($dia) . " tiene la hora de fin (" .
+                    formatearHoraDecimalAmPm($rango['fin']) . ") antes o igual a la hora de inicio (" .
+                    formatearHoraDecimalAmPm($rango['inicio']) . "). Revise si seleccionó a.m./p.m. correctamente."];
+            }
+            $activos[] = ['nombre' => $turnoLabel, 'inicio' => $rango['inicio'], 'fin' => $rango['fin']];
         }
-        if (!is_numeric($turno['inicio']) || !is_numeric($turno['fin']) ||
-            $turno['inicio'] < 0 || $turno['inicio'] > 24 || $turno['fin'] < 0 || $turno['fin'] > 24) {
-            return ['valido' => false, 'mensaje' => "El turno \"{$turno['nombre']}\" tiene una hora fuera de rango."];
-        }
-        if ((float)$turno['fin'] <= (float)$turno['inicio']) {
-            return ['valido' => false, 'mensaje' => "El turno \"{$turno['nombre']}\" tiene la hora de fin (" .
-                formatearHoraDecimalAmPm($turno['fin']) . ") antes o igual a la hora de inicio (" .
-                formatearHoraDecimalAmPm($turno['inicio']) . "). Revise si seleccionó a.m./p.m. correctamente."];
-        }
-        $activos[] = $turno;
-    }
 
-    usort($activos, fn($a, $b) => $a['inicio'] <=> $b['inicio']);
+        usort($activos, fn($a, $b) => $a['inicio'] <=> $b['inicio']);
 
-    for ($i = 0; $i < count($activos) - 1; $i++) {
-        if ($activos[$i + 1]['inicio'] < $activos[$i]['fin']) {
-            $anterior = $activos[$i];
-            $siguiente = $activos[$i + 1];
-            return ['valido' => false, 'mensaje' => "El turno \"{$siguiente['nombre']}\" (" .
-                formatearHoraDecimalAmPm($siguiente['inicio']) . " - " . formatearHoraDecimalAmPm($siguiente['fin']) .
-                ") se solapa con el turno \"{$anterior['nombre']}\" (" .
-                formatearHoraDecimalAmPm($anterior['inicio']) . " - " . formatearHoraDecimalAmPm($anterior['fin']) .
-                "). Revise si seleccionó a.m./p.m. correctamente."];
+        for ($i = 0; $i < count($activos) - 1; $i++) {
+            if ($activos[$i + 1]['inicio'] < $activos[$i]['fin']) {
+                $anterior = $activos[$i];
+                $siguiente = $activos[$i + 1];
+                return ['valido' => false, 'mensaje' => "El turno \"{$siguiente['nombre']}\" (" .
+                    formatearHoraDecimalAmPm($siguiente['inicio']) . " - " . formatearHoraDecimalAmPm($siguiente['fin']) .
+                    ") se solapa con el turno \"{$anterior['nombre']}\" (" .
+                    formatearHoraDecimalAmPm($anterior['inicio']) . " - " . formatearHoraDecimalAmPm($anterior['fin']) .
+                    ") el " . nombreDiaSemana($dia) . ". Revise si seleccionó a.m./p.m. correctamente."];
+            }
         }
     }
 
@@ -515,6 +573,27 @@ return function (App $app) {
             $diasNoche = json_decode($diasNoche, true);
         }
 
+        // overridesManana/Tarde/Noche: excepciones de horario para días
+        // puntuales (ej. Sábado con horas distintas al resto de la semana).
+        // Igual que diasX arriba, si el cliente no envía la clave se
+        // preserva un array vacío por defecto -- pero a diferencia de diasX,
+        // NO hay "valor anterior" al que caer por retrocompatibilidad
+        // (overridesX es una funcionalidad nueva, ningún horario guardado
+        // antes de hoy pudo haberla tenido), así que ausente = sin
+        // excepciones es siempre correcto, no hace falta un fallback.
+        $overridesManana = $data['overridesManana'] ?? [];
+        $overridesTarde = $data['overridesTarde'] ?? [];
+        $overridesNoche = $data['overridesNoche'] ?? [];
+        if (is_string($overridesManana)) {
+            $overridesManana = json_decode($overridesManana, true);
+        }
+        if (is_string($overridesTarde)) {
+            $overridesTarde = json_decode($overridesTarde, true);
+        }
+        if (is_string($overridesNoche)) {
+            $overridesNoche = json_decode($overridesNoche, true);
+        }
+
         if (!$employeeId) {
             $response->getBody()->write(json_encode(['error' => 'ID de empleado requerido.']));
             return $response
@@ -534,6 +613,9 @@ return function (App $app) {
             'diasManana' => sanitizarDiasArray($diasManana),
             'diasTarde' => sanitizarDiasArray($diasTarde),
             'diasNoche' => sanitizarDiasArray($diasNoche),
+            'overridesManana' => sanitizarOverrides($overridesManana),
+            'overridesTarde' => sanitizarOverrides($overridesTarde),
+            'overridesNoche' => sanitizarOverrides($overridesNoche),
         ];
 
         // Nunca confiar solo en la validación del frontend: este dato
@@ -567,7 +649,20 @@ return function (App $app) {
 
         $companyId = $empresaResult[0]['id_empresa'];
 
-        $horarioJson = json_encode($horarioLaboral);
+        // json_encode() de un array PHP con claves enteras que casualmente
+        // forman una secuencia 0-based (ej. overridesX con solo el día 0, o
+        // los días 0 y 1) lo trata como una LISTA JSON en vez de un OBJETO
+        // -- (object) fuerza que overridesX siempre sea un objeto `{"6":
+        // {...}}`, nunca un array `[{...}]`, sin importar qué días tenga.
+        // Se hace en una copia separada porque $horarioLaboral (arrays
+        // planos) es el que ya usó validarHorarioLaboral()/
+        // resolverHorasEfectivasDia() arriba, que esperan arrays, no objetos.
+        $horarioParaGuardar = $horarioLaboral;
+        $horarioParaGuardar['overridesManana'] = (object)$horarioLaboral['overridesManana'];
+        $horarioParaGuardar['overridesTarde'] = (object)$horarioLaboral['overridesTarde'];
+        $horarioParaGuardar['overridesNoche'] = (object)$horarioLaboral['overridesNoche'];
+
+        $horarioJson = json_encode($horarioParaGuardar);
         $sql = 'UPDATE empresas SET horario_laboral = ? WHERE id_empresa = ?';
         $result = $localConnection->goQuery($sql, [$horarioJson, $companyId]);
         $localConnection->disconnect();

@@ -170,7 +170,19 @@ return function (App $app) {
      *     permite omitir un turno en un día puntual (ej. diasTarde sin
      *     sábado). Ausentes ⇒ el consumidor debe asumir diasLaborales como
      *     respaldo para ese turno.
+     *   - overridesManana / overridesTarde / overridesNoche (OPCIONALES,
+     *     Fase 2): objeto `{ "<día 0-6>": { horaInicio, horaFin } }` con
+     *     horas específicas para días puntuales que difieren de la base del
+     *     turno (ej. Sábado con menos horas que el resto de la semana). Este
+     *     endpoint los devuelve tal cual vienen en la BD (sin resolverlos),
+     *     junto con la hora base -- la hora base (horaInicioX/horaFinX) NO
+     *     refleja las excepciones, es solo un valor de referencia general.
+     *     ⚠️ Si `msg_ninesys` (servicio externo, repo aparte) calcula
+     *     timeouts usando solo la hora base sin consultar overridesX, esos
+     *     cálculos serán incorrectos para los días con excepción -- no
+     *     forma parte de este cambio actualizar ese servicio.
      *
+
      * `reason` posibles en 422:
      *   - horario_laboral_empty
      *   - horario_laboral_invalid_json

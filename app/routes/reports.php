@@ -26,64 +26,31 @@ function calcularHorasLaboradasReales($fechaInicioStr, $fechaTerminadoStr, $hora
 
     $horasTotales = 0.0;
     $fechaActual = clone $fechaInicio;
-    $diasLaborales = array_map('intval', $horarioLaboral['diasLaborales']);
-
-    // diasManana/diasTarde/diasNoche permiten omitir un turno en días
-    // específicos (ej. Tarde sin sábado). Si el JSON es de antes de esta
-    // funcionalidad (sin esas claves), se usa diasLaborales para los 3 --
-    // mismo comportamiento de siempre, cero regresión para horarios viejos.
-    $diasManana = array_map('intval', $horarioLaboral['diasManana'] ?? $horarioLaboral['diasLaborales']);
-    $diasTarde = array_map('intval', $horarioLaboral['diasTarde'] ?? $horarioLaboral['diasLaborales']);
-    $diasNoche = array_map('intval', $horarioLaboral['diasNoche'] ?? $horarioLaboral['diasLaborales']);
-
-    $horaInicioManana = (float)($horarioLaboral['horaInicioManana'] ?? 0);
-    $horaFinManana = (float)($horarioLaboral['horaFinManana'] ?? 0);
-    $horaInicioTarde = (float)($horarioLaboral['horaInicioTarde'] ?? 0);
-    $horaFinTarde = (float)($horarioLaboral['horaFinTarde'] ?? 0);
-    // Noche es opcional: null/ausente significa que la empresa no lo usa.
-    $horaInicioNoche = $horarioLaboral['horaInicioNoche'] ?? null;
-    $horaFinNoche = $horarioLaboral['horaFinNoche'] ?? null;
-    $tieneNoche = $horaInicioNoche !== null && $horaFinNoche !== null;
 
     while ($fechaActual < $fechaTerminado) {
         $diaSemana = (int)$fechaActual->format('w'); // 0=domingo...6=sábado, igual que JS getDay()
 
-        if (in_array($diaSemana, $diasManana, true)) {
-            $inicioManana = clone $fechaActual;
-            $inicioManana->setTime((int)floor($horaInicioManana), (int)round(fmod($horaInicioManana, 1) * 60), 0);
-            $finManana = clone $fechaActual;
-            $finManana->setTime((int)floor($horaFinManana), (int)round(fmod($horaFinManana, 1) * 60), 0);
-
-            $inicioTrabajoManana = max($fechaInicio, $inicioManana);
-            $finTrabajoManana = min($fechaTerminado, $finManana);
-            if ($inicioTrabajoManana < $finTrabajoManana) {
-                $horasTotales += ($finTrabajoManana->getTimestamp() - $inicioTrabajoManana->getTimestamp()) / 3600;
+        // resolverHorasEfectivasDia() (definida en config.php, cargado antes
+        // que este archivo en cada request -- mismo patrón ya usado para
+        // calcularHorasSemanaHorario más abajo) resuelve, para este turno y
+        // este día puntual, la excepción (overridesX) si existe, o la hora
+        // base del turno -- así "Sábado con horas distintas" (Fase 2) queda
+        // cubierto sin duplicar la regla de resolución en cada consumidor.
+        foreach (['Manana', 'Tarde', 'Noche'] as $turno) {
+            $rango = resolverHorasEfectivasDia($horarioLaboral, $turno, $diaSemana);
+            if ($rango === null) {
+                continue;
             }
-        }
 
-        if (in_array($diaSemana, $diasTarde, true)) {
-            $inicioTarde = clone $fechaActual;
-            $inicioTarde->setTime((int)floor($horaInicioTarde), (int)round(fmod($horaInicioTarde, 1) * 60), 0);
-            $finTarde = clone $fechaActual;
-            $finTarde->setTime((int)floor($horaFinTarde), (int)round(fmod($horaFinTarde, 1) * 60), 0);
+            $inicioTurno = clone $fechaActual;
+            $inicioTurno->setTime((int)floor($rango['inicio']), (int)round(fmod($rango['inicio'], 1) * 60), 0);
+            $finTurno = clone $fechaActual;
+            $finTurno->setTime((int)floor($rango['fin']), (int)round(fmod($rango['fin'], 1) * 60), 0);
 
-            $inicioTrabajoTarde = max($fechaInicio, $inicioTarde);
-            $finTrabajoTarde = min($fechaTerminado, $finTarde);
-            if ($inicioTrabajoTarde < $finTrabajoTarde) {
-                $horasTotales += ($finTrabajoTarde->getTimestamp() - $inicioTrabajoTarde->getTimestamp()) / 3600;
-            }
-        }
-
-        if ($tieneNoche && in_array($diaSemana, $diasNoche, true)) {
-            $inicioNoche = clone $fechaActual;
-            $inicioNoche->setTime((int)floor($horaInicioNoche), (int)round(fmod($horaInicioNoche, 1) * 60), 0);
-            $finNoche = clone $fechaActual;
-            $finNoche->setTime((int)floor($horaFinNoche), (int)round(fmod($horaFinNoche, 1) * 60), 0);
-
-            $inicioTrabajoNoche = max($fechaInicio, $inicioNoche);
-            $finTrabajoNoche = min($fechaTerminado, $finNoche);
-            if ($inicioTrabajoNoche < $finTrabajoNoche) {
-                $horasTotales += ($finTrabajoNoche->getTimestamp() - $inicioTrabajoNoche->getTimestamp()) / 3600;
+            $inicioTrabajo = max($fechaInicio, $inicioTurno);
+            $finTrabajo = min($fechaTerminado, $finTurno);
+            if ($inicioTrabajo < $finTrabajo) {
+                $horasTotales += ($finTrabajo->getTimestamp() - $inicioTrabajo->getTimestamp()) / 3600;
             }
         }
 
@@ -95,28 +62,28 @@ function calcularHorasLaboradasReales($fechaInicioStr, $fechaTerminadoStr, $hora
 }
 
 // Horas semanales configuradas en el horario laboral de la empresa, usadas
-// para calcular el costo por hora de empleados salariados. Antes se calculaba
-// como (horas de Mañana + horas de Tarde) * cantidad de días laborales, lo
-// cual asumía que ambos turnos aplican exactamente los mismos días. Desde que
-// un turno puede omitirse en días específicos (y existe un 3er turno, Noche),
-// cada turno se cuenta con su propia cantidad de días activos -- con datos
-// viejos (sin diasManana/diasTarde, sin Noche) da el mismo resultado que
-// antes, es una generalización, no un cambio de comportamiento.
+// para calcular el costo por hora de empleados salariados. Ya no puede ser
+// (horas del turno) * (cantidad de días) porque, desde que existen
+// excepciones por día (overridesX, Fase 2), un mismo turno puede pesar
+// distinto según el día (ej. Sábado con menos horas que el resto de la
+// semana) -- se suma explícitamente día por día usando
+// resolverHorasEfectivasDia() (config.php), la misma función que ya usa
+// calcularHorasLaboradasReales() arriba. Con horarios sin overrides ni
+// diasManana/diasTarde propios (formato de antes de hoy), da exactamente el
+// mismo resultado que el cálculo anterior -- generalización, no regresión.
 function calcularHorasSemanaHorario($horarioObj) {
     if (!is_array($horarioObj)) {
         return 0.0;
     }
 
-    $diasLaborales = is_array($horarioObj['diasLaborales'] ?? null) ? $horarioObj['diasLaborales'] : [];
-    $diasManana = is_array($horarioObj['diasManana'] ?? null) ? $horarioObj['diasManana'] : $diasLaborales;
-    $diasTarde = is_array($horarioObj['diasTarde'] ?? null) ? $horarioObj['diasTarde'] : $diasLaborales;
-    $diasNoche = is_array($horarioObj['diasNoche'] ?? null) ? $horarioObj['diasNoche'] : $diasLaborales;
-
     $horasSemana = 0.0;
-    $horasSemana += max(0, (float)($horarioObj['horaFinManana'] ?? 0) - (float)($horarioObj['horaInicioManana'] ?? 0)) * count($diasManana);
-    $horasSemana += max(0, (float)($horarioObj['horaFinTarde'] ?? 0) - (float)($horarioObj['horaInicioTarde'] ?? 0)) * count($diasTarde);
-    if (($horarioObj['horaInicioNoche'] ?? null) !== null && ($horarioObj['horaFinNoche'] ?? null) !== null) {
-        $horasSemana += max(0, (float)$horarioObj['horaFinNoche'] - (float)$horarioObj['horaInicioNoche']) * count($diasNoche);
+    foreach (range(0, 6) as $dia) {
+        foreach (['Manana', 'Tarde', 'Noche'] as $turno) {
+            $rango = resolverHorasEfectivasDia($horarioObj, $turno, $dia);
+            if ($rango !== null) {
+                $horasSemana += max(0, $rango['fin'] - $rango['inicio']);
+            }
+        }
     }
 
     return $horasSemana;
