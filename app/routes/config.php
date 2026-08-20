@@ -487,13 +487,24 @@ return function (App $app) {
         $horaInicioNoche = normalizarHoraDecimalOpcional($data['horaInicioNoche'] ?? null);
         $horaFinNoche = normalizarHoraDecimalOpcional($data['horaFinNoche'] ?? null);
         $diasLaborales = $data['diasLaborales'] ?? null;
-        $diasManana = $data['diasManana'] ?? null;
-        $diasTarde = $data['diasTarde'] ?? null;
-        $diasNoche = $data['diasNoche'] ?? null;
-
         if (is_string($diasLaborales)) {
             $diasLaborales = json_decode($diasLaborales, true);
         }
+
+        // diasManana/diasTarde/diasNoche: si el cliente que llama a este
+        // endpoint NO envía la clave (cliente desactualizado, o una
+        // integración que nunca se actualizó), se cae a diasLaborales -- el
+        // mismo criterio de retrocompatibilidad usado al LEER un horario
+        // viejo. Sin este fallback, un guardado "incompleto" borraría los
+        // días de un turno en vez de dejarlos como estaban antes (bug real
+        // detectado en verificación: probar el endpoint sin estas claves
+        // guardaba arrays vacíos, dejando Mañana/Tarde sin ningún día
+        // activo). Si el cliente SÍ envía la clave (aunque sea un array
+        // vacío -- "omitir este turno todos los días"), se respeta tal cual.
+        $diasManana = array_key_exists('diasManana', $data) ? $data['diasManana'] : $diasLaborales;
+        $diasTarde = array_key_exists('diasTarde', $data) ? $data['diasTarde'] : $diasLaborales;
+        $diasNoche = array_key_exists('diasNoche', $data) ? $data['diasNoche'] : $diasLaborales;
+
         if (is_string($diasManana)) {
             $diasManana = json_decode($diasManana, true);
         }
