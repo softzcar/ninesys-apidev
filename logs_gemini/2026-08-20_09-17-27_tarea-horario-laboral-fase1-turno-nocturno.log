@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** Agregar turno Nocturno a Horario Laboral, permitir omitir un turno específico en un día específico (ej. Sábado solo Mañana, sin Tarde), y validar que las horas de un turno no queden en conflicto/solapadas, con mensaje claro. Énfasis explícito del usuario en hacerlo con cuidado dado el costo ya invertido en que los cálculos de horas funcionen bien.
+- **Fecha y Hora:** 2026-08-20 09:17:27
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/config.php`, `app/routes/reports.php`, `app/routes/msg_service.php`
+- **Commits Relacionados:**
+    - Frontend: `f9d9757`
+    - Backend: `28a877d`
+- **Acción Realizada:**
+  1. Nueva forma retrocompatible del JSON `horario_laboral`: se agregan `horaInicioNoche`/`horaFinNoche` (null = turno inactivo) y `diasManana`/`diasTarde`/`diasNoche` (lista de días propia por turno, con fallback a `diasLaborales` si el cliente no las envía).
+  2. `config.php`: `POST /configuracion/horario` acepta y guarda las 5 claves nuevas; `validarHorarioLaboral()` reescrita para validar `horaFin > horaInicio` por turno y ausencia de solapamiento entre turnos activos (ordenados por hora de inicio), bloqueando el guardado con mensaje claro en español si falla.
+  3. `reports.php`: `calcularHorasLaboradasReales()` agrega un 3er bloque de intersección para Noche y usa `diasManana`/`diasTarde`/`diasNoche` (con fallback) en vez del array único de días. Los 2 puntos que calculan `$horasSemana` se generalizan a sumar independientemente por turno (`horasDia_turno * count(dias_turno)`), fórmula que da resultado idéntico al actual para horarios sin datos nuevos.
+  4. `msg_service.php`: `/internal/business-hours` extiende la validación de esquema para aceptar las 5 claves nuevas como opcionales; se documenta el riesgo de que el servicio externo `msg_ninesys` no las use aún (fuera de este plan).
+- **Inconvenientes y Desafíos:** Ninguno bloqueante; el diseño retrocompatible por *fallback* evitó necesitar migración de datos.
+- **Decisión Final y Justificación:** Turno Noche no cruza medianoche (mismo patrón que Mañana/Tarde) para no tocar el núcleo de iteración día-por-día de los motores de cálculo existentes — decisión confirmada con el usuario antes de implementar.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, php -r para pruebas directas, git), `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado con `php -l` y scripts `php -r` de prueba directa antes de desplegar; verificado contra datos reales de empresas 194/204/206 en Desarrollo tras el despliegue.
+- **Logro Conseguido:** Turno Nocturno, omisión de turno por día, y validación de solapamiento disponibles de punta a punta (backend), sin regresión para ningún horario ya guardado.
+- **Observaciones de Claude:** Ver también `c4c6ad4` (bug real encontrado durante la propia verificación de este mismo cambio) y la Fase 2 (`1aa5f88`) que se construyó sobre este diseño.

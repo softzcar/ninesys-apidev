@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** "No pude configurar un horario diferente para el día sábado, si cambio la hora de entrada el día sábado la cambia en toda la semana... es inútil ese selector de días si no me selecciona el día para cambiarlo independientemente." Confirmado con el usuario: cada turno (Mañana/Tarde/Noche) debe permitir horas distintas para días puntuales, sin pasar a un modelo de N turnos libres por día.
+- **Fecha y Hora:** 2026-08-20 14:28:30
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/config.php`, `app/routes/reports.php`, `app/routes/msg_service.php`
+- **Commits Relacionados:**
+    - Frontend: `94497f9`
+    - Backend: `1aa5f88`
+- **Acción Realizada:**
+  1. Se agrega `overridesManana`/`overridesTarde`/`overridesNoche` (mapa `{"<día 0-6>": {horaInicio, horaFin}}`) junto a las claves de la Fase 1, aditivo y retrocompatible (mapa ausente o vacío = comportamiento idéntico a hoy).
+  2. Nueva función central `resolverHorasEfectivasDia(horario, turno, dia)` en `config.php`: si el día no está en `diasX` retorna null; si hay override para ese día lo usa; si no, usa la hora base del turno. Reutilizada por `reports.php`.
+  3. `validarHorarioLaboral()` reescrita para validar solapamiento **por día** (antes era una sola validación para toda la semana): para cada uno de los 7 días se resuelven las horas efectivas de los turnos activos ese día y se corre el algoritmo de solapamiento sobre ese conjunto puntual.
+  4. `reports.php`: `calcularHorasLaboradasReales()` y la nueva `calcularHorasSemanaHorario()` reescritas para sumar día por día vía `resolverHorasEfectivasDia()` en vez de `horasDia * count(dias)`.
+  5. `msg_service.php`: `/internal/business-hours` expone también `overridesManana`/`overridesTarde`/`overridesNoche` como información adicional, con nota de riesgo explícita de que `msg_ninesys` necesitaría cambios propios para aprovecharlos (fuera de este plan).
+  6. Gotcha de PHP encontrado y corregido antes de desplegar: un mapa de overrides con claves de día 0-based secuenciales (ej. solo día 0, o días 0+1) se serializa como lista JSON en vez de objeto -- corregido casteando a `(object)` solo las 3 claves overridesX en una copia separada (`$horarioParaGuardar`), justo antes del `json_encode()` final, manteniendo el array plano original para la lógica interna.
+- **Inconvenientes y Desafíos:** El gotcha de serialización JSON de PHP se encontró proactivamente con un script `php -r` de prueba directa, antes de desplegar -- no llegó a afectar datos reales.
+- **Decisión Final y Justificación:** Mantener los turnos con nombre (Mañana/Tarde/Noche) en vez de un modelo 100% libre de N turnos por día -- decisión confirmada con el usuario, evita un rediseño mucho mayor y más riesgoso para un caso de uso que se resuelve igual con overrides por día.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, php -r, curl, git), `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** Verificado con curl contra Desarrollo: horario ya guardado sin overrides calcula horas idéntico a antes; override de Sábado en Mañana solo afecta ese día; solapamiento puntual de un solo día se detecta sin bloquear el resto de la semana.
+- **Logro Conseguido:** Resuelto de fondo el caso real del usuario (horario distinto el sábado) sin duplicar el modelo de turnos ni arriesgar los cálculos de nómina ya verificados.

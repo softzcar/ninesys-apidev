@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** "cuando eliminé la empresa desde setup.nineteengreen.com no eliminó los registros en `api_empresas`... estoy haciendo pruebas creando nuevas empresas voy a tener que estarla eliminando seguido, necesito que esta aplicación sea capaz de hacer esta tarea correctamente."
+- **Fecha y Hora:** 2026-08-20 17:01:26
+- **Proyecto(s):** Backend (+ setup_company como consumidor)
+- **Archivos Involucrados:** `app/routes.php` (endpoint `DELETE /setup/user/{id}`)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - setup_company: `3a1ee88`
+    - Backend: `9b1dc08`
+- **Acción Realizada:** Diagnosticado que el intento de borrado de la empresa 204 por el usuario vía `setup.nineteengreen.com` había fallado en silencio. Causa raíz: condición de carrera entre `pg_terminate_backend` + `DROP DATABASE ... WITH (FORCE)` (fix previo de Antigravity de esta misma mañana, `26f1508`/log `2026-08-20_11-00-00`) y el polling constante de `msg_ninesys` a todos los tenants (incluido el que se está borrando), que puede reabrir una conexión entre ambos pasos. Se reescribió el bloque Postgres de `DELETE /setup/user/{id}` con un loop de reintento (hasta 5 intentos, 300ms entre cada uno), reintentando solo ante el error específico de conexión en uso, no ante cualquier excepción. En paralelo, `setup_company/pages/usuarios.vue` amplía el timeout del fetch de 20s a 60s para dar margen a los reintentos.
+- **Inconvenientes y Desafíos:** El usuario primero afirmó que la empresa 204 "ya no existe en la base de datos" -- se verificó directamente contra `api_empresas.empresas` y seguía existiendo (`activo=1`); se le señaló la discrepancia y se confirmó explícitamente el alcance antes de proceder al borrado completo.
+- **Decisión Final y Justificación:** Reintento acotado solo al error de conexión-en-uso (no genérico) para no enmascarar otros fallos reales; timeout de cliente ampliado en paralelo porque 5 reintentos de 300ms pueden superar el timeout anterior de 20s sumado a la latencia normal del borrado.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (ssh, psql, curl, git), `ninesys-hub/bin/deploy_backend.sh` (opción 2, Desarrollo).
+- **Resultado:** Éxito.
+- **Verificación:** Se completó el borrado real y total de la empresa 204 (BD Postgres + filas centrales en `api_empresas`) usando el endpoint corregido, verificado con curl directo y confirmado por SQL que no quedaron huérfanos.
+- **Logro Conseguido:** Corregido un riesgo sistémico de arquitectura (no un bug puntual de la empresa 204) -- cualquier borrado de empresa futuro, con `msg_ninesys` corriendo, estaba expuesto a la misma condición de carrera.

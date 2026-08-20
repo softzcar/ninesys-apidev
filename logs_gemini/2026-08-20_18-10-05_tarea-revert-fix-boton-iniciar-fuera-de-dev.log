@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** "el fix que aplicó Antigravity en producción es solo para producción no lo vamos a reflejar localmente" / "ese fix sí hay que commiterlo y pushearlo" (referido al mismo fix, pero solo en la rama de Producción).
+- **Fecha y Hora:** 2026-08-20 18:10:05
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/manufacturing.php`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend (Dev, `feature/postgresql-support`): `b606162` (revert)
+    - Backend (Prod, `refactor/modular-routes`): `30a4b6d` (fix aplicado y commiteado solo ahí)
+- **Acción Realizada:** Durante la revisión de cierre del día se encontró que el commit `26f1508` (10:59 am, backend) mezcló sin relación el fix legítimo de borrado de empresa (Postgres/Dev) con un fix de `manufacturing.php` que Antigravity había aplicado esa misma mañana directamente por SSH en `vps-contabo-prod` (documentado en `logs_gemini/2026-08-20_10-35-00_tarea-fix-bloqueo-orden-siguiente-departamento.log`), pese a que ese log afirmaba explícitamente no haber hecho `git commit` del cambio local. Se revirtió en Dev/local la única línea afectada (`ldea2.id_empleado = y.id_empleado` -> `IS NOT NULL`), dejando intacto el fix de borrado de empresa del mismo commit. Por separado, se encontró que en el propio servidor de Producción el archivo SÍ tenía el cambio aplicado pero sin commitear -- se commiteó y pusheó ahí, exclusivamente en `refactor/modular-routes`, para que no se pierda en el próximo `git pull`/`git reset --hard` de un futuro despliegue a Producción.
+- **Inconvenientes y Desafíos:** El estado real (qué rama tenía el fix, cuál no, y cuál estaba desactualizada) requirió verificación directa en los 2 servidores antes de tocar nada -- `origin/refactor/modular-routes` estaba 6 días desactualizado respecto al archivo real en disco de Producción.
+- **Decisión Final y Justificación:** Mantener el fix exclusivamente en la rama/servidor de Producción por decisión explícita del usuario -- no es una limitación técnica, es una decisión de alcance del propio usuario sobre dónde debe vivir ese comportamiento.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (git, ssh, php -l).
+- **Resultado:** Éxito.
+- **Verificación:** `git diff` confirmado como una sola línea en cada repo; `php -l` sin errores tras el revert local; commit en Producción verificado como el único archivo modificado antes de commitear (se dejaron intactos otros archivos sueltos sin relación en el working tree de Producción).
+- **Logro Conseguido:** El fix de Producción queda protegido en git (ya no depende de que nadie sobreescriba el archivo a mano), y Dev queda exactamente como antes del hotfix de esta mañana, sin mezclar código no solicitado para ese ambiente.

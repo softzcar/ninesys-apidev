@@ -1,0 +1,14 @@
+- **Solicitud del Usuario:** Ninguna explícita -- bug real encontrado durante la propia verificación end-to-end de la Fase 1 de Horario Laboral (`28a877d`).
+- **Fecha y Hora:** 2026-08-20 09:22:22
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** `app/routes/config.php`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `c4c6ad4`
+- **Acción Realizada:** Al probar con una llamada `curl` directa a `POST /configuracion/horario` que simulaba un cliente sin `diasManana`/`diasTarde`/`diasNoche` (payload incompleto), el backend defaulteaba esas claves a arrays vacíos `[]` en vez de caer a `diasLaborales`, borrando silenciosamente los días activos de Mañana/Tarde. Corregido con `array_key_exists('diasX', $data) ? $data['diasX'] : $diasLaborales` en vez de `$data['diasX'] ?? []`.
+- **Inconvenientes y Desafíos:** La propia llamada de prueba corrompió momentáneamente los datos reales de la empresa 206 en Desarrollo antes de detectar el bug.
+- **Decisión Final y Justificación:** `array_key_exists` en vez de `??` porque el problema era distinguir "clave ausente" de "clave presente con array vacío intencional" -- `??` trata ambos casos igual.
+- **Herramienta(s) Utilizada(s):** Bash (curl, git), Edit.
+- **Resultado:** Éxito.
+- **Verificación:** Redesplegado y corregidos manualmente vía curl los datos de la empresa 206 a su estado original; reverificado que el guardado sin esas claves ahora cae correctamente a `diasLaborales`.
+- **Logro Conseguido:** Se evitó que este bug de pérdida de datos llegara a afectar a un cliente real -- encontrado y corregido antes de que el usuario lo reportara.
