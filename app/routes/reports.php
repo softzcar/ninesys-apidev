@@ -28,15 +28,27 @@ function calcularHorasLaboradasReales($fechaInicioStr, $fechaTerminadoStr, $hora
     $fechaActual = clone $fechaInicio;
     $diasLaborales = array_map('intval', $horarioLaboral['diasLaborales']);
 
+    // diasManana/diasTarde/diasNoche permiten omitir un turno en días
+    // específicos (ej. Tarde sin sábado). Si el JSON es de antes de esta
+    // funcionalidad (sin esas claves), se usa diasLaborales para los 3 --
+    // mismo comportamiento de siempre, cero regresión para horarios viejos.
+    $diasManana = array_map('intval', $horarioLaboral['diasManana'] ?? $horarioLaboral['diasLaborales']);
+    $diasTarde = array_map('intval', $horarioLaboral['diasTarde'] ?? $horarioLaboral['diasLaborales']);
+    $diasNoche = array_map('intval', $horarioLaboral['diasNoche'] ?? $horarioLaboral['diasLaborales']);
+
     $horaInicioManana = (float)($horarioLaboral['horaInicioManana'] ?? 0);
     $horaFinManana = (float)($horarioLaboral['horaFinManana'] ?? 0);
     $horaInicioTarde = (float)($horarioLaboral['horaInicioTarde'] ?? 0);
     $horaFinTarde = (float)($horarioLaboral['horaFinTarde'] ?? 0);
+    // Noche es opcional: null/ausente significa que la empresa no lo usa.
+    $horaInicioNoche = $horarioLaboral['horaInicioNoche'] ?? null;
+    $horaFinNoche = $horarioLaboral['horaFinNoche'] ?? null;
+    $tieneNoche = $horaInicioNoche !== null && $horaFinNoche !== null;
 
     while ($fechaActual < $fechaTerminado) {
         $diaSemana = (int)$fechaActual->format('w'); // 0=domingo...6=sábado, igual que JS getDay()
 
-        if (in_array($diaSemana, $diasLaborales, true)) {
+        if (in_array($diaSemana, $diasManana, true)) {
             $inicioManana = clone $fechaActual;
             $inicioManana->setTime((int)floor($horaInicioManana), (int)round(fmod($horaInicioManana, 1) * 60), 0);
             $finManana = clone $fechaActual;
@@ -47,7 +59,9 @@ function calcularHorasLaboradasReales($fechaInicioStr, $fechaTerminadoStr, $hora
             if ($inicioTrabajoManana < $finTrabajoManana) {
                 $horasTotales += ($finTrabajoManana->getTimestamp() - $inicioTrabajoManana->getTimestamp()) / 3600;
             }
+        }
 
+        if (in_array($diaSemana, $diasTarde, true)) {
             $inicioTarde = clone $fechaActual;
             $inicioTarde->setTime((int)floor($horaInicioTarde), (int)round(fmod($horaInicioTarde, 1) * 60), 0);
             $finTarde = clone $fechaActual;
@@ -60,11 +74,52 @@ function calcularHorasLaboradasReales($fechaInicioStr, $fechaTerminadoStr, $hora
             }
         }
 
+        if ($tieneNoche && in_array($diaSemana, $diasNoche, true)) {
+            $inicioNoche = clone $fechaActual;
+            $inicioNoche->setTime((int)floor($horaInicioNoche), (int)round(fmod($horaInicioNoche, 1) * 60), 0);
+            $finNoche = clone $fechaActual;
+            $finNoche->setTime((int)floor($horaFinNoche), (int)round(fmod($horaFinNoche, 1) * 60), 0);
+
+            $inicioTrabajoNoche = max($fechaInicio, $inicioNoche);
+            $finTrabajoNoche = min($fechaTerminado, $finNoche);
+            if ($inicioTrabajoNoche < $finTrabajoNoche) {
+                $horasTotales += ($finTrabajoNoche->getTimestamp() - $inicioTrabajoNoche->getTimestamp()) / 3600;
+            }
+        }
+
         $fechaActual->modify('+1 day');
         $fechaActual->setTime(0, 0, 0);
     }
 
     return round($horasTotales, 2);
+}
+
+// Horas semanales configuradas en el horario laboral de la empresa, usadas
+// para calcular el costo por hora de empleados salariados. Antes se calculaba
+// como (horas de Mañana + horas de Tarde) * cantidad de días laborales, lo
+// cual asumía que ambos turnos aplican exactamente los mismos días. Desde que
+// un turno puede omitirse en días específicos (y existe un 3er turno, Noche),
+// cada turno se cuenta con su propia cantidad de días activos -- con datos
+// viejos (sin diasManana/diasTarde, sin Noche) da el mismo resultado que
+// antes, es una generalización, no un cambio de comportamiento.
+function calcularHorasSemanaHorario($horarioObj) {
+    if (!is_array($horarioObj)) {
+        return 0.0;
+    }
+
+    $diasLaborales = is_array($horarioObj['diasLaborales'] ?? null) ? $horarioObj['diasLaborales'] : [];
+    $diasManana = is_array($horarioObj['diasManana'] ?? null) ? $horarioObj['diasManana'] : $diasLaborales;
+    $diasTarde = is_array($horarioObj['diasTarde'] ?? null) ? $horarioObj['diasTarde'] : $diasLaborales;
+    $diasNoche = is_array($horarioObj['diasNoche'] ?? null) ? $horarioObj['diasNoche'] : $diasLaborales;
+
+    $horasSemana = 0.0;
+    $horasSemana += max(0, (float)($horarioObj['horaFinManana'] ?? 0) - (float)($horarioObj['horaInicioManana'] ?? 0)) * count($diasManana);
+    $horasSemana += max(0, (float)($horarioObj['horaFinTarde'] ?? 0) - (float)($horarioObj['horaInicioTarde'] ?? 0)) * count($diasTarde);
+    if (($horarioObj['horaInicioNoche'] ?? null) !== null && ($horarioObj['horaFinNoche'] ?? null) !== null) {
+        $horasSemana += max(0, (float)$horarioObj['horaFinNoche'] - (float)$horarioObj['horaInicioNoche']) * count($diasNoche);
+    }
+
+    return $horasSemana;
 }
 
 return function (App $app) {
@@ -132,14 +187,7 @@ return function (App $app) {
             $sqlSalarios = "SELECT id_usuario, id_usuario as id_empleado, nombre, salario_monto, salario_periodo, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_empresa = $id_empresa";
             $salariosData = $dbEmpresas->goQuery($sqlSalarios);
             $horarioObj = $horario_laboral ? json_decode($horario_laboral, true) : null;
-            $horasDia = 0;
-            $diasSemana = 0;
-            if (is_array($horarioObj)) {
-                $horasDia = (float)($horarioObj['horaFinManana'] ?? 0) - (float)($horarioObj['horaInicioManana'] ?? 0);
-                $horasDia += (float)($horarioObj['horaFinTarde'] ?? 0) - (float)($horarioObj['horaInicioTarde'] ?? 0);
-                $diasSemana = is_array($horarioObj['diasLaborales'] ?? null) ? count($horarioObj['diasLaborales']) : 0;
-            }
-            $horasSemana = max(0, $horasDia) * max(0, $diasSemana);
+            $horasSemana = calcularHorasSemanaHorario($horarioObj);
             if (is_array($salariosData) && !isset($salariosData['status'])) {
                 foreach ($salariosData as &$emp) {
                     $monto = (float)($emp['salario_monto'] ?? 0);
@@ -825,14 +873,7 @@ return function (App $app) {
         }
         $horario_laboral = (!empty($horarioResult) && isset($horarioResult[0]['horario_laboral'])) ? $horarioResult[0]['horario_laboral'] : null;
         $horarioObj = $horario_laboral ? json_decode($horario_laboral, true) : null;
-        $horasDia = 0;
-        $diasSemana = 0;
-        if (is_array($horarioObj)) {
-            $horasDia = (float)($horarioObj['horaFinManana'] ?? 0) - (float)($horarioObj['horaInicioManana'] ?? 0);
-            $horasDia += (float)($horarioObj['horaFinTarde'] ?? 0) - (float)($horarioObj['horaInicioTarde'] ?? 0);
-            $diasSemana = is_array($horarioObj['diasLaborales'] ?? null) ? count($horarioObj['diasLaborales']) : 0;
-        }
-        $horasSemana = max(0, $horasDia) * max(0, $diasSemana);
+        $horasSemana = calcularHorasSemanaHorario($horarioObj);
         $dbEmpresas->disconnect();
 
         // Salary employees who worked on this order (from task records).

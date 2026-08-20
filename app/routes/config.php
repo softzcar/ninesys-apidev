@@ -62,6 +62,95 @@ function obtenerEstadoWizardOperativo(LocalDB $db): array
     ];
 }
 
+// El turno Noche es opcional: a diferencia de Mañana/Tarde (siempre enviados
+// por el formulario), ausente o cadena vacía significa "sin configurar" y debe
+// guardarse como null, no como 0.0 -- (float)null bloquearía horas reales de
+// medianoche en los cálculos que consumen este JSON.
+function normalizarHoraDecimalOpcional($valor)
+{
+    if ($valor === null || $valor === '') {
+        return null;
+    }
+    return is_numeric($valor) ? (float)$valor : null;
+}
+
+// Sanitiza un array de días laborales a enteros únicos en [0,6] (0=domingo,
+// igual convención que Date.getDay() de JS). Protege contra el mismo tipo de
+// corrupción de datos ya visto antes (arrays de strings como ["Lunes"]).
+function sanitizarDiasArray($dias)
+{
+    if (!is_array($dias)) {
+        return [];
+    }
+    $limpios = array_filter(array_map('intval', $dias), fn($d) => $d >= 0 && $d <= 6);
+    return array_values(array_unique($limpios));
+}
+
+function formatearHoraDecimalAmPm($horaDecimal)
+{
+    $horas24 = (int)floor($horaDecimal);
+    $minutos = (int)round(($horaDecimal - $horas24) * 60);
+    if ($minutos === 60) {
+        $minutos = 0;
+        $horas24++;
+    }
+    $periodo = $horas24 >= 12 ? 'p.m.' : 'a.m.';
+    $horas12 = $horas24 % 12;
+    if ($horas12 === 0) {
+        $horas12 = 12;
+    }
+    return sprintf('%02d:%02d %s', $horas12, $minutos, $periodo);
+}
+
+/**
+ * Valida los 3 turnos de un horario laboral: cada uno con hora de fin después
+ * de la de inicio, y sin solaparse entre sí. Un turno con horaInicio/horaFin
+ * null se considera "no configurado" y se omite de la validación. Devuelve
+ * ['valido' => bool, 'mensaje' => string|null] con un mensaje claro en
+ * español, listo para mostrar al usuario o devolver en la respuesta HTTP.
+ */
+function validarHorarioLaboral(array $horario): array
+{
+    $turnos = [
+        ['nombre' => 'Mañana', 'inicio' => $horario['horaInicioManana'] ?? null, 'fin' => $horario['horaFinManana'] ?? null],
+        ['nombre' => 'Tarde', 'inicio' => $horario['horaInicioTarde'] ?? null, 'fin' => $horario['horaFinTarde'] ?? null],
+        ['nombre' => 'Noche', 'inicio' => $horario['horaInicioNoche'] ?? null, 'fin' => $horario['horaFinNoche'] ?? null],
+    ];
+
+    $activos = [];
+    foreach ($turnos as $turno) {
+        if ($turno['inicio'] === null || $turno['fin'] === null) {
+            continue; // turno no configurado, no participa en la validación
+        }
+        if (!is_numeric($turno['inicio']) || !is_numeric($turno['fin']) ||
+            $turno['inicio'] < 0 || $turno['inicio'] > 24 || $turno['fin'] < 0 || $turno['fin'] > 24) {
+            return ['valido' => false, 'mensaje' => "El turno \"{$turno['nombre']}\" tiene una hora fuera de rango."];
+        }
+        if ((float)$turno['fin'] <= (float)$turno['inicio']) {
+            return ['valido' => false, 'mensaje' => "El turno \"{$turno['nombre']}\" tiene la hora de fin (" .
+                formatearHoraDecimalAmPm($turno['fin']) . ") antes o igual a la hora de inicio (" .
+                formatearHoraDecimalAmPm($turno['inicio']) . "). Revise si seleccionó a.m./p.m. correctamente."];
+        }
+        $activos[] = $turno;
+    }
+
+    usort($activos, fn($a, $b) => $a['inicio'] <=> $b['inicio']);
+
+    for ($i = 0; $i < count($activos) - 1; $i++) {
+        if ($activos[$i + 1]['inicio'] < $activos[$i]['fin']) {
+            $anterior = $activos[$i];
+            $siguiente = $activos[$i + 1];
+            return ['valido' => false, 'mensaje' => "El turno \"{$siguiente['nombre']}\" (" .
+                formatearHoraDecimalAmPm($siguiente['inicio']) . " - " . formatearHoraDecimalAmPm($siguiente['fin']) .
+                ") se solapa con el turno \"{$anterior['nombre']}\" (" .
+                formatearHoraDecimalAmPm($anterior['inicio']) . " - " . formatearHoraDecimalAmPm($anterior['fin']) .
+                "). Revise si seleccionó a.m./p.m. correctamente."];
+        }
+    }
+
+    return ['valido' => true, 'mensaje' => null];
+}
+
 return function (App $app) {
 
 
@@ -392,14 +481,57 @@ return function (App $app) {
         $horaFinManana = $data['horaFinManana'] ?? null;
         $horaInicioTarde = $data['horaInicioTarde'] ?? null;
         $horaFinTarde = $data['horaFinTarde'] ?? null;
+        // Turno Noche es opcional -- a diferencia de Mañana/Tarde, ausente o
+        // vacío significa "sin configurar" (null), no "00:00" ((float)null
+        // daría 0.0, que sí bloquearía horas reales).
+        $horaInicioNoche = normalizarHoraDecimalOpcional($data['horaInicioNoche'] ?? null);
+        $horaFinNoche = normalizarHoraDecimalOpcional($data['horaFinNoche'] ?? null);
         $diasLaborales = $data['diasLaborales'] ?? null;
+        $diasManana = $data['diasManana'] ?? null;
+        $diasTarde = $data['diasTarde'] ?? null;
+        $diasNoche = $data['diasNoche'] ?? null;
 
         if (is_string($diasLaborales)) {
             $diasLaborales = json_decode($diasLaborales, true);
         }
+        if (is_string($diasManana)) {
+            $diasManana = json_decode($diasManana, true);
+        }
+        if (is_string($diasTarde)) {
+            $diasTarde = json_decode($diasTarde, true);
+        }
+        if (is_string($diasNoche)) {
+            $diasNoche = json_decode($diasNoche, true);
+        }
 
         if (!$employeeId) {
             $response->getBody()->write(json_encode(['error' => 'ID de empleado requerido.']));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withHeader('Access-Control-Allow-Origin', '*')
+                ->withStatus(400);
+        }
+
+        $horarioLaboral = [
+            'horaInicioManana' => (float)$horaInicioManana,
+            'horaFinManana' => (float)$horaFinManana,
+            'horaInicioTarde' => (float)$horaInicioTarde,
+            'horaFinTarde' => (float)$horaFinTarde,
+            'horaInicioNoche' => $horaInicioNoche,
+            'horaFinNoche' => $horaFinNoche,
+            'diasLaborales' => sanitizarDiasArray($diasLaborales),
+            'diasManana' => sanitizarDiasArray($diasManana),
+            'diasTarde' => sanitizarDiasArray($diasTarde),
+            'diasNoche' => sanitizarDiasArray($diasNoche),
+        ];
+
+        // Nunca confiar solo en la validación del frontend: este dato
+        // alimenta cálculos de nómina y costos, así que se blinda también
+        // aquí -- por si llega una petición directa que no pasó por el
+        // formulario, o el frontend queda desactualizado.
+        $validacion = validarHorarioLaboral($horarioLaboral);
+        if (!$validacion['valido']) {
+            $response->getBody()->write(json_encode(['error' => $validacion['mensaje']]));
             return $response
                 ->withHeader('Content-Type', 'application/json')
                 ->withHeader('Access-Control-Allow-Origin', '*')
@@ -423,14 +555,6 @@ return function (App $app) {
         }
 
         $companyId = $empresaResult[0]['id_empresa'];
-
-        $horarioLaboral = [
-            'horaInicioManana' => (float)$horaInicioManana,
-            'horaFinManana' => (float)$horaFinManana,
-            'horaInicioTarde' => (float)$horaInicioTarde,
-            'horaFinTarde' => (float)$horaFinTarde,
-            'diasLaborales' => is_array($diasLaborales) ? $diasLaborales : []
-        ];
 
         $horarioJson = json_encode($horarioLaboral);
         $sql = 'UPDATE empresas SET horario_laboral = ? WHERE id_empresa = ?';

@@ -159,7 +159,17 @@ return function (App $app) {
      *   - horaInicioManana / horaFinManana / horaInicioTarde / horaFinTarde:
      *     número decimal en horas (ej: 8.5 = 08:30, 12 = 12:00, 17.5 = 17:30).
      *     Rango válido: [0, 24]. Pueden ser null/vacío para turnos no usados.
+     *   - horaInicioNoche / horaFinNoche (OPCIONALES, no forman parte de
+     *     $requiredKeys -- pueden estar ausentes en horarios guardados antes
+     *     de que existiera el turno Noche): mismo formato/rango que arriba.
+     *     Si vienen presentes, se validan igual; si están ausentes o
+     *     null/vacías, se interpreta como "la empresa no usa turno Noche".
      *   - diasLaborales: array de enteros (convención: 1=Lun..7=Dom o 0=Dom..6=Sáb).
+     *   - diasManana / diasTarde / diasNoche (OPCIONALES, mismo criterio que
+     *     Noche arriba): lista de días en que ESE turno específico aplica --
+     *     permite omitir un turno en un día puntual (ej. diasTarde sin
+     *     sábado). Ausentes ⇒ el consumidor debe asumir diasLaborales como
+     *     respaldo para ese turno.
      *
      * `reason` posibles en 422:
      *   - horario_laboral_empty
@@ -288,11 +298,14 @@ return function (App $app) {
         }
 
         // --- 9. Validar horas como decimales en [0, 24]. Vacíos/null permitidos
-        //     para tramos opcionales (ej: empresa sin turno tarde). ---
-        $timeKeys = ['horaInicioManana', 'horaFinManana', 'horaInicioTarde', 'horaFinTarde'];
+        //     para tramos opcionales (ej: empresa sin turno tarde o sin turno
+        //     Noche). horaInicioNoche/horaFinNoche pueden no existir siquiera
+        //     como clave en horarios guardados antes de esta funcionalidad --
+        //     ?? null evita el warning de clave ausente. ---
+        $timeKeys = ['horaInicioManana', 'horaFinManana', 'horaInicioTarde', 'horaFinTarde', 'horaInicioNoche', 'horaFinNoche'];
         $invalidTimes = [];
         foreach ($timeKeys as $k) {
-            $v = $horario[$k];
+            $v = $horario[$k] ?? null;
             if ($v === null || $v === '') continue;
             if (!is_numeric($v) || $v < 0 || $v > 24) {
                 $invalidTimes[$k] = $v;
@@ -329,6 +342,37 @@ return function (App $app) {
                 'reason'  => 'dias_laborales_invalid_items',
                 'invalid' => $invalidDays,
             ], 422);
+        }
+
+        // --- 10b. Validar diasManana/diasTarde/diasNoche (OPCIONALES) como
+        //     arrays de enteros, mismo criterio que diasLaborales. Ausentes
+        //     no es error -- el consumidor debe usar diasLaborales como
+        //     respaldo para ese turno. ---
+        foreach (['diasManana', 'diasTarde', 'diasNoche'] as $diasKey) {
+            if (!array_key_exists($diasKey, $horario) || $horario[$diasKey] === null) {
+                continue;
+            }
+            if (!is_array($horario[$diasKey])) {
+                return $respondJson([
+                    'error'   => 'unprocessable_entity',
+                    'message' => "El campo {$diasKey} debe ser un array.",
+                    'reason'  => 'dias_laborales_not_array',
+                ], 422);
+            }
+            $invalidDaysTurno = [];
+            foreach ($horario[$diasKey] as $d) {
+                if (!is_int($d) || $d < 0 || $d > 7) {
+                    $invalidDaysTurno[] = $d;
+                }
+            }
+            if (!empty($invalidDaysTurno)) {
+                return $respondJson([
+                    'error'   => 'unprocessable_entity',
+                    'message' => "{$diasKey} contiene valores no válidos (se esperan enteros en [0, 7]).",
+                    'reason'  => 'dias_laborales_invalid_items',
+                    'invalid' => $invalidDaysTurno,
+                ], 422);
+            }
         }
 
         // --- 11. Log de auditoría ---

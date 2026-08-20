@@ -19,15 +19,11 @@ return function (App $app) {
         
         $horario_laboral = (!empty($horarioResult) && isset($horarioResult[0]['horario_laboral'])) ? $horarioResult[0]['horario_laboral'] : null;
         $horarioObj = $horario_laboral ? json_decode($horario_laboral, true) : null;
-        
-        $horasDia = 0;
-        $diasSemana = 0;
-        if (is_array($horarioObj)) {
-            $horasDia = (float)($horarioObj['horaFinManana'] ?? 0) - (float)($horarioObj['horaInicioManana'] ?? 0);
-            $horasDia += (float)($horarioObj['horaFinTarde'] ?? 0) - (float)($horarioObj['horaInicioTarde'] ?? 0);
-            $diasSemana = is_array($horarioObj['diasLaborales'] ?? null) ? count($horarioObj['diasLaborales']) : 0;
-        }
-        $horasSemana = max(0, $horasDia) * max(0, $diasSemana);
+
+        // calcularHorasSemanaHorario() definida globalmente en reports.php --
+        // mismo criterio de "ambos archivos se cargan en cada request" que ya
+        // aplica arriba para calcularHorasLaboradasReales().
+        $horasSemana = calcularHorasSemanaHorario($horarioObj);
 
         $sqlSalarios = "SELECT id_usuario, nombre, salario_monto, salario_periodo, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_empresa = $id_empresa AND activo = 1";
         $salariosData = $dbEmpresas->goQuery($sqlSalarios);
