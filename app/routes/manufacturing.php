@@ -3328,7 +3328,7 @@ return function (App $app) {
                 WHERE ldea2.id_orden = y.id_orden
                     AND ldea2.fecha_terminado IS NULL
                     AND (
-                        ldea2.id_empleado = y.id_empleado
+                        ldea2.id_empleado IS NOT NULL
                         OR NOT EXISTS (
                             SELECT 1
                             FROM lotes_detalles_empleados_asignados ldea_done
