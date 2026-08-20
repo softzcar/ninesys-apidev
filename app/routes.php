@@ -602,8 +602,31 @@ return function (App $app) {
           throw new Exception('Nombre de base de datos con formato inesperado, se aborta por seguridad: ' . $dbName);
         }
         if (defined('DB_DRIVER') && (DB_DRIVER === 'pgsql' || DB_DRIVER === 'postgres')) {
-          $pdo->exec('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ' . $pdo->quote($dbName) . ' AND pid <> pg_backend_pid()');
-          $pdo->exec('DROP DATABASE IF EXISTS "' . $dbName . '" WITH (FORCE)');
+          // msg_ninesys mantiene un pool de conexiones activo hacia CADA
+          // empresa (polling periódico de estado de sesión de WhatsApp, ver
+          // src/services/tenantResolver.js en ese servicio) -- incluida la
+          // que se está por eliminar. `WITH (FORCE)` (PG 13+) ya reintenta
+          // el terminate-and-drop internamente para cerrar la ventana de
+          // carrera, pero bajo polling constante puede seguir perdiéndola
+          // (una conexión nueva se reabre justo entre el terminate y el
+          // drop) -- "database is being accessed by other users". Se
+          // reintenta unas pocas veces antes de rendirse, en vez de fallar
+          // de una la primera vez que se pierde la carrera.
+          $maxIntentos = 5;
+          for ($intento = 1; $intento <= $maxIntentos; $intento++) {
+            $pdo->exec('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ' . $pdo->quote($dbName) . ' AND pid <> pg_backend_pid()');
+            try {
+              $pdo->exec('DROP DATABASE IF EXISTS "' . $dbName . '" WITH (FORCE)');
+              break; // éxito
+            } catch (\PDOException $e) {
+              $esConflictoDeConexion = stripos($e->getMessage(), 'being accessed by other users') !== false
+                || stripos($e->getMessage(), 'source database') !== false;
+              if (!$esConflictoDeConexion || $intento === $maxIntentos) {
+                throw $e;
+              }
+              usleep(300000); // 300ms antes de reintentar
+            }
+          }
         } else {
           $pdo->exec('DROP DATABASE IF EXISTS `' . $dbName . '`');
         }
