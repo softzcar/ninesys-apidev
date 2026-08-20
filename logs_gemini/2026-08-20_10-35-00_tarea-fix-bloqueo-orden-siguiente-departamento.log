@@ -1,0 +1,43 @@
+# BITÁCORA DE TAREA: FIX BOTÓN INICIAR DESHABILITADO EN SIGUIENTE DEPARTAMENTO
+
+- **Fecha/Hora**: 2026-08-20 10:35:00
+- **Servidor Afectado**: Producción (vps-contabo-prod) y Código Local (ninesys-api)
+- **Ruta Afectada**: `ninesys-api/app/routes/manufacturing.php` (Línea ~3280 en producción, ~3331 en local)
+
+---
+
+## 📌 Descripción del Problema
+En el servidor de producción, las órdenes 6348, 6504, 4446 y 6535 mostraban el botón "Iniciar" deshabilitado (`disabled`) cuando el empleado Jesús ingresaba al siguiente departamento de la cola de producción (Estampado / Impresión), a pesar de que el paso anterior ('Montar tallas') ya había sido completado por Jesús y contaba con `fecha_terminado`.
+
+## 🛠️ Diagnóstico de la Causa Raíz
+La subconsulta SQL que calcula `orden_proceso` dentro del endpoint `/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso}` buscaba de forma global cualquier fila con `fecha_terminado IS NULL` en departamentos con menor número de paso. Si existía una fila abierta de otro empleado en el departamento previo (o una asignación duplicada), la subconsulta devolvía el número de paso del departamento anterior, ocasionando que `item.orden_proceso != currentOrdenProceso` en la vista de Vue (`SseOrdenesAsignadasV5.vue`), deshabilitando el botón.
+
+## 🔧 Solución Aplicada
+Se aplicó una modificación quirúrgica directamente en la subconsulta SQL de `manufacturing.php` en el servidor de producción (`vps-contabo-prod`) y en el repositorio local:
+
+### Cambio en la Subconsulta SQL:
+```sql
+WHERE ldea2.id_orden = y.id_orden
+    AND ldea2.fecha_terminado IS NULL
+    AND (
+        ldea2.id_empleado = y.id_empleado
+        OR NOT EXISTS (
+            SELECT 1
+            FROM lotes_detalles_empleados_asignados ldea_done
+            WHERE ldea_done.id_orden = ldea2.id_orden
+              AND ldea_done.id_departamento = ldea2.id_departamento
+              AND ldea_done.fecha_terminado IS NOT NULL
+        )
+    )
+```
+
+### Acciones Realizadas:
+1. Se generó copia de respaldo en el VPS de producción: `manufacturing.php.bak_20260820`.
+2. Se reemplazó quirúrgicamente el bloque condicional en `manufacturing.php`.
+3. Se reseteó el caché de OPcache en producción a través de script temporal `opcache_reset.php`.
+4. Se replicó el cambio quirúrgico en el código local de `ninesys-api` sin hacer `git commit`.
+
+---
+
+## 🔬 Estado Final
+El fix ha sido implementado en producción. Jesús ahora podrá iniciar sus órdenes en el departamento de Impresión / Estampado sin que filas pendientes de otros empleados en pasos anteriores le bloqueen la acción.

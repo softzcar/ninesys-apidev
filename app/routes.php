@@ -601,7 +601,12 @@ return function (App $app) {
         if (!preg_match('/^api_emp_\d+$/', $dbName)) {
           throw new Exception('Nombre de base de datos con formato inesperado, se aborta por seguridad: ' . $dbName);
         }
-        $pdo->exec('DROP DATABASE IF EXISTS "' . $dbName . '"');
+        if (defined('DB_DRIVER') && (DB_DRIVER === 'pgsql' || DB_DRIVER === 'postgres')) {
+          $pdo->exec('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ' . $pdo->quote($dbName) . ' AND pid <> pg_backend_pid()');
+          $pdo->exec('DROP DATABASE IF EXISTS "' . $dbName . '" WITH (FORCE)');
+        } else {
+          $pdo->exec('DROP DATABASE IF EXISTS `' . $dbName . '`');
+        }
       }
 
       // 3. Eliminar referencias en api_empresas. empresas_usuarios y
@@ -765,7 +770,12 @@ return function (App $app) {
         // Si falla la creación de BD/schema, eliminar la empresa creada y,
         // si la BD llegó a crearse, también eliminarla para no dejar huérfanos.
         try {
-          $pdo->exec('DROP DATABASE IF EXISTS "' . $db_name . '"');
+          if (defined('DB_DRIVER') && (DB_DRIVER === 'pgsql' || DB_DRIVER === 'postgres')) {
+            $pdo->exec('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ' . $pdo->quote($db_name) . ' AND pid <> pg_backend_pid()');
+            $pdo->exec('DROP DATABASE IF EXISTS "' . $db_name . '" WITH (FORCE)');
+          } else {
+            $pdo->exec('DROP DATABASE IF EXISTS `' . $db_name . '`');
+          }
         } catch (Exception $cleanupError) {
           error_log('WARN: no se pudo limpiar la BD huérfana ' . $db_name . ': ' . $cleanupError->getMessage());
         }
