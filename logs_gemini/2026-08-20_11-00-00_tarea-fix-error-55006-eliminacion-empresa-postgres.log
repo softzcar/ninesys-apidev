@@ -1,0 +1,40 @@
+# BITÁCORA DE TAREA: FIX ERROR SQLSTATE 55006 AL ELIMINAR EMPRESA EN POSTGRESQL (SETUP)
+
+- **Fecha/Hora**: 2026-08-20 11:00:00
+- **Servidor Afectado**: Desarrollo (Contabo Dev - vps-contabo-dev) y Código Local (ninesys-api)
+- **Ruta Afectada**: `ninesys-api/app/routes.php` (Endpoints `/setup/company/{id_empresa}`)
+
+---
+
+## 📌 Descripción del Problema
+Al intentar eliminar una empresa (como la empresa ID 206) desde la interfaz de administración/setup (`setup.nineteengreen.com`), PostgreSQL retornaba el error:
+`Error interno del servidor: SQLSTATE[55006]: Object in use: 7 ERROR: database "api_emp_206" is being accessed by other users. DETAIL: There are 2 other sessions using the database.`
+
+## 🛠️ Diagnóstico de la Causa Raíz
+En PostgreSQL, la sentencia `DROP DATABASE "api_emp_xxx"` rechaza el borrado si existen conexiones activas o inactivas (idle) conectadas a dicha base de datos. El servidor mantenía sesiones persistentes de PDO (`dev_user`) vinculadas a la base de datos de la empresa, impidiendo que el motor ejecutara el DDL.
+
+## 🔧 Solución Aplicada
+Se actualizaron las sentencias de eliminación de bases de datos de empresas en `ninesys-api/app/routes.php` (tanto en la ruta `DELETE /setup/company/{id_empresa}` como en el bloque de limpieza de `POST /setup/company`):
+
+1. **Terminación de Sesiones Activas en Postgres**:
+   ```sql
+   SELECT pg_terminate_backend(pid) 
+   FROM pg_stat_activity 
+   WHERE datname = 'api_emp_xxx' AND pid <> pg_backend_pid();
+   ```
+2. **Forzar Borrado de Base de Datos**:
+   ```sql
+   DROP DATABASE IF EXISTS "api_emp_xxx" WITH (FORCE);
+   ```
+
+---
+
+## 🚀 Despliegue Realizado
+- **Commit Git**: `fix(setup): terminate active Postgres sessions and force drop DB when deleting company in dev` en la rama `feature/postgresql-support`.
+- **Despliegue**: Se ejecutó `ninesys-hub/bin/deploy_backend.sh` opción 2 (Desarrollo).
+- **OPcache**: Reseteado exitosamente en `vps-contabo-dev`.
+
+---
+
+## 🔬 Estado Final
+El fix se desplegó en el servidor de desarrollo. La eliminación de empresas (incluyendo la ID 206) ahora cierra automáticamente cualquier sesión abierta y elimina la base de datos sin generar el error `SQLSTATE[55006]`.
