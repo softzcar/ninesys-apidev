@@ -2366,8 +2366,38 @@ return function (App $app) {
           ($p_actual['id_products_attributes'] ?? null) != ($p_nuevo['atributo'] ?? null) ||
           ($p_actual['multiplicador_porcentaje'] ?? null) != $multiplicadorNuevo
         ) {
-          $idTallaNuevo = (isset($p_nuevo['talla']) && !is_null($p_nuevo['talla'])) ? (int) $p_nuevo['talla'] : null;
-          $idTelaNuevo = (isset($p_nuevo['tela']) && !is_null($p_nuevo['tela'])) ? (int) $p_nuevo['tela'] : null;
+          // Talla/Tela: misma ramificación de 3 casos que /ordenes/nueva/custom
+          // (numérica / "No aplica" literal / ausente) -- ver comentario allá.
+          $rawTallaNuevo = $p_nuevo['talla'] ?? null;
+          if (is_numeric($rawTallaNuevo)) {
+            $idTallaNuevo = (int) $rawTallaNuevo;
+            $tallaNuevoSql = '(SELECT nombre FROM sizes WHERE _id = ?)';
+            $tallaNuevoBindExtra = [$idTallaNuevo];
+          } elseif ($rawTallaNuevo === 'No aplica') {
+            $idTallaNuevo = null;
+            $tallaNuevoSql = '?';
+            $tallaNuevoBindExtra = ['No aplica'];
+          } else {
+            $idTallaNuevo = null;
+            $tallaNuevoSql = '?';
+            $tallaNuevoBindExtra = [null];
+          }
+
+          $rawTelaNuevo = $p_nuevo['tela'] ?? null;
+          if (is_numeric($rawTelaNuevo)) {
+            $idTelaNuevo = (int) $rawTelaNuevo;
+            $telaNuevoSql = '(SELECT tela FROM catalogo_telas WHERE _id = ?)';
+            $telaNuevoBindExtra = [$idTelaNuevo];
+          } elseif ($rawTelaNuevo === 'No aplica') {
+            $idTelaNuevo = null;
+            $telaNuevoSql = '?';
+            $telaNuevoBindExtra = ['No aplica'];
+          } else {
+            $idTelaNuevo = null;
+            $telaNuevoSql = '?';
+            $telaNuevoBindExtra = [null];
+          }
+
           $idAtributoNuevo = isset($p_nuevo['atributo']) ? (int) $p_nuevo['atributo'] : null;
 
           $sql_update_prod = "UPDATE {$table_productos} SET
@@ -2375,18 +2405,19 @@ return function (App $app) {
                     precio_unitario = ?,
                     corte = ?,
                     id_size = ?,
-                    talla = (SELECT nombre FROM sizes WHERE _id = ?),
+                    talla = {$tallaNuevoSql},
                     id_tela = ?,
-                    tela = (SELECT tela FROM catalogo_telas WHERE _id = ?),
+                    tela = {$telaNuevoSql},
                     id_products_attributes = ?,
                     multiplicador_porcentaje = ?
                     WHERE _id = ?";
-          $localConnection->goQuery($sql_update_prod, [
-            $p_nuevo['cantidad'], $p_nuevo['precio'], $p_nuevo['corte'],
-            $idTallaNuevo, $idTallaNuevo, $idTelaNuevo, $idTelaNuevo, $idAtributoNuevo,
-            $multiplicadorNuevo,
-            (int) $id_nuevo,
-          ]);
+          $localConnection->goQuery($sql_update_prod, array_merge(
+            [$p_nuevo['cantidad'], $p_nuevo['precio'], $p_nuevo['corte'], $idTallaNuevo],
+            $tallaNuevoBindExtra,
+            [$idTelaNuevo],
+            $telaNuevoBindExtra,
+            [$idAtributoNuevo, $multiplicadorNuevo, (int) $id_nuevo]
+          ));
         }
       }
     }
@@ -2397,12 +2428,38 @@ return function (App $app) {
         // Reutilizamos la lógica de inserción del endpoint original
         $cat_name = 'Uncatagorized';  // Valor por defecto
 
-        $id_talla = (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '')
-          ? (int) $decodedObj['talla']
-          : null;
-        $id_tela = (isset($decodedObj['tela']) && !is_null($decodedObj['tela']) && $decodedObj['tela'] !== '')
-          ? (int) $decodedObj['tela']
-          : null;
+        // Talla/Tela: misma ramificación de 3 casos que /ordenes/nueva/custom
+        // (numérica / "No aplica" literal / ausente) -- ver comentario allá.
+        $rawTalla = $decodedObj['talla'] ?? null;
+        if (is_numeric($rawTalla)) {
+          $id_talla = (int) $rawTalla;
+          $tallaSql = '(SELECT nombre FROM sizes WHERE _id = ?)';
+          $tallaBindExtra = [$id_talla];
+        } elseif ($rawTalla === 'No aplica') {
+          $id_talla = null;
+          $tallaSql = '?';
+          $tallaBindExtra = ['No aplica'];
+        } else {
+          $id_talla = null;
+          $tallaSql = '?';
+          $tallaBindExtra = [null];
+        }
+
+        $rawTela = $decodedObj['tela'] ?? null;
+        if (is_numeric($rawTela)) {
+          $id_tela = (int) $rawTela;
+          $telaSql = '(SELECT tela FROM catalogo_telas WHERE _id = ?)';
+          $telaBindExtra = [$id_tela];
+        } elseif ($rawTela === 'No aplica') {
+          $id_tela = null;
+          $telaSql = '?';
+          $telaBindExtra = ['No aplica'];
+        } else {
+          $id_tela = null;
+          $telaSql = '?';
+          $telaBindExtra = [null];
+        }
+
         $id_products_attributes = (isset($decodedObj['atributo']) && !is_null($decodedObj['atributo'])) ? (int) $decodedObj['atributo'] : null;
         $corte = isset($decodedObj['corte']) ? $decodedObj['corte'] : '';
         $multiplicador_porcentaje = (isset($decodedObj['multiplicador_porcentaje']) && is_numeric($decodedObj['multiplicador_porcentaje']))
@@ -2410,24 +2467,26 @@ return function (App $app) {
           : null;
 
         $sql2 = "INSERT INTO {$table_productos} (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes, multiplicador_porcentaje)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT nombre FROM sizes WHERE _id = ?), ?, ?, (SELECT tela FROM catalogo_telas WHERE _id = ?), ?, ?)";
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, {$tallaSql}, ?, ?, {$telaSql}, ?, ?)";
 
-        $res_insert = $localConnection->goQuery($sql2, [
-          date('Y-m-d H:i:s'),
-          floatval($decodedObj['precio'] ?? 0),
-          floatval($decodedObj['precio'] ?? 0),
-          $decodedObj['producto'] ?? '',
-          $id_orden_a_editar,
-          intval($decodedObj['cod'] ?? 0),
-          floatval($decodedObj['cantidad'] ?? 0),
-          intval($decodedObj['categoria'] ?? 0),
-          $cat_name,
-          $id_talla, $id_talla,
-          $corte,
-          $id_tela, $id_tela,
-          $id_products_attributes,
-          $multiplicador_porcentaje,
-        ]);
+        $res_insert = $localConnection->goQuery($sql2, array_merge(
+          [
+            date('Y-m-d H:i:s'),
+            floatval($decodedObj['precio'] ?? 0),
+            floatval($decodedObj['precio'] ?? 0),
+            $decodedObj['producto'] ?? '',
+            $id_orden_a_editar,
+            intval($decodedObj['cod'] ?? 0),
+            floatval($decodedObj['cantidad'] ?? 0),
+            intval($decodedObj['categoria'] ?? 0),
+            $cat_name,
+            $id_talla,
+          ],
+          $tallaBindExtra,
+          [$corte, $id_tela],
+          $telaBindExtra,
+          [$id_products_attributes, $multiplicador_porcentaje]
+        ));
         $object['sql_insert_new_product'] = $sql2;
 
         /* $response->getBody()->write(json_encode($res_insert));
@@ -3030,17 +3089,43 @@ $object['sales_commission_ISSET'][] = false;
               }
             }
           }
-          // --- Talla: id_size + talla (nombre) resueltos con una subconsulta
-          // inline -- si $id_talla es null, "_id = ?" con NULL nunca matchea
-          // ninguna fila y la subconsulta escalar da NULL, mismo efecto que
-          // el "NULL, NULL" explícito de antes, sin necesitar dos ramas de SQL.
-          $id_talla = (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '')
-            ? (int) $decodedObj['talla']
-            : null;
+          // --- Talla: 3 ramas -- numérica (id_size real + nombre resuelto por
+          // subconsulta, como antes), "No aplica" (id_size=NULL, columna legacy
+          // = literal 'No aplica', mismo criterio que ya usa "corte"), o
+          // ausente/vacía (NULL, NULL, caso "diseño", como antes). Comparación
+          // exacta al string sentinel (no un "no numérico" laxo) para no
+          // convertir un futuro bug de datos en un falso "No aplica" silencioso.
+          $rawTalla = $decodedObj['talla'] ?? null;
+          if (is_numeric($rawTalla)) {
+            $id_talla = (int) $rawTalla;
+            $tallaSql = '(SELECT nombre FROM sizes WHERE _id = ?)';
+            $tallaBindExtra = [$id_talla];
+          } elseif ($rawTalla === 'No aplica') {
+            $id_talla = null;
+            $tallaSql = '?';
+            $tallaBindExtra = ['No aplica'];
+          } else {
+            $id_talla = null;
+            $tallaSql = '?';
+            $tallaBindExtra = [null];
+          }
 
           $corte = isset($decodedObj['corte']) ? ($decodedObj['corte'] ?? '') : '';
 
-          $id_tela = isset($decodedObj['tela']) ? (int) $decodedObj['tela'] : null;
+          $rawTela = $decodedObj['tela'] ?? null;
+          if (is_numeric($rawTela)) {
+            $id_tela = (int) $rawTela;
+            $telaSql = '(SELECT tela FROM catalogo_telas WHERE _id = ?)';
+            $telaBindExtra = [$id_tela];
+          } elseif ($rawTela === 'No aplica') {
+            $id_tela = null;
+            $telaSql = '?';
+            $telaBindExtra = ['No aplica'];
+          } else {
+            $id_tela = null;
+            $telaSql = '?';
+            $telaBindExtra = [null];
+          }
 
           // Manejar el nuevo atributo (SINGLE) si es que existe.
           // Según el payload, este campo 'atributo' no está llegando.
@@ -3054,15 +3139,20 @@ $object['sales_commission_ISSET'][] = false;
             ? (float) $decodedObj['multiplicador_porcentaje']
             : null;
 
-          $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes, multiplicador_porcentaje)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT nombre FROM sizes WHERE _id = ?), ?, ?, (SELECT tela FROM catalogo_telas WHERE _id = ?), ?, ?)';
+          $sql2 = "INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes, multiplicador_porcentaje)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $tallaSql, ?, ?, $telaSql, ?, ?)";
           $object['sql_ordenes_productos'] = $sql2;
-          $producto_detalle_response = $localConnection->goQuery($sql2, [
-            $now, $precio_item, $precio_item, $decodedObj['producto'], $last_id,
-            $decodedObj['cod'], $decodedObj['cantidad'], $id_categoria, $cat_name,
-            $id_talla, $id_talla, $corte, $id_tela, $id_tela, $id_products_attributes_single,
-            $multiplicador_porcentaje,
-          ]);
+          $producto_detalle_response = $localConnection->goQuery($sql2, array_merge(
+            [
+              $now, $precio_item, $precio_item, $decodedObj['producto'], $last_id,
+              $decodedObj['cod'], $decodedObj['cantidad'], $id_categoria, $cat_name,
+              $id_talla,
+            ],
+            $tallaBindExtra,
+            [$corte, $id_tela],
+            $telaBindExtra,
+            [$id_products_attributes_single, $multiplicador_porcentaje]
+          ));
           error_log('Resultado INSERT: ' . json_encode($producto_detalle_response));
           $object['producto_detalle'][] = $producto_detalle_response;
 
@@ -3524,11 +3614,16 @@ $object['sales_commission_ISSET'][] = false;
           $params2[] = $cat_name;
           $values_prefix = '?, ?, ?, ?, ?, ?, ?, ?, ?, ';
 
-          if (isset($decodedObj['talla']) && !is_null($decodedObj['talla']) && $decodedObj['talla'] !== '') {
+          if (isset($decodedObj['talla']) && is_numeric($decodedObj['talla'])) {
             $id_talla = intval($decodedObj['talla']);
             $values = $values_prefix . '?, (SELECT nombre FROM sizes WHERE _id = ?),';
             $params2[] = $id_talla;
             $params2[] = $id_talla;
+          } elseif (isset($decodedObj['talla']) && $decodedObj['talla'] === 'No aplica') {
+            // "No aplica": id_size=NULL, columna legacy = literal 'No aplica'
+            // (mismo criterio que "corte"), en vez de NULL/NULL.
+            $values = $values_prefix . 'NULL, ?,';
+            $params2[] = 'No aplica';
           } else {
             $values = $values_prefix . 'NULL, NULL,';
           }
@@ -3541,11 +3636,15 @@ $object['sales_commission_ISSET'][] = false;
             $params2[] = '';
           }
 
-          if (isset($decodedObj['tela']) && !is_null($decodedObj['tela']) && $decodedObj['tela'] !== '') {
+          if (isset($decodedObj['tela']) && is_numeric($decodedObj['tela'])) {
             $id_tela_prod = intval($decodedObj['tela']);
             $values .= '?, (SELECT tela FROM catalogo_telas WHERE _id = ?)';
             $params2[] = $id_tela_prod;
             $params2[] = $id_tela_prod;
+          } elseif (isset($decodedObj['tela']) && $decodedObj['tela'] === 'No aplica') {
+            // "No aplica": id_tela=NULL, columna legacy = literal 'No aplica'.
+            $values .= "NULL, ?";
+            $params2[] = 'No aplica';
           } else {
             $values .= "NULL, ?";
             $params2[] = '';

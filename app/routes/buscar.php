@@ -221,6 +221,7 @@ return function (App $app) {
             op.cantidad,
             op.id_size AS id_talla,
             s.nombre AS talla,
+            op.talla AS talla_raw,
             op.id_tela,
             prices_json.prices, -- Aquí usamos el alias de la subconsulta derivada
             op.tela,
@@ -259,6 +260,7 @@ return function (App $app) {
         $data[$key]['id_tela'] = $product['id_tela'];
         $data[$key]['id_talla'] = $product['id_talla'];
         $data[$key]['talla'] = $product['talla'];
+        $data[$key]['talla_raw'] = $product['talla_raw'];
         $data[$key]['tela'] = $product['tela'];
         $data[$key]['corte'] = $product['corte'];
         $data[$key]['precio'] = $product['precio'];
