@@ -1,0 +1,36 @@
+# Bitácora de Trabajo - "No aplica" para Talla y Tela en los wizards de orden/presupuesto
+
+- **Solicitud del Usuario:** "TEnemos un nuevo check `Requiere Talla, Corte y Tela` pero no todos los productos requieren todos los items de información, por ejemplo un banderin no requierre talla ni corte solo tela, se me ocurre que la manera mas simple de implementarlo es que en los SELECT en el wizard de crear nueva orden y presupuestos opngamos la opción 'No Aplica' como una opción siempre presente. Esta fucnionalidad solo está implementada en el SELECT 'Corte' tanto en crear ordenes como presupustos. Debemos tener en cuenta que la API entienda este parámetro y lo guarde de manera de no romper nada [...] Procedamos paso a paso con cuidado de que todo quede bien programado y todos los escenarios cubiertos". Tras una primera clarificación de alcance rechazada, el usuario precisó: "La idea es dejar como está los formularios de crear y editar productos como estan [...] La tarea es que en los formularios de crear nueva orden y presupuesto cuando añadimos un producto nos muestra estos tres select entonces solo 'Corte' tiene implementado 'No aplica' debemos implementar esta opción en los otros dos y que al guardar los datos todo se guarde y se recupere correctamente".
+- **Fecha y Hora:** 2026-08-21 19:30:00
+- **Proyecto(s):** Ambos (Frontend + Backend)
+- **Archivos Involucrados:**
+  - `app_multi/components/ordenes/nueva.vue`
+  - `app_multi/components/ordenes/presupuesto.vue`
+  - `ninesys-api/app/routes/orders.php`
+  - `ninesys-api/app/routes/buscar.php`
+  - `ninesys-api/public/model/create_new_company_api_emp_N.sql`
+  - `ninesys-api/public/model/create_new_company_api_emp_N_postgres.sql`
+- **Commits Relacionados:**
+  - Frontend: `5af1bd4` (selects + mapeo de recarga)
+  - Backend: `053585d` (4 rutas de guardado + buscar.php), `103480a` (fix ancho de columna en plantillas)
+- **Acción Realizada:**
+  1. Se agregó la opción sintética "No aplica" (solo frontend, sin tocar el catálogo real de `dataTallas`/`dataTelas`) a los selects de Talla y Tela en ambos wizards, vía computed properties `tallasConNoAplica`/`telasConNoAplica`.
+  2. Backend: se reemplazaron los casts inseguros por una ramificación explícita de 3 casos (numérico / sentinel "No aplica" / ausente) en las 4 rutas de guardado (`/ordenes/nueva/custom`, `/ordenes/nueva/custom/edit` x2 puntos, `/ordenes/nueva/sport`); `/presupuesto/nuevo` ya era correcto y sirvió de control.
+  3. Se corrigió la recuperación al recargar: `buscar.php` ahora expone `op.talla AS talla_raw` (aditivo) y el frontend mapea el sentinel de vuelta a "No aplica" en `manejarOrdenCargada()`/`cargarPresupuestoEmitido()` en vez de dejarlo en blanco.
+  4. **Bug real descubierto durante la verificación en vivo (no previsto en el plan):** la columna `ordenes_productos.talla` era `varchar(8)` en MySQL y Postgres -- demasiado angosta para el string "No aplica" (9 caracteres). Postgres rechazaba el INSERT con `22001: value too long`, produciendo un HTTP 500 real (no un 409 de FK como se había anticipado). Se amplió a `varchar(32)` (igual que `presupuestos_productos.talla`) en las 3 empresas activas de Desarrollo (194, 207, 208 -- 163 excluida siempre) vía `ALTER TABLE`, y se sincronizaron ambas plantillas de creación de empresa nueva para que el bug no reaparezca.
+- **Inconvenientes y Desafíos:**
+  - El bug de ancho de columna no fue detectado en la fase de diseño/exploración (que se enfocó en el comportamiento de la FK, no en el tamaño del VARCHAR) -- solo se descubrió al intentar guardar una orden real de prueba y ver un 500 en el log de LiteSpeed.
+  - Automatización de navegador: el botón "Guardar Orden"/"Guardar Presupuesto" resultó ser un guardado de BORRADOR (`postOrden` → `/orden/guardar`), no el guardado real -- hubo que identificar y navegar el flujo completo de tabs (Cliente → Productos → Pago y asignación → Emitir orden/Finalizar) para llegar al endpoint real de creación.
+- **Decisión Final y Justificación:** Se amplió la columna a 32 en vez de a un tamaño ajustado (ej. 16), para igualar la convención ya existente en `presupuestos_productos.talla` y en `tela`/`corte`, reduciendo la superficie de casos especiales entre tablas.
+- **Herramienta(s) Utilizada(s):** Edit, Bash (SSH a vps-contabo-dev, psql), navegador (Chrome DevTools vía Claude in Chrome), ExitPlanMode.
+- **Resultado:** Éxito.
+- **Verificación:**
+  1. Guardado con "No aplica" en `nueva.vue` categoría "custom" (orden #6578): confirmado por SQL directo `id_size=NULL, talla='No aplica', id_tela=NULL, tela='No aplica', corte='No aplica'`.
+  2. Edición de esa misma orden: cambiar la talla de un producto existente a un valor real ("M") Y agregar un producto nuevo con "No aplica" en el mismo request -- ambas ramas de `/ordenes/nueva/custom/edit` verificadas por SQL directo, ambas correctas.
+  3. Recarga vía "Cargar Orden no Asignada": el select de Talla, Corte y Tela mostraron "No aplica" **seleccionado visualmente**, no en blanco -- confirmado leyendo `select.value`/`selectedText` en vivo.
+  4. Guardado con "No aplica" en `nueva.vue` categoría "sport" (orden #6579, vía `/ordenes/nueva/sport`): confirmado por SQL directo.
+  5. Guardado con "No aplica" en `presupuesto.vue` (`/presupuesto/nuevo`, presupuesto #1): confirmado por SQL directo -- funcionaba ya como baseline/control, sin cambios de código necesarios.
+  6. Limpieza: todos los registros de prueba (3 clientes, 2 órdenes, 1 presupuesto) fueron eliminados de la base de datos de Desarrollo (194) al finalizar.
+- **Logro Conseguido:** Los productos que no requieren Talla o Tela (ej. un banderín que solo requiere Tela) ahora pueden marcarse explícitamente como "No aplica" en los 4 flujos de guardado (custom, custom/edit, sport, presupuesto) y en los 2 flujos de recarga, sin romper ningún caso existente (tallas/telas reales, productos de diseño, validación de campos obligatorios, recargo por talla XL). De paso se corrigió un bug latente de esquema (columna demasiado angosta) que habría bloqueado la función por completo en producción si no se hubiera detectado en esta verificación.
+- **Observaciones de Gemini:** El hallazgo del `varchar(8)` es un buen recordatorio de que la verificación end-to-end contra datos reales (no solo lectura de código) sigue siendo indispensable incluso después de un diseño cuidadosamente validado por un agente de Plan -- el diseño validó la lógica de la FK pero no el tamaño físico de la columna.
+- **Respuesta de Claude:** Se implementó, desplegó (backend en Dev vía `deploy_backend.sh`, frontend en Dev vía `deploy.sh`) y verificó end-to-end la opción "No aplica" para Talla y Tela en los 4 flujos de guardado y 2 de recarga, incluyendo un fix de esquema real descubierto en el camino (columna `talla` demasiado angosta).
