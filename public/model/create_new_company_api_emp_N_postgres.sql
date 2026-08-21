@@ -1049,7 +1049,7 @@ CREATE TABLE ordenes_productos (
   name varchar(240) DEFAULT NULL ,
   cantidad DECIMAL(6,1) NOT NULL DEFAULT 0 ,
   id_size INTEGER DEFAULT NULL ,
-  talla varchar(8) DEFAULT NULL ,
+  talla varchar(32) DEFAULT NULL ,
   corte varchar(32) DEFAULT NULL ,
   metros decimal(7, 2) NOT NULL DEFAULT 0.00 ,
   desperdicio decimal(7, 2) NOT NULL DEFAULT 0.00 ,

@@ -914,7 +914,7 @@ CREATE TABLE `ordenes_productos` (
   `name` varchar(240) DEFAULT NULL COMMENT 'Nombre del producto',
   `cantidad` DECIMAL(6,1) NOT NULL DEFAULT 0 COMMENT 'Cantidad del producto',
   `id_size` int(11) DEFAULT NULL COMMENT 'ID de la talla',
-  `talla` varchar(8) DEFAULT NULL COMMENT 'Talla del producto',
+  `talla` varchar(32) DEFAULT NULL COMMENT 'Talla del producto',
   `corte` varchar(32) DEFAULT NULL COMMENT 'Dama, caballero, niño',
   `metros` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Metros de material utilizado',
   `desperdicio` decimal(7, 2) NOT NULL DEFAULT 0.00 COMMENT 'Restos del material',
