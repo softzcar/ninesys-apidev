@@ -237,6 +237,26 @@ return function (App $app) {
         continue; // ya resuelto como ancla
       }
 
+      // La tasa manual, una vez configurada, es la elección deliberada del
+      // usuario (con qué tasa quiere trabajar) y prevalece sobre la
+      // automática mientras exista -- deja de ser un simple respaldo de
+      // emergencia. El BCV se sigue consultando y mostrando como referencia
+      // en otros widgets (ver GET /bcv-rates), pero ya no sustituye en
+      // silencio la elección del usuario aquí. A diferencia de las
+      // automáticas, el valor manual ya está expresado "por la moneda base
+      // actual" (es lo que el administrador ve y llena) -- no se triangula.
+      if ($moneda['tasa_manual'] !== null) {
+        $resueltas[$codigo] = [
+          'tasa' => (float) $moneda['tasa_manual'],
+          'fuente' => 'manual',
+          'fecha' => $moneda['tasa_manual_actualizado_en'],
+          'esManual' => true,
+        ];
+        continue;
+      }
+
+      // Sin tasa manual configurada todavía (moneda recién activada o
+      // empresa nueva): usar la automática si hay una estrategia disponible.
       $resultado = null;
       if (isset($estrategiasPorCodigo[$codigo])) {
         $resultado = $estrategiasPorCodigo[$codigo]();
@@ -245,21 +265,6 @@ return function (App $app) {
       if ($resultado !== null) {
         $resultado['esManual'] = false;
         $resueltas[$codigo] = $resultado;
-        continue;
-      }
-
-      // Respaldo manual: si no hay estrategia automática, o la que existe
-      // falló (ej. bcv.org.ve caído), usar la tasa cargada a mano en el
-      // Gestor de Monedas. A diferencia de las automáticas, el valor manual
-      // ya está expresado "por la moneda base actual" (es lo que el
-      // administrador ve y llena en el Gestor de Monedas) -- no se triangula.
-      if ($moneda['tasa_manual'] !== null) {
-        $resueltas[$codigo] = [
-          'tasa' => (float) $moneda['tasa_manual'],
-          'fuente' => 'manual',
-          'fecha' => $moneda['tasa_manual_actualizado_en'],
-          'esManual' => true,
-        ];
       }
     }
 

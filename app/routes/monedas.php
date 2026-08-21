@@ -209,8 +209,11 @@ return function (App $app) {
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 
-  // Tasa manual de respaldo, para monedas sin estrategia automática de
-  // obtención en GET /tasas-cambio (ej. Euro). La moneda base nunca la
+  // Tasa manual: la elección deliberada del administrador de con qué tasa
+  // trabajar. GET /tasas-cambio la usa con prioridad sobre la automática
+  // mientras esté configurada (deja de ser un simple respaldo de
+  // emergencia) -- el BCV se sigue consultando y mostrando como referencia,
+  // pero no sustituye en silencio esta elección. La moneda base nunca la
   // necesita -- siempre reporta tasa=1 desde ese mismo endpoint.
   $app->post('/monedas/establecer-tasa', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
@@ -240,6 +243,53 @@ return function (App $app) {
     $localConnection->goQuery(
       'UPDATE catalogo_monedas SET tasa_manual = ?, tasa_manual_actualizado_en = CURRENT_TIMESTAMP WHERE _id = ?',
       [$tasa, $id]
+    );
+    $localConnection->disconnect();
+
+    $responseData = ['message' => 'Tasa actualizada exitosamente.'];
+    $response->getBody()->write(json_encode($responseData));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+  });
+
+  // Igual que /monedas/establecer-tasa, pero resolviendo por código ISO en vez
+  // de _id -- para consumidores que solo conocen el código (ej. el widget
+  // legado formMonedas.vue, que trabaja con nombres en español mapeados a
+  // ISO: bolivar->VES, dolar->USD, peso_colombiano->COP) y no cargan el
+  // catálogo completo de catalogo_monedas con sus IDs.
+  $app->post('/monedas/establecer-tasa-por-codigo', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $codigo = strtoupper(trim($data['codigo'] ?? ''));
+    $tasa = isset($data['tasa']) ? (float) $data['tasa'] : null;
+
+    if (!$codigo || $tasa === null || $tasa <= 0) {
+      $response->getBody()->write(json_encode(['error' => 'Debe indicar un código de moneda y una tasa mayor a 0.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection = new LocalDB();
+
+    $moneda = $localConnection->goQuery(
+      'SELECT _id, es_base FROM catalogo_monedas WHERE codigo = ? AND eliminado = 0',
+      [$codigo]
+    );
+    if (empty($moneda)) {
+      $localConnection->disconnect();
+      // No es un error real: la moneda puede no estar activa/configurada para
+      // esta empresa todavía -- el widget legado sigue funcionando igual con
+      // el sistema anterior aunque esto no exista aún.
+      $response->getBody()->write(json_encode(['message' => 'Moneda no configurada en catalogo_monedas, omitido.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    }
+
+    if ((int) $moneda[0]['es_base'] === 1) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'La moneda base siempre tiene tasa 1, no se puede editar.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $localConnection->goQuery(
+      'UPDATE catalogo_monedas SET tasa_manual = ?, tasa_manual_actualizado_en = CURRENT_TIMESTAMP WHERE _id = ?',
+      [$tasa, $moneda[0]['_id']]
     );
     $localConnection->disconnect();
 
