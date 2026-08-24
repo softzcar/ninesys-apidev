@@ -206,7 +206,8 @@ return function (App $app) {
     $stock_quantity = $data['stock_quantity'] ?? 0;
     $reactivar_id = (isset($data['reactivar_id']) && $data['reactivar_id'] !== '') ? intval($data['reactivar_id']) : null;
     $requiere_talla_corte_tela = filter_var($data['requiere_talla_corte_tela'] ?? true, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
-    $responseProd = $woo->createProductLite($data['product'], $data['prices'], $data['category'], $data['sku'], $producto_fisico, $es_diseno, $stock_quantity, $reactivar_id, $requiere_talla_corte_tela);
+    $es_servicio_de_impresion = filter_var($data['es_servicio_de_impresion'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+    $responseProd = $woo->createProductLite($data['product'], $data['prices'], $data['category'], $data['sku'], $producto_fisico, $es_diseno, $stock_quantity, $reactivar_id, $requiere_talla_corte_tela, $es_servicio_de_impresion);
 
     $status = 200;
     if (isset($responseProd['error'])) {
@@ -230,8 +231,9 @@ return function (App $app) {
     $es_diseno = $data['es_diseno'] ?? 0;
     $stock_quantity = $data['stock_quantity'] ?? 0;
     $requiere_talla_corte_tela = filter_var($data['requiere_talla_corte_tela'] ?? true, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+    $es_servicio_de_impresion = filter_var($data['es_servicio_de_impresion'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
 
-    $result = $woo->updateProductLite($data['id'], $data['product'], $data['sku'], $data['category'], $producto_fisico, $es_diseno, $stock_quantity, $requiere_talla_corte_tela);
+    $result = $woo->updateProductLite($data['id'], $data['product'], $data['sku'], $data['category'], $producto_fisico, $es_diseno, $stock_quantity, $requiere_talla_corte_tela, $es_servicio_de_impresion);
 
     $response->getBody()->write(json_encode([$result]));
     return $response

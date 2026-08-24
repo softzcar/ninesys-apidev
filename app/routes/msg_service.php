@@ -820,6 +820,59 @@ return function (App $app) {
     });
 
     /**
+     * GET /internal/vendedor-aleatorio/{id_empresa}
+     *
+     * Devuelve un vendedor activo elegido al azar entre los del departamento de
+     * ventas/comercialización (5, 6) de la empresa -- para el caso "cliente
+     * nuevo o sin historial" al crear un presupuesto desde una app externa
+     * (19print), como complemento de /internal/cliente/{id_empresa}/by-phone
+     * (que cubre el caso "cliente existente -> último vendedor"). Mismo
+     * criterio de departamento que ya usa msg_ninesys/src/services/assignmentPolicy.js,
+     * sin el filtro de disponibilidad de chat (wa_vendor_state.allow_auto_assign),
+     * que es específico del módulo de WhatsApp y no aplica acá.
+     *
+     * Header: Authorization: {id_empresa}
+     *
+     * Respuesta 200: { "vendedor_id": int|null }
+     */
+    $app->get('/internal/vendedor-aleatorio/{id_empresa}', function (Request $request, Response $response, $args) {
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+
+        $randomFn = DB_DRIVER === 'pgsql' ? 'RANDOM()' : 'RAND()';
+
+        try {
+            $centralConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $centralConnection->goQuery(
+                "SELECT u.id_usuario
+                 FROM empresas_usuarios u
+                 JOIN empresas_usuarios_departamentos d ON d.id_empleado = u.id_usuario
+                 WHERE u.id_empresa = ? AND u.activo = 1 AND d.id_departamento IN (5, 6)
+                 ORDER BY {$randomFn} LIMIT 1",
+                [$idEmpresa]
+            );
+            $centralConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][vendedor-aleatorio] Error empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al elegir vendedor.'], 500);
+        }
+
+        if (empty($rows) || isset($rows['status'])) {
+            return $respondJson(['vendedor_id' => null], 200);
+        }
+
+        return $respondJson(['vendedor_id' => (int) $rows[0]['id_usuario']], 200);
+    });
+
+    /**
      * GET /internal/ordenes/{id_empresa}/by-phone?phone={telefono}
      *
      * Busca las órdenes de un cliente en el tenant por número de teléfono.

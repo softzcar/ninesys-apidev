@@ -1161,6 +1161,7 @@ CREATE TABLE products (
   fisico SMALLINT NOT NULL DEFAULT 1 ,
   es_diseno SMALLINT NOT NULL DEFAULT 0 ,
   requiere_talla_corte_tela SMALLINT NOT NULL DEFAULT 1 ,
+  es_servicio_de_impresion SMALLINT NOT NULL DEFAULT 0 ,
   comision decimal(7, 2) DEFAULT 0.00 ,
   stock_quantity INTEGER DEFAULT 0 ,
   product_description text DEFAULT NULL ,

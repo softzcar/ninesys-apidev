@@ -1021,6 +1021,7 @@ CREATE TABLE `products` (
   `fisico` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Indica true si es un [rpducto virtual como diseños, patronajes o indica si es un producto fisico, si es falso indica un producto virtual o digital',
   `es_diseno` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Indica si el producto pretenece al departamento de diseño',
   `requiere_talla_corte_tela` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Si es 0, el producto es físico pero no se confecciona como prenda (ej. impresión DTF standalone) -- no exige talla/corte/tela al crear una orden.',
+  `es_servicio_de_impresion` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Producto ofrecido como servicio de impresión/sublimación por metraje (ej. catálogo de 19print) -- independiente de requiere_talla_corte_tela, hay productos que no requieren talla/corte/tela pero tampoco son servicios de impresión.',
   `price` decimal(20, 2) DEFAULT NULL,
   `comision` decimal(7, 2) DEFAULT 0.00 COMMENT 'Monto para el calculo de comisión variable',
   `stock_quantity` int(11) DEFAULT 0 COMMENT 'Existencia en inventario\r\n',
