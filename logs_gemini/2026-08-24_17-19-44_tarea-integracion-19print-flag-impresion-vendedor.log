@@ -1,0 +1,92 @@
+- **Solicitud del Usuario:** Empezar a integrar la nueva app `19print_app`
+  (dtf.nineteencustom.com) con la API y el servicio de WhatsApp de Ninesys.
+  Flujo acordado: selector de empresa (194 Nineteen Custom / 208 19 Print) →
+  catálogo de servicios de impresión filtrado por un flag nuevo en
+  `products` (mismo patrón que `requiere_talla_corte_tela`, pero
+  independiente semánticamente) → buscar/crear cliente (reusar el mismo
+  contrato que ya usa `presupuesto.vue`) → crear presupuesto real vía
+  `POST /presupuesto/nuevo` (sin tocarlo) → notificar por WhatsApp vía
+  `msg_ninesys` directo. Responsable del presupuesto: último vendedor que
+  atendió al cliente si tiene historial, si no, uno aleatorio elegible.
+- **Fecha y Hora:** 2026-08-24 17:19:44
+- **Proyecto(s):** Backend (ninesys-api) -- la parte de 19print_app se
+  documenta en su propio repo.
+- **Archivos Involucrados:**
+  - `app/lib/woome.php` (getAllProducts, createProductLite, updateProductLite)
+  - `app/routes/products.php` (POST /products/lite, POST /editar-producto)
+  - `app/routes/msg_service.php` (nuevo endpoint /internal/vendedor-aleatorio/{id_empresa})
+  - `public/model/create_new_company_api_emp_N.sql`
+  - `public/model/create_new_company_api_emp_N_postgres.sql`
+- **Commits Relacionados:**
+  - Backend: 89f8838 (feature/postgresql-support)
+- **Acción Realizada:**
+  1. Agregada columna `es_servicio_de_impresion` (tinyint/smallint, DEFAULT
+     0) a `products`, mismo patrón que `requiere_talla_corte_tela` pero sin
+     relación semántica (hay productos sin talla/corte/tela que tampoco son
+     servicios de impresión). Expuesta en `GET /products` (SELECT + mapeo de
+     salida -- el mapeo es manual campo por campo, ya hubo un bug real con
+     el flag hermano por olvidarlo) y en `POST /products/lite` /
+     `POST /editar-producto`.
+  2. Aplicado `ALTER TABLE products ADD COLUMN es_servicio_de_impresion...`
+     en Dev (Postgres) para `api_emp_194` y `api_emp_208` -- 208 no tenía
+     historial de haber recibido el flag hermano tampoco, se verificó que
+     la empresa existe y está activa antes de tocarla.
+  3. Curado el catálogo real: 208 (6/6 productos, toda la empresa es
+     servicios de impresión) y 194 (5 productos elegidos por el usuario:
+     163 DTF UV RIGIDO, 164 DTF UV TEXTIL, 165 DTF 60CM, 144 Impresion Por
+     Metros, 127 ESTAMPADO DTF).
+  4. Agregado endpoint nuevo `GET /internal/vendedor-aleatorio/{id_empresa}`
+     en `msg_service.php` (mismo patrón de auth que
+     `/internal/cliente/{id_empresa}/by-phone`, que ya existía y cubre el
+     caso "cliente con historial" -- no se tocó). El nuevo endpoint es
+     puramente aditivo: elige un vendedor activo al azar entre los
+     departamentos 5/6 (mismo criterio que ya usa
+     `msg_ninesys/assignmentPolicy.js`), consultando la BD central
+     `api_empresas` (`empresas_usuarios` + `empresas_usuarios_departamentos`).
+  5. Deploy a Dev vía `ninesys-hub/bin/deploy_backend.sh` (opción 2).
+- **Inconvenientes y Desafíos:**
+  - Al probar `/presupuesto/nuevo` de punta a punta contra Dev (con datos de
+    prueba marcados, empresa 208) se encontraron **dos bugs reales
+    preexistentes** en ese endpoint (no introducidos por esta tarea, ya
+    estaban en el código, simplemente nunca se habían disparado porque
+    `app_multi` siempre manda estos campos "bien" por casualidad de cómo
+    arma el form):
+    1. `presupuestos_productos.cantidad` es `INTEGER` en el esquema
+       Postgres -- mandar un decimal (ej. `2.5` metros) tira **500** al
+       fallar el bind del PDO. `producto_detalle`/`cantidad` siempre debe
+       mandarse como entero.
+    2. El handler NO hace `json_decode()` sobre `nombre`, `apellido`, `obs`
+       ni `fechaEntrega` al construir `cliente_nombre`/`observaciones`/
+       `fecha_entrega` -- usa el valor crudo del form. Si se manda esos
+       campos como string JSON-citado (`"Juan"`), las comillas literales
+       quedan guardadas en la fila. Solo `cedula` sí pasa por
+       `json_decode()` y necesita ir citada.
+  - No se modificó `orders.php` para corregir esto (no era parte del
+    pedido y `/presupuesto/nuevo` es el contrato ya probado que usa
+    `app_multi`, no un endpoint nuevo) -- el fix se aplicó del lado
+    consumidor (19print_app), documentando el comportamiento real acá para
+    que quede registrado y no se repita el hallazgo.
+- **Decisión Final y Justificación:** Cambios aditivos únicamente (columna
+  nueva + endpoint nuevo), sin tocar `/presupuesto/nuevo` ni `/customers/*`
+  -- se prioriza no alterar comportamiento ya probado por `app_multi`.
+- **Herramienta(s) Utilizada(s):** Edit, Bash (php -l, ssh + psql, curl,
+  git commit/push, deploy_backend.sh)
+- **Resultado:** Éxito
+- **Verificación:** Probado end-to-end contra Dev con datos de prueba
+  claramente marcados ("PRUEBA 19PRINT - no procesar", teléfono ficticio
+  04120000000) en `api_emp_208`: creación de cliente (`POST /customers/...`),
+  resolución de vendedor (`by-phone` + `vendedor-aleatorio`), creación de
+  presupuesto (`POST /presupuesto/nuevo`) y verificación directa en BD de
+  que los datos quedan limpios (sin comillas literales, cantidad entera
+  aceptada). Todos los registros de prueba fueron borrados al finalizar
+  (`presupuestos` _id 2/4/5, `presupuestos_productos` asociados, `customers`
+  _id 8) -- se verificó que la tabla `presupuestos` de 208 quedó vacía de
+  nuevo tras la limpieza.
+- **Logro Conseguido:** Ninesys ya expone todo lo necesario para que
+  19print_app cree presupuestos reales y resuelva el vendedor
+  automáticamente, sin tocar el flujo existente de `app_multi`. De paso se
+  detectaron y documentaron dos bugs reales latentes en `/presupuesto/nuevo`
+  que podrían haber afectado a cualquier otro consumidor futuro del mismo
+  endpoint.
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude).
+- **Respuesta de Gemini:** N/A (tarea ejecutada por Claude).
