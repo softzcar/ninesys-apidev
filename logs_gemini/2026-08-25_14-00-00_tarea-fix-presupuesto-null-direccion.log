@@ -1,0 +1,41 @@
+# Bitácora de Trabajo - Fix nombre "null" y dirección incorrecta al abrir un presupuesto
+
+- **Solicitud del Usuario:** "vamos a revisar la página de presupuestos, me reportan que al momento de generar un presupuesto en la empresa 19 Print (Probaron con el cliente sayerlin) reportan: 'Una vez genera el presupuesto uno entra al sistema y estos son los datos que muestran cuando se abre y Sale mal el nombre dice null y las direcciones mal a pesar de estar registrado'"
+- **Fecha y Hora:** 2026-08-25
+- **Proyecto(s):** Ambos (Frontend + Backend) + msg_ninesys (WhatsApp)
+- **Archivos Involucrados:**
+  - `app_multi/components/ordenes/nueva.vue`
+  - `app_multi/components/ordenes/presupuesto.vue`
+  - `ninesys-api/app/routes/orders.php`
+  - `ninesys-api/app/lib/woome.php`
+  - `ninesys-api/public/model/create_new_company_api_emp_N.sql` y `..._postgres.sql`
+  - VPS: `wa_ai_agents.system_prompt` (empresa 208, en BD, no archivo de código)
+- **Commits Relacionados:**
+  - Frontend: `bb73897` (rama `refactor/modular-routes`)
+  - Backend: `5cb02cc` (rama `feature/postgresql-support`)
+- **Acción Realizada:**
+  1. Investigación con 3 agentes Explore + lectura directa de código + verificación contra datos reales (SQL en empresa 208 Dev) + logs reales de `msg_ninesys` (pm2), que permitió reconstruir la secuencia exacta: un test por WhatsApp de una "Impresión DTF" con diseño personalizado (link a `/lienzos/9`) fue rechazado 3 veces por la IA (producto sin `idCategory` de catálogo válido); al no completarse, se creó manualmente desde el panel web tecleando los datos de "Sayerlin Quintero" sin usar "Buscar Cliente", dejando el presupuesto sin vincular (`id_wp=NULL`) pese a que la cliente ya existía.
+  2. Se agregó columna `cliente_direccion` a `presupuestos` (194/207/208 Dev, + ambas plantillas de empresa nueva) y se persiste en `POST /presupuesto/nuevo` -- antes el frontend la enviaba pero el backend nunca la insertaba.
+  3. Se corrigió un bug de null-guard confirmado en 6 puntos (3 por wizard, `nueva.vue`/`presupuesto.vue`): al cargar un cliente vinculado se asignaban `first_name`/`last_name`/`address`/`email` sin proteger contra `NULL` (permitido en el esquema de `customers`), produciendo el literal `"null"` visible y contaminando el dato al reenviarse. Se aplicó el mismo guard ya usado en `onPhoneBlur`.
+  4. Se endureció `createCustomer()` (`woome.php`) para detectar también duplicados por **cédula** (antes solo por teléfono), devolviendo `cedula_duplicate` con los datos del cliente existente; el frontend ahora ofrece vincularse a ese cliente en vez de crear uno huérfano.
+  5. Se ajustó el prompt de la IA de WhatsApp (empresa 208 en vivo + ambas plantillas de empresa nueva) para que, cuando el cliente describa un diseño/producto que no aparece en el catálogo inyectado (ej. diseño ya armado en la plataforma interna "Lienzos"), escale a un asesor humano (`[HANDOFF_IA]`) en vez de reintentar `submit_presupuesto` con datos inventados.
+  6. Limpieza de datos de prueba reales rotos (presupuestos `_id=6` y `_id=7` de la empresa 208, sin dependencias downstream).
+- **Inconvenientes y Desafíos:**
+  - Reconstruir la causa raíz real requirió cruzar 3 fuentes (código, SQL directo, logs de pm2 con múltiples conversaciones entrelazadas) -- una primera lectura de logs confundió una conversación no relacionada (otro cliente) con el rechazo real de la IA para Sayerlin.
+  - Al editar el prompt de la IA (texto con secuencias `\n` literales de 2 backslashes, no saltos de línea reales) mediante scripts Python invocados desde bash con comillas dobles, el propio bash "comía" backslashes antes de que Python los viera, produciendo inserciones con la mitad de los backslashes esperados -- detectado por verificación byte a byte contra un separador original conocido, y corregido con heredocs de bash sin interpolación (comillas simples en el delimitador).
+  - Se descubrió además que la convención de comillas escapadas alrededor de "Productos encontrados" es DISTINTA entre la plantilla Postgres (comillas planas) y la plantilla MySQL (comillas con backslash) -- la primera inserción las intercambió por error; corregido tras verificación cruzada.
+  - Verificación en navegador interrumpida por el usuario por lentitud; se completó la verificación del backend directamente vía `curl` contra la API real de Desarrollo en su lugar (cedula_duplicate, creación normal de cliente, persistencia de cliente_direccion).
+- **Decisión Final y Justificación:** Se optó por agregar `cliente_direccion` como columna propia del presupuesto (snapshot al momento de cotizar) en vez de depender solo de vincular correctamente `id_wp`, para que la dirección cotizada no cambie retroactivamente si el cliente actualiza su ficha después. El chequeo de duplicados por cédula se agregó como red de seguridad adicional a la ya existente por teléfono, sin reemplazarla, ya que ambos casos (teléfono distinto con cédula repetida, o viceversa) son posibles.
+- **Herramienta(s) Utilizada(s):** Explore agents, Plan mode (AskUserQuestion, ExitPlanMode), Edit, Bash (SSH a vps-contabo-dev, psql, curl contra la API real), Read.
+- **Resultado:** Éxito (backend verificado en vivo; frontend verificado por revisión de código y diff, sin prueba de navegador completa por interrupción del usuario).
+- **Verificación:**
+  1. `POST /customers/.../17793979/...` con teléfono distinto al registrado → confirma `{"error":"cedula_duplicate","customer":{"id":2,"first_name":"SAYERLIN",...}}`.
+  2. `POST /customers/...` con datos y teléfono genuinamente nuevos → sigue creando el cliente normalmente (sin falso positivo).
+  3. `POST /presupuesto/nuevo` con `direccion="Direccion De Prueba 123"` → `GET /presupuesto/detalle/{id}` devuelve `"cliente_direccion":"Direccion De Prueba 123"` correctamente.
+  4. `php -l` limpio en `orders.php` y `woome.php`.
+  5. Diff de `nueva.vue`/`presupuesto.vue` revisado línea por línea, mismo patrón en los 6 puntos, consistente con el guard ya probado en `onPhoneBlur`.
+  6. Prompt de IA de empresa 208 verificado con `grep`/hex dump byte a byte contra el separador original del propio prompt, confirmando encoding idéntico tras la corrección.
+  7. Datos de prueba (presupuestos 6, 7, 8 y clientes de prueba) eliminados de la BD de Desarrollo (208) al finalizar.
+- **Logro Conseguido:** El reporte original (nombre "null" y dirección incorrecta al reabrir un presupuesto) queda corregido de raíz en 3 frentes simultáneos: persistencia de la dirección cotizada, protección contra valores NULL al cargar un cliente, y una red de seguridad (chequeo por cédula) que reduce la probabilidad de que vuelva a ocurrir un presupuesto huérfano -- además del ajuste al prompt de la IA que atacó la causa disparadora real del incidente reportado.
+- **Observaciones de Claude:** Pendiente ejecutar la verificación de UI en navegador (crear un presupuesto con estos fixes desde `presupuesto.vue`, confirmar visualmente que no aparece "null" y que la dirección persiste al reabrir) en una sesión futura si el usuario lo solicita -- la verificación de esta sesión se limitó al backend por tiempo.
+- **Respuesta de Claude:** Se corrigieron y desplegaron a Desarrollo los 3 frentes del bug reportado (persistencia de dirección, guard contra NULL, chequeo de cédula duplicada) más el ajuste al prompt de la IA que causó el problema original: 3 intentos fallidos de presupuesto por WhatsApp que forzaron la creación manual sin vincular al cliente ya registrado.
