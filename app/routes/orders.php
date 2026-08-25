@@ -2031,7 +2031,7 @@ return function (App $app) {
     $id_wp_param = (!empty($id_wp_val) && is_numeric($id_wp_val)) ? $id_wp_val : null;
 
     /* Craer orden en nunesys */
-    $sql = 'INSERT INTO presupuestos (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+    $sql = 'INSERT INTO presupuestos (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, cliente_direccion, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
     $localConnection->beginTransaction();
     try {
@@ -2045,6 +2045,7 @@ return function (App $app) {
       $newJson['obs'] ?? '',
       $newJson['total'],
       $cliente,
+      $arr['direccion'] ?? '',
       date('Y-m-d'),
       $newJson['fechaEntrega'],
       date('Y-m-d'),

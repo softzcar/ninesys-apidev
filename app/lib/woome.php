@@ -1321,6 +1321,30 @@ class WooMe
     }
     $myCount = count($exist);
 
+    // Si el teléfono no coincide con nadie, verificar también por cédula --
+    // evita crear un registro suelto/duplicado cuando el cliente ya existe
+    // pero se tipeó con un teléfono distinto (ej. WhatsApp de otra persona
+    // narrando los datos de un cliente ya registrado).
+    if ($myCount === 0 && !empty($cedula) && $cedula !== 'none') {
+      $sqlCedula = "SELECT _id, first_name, last_name, phone, eliminado FROM customers WHERE cedula = ?";
+      $existCedula = $localConnection->goQuery($sqlCedula, [trim($cedula)]);
+      if (count($existCedula) > 0 && (int)($existCedula[0]['eliminado'] ?? 0) === 0) {
+        $conflictCustomer = $existCedula[0];
+        $localConnection->disconnect();
+        return json_encode([
+          'status' => 'error',
+          'error' => 'cedula_duplicate',
+          'msg' => 'La cédula ya está registrada a otro cliente',
+          'customer' => [
+            'id' => (int)$conflictCustomer['_id'],
+            'first_name' => $conflictCustomer['first_name'],
+            'last_name' => $conflictCustomer['last_name'],
+            'phone' => $conflictCustomer['phone'],
+          ],
+        ]);
+      }
+    }
+
     if ($myCount === 0) {
       $bytes = random_bytes(6);
       $token = bin2hex($bytes);
