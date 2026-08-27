@@ -41,3 +41,8 @@ reporte.md
 /public/ssl.combined
 /public/ssl.everything
 /public/ssl.key
+
+# Scripts de depuración con credenciales embebidas: NO deben ir al repo.
+# Viven en public/ (raíz web) y ejecutan consultas sin autenticación, así que
+# además conviene no dejarlos desplegados en el servidor.
+public/debug_query.php
