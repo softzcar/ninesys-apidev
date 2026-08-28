@@ -46,3 +46,11 @@ define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: '');
 
 // URL base de la API de WhatsApp (desde .env)
 define('WS_API_URL', getenv('WS_API_URL') ?: 'https://ws.nineteengreen.com/');
+
+// Integración con 19print_app -- fallback manual de clave de cliente desde
+// app_multi "Gestión de Clientes" cuando el WhatsApp automático falla (ver
+// app/routes/products.php, POST /customers/generar-clave-19print).
+// TOKEN_19PRINT_ADMIN debe coincidir con INTEGRACION_ADMIN_TOKEN del backend
+// de 19print_app.
+define('URL_19PRINT_API', getenv('URL_19PRINT_API') ?: 'https://dtf.nineteencustom.com/api');
+define('TOKEN_19PRINT_ADMIN', getenv('TOKEN_19PRINT_ADMIN') ?: '');

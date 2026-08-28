@@ -887,6 +887,42 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  // Proxy fino hacia 19print_app: genera (o regenera) manualmente la clave de
+  // acceso de un cliente a dtf.nineteencustom.com, para cuando el WhatsApp
+  // automático de esa app falla y hay que comunicarle el PIN al cliente por
+  // otra vía. Usado desde el botón nuevo en app_multi "Gestión de Clientes".
+  // Toda la lógica real (verificar que sea cliente, generar el PIN, intentar
+  // el WhatsApp, guardar el hash) vive del lado de 19print -- acá solo se
+  // reenvía la orden con el token de servicio compartido.
+  $app->post('/customers/generar-clave-19print', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $phone = $data['phone'] ?? null;
+    if (!$phone) {
+      $response->getBody()->write(json_encode(['error' => 'Falta el teléfono']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $options = ['http' => [
+      'method' => 'POST',
+      'header' => "Content-Type: application/json\r\nX-Service-Token: " . TOKEN_19PRINT_ADMIN . "\r\n",
+      'content' => json_encode(['telefono' => $phone]),
+      'timeout' => 15,
+      'ignore_errors' => true,
+    ]];
+    $result = @file_get_contents(URL_19PRINT_API . '/integracion/clientes/generar-clave', false, stream_context_create($options));
+
+    $statusCode = 502;
+    if (isset($http_response_header)) {
+      preg_match('{HTTP/\d+\.\d+ (\d+) }', implode("\r\n", $http_response_header), $m);
+      if (isset($m[1])) {
+        $statusCode = (int) $m[1];
+      }
+    }
+
+    $response->getBody()->write($result !== false ? $result : json_encode(['error' => 'No se pudo contactar el servicio de 19print']));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus($statusCode);
+  });
+
   $app->post('/customers/{first_name}/{last_name}/{cedula}/{phone}/{email}/{address}', function (Request $request, Response $response, array $args) {
     $data = $request->getParsedBody();
     if (empty($data)) {
