@@ -1,0 +1,110 @@
+- **Solicitud del Usuario:** El login de clientes por teléfono de 19print_app
+  (autoservicio por WhatsApp) ya está en producción y funcionando. El usuario
+  pidió el fallback que había quedado pendiente de fase 2: un botón en
+  "Gestión de Clientes" de app_multi para generar la clave manualmente
+  cuando el WhatsApp automático falla, mostrando el PIN en pantalla para que
+  el staff se lo comunique al cliente por otra vía. Confirmó explícitamente
+  que Antigravity ya terminó su trabajo en app_multi (todo commiteado y
+  pusheado) antes de tocar ese repo.
+- **Fecha y Hora:** 2026-08-28 17:28:47
+- **Proyecto(s):** Backend (ninesys-api) + 19print_app (repo propio) +
+  Frontend (app_multi) -- los tres se tocaron en esta tarea, documentado acá
+  del lado de ninesys-api porque es el proxy entre los otros dos.
+- **Archivos Involucrados:**
+  - `app/routes/products.php` (nuevo POST /customers/generar-clave-19print)
+  - `app/config.php` (constantes URL_19PRINT_API / TOKEN_19PRINT_ADMIN)
+  - `.env.example` (documentación de las dos variables nuevas)
+  - 19print_app: `packages/backend/src/routes/integracion.js` (nuevo),
+    `packages/backend/src/app.js` (montaje del router)
+  - app_multi: `pages/clientes/gestion.vue` (botón nuevo + método)
+- **Commits Relacionados:**
+  - Backend (ninesys-api): 119a4ca (feature/postgresql-support)
+  - 19print_app: 0e3fa65 (master)
+  - Frontend (app_multi): 70090d1 (refactor/modular-routes)
+- **Acción Realizada:**
+  1. Diseño en 3 capas para no duplicar lógica ni datos: app_multi (botón) →
+     ninesys-api (proxy fino, sin lógica de negocio) → 19print_app backend
+     (dueño real del teléfono/clave, ver `print19.usuarios`).
+  2. En 19print_app: nuevo router `integracionRouter` montado en
+     `/api/integracion`, con un carril de auth propio (header
+     `X-Service-Token` comparado con `timingSafeEqual` contra
+     `INTEGRACION_ADMIN_TOKEN`), mismo patrón que ya usa `routes/agente.js`
+     para el agente de escritorio (servidor-a-servidor, no JWT de usuario).
+     El endpoint reutiliza tal cual `normalizarTelefono`,
+     `empresasDondeEsCliente` y `enviarWhatsapp` ya existentes -- la única
+     diferencia real con el autoservicio (`/auth/solicitar-clave`) es que
+     acá el PIN SÍ viaja en la respuesta y el hash SIEMPRE se persiste
+     (override manual a propósito, no depende de que el WhatsApp funcione).
+  3. En ninesys-api: ruta nueva `POST /customers/generar-clave-19print`
+     junto a las demás `/customers/...` en `products.php`, que reenvía el
+     teléfono a 19print_app con `file_get_contents`/`stream_context_create`
+     (mismo estilo que `WhatsAppAPIClient::makeRequest` en
+     `app/lib/whatsapp.php` -- no se introdujo Guzzle aunque está en
+     vendor/, para no romper la convención ya establecida) y devuelve la
+     respuesta de 19print tal cual (mismo status code, mismo JSON) para no
+     duplicar textos de error/éxito entre los dos backends.
+  4. En app_multi: botón nuevo en la columna de Acciones de "Gestión de
+     Clientes", visible solo si `idEmpresa` es 194 u 208 (computed
+     `usa19print`, usando el `idEmpresa` que ya vive en `store/login.js` y
+     que ya usa `plugins/axios-interceptor.js` para el header
+     `Authorization`) y restringido a `dataUser.departamento ===
+     'Administración'` -- mismo nivel de acceso que el botón de eliminar
+     cliente, porque emitir una clave de acceso es igual de sensible.
+     Usa `this.$alert`/`this.$handleApiError` (plugin `plugins/alerts.js`,
+     `vue-simple-alert`) ya existentes en el archivo, sin agregar
+     dependencias nuevas.
+  5. Deploy: 19print_app a su único servidor (git pull + pm2 restart
+     dtf-backend, sin migración de schema); ninesys-api a Desarrollo con
+     `ninesys-hub/bin/deploy_backend.sh` opción 2; app_multi a Desarrollo
+     con `ninesys-hub/bin/deploy.sh` opción 2. Ninguno tocó Producción.
+- **Inconvenientes y Desafíos:**
+  - Primer intento del endpoint nuevo en ninesys-api devolvió "Falta el
+    teléfono" al mandar el body como JSON (`{"phone": "..."}`) -- esta app
+    NO tiene `BodyParsingMiddleware` para JSON registrado globalmente (ya
+    hay un comentario preexistente sobre esto en
+    `/lotes/empleados/asignar-productos`, más abajo en el mismo archivo),
+    así que `getParsedBody()` solo funciona con `application/
+    x-www-form-urlencoded`. Se resolvió del lado del cliente (app_multi
+    manda `URLSearchParams`, igual que ya hace `deleteCustomer` en el mismo
+    archivo) en vez de tocar la configuración global de Slim -- cambio cero
+    en comportamiento para cualquier otro endpoint.
+  - El primer restart de PM2 en el servidor de 19print_app mostró el aviso
+    "Use --update-env to update environment variables" al agregar la
+    variable `INTEGRACION_ADMIN_TOKEN` nueva al `.env` -- se verificó en
+    vivo con curl que la variable sí se leyó (un `pm2 restart` reinicia el
+    proceso Node desde cero, que vuelve a correr `dotenv/config` al
+    arrancar; el aviso es sobre el snapshot de env que guarda PM2 para otros
+    fines, no sobre si el proceso relee el `.env` en disco).
+- **Decisión Final y Justificación:** Secreto compartido estático
+  (`TOKEN_19PRINT_ADMIN` = `INTEGRACION_ADMIN_TOKEN`) en vez de un esquema
+  de tokens por-agente como el de `EmpresaAgente` -- acá hay un solo emisor
+  confiable (ninesys-api server-to-server), no múltiples PCs de producción,
+  así que una tabla de tokens sería sobre-ingeniería. El proxy en
+  ninesys-api es deliberadamente fino (sin verificar nada de Ninesys del
+  lado de acá): 19print_app ya hace su propia verificación en vivo contra
+  Ninesys Dev vía `empresasDondeEsCliente`, duplicarla acá sería redundante
+  y una segunda fuente de verdad para mantener sincronizada.
+- **Herramienta(s) Utilizada(s):** Write, Edit, Bash (node --check, php -l,
+  git commit/push, deploy_backend.sh, deploy.sh, ssh, curl).
+- **Resultado:** Éxito.
+- **Verificación:** Probado end-to-end contra Dev con un cliente real
+  (teléfono `584140326592`, cliente "SAYERLIN QUINTERO" de la empresa 194):
+  1. Endpoint de 19print_app directo (`/api/integracion/clientes/generar-
+     clave`) con token correcto → 200, PIN generado, WhatsApp enviado.
+  2. Mismo endpoint con token incorrecto → 401 "Token inválido" (confirma
+     que el auth no queda abierto).
+  3. Proxy de ninesys-api (`POST /customers/generar-clave-19print`) contra
+     `api.nineteengreen.com` con el teléfono como form-urlencoded → 200,
+     mismo PIN generado y WhatsApp enviado, confirmando que la cadena
+     completa app_multi→ninesys-api→19print_app funciona.
+  4. Un teléfono inventado (`584129999999`) devuelve 404 con el mensaje
+     "no está registrado como cliente en ninguna empresa", tanto directo
+     como a través del proxy.
+- **Logro Conseguido:** Queda cerrada la fase 2 (fallback manual) del login
+  de clientes por teléfono de 19print_app que había quedado pendiente desde
+  la primera entrega. El staff ya no depende de que el WhatsApp automático
+  funcione para dar acceso a un cliente -- puede generar la clave desde la
+  misma pantalla donde ya gestiona clientes todos los días, sin aprender un
+  sistema nuevo ni tener una cuenta aparte en 19print_app.
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude).
+- **Respuesta de Gemini:** N/A (tarea ejecutada por Claude).
