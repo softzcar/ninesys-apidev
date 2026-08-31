@@ -678,7 +678,7 @@ CREATE TABLE `lotes_detalles` (
   `terminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Indica si la tarea se ha terminado para la lista de verificación en el módulo de empleados',
   `id_departamento` int(11) DEFAULT NULL COMMENT 'ID del departamento',
   `departamento` varchar(256) DEFAULT NULL COMMENT 'Departamento al cual pertenecen las unidades, se guarda como histórico del registro en caso que el nombre del departamento sea editado posteriormente',
-  `unidades_solicitadas` int(11) DEFAULT 0 COMMENT 'Unidades para el calculo de pago',
+  `unidades_solicitadas` decimal(10,1) DEFAULT 0 COMMENT 'Unidades para el calculo de pago (admite decimales: productos por metro)',
   `comision` decimal(8, 2) DEFAULT 0.00 COMMENT 'Porcentaje para el cálculo de la comisión',
   `detalles` varchar(255) DEFAULT NULL COMMENT 'Información adicional del producto',
   `fecha_inicio` timestamp NULL DEFAULT NULL COMMENT 'Momento en que el primer empleado asignado ha iniciado el trabajo	',
@@ -709,7 +709,7 @@ CREATE TABLE `lotes_detalles_empleados_productos` (
   `_id` int(11) NOT NULL,
   `id_lotes_detalles_empleados_asignados` int(11) NOT NULL COMMENT 'FK a lotes_detalles_empleados_asignados',
   `id_ordenes_productos` int(11) NOT NULL COMMENT 'FK a ordenes_productos: línea de producto asignada',
-  `cantidad_asignada` int(11) NOT NULL COMMENT 'Unidades de esa línea asignadas a este empleado',
+  `cantidad_asignada` decimal(6,1) NOT NULL COMMENT 'Unidades de esa línea asignadas a este empleado (admite decimales: productos por metro)',
   `moment` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Asignación granular de productos/cantidades por empleado dentro de una tarea de lote';
 CREATE TABLE `lotes_fisicos` (

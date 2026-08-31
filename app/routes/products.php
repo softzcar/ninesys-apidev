@@ -1753,11 +1753,11 @@ return function (App $app) {
     // CALCULAR CANTIDAD DE UNIDADES SOLICITADAS
     $sql = "SELECT SUM(cantidad) total_cantidad FROM ordenes_productos WHERE id_orden = {$miEmpleado['id_orden']}";
     $total_cantidad = $localConnection->goQuery($sql)[0]['total_cantidad'] ?? 0;
-    // ordenes_productos.cantidad es numeric(6,1); SUM() devuelve algo como "10.0", pero
-    // lotes_detalles.unidades_solicitadas es entero. MySQL trunca "10.0" implicitamente;
-    // PostgreSQL rechaza el formato decimal como entero invalido. intval() normaliza ambos
-    // casos (incluyendo NULL cuando la orden no tiene productos).
-    $total_cantidad = intval($total_cantidad);
+    // ordenes_productos.cantidad es numeric(6,1) y lotes_detalles.unidades_solicitadas
+    // tambien: los productos vendidos por metro (DTF, sublimacion por metros) tienen
+    // cantidades como 0.5 o 2.6. floatval() normaliza el "10.0" que devuelve SUM() y el
+    // NULL de una orden sin productos, sin perder el decimal.
+    $total_cantidad = floatval($total_cantidad);
 
     $values = "id_departamento ='" . $miEmpleado['id_departamento'] . "',";
     $values .= "departamento ='" . $nombreDepartamento . "',";
@@ -1881,11 +1881,15 @@ return function (App $app) {
       $response->getBody()->write(json_encode(['error' => 'La orden no tiene productos.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
+    // Las cantidades son numeric(6,1): hay productos que se venden por metro (DTF,
+    // sublimacion por metros), asi que 0.5 o 2.6 son valores legitimos. Truncarlos con
+    // intval() bloqueaba la asignacion (0.5 -> 0) y falseaba las unidades de cada
+    // empleado (2.6 -> 2), que alimentan comisiones y eficiencia.
     $cantidadPorLinea = [];
     $unidadesTotales = 0;
     foreach ($lineas as $l) {
-      $cantidadPorLinea[intval($l['_id'])] = intval($l['cantidad']);
-      $unidadesTotales += intval($l['cantidad']);
+      $cantidadPorLinea[intval($l['_id'])] = floatval($l['cantidad']);
+      $unidadesTotales += floatval($l['cantidad']);
     }
 
     // Validar: cada línea referenciada debe pertenecer a la orden, cantidad > 0,
@@ -1900,7 +1904,7 @@ return function (App $app) {
       }
       foreach ($asig['productos'] as $p) {
         $idLinea = intval($p['id_ordenes_productos'] ?? 0);
-        $cant = intval($p['cantidad_asignada'] ?? 0);
+        $cant = floatval($p['cantidad_asignada'] ?? 0);
         if (!isset($cantidadPorLinea[$idLinea])) {
           $response->getBody()->write(json_encode(['error' => "La línea de producto {$idLinea} no pertenece a la orden {$id_orden}."]));
           return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
@@ -1914,7 +1918,9 @@ return function (App $app) {
     }
     foreach ($cantidadPorLinea as $idLinea => $cantidadReal) {
       $asignado = $sumaPorLinea[$idLinea] ?? 0;
-      if ($asignado !== $cantidadReal) {
+      // Comparacion con tolerancia: con decimales, sumas como 0.1 + 0.2 no dan
+      // exactamente 0.3 en punto flotante. La escala real es de 1 decimal.
+      if (abs($asignado - $cantidadReal) > 0.001) {
         $response->getBody()->write(json_encode([
           'error' => 'La asignación no cubre exactamente las unidades de cada producto.',
           'id_ordenes_productos' => $idLinea,
@@ -1936,7 +1942,7 @@ return function (App $app) {
         $id_empleado = intval($asig['id_empleado']);
         $unidadesEmpleado = 0;
         foreach ($asig['productos'] as $p) {
-          $unidadesEmpleado += intval($p['cantidad_asignada']);
+          $unidadesEmpleado += floatval($p['cantidad_asignada']);
         }
         $porcentaje = $unidadesTotales > 0 ? round(($unidadesEmpleado / $unidadesTotales) * 100, 2) : 0;
 
@@ -1959,7 +1965,7 @@ return function (App $app) {
         $localConnection->goQuery('DELETE FROM lotes_detalles_empleados_productos WHERE id_lotes_detalles_empleados_asignados = ?', [$idLdea]);
         foreach ($asig['productos'] as $p) {
           $sqlInsProd = 'INSERT INTO lotes_detalles_empleados_productos (id_lotes_detalles_empleados_asignados, id_ordenes_productos, cantidad_asignada) VALUES (?, ?, ?)';
-          $localConnection->goQuery($sqlInsProd, [$idLdea, intval($p['id_ordenes_productos']), intval($p['cantidad_asignada'])]);
+          $localConnection->goQuery($sqlInsProd, [$idLdea, intval($p['id_ordenes_productos']), floatval($p['cantidad_asignada'])]);
         }
 
         $resultados[] = ['id_empleado' => $id_empleado, 'procentaje_comision' => $porcentaje, 'unidades_asignadas' => $unidadesEmpleado];
@@ -2013,7 +2019,7 @@ return function (App $app) {
         // 1. CALCULAR CANTIDAD DE UNIDADES SOLICITADAS (una vez por orden)
         $sqlCant = 'SELECT SUM(cantidad) total_cantidad FROM ordenes_productos WHERE id_orden = ?';
         $total_cantidad_res = $localConnection->goQuery($sqlCant, [$id_orden]);
-        $total_cantidad = intval($total_cantidad_res[0]['total_cantidad'] ?? 0);
+        $total_cantidad = floatval($total_cantidad_res[0]['total_cantidad'] ?? 0);
 
         foreach ($asignaciones as $asig) {
           $id_departamento = intval($asig['id_departamento']);
