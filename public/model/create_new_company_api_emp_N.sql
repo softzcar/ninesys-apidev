@@ -672,7 +672,7 @@ CREATE TABLE `lotes_detalles` (
   `id_orden` int(11) DEFAULT NULL COMMENT 'ID de la orden de trabajo',
   `id_woo` bigint(20) UNSIGNED DEFAULT NULL COMMENT 'ID del producto en Woocommerce',
   `progreso` varchar(11) NOT NULL DEFAULT 'por iniciar' COMMENT 'Nos indica el estado de desarrollo de la tarea: por niciar, en curso, terminada',
-  `id_ordenes_productos` int(11) NOT NULL DEFAULT 0 COMMENT 'ID del producto ordenes_productos',
+  `id_ordenes_productos` int(11) DEFAULT NULL COMMENT 'ID del producto ordenes_productos (nullable: la fila-resumen por departamento que crea la asignación granular no corresponde a una sola línea de producto)',
   `id_empleado` int(11) DEFAULT NULL COMMENT 'id del empleado responsable de la producción',
   `id_reposicion` int(11) DEFAULT NULL COMMENT 'ID de en caso de ser una reposción',
   `terminado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Indica si la tarea se ha terminado para la lista de verificación en el módulo de empleados',
