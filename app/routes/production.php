@@ -319,7 +319,15 @@ return function (App $app) {
         LEFT JOIN ordenes_borrador_empleado n ON a._id = n.id_orden
         JOIN lotes b ON a._id = b.id_orden
         LEFT JOIN customers cus ON cus._id = a.id_wp
-        LEFT JOIN disenos c ON a._id = c.id_orden
+        LEFT JOIN (
+            -- Una orden puede tener varias filas en disenos (reintentos/rediseños).
+            -- Sin esto, el LEFT JOIN directo multiplicaba la orden una vez por cada
+            -- fila de disenos (fan-out) -- se toma solo la mas reciente por orden.
+            SELECT * FROM (
+                SELECT dz.*, ROW_NUMBER() OVER (PARTITION BY dz.id_orden ORDER BY dz._id DESC) AS rn_diseno
+                FROM disenos dz
+            ) ranked_disenos WHERE rn_diseno = 1
+        ) c ON a._id = c.id_orden
         LEFT JOIN revisiones d ON d.id_diseno = c._id
         LEFT JOIN api_empresas.empresas_usuarios e ON e.id_usuario = c.id_empleado
         LEFT JOIN ordenes_fila_orden f ON f.id_orden = a._id
