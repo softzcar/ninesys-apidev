@@ -1003,7 +1003,7 @@ CREATE TABLE `presupuestos_productos` (
   `id_category` int(11) DEFAULT NULL COMMENT 'ID de la categoria en WooCommerce',
   `category_name` varchar(20) DEFAULT NULL COMMENT 'NOMBRE de la categoria en woocommerce',
   `name` varchar(240) DEFAULT NULL COMMENT 'Nombre del producto',
-  `cantidad` int(11) NOT NULL DEFAULT 0 COMMENT 'Cantidad del producto',
+  `cantidad` DECIMAL(6,1) NOT NULL DEFAULT 0 COMMENT 'Cantidad del producto (admite decimales -- ej. metros de impresión/sublimación -- igual precisión que ordenes_productos.cantidad)',
   `talla` varchar(32) DEFAULT NULL COMMENT 'Talla del producto',
   `corte` varchar(32) DEFAULT NULL COMMENT 'Dama, caballero, niño',
   `tela` varchar(128) DEFAULT NULL COMMENT 'Tela principal seleccionada desde Comercialización',

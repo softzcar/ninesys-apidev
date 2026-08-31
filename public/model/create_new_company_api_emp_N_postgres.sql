@@ -1142,7 +1142,7 @@ CREATE TABLE presupuestos_productos (
   id_category INTEGER DEFAULT NULL ,
   category_name varchar(20) DEFAULT NULL ,
   name varchar(240) DEFAULT NULL ,
-  cantidad INTEGER NOT NULL DEFAULT 0 ,
+  cantidad DECIMAL(6,1) NOT NULL DEFAULT 0 ,
   talla varchar(32) DEFAULT NULL ,
   corte varchar(32) DEFAULT NULL ,
   tela varchar(128) DEFAULT NULL ,

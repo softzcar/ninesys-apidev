@@ -2031,6 +2031,12 @@ return function (App $app) {
     $id_wp_param = (!empty($id_wp_val) && is_numeric($id_wp_val)) ? $id_wp_val : null;
 
     /* Craer orden en nunesys */
+    // cliente_direccion usa $newJson['direccion'] CRUDO (no $arr['direccion'], que
+    // pasó por json_decode()): igual que nombre/apellido/obs/fechaEntrega, los
+    // callers (presupuesto.vue, 19print_app) mandan este campo como texto plano,
+    // no como JSON con comillas -- json_decode() sobre texto no-JSON devuelve
+    // null en silencio y la dirección quedaba siempre vacía (bug real, hallado
+    // 2026-08-31 en un presupuesto de 19print_app con dirección perdida).
     $sql = 'INSERT INTO presupuestos (responsable, moment, pago_descuento, pago_abono, id_wp, cliente_cedula, observaciones, pago_total, cliente_nombre, cliente_direccion, fecha_inicio, fecha_entrega, fecha_creacion, status ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
     $localConnection->beginTransaction();
@@ -2045,7 +2051,7 @@ return function (App $app) {
       $newJson['obs'] ?? '',
       $newJson['total'],
       $cliente,
-      $arr['direccion'] ?? '',
+      $newJson['direccion'] ?? '',
       date('Y-m-d'),
       $newJson['fechaEntrega'],
       date('Y-m-d'),
