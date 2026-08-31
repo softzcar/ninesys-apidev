@@ -1,0 +1,161 @@
+- **Solicitud del Usuario:** El usuario reportó que los presupuestos generados
+  desde 19print_app se creaban "con datos dañados": precio y cantidad de
+  producto incorrectos, y datos del cliente corruptos. Pidió investigar,
+  corregir el bug de backend (bajo riesgo), y además ampliar el esquema de
+  Desarrollo para que las cantidades se guarden correctamente, actualizando
+  también el script de creación de empresa nueva y (si hacía falta) el script
+  de migración de la empresa 194.
+- **Fecha y Hora:** 2026-08-31 09:43:00 a 10:16:00
+- **Proyecto(s):** Backend (ninesys-api) + Backend de 19print_app (repo
+  externo) + esquema de base de datos (Desarrollo, Postgres)
+- **Archivos Involucrados:**
+  - `app/routes/orders.php` (POST /presupuesto/nuevo)
+  - `public/model/create_new_company_api_emp_N.sql`
+  - `public/model/create_new_company_api_emp_N_postgres.sql`
+  - `19print_app/packages/backend/src/routes/ninesys.js` (repo externo)
+  - `19print_app/packages/backend/src/lib/ninesysApi.js` (repo externo)
+  - Base de datos: `api_emp_194` y `api_emp_208` (Postgres, vps-contabo-dev),
+    tabla `presupuestos_productos`, columna `cantidad`
+- **Commits Relacionados:**
+  - Backend (ninesys-api): f62cfb3
+  - 19print_app: d612331
+- **Acción Realizada:**
+  1. Investigación en vivo (solo lectura primero): se recorrió el flujo
+     completo de creación de presupuesto de 19print_app
+     (`PedidoWhatsApp.vue` -> `routes/ninesys.js` -> `lib/ninesysApi.js` ->
+     `POST /presupuesto/nuevo` en `orders.php`), comparando contra el mismo
+     endpoint usado por `app_multi` (`presupuesto.vue`).
+  2. Se reprodujo el bug en vivo dos veces contra Desarrollo (empresa 194),
+     con un presupuesto de prueba totalmente descartable (`obs` marcado
+     "PRUEBA DIAGNOSTICA DESCARTABLE"), borrado inmediatamente después de
+     cada prueba:
+     - **Bug 1 (dirección perdida):** `orders.php` aplicaba `json_decode()`
+       al campo `direccion`, pero tanto 19print_app como `presupuesto.vue`
+       (app_multi, línea 2447) lo mandan como texto plano, no como JSON
+       citado. `json_decode()` sobre texto no-JSON devuelve `null` en
+       silencio, y el `?? ''` de respaldo dejaba `cliente_direccion` siempre
+       vacío. Confirmado enviando `direccion=Direccion de prueba
+       diagnostico` y viendo que llegó vacío a la fila.
+     - **Bug 2 (cantidad/precio en unidad inventada):** se encontró que
+       `presupuestos_productos.cantidad` es `INTEGER` (confirmado también en
+       MySQL Producción: `int(11)`, no es un artefacto de la migración a
+       Postgres). Para facturar metros con decimales sin violar esa
+       restricción, `routes/ninesys.js` de 19print_app multiplicaba la
+       cantidad x10 y dividía el precio /10 ("decímetros"), un truco
+       invisible para el resto de Ninesys: el catálogo de servicios
+       etiqueta sus tramos de precio en METROS ("más de 20 metros", "entre
+       10 y 19", etc.) y `ordenes_productos.cantidad` YA es
+       `numeric(6,1)` -- admite decimales de metro directo. Se encontró un
+       caso real ya afectado: presupuesto `_id=9` de la empresa 208
+       (cliente real Sayerlin Quintero, 2026-08-28) quedó guardado como
+       "6 unidades a $0.40" en vez de "0.6 metros a $4.00/metro" -- el
+       total ($2.40) da correcto, pero el precio y la cantidad no tienen
+       sentido frente al catálogo real si alguien abre el presupuesto en
+       app_multi.
+  3. **Corrección Bug 1:** en `orders.php`, el INSERT de `presupuestos` ahora
+     usa `$newJson['direccion']` (valor crudo del form) en vez de
+     `$arr['direccion']` (resultado de `json_decode()`), igual que ya se
+     hacía con `cliente_nombre`/`observaciones`/`fecha_entrega`. Se agregó
+     comentario explicando el porqué para que no se repita el error si se
+     agrega un campo similar en el futuro.
+  4. **Corrección Bug 2:**
+     - Ampliada la columna `presupuestos_productos.cantidad` de `INTEGER` a
+       `DECIMAL(6,1)` en ambas plantillas de empresa nueva
+       (`create_new_company_api_emp_N.sql` para MySQL y
+       `create_new_company_api_emp_N_postgres.sql` para Postgres), misma
+       precisión que `ordenes_productos.cantidad`.
+     - Aplicado el mismo `ALTER TABLE ... ALTER COLUMN cantidad TYPE
+       numeric(6,1)` en vivo contra Postgres Desarrollo, **solo en las
+       empresas 194 y 208** (las dos únicas que usa 19print_app) -- sin
+       tocar Producción (MySQL) ni otras empresas de Desarrollo, por pedido
+       explícito del usuario de acotar el cambio a Desarrollo. Verificado
+       antes/después con `\d presupuestos_productos`; sin pérdida de datos
+       (la fila existente de la empresa 208 conservó su valor `6` como
+       `6.0`).
+     - `19print_app/routes/ninesys.js`: eliminado el truco de "decímetros"
+       en `lineaProducto()` -- ahora calcula `cantidadMetros` en metros
+       reales (redondeo al décimo hacia arriba, igual criterio de
+       facturación que antes) y usa `servicio.precio` tal cual, sin dividir
+       entre 10.
+     - `19print_app/lib/ninesysApi.js`: eliminado el `Math.ceil()` que
+       forzaba `cantidad` a entero en `crearPresupuesto()` (ya no hace
+       falta, la columna admite decimales); actualizado el comentario que
+       documentaba el contrato real del endpoint para reflejar ambas
+       correcciones.
+  5. **Verificación del script de clonación 194 (Producción->Desarrollo):**
+     se revisó `clone_194_postgres_etl.php::resolveTableColumns()` --
+     compara columnas por NOMBRE entre MySQL y Postgres, no por tipo, así
+     que el cambio de tipo de `cantidad` no la excluye de la copia ni
+     requiere tocar el script del clon. Los valores enteros de MySQL
+     (`int(11)`) se copian sin problema hacia la columna `numeric(6,1)` de
+     Postgres (ensanchamiento de tipo, compatible). **No se modificó el
+     script de clonación** -- se verificó que no hacía falta, tal como
+     pidió el usuario condicionalmente ("si hace falta").
+  6. Desplegado el backend de ninesys-api a Desarrollo
+     (`ninesys-hub/bin/deploy_backend.sh`, opción 2). Desplegado el backend
+     de 19print_app a su único servidor (`vps-contabo-prod`, `git pull` +
+     `pm2 restart dtf-backend`).
+  7. Reproducción final de control: nuevo presupuesto de prueba contra
+     Desarrollo (empresa 194) con los mismos datos de prueba descartables,
+     usando la lógica ya corregida (`cantidad=2.5`, `precio=4`) -- se
+     verificó que `cliente_direccion`, `precio_unitario` (4.00) y
+     `cantidad` (2.5) quedaron exactamente como se enviaron. Fila borrada
+     de inmediato al terminar la verificación.
+- **Inconvenientes y Desafíos:**
+  - El reporte inicial del usuario no traía un presupuesto o cliente
+    concreto para inspeccionar -- se investigó primero una hipótesis
+    circunstancial (colisión de IDs por el clon de 194 corrido esa misma
+    mañana a las 08:32), que resultó ser un riesgo real pero no la causa de
+    lo reportado (el clon no había afectado ningún presupuesto de 19print
+    todavía en el momento del reporte). Se descartó tras verificar que la
+    secuencia de `presupuestos` en Desarrollo seguía sin usarse desde el
+    clon. La causa real se encontró reproduciendo el flujo completo en vivo
+    con datos de prueba, no a partir de un caso reportado por el usuario.
+  - `presupuestos`/`presupuestos_productos` de la empresa 194 estaban
+    completamente vacías tanto en Desarrollo como en Producción al momento
+    de investigar (comportamiento normal del negocio -- se convierten a
+    `ordenes` casi de inmediato), lo que impidió usar datos históricos de
+    194 para diagnosticar; se recurrió a la empresa 208, que sí tenía un
+    presupuesto real (`_id=9`, cliente Sayerlin) todavía sin convertir.
+- **Decisión Final y Justificación:**
+  - Se corrigió `direccion` usando el valor crudo del form (no
+    `json_decode()`), igual criterio ya usado para nombre/apellido/obs/fecha
+    -- consistente con el resto del endpoint, mínimo cambio de código.
+  - Se corrigió la unidad de `cantidad` ampliando el esquema real
+    (`DECIMAL(6,1)`) en vez de seguir apilando trucos de conversión del lado
+    de 19print_app -- la causa de fondo era la restricción de esquema, no
+    la lógica de facturación; corregirla ahí evita que cualquier futuro
+    integrador tropiece con el mismo problema.
+  - Se acotó el `ALTER TABLE` en vivo a las empresas 194 y 208 en
+    Desarrollo únicamente, por pedido explícito del usuario -- Producción
+    (MySQL) queda con la restricción `int(11)` intacta hasta que se pida
+    ese cambio aparte.
+  - **Pendiente de decisión del usuario, no corregido en esta tarea:** el
+    presupuesto histórico real `_id=9` de la empresa 208 (Sayerlin) sigue
+    con los valores viejos y deformados (`cantidad=6`, `precio_unitario=
+    0.40`) -- no se reescribió sin confirmación explícita, al ser un dato
+    de cliente real ya existente. Corrección disponible: `UPDATE
+    presupuestos_productos SET cantidad=0.6, precio_unitario=4.00 WHERE
+    _id=5` (recalculado a partir del total real, $2.40 = 0.6m x $4/m).
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (`curl` contra
+  api.nineteengreen.com para reproducir el bug y verificar la corrección,
+  `ssh`/`psql` contra vps-contabo-dev para inspeccionar y alterar el
+  esquema, `git`, `ninesys-hub/bin/deploy_backend.sh`, `pm2` en
+  vps-contabo-prod).
+- **Resultado:** Éxito.
+- **Verificación:** Reproducido el bug end-to-end antes de corregir (fila de
+  prueba con dirección vacía y cantidad/precio en decímetros), y vuelto a
+  probar end-to-end después de corregir (fila de prueba con dirección,
+  cantidad y precio exactamente como se enviaron) -- ambas pruebas contra la
+  empresa 194 en Desarrollo, filas de prueba borradas de inmediato en ambos
+  casos. Esquema verificado antes/después con `\d presupuestos_productos`
+  en `api_emp_194` y `api_emp_208`.
+- **Logro Conseguido:** Corregidos dos bugs de integridad de datos reales
+  que afectaban a TODO presupuesto creado desde 19print_app (y el de
+  dirección también a los creados desde app_multi): la dirección del
+  cliente ya no se pierde, y el precio/cantidad de los servicios de
+  impresión por metraje ya se guardan en unidades reales y coherentes con
+  el resto de Ninesys. Esquema de empresa nueva actualizado para que este
+  bug no se repita en futuras empresas.
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude).
+- **Respuesta de Gemini:** N/A (tarea ejecutada por Claude).
