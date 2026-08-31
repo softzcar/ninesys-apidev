@@ -1931,10 +1931,6 @@ return function (App $app) {
       }
     }
 
-    $sqlDep = 'SELECT departamento FROM departamentos WHERE _id = ?';
-    $respDep = $localConnection->goQuery($sqlDep, [$id_departamento]);
-    $nombreDepartamento = $respDep[0]['departamento'] ?? '';
-
     $localConnection->beginTransaction();
     try {
       $resultados = [];
@@ -1971,15 +1967,11 @@ return function (App $app) {
         $resultados[] = ['id_empleado' => $id_empleado, 'procentaje_comision' => $porcentaje, 'unidades_asignadas' => $unidadesEmpleado];
       }
 
-      // Mismo mantenimiento de lotes_detalles.unidades_solicitadas que /lotes/empleados/reasignar
-      $sqlCheckDetail = 'SELECT _id FROM lotes_detalles WHERE id_departamento = ? AND id_orden = ?';
-      $detailExists = $localConnection->goQuery($sqlCheckDetail, [$id_departamento, $id_orden]);
-      if (empty($detailExists)) {
-        $localConnection->goQuery('INSERT INTO lotes_detalles (id_orden, id_departamento, departamento, unidades_solicitadas) VALUES (?, ?, ?, ?)', [$id_orden, $id_departamento, $nombreDepartamento, $unidadesTotales]);
-      } else {
-        $localConnection->goQuery('UPDATE lotes_detalles SET departamento = ?, unidades_solicitadas = ? WHERE id_departamento = ? AND id_orden = ?', [$nombreDepartamento, $unidadesTotales, $id_departamento, $id_orden]);
-      }
-
+      // lotes_detalles ya no se toca aquí: es una tabla legacy sin consumidores vivos
+      // (unidades_solicitadas/id_empleado quedaron en desuso desde que el flujo real de
+      // asignación pasó a vivir en lotes_detalles_empleados_asignados/_productos, ver
+      // comentario en production.php sobre /sse/produccion/ordenes-activas). Escribir ahí
+      // solo agregaba riesgo de FK sin ningún beneficio real (incidente: orden 6746).
       $localConnection->commit();
     } catch (Exception $e) {
       $localConnection->rollBack();
@@ -2016,11 +2008,6 @@ return function (App $app) {
       foreach ($id_ordenes as $id_orden) {
         $id_orden = intval($id_orden);
 
-        // 1. CALCULAR CANTIDAD DE UNIDADES SOLICITADAS (una vez por orden)
-        $sqlCant = 'SELECT SUM(cantidad) total_cantidad FROM ordenes_productos WHERE id_orden = ?';
-        $total_cantidad_res = $localConnection->goQuery($sqlCant, [$id_orden]);
-        $total_cantidad = floatval($total_cantidad_res[0]['total_cantidad'] ?? 0);
-
         foreach ($asignaciones as $asig) {
           $id_departamento = intval($asig['id_departamento']);
           $empleados = $asig['empleados'];
@@ -2040,19 +2027,9 @@ return function (App $app) {
           $nombreDepartamento = $deptCache[$id_departamento]['nombre'];
           $nuevo_orden_proceso = $deptCache[$id_departamento]['orden'];
 
-          // 2. ACTUALIZAR O INSERTAR REGISTRO EN lotes_detalles
-          $sqlCheckDetail = 'SELECT _id FROM lotes_detalles WHERE id_departamento = ? AND id_orden = ?';
-          $detailExists = $localConnection->goQuery($sqlCheckDetail, [$id_departamento, $id_orden]);
-
-          if (empty($detailExists)) {
-            $sqlInsDetail = "INSERT INTO lotes_detalles (id_orden, id_departamento, departamento, unidades_solicitadas, estatus)
-                             VALUES (?, ?, ?, ?, 'por iniciar')";
-            $localConnection->goQuery($sqlInsDetail, [$id_orden, $id_departamento, $nombreDepartamento, $total_cantidad]);
-          } else {
-            $sqlUpLote = 'UPDATE lotes_detalles SET departamento = ?, unidades_solicitadas = ?
-                          WHERE id_departamento = ? AND id_orden = ?';
-            $localConnection->goQuery($sqlUpLote, [$nombreDepartamento, $total_cantidad, $id_departamento, $id_orden]);
-          }
+          // lotes_detalles ya no se toca aquí: tabla legacy sin consumidores vivos
+          // (ver mismo razonamiento en /lotes/empleados/asignar-productos). Solo agregaba
+          // riesgo de FK sin ningún beneficio real.
 
           // 3. ASIGNAR EMPLEADOS
           $sqlDel = 'DELETE FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND id_departamento = ?';
