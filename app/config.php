@@ -3,7 +3,7 @@
 const CK = "ck_3142398030de80ac909743b6b2c81cec2a23ab62";
 const CS = "cs_8341cbae22ebbf4ecfe86fac9d2ff6db54042c97";
 // const URL = "https://nineteengreen.com";
-const URL = "https://dev.nineteengreen.com";
+const URL = "https://ninesys19.com";
 const URLWP = "https://";
 const URLWC = "https://";
 
@@ -45,7 +45,7 @@ loadEnvFile();
 define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: '');
 
 // URL base de la API de WhatsApp (desde .env)
-define('WS_API_URL', getenv('WS_API_URL') ?: 'https://ws.nineteengreen.com/');
+define('WS_API_URL', getenv('WS_API_URL') ?: 'https://ws.ninesys19.com/');
 
 // Integración con 19print_app -- fallback manual de clave de cliente desde
 // app_multi "Gestión de Clientes" cuando el WhatsApp automático falla (ver

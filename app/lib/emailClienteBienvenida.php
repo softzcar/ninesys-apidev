@@ -84,7 +84,7 @@ td {
 <p>' . $this->data["customer"]["nombre"] . ' gracias por tu compra. A continuación encontrarás los detalles de tu pedido:</p>
 <p>El monto toal de tu orden es de <strong>$' . number_format($this->data["orden"][0]["pago_total"], 0) . '</strong>. Has hecho un abono de <strong>$' . number_format($this->data["orden"][0]["pago_abono"], 0) . '</strong> y te resta por abonar <strong>$' . $this->diferencia . '</strong>. La fecha de entrega de tu pedido es <strong>' . date('d/m/Y', strtotime($this->data["orden"][0]["fecha_entrega"])) . '</strong> </p>
 
-<p>Usa estos enlaces para <a href="https://app.nineteengreen.com/clientes/progreso" target="_blank">ver el avance de tu pedido</a> o para <a href="#" target="_blank">Aprobar tu diseño</a></p>
+<p>Usa estos enlaces para <a href="https://app.ninesys19.com/clientes/progreso" target="_blank">ver el avance de tu pedido</a> o para <a href="#" target="_blank">Aprobar tu diseño</a></p>
 
                 <table>
                     <thead>
