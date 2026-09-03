@@ -2952,15 +2952,25 @@ return function (App $app) {
       // NUEVO: Si no hay id_wp, crear o actualizar el cliente automáticamente
       error_log("id_wp vacío detectado, creando/actualizando cliente automáticamente");
 
-      $cliente_nombre = $arr['nombre'] ?? '';
-      $cliente_apellido = $arr['apellido'] ?? '';
+      // nombre/apellido/direccion CRUDOS ($newJson, no $arr): nueva.vue manda
+      // estos tres como texto plano (URLSearchParams.set, sin JSON.stringify)
+      // -- json_decode() sobre texto no-JSON (cualquier nombre/dirección con
+      // letras) devuelve null en silencio. cedula/telefono sobreviven porque
+      // suelen ser solo dígitos (JSON válido por sí solo); nombre/apellido/
+      // dirección casi nunca lo son (bug real, mismo patrón ya corregido en
+      // /presupuesto/nuevo el 2026-09-03).
+      $cliente_nombre = $newJson['nombre'] ?? '';
+      $cliente_apellido = $newJson['apellido'] ?? '';
       $cliente_cedula = $arr['cedula'] ?? '';
       $cliente_telefono = $arr['telefono'] ?? '';
       $cliente_email = $arr['email'] ?? '';
-      $cliente_direccion = $arr['direccion'] ?? 'none';
+      $cliente_direccion = $newJson['direccion'] ?? 'none';
 
-      // Generar email si está vacío
-      if (empty($cliente_email) || $cliente_email === 'none') {
+      // Generar email si está vacío -- $emailFueProvisto se guarda ANTES de
+      // rellenar, para no pisar un email real ya guardado si este request en
+      // particular no trae uno (ver el merge del UPDATE más abajo).
+      $emailFueProvisto = !empty($cliente_email) && $cliente_email !== 'none';
+      if (!$emailFueProvisto) {
         $randomString = substr(str_shuffle('abcdefghijklmnopqrstuvwxyz0123456789'), 0, 8);
         $cliente_email = strtolower(substr($cliente_nombre, 0, 1)) . $randomString . '@email.com';
       }
@@ -2995,6 +3005,21 @@ return function (App $app) {
           // eliminado = 0 → auto-reactivar: si estaba con soft delete y hace una
           // nueva orden, se reutiliza su registro (no se duplica el teléfono).
           $customer_id = (int) $existingCustomer[0]['_id'];
+
+          // Merge, no reemplazo ciego -- mismo fix que /presupuesto/nuevo
+          // (2026-09-03): un dato real ya guardado (ej. el email verdadero de
+          // un cliente que este request en particular no trae) no debe
+          // borrarse solo porque venga vacío/"none" esta vez.
+          $existingRow = $localConnection->goQuery(
+            'SELECT first_name, last_name, cedula, phone, email, address FROM customers WHERE _id = ?',
+            [$customer_id]
+          );
+          $existingRow = $existingRow[0] ?? [];
+
+          $merge = function ($nuevo, $actual) {
+            return (!empty($nuevo) && $nuevo !== 'none') ? $nuevo : ($actual ?? '');
+          };
+
           $sqlUpdateCustomer = 'UPDATE customers SET
                                   eliminado = 0,
                                   first_name = ?,
@@ -3005,8 +3030,13 @@ return function (App $app) {
                                   address = ?
                                 WHERE _id = ?';
           $localConnection->goQuery($sqlUpdateCustomer, [
-            $cliente_nombre, $cliente_apellido, $cliente_cedula,
-            $cliente_telefono, $cliente_email, $cliente_direccion, $customer_id,
+            $merge($cliente_nombre, $existingRow['first_name'] ?? null),
+            $merge($cliente_apellido, $existingRow['last_name'] ?? null),
+            $merge($cliente_cedula, $existingRow['cedula'] ?? null),
+            $merge($cliente_telefono, $existingRow['phone'] ?? null),
+            $emailFueProvisto ? $cliente_email : ($existingRow['email'] ?? $cliente_email),
+            $merge($cliente_direccion, $existingRow['address'] ?? null),
+            $customer_id,
           ]);
           $id_wp_param = $customer_id;
           error_log("Cliente existente actualizado con ID: $customer_id");
