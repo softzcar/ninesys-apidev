@@ -122,19 +122,48 @@
   `ssh` + `node`/Prisma contra la base `print19` de 19print_app para
   recuperar el teléfono real del cliente, `git`,
   `ninesys-hub/bin/deploy_backend_dev.sh`, `ninesys-hub/bin/deploy_dtf_dev.sh`).
+- **Continuación de la misma tarea (mismo día):** al probar con un
+  presupuesto REAL nuevo (no de prueba, ID #11 de la empresa 194 -- el
+  usuario esperaba ID #9 sin saber que mis dos presupuestos de prueba ya
+  habían consumido los IDs 9 y 10 de la secuencia, aclarado en el chat), se
+  encontró una regresión real causada por el propio fix de esta tarea: el
+  `UPDATE customers` del cliente ya existente (947, Ozcar Vela) sobreescribió
+  su **email real** (`softzcar@gmail.com`) con uno inventado, porque
+  19print_app no manda email y el `UPDATE` reemplazaba TODOS los campos sin
+  condición. Reparado el dato (con confirmación explícita del usuario, dado
+  que el sistema bloqueó el `UPDATE` directo por tratarse de datos reales) y
+  corregida la causa: el `UPDATE` ahora hace **merge** -- un campo solo se
+  pisa si el valor nuevo es real (no vacío/"none", y para email
+  específicamente, nunca el inventado sobre uno real ya guardado).
+  Se encontró que el endpoint hermano `/ordenes/nueva/custom` (creación
+  directa de órdenes, mucho más usado que `/presupuesto/nuevo`) tenía
+  EXACTAMENTE los mismos dos bugs (nombre/apellido/dirección vía
+  `json_decode()` en vez de crudos, y `UPDATE` sin merge) -- confirmado con
+  el usuario y corregido ahí también en la misma sesión, con el mismo
+  criterio ya verificado.
 - **Resultado:** Éxito.
 - **Verificación:** Reproducido el flujo completo end-to-end contra la
-  empresa 194 en Desarrollo, dos veces (antes y después de corregir la
-  regresión propia): presupuesto de prueba -> cliente creado/actualizado en
-  `customers` con todos los campos -> `id_wp` presente en
-  `/presupuesto/detalle/{id}`. Presupuesto real #7 verificado con
-  `id_wp=947` tras el backfill.
+  empresa 194 en Desarrollo: en `/presupuesto/nuevo`, tres presupuestos de
+  prueba (reproducir la regresión propia del paso 3, confirmar la
+  corrección, y confirmar que un request sin email no pisa uno real ya
+  guardado); en `/ordenes/nueva/custom`, dos órdenes de prueba (cliente
+  nuevo con nombre/apellido correctos, y un segundo request con
+  nombre/dirección vacíos que no pisó lo ya guardado). Presupuesto real #7
+  verificado con `id_wp=947` tras el backfill, y presupuesto real #11
+  (creado por el usuario después del fix) verificado con `id_wp=947`
+  resuelto automáticamente sin intervención manual. Todas las filas de
+  prueba (`presupuestos`/`presupuestos_productos`/`ordenes`/
+  `ordenes_productos`/`ordenes_observaciones`/`customers`) borradas de
+  inmediato tras cada verificación.
 - **Logro Conseguido:** Los presupuestos creados desde 19print_app (y desde
-  cualquier caller de `/presupuesto/nuevo` sin cliente ya seleccionado) ya
-  quedan ligados a un cliente real de Ninesys con todos sus datos, igual que
-  los creados desde `presupuesto.vue` -- se cierra la clase completa de bug,
-  no solo el caso puntual reportado. Talla/tela de estos productos ya no se
-  rompen al cargarlos en una orden nueva, y la tela real queda visible para
-  el staff en las observaciones.
+  cualquier caller de `/presupuesto/nuevo` u `/ordenes/nueva/custom` sin
+  cliente ya seleccionado) ya quedan ligados a un cliente real de Ninesys
+  con todos sus datos, igual que los creados desde `presupuesto.vue` -- se
+  cierra la clase completa de bug, no solo el caso puntual reportado. Talla/
+  tela de estos productos ya no se rompen al cargarlos en una orden nueva, y
+  la tela real queda visible para el staff en las observaciones. De paso se
+  cerró una clase de bug de pérdida silenciosa de datos reales de clientes
+  (email/nombre/dirección pisados por vacíos) en los DOS endpoints de
+  creación de clientes automática del sistema, no solo el reportado.
 - **Observaciones de Gemini:** N/A (tarea ejecutada por Claude).
 - **Respuesta de Gemini:** N/A (tarea ejecutada por Claude).
