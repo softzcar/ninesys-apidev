@@ -2054,7 +2054,13 @@ return function (App $app) {
       $cliente_email_wp = $arr['email'] ?? '';
       $cliente_direccion_wp = $newJson['direccion'] ?? 'none';
 
-      if (empty($cliente_email_wp) || $cliente_email_wp === 'none') {
+      // Se guarda ANTES de rellenar con el email inventado: hace falta para
+      // no pisar, en el UPDATE de un cliente ya existente, un email real que
+      // ya tenía guardado con este relleno (bug real, hallado 2026-09-03 --
+      // 19print_app no manda email, y esto le borró el email real a un
+      // cliente real de Ninesys que ya lo tenía cargado desde antes).
+      $emailFueProvisto = !empty($cliente_email_wp) && $cliente_email_wp !== 'none';
+      if (!$emailFueProvisto) {
         $randomString = substr(str_shuffle('abcdefghijklmnopqrstuvwxyz0123456789'), 0, 8);
         $cliente_email_wp = strtolower(substr($cliente_nombre_wp, 0, 1)) . $randomString . '@email.com';
       }
@@ -2085,6 +2091,22 @@ return function (App $app) {
 
         if (!empty($existingCustomer)) {
           $customer_id = (int) $existingCustomer[0]['_id'];
+
+          // Merge, no reemplazo ciego: un dato real ya guardado (ej. el
+          // email verdadero de un cliente que 19print_app no conoce y no
+          // manda) no debe borrarse solo porque este request en particular
+          // no lo trae. Solo se actualiza un campo cuando el valor nuevo es
+          // real (no vacío/"none", y en el caso del email, no el inventado).
+          $existingRow = $localConnection->goQuery(
+            'SELECT first_name, last_name, cedula, phone, email, address FROM customers WHERE _id = ?',
+            [$customer_id]
+          );
+          $existingRow = $existingRow[0] ?? [];
+
+          $merge = function ($nuevo, $actual) {
+            return (!empty($nuevo) && $nuevo !== 'none') ? $nuevo : ($actual ?? '');
+          };
+
           $sqlUpdateCustomer = 'UPDATE customers SET
                                   eliminado = 0,
                                   first_name = ?,
@@ -2095,8 +2117,13 @@ return function (App $app) {
                                   address = ?
                                 WHERE _id = ?';
           $localConnection->goQuery($sqlUpdateCustomer, [
-            $cliente_nombre_wp, $cliente_apellido_wp, $cliente_cedula_wp,
-            $cliente_telefono_wp, $cliente_email_wp, $cliente_direccion_wp, $customer_id,
+            $merge($cliente_nombre_wp, $existingRow['first_name'] ?? null),
+            $merge($cliente_apellido_wp, $existingRow['last_name'] ?? null),
+            $merge($cliente_cedula_wp, $existingRow['cedula'] ?? null),
+            $merge($cliente_telefono_wp, $existingRow['phone'] ?? null),
+            $emailFueProvisto ? $cliente_email_wp : ($existingRow['email'] ?? $cliente_email_wp),
+            $merge($cliente_direccion_wp, $existingRow['address'] ?? null),
+            $customer_id,
           ]);
           $id_wp_param = $customer_id;
         } else {
