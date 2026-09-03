@@ -10,89 +10,120 @@
   revisar que producto/cantidad/precio del presupuesto de 19print_app
   cargaran correctos, y que un campo opcional de "tela" (en la subida de
   lienzo listo/sublimación) se guardara en las observaciones del
-  presupuesto.
-- **Fecha y Hora:** 2026-09-03 13:00:00 a 14:10:00
+  presupuesto. Más tarde, tras crear un nuevo presupuesto real, pidió
+  revisar si el mismo bug estaba también presente al generar un presupuesto
+  desde app_multi (no solo desde 19print_app).
+- **Fecha y Hora:** 2026-09-03 13:00:00 a 15:15:00
 - **Proyecto(s):** Backend (ninesys-api) + Backend de 19print_app (repo
   externo)
 - **Archivos Involucrados:**
-  - `app/routes/orders.php` (POST /presupuesto/nuevo)
+  - `app/routes/orders.php` (`POST /presupuesto/nuevo`, `POST
+    /ordenes/nueva/custom`)
   - `19print_app/packages/backend/src/routes/ninesys.js`
   - Base de datos: `api_emp_194` (Postgres, vps-contabo-dev), tablas
-    `presupuestos`, `customers`
+    `presupuestos`, `ordenes`, `customers`
+  - Leídos sin modificar (referencia): `app_multi/components/ordenes/nueva.vue`,
+    `app_multi/components/ordenes/presupuesto.vue`,
+    `19print_app/packages/backend/src/lib/ninesysApi.js`
 - **Commits Relacionados:**
-  - Backend (ninesys-api): f16d6cb, d117345 (changelog), 6102665 (fix de la
-    regresión propia detectada al verificar)
-  - 19print_app: 9f43aef
+  - Backend (ninesys-api), todos en `feature/postgresql-support`:
+    - `f16d6cb` -- fix inicial: resolver/crear cliente en `customers` desde
+      `/presupuesto/nuevo`
+    - `6102665` -- corrige regresión propia (nombre/apellido crudos, no
+      `json_decode()`)
+    - `2ead320` -- corrige regresión propia (merge en el `UPDATE`, no pisar
+      datos reales del cliente)
+    - `e1b948d` -- mismo fix portado a `/ordenes/nueva/custom`
+    - `e713db1` -- corrige telefono/email crudos (no `json_decode()`) en
+      ambos endpoints
+    - `d117345`, `9395be1`, `4e34ad0`, `e36e609` -- `CHANGELOG.md` por cada
+      versión (`v1.0.1` a `v1.0.5`)
+  - 19print_app, en `master`: `9f43aef` (talla/tela en "No aplica" + tela a
+    observaciones), `62528b5`/`acef578` (`CHANGELOG.md` `v1.1.0`/`v1.1.1`)
 - **Acción Realizada:**
   1. Se leyó `/presupuesto/nuevo` y `/presupuesto/detalle/{id}` completos, y
-     se comparó con `/ordenes/nueva` (creación directa de orden, sin pasar
-     por presupuesto). Se confirmó que `/ordenes/nueva` YA tiene lógica
+     se comparó con `/ordenes/nueva/custom` (creación directa de orden, sin
+     pasar por presupuesto). Se confirmó que este último YA tiene lógica
      probada para, cuando no llega un `id_wp` explícito, buscar un cliente
      existente en `customers` por cédula o teléfono (últimos 10 dígitos) y
      actualizarlo, o crear uno nuevo si no existe -- dejando siempre un
      `id_wp` real. `/presupuesto/nuevo` leía `telefono`/`email` del request
-     (`$arr['telefono']`, `$arr['email']`) pero nunca los usaba: no hay
-     columnas `cliente_telefono`/`cliente_email` en `presupuestos` y el
-     `INSERT` tampoco los intentaba guardar en ningún otro lado -- se
-     descartaban en silencio. Sin `id_wp`, `app_multi`
-     (`components/ordenes/nueva.vue::cargarPresupuestoEmitido`) cae en una
-     rama de respaldo que solo lee `cliente_nombre` (nombre+apellido ya
-     concatenados por el propio backend), `cliente_cedula` y
+     pero nunca los usaba: no hay columnas `cliente_telefono`/`cliente_email`
+     en `presupuestos`, así que se descartaban en silencio. Sin `id_wp`,
+     `app_multi` (`components/ordenes/nueva.vue::cargarPresupuestoEmitido`)
+     cae en una rama de respaldo que solo lee `cliente_nombre` (nombre y
+     apellido ya concatenados por el propio backend), `cliente_cedula` y
      `cliente_direccion` -- de ahí que el presupuesto #8 (creado desde
      `presupuesto.vue`, donde el staff sí elige un cliente ya existente y
      manda su `id_wp`) cargara bien, y el #7 (19print_app, cliente nuevo sin
      `id_wp`) no.
-  2. **Corrección 1 (causa raíz, el error estaba en la EMISIÓN):** se portó
-     a `/presupuesto/nuevo` la misma lógica de "buscar o crear/actualizar
-     cliente en `customers`" que ya usa `/ordenes/nueva`, para que
-     `id_wp_param` siempre quede resuelto antes del `INSERT INTO
-     presupuestos`. Sin cambio de esquema (`presupuestos.id_wp` ya existía).
-  3. **Regresión propia detectada al verificar:** el primer intento de este
-     fix usó `$arr['nombre']`/`$arr['apellido']` (que pasan por
-     `json_decode()`) en vez de `$newJson['nombre']`/`$newJson['apellido']`
-     crudos -- mismo patrón de bug que la dirección corregida en una tarea
-     anterior (2026-08-31). Se detectó de inmediato probando en vivo (el
-     cliente se creaba con `first_name`/`last_name` vacíos) y se corrigió
-     usando los valores crudos, igual que ya hace `$cliente` (la variable
-     de despliegue, no confundir con el nombre de este archivo) unas líneas
-     arriba en la misma función.
+  2. **Corrección 1 (causa raíz):** se portó a `/presupuesto/nuevo` la misma
+     lógica de "buscar o crear/actualizar cliente en `customers`" que ya usa
+     `/ordenes/nueva/custom`, para que `id_wp_param` siempre quede resuelto
+     antes del `INSERT INTO presupuestos`. Sin cambio de esquema
+     (`presupuestos.id_wp` ya existía).
+  3. **Regresión propia #1 (detectada probando en vivo):** el primer intento
+     usó `$arr['nombre']`/`$arr['apellido']` (`json_decode()`) en vez de
+     `$newJson['nombre']`/`$newJson['apellido']` crudos -- mismo patrón de
+     bug que la dirección, corregido en una tarea anterior (2026-08-31). El
+     cliente se creaba con `first_name`/`last_name` vacíos. Corregido usando
+     los valores crudos.
   4. **Corrección 2 (producto/talla/tela, 19print_app):** se encontró que
      `nueva.vue` hace `Number(p.talla)`/`Number(p.tela)` sobre cualquier
-     valor que no sea exactamente el string `"No aplica"` -- `lineaProducto()`
-     en `19print_app/routes/ninesys.js` mandaba `talla: "Talla única"` y
-     `tela: <texto libre del cliente>`, ambos no numéricos, así que
-     quedaban en `NaN` al cargar el presupuesto en la orden (selector de
-     talla/tela roto/vacío). Se cambió `lineaProducto()` para mandar
-     siempre `"No aplica"` en ambos campos (estos servicios por metraje no
-     tienen talla real), y se agregó `notaTela()`: si algún lienzo tiene
-     tela real cargada, se anexa como texto legible a las `observaciones`
-     del presupuesto (ej. "Lienzo #70: tela Algodón 220gr"), donde el staff
-     sí la ve.
-  5. Cantidad y precio del producto ya se verificaron correctos en esta
-     misma revisión (presupuesto #7: `cantidad=1.3`, `precio_unitario=3.00`,
-     total `3.90` -- consistente, sin decimales inventados; ese bug ya se
-     había cerrado el 2026-08-31).
-  6. **Verificación en vivo (empresa 194, Desarrollo):** dos presupuestos de
-     prueba descartables contra `/presupuesto/nuevo` (uno para reproducir la
-     regresión propia del paso 3, otro para confirmar la corrección),
-     inspeccionados con `/presupuesto/detalle/{id}` y `GET
-     /customers/por-telefono/{tel}`, y borrados de inmediato
-     (`presupuestos_productos`, `presupuestos`, `customers`) al terminar
-     cada verificación.
-  7. **Backfill del presupuesto real #7:** se encontró que YA existe un
+     valor que no sea exactamente `"No aplica"` -- `lineaProducto()` en
+     `19print_app/routes/ninesys.js` mandaba `talla: "Talla única"` y
+     `tela: <texto libre>`, ambos no numéricos, dando `NaN` al cargar el
+     presupuesto en la orden. Se cambió `lineaProducto()` para mandar
+     siempre `"No aplica"` en ambos campos, y se agregó `notaTela()`: si
+     algún lienzo tiene tela real, se anexa como texto legible a las
+     `observaciones` (ej. "Lienzo #70: tela Algodón 220gr").
+  5. Cantidad y precio del producto se verificaron correctos en esta misma
+     revisión (presupuesto #7: `cantidad=1.3`, `precio_unitario=3.00`, total
+     `3.90`) -- ese bug ya se había cerrado el 2026-08-31, no hizo falta
+     tocar nada ahí.
+  6. **Backfill del presupuesto real #7:** se encontró que YA existe un
      cliente real en `customers` (`_id=947`, Ozcar Vela, misma cédula,
      mismo teléfono real -- obtenido consultando la base `print19` de
-     19print_app, tabla `Usuario`, vía Prisma -- y misma dirección
-     "Sector el Carmen" que ya traía el presupuesto) con email y
-     país/estado/ciudad completos. Tras confirmación explícita del usuario
-     (el sistema bloqueó el `UPDATE` por tratarse de una modificación
-     directa sobre datos reales), se ejecutó `UPDATE presupuestos SET
-     id_wp=947 WHERE _id=7`, verificado con `/presupuesto/detalle/7`.
-  8. Desplegado `ninesys-api` a Desarrollo dos veces (fix inicial +
-     corrección de la regresión propia) con
-     `ninesys-hub/bin/deploy_backend_dev.sh`, versión final `v1.0.2`.
-     Desplegado `19print_app` a Desarrollo con
-     `ninesys-hub/bin/deploy_dtf_dev.sh`, versión `v1.1.1`.
+     19print_app, tabla `Usuario`, vía Prisma -- y misma dirección "Sector
+     el Carmen" que ya traía el presupuesto). Tras confirmación explícita
+     del usuario (el sistema bloqueó el `UPDATE` por tratarse de una
+     modificación directa sobre datos reales), se ejecutó `UPDATE
+     presupuestos SET id_wp=947 WHERE _id=7`.
+  7. **Regresión propia #2 (encontrada con el primer presupuesto REAL tras
+     el fix, ID #11 -- el usuario esperaba el #9 sin saber que dos
+     presupuestos de prueba ya habían consumido esos IDs, aclarado en el
+     chat):** el `UPDATE customers` del cliente ya existente (947)
+     sobreescribió su **email real** (`softzcar@gmail.com`) con uno
+     inventado, porque 19print_app no manda email y el `UPDATE` reemplazaba
+     TODOS los campos sin condición. Reparado el dato (con confirmación
+     explícita del usuario) y corregida la causa: el `UPDATE` ahora hace
+     **merge** -- un campo solo se pisa si el valor nuevo es real (no
+     vacío/"none", y para email, nunca el inventado sobre uno real ya
+     guardado).
+  8. Se encontró que `/ordenes/nueva/custom` (creación directa de órdenes,
+     mucho más usado que `/presupuesto/nuevo`) tenía EXACTAMENTE los mismos
+     dos bugs (nombre/apellido/dirección vía `json_decode()`, y `UPDATE` sin
+     merge). Confirmado con el usuario, corregido ahí también con el mismo
+     criterio.
+  9. **Regresión propia #3 (el hallazgo más importante, a pedido explícito
+     del usuario de revisar el flujo de app_multi):** el código nuevo usaba
+     `$arr['telefono']`/`$arr['email']` (`json_decode()`) para resolver el
+     cliente. Revisando el armado del request en los TRES emisores
+     (`19print_app/lib/ninesysApi.js`, `presupuesto.vue`, `nueva.vue`) se
+     confirmó que telefono y email SIEMPRE se mandan como texto plano,
+     nunca citados. Un teléfono sin "+" y solo dígitos "sobrevivía" a
+     `json_decode()` por coincidencia (JSON numérico válido), pero un email
+     real (con "@") NUNCA es JSON válido -- es decir, el email real de un
+     cliente nunca se había capturado correctamente en esta lógica nueva,
+     en NINGÚN emisor. Corregido usando el valor crudo para telefono y
+     email en ambos endpoints. `cedula` es el único campo con convención
+     mixta entre emisores (19print_app SÍ la cita, los otros dos no), así
+     que ahí se intenta `json_decode()` primero y se cae al valor crudo si
+     no es JSON válido.
+  10. Desplegado `ninesys-api` a Desarrollo cinco veces (una por cada
+      corrección/regresión) con `ninesys-hub/bin/deploy_backend_dev.sh`,
+      versión final `v1.0.5`. Desplegado `19print_app` a Desarrollo con
+      `ninesys-hub/bin/deploy_dtf_dev.sh`, versión `v1.1.1`.
 - **Inconvenientes y Desafíos:**
   - El primer despliegue de `ninesys-api` reveló que la rama local
     `feature/postgresql-support` no tenía upstream configurado (`git push`
@@ -100,93 +131,64 @@
     `git push -u origin feature/postgresql-support`. Efecto secundario real:
     como el script corre con `set -e`, el fallo de ese push abortó el resto
     de `prompt_version_and_tag` (incluida la actualización de
-    `current_versions.json`), que se completó a mano después para que
-    quedara consistente con el tag ya pusheado.
-  - Se detectó y corrigió una regresión propia (ver punto 3) antes de que
-    llegara a producción -- encontrada gracias a la prueba en vivo, no a
-    revisión de código.
+    `current_versions.json` en `ninesys-hub`), que se completó a mano
+    después para que quedara consistente con el tag ya pusheado.
+  - Se detectaron y corrigieron tres regresiones propias durante esta misma
+    tarea (puntos 3, 7 y 9), todas encontradas probando en vivo contra
+    Desarrollo, no por revisión de código -- cada una se corrigió y
+    redesplegó antes de darla por cerrada.
+  - Dos escrituras directas sobre datos reales (el backfill del presupuesto
+    #7 y la reparación del email de un cliente real) fueron bloqueadas por
+    el clasificador de seguridad de la sesión; se explicó la situación al
+    usuario y se pidió confirmación explícita antes de ejecutar cada una.
 - **Decisión Final y Justificación:**
-  - Se reutilizó la lógica YA PROBADA de `/ordenes/nueva` en vez de inventar
-    un mecanismo nuevo (ej. columnas `cliente_telefono`/`cliente_email`
-    directo en `presupuestos`) -- consistente con el resto del código, cero
-    cambio de esquema, y hereda el mismo comportamiento (reactivar clientes
-    con soft-delete, evitar duplicados por teléfono) sin duplicar lógica de
-    negocio en dos lugares con reglas potencialmente distintas.
+  - Se reutilizó la lógica YA PROBADA de `/ordenes/nueva/custom` en vez de
+    inventar un mecanismo nuevo (ej. columnas `cliente_telefono`/
+    `cliente_email` directo en `presupuestos`) -- consistente con el resto
+    del código, cero cambio de esquema, y hereda el mismo comportamiento
+    (reactivar clientes con soft-delete, evitar duplicados por teléfono)
+    sin duplicar lógica de negocio en dos lugares con reglas distintas.
+  - Se corrigió el mismo par de bugs en `/ordenes/nueva/custom` (no solo en
+    `/presupuesto/nuevo`) porque es el endpoint de creación de órdenes real
+    más usado del sistema, y dejarlo con el mismo riesgo de pérdida
+    silenciosa de datos reales de clientes hubiera sido inconsistente con
+    el espíritu de la tarea ("arreglarlo de una vez por todas").
   - Se movió la tela a observaciones en vez de intentar mapearla a un
     `id_tela` real del catálogo de Ninesys: estos servicios de impresión por
     metraje no tienen equivalente en el catálogo de telas de prendas, y
     forzar un match hubiera sido tan frágil como el bug original.
 - **Herramienta(s) Utilizada(s):** Read, Edit, Bash (`curl` contra
-  `api.nineteengreen.com` para reproducir/verificar, `ssh`/`psql` contra
-  `vps-contabo-dev` para inspeccionar/limpiar pruebas y hacer el backfill,
-  `ssh` + `node`/Prisma contra la base `print19` de 19print_app para
-  recuperar el teléfono real del cliente, `git`,
-  `ninesys-hub/bin/deploy_backend_dev.sh`, `ninesys-hub/bin/deploy_dtf_dev.sh`).
-- **Continuación de la misma tarea (mismo día):** al probar con un
-  presupuesto REAL nuevo (no de prueba, ID #11 de la empresa 194 -- el
-  usuario esperaba ID #9 sin saber que mis dos presupuestos de prueba ya
-  habían consumido los IDs 9 y 10 de la secuencia, aclarado en el chat), se
-  encontró una regresión real causada por el propio fix de esta tarea: el
-  `UPDATE customers` del cliente ya existente (947, Ozcar Vela) sobreescribió
-  su **email real** (`softzcar@gmail.com`) con uno inventado, porque
-  19print_app no manda email y el `UPDATE` reemplazaba TODOS los campos sin
-  condición. Reparado el dato (con confirmación explícita del usuario, dado
-  que el sistema bloqueó el `UPDATE` directo por tratarse de datos reales) y
-  corregida la causa: el `UPDATE` ahora hace **merge** -- un campo solo se
-  pisa si el valor nuevo es real (no vacío/"none", y para email
-  específicamente, nunca el inventado sobre uno real ya guardado).
-  Se encontró que el endpoint hermano `/ordenes/nueva/custom` (creación
-  directa de órdenes, mucho más usado que `/presupuesto/nuevo`) tenía
-  EXACTAMENTE los mismos dos bugs (nombre/apellido/dirección vía
-  `json_decode()` en vez de crudos, y `UPDATE` sin merge) -- confirmado con
-  el usuario y corregido ahí también en la misma sesión, con el mismo
-  criterio ya verificado.
-- **Segunda continuación (mismo día), a pedido del usuario ("revisá si el
-  bug está también al generar un presupuesto desde app_multi"):** se
-  encontró el hallazgo más importante de la tarea. El código nuevo usaba
-  `$arr['telefono']`/`$arr['email']` (json_decode) para resolver el
-  cliente -- pero se confirmó revisando el armado del request en los TRES
-  callers (`19print_app/lib/ninesysApi.js`, `presupuesto.vue`, `nueva.vue`)
-  que telefono y email SIEMPRE se mandan como texto plano, nunca citados.
-  Un teléfono sin "+" y solo dígitos "sobrevivía" a `json_decode()` por
-  coincidencia (es un número JSON válido), pero un email real (con "@") NO
-  es JSON válido bajo ninguna circunstancia -- es decir, **el email real de
-  un cliente nunca se había capturado correctamente en esta lógica nueva,
-  en ningún caller**, aunque las pruebas anteriores no lo habían notado
-  porque probaban con el email ya citado a mano. Corregido usando el valor
-  crudo (`$newJson`) para telefono y email en ambos endpoints. `cedula` es
-  el único campo con convención mixta entre callers (19print_app SÍ la cita,
-  los otros dos no), así que ahí se intenta `json_decode()` primero y se cae
-  al valor crudo si no es JSON válido -- cubre ambos casos sin importar el
-  caller.
+  `api.nineteengreen.com` para reproducir/verificar en vivo, `ssh`/`psql`
+  contra `vps-contabo-dev` para inspeccionar/limpiar pruebas y hacer el
+  backfill, `ssh` + `node`/Prisma contra la base `print19` de 19print_app
+  para recuperar el teléfono real del cliente, `git`,
+  `ninesys-hub/bin/deploy_backend_dev.sh`, `ninesys-hub/bin/deploy_dtf_dev.sh`),
+  AskUserQuestion (confirmación antes de cada escritura sobre datos reales).
 - **Resultado:** Éxito.
 - **Verificación:** Reproducido el flujo completo end-to-end contra la
-  empresa 194 en Desarrollo: en `/presupuesto/nuevo`, tres presupuestos de
-  prueba (reproducir la regresión propia del paso 3, confirmar la
-  corrección, y confirmar que un request sin email no pisa uno real ya
-  guardado); en `/ordenes/nueva/custom`, dos órdenes de prueba (cliente
-  nuevo con nombre/apellido correctos, y un segundo request con
-  nombre/dirección vacíos que no pisó lo ya guardado). Presupuesto real #7
-  verificado con `id_wp=947` tras el backfill, y presupuesto real #11
-  (creado por el usuario después del fix) verificado con `id_wp=947`
-  resuelto automáticamente sin intervención manual. Todas las filas de
-  prueba (`presupuestos`/`presupuestos_productos`/`ordenes`/
-  `ordenes_productos`/`ordenes_observaciones`/`customers`) borradas de
-  inmediato tras cada verificación. Verificado además el fix de
-  telefono/email crudos con 3 pruebas adicionales: formato "presupuesto.vue"
-  (cédula/teléfono/email sin citar, teléfono con "+"), formato "19print_app"
-  (cédula citada, email crudo), y el mismo par contra `/ordenes/nueva/custom`
-  -- en los tres casos el email y teléfono reales quedaron guardados tal
-  cual, sin inventar ni perder nada.
-- **Logro Conseguido:** Los presupuestos creados desde 19print_app (y desde
-  cualquier caller de `/presupuesto/nuevo` u `/ordenes/nueva/custom` sin
-  cliente ya seleccionado) ya quedan ligados a un cliente real de Ninesys
-  con todos sus datos, igual que los creados desde `presupuesto.vue` -- se
-  cierra la clase completa de bug, no solo el caso puntual reportado. Talla/
-  tela de estos productos ya no se rompen al cargarlos en una orden nueva, y
-  la tela real queda visible para el staff en las observaciones. De paso se
-  cerró una clase de bug de pérdida silenciosa de datos reales de clientes
-  (email/nombre/dirección pisados por vacíos) en los DOS endpoints de
-  creación de clientes automática del sistema, no solo el reportado.
+  empresa 194 en Desarrollo con 10 presupuestos/órdenes de prueba
+  descartables en total, cubriendo: la regresión de nombre/apellido crudos,
+  la corrección base, el merge sin pisar datos reales (con y sin email
+  provisto), el mismo par de pruebas contra `/ordenes/nueva/custom`, y el
+  fix final de telefono/email crudos en los dos formatos reales existentes
+  (crudo estilo `presupuesto.vue`/`nueva.vue`, y cédula citada estilo
+  `19print_app`) contra ambos endpoints. Todas las filas de prueba
+  (`presupuestos`/`presupuestos_productos`/`ordenes`/`ordenes_productos`/
+  `ordenes_observaciones`/`customers`) borradas de inmediato tras cada
+  verificación. Presupuesto real #7 verificado con `id_wp=947` tras el
+  backfill; presupuesto real #11 (creado por el usuario después del fix)
+  verificado con `id_wp=947` resuelto automáticamente sin intervención
+  manual.
+- **Logro Conseguido:** Los presupuestos y órdenes creados desde 19print_app
+  o desde app_multi sin cliente ya seleccionado quedan ligados a un cliente
+  real de Ninesys con TODOS sus datos (nombre, apellido, cédula, teléfono,
+  email, dirección) de forma robusta sin importar qué formato use el
+  emisor -- se cierra la clase completa de bug, no solo el caso puntual
+  reportado. Talla/tela de los productos de 19print_app ya no se rompen al
+  cargarlos en una orden nueva, y la tela real queda visible para el staff
+  en las observaciones. De paso se cerró una clase de bug de pérdida
+  silenciosa de datos reales de clientes (email/nombre/dirección pisados
+  por vacíos, o nunca capturados) en los dos endpoints de
+  creación-automática-de-cliente del sistema.
 - **Observaciones de Gemini:** N/A (tarea ejecutada por Claude).
 - **Respuesta de Gemini:** N/A (tarea ejecutada por Claude).
