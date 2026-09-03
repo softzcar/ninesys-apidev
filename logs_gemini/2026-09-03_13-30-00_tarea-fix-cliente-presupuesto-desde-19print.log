@@ -1,0 +1,140 @@
+- **Solicitud del Usuario:** El usuario probó las barras de progreso de
+  19print_app (funcionando bien) y luego emitió un presupuesto real desde
+  ahí (empresa 194, cliente Ozcar Vela, presupuesto #7). Al cargar ese
+  presupuesto en "Nueva Orden" en app_multi, los datos del cliente
+  (teléfono, apellido, email, país/estado/ciudad) no se completaban en el
+  formulario -- solo nombre completo, cédula y dirección. Pidió determinar
+  si el error estaba al emitir el presupuesto (19print_app), al traer los
+  datos, o al renderizarlos, y corregirlo de raíz. Un presupuesto de control
+  creado desde app_multi (presupuesto #8) sí cargó bien. Pidió además
+  revisar que producto/cantidad/precio del presupuesto de 19print_app
+  cargaran correctos, y que un campo opcional de "tela" (en la subida de
+  lienzo listo/sublimación) se guardara en las observaciones del
+  presupuesto.
+- **Fecha y Hora:** 2026-09-03 13:00:00 a 14:10:00
+- **Proyecto(s):** Backend (ninesys-api) + Backend de 19print_app (repo
+  externo)
+- **Archivos Involucrados:**
+  - `app/routes/orders.php` (POST /presupuesto/nuevo)
+  - `19print_app/packages/backend/src/routes/ninesys.js`
+  - Base de datos: `api_emp_194` (Postgres, vps-contabo-dev), tablas
+    `presupuestos`, `customers`
+- **Commits Relacionados:**
+  - Backend (ninesys-api): f16d6cb, d117345 (changelog), 6102665 (fix de la
+    regresión propia detectada al verificar)
+  - 19print_app: 9f43aef
+- **Acción Realizada:**
+  1. Se leyó `/presupuesto/nuevo` y `/presupuesto/detalle/{id}` completos, y
+     se comparó con `/ordenes/nueva` (creación directa de orden, sin pasar
+     por presupuesto). Se confirmó que `/ordenes/nueva` YA tiene lógica
+     probada para, cuando no llega un `id_wp` explícito, buscar un cliente
+     existente en `customers` por cédula o teléfono (últimos 10 dígitos) y
+     actualizarlo, o crear uno nuevo si no existe -- dejando siempre un
+     `id_wp` real. `/presupuesto/nuevo` leía `telefono`/`email` del request
+     (`$arr['telefono']`, `$arr['email']`) pero nunca los usaba: no hay
+     columnas `cliente_telefono`/`cliente_email` en `presupuestos` y el
+     `INSERT` tampoco los intentaba guardar en ningún otro lado -- se
+     descartaban en silencio. Sin `id_wp`, `app_multi`
+     (`components/ordenes/nueva.vue::cargarPresupuestoEmitido`) cae en una
+     rama de respaldo que solo lee `cliente_nombre` (nombre+apellido ya
+     concatenados por el propio backend), `cliente_cedula` y
+     `cliente_direccion` -- de ahí que el presupuesto #8 (creado desde
+     `presupuesto.vue`, donde el staff sí elige un cliente ya existente y
+     manda su `id_wp`) cargara bien, y el #7 (19print_app, cliente nuevo sin
+     `id_wp`) no.
+  2. **Corrección 1 (causa raíz, el error estaba en la EMISIÓN):** se portó
+     a `/presupuesto/nuevo` la misma lógica de "buscar o crear/actualizar
+     cliente en `customers`" que ya usa `/ordenes/nueva`, para que
+     `id_wp_param` siempre quede resuelto antes del `INSERT INTO
+     presupuestos`. Sin cambio de esquema (`presupuestos.id_wp` ya existía).
+  3. **Regresión propia detectada al verificar:** el primer intento de este
+     fix usó `$arr['nombre']`/`$arr['apellido']` (que pasan por
+     `json_decode()`) en vez de `$newJson['nombre']`/`$newJson['apellido']`
+     crudos -- mismo patrón de bug que la dirección corregida en una tarea
+     anterior (2026-08-31). Se detectó de inmediato probando en vivo (el
+     cliente se creaba con `first_name`/`last_name` vacíos) y se corrigió
+     usando los valores crudos, igual que ya hace `$cliente` (la variable
+     de despliegue, no confundir con el nombre de este archivo) unas líneas
+     arriba en la misma función.
+  4. **Corrección 2 (producto/talla/tela, 19print_app):** se encontró que
+     `nueva.vue` hace `Number(p.talla)`/`Number(p.tela)` sobre cualquier
+     valor que no sea exactamente el string `"No aplica"` -- `lineaProducto()`
+     en `19print_app/routes/ninesys.js` mandaba `talla: "Talla única"` y
+     `tela: <texto libre del cliente>`, ambos no numéricos, así que
+     quedaban en `NaN` al cargar el presupuesto en la orden (selector de
+     talla/tela roto/vacío). Se cambió `lineaProducto()` para mandar
+     siempre `"No aplica"` en ambos campos (estos servicios por metraje no
+     tienen talla real), y se agregó `notaTela()`: si algún lienzo tiene
+     tela real cargada, se anexa como texto legible a las `observaciones`
+     del presupuesto (ej. "Lienzo #70: tela Algodón 220gr"), donde el staff
+     sí la ve.
+  5. Cantidad y precio del producto ya se verificaron correctos en esta
+     misma revisión (presupuesto #7: `cantidad=1.3`, `precio_unitario=3.00`,
+     total `3.90` -- consistente, sin decimales inventados; ese bug ya se
+     había cerrado el 2026-08-31).
+  6. **Verificación en vivo (empresa 194, Desarrollo):** dos presupuestos de
+     prueba descartables contra `/presupuesto/nuevo` (uno para reproducir la
+     regresión propia del paso 3, otro para confirmar la corrección),
+     inspeccionados con `/presupuesto/detalle/{id}` y `GET
+     /customers/por-telefono/{tel}`, y borrados de inmediato
+     (`presupuestos_productos`, `presupuestos`, `customers`) al terminar
+     cada verificación.
+  7. **Backfill del presupuesto real #7:** se encontró que YA existe un
+     cliente real en `customers` (`_id=947`, Ozcar Vela, misma cédula,
+     mismo teléfono real -- obtenido consultando la base `print19` de
+     19print_app, tabla `Usuario`, vía Prisma -- y misma dirección
+     "Sector el Carmen" que ya traía el presupuesto) con email y
+     país/estado/ciudad completos. Tras confirmación explícita del usuario
+     (el sistema bloqueó el `UPDATE` por tratarse de una modificación
+     directa sobre datos reales), se ejecutó `UPDATE presupuestos SET
+     id_wp=947 WHERE _id=7`, verificado con `/presupuesto/detalle/7`.
+  8. Desplegado `ninesys-api` a Desarrollo dos veces (fix inicial +
+     corrección de la regresión propia) con
+     `ninesys-hub/bin/deploy_backend_dev.sh`, versión final `v1.0.2`.
+     Desplegado `19print_app` a Desarrollo con
+     `ninesys-hub/bin/deploy_dtf_dev.sh`, versión `v1.1.1`.
+- **Inconvenientes y Desafíos:**
+  - El primer despliegue de `ninesys-api` reveló que la rama local
+    `feature/postgresql-support` no tenía upstream configurado (`git push`
+    sin argumentos, dentro de `_lib_deploy.sh`, falló) -- corregido con
+    `git push -u origin feature/postgresql-support`. Efecto secundario real:
+    como el script corre con `set -e`, el fallo de ese push abortó el resto
+    de `prompt_version_and_tag` (incluida la actualización de
+    `current_versions.json`), que se completó a mano después para que
+    quedara consistente con el tag ya pusheado.
+  - Se detectó y corrigió una regresión propia (ver punto 3) antes de que
+    llegara a producción -- encontrada gracias a la prueba en vivo, no a
+    revisión de código.
+- **Decisión Final y Justificación:**
+  - Se reutilizó la lógica YA PROBADA de `/ordenes/nueva` en vez de inventar
+    un mecanismo nuevo (ej. columnas `cliente_telefono`/`cliente_email`
+    directo en `presupuestos`) -- consistente con el resto del código, cero
+    cambio de esquema, y hereda el mismo comportamiento (reactivar clientes
+    con soft-delete, evitar duplicados por teléfono) sin duplicar lógica de
+    negocio en dos lugares con reglas potencialmente distintas.
+  - Se movió la tela a observaciones en vez de intentar mapearla a un
+    `id_tela` real del catálogo de Ninesys: estos servicios de impresión por
+    metraje no tienen equivalente en el catálogo de telas de prendas, y
+    forzar un match hubiera sido tan frágil como el bug original.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (`curl` contra
+  `api.nineteengreen.com` para reproducir/verificar, `ssh`/`psql` contra
+  `vps-contabo-dev` para inspeccionar/limpiar pruebas y hacer el backfill,
+  `ssh` + `node`/Prisma contra la base `print19` de 19print_app para
+  recuperar el teléfono real del cliente, `git`,
+  `ninesys-hub/bin/deploy_backend_dev.sh`, `ninesys-hub/bin/deploy_dtf_dev.sh`).
+- **Resultado:** Éxito.
+- **Verificación:** Reproducido el flujo completo end-to-end contra la
+  empresa 194 en Desarrollo, dos veces (antes y después de corregir la
+  regresión propia): presupuesto de prueba -> cliente creado/actualizado en
+  `customers` con todos los campos -> `id_wp` presente en
+  `/presupuesto/detalle/{id}`. Presupuesto real #7 verificado con
+  `id_wp=947` tras el backfill.
+- **Logro Conseguido:** Los presupuestos creados desde 19print_app (y desde
+  cualquier caller de `/presupuesto/nuevo` sin cliente ya seleccionado) ya
+  quedan ligados a un cliente real de Ninesys con todos sus datos, igual que
+  los creados desde `presupuesto.vue` -- se cierra la clase completa de bug,
+  no solo el caso puntual reportado. Talla/tela de estos productos ya no se
+  rompen al cargarlos en una orden nueva, y la tela real queda visible para
+  el staff en las observaciones.
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude).
+- **Respuesta de Gemini:** N/A (tarea ejecutada por Claude).
