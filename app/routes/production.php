@@ -718,6 +718,60 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  // ÓRDENES TERMINADAS (sección "Órdenes terminadas" de Control de Producción).
+  // Deliberadamente separado de /sse/produccion (que ya es una consulta pesada
+  // con progreso/asignaciones/lotes físicos) -- esta consulta solo trae lo que
+  // esa sección necesita: Orden, Cliente y los datos para emitir una reposición
+  // sobre una orden ya terminada, sin sumarle status='terminada' al filtro de
+  // la consulta principal.
+  $app->get('/produccion/ordenes-terminadas', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+
+    $sql = "SELECT
+          a._id AS orden,
+          CONCAT(cus.first_name, ' ', cus.last_name) AS cliente,
+          (
+            SELECT dep.departamento
+            FROM lotes_detalles_empleados_asignados ldea
+            JOIN departamentos dep ON dep._id = ldea.id_departamento
+            WHERE ldea.id_orden = a._id
+            ORDER BY dep.orden_proceso DESC
+            LIMIT 1
+          ) AS paso
+        FROM ordenes a
+        LEFT JOIN customers cus ON cus._id = a.id_wp
+        WHERE a.status = 'terminada'
+        ORDER BY a._id DESC";
+    $obj['ordenes'] = $localConnection->goQuery($sql);
+
+    // Mismas columnas/alias que arma /sse/produccion para
+    // reposicion_ordenes_productos (solo cambia el filtro de status) -- para
+    // que reposicion.vue/reposicionForm.vue la consuman sin ningún cambio.
+    $sql = "SELECT
+          b._id,
+          b.id_orden,
+          b._id item,
+          b.id_woo cod,
+          b.name producto,
+          b.cantidad,
+          b.talla,
+          b.tela,
+          b.corte,
+          b.precio_unitario precio,
+          b.precio_woo precioWoo
+        FROM ordenes_productos b
+        JOIN ordenes a ON a._id = b.id_orden
+        JOIN products p ON p._id = b.id_woo
+        WHERE a.status = 'terminada' AND p.fisico = 1";
+    $obj['reposicion_ordenes_productos'] = $localConnection->goQuery($sql);
+
+    $response->getBody()->write(json_encode($obj, JSON_NUMERIC_CHECK));
+
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   // SSE CORTE
   $app->get('/sse/produccion/corte/{id_empleado}', function (Request $request, Response $response, array $args) {  // /lotes/en-proceso
     // 2026-08-13: el filtro por empleado usaba lotes_detalles.id_empleado,
