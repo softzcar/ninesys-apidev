@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.6] - 2026-09-03
+- Endpoint liviano GET /produccion/ordenes-terminadas para la nueva seccion de reposiciones sobre ordenes terminadas
+
 ## [v1.0.5] - 2026-09-03
 - Fix: telefono/email crudos (no json_decode) al resolver/crear cliente -- email real nunca se capturaba antes
 
