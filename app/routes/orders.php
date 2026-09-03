@@ -2042,8 +2042,13 @@ return function (App $app) {
     if (!empty($id_wp_val) && is_numeric($id_wp_val)) {
       $id_wp_param = (int) $id_wp_val;
     } else {
-      $cliente_nombre_wp = $arr['nombre'] ?? '';
-      $cliente_apellido_wp = $arr['apellido'] ?? '';
+      // nombre/apellido CRUDOS ($newJson, no $arr): igual que $cliente más
+      // arriba en esta misma función, presupuesto.vue y 19print_app mandan
+      // estos dos como texto plano, no como JSON con comillas -- pasarlos
+      // por $arr (json_decode) los dejaba en null/vacío (mismo patrón que el
+      // bug de dirección, ya corregido antes en este archivo).
+      $cliente_nombre_wp = $newJson['nombre'] ?? '';
+      $cliente_apellido_wp = $newJson['apellido'] ?? '';
       $cliente_cedula_wp = $arr['cedula'] ?? '';
       $cliente_telefono_wp = $arr['telefono'] ?? '';
       $cliente_email_wp = $arr['email'] ?? '';
