@@ -2049,9 +2049,21 @@ return function (App $app) {
       // bug de dirección, ya corregido antes en este archivo).
       $cliente_nombre_wp = $newJson['nombre'] ?? '';
       $cliente_apellido_wp = $newJson['apellido'] ?? '';
-      $cliente_cedula_wp = $arr['cedula'] ?? '';
-      $cliente_telefono_wp = $arr['telefono'] ?? '';
-      $cliente_email_wp = $arr['email'] ?? '';
+      // cedula es el único de estos campos que 19print_app SÍ manda citado
+      // (JSON.stringify) -- presupuesto.vue/nueva.vue no. json_decode()
+      // resuelve el caso citado; si falla (viene cruda, típico de
+      // presupuesto.vue/nueva.vue), se usa el valor crudo tal cual.
+      $cedulaRaw = $newJson['cedula'] ?? '';
+      $cedulaDecoded = json_decode($cedulaRaw);
+      $cliente_cedula_wp = $cedulaDecoded !== null ? (string) $cedulaDecoded : $cedulaRaw;
+      // telefono/email CRUDOS ($newJson, no $arr): los tres callers
+      // (19print_app, presupuesto.vue, nueva.vue) los mandan como texto
+      // plano -- un email real (con "@") o un teléfono con "+" nunca son
+      // JSON válido, json_decode() los dejaba en null en silencio (el
+      // teléfono "sobrevivía" antes solo si era puro dígitos sin "+", por
+      // coincidencia -- JSON numérico válido; el email NUNCA sobrevivía).
+      $cliente_telefono_wp = $newJson['telefono'] ?? '';
+      $cliente_email_wp = $newJson['email'] ?? '';
       $cliente_direccion_wp = $newJson['direccion'] ?? 'none';
 
       // Se guarda ANTES de rellenar con el email inventado: hace falta para
@@ -2952,18 +2964,22 @@ return function (App $app) {
       // NUEVO: Si no hay id_wp, crear o actualizar el cliente automáticamente
       error_log("id_wp vacío detectado, creando/actualizando cliente automáticamente");
 
-      // nombre/apellido/direccion CRUDOS ($newJson, no $arr): nueva.vue manda
-      // estos tres como texto plano (URLSearchParams.set, sin JSON.stringify)
-      // -- json_decode() sobre texto no-JSON (cualquier nombre/dirección con
-      // letras) devuelve null en silencio. cedula/telefono sobreviven porque
-      // suelen ser solo dígitos (JSON válido por sí solo); nombre/apellido/
-      // dirección casi nunca lo son (bug real, mismo patrón ya corregido en
-      // /presupuesto/nuevo el 2026-09-03).
+      // nombre/apellido/direccion/telefono/email CRUDOS ($newJson, no $arr):
+      // nueva.vue manda TODOS estos como texto plano (URLSearchParams.set,
+      // sin JSON.stringify) -- json_decode() sobre texto no-JSON (cualquier
+      // nombre/dirección con letras, o un email con "@") devuelve null en
+      // silencio. Un teléfono puro-dígitos "sobrevivía" antes por
+      // coincidencia (JSON numérico válido), pero el email NUNCA (bug real,
+      // mismo patrón ya corregido en /presupuesto/nuevo el 2026-09-03). cedula
+      // sí puede venir citada según el caller, por eso se intenta decodificar
+      // primero y se cae al valor crudo si no es JSON válido.
       $cliente_nombre = $newJson['nombre'] ?? '';
       $cliente_apellido = $newJson['apellido'] ?? '';
-      $cliente_cedula = $arr['cedula'] ?? '';
-      $cliente_telefono = $arr['telefono'] ?? '';
-      $cliente_email = $arr['email'] ?? '';
+      $cedulaRaw = $newJson['cedula'] ?? '';
+      $cedulaDecoded = json_decode($cedulaRaw);
+      $cliente_cedula = $cedulaDecoded !== null ? (string) $cedulaDecoded : $cedulaRaw;
+      $cliente_telefono = $newJson['telefono'] ?? '';
+      $cliente_email = $newJson['email'] ?? '';
       $cliente_direccion = $newJson['direccion'] ?? 'none';
 
       // Generar email si está vacío -- $emailFueProvisto se guarda ANTES de
