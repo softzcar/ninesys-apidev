@@ -2026,9 +2026,93 @@ return function (App $app) {
     // Por ejemplo:
     // $woo->sendMail($orderWC->id, 'Mensaje de confirmacion de cracion de orden para el cliente'); // Reemplaza "enviarCorreoElectronico" con la función real
 
-    // Validar id_wp
+    // Validar id_wp -- mismo patrón que /ordenes/nueva (más abajo en este
+    // archivo): si no viene un id_wp explícito (caso real: 19print_app, que
+    // no conoce clientes de Ninesys), buscar o crear/actualizar el cliente
+    // en `customers` por cédula/teléfono para que el presupuesto SIEMPRE
+    // quede ligado a un cliente real. Sin esto, teléfono/email/apellido que
+    // sí llegan en el request (`$arr['telefono']`/`$arr['email']`) se leían
+    // y se descartaban en silencio -- nunca se guardaban en ningún lado, y
+    // `presupuesto/detalle/{id}` no tenía cómo devolverlos (bug real, hallado
+    // 2026-09-03: presupuesto de 19print_app con datos de cliente vacíos al
+    // cargarlo en "Nueva Orden" en app_multi, salvo lo que sí vive en
+    // `presupuestos` -- nombre completo, cédula y dirección).
     $id_wp_val = $arr['id_wp'];
-    $id_wp_param = (!empty($id_wp_val) && is_numeric($id_wp_val)) ? $id_wp_val : null;
+    $id_wp_param = null;
+    if (!empty($id_wp_val) && is_numeric($id_wp_val)) {
+      $id_wp_param = (int) $id_wp_val;
+    } else {
+      $cliente_nombre_wp = $arr['nombre'] ?? '';
+      $cliente_apellido_wp = $arr['apellido'] ?? '';
+      $cliente_cedula_wp = $arr['cedula'] ?? '';
+      $cliente_telefono_wp = $arr['telefono'] ?? '';
+      $cliente_email_wp = $arr['email'] ?? '';
+      $cliente_direccion_wp = $newJson['direccion'] ?? 'none';
+
+      if (empty($cliente_email_wp) || $cliente_email_wp === 'none') {
+        $randomString = substr(str_shuffle('abcdefghijklmnopqrstuvwxyz0123456789'), 0, 8);
+        $cliente_email_wp = strtolower(substr($cliente_nombre_wp, 0, 1)) . $randomString . '@email.com';
+      }
+
+      $conditions = [];
+      $conditionParams = [];
+
+      if (!empty($cliente_cedula_wp) && $cliente_cedula_wp !== 'none') {
+        $conditions[] = 'cedula = ?';
+        $conditionParams[] = $cliente_cedula_wp;
+      }
+
+      if (!empty($cliente_telefono_wp) && $cliente_telefono_wp !== 'none') {
+        $digits = preg_replace('/\D/', '', $cliente_telefono_wp);
+        if (strlen($digits) >= 7) {
+          $last10 = substr($digits, -10);
+          $conditions[] = "REGEXP_REPLACE(phone, '[^0-9]', '') LIKE ?";
+          $conditionParams[] = '%' . $last10;
+        } else {
+          $conditions[] = 'phone = ?';
+          $conditionParams[] = $cliente_telefono_wp;
+        }
+      }
+
+      if (!empty($conditions)) {
+        $sqlCheckCustomer = 'SELECT _id FROM customers WHERE (' . implode(' OR ', $conditions) . ') LIMIT 1';
+        $existingCustomer = $localConnection->goQuery($sqlCheckCustomer, $conditionParams);
+
+        if (!empty($existingCustomer)) {
+          $customer_id = (int) $existingCustomer[0]['_id'];
+          $sqlUpdateCustomer = 'UPDATE customers SET
+                                  eliminado = 0,
+                                  first_name = ?,
+                                  last_name = ?,
+                                  cedula = ?,
+                                  phone = ?,
+                                  email = ?,
+                                  address = ?
+                                WHERE _id = ?';
+          $localConnection->goQuery($sqlUpdateCustomer, [
+            $cliente_nombre_wp, $cliente_apellido_wp, $cliente_cedula_wp,
+            $cliente_telefono_wp, $cliente_email_wp, $cliente_direccion_wp, $customer_id,
+          ]);
+          $id_wp_param = $customer_id;
+        } else {
+          $sqlCreateCustomer = 'INSERT INTO customers (first_name, last_name, cedula, phone, email, address) VALUES (?, ?, ?, ?, ?, ?)';
+          $createResult = $localConnection->goQuery($sqlCreateCustomer, [
+            $cliente_nombre_wp, $cliente_apellido_wp, $cliente_cedula_wp, $cliente_telefono_wp, $cliente_email_wp, $cliente_direccion_wp,
+          ]);
+          if (isset($createResult['insert_id'])) {
+            $id_wp_param = (int) $createResult['insert_id'];
+          }
+        }
+      } else {
+        $sqlCreateCustomer = 'INSERT INTO customers (first_name, last_name, cedula, phone, email, address) VALUES (?, ?, ?, ?, ?, ?)';
+        $createResult = $localConnection->goQuery($sqlCreateCustomer, [
+          $cliente_nombre_wp, $cliente_apellido_wp, $cliente_cedula_wp, $cliente_telefono_wp, $cliente_email_wp, $cliente_direccion_wp,
+        ]);
+        if (isset($createResult['insert_id'])) {
+          $id_wp_param = (int) $createResult['insert_id'];
+        }
+      }
+    }
 
     /* Craer orden en nunesys */
     // cliente_direccion usa $newJson['direccion'] CRUDO (no $arr['direccion'], que
