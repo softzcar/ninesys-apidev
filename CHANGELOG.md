@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.5] - 2026-09-03
+- Fix: telefono/email crudos (no json_decode) al resolver/crear cliente -- email real nunca se capturaba antes
+
 ## [v1.0.4] - 2026-09-03
 - Mismo fix de presupuesto/nuevo (nombre/apellido crudos + merge sin pisar datos reales) portado a /ordenes/nueva
 
