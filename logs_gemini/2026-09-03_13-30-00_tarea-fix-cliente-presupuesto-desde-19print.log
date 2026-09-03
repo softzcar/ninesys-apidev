@@ -141,6 +141,24 @@
   `json_decode()` en vez de crudos, y `UPDATE` sin merge) -- confirmado con
   el usuario y corregido ahí también en la misma sesión, con el mismo
   criterio ya verificado.
+- **Segunda continuación (mismo día), a pedido del usuario ("revisá si el
+  bug está también al generar un presupuesto desde app_multi"):** se
+  encontró el hallazgo más importante de la tarea. El código nuevo usaba
+  `$arr['telefono']`/`$arr['email']` (json_decode) para resolver el
+  cliente -- pero se confirmó revisando el armado del request en los TRES
+  callers (`19print_app/lib/ninesysApi.js`, `presupuesto.vue`, `nueva.vue`)
+  que telefono y email SIEMPRE se mandan como texto plano, nunca citados.
+  Un teléfono sin "+" y solo dígitos "sobrevivía" a `json_decode()` por
+  coincidencia (es un número JSON válido), pero un email real (con "@") NO
+  es JSON válido bajo ninguna circunstancia -- es decir, **el email real de
+  un cliente nunca se había capturado correctamente en esta lógica nueva,
+  en ningún caller**, aunque las pruebas anteriores no lo habían notado
+  porque probaban con el email ya citado a mano. Corregido usando el valor
+  crudo (`$newJson`) para telefono y email en ambos endpoints. `cedula` es
+  el único campo con convención mixta entre callers (19print_app SÍ la cita,
+  los otros dos no), así que ahí se intenta `json_decode()` primero y se cae
+  al valor crudo si no es JSON válido -- cubre ambos casos sin importar el
+  caller.
 - **Resultado:** Éxito.
 - **Verificación:** Reproducido el flujo completo end-to-end contra la
   empresa 194 en Desarrollo: en `/presupuesto/nuevo`, tres presupuestos de
@@ -154,7 +172,12 @@
   resuelto automáticamente sin intervención manual. Todas las filas de
   prueba (`presupuestos`/`presupuestos_productos`/`ordenes`/
   `ordenes_productos`/`ordenes_observaciones`/`customers`) borradas de
-  inmediato tras cada verificación.
+  inmediato tras cada verificación. Verificado además el fix de
+  telefono/email crudos con 3 pruebas adicionales: formato "presupuesto.vue"
+  (cédula/teléfono/email sin citar, teléfono con "+"), formato "19print_app"
+  (cédula citada, email crudo), y el mismo par contra `/ordenes/nueva/custom`
+  -- en los tres casos el email y teléfono reales quedaron guardados tal
+  cual, sin inventar ni perder nada.
 - **Logro Conseguido:** Los presupuestos creados desde 19print_app (y desde
   cualquier caller de `/presupuesto/nuevo` u `/ordenes/nueva/custom` sin
   cliente ya seleccionado) ya quedan ligados a un cliente real de Ninesys
