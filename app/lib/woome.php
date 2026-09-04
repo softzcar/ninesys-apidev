@@ -1170,6 +1170,12 @@ class WooMe
 
     $tieneBusqueda = $buscar !== null && trim($buscar) !== '';
     $like = $tieneBusqueda ? '%' . trim($buscar) . '%' : null;
+    // Sin ORDER BY, el motor no garantiza ningún orden particular al aplicar
+    // LIMIT -- con la búsqueda acotada a 20 filas, esto hacía que el orden
+    // pareciera arbitrario y que un cliente que sí coincidía con el texto
+    // buscado quedara fuera de las 20 filas devueltas de forma inconsistente
+    // entre una búsqueda y otra (hallazgo real 2026-09-04).
+    $orderBySql = $tieneBusqueda ? ' ORDER BY first_name ASC, last_name ASC' : '';
     $limitSql = $tieneBusqueda ? ' LIMIT 20' : '';
     // Postgres, a diferencia de MySQL, distingue mayúsculas/minúsculas con
     // LIKE -- sin esto, buscar "ozc" no encontraba a "Ozcar" (hallazgo real
@@ -1182,7 +1188,7 @@ class WooMe
                               c.id_catalogo_pais, c.id_catalogo_estado, c.id_catalogo_ciudad
               FROM customers c
               INNER JOIN ordenes o ON o.id_wp = c._id
-              WHERE c.eliminado = 0 AND o.responsable = ?' . $searchWhere . $limitSql;
+              WHERE c.eliminado = 0 AND o.responsable = ?' . $searchWhere . $orderBySql . $limitSql;
       $params = [$id_vendedor];
       if ($tieneBusqueda) {
         $params = array_merge($params, [$like, $like, $like, $like]);
@@ -1193,7 +1199,7 @@ class WooMe
       $sql = 'SELECT _id id, first_name, last_name, username, cedula, phone, address, email, recibir_notificaciones,
                      id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad
               FROM customers
-              WHERE eliminado = 0' . $searchWhere . $limitSql;
+              WHERE eliminado = 0' . $searchWhere . $orderBySql . $limitSql;
       $params = $tieneBusqueda ? [$like, $like, $like, $like] : [];
       $data = $localConnection->goQuery($sql, $params);
     }
