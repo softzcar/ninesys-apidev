@@ -194,9 +194,9 @@ return function (App $app) {
                     WHERE
                         op.id_orden = ord._id
                 ) AS total_orden,
-                (SELECT COALESCE(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id) AS total_descuento,
-                (SELECT COALESCE(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id) AS total_nota_credito,
-                (SELECT COALESCE(SUM(abono), 0) FROM abonos WHERE id_orden = ord._id) AS total_abonos_base,
+                (SELECT COALESCE(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id AND moment::date BETWEEN ? AND ?) AS total_descuento,
+                (SELECT COALESCE(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id AND moment::date BETWEEN ? AND ?) AS total_nota_credito,
+                (SELECT COALESCE(SUM(abono), 0) FROM abonos WHERE id_orden = ord._id AND moment::date BETWEEN ? AND ?) AS total_abonos_base,
                 (
                     SELECT
                         COALESCE(json_agg(
@@ -230,7 +230,9 @@ return function (App $app) {
                 " . $searchVendedor . '
                 ORDER BY
                 met.id_orden DESC, met.moment ASC;';
-      $params = array_merge([$inicio, $fin], $paramsVendedor);
+      // Un placeholder por cada subconsulta acotada al rango (descuento, nota_credito,
+      // abonos_base) más el WHERE externo -- mismo orden en que aparecen los "?" en el SQL.
+      $params = array_merge([$inicio, $fin, $inicio, $fin, $inicio, $fin, $inicio, $fin], $paramsVendedor);
     } else {
       $sql = "SELECT
                 met._id,
@@ -250,9 +252,9 @@ return function (App $app) {
                     WHERE
                         op.id_orden = ord._id
                 ) AS total_orden,
-                (SELECT COALESCE(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id) AS total_descuento,
-                (SELECT COALESCE(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id) AS total_nota_credito,
-                (SELECT COALESCE(SUM(abono), 0) FROM abonos WHERE id_orden = ord._id) AS total_abonos_base,
+                (SELECT COALESCE(SUM(descuento), 0) FROM abonos WHERE id_orden = ord._id AND DATE(moment) BETWEEN ? AND ?) AS total_descuento,
+                (SELECT COALESCE(SUM(nota_credito), 0) FROM abonos WHERE id_orden = ord._id AND DATE(moment) BETWEEN ? AND ?) AS total_nota_credito,
+                (SELECT COALESCE(SUM(abono), 0) FROM abonos WHERE id_orden = ord._id AND DATE(moment) BETWEEN ? AND ?) AS total_abonos_base,
                 (
                     SELECT
                         CONCAT(
@@ -290,7 +292,9 @@ return function (App $app) {
                 " . $searchVendedor . '
                 ORDER BY
                 met.id_orden DESC, met.moment ASC;';
-      $params = array_merge([$inicio, $fin], $paramsVendedor);
+      // Mismo orden que la rama Postgres: un placeholder por cada subconsulta acotada
+      // (descuento, nota_credito, abonos_base) más el WHERE externo.
+      $params = array_merge([$inicio, $fin, $inicio, $fin, $inicio, $fin, $inicio, $fin], $paramsVendedor);
     }
   }
 
