@@ -1169,38 +1169,57 @@ class WooMe
     $localConnection = new LocalDB();
 
     $tieneBusqueda = $buscar !== null && trim($buscar) !== '';
-    $like = $tieneBusqueda ? '%' . trim($buscar) . '%' : null;
     // Sin ORDER BY, el motor no garantiza ningún orden particular al aplicar
-    // LIMIT -- con la búsqueda acotada a 20 filas, esto hacía que el orden
+    // LIMIT -- con la búsqueda acotada a filas, esto hacía que el orden
     // pareciera arbitrario y que un cliente que sí coincidía con el texto
-    // buscado quedara fuera de las 20 filas devueltas de forma inconsistente
+    // buscado quedara fuera de las filas devueltas de forma inconsistente
     // entre una búsqueda y otra (hallazgo real 2026-09-04).
     $orderBySql = $tieneBusqueda ? ' ORDER BY first_name ASC, last_name ASC' : '';
-    $limitSql = $tieneBusqueda ? ' LIMIT 20' : '';
+    // Subido de 20 a 30 como margen adicional -- el fix real para nombres
+    // comunes es la búsqueda por palabras de abajo (hallazgo real 2026-09-05:
+    // con 34 "Ricardo" en la tabla, ni ordenar ni un límite más alto alcanzan
+    // por sí solos si no se puede acotar por apellido también).
+    $limitSql = $tieneBusqueda ? ' LIMIT 30' : '';
     // Postgres, a diferencia de MySQL, distingue mayúsculas/minúsculas con
     // LIKE -- sin esto, buscar "ozc" no encontraba a "Ozcar" (hallazgo real
     // 2026-08-07, mismo patrón ya usado en msg_service.php).
     $likeOp = (defined('DB_DRIVER') && DB_DRIVER === 'pgsql') ? 'ILIKE' : 'LIKE';
 
+    // Se separa el texto en palabras y se exige que CADA una coincida con
+    // alguna columna (nombre, apellido, teléfono o cédula) -- antes el texto
+    // completo se comparaba contra cada columna por separado, así que
+    // escribir "Ricardo Perez" no encontraba nada (ninguna columna contiene
+    // la frase completa "Ricardo Perez"). Con nombres comunes (varias
+    // decenas de personas con el mismo primer nombre) era imposible acotar
+    // más allá del primer nombre solo (hallazgo real 2026-09-05).
+    $tokens = $tieneBusqueda ? array_values(array_filter(preg_split('/\s+/', trim($buscar)))) : [];
+
     if ($id_vendedor !== null) {
-      $searchWhere = $tieneBusqueda ? " AND (c.first_name {$likeOp} ? OR c.last_name {$likeOp} ? OR c.phone {$likeOp} ? OR c.cedula {$likeOp} ?)" : '';
+      $searchWhere = '';
+      $params = [$id_vendedor];
+      foreach ($tokens as $token) {
+        $like = '%' . $token . '%';
+        $searchWhere .= " AND (c.first_name {$likeOp} ? OR c.last_name {$likeOp} ? OR c.phone {$likeOp} ? OR c.cedula {$likeOp} ?)";
+        $params = array_merge($params, [$like, $like, $like, $like]);
+      }
       $sql = 'SELECT DISTINCT c._id id, c.first_name, c.last_name, c.username, c.cedula, c.phone, c.address, c.email, c.recibir_notificaciones,
                               c.id_catalogo_pais, c.id_catalogo_estado, c.id_catalogo_ciudad
               FROM customers c
               INNER JOIN ordenes o ON o.id_wp = c._id
               WHERE c.eliminado = 0 AND o.responsable = ?' . $searchWhere . $orderBySql . $limitSql;
-      $params = [$id_vendedor];
-      if ($tieneBusqueda) {
-        $params = array_merge($params, [$like, $like, $like, $like]);
-      }
       $data = $localConnection->goQuery($sql, $params);
     } else {
-      $searchWhere = $tieneBusqueda ? " AND (first_name {$likeOp} ? OR last_name {$likeOp} ? OR phone {$likeOp} ? OR cedula {$likeOp} ?)" : '';
+      $searchWhere = '';
+      $params = [];
+      foreach ($tokens as $token) {
+        $like = '%' . $token . '%';
+        $searchWhere .= " AND (first_name {$likeOp} ? OR last_name {$likeOp} ? OR phone {$likeOp} ? OR cedula {$likeOp} ?)";
+        $params = array_merge($params, [$like, $like, $like, $like]);
+      }
       $sql = 'SELECT _id id, first_name, last_name, username, cedula, phone, address, email, recibir_notificaciones,
                      id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad
               FROM customers
               WHERE eliminado = 0' . $searchWhere . $orderBySql . $limitSql;
-      $params = $tieneBusqueda ? [$like, $like, $like, $like] : [];
       $data = $localConnection->goQuery($sql, $params);
     }
     $localConnection->disconnect();
