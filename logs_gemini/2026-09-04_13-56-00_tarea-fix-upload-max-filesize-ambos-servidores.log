@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** "el endpoint https://api.nineteengreen.com/upload-order-detail-image me devuelve el error 'The uploaded file exceeds the upload_max_filesize directive in php.ini' y en producción tenemos el mismo error, debemos arreglarlos YA en ambos servidores"
+- **Fecha y Hora:** 2026-09-04 13:56:00
+- **Proyecto(s):** Backend (infraestructura)
+- **Archivos Involucrados:**
+  - /usr/local/lsws/lsphp83/etc/php.ini (vps-contabo-dev)
+  - /usr/local/lsws/lsphp83/etc/php.ini (vps-contabo-prod)
+- **Commits Relacionados:**
+  - Frontend: N/A
+  - Backend: N/A (cambio de configuración de servidor, no de código)
+- **Acción Realizada:** Se ajustó `upload_max_filesize=100M`, `post_max_size=110M` y `memory_limit=256M` en el `php.ini` de LSAPI (lsphp83) en ambos VPS, con backup previo del archivo (`.bak-<timestamp>`). Tras el cambio, los workers LSAPI/litespeed ya forkeados no recogían la nueva configuración -- fue necesario identificar procesos `lsphp`/`litespeed` huérfanos por PID exacto y matarlos con `kill -9`, y usar `systemctl restart lshttpd` (el `lswsctrl fullrestart` estaba roto, "service: command not found" en este sistema).
+- **Inconvenientes y Desafíos:** Un intento con `pkill -f` sobre el patrón del binario lsphp pudo haber coincidido con el propio comando SSH invocador -- se evitó repetir ese patrón y se usó matado por PID exacto en su lugar.
+- **Decisión Final y Justificación:** Editar el php.ini de LSAPI directamente (no un .htaccess ni ini_set en runtime) porque el límite se aplicaba antes de que el código PHP de la aplicación pudiera intervenir.
+- **Herramienta(s) Utilizada(s):** Bash (SSH a ambos VPS)
+- **Resultado:** Éxito
+- **Verificación:** Confirmado subiendo una imagen real desde el editor Quill en ambos entornos tras el reinicio de los procesos.
+- **Logro Conseguido:** Desbloqueada la subida de imágenes desde el editor de descripción de órdenes en Desarrollo y Producción.
+- **Referencias de Sesión (Contexto):** N/A
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Límites de subida corregidos y verificados en ambos servidores.

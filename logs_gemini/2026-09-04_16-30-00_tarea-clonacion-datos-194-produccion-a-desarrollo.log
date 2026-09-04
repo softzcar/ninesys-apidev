@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "ok ahora CON SUMO CUIDADO vamos a traer los datos del servidor de producción al servidor de desarrollo para la empresa 194... ya no necesitamos [el script MariaDB→PostgreSQL] pues ambos VPS están corriendo PostgreSQL... hazlo con sumo cuidado siempre con la posibilidad de hacer rollback de ser necesario"
+- **Fecha y Hora:** 2026-09-04 16:30:00
+- **Proyecto(s):** Backend (infraestructura/datos)
+- **Archivos Involucrados:**
+  - ninesys-hub/bin/clone_194_postgres_native.sh (nuevo)
+- **Commits Relacionados:**
+  - Frontend: N/A
+  - Backend: N/A
+  - ninesys-hub: a152a5d
+- **Acción Realizada:** Se escribió un script nuevo de clonación Postgres→Postgres nativo (reemplazando al ETL MySQL→Postgres obsoleto, bloqueado desde el cutover del 31-ago). Verificación en vivo previa (Prod con actividad de hoy, Dev congelado desde el 2-sep) antes de tocar nada. Backup automático de Dev (`pg_dump -Fc` a `/tmp/`) en cada corrida. Se encontró un hallazgo real no anticipado: Producción tiene filas huérfanas (FK inexistentes) en 15+ relaciones, miles de filas acumuladas de años/migraciones anteriores. La técnica de recreación de tablas con `--clean` fallaba validando esos huérfanos reales, así que se adoptó `pg_restore --data-only --disable-triggers` + un `TRUNCATE` armado a mano, todo en una única transacción -- preserva fielmente el estado real de Producción (huérfanos incluidos) en vez de "limpiarlos" silenciosamente durante la clonación.
+- **Inconvenientes y Desafíos:** 3 intentos fallidos antes del exitoso (permisos de `/root` para el usuario `postgres`, incompatibilidad de `pg_restore --clean` con los huérfanos reales, y `--data-only`/`--clean` mutuamente excluyentes en esta versión de `pg_restore`) -- cada uno con rollback automático limpio, Desarrollo nunca quedó en estado intermedio.
+- **Decisión Final y Justificación:** Preservar fielmente los huérfanos de Producción en vez de "limpiarlos" durante el clon, porque limpiar datos reales sin que el usuario lo pida explícitamente sería alterar el objeto mismo de la clonación (traer el estado real de Producción).
+- **Herramienta(s) Utilizada(s):** Bash (SSH a ambos VPS, pg_dump/pg_restore/psql)
+- **Resultado:** Éxito
+- **Verificación:** Conteos exactos coincidentes Prod vs Dev en las 6 tablas clave (ordenes 6954, customers 2001, metodos_de_pago 9003, abonos 15638, ordenes_productos 14576, products 155); confirmado que las tablas `wa_*` (WhatsApp) de Desarrollo no se pisaron.
+- **Logro Conseguido:** Desarrollo quedó con los datos reales y actuales de la empresa 194, permitiendo revisar la planilla de pagos con información fresca.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Clonación exitosa con verificación de conteos exacta; hallazgo de huérfanos de FK preexistentes en Producción documentado para una futura auditoría de datos (no resuelto en esta tarea, a propósito).

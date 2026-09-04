@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** "ok vamos a actualizar el servidor de producción con las versiones actualizadas de desarrollo app_multi, api, 19print_app, etc."
+- **Fecha y Hora:** 2026-09-04 17:32:00
+- **Proyecto(s):** Ambos
+- **Archivos Involucrados:** N/A (despliegue, no cambios de código nuevos)
+- **Commits Relacionados:**
+  - ninesys-hub: b5433e4, 10d7a39, 817a108, 1a141cf, 8ea89fc, 65ddee9 (tags de versión prod)
+- **Acción Realizada:** Primer uso real de los scripts `deploy_<función>_prod.sh` para promover a Producción todo lo acumulado en Desarrollo desde el arranque del sistema de versionado (2-sep): `app_multi` v1.0.0→v1.0.14, `ninesys-api` v1.0.0→v1.0.8, `19print_app` v1.0.0→v1.1.1. Se encontraron y corrigieron 2 hallazgos reales de infraestructura en Producción durante el deploy de 19print_app: (1) `pm2` no estaba instalado globalmente para Node 20 (solo para Node 23), mismo problema ya resuelto antes en Desarrollo; (2) cambios locales sin commitear en 3 archivos del backend de dtf (`auth.js`, `integracion.js`, `agente.js`) -- se respaldaron con `git diff > patch` antes de tocar nada, se confirmó que eran 100% redundantes con fixes ya mergeados en el repo (aplicados a mano por una sesión anterior sin acceso SSH a GitHub desde Producción) y recién entonces se descartaron con `git checkout -- .`.
+- **Inconvenientes y Desafíos:** Un intento de `deploy_frontend_prod.sh` fue bloqueado por el clasificador de Auto Mode; se resolvió pidiendo reautorización explícita al usuario antes de reintentar el mismo comando.
+- **Decisión Final y Justificación:** Nunca descartar cambios sin commitear sin antes compararlos contra el repo/tag de destino -- en este caso resultó ser trabajo ya redundante, pero el protocolo de verificación previa es el mismo sin importar el resultado.
+- **Herramienta(s) Utilizada(s):** Bash (scripts de ninesys-hub/bin, SSH a Producción)
+- **Resultado:** Éxito
+- **Verificación:** Los 3 apps quedaron corriendo la versión promovida en Producción sin downtime reportado; `pm2 list` confirmó que el demonio compartido no duplicó procesos (incluyendo `ntmsg-app`, el WhatsApp real de Producción, no tocado).
+- **Logro Conseguido:** Primer despliegue real a Producción con el nuevo sistema de versionado multi-repo, validando el flujo completo de principio a fin.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Despliegue a Producción completado para los 3 apps, con 2 hallazgos de infraestructura resueltos en el camino sin pérdida de trabajo.

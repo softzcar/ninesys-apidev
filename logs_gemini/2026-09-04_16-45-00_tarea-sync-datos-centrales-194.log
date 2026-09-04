@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "sincroniza también los datos centrales de la 194"
+- **Fecha y Hora:** 2026-09-04 16:45:00
+- **Proyecto(s):** Backend (infraestructura/datos)
+- **Archivos Involucrados:**
+  - ninesys-hub/bin/sync_empresas_centrales_194_postgres_native.sh (nuevo)
+- **Commits Relacionados:**
+  - Frontend: N/A
+  - Backend: N/A
+  - ninesys-hub: a152a5d
+- **Acción Realizada:** Script nuevo Postgres nativo (reemplaza al companion MySQL bloqueado) que sincroniza `empresas`, `empresas_usuarios`, `empresas_usuarios_departamentos` y `empresas_gastos` de `api_empresas`, acotado a `id_empresa=194` -- espejo fiel que también elimina huérfanos del lado de Desarrollo para esa empresa puntual. Se agregó de paso la sincronización de `id_pais` (antes excluida porque Producción en MySQL no tenía esa columna; ya no aplica esa limitación con ambos lados en Postgres).
+- **Inconvenientes y Desafíos:** Ninguno; los conteos ya coincidían antes de correr (17 empleados, 37 vínculos, 1 gasto) -- corrida de verificación sin drift real.
+- **Decisión Final y Justificación:** Acotar todas las operaciones (incluida la limpieza de huérfanos) a `id_empresa=194` explícitamente, para no arriesgar datos de otras empresas (208, 163) que comparten esas mismas tablas centrales.
+- **Herramienta(s) Utilizada(s):** Bash (SSH a ambos VPS)
+- **Resultado:** Éxito
+- **Verificación:** Confirmado que otras empresas (208) no fueron tocadas.
+- **Logro Conseguido:** Empresa 194 queda completa en Desarrollo (base propia + datos centrales) con información fresca de Producción.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Datos centrales de la 194 sincronizados y verificados, sin afectar otras empresas.

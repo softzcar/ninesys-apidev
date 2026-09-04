@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "ok ahora recibo un error distinto 'Error processing file: Upload target path is not writable' el mismo en ambos servidores desarrollo y producción"
+- **Fecha y Hora:** 2026-09-04 15:00:00
+- **Proyecto(s):** Backend (infraestructura)
+- **Archivos Involucrados:**
+  - /home/api.nineteengreen.com/public_html/public/images-orders-details/ (Dev, creado nuevo)
+  - public/images-orders-details/ en Producción (permisos corregidos)
+- **Commits Relacionados:**
+  - Frontend: N/A
+  - Backend: N/A (cambio de permisos de filesystem, no de código)
+- **Acción Realizada:** En Desarrollo, el directorio `images-orders-details/` no existía y su carpeta padre `public/` pertenecía a `root:root`, bloqueando el `mkdir` automático de la app -- se creó manualmente con dueño `apini1806`. En Producción, el directorio ya existía con 4.127 archivos reales pero pertenecía a `cyberpanel:docker` -- se hizo `chown -R` al usuario real del vhost (`apini8422`) sin tocar el contenido.
+- **Inconvenientes y Desafíos:** Ninguno relevante; causa raíz clara una vez identificada la diferencia de dueño de carpeta.
+- **Decisión Final y Justificación:** Corregir permisos/dueño en vez de relajar permisos globalmente (ej. 777), preservando el modelo de aislamiento por usuario de cada vhost.
+- **Herramienta(s) Utilizada(s):** Bash (SSH a ambos VPS)
+- **Resultado:** Éxito
+- **Verificación:** Confirmado subiendo y viendo la imagen resultante en el editor en ambos entornos.
+- **Logro Conseguido:** Subida de imágenes completamente funcional en Desarrollo y Producción.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Directorios de subida corregidos en ambos servidores, confirmado funcionando.

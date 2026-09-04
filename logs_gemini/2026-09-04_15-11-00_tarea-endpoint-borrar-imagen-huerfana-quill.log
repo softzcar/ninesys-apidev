@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** "si elimino la imagen del editor no se elimina del servidor, queda como archivo basura en el VPS"
+- **Fecha y Hora:** 2026-09-04 15:11:00
+- **Proyecto(s):** Ambos
+- **Archivos Involucrados:**
+  - ninesys-api/app/routes/upload.php
+- **Commits Relacionados:**
+  - Frontend: fc34880
+  - Backend: 55956d9
+- **Acción Realizada:** Se agregó `POST /delete-order-detail-image`, validando el nombre de archivo recibido con `basename()` más un regex estricto `^[a-f0-9]{16}\.[A-Za-z0-9]{1,10}$` (idéntico al patrón que genera `moveUploadedFile()` al subir), antes de ejecutar `unlink()` -- descarta cualquier posibilidad de path traversal sin importar el input recibido.
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** Validar contra el patrón exacto de nombre generado (hex de 16 + extensión corta) en vez de solo sanitizar la ruta, para que el endpoint solo pueda borrar archivos que el propio sistema de subida creó.
+- **Herramienta(s) Utilizada(s):** Edit
+- **Resultado:** Éxito
+- **Verificación:** Probado end-to-end desde el frontend (ver log de frontend "fix-race-vmodel-limpieza-quill").
+- **Logro Conseguido:** Backend seguro para limpiar imágenes huérfanas sin exponer borrado arbitrario de archivos.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Endpoint de borrado implementado con validación estricta de nombre de archivo.

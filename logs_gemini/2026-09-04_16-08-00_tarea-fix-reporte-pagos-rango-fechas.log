@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** "ninguno de los dos, que se filtren los pagos de esta semana nada más, los viejos no tienen por qué aparecer"
+- **Fecha y Hora:** 2026-09-04 16:08:00
+- **Proyecto(s):** Ambos
+- **Archivos Involucrados:**
+  - ninesys-api/app/routes/finance.php
+- **Commits Relacionados:**
+  - Frontend: 047ae2f
+  - Backend: 92332df
+- **Acción Realizada:** Se agregó acotación por fecha (`AND moment::date BETWEEN ? AND ?` en Postgres, `AND DATE(moment) BETWEEN ? AND ?` en MySQL) a las subconsultas `total_descuento`, `total_nota_credito` y `total_abonos_base` de `/reporte-de-pagos`, que antes no tenían filtro de fecha alguno mientras que "Métodos de Pago" en el mismo reporte sí lo tenía -- esa asimetría era la causa de la discrepancia reportada por el usuario. `total_orden` se dejó sin acotar (no es un evento con fecha propia).
+- **Inconvenientes y Desafíos:** Reordenar correctamente los arrays `$params` posicionales al agregar el par de fechas repetido en cada subconsulta.
+- **Decisión Final y Justificación:** Acotar todo al rango filtrado (decisión explícita del usuario) en vez de mostrar histórico + rango por separado, para eliminar ambigüedad sobre cuál cifra es la correcta.
+- **Herramienta(s) Utilizada(s):** Edit, Bash (deploy)
+- **Resultado:** Éxito
+- **Verificación:** Confirmado por el usuario contra datos reales de la vendedora Sara en el rango de la semana.
+- **Logro Conseguido:** Consistencia entre las 7 cards del reporte de Balance de pagos y abonos.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Backend corregido para acotar todas las subconsultas relevantes al rango de fechas filtrado.
