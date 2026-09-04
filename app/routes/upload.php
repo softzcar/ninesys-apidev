@@ -78,6 +78,35 @@ return function (App $app) {
         ]));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
     });
+
+    // Limpieza de imágenes huérfanas: se llama desde el frontend cuando una
+    // imagen ya insertada en un editor Quill (descripción de orden) se borra
+    // del contenido antes de guardar, para no dejar el archivo como basura en
+    // el servidor. Solo acepta el nombre de archivo (no una ruta ni una URL
+    // completa) y lo valida contra el patrón EXACTO que genera
+    // moveUploadedFile() -- 16 hex + extensión -- antes de tocar el
+    // filesystem, para que sea imposible borrar nada fuera de esta carpeta
+    // sin importar qué se mande.
+    $app->post('/delete-order-detail-image', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+        $filename = basename(trim((string) ($data['filename'] ?? '')));
+
+        if (!preg_match('/^[a-f0-9]{16}\.[A-Za-z0-9]{1,10}$/', $filename)) {
+            $response->getBody()->write(json_encode(['error' => 'Nombre de archivo inválido']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $directory = __DIR__ . '/../../public/images-orders-details';
+        $filepath = $directory . DIRECTORY_SEPARATOR . $filename;
+
+        // No es un error real si ya no existe (doble click, limpieza repetida, etc.)
+        if (file_exists($filepath) && is_file($filepath)) {
+            unlink($filepath);
+        }
+
+        $response->getBody()->write(json_encode(['success' => true]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    });
 };
 
 /**
