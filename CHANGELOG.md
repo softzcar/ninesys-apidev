@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.10] - 2026-09-04
+- Fix: busqueda de clientes por palabras (nombre+apellido) para acotar nombres comunes
+
 ## [v1.0.9] - 2026-09-04
 - Fix: ordenar alfabeticamente el typeahead de busqueda de clientes (nueva orden/presupuesto)
 
