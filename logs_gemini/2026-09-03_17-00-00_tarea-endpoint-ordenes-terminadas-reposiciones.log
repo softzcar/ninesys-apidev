@@ -1,0 +1,89 @@
+- **Solicitud del Usuario:** Retomando el pedido original de negocio
+  ("permitir reactivar una orden Terminada a Activa" para poder reasignar
+  personal y corregir/completar trabajo), un análisis previo (mismo día,
+  sesión de Claude Code) encontró que ese cambio tal cual se pidió
+  arriesgaba duplicar pagos, doble descuento de inventario y stock de
+  WooCommerce duplicado. El usuario decidió el enfoque correcto: no tocar
+  el status de la orden, usar el mecanismo de reposiciones (ya aislado por
+  `id_reposicion` en pagos, sin ese riesgo) y agregar una sección nueva
+  "Órdenes terminadas" en Control de Producción (`/test`, separada de
+  "Órdenes en curso") desde donde emitir reposiciones sobre órdenes ya
+  cerradas. Pidió explícitamente que la fuente de datos de esa sección NO
+  se sumara a `GET /sse/produccion` (ya es una consulta pesada), sino que
+  fuera un endpoint aparte, deliberadamente liviano.
+- **Fecha y Hora:** 2026-09-03 17:00:00 a 17:15:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - `app/routes/production.php` (nuevo endpoint `GET
+    /produccion/ordenes-terminadas`, agregado junto a `/sse/produccion`
+    sin modificarlo)
+- **Commits Relacionados:**
+  - Backend (ninesys-api), `feature/postgresql-support`:
+    - `3da3ce4` -- feat(produccion): endpoint liviano GET
+      /produccion/ordenes-terminadas
+  - Frontend (app_multi), rama `refactor/modular-routes` (mismo día,
+    commits aparte para la sección de UI y sus fixes posteriores):
+    `9ae4313` (moneda base, tarea distinta), `08bf193`, `b996d67`,
+    `9f2455c` (sección "Órdenes terminadas" + fixes de badge/layout).
+- **Acción Realizada:** Se agregó un endpoint nuevo, separado de
+  `/sse/produccion`, con dos queries mínimas: (1) órdenes con
+  `status = 'terminada'` trayendo solo `orden`, `cliente` (vía LEFT JOIN a
+  `customers`) y `paso` (subquery del último departamento trabajado, mismo
+  patrón ya usado en `POST /produccion/reposicion` para el fallback de
+  "orden sin tareas activas"); (2) los productos físicos de esas órdenes
+  con las mismas columnas/alias que ya arma `/sse/produccion` para
+  `reposicion_ordenes_productos`, para que el frontend reutilice el
+  componente `produccionsse-reposicion` sin ningún cambio. Sin `LIMIT`:
+  se confirmó con el usuario que `'terminada'` es un estado transitorio
+  (la orden pasa a `'entregada'` al entregarse), no un archivo histórico
+  que crece sin límite, así que no hace falta paginación.
+- **Inconvenientes y Desafíos:** Ninguno en el backend en sí (query
+  simple, sin joins pesados). El trabajo de integración con el frontend sí
+  tuvo varias iteraciones de fixes (ver commits de app_multi del mismo
+  día: badge mostrando "0" antes de cargar por carga perezosa, CSS del
+  grid de 10 columnas reutilizado por error para una tabla de 3 columnas)
+  -- documentados en los commits de `app_multi`, no en este log porque no
+  tocan `ninesys-api`.
+- **Decisión Final y Justificación:** Endpoint nuevo y separado en vez de
+  agregar `status = 'terminada'` al `WHERE` de `/sse/produccion` -- pedido
+  explícito del usuario para no hacer más pesada una consulta que ya lo
+  es, y arquitectónicamente más limpio: la sección "Órdenes terminadas"
+  tiene una necesidad de datos genuinamente distinta (sin progreso,
+  asignaciones ni lotes físicos) a la de Control de Producción activo.
+- **Herramienta(s) Utilizada(s):** Edit (inserción del endpoint), Bash
+  (`php -l` para verificar sintaxis, `curl` contra Desarrollo para
+  confirmar que el endpoint responde), y verificación directa contra
+  Postgres (`psql` vía SSH a `vps-contabo-dev`) corriendo la query a mano
+  contra `api_emp_194` para confirmar que devolvía las 71 órdenes
+  `terminada` reales antes de dar el endpoint por bueno.
+- **Resultado:** Éxito.
+- **Verificación:** `php -l app/routes/production.php` sin errores.
+  Desplegado a Desarrollo (`ninesys-hub/bin/deploy_backend_dev.sh`,
+  `ninesys-api` dev `v1.0.6`). Verificado que `GET
+  /produccion/ordenes-terminadas` responde (mismo comportamiento 500 sin
+  token que `/sse/produccion`, esperado). La query verificada manualmente
+  contra `api_emp_194` devolvió las 71 órdenes reales en `status =
+  'terminada'`, confirmando que el endpoint no tenía ningún problema de
+  datos -- el "0 órdenes" que reportó el usuario al probar en el navegador
+  resultó ser un bug de UX en el frontend (badge mostrando "0" antes de
+  expandir la sección perezosa), no del backend, corregido en
+  `app_multi` (`b996d67`).
+- **Logro Conseguido:** Habilita reasignar personal sobre trabajo ya
+  cerrado (reposiciones) sin ningún riesgo de duplicar pagos/inventario/
+  stock, resolviendo el pedido original de negocio con un enfoque más
+  seguro que el planteado inicialmente, sin sumarle carga al panel
+  principal de Control de Producción.
+- **Referencias de Sesión (Contexto):** Sesión de Claude Code (no
+  Antigravity/Gemini), continuación de la conversación
+  `64534203-9f36-4a23-87cc-4a7bb1cf6441`. No aplica walkthrough.md/task.md
+  (esos archivos son del flujo de Antigravity).
+- **⚠️ NOTA DE PERSISTENCIA:** N/A (no hay links temporales de Antigravity
+  en esta tarea, todo el detalle técnico ya está en este log).
+- **Observaciones de Claude:** El análisis previo de "reactivar orden
+  Terminada" (que llevó a esta decisión de diseño) fue puramente de
+  investigación/lectura de código, sin cambios -- no generó commits ni
+  requiere log propio, su resultado está reflejado en la justificación de
+  este log y en la memoria de la sesión.
+- **Respuesta de Claude:** Endpoint creado, desplegado y verificado en
+  Desarrollo. Reportado al usuario que quedaba lista la sección para
+  construir la UI del frontend.
