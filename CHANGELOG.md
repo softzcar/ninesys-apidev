@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.16] - 2026-09-08
+- Exponer es_servicio_de_impresion en /sse/produccion, base para filtro SOLO IMPRESION
+
 ## [v1.0.15] - 2026-09-08
 - Fix: cardinality violation (filas duplicadas de asignacion granular) en reports/manufacturing-time y eficiencia-orden
 
