@@ -1347,7 +1347,22 @@ return function (App $app) {
                         WHERE im_sub.id_orden = op.id_orden
                     ), 0) AS real
                 FROM ordenes_productos op
-                JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
+                JOIN product_insumos_asignados pia ON pia.id_product = op.id_woo
+                    AND (
+                        pia.id_talla = op.id_size
+                        -- Productos solo-impresion (ej. DTF) no llevan talla -- mismo
+                        -- fix ya aplicado en /reports/input-efficiency, hallazgo real
+                        -- 2026-09-08. MIN(id_talla) evita multiplicar el SUM por las
+                        -- tallas duplicadas del catalogo cuando op.id_size es NULL.
+                        OR (
+                            op.id_size IS NULL
+                            AND pia.id_talla = (
+                                SELECT MIN(p2.id_talla) FROM product_insumos_asignados p2
+                                WHERE p2.id_product = op.id_woo
+                                  AND p2.id_catalogo_insumos_productos = pia.id_catalogo_insumos_productos
+                            )
+                        )
+                    )
                 WHERE op.id_orden IN ($idsString)
                 GROUP BY op.id_orden";
             $matEff = $db->goQuery($sqlMat);
