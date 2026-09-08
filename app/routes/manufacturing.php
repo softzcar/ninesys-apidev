@@ -3879,7 +3879,12 @@ return function (App $app) {
             ) ldep_completado ON ldep_completado.id_ordenes_productos = op._id";
 
     $piezas_expr = "COALESCE(ic_corte.cantidad_cortada, ldep_completado.cantidad_completada, op.cantidad)";
-    $sieteDiasExpr = DB_DRIVER === 'pgsql' ? "CURRENT_DATE - INTERVAL '7 days'" : 'DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
+    // Se quitó un filtro "AND im.fecha >= hoy - 7 dias" que existía en ambas
+    // subconsultas de abajo (id_insumo y cantidad_real): como el WHERE ya
+    // acota a los id_orden pedidos, ese límite de 7 días no tenía ninguna
+    // razón de negocio -- solo hacía que "Consumo Real" saliera en 0.00 (y
+    // la eficiencia en 0.0%) para cualquier orden cuya producción hubiera
+    // ocurrido hace más de una semana (hallazgo real 2026-09-08, orden 6826).
 
     $sql = "
             SELECT
@@ -3889,7 +3894,6 @@ return function (App $app) {
                   LEFT JOIN inventario inv ON inv._id = im.id_insumo
                   WHERE im.id_orden IN ($idsString)
                     AND (inv.id_catalogo = cip._id OR im.id_catalogo_insumos_prodcutos = cip._id)
-                    AND im.fecha >= $sieteDiasExpr
                 ), (SELECT MAX(_id) FROM inventario WHERE id_catalogo = cip._id)) AS id_insumo,
                 cip._id AS id_insumo_catalogo,
                 cip.nombre AS nombre_insumo,
@@ -3933,7 +3937,6 @@ return function (App $app) {
                     LEFT JOIN inventario inv_sub ON inv_sub._id = im_sub.id_insumo
                     WHERE im_sub.id_orden IN ($idsString)
                       AND (inv_sub.id_catalogo = cip._id OR im_sub.id_catalogo_insumos_prodcutos = cip._id)
-                      AND im_sub.fecha >= $sieteDiasExpr
                 ), 0) AS cantidad_real
 
             FROM ordenes_productos op
@@ -3945,7 +3948,26 @@ return function (App $app) {
                        MAX(cantidad) AS cantidad, MAX(unidad) AS unidad
                 FROM product_insumos_asignados
                 GROUP BY id_product, id_talla, id_catalogo_insumos_productos
-            ) pia ON pia.id_product = op.id_woo AND pia.id_talla = op.id_size
+            ) pia ON pia.id_product = op.id_woo
+                 AND (
+                    pia.id_talla = op.id_size
+                    -- Productos solo-impresion (es_servicio_de_impresion=1, ej. DTF) no
+                    -- llevan talla -- op.id_size queda NULL. product_insumos_asignados
+                    -- para estos productos igual exige un id_talla (duplicado idéntico
+                    -- en cada talla del catalogo, ver hallazgo real 2026-09-08), asi que
+                    -- sin este fallback el JOIN nunca encontraba fila y el reporte
+                    -- mostraba N/A para cualquier orden de un producto sin talla.
+                    -- Se toma una sola fila representativa (MIN id_talla) para no
+                    -- multiplicar el SUM por cada talla del catalogo.
+                    OR (
+                        op.id_size IS NULL
+                        AND pia.id_talla = (
+                            SELECT MIN(p2.id_talla) FROM product_insumos_asignados p2
+                            WHERE p2.id_product = op.id_woo
+                              AND p2.id_catalogo_insumos_productos = pia.id_catalogo_insumos_productos
+                        )
+                    )
+                 )
             JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
             -- Subquery agrupada por catálogo para obtener rendimiento sin multiplicar filas.
             LEFT JOIN (

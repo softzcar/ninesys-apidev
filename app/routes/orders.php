@@ -1314,8 +1314,22 @@ return function (App $app) {
                 LEFT JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
                 LEFT JOIN departamentos dep ON ldea.id_departamento = dep._id
                 LEFT JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product
-                                                        AND op.id_size = pia.id_talla
                                                         AND ldea.id_departamento = pia.id_departamento
+                                                        AND (
+                                                            op.id_size = pia.id_talla
+                                                            -- Productos solo-impresion (ej. DTF) no llevan talla --
+                                                            -- ver mismo fix y comentario en /reports/input-efficiency
+                                                            -- (manufacturing.php), hallazgo real 2026-09-08.
+                                                            OR (
+                                                                op.id_size IS NULL
+                                                                AND pia.id_talla = (
+                                                                    SELECT MIN(p2.id_talla) FROM product_insumos_asignados p2
+                                                                    WHERE p2.id_product = op.id_woo
+                                                                      AND p2.id_departamento = pia.id_departamento
+                                                                      AND p2.id_catalogo_insumos_productos = pia.id_catalogo_insumos_productos
+                                                                )
+                                                            )
+                                                        )
                 LEFT JOIN sizes s ON op.id_size = s._id
                 LEFT JOIN catalogo_insumos_productos cip ON pia.id_catalogo_insumos_productos = cip._id
                 LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = ldea._id AND ldep.id_ordenes_productos = op._id
@@ -1401,8 +1415,22 @@ return function (App $app) {
                 LEFT JOIN api_empresas.empresas_usuarios eu ON ldea.id_empleado = eu.id_usuario
                 LEFT JOIN departamentos dep ON ldea.id_departamento = dep._id
                 LEFT JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product
-                                                        AND op.id_size = pia.id_talla
                                                         AND ldea.id_departamento = pia.id_departamento
+                                                        AND (
+                                                            op.id_size = pia.id_talla
+                                                            -- Productos solo-impresion (ej. DTF) no llevan talla --
+                                                            -- ver mismo fix y comentario en /reports/input-efficiency
+                                                            -- (manufacturing.php), hallazgo real 2026-09-08.
+                                                            OR (
+                                                                op.id_size IS NULL
+                                                                AND pia.id_talla = (
+                                                                    SELECT MIN(p2.id_talla) FROM product_insumos_asignados p2
+                                                                    WHERE p2.id_product = op.id_woo
+                                                                      AND p2.id_departamento = pia.id_departamento
+                                                                      AND p2.id_catalogo_insumos_productos = pia.id_catalogo_insumos_productos
+                                                                )
+                                                            )
+                                                        )
                 LEFT JOIN sizes s ON op.id_size = s._id
                 LEFT JOIN catalogo_insumos_productos cip ON pia.id_catalogo_insumos_productos = cip._id
                 LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = ldea._id AND ldep.id_ordenes_productos = op._id
