@@ -1,0 +1,16 @@
+- **Solicitud del Usuario:** Punto 7 de la lista de pendientes (rediseñado por el usuario a una versión simplificada): checkbox 'Verificado' por transacción no-efectivo en el reporte /reportes/pagos-abonos, solo administradores.
+- **Fecha y Hora:** 2026-09-08 16:07:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** app/routes/finance.php (/reporte-de-pagos, nuevo POST /metodos-de-pago/{id}/verificar), public/model/create_new_company_api_emp_N.sql, public/model/create_new_company_api_emp_N_postgres.sql
+- **Commits Relacionados:** 
+  - Backend: f37cb49
+  - Frontend: 9294b8b (mismo día, ver log de app_multi)
+- **Acción Realizada:** Diseño original (auditoría completa con tabla de verificaciones en bloque, endpoints de observación, permisos server-side) descartado por el usuario tras verlo: 'el requerimiento es más grande de lo esperado... vamos a resolver puntualmente el problema de poder verificar las transacciones... de la manera más sencilla posible'. Se implementó en su lugar: 3 columnas nuevas en metodos_de_pago (verificado boolean, id_empleado_verifica, moment_verificacion) agregadas en ambas plantillas de empresa nueva (MySQL y Postgres) y migradas en caliente en la empresa 194 real (Desarrollo y luego Producción); se agregó met.verificado al SELECT en los 4 bloques vigentes de /reporte-de-pagos; nuevo endpoint POST /metodos-de-pago/{id}/verificar (marca/desmarca, limpia id_empleado_verifica/moment_verificacion al desmarcar).
+- **Inconvenientes y Desafíos:** Al desplegar a Producción se detectó que el backend ya referenciaba la columna verificado antes de migrar el esquema de Producción (se había migrado solo en Desarrollo) -- corregido en el mismo turno, sin impacto real, aplicando el mismo ALTER TABLE contra la BD de Producción antes de que alguien golpeara el endpoint roto.
+- **Decisión Final y Justificación:** Seguir la convención ya establecida del codebase para booleanos ((int) filter_var(...FILTER_VALIDATE_BOOLEAN), no true/false nativo de PHP), confirmado por grep contra patrones existentes en monedas.php/communications.php.
+- **Herramienta(s) Utilizada(s):** Bash (SSH + psql para migraciones y verificación), Edit, curl
+- **Resultado:** Éxito
+- **Verificación:** Verificado end-to-end vía curl: marcar/desmarcar setea y limpia correctamente verificado/id_empleado_verifica/moment_verificacion, en Desarrollo y en Producción (tras corregir el gap de migración).
+- **Logro Conseguido:** Backend completo para verificación manual de transacciones no-efectivo, con esquema replicado en ambas plantillas de empresa nueva para no generar drift futuro.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Implementado el backend de verificación de pagos (columna + endpoint), con un gap de migración de esquema en Producción detectado y corregido en el mismo turno.

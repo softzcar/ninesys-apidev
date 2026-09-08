@@ -1,0 +1,16 @@
+- **Solicitud del Usuario:** "vamos a tener que retroceder y volver a implementar en esta página en particular el paginador antiguo y traernos TODOS los resultados" -- necesario para poder ordenar por antigüedad y saber quién debe dinero, cosa que la paginación progresiva (12-ago) no permite ver de una vez.
+- **Fecha y Hora:** 2026-09-08 16:27:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** app/routes/tables.php (/table/ordenes-activas/{id_empleado})
+- **Commits Relacionados:** 
+  - Backend: 16182a5
+  - Frontend: 62337e9 (mismo día, ver log de app_multi)
+- **Acción Realizada:** Se agregó un modo opcional todos=1 al endpoint que, cuando está presente, omite el LIMIT y el cálculo de next_cursor, devolviendo todos los resultados en una sola consulta -- sin tocar el comportamiento por defecto (paginado) para ningún otro llamador. Se verificó con cuidado, cruzando por número de línea, que el bloque casi idéntico next_cursor de /table/ordenes-todas (línea 914, endpoint separado) no fue tocado.
+- **Inconvenientes y Desafíos:** Riesgo de reintroducir el bug N+1 de categorías (5.5x, corregido 2026-08-12) al traer todos los resultados sin límite -- se verificó explícitamente que el fix de esa fecha usa un batching por consulta única (WHERE id_orden IN (...)) independiente del volumen del set de resultados, por lo que quitar el LIMIT no reintroduce el N+1.
+- **Decisión Final y Justificación:** Modo opt-in vía query param en vez de cambiar el comportamiento por defecto del endpoint, para no afectar otros consumidores del mismo endpoint paginado.
+- **Herramienta(s) Utilizada(s):** Edit, Bash (curl de verificación)
+- **Resultado:** Éxito
+- **Verificación:** curl con todos=1 para el empleado 10 (Admin) devolvió 203-207 resultados abarcando desde la orden #6982/#6999 hasta la #190, en 1.1-1.3 segundos -- sin regresión de rendimiento.
+- **Logro Conseguido:** La página de Órdenes en Curso puede volver a traer y ordenar el historial completo cuando se necesita determinar deuda pendiente, sin perder la optimización N+1 lograda en agosto.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Agregado un modo opt-in 'todos=1' al endpoint de órdenes activas para traer el historial completo sin reintroducir el bug N+1 ya corregido.

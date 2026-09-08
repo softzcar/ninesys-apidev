@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** Continuación del punto 3 -- verificación del lote recién finalizado (lote 66) reveló una orden sin material asignado.
+- **Fecha y Hora:** 2026-09-08 12:21:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** app/routes/manufacturing.php (/finalizar-departamento, /finalizar-impresion, /finalizar-corte)
+- **Commits Relacionados:** 
+  - Backend: 3505305
+- **Acción Realizada:** La orden 6869 (0.5 metros de DTF, producto medido por metro) quedó sin ningún papel ni tinta asignado en el reparto proporcional del lote: intval($order['unidades_orden']) truncaba 0.5 a 0, la proporción de reparto le tocaba 0%, y el consumo estimado resultante (0) no pasaba el guard `if ($consumo_estimado > 0)`. Mismo bug de fondo ya corregido el 2026-08-31 en asignación de personal para esta misma orden, nunca replicado en los 3 endpoints de finalización de lote (huérfanos/sin uso real hasta hoy). Se cambió intval->floatval en las 4 ocurrencias que afectan el cálculo real del reparto.
+- **Inconvenientes y Desafíos:** El stock total SÍ se descontaba correctamente (una sola resta sobre la cantidad total del rollo) -- lo que faltaba era la trazabilidad por orden en inventario_movimientos/tintas, un bug silencioso que solo se detecta revisando los datos post-finalización, no por un error visible.
+- **Decisión Final y Justificación:** Se dejó intval en pagos.cantidad a propósito (esa columna es integer por esquema, solo un campo de reporte/conteo -- monto_pago, el valor real del pago, ya se calcula correctamente aparte).
+- **Herramienta(s) Utilizada(s):** Bash (consultas SQL de verificación vía SSH), Edit
+- **Resultado:** Éxito
+- **Verificación:** Confirmado contra datos reales del lote 66 / orden 6869 en Desarrollo tras el fix.
+- **Logro Conseguido:** Los productos medidos por metro (DTF, sublimación) con cantidades fraccionarias (ej. 0.5) ya no quedan sin material/tinta asignado en el reparto proporcional del lote.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Corregido el truncamiento de unidades fraccionarias (intval->floatval) que dejaba productos por metro sin material asignado en el reparto de lote.

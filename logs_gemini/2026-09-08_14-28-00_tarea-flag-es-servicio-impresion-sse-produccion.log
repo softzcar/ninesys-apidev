@@ -1,0 +1,16 @@
+- **Solicitud del Usuario:** Punto 5 de la lista de pendientes: filtro en Control de Producción para ver solo tareas de impresión (DTF, sublimación por metros, sublimación con tela) -- 'pueden ser los productos que dice solo impresión'.
+- **Fecha y Hora:** 2026-09-08 14:28:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** app/routes/production.php (/sse/produccion)
+- **Commits Relacionados:** 
+  - Backend: d9c7e32
+  - Frontend: 57ea380 (mismo día, ver log de app_multi)
+- **Acción Realizada:** Se expuso el campo ya existente products.es_servicio_de_impresion (agregado 2026-08-24/25 junto al checkbox 'Es una Impresión' en el admin de productos) en el SELECT de orden_productos dentro de /sse/produccion, junto a p.fisico. Sin este campo el frontend no tenía forma de distinguir qué productos de una orden son 'solo impresión' para el nuevo filtro de Control de Producción.
+- **Inconvenientes y Desafíos:** Ninguno -- el campo ya existía en el modelo de datos, solo faltaba seleccionarlo en este endpoint puntual.
+- **Decisión Final y Justificación:** Reutilizar el flag ya existente en vez de inferir 'solo impresión' por nombre de producto (frágil) o por categoría.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (verificación vía curl y psql)
+- **Resultado:** Éxito
+- **Verificación:** Confirmado en vivo (curl /sse/produccion) que las 230 filas de orden_productos traen el campo, con 15 marcadas en 1 para productos DTF reales (163, 164, 165) en la empresa 194, tanto en Desarrollo como en Producción.
+- **Logro Conseguido:** Habilitado el dato necesario para el filtro 'SOLO IMPRESIÓN' del frontend, reutilizando un flag ya curado en producción.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Expuesto el flag es_servicio_de_impresion en /sse/produccion, base del filtro SOLO IMPRESIÓN del punto 5.

@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** Reconectar el flujo de finalización de lote de Impresión (parte del punto 3 de la lista de pendientes: "iniciar en lote impresión no deja terminar tarea, pide tinta")
+- **Fecha y Hora:** 2026-09-08 11:45:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** app/routes/manufacturing.php (/lotes/{id}/finalizar-departamento, /finalizar-impresion, /finalizar-corte)
+- **Commits Relacionados:** 
+  - Backend: 4518641
+- **Acción Realizada:** El commit 8f40dee (2026-08-19) había corregido que una orden quedara atascada en status='activa' cuando su producto no pasaba por toda la cadena global de departamentos -- ese fix (buscar el siguiente departamento con EXISTS contra lotes_detalles_empleados_asignados, en vez de asumir el siguiente orden_proceso global) solo se había aplicado a /registrar-paso-empleado (flujo de un solo empleado). Los 3 endpoints de finalización de LOTE seguían con la lógica vieja rota, y ninguno de los 3 actualizaba ordenes.status='terminada' al llegar al último paso real (solo actualizaban lotes.paso). Se replicó el mismo fix EXISTS + se agregó el UPDATE ordenes.status faltante en los 3 endpoints.
+- **Inconvenientes y Desafíos:** El bug era latente (nunca antes ejecutado en producción real) porque el modal de finalizar lote de Impresión llevaba tiempo desconectado del frontend (ver commit hermano en app_multi, ff41761) -- se descubrió justo al reactivarlo.
+- **Decisión Final y Justificación:** Replicar el mismo criterio EXISTS ya validado en /registrar-paso-empleado en vez de inventar una lógica nueva, para mantener consistencia entre los distintos caminos de finalización de tarea.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Bash (php -l, git commit/push)
+- **Resultado:** Éxito
+- **Verificación:** php -l sin errores; verificado en vivo en Desarrollo tras el deploy.
+- **Logro Conseguido:** Los 3 endpoints de finalización de lote ya no dejan órdenes atascadas en 'activa' cuando su producto no requiere el resto de la cadena de departamentos.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Corregido el bug de orden atascada replicando el fix ya probado de /registrar-paso-empleado en los 3 endpoints de finalización de lote.

@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** Continuación del punto 3 (tinta en lote de impresión) -- error de servidor al finalizar el primer lote de impresión real tras reconectar el modal.
+- **Fecha y Hora:** 2026-09-08 12:11:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** app/routes/manufacturing.php (/lotes/{id}/finalizar-impresion, cálculo de comisión)
+- **Commits Relacionados:** 
+  - Backend: 58493a0
+- **Acción Realizada:** El primer uso real de /finalizar-impresion (tras reconectarlo hoy) reveló un bug SQL latente nunca antes ejecutado: la consulta de cálculo de pago multiplicaba SUM(cantidad) * tasa_comision por FUERA del SUM, violando el GROUP BY estricto de Postgres (SQLSTATE 42803) y siendo matemáticamente incorrecto si la orden tiene productos con comisión distinta. Se movió la multiplicación DENTRO del SUM (por fila de producto), tanto para la comisión variable por producto como la fija por empleado.
+- **Inconvenientes y Desafíos:** El bug solo se manifestó al ejecutar el endpoint con datos reales por primera vez en meses -- no era detectable por revisión estática sin conocer el comportamiento estricto de GROUP BY en Postgres vs. MySQL (que lo toleraba silenciosamente).
+- **Decisión Final y Justificación:** Corregir el cálculo en la fuente (dentro del SUM) en vez de agregar las columnas al GROUP BY, porque la segunda opción hubiera sido matemáticamente incorrecta para órdenes con comisiones mixtas.
+- **Herramienta(s) Utilizada(s):** Bash (logs de error, php -l), Edit
+- **Resultado:** Éxito
+- **Verificación:** Reintento del mismo lote en Desarrollo tras el fix, sin error SQL, comisión calculada correctamente por fila.
+- **Logro Conseguido:** El botón real de finalizar lote de Impresión ya no revienta con error 500 al calcular comisiones.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Corregido un error SQL (GROUP BY + cálculo de comisión matemáticamente incorrecto) descubierto en el primer uso real del endpoint tras reconectarlo.

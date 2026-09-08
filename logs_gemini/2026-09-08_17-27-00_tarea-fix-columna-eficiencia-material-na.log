@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** "ok vamos mejor! sin embargo en la información del modal aparecen los dos consumos, la meta y el real, pero en la tabla, en la columna 'EFICIENCIA DEL MATERIAL' sigue mostrando N/A".
+- **Fecha y Hora:** 2026-09-08 17:27:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** app/routes/reports.php (/reportes/general-eficiencia-detallado)
+- **Commits Relacionados:** 
+  - Backend: 8a88928
+- **Acción Realizada:** Tercera ocurrencia del mismo bug de talla (ver 673d067): la consulta consolidada por orden que alimenta específicamente la columna de la tabla en general-eficiencia.vue (distinta del endpoint que alimenta el modal de detalle, ya corregido) tenía el mismo INNER JOIN exigiendo talla exacta. Para productos solo-impresión esa consulta no encontraba fila, dejando la orden sin match en $matEff y forzando la columna a N/A aunque el modal de detalle ya mostrara los insumos correctamente. Se aplicó el mismo fallback MIN(id_talla).
+- **Inconvenientes y Desafíos:** El reporte tiene 2 fuentes de datos distintas para el modal y para la columna de la tabla -- corregir una no corrige automáticamente la otra, lo que generó esta segunda ronda de reporte del usuario.
+- **Decisión Final y Justificación:** Mismo fix ya validado (MIN(id_talla)), aplicado consistentemente en la tercera ubicación con el mismo patrón de bug.
+- **Herramienta(s) Utilizada(s):** Edit, Bash (curl de verificación)
+- **Resultado:** Éxito
+- **Verificación:** curl contra /reportes/general-eficiencia-detallado en Desarrollo: las órdenes 6971, 6970 y 6826 ya muestran 100%, 100% y 244.07% respectivamente en vez de N/A.
+- **Logro Conseguido:** La columna de la tabla del reporte de eficiencia ya refleja el mismo dato correcto que el modal de detalle.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Corregida la tercera ocurrencia del bug de talla, esta vez en la consulta que alimenta la columna de la tabla del reporte (no el modal).

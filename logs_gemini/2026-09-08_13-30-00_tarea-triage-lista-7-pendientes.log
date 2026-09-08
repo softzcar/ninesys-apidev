@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** "parece que la persona encargada de revisar los reportes no los está leyendo con mucha atención... vamos a revisar qué de esa lista y qué nos falta por hacer para organizar las tareas que faltan" (lista de 7 puntos reportados).
+- **Fecha y Hora:** 2026-09-08 13:30:00
+- **Proyecto(s):** Ambos
+- **Archivos Involucrados:** N/A (investigación/triage, sin cambios de código en esta tarea puntual)
+- **Commits Relacionados:** 
+  - N/A (ver logs de tareas 5 y 7 más abajo en la línea de tiempo para el código resultante)
+- **Acción Realizada:** Se investigó cada uno de los 7 puntos reportados contra el estado real del código, mediante subagentes de exploración de solo lectura: (1) buscador de clientes -- ya resuelto antes de esta lista; (2) paginación anterior -- se verificó que el mecanismo de búsqueda fuera del lote cargado ya funciona igual en ambas páginas (ordenesTodas.vue y activas.vue), el usuario confirmó el criterio de cierre; (3) tinta en lote de impresión -- ya resuelto antes de esta lista; (4) último proceso en gestión de insumos -- se confirmó que los componentes BotonTerminar* son código muerto sin uso real, y que la rama de reposiciones es un diseño correcto y distinto (no un bug); (5) filtro solo impresión -- genuinamente nuevo, diseñado e implementado (ver log de las 14:28/14:29); (6) números bancarios -- ya resuelto antes de esta lista; (7) check de verificación de pagos -- diseñado en dos rondas (una versión grande de auditoría descartada por el propio usuario, y la versión simplificada implementada, ver log de las 16:07/16:12).
+- **Inconvenientes y Desafíos:** El punto 7 requirió descartar un diseño completo ya presentado (tabla de verificaciones en bloque, endpoints de auditoría, nueva página) después de que el usuario indicara explícitamente que el alcance real era mucho más acotado -- se rehizo el diseño desde cero en la misma sesión sin perder el trabajo de investigación previo (esquema de metodos_de_pago, patrones de permisos ya existentes).
+- **Decisión Final y Justificación:** Organizar y decidir con el usuario ANTES de programar cualquier línea de código, dado que la mitad de los puntos ya estaban resueltos y solo necesitaban confirmación de reintento, evitando reimplementar trabajo ya hecho.
+- **Herramienta(s) Utilizada(s):** Agent/Explore y Agent/Plan (varios subagentes de investigación), AskUserQuestion
+- **Resultado:** Éxito
+- **Verificación:** Tabla de estado de los 7 puntos revisada y confirmada con el usuario al cierre de la jornada (ver log de verificación final más abajo).
+- **Logro Conseguido:** Evitado reimplementar 4 de los 7 puntos ya resueltos, y clarificado el alcance real de los 2 puntos genuinamente pendientes antes de invertir tiempo de desarrollo.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Triageados los 7 puntos reportados contra el código real: 4 ya resueltos/cerrados, 2 implementados en esta misma jornada tras rediseño con el usuario, 1 confirmado cerrado por el propio usuario.

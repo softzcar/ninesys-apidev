@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** "en la página de el reporte de eficiencia tenemos que hay órdenes que muestran N/A en la columna 'EFICIENCIA DEL MATERIAL'... pero si abro este mismo modal en una orden que sí muestra un valor sí que me la muestra pero me muestra el consumo real ceros" (con capturas de pantalla de las órdenes 6971, 6970 y 6826).
+- **Fecha y Hora:** 2026-09-08 17:23:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** app/routes/manufacturing.php (/reports/input-efficiency), app/routes/orders.php (/reportes/resumen/empleados/{id_empleado}/{id_departamento}, 2 ocurrencias)
+- **Commits Relacionados:** 
+  - Backend: 673d067
+- **Acción Realizada:** Se encontraron y corrigieron 2 bugs reales distintos en la misma consulta: (1) un filtro sin justificación de 'últimos 7 días' sobre inventario_movimientos que hacía salir Consumo Real en 0.00 para cualquier orden con producción de más de una semana de antigüedad -- el WHERE externo ya acotaba correctamente por id_orden, el filtro adicional no tenía ninguna razón de negocio y se eliminó; (2) el JOIN contra product_insumos_asignados exigía coincidencia exacta de talla (pia.id_talla = op.id_size), pero los productos 'solo impresión' (DTF, es_servicio_de_impresion=1) no llevan talla -- op.id_size queda NULL -- y ese JOIN nunca encontraba fila, mostrando N/A completo. Se agregó un fallback (MIN(id_talla) cuando id_size es NULL) sin multiplicar el SUM por las tallas duplicadas del catálogo. El mismo patrón de JOIN se corrigió también en las 2 ocurrencias equivalentes de orders.php, explícitamente cross-referenciadas en el propio código como 'mismo criterio'.
+- **Inconvenientes y Desafíos:** Un primer intento de agregar un comentario explicativo con comillas dobles dentro de la cadena SQL rompió la sintaxis PHP (comillas cerrando el string antes de tiempo) -- corregido quitando las comillas del comentario y verificando con php -l.
+- **Decisión Final y Justificación:** Usar MIN(id_talla) en vez de traer todas las tallas duplicadas, porque product_insumos_asignados guarda una fila idéntica por cada talla del catálogo para estos productos (un artefacto del modelo de datos, no un dato real distinto por talla) -- sumar todas multiplicaría el consumo estimado incorrectamente.
+- **Herramienta(s) Utilizada(s):** Bash (psql para confirmar el modelo de datos real), Edit, curl
+- **Resultado:** Éxito
+- **Verificación:** curl contra las 3 órdenes reportadas en Desarrollo: 6971 y 6970 (antes N/A) ahora muestran datos reales de insumo DTF; 6826 (antes Real=0.00) ahora muestra 13.5 Mt real en vez de 0.
+- **Logro Conseguido:** Corregidos 2 bugs de fondo (no solo cosméticos) que afectaban la fiabilidad del reporte de eficiencia de material para cualquier orden con productos DTF/solo-impresión o con más de una semana de antigüedad.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Corregidos 2 bugs reales (filtro de 7 días injustificado + JOIN de talla que fallaba para productos DTF) en el reporte de eficiencia de insumos.

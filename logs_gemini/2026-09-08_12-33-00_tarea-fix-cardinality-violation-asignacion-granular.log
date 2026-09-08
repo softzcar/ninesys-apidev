@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** Reportado directamente: error al cargar /empleados/dashboard.
+- **Fecha y Hora:** 2026-09-08 12:33:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** app/routes/manufacturing.php (POST y GET /reports/manufacturing-time), app/routes/inventory.php (GET /eficiencia-orden/{id_orden})
+- **Commits Relacionados:** 
+  - Backend: 6906f2f
+- **Acción Realizada:** Se encontraron 2 filas idénticas en lotes_detalles_empleados_asignados (mismo orden/departamento/empleado, ambas id_reposicion NULL, mismos 5 productos y cantidades duplicados por completo -- orden 6968, empleado 5, departamento 1). Cualquier subconsulta que asumía "una sola fila" para ese combo y la usaba como escalar (ej. dentro de un COALESCE) rompía en Postgres con SQLSTATE 21000 "more than one row returned by a subquery used as an expression" (MySQL lo toleraba silenciosamente, tomando una fila arbitraria). Afectaba 3 endpoints: POST y GET /reports/manufacturing-time, y GET /eficiencia-orden/{id_orden}. Se cambió el escalar directo ldep.cantidad_asignada por MAX(ldep.cantidad_asignada) en las 3 subconsultas.
+- **Inconvenientes y Desafíos:** No se investigó ni corrigió la causa raíz de la duplicación en sí (posible guardado doble de la asignación granular) -- queda pendiente como hallazgo aparte, documentado en el propio commit.
+- **Decisión Final y Justificación:** MAX() no cambia el resultado cuando las filas duplicadas son idénticas (como en este caso real), y evita que la consulta reviente si en el futuro aparecen filas con valores distintos -- una corrección defensiva mínima sin ocultar el problema de fondo.
+- **Herramienta(s) Utilizada(s):** Bash (SSH + psql para reproducir), Edit
+- **Resultado:** Éxito
+- **Verificación:** /empleados/dashboard cargó sin error tras el fix, verificado contra la orden 6968 real.
+- **Logro Conseguido:** Desbloqueado /empleados/dashboard para el empleado afectado, y prevenidos 2 endpoints más con el mismo patrón de riesgo antes de que fallaran en producción.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Corregida una violación de cardinalidad en 3 endpoints causada por filas de asignación granular duplicadas, usando MAX() como blindaje.

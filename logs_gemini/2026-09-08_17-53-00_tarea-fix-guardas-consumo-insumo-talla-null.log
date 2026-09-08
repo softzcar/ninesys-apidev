@@ -1,0 +1,16 @@
+- **Solicitud del Usuario:** "hay órdenes terminadas que no muestran un consumo de material lo que no es lógico" (orden 6964, DTF UV) -- tras investigar, se decidió corregir tanto la causa raíz en el frontend (ver log de app_multi) como las guardas de seguridad de backend con el mismo bug de talla ya identificado.
+- **Fecha y Hora:** 2026-09-08 17:53:00
+- **Proyecto(s):** Backend
+- **Archivos Involucrados:** app/routes/manufacturing.php (/lotes/{id}/finalizar-departamento), app/routes/production.php (/produccion/terminar/{id}), app/routes/inventory.php (/inventario/consumo/{id_insumo})
+- **Commits Relacionados:** 
+  - Backend: a1b631c
+  - Frontend: af819b3 (mismo día, ver log de app_multi -- causa raíz real del bug reportado)
+- **Acción Realizada:** Investigación profunda (2 subagentes de exploración en paralelo) descartó la hipótesis inicial de que el flujo individual 'Terminar Tarea' carecía de captura de material -- esa validación ya existía desde el 2026-05-22. La causa real resultó ser un bug de sincronización en el frontend (ver commit hermano). De paso se encontraron y corrigieron las 3 últimas ocurrencias del mismo bug de JOIN por talla (ya corregido 4 veces hoy en reportes): $depCheckSql en /lotes/{id}/finalizar-departamento (decide si un lote requiere consumo antes de aceptar su finalización), $metaCheck en /produccion/terminar/{id} (guarda que bloquea terminar una orden sin consumo registrado cuando se requiere) e inventario/consumo/{id_insumo} (reporte de solo lectura).
+- **Inconvenientes y Desafíos:** Se descartó una implementación completa de 'agregar registro de material al camino individual' (ya aprobada inicialmente por el usuario) al descubrir, leyendo el componente real en vez de solo el resumen inicial, que esa funcionalidad ya existía -- se corrigió el rumbo del plan a mitad de la investigación, documentándolo explícitamente para el usuario antes de implementar.
+- **Decisión Final y Justificación:** Aplicar el mismo fallback MIN(id_talla) por consistencia, dado que uno de los 3 casos (producción.php:1856) es literalmente una guarda de seguridad que hoy no protege a los productos solo-impresión del bug que causó la pérdida de datos original.
+- **Herramienta(s) Utilizada(s):** Agent/Explore (2 subagentes en paralelo), Bash (psql para confirmar el fix con datos reales), Edit
+- **Resultado:** Éxito
+- **Verificación:** Confirmado con SQL en vivo en Desarrollo y Producción que el guard ahora detecta correctamente que la orden 6964 (DTF) requiere consumo de insumo (antes daba 0, ahora 1).
+- **Logro Conseguido:** Cerradas las 4 últimas ocurrencias del bug de talla identificado hoy (reportes + 3 guardas de seguridad de producción), dejando el sistema consistente en todos los puntos donde se evalúa si un producto requiere insumo.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Corregidas las 3 guardas de seguridad restantes con el mismo bug de talla, tras descartar la hipótesis inicial de falta de funcionalidad en el camino individual de Terminar Tarea.

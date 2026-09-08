@@ -1,0 +1,15 @@
+- **Solicitud del Usuario:** "vamos a verificar que estos pendientes también estan listos" (repaso final de los puntos 4, 5 y 7 con la redacción original del reportante) + "vamos a cerrar los logs y registrar la información para las versiones, comitear y pusear todo".
+- **Fecha y Hora:** 2026-09-08 18:10:00
+- **Proyecto(s):** Ambos
+- **Archivos Involucrados:** N/A (verificación en vivo contra Desarrollo y Producción, sin cambios de código)
+- **Commits Relacionados:** 
+  - N/A
+- **Acción Realizada:** Verificación en vivo en Producción de los 3 puntos: (4) confirmado cerrado por investigación, sin código pendiente; (5) confirmado vía curl que el campo es_servicio_de_impresion llega en las 230 filas de /sse/produccion, con 15 marcadas en 1 para productos DTF reales; (7) confirmado que la columna verificado existe en el esquema de metodos_de_pago y llega en /reporte-de-pagos, ambos en Producción. Se identificó y resolvió con el usuario una discrepancia de redacción en el punto 7 (el texto original mencionaba 'Todas las Órdenes y Órdenes en Curso', pero la implementación real está en /reportes/pagos-abonos por decisión explícita del usuario al simplificar el diseño) -- confirmado que la ubicación actual satisface el pedido.
+- **Inconvenientes y Desafíos:** Ninguno técnico -- el único punto de fricción fue de alcance/redacción (dónde vive el check de verificación), resuelto con una pregunta directa al usuario en vez de asumir.
+- **Decisión Final y Justificación:** Cerrar la lista completa de 7 puntos como decisión explícita del usuario, dejando registrado que los puntos con UI nueva (5 y 7) quedaron verificados por código/API aunque no haya evidencia de que el usuario los haya probado personalmente en el navegador todavía.
+- **Herramienta(s) Utilizada(s):** Bash (curl, psql vía SSH), AskUserQuestion
+- **Resultado:** Éxito
+- **Verificación:** curl + psql contra api.ninesys19.com y la base de datos real de la empresa 194 en Producción.
+- **Logro Conseguido:** Lista original de 7 pendientes cerrada en su totalidad, con los 2 puntos de UI nueva verificados por API/base de datos en Producción antes del cierre.
+- **Observaciones de Gemini:** N/A (tarea realizada con Claude Code).
+- **Respuesta de Gemini:** Verificados en vivo en Producción los puntos 4, 5 y 7, y cerrada formalmente la lista original de 7 pendientes con acuerdo explícito del usuario.
