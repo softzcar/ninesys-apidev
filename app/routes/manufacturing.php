@@ -4205,7 +4205,7 @@ return function (App $app) {
       // ninguna asignación granular, comportamiento de siempre (op.cantidad completa).
       $cantidadProyeccionGetSql = $id_empleado
         ? "COALESCE(
-              (SELECT ldep_g.cantidad_asignada FROM lotes_detalles_empleados_productos ldep_g
+              (SELECT MAX(ldep_g.cantidad_asignada) FROM lotes_detalles_empleados_productos ldep_g
                 JOIN lotes_detalles_empleados_asignados ldea_g ON ldea_g._id = ldep_g.id_lotes_detalles_empleados_asignados
                 WHERE ldea_g.id_orden = o._id AND ldea_g.id_departamento = ptp.id_departamento
                   AND ldea_g.id_empleado = $id_empleado AND ldep_g.id_ordenes_productos = op._id),
@@ -4427,7 +4427,7 @@ return function (App $app) {
       // al cual acotar, se deja el comportamiento agregado de siempre.
       $cantidadProyeccionSql = $id_empleado
         ? "COALESCE(
-              (SELECT ldep_g.cantidad_asignada FROM lotes_detalles_empleados_productos ldep_g
+              (SELECT MAX(ldep_g.cantidad_asignada) FROM lotes_detalles_empleados_productos ldep_g
                 JOIN lotes_detalles_empleados_asignados ldea_g ON ldea_g._id = ldep_g.id_lotes_detalles_empleados_asignados
                 WHERE ldea_g.id_orden = o._id AND ldea_g.id_departamento = ptp_sub.id_departamento
                   AND ldea_g.id_empleado = $id_empleado AND ldep_g.id_ordenes_productos = op._id),

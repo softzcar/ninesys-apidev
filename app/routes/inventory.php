@@ -2067,7 +2067,15 @@ return function (App $app) {
         $params = [];
         $paramsWhere = [];
         if ($idEmpleadoParam && $idDepartamentoParam) {
-            $granularSelect = '(SELECT ldep.cantidad_asignada FROM lotes_detalles_empleados_productos ldep
+            // MAX() en vez de un valor escalar directo: puede haber más de
+            // una fila de asignación duplicada para el mismo
+            // orden/departamento/empleado (hallazgo real 2026-09-08, orden
+            // 6968 -- causaba "more than one row returned by a subquery
+            // used as an expression" en Postgres). Cuando las filas son
+            // duplicados legítimos, cantidad_asignada es la misma en todas
+            // y MAX() no altera el resultado; si algún día difieren, MAX()
+            // sigue sin romper la consulta.
+            $granularSelect = '(SELECT MAX(ldep.cantidad_asignada) FROM lotes_detalles_empleados_productos ldep
                 JOIN lotes_detalles_empleados_asignados ldea ON ldea._id = ldep.id_lotes_detalles_empleados_asignados
                 WHERE ldea.id_orden = a.id_orden AND ldea.id_departamento = ? AND ldea.id_empleado = ? AND ldep.id_ordenes_productos = a._id)';
             $params = [$idDepartamentoParam, $idEmpleadoParam];
