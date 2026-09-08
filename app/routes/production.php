@@ -406,6 +406,7 @@ return function (App $app) {
         (SELECT _id FROM lotes_fisicos WHERE id_orden = b._id) id_lotes,
         b.id_woo,
         p.fisico,
+        p.es_servicio_de_impresion,
         b.id_category,
         cat.nombre as category_name,
         b.name,
