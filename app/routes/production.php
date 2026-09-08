@@ -1853,7 +1853,19 @@ return function (App $app) {
 
       $depCheck = $localConnection->goQuery("SELECT COUNT(*) cnt FROM inventario_movimientos WHERE id_orden = ?", [$id]);
       $hasMovs = intval($depCheck[0]['cnt'] ?? 0) > 0;
-      $metaCheck = $localConnection->goQuery("SELECT COUNT(*) cnt FROM product_insumos_asignados pia JOIN ordenes_productos op ON op.id_woo = pia.id_product AND op.id_size = pia.id_talla WHERE op.id_orden = ?", [$id]);
+      // Productos solo-impresion (ej. DTF) no llevan talla -- mismo fix ya
+      // aplicado en /reports/input-efficiency, hallazgo real 2026-09-08.
+      $metaCheck = $localConnection->goQuery("SELECT COUNT(*) cnt FROM product_insumos_asignados pia JOIN ordenes_productos op ON op.id_woo = pia.id_product AND (
+          op.id_size = pia.id_talla
+          OR (
+              op.id_size IS NULL
+              AND pia.id_talla = (
+                  SELECT MIN(p2.id_talla) FROM product_insumos_asignados p2
+                  WHERE p2.id_product = op.id_woo
+                    AND p2.id_catalogo_insumos_productos = pia.id_catalogo_insumos_productos
+              )
+          )
+      ) WHERE op.id_orden = ?", [$id]);
       $hasMeta = intval($metaCheck[0]['cnt'] ?? 0) > 0;
       if ($hasMeta && !$hasMovs) {
         throw new \Exception('La orden requiere consumo de insumos y no registra movimientos de inventario');

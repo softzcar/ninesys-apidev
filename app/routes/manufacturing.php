@@ -1654,7 +1654,19 @@ return function (App $app) {
       $now = date('Y-m-d H:i:s');
       $ordenIds = array_map(function($o){ return intval($o['id_orden']); }, $ordenes_del_lote);
       $ordenIdsStr = implode(',', $ordenIds);
-      $depCheckSql = "SELECT op.id_orden, COUNT(*) as cnt FROM product_insumos_asignados pia JOIN ordenes_productos op ON op.id_woo = pia.id_product AND op.id_size = pia.id_talla WHERE op.id_orden IN ($ordenIdsStr) AND pia.id_departamento = ? GROUP BY op.id_orden";
+      // Productos solo-impresion (ej. DTF) no llevan talla -- mismo fix ya
+      // aplicado en /reports/input-efficiency, hallazgo real 2026-09-08.
+      $depCheckSql = "SELECT op.id_orden, COUNT(*) as cnt FROM product_insumos_asignados pia JOIN ordenes_productos op ON op.id_woo = pia.id_product AND (
+          op.id_size = pia.id_talla
+          OR (
+              op.id_size IS NULL
+              AND pia.id_talla = (
+                  SELECT MIN(p2.id_talla) FROM product_insumos_asignados p2
+                  WHERE p2.id_product = op.id_woo
+                    AND p2.id_catalogo_insumos_productos = pia.id_catalogo_insumos_productos
+              )
+          )
+      ) WHERE op.id_orden IN ($ordenIdsStr) AND pia.id_departamento = ? GROUP BY op.id_orden";
       $depChecks = $localConnection->goQuery($depCheckSql, [$id_departamento]);
       $requiereMap = [];
       if (is_array($depChecks)) {

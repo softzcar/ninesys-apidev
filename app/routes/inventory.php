@@ -2265,8 +2265,22 @@ return function (App $app) {
             (
                 SELECT SUM(op.cantidad * COALESCE(pia.cantidad, 0))
                 FROM ordenes_productos op
-                JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product AND op.id_size = pia.id_talla
-                WHERE op.id_orden = imo.id_orden 
+                JOIN product_insumos_asignados pia ON op.id_woo = pia.id_product AND (
+                    op.id_size = pia.id_talla
+                    -- Productos solo-impresion (ej. DTF) no llevan talla --
+                    -- mismo fix ya aplicado en /reports/input-efficiency,
+                    -- hallazgo real 2026-09-08.
+                    OR (
+                        op.id_size IS NULL
+                        AND pia.id_talla = (
+                            SELECT MIN(p2.id_talla) FROM product_insumos_asignados p2
+                            WHERE p2.id_product = op.id_woo
+                              AND p2.id_departamento = pia.id_departamento
+                              AND p2.id_catalogo_insumos_productos = pia.id_catalogo_insumos_productos
+                        )
+                    )
+                )
+                WHERE op.id_orden = imo.id_orden
                   AND pia.id_departamento = imo.id_departamento
                   AND pia.id_catalogo_insumos_productos = inv.id_catalogo
             ) AS material_estimado
