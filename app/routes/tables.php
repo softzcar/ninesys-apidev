@@ -548,6 +548,14 @@ return function (App $app) {
     $estadoOrden = trim($queryParams['estado_orden'] ?? 'todas');
     $cursor = (isset($queryParams['cursor']) && $queryParams['cursor'] !== '') ? (int) $queryParams['cursor'] : null;
     $limit = isset($queryParams['limit']) ? min(100, max(1, (int) $queryParams['limit'])) : 25;
+    // "Órdenes en curso" es el reporte usado para determinar quién debe dinero,
+    // ordenando por las órdenes más antiguas -- eso exige tener SIEMPRE el
+    // universo completo cargado (no solo la primera página), porque de lo
+    // contrario una deuda vieja que aún no "llegó" al scroll queda invisible.
+    // Se trae todo en una sola consulta -- sigue siendo UNA sola query con el
+    // fix de categorías por lote ya aplicado (ver más abajo), no reintroduce
+    // el N+1 real que motivó la paginación original (hallazgo real 2026-09-08).
+    $sinLimite = isset($queryParams['todos']) && $queryParams['todos'] === '1';
 
     if (DB_DRIVER === 'pgsql') {
       $saldo = "(ord.pago_total - COALESCE((SELECT SUM(abono) + SUM(descuento) - SUM(nota_credito) FROM abonos WHERE id_orden = ord._id), 0))";
@@ -661,16 +669,24 @@ return function (App $app) {
 
     // product_categories se calculaba antes con una subconsulta correlacionada por fila
     // (mismo patrón N+1 ya corregido en /table/ordenes-todas) -- ahora se calcula en un
-    // solo query por lote, después de tener los ids de esta página.
-    $sql = "SELECT $baseFields $baseJoins
-        $whereSql
-        ORDER BY ord._id DESC
-        LIMIT ?";
-    $sqlParams = array_merge($pageWhereParams, [$limit + 1]);
-    $items = $localConnection->goQuery($sql, $sqlParams);
+    // solo query por lote, después de tener los ids de esta página (o de todo el
+    // resultado, en modo $sinLimite).
+    if ($sinLimite) {
+      $sql = "SELECT $baseFields $baseJoins
+          $whereSql
+          ORDER BY ord._id DESC";
+      $items = $localConnection->goQuery($sql, $pageWhereParams);
+    } else {
+      $sql = "SELECT $baseFields $baseJoins
+          $whereSql
+          ORDER BY ord._id DESC
+          LIMIT ?";
+      $sqlParams = array_merge($pageWhereParams, [$limit + 1]);
+      $items = $localConnection->goQuery($sql, $sqlParams);
+    }
 
     $nextCursor = null;
-    if (count($items) > $limit) {
+    if (!$sinLimite && count($items) > $limit) {
       $items = array_slice($items, 0, $limit);
       $lastItem = end($items);
       $nextCursor = (int) $lastItem['orden'];
