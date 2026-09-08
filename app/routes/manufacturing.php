@@ -2192,7 +2192,16 @@ return function (App $app) {
         $cantidadRealImpSql = $tieneGranularImp ? 'COALESCE(ldep.cantidad_asignada, c.cantidad)' : 'c.cantidad';
         $porcentajeCaseImpSql = $tieneGranularImp ? '100' : 'a.procentaje_comision';
 
-        $sql_calculo_pago = "SELECT a._id AS id_lotes_detalles, a.procentaje_comision, ((SUM($cantidadRealImpSql) * d.comision) * $porcentajeCaseImpSql / 100) AS total_comision_variable, ((SUM($cantidadRealImpSql) * eu.comision) * $porcentajeCaseImpSql / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo $granularJoinImpSql WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND a.id_reposicion IS NULL AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) $granularWhereImpSql GROUP BY a._id, a.procentaje_comision";
+        // La multiplicación por la tasa de comisión debe ir DENTRO del SUM
+        // (por fila de producto), no fuera -- afuera asume una sola tasa
+        // para toda la orden, lo cual es matemáticamente incorrecto si la
+        // orden tiene productos con comisión distinta, y además viola el
+        // GROUP BY estricto de Postgres (d.comision no es agregado ni está
+        // en el GROUP BY). eu.comision es invariante por grupo (un solo
+        // empleado), pero se agrega igual dentro del SUM por consistencia
+        // y para no necesitar agregarla al GROUP BY (hallazgo real
+        // 2026-09-08, primer uso real de este endpoint tras reconectarlo).
+        $sql_calculo_pago = "SELECT a._id AS id_lotes_detalles, a.procentaje_comision, (SUM($cantidadRealImpSql * d.comision) * $porcentajeCaseImpSql / 100) AS total_comision_variable, (SUM($cantidadRealImpSql * eu.comision) * $porcentajeCaseImpSql / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo $granularJoinImpSql WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND a.id_reposicion IS NULL AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) $granularWhereImpSql GROUP BY a._id, a.procentaje_comision";
         $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
         if (!empty($resp_comision)) {
           $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
