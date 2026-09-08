@@ -740,7 +740,10 @@ CREATE TABLE `metodos_de_pago` (
   `tipo_de_pago` varchar(13) NOT NULL DEFAULT 'Orden nueva' COMMENT 'Procedencia del pago para identificar el tipo de ingreso',
   `monto` decimal(12, 2) NOT NULL DEFAULT 0.00 COMMENT 'Monto cancelado en cada metodo de pago',
   `tasa` decimal(12, 2) DEFAULT NULL COMMENT 'Tasa de conversion con relacion al dolar',
-  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro'
+  `moment` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'Fecha de registro',
+  `verificado` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Verificacion manual del pago contra el estado de cuenta bancario (aplica a pagos no efectivo, ej. Transferencia/Pagomovil)',
+  `id_empleado_verifica` int(11) DEFAULT NULL COMMENT 'ID del empleado (Administracion) que marco el pago como verificado -- sin FK, empresas_usuarios vive en la BD central',
+  `moment_verificacion` timestamp NULL DEFAULT NULL COMMENT 'Fecha y hora en que se marco como verificado'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_spanish_ci COMMENT = 'Registro de transacciones de pago asociadas a órdenes. Almacena método, moneda, monto, tasa de conversión y referencia al cierre de caja.';
 CREATE TABLE `ordenes` (
   `_id` int(11) NOT NULL AUTO_INCREMENT,

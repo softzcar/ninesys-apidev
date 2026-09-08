@@ -46,6 +46,7 @@ return function (App $app) {
     met.detalle,
     met.tasa,
     met.moneda,
+    met.verificado,
     (
         SELECT
             SUM(op.cantidad * op.precio_unitario)
@@ -101,6 +102,7 @@ return function (App $app) {
     met.detalle,
     met.tasa,
     met.moneda,
+    met.verificado,
     (
         SELECT
             SUM(op.cantidad * op.precio_unitario)
@@ -186,6 +188,7 @@ return function (App $app) {
                 met.detalle,
                 met.tasa,
                 met.moneda,
+                met.verificado,
                 (
                     SELECT
                         SUM(op.cantidad * op.precio_unitario)
@@ -244,6 +247,7 @@ return function (App $app) {
                 met.detalle,
                 met.tasa,
                 met.moneda,
+                met.verificado,
                 (
                     SELECT
                         SUM(op.cantidad * op.precio_unitario)
@@ -330,6 +334,46 @@ return function (App $app) {
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
+  // Marcar/desmarcar un pago (metodos_de_pago) como verificado manualmente
+  // contra el estado de cuenta bancario -- usado por la columna "Verificado"
+  // en el reporte de Balance de pagos y abonos, acotado en el frontend a
+  // pagos no-efectivo (Transferencia/Pagomovil/etc). Sin validacion de rol
+  // server-side por ahora: consistente con que no existe autenticacion real
+  // en ningun endpoint de este backend hoy, el candado queda en frontend
+  // (checkbox deshabilitado si el usuario no es Administracion).
+  $app->post('/metodos-de-pago/{id}/verificar', function (Request $request, Response $response, array $args) {
+    $localConnection = new LocalDB();
+    $id = intval($args['id']);
+    $data = $request->getParsedBody();
+    if (empty($data)) {
+      $data = json_decode($request->getBody()->getContents(), true);
+    }
+
+    $verificado = (int) filter_var($data['verificado'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    $idEmpleado = isset($data['id_empleado']) ? intval($data['id_empleado']) : null;
+
+    if ($id <= 0) {
+      $response->getBody()->write(json_encode(['error' => 'ID inválido']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    if ($verificado) {
+      $sql = 'UPDATE metodos_de_pago SET verificado = ?, id_empleado_verifica = ?, moment_verificacion = ? WHERE _id = ?';
+      $now = date('Y-m-d H:i:s');
+      $localConnection->goQuery($sql, [$verificado, $idEmpleado, $now, $id]);
+    } else {
+      $sql = 'UPDATE metodos_de_pago SET verificado = ?, id_empleado_verifica = NULL, moment_verificacion = NULL WHERE _id = ?';
+      $localConnection->goQuery($sql, [$verificado, $id]);
+    }
+
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode(['success' => true, 'verificado' => $verificado]));
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
