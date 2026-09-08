@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.20] - 2026-09-08
+- Fix columna Eficiencia Material en N/A (tercera ocurrencia del bug de talla en productos solo-impresion)
+
 ## [v1.0.19] - 2026-09-08
 - Fix eficiencia de insumos: N/A y consumo real en 0 para productos solo-impresion y ordenes antiguas
 
