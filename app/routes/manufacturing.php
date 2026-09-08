@@ -1703,7 +1703,12 @@ return function (App $app) {
           if ($total_unidades_segmento > 0) {
             foreach ($ordenes_para_distribuir as $order) {
               $id_orden_actual = $order['id_orden'];
-              $unidades_orden = intval($order['unidades_orden']);
+              // floatval, no intval: hay productos medidos en unidades
+              // fraccionarias (ej. DTF por metros, 0.5) -- truncar a entero
+              // dejaba la orden con proporcion 0 y sin ningun consumo
+              // asignado (mismo bug ya corregido en asignación de personal
+              // el 2026-08-31 para la orden 6869, nunca replicado aquí).
+              $unidades_orden = floatval($order['unidades_orden']);
               $proporcion = $unidades_orden / $total_unidades_segmento;
               $consumo_estimado_orden = $cantidad_total_consumida * $proporcion;
 
@@ -2091,7 +2096,10 @@ return function (App $app) {
 
           if ($total_unidades_segmento > 0) {
             foreach ($ordenes_para_distribuir as $order) {
-              $proporcion = intval($order['unidades_orden']) / $total_unidades_segmento;
+              // floatval, no intval: ver comentario en /finalizar-departamento
+              // -- productos por metro (ej. DTF 0.5m) quedaban sin ningún
+              // papel asignado por truncarse a 0.
+              $proporcion = floatval($order['unidades_orden']) / $total_unidades_segmento;
               $consumo_estimado = $cantidad_total_papel * $proporcion;
 
               if ($consumo_estimado > 0) {
@@ -2109,7 +2117,8 @@ return function (App $app) {
         $colores = $tinta['colores'] ?? []; // Mapa de [id_color => cantidad]
 
         foreach ($ordenes_del_lote as $order) {
-          $proporcion = intval($order['unidades_orden']) / $gran_total_unidades_lote;
+          // floatval, no intval: ver comentario en /finalizar-departamento.
+          $proporcion = floatval($order['unidades_orden']) / $gran_total_unidades_lote;
           foreach ($colores as $id_color => $cantidad) {
             $cantidad_proporcional = floatval($cantidad) * $proporcion;
             if ($cantidad_proporcional > 0) {
@@ -2321,7 +2330,8 @@ return function (App $app) {
         if ($total_unidades_segmento > 0) {
           foreach ($ordenes_para_distribuir as $order) {
             $id_orden_actual = $order['id_orden'];
-            $unidades_orden = intval($order['unidades_orden']);
+            // floatval, no intval: ver comentario en /finalizar-departamento.
+            $unidades_orden = floatval($order['unidades_orden']);
             $proporcion = $unidades_orden / $total_unidades_segmento;
 
             // Distribuir y registrar consumo
