@@ -1777,10 +1777,32 @@ return function (App $app) {
       foreach ($ordenes_del_lote as $order) {
         $id_orden_actual = $order['id_orden'];
 
-        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
-        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+        // Buscar el siguiente departamento SOLO entre los que esta orden
+        // realmente tiene asignados (EXISTS contra
+        // lotes_detalles_empleados_asignados) -- antes se asumía el
+        // siguiente orden_proceso configurado GLOBALMENTE en la empresa
+        // (o incluso el número consecutivo +1, con huecos rotos), sin
+        // verificar si esta orden tenía algo que hacer ahí. Mismo fix ya
+        // aplicado en /registrar-paso-empleado (commit 8f40dee,
+        // 2026-08-19) para el flujo de un solo empleado -- nunca se había
+        // replicado a la finalización de LOTE, así que un lote de un solo
+        // departamento (ej. Impresión) podía quedar atascado en 'activa'
+        // igual que el bug original (hallazgo real 2026-09-08).
+        $next_dep_info = $localConnection->goQuery(
+          'SELECT d._id, d.departamento
+           FROM departamentos d
+           WHERE d.asignar_numero_de_paso > 0 AND d.orden_proceso > ?
+             AND EXISTS (
+               SELECT 1 FROM lotes_detalles_empleados_asignados ldea
+               WHERE ldea.id_orden = ? AND ldea.id_departamento = d._id
+             )
+           ORDER BY d.orden_proceso ASC
+           LIMIT 1',
+          [$orden_proceso_actual, $id_orden_actual]
+        );
         if (empty($next_dep_info)) {
           $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = NULL WHERE id_orden = ?", [$id_orden_actual]);
+          $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ? AND status NOT IN ('cancelada', 'entregada')", [$id_orden_actual]);
         } else {
           $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
         }
@@ -2110,10 +2132,34 @@ return function (App $app) {
 
       foreach ($ordenes_del_lote as $order) {
         $id_orden_actual = $order['id_orden'];
-        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
-        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+
+        // Buscar el siguiente departamento SOLO entre los que esta orden
+        // realmente tiene asignados (EXISTS) -- mismo fix de
+        // /registrar-paso-empleado (commit 8f40dee, 2026-08-19), nunca
+        // replicado aquí. Sin esto, un lote de Impresión sin más pasos
+        // asignados (ej. producto que solo requiere Impresión) se
+        // "empujaba" igual al siguiente departamento de la cadena global
+        // y la orden quedaba atascada en 'activa' (hallazgo real
+        // 2026-09-08, mismo síntoma reportado por el usuario).
+        $next_dep_info = $localConnection->goQuery(
+          'SELECT d._id, d.departamento
+           FROM departamentos d
+           WHERE d.asignar_numero_de_paso > 0 AND d.orden_proceso > ?
+             AND EXISTS (
+               SELECT 1 FROM lotes_detalles_empleados_asignados ldea
+               WHERE ldea.id_orden = ? AND ldea.id_departamento = d._id
+             )
+           ORDER BY d.orden_proceso ASC
+           LIMIT 1',
+          [$orden_proceso_actual, $id_orden_actual]
+        );
         if (empty($next_dep_info)) {
           $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = NULL WHERE id_orden = ?", [$id_orden_actual]);
+          // Ver mismo fix en /finalizar-departamento y /registrar-paso-empleado:
+          // este endpoint nunca actualizaba ordenes.status, solo lotes.paso --
+          // la orden quedaba "terminada" en el flujo de producción pero
+          // seguía figurando 'activa' para el resto de la aplicación.
+          $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ? AND status NOT IN ('cancelada', 'entregada')", [$id_orden_actual]);
         } else {
           $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
         }
@@ -2288,11 +2334,27 @@ return function (App $app) {
       foreach ($ordenes_del_lote as $order) {
         $id_orden_actual = $order['id_orden'];
 
-        // Lógica de actualización de paso en `lotes`
-        $siguiente_paso_proceso = intval($orden_proceso_actual) + 1;
-        $next_dep_info = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE asignar_numero_de_paso > 0 AND orden_proceso = ? LIMIT 1', [$siguiente_paso_proceso]);
+        // Lógica de actualización de paso en `lotes` -- mismo fix EXISTS de
+        // /finalizar-departamento y /finalizar-impresion (ver comentarios
+        // ahí): solo avanza a un departamento que esta orden realmente
+        // tiene asignado, y marca ordenes.status='terminada' cuando es el
+        // último paso (antes solo actualizaba lotes.paso, nunca el status
+        // real de la orden).
+        $next_dep_info = $localConnection->goQuery(
+          'SELECT d._id, d.departamento
+           FROM departamentos d
+           WHERE d.asignar_numero_de_paso > 0 AND d.orden_proceso > ?
+             AND EXISTS (
+               SELECT 1 FROM lotes_detalles_empleados_asignados ldea
+               WHERE ldea.id_orden = ? AND ldea.id_departamento = d._id
+             )
+           ORDER BY d.orden_proceso ASC
+           LIMIT 1',
+          [$orden_proceso_actual, $id_orden_actual]
+        );
         if (empty($next_dep_info)) {
           $localConnection->goQuery("UPDATE lotes SET paso = 'terminado', id_departamento_actual = NULL WHERE id_orden = ?", [$id_orden_actual]);
+          $localConnection->goQuery("UPDATE ordenes SET status = 'terminada' WHERE _id = ? AND status NOT IN ('cancelada', 'entregada')", [$id_orden_actual]);
         } else {
           $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
         }
