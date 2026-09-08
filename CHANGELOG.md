@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.19] - 2026-09-08
+- Fix eficiencia de insumos: N/A y consumo real en 0 para productos solo-impresion y ordenes antiguas
+
 ## [v1.0.18] - 2026-09-08
 - Modo sin limite (todos=1) en /table/ordenes-activas, base para volver a paginador client-side
 
