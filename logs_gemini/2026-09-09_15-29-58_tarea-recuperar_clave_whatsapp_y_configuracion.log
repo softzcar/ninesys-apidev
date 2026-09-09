@@ -1,0 +1,30 @@
+- **Solicitud del Usuario:** "si, diseñemos el flujo de recuperación de clave por WhatsApp" -- continuación de lo planteado antes: "vamos a habilitar en el login una opción para poder solicitar una nueva clave en caso que no la recuerde... solo solicitar clave a través de WhatsApp... solo le enviamos una nueva clave numérica de 8 dígitos... necesitamos una opción en la página de empleados donde el empleado pueda cambiar su clave, podemos poner al final del sidebar una opción llamada 'Configuración'".
+- **Fecha y Hora:** 2026-09-09 15:29:58
+- **Proyecto(s):** Ambos (Backend y Frontend)
+- **Archivos Involucrados:**
+    - ninesys-api/app/routes/auth.php
+    - ninesys-api/app/routes/employees.php
+    - app_multi/components/login/form.vue
+    - app_multi/components/layout/AppSidebar.vue
+    - app_multi/components/configuracion/ModalCambiarClave.vue (nuevo)
+- **Commits Relacionados:**
+    - Backend: 98e40cf
+    - Frontend: ab583d0
+- **Acción Realizada:** Se investigó el flujo ya implementado y en producción en 19print_app/dtf (`auth.js` `/solicitar-clave`) como referencia explícita del usuario, y se replicó el mismo patrón (enviar por WhatsApp ANTES de tocar la base de datos, para nunca dejar a alguien sin acceso por un envío fallido). Se reutilizó `WhatsAppAPIClient::sendDirectMessageToNode()` (ya usado en `communications.php`) para el envío, sin escribir un cliente nuevo.
+
+  Backend: `POST /login/solicitar-clave` (auth.php) busca la identidad por email en la BD central, genera una clave numérica de 8 dígitos (`random_int` + `str_pad`), la envía por WhatsApp al teléfono registrado y solo si el envío fue exitoso persiste la clave nueva; devuelve 404 si el email no existe, 400 si no tiene teléfono, 502 si el envío falla (sin tocar la clave existente). `POST /empleados/cambiar-clave` (employees.php) permite el autoservicio: recibe `id_usuario` + `clave_actual` + `clave_nueva`, valida la clave actual (mismo criterio de comparación que `/login`) antes de guardar.
+
+  Frontend: enlace "¿Olvidó su clave?" en el login con un modal simple (email + enviar). Nueva sección colapsable "Configuración" en `AppSidebar.vue` (visible para TODOS los roles, ya que vive en el sidebar compartido y no en cada `Sidebar<Rol>.vue`), con la opción "Cambiar clave" que abre `ModalCambiarClave.vue` (3 campos, valida que las claves nuevas coincidan).
+- **Inconvenientes y Desafíos:**
+    - Al verificar en vivo, `/login/solicitar-clave` devolvía 502 con una identidad de prueba -- se investigó a fondo y se descubrió que el campo `empresas_usuarios.telefono` de empleados reales YA se guarda en formato E.164 (58+10 dígitos, igual que `customers.phone`), pero la identidad de prueba que creé usó por error el formato local venezolano ("04..."). Se confirmó con pruebas directas de PHP y curl contra `msg_ninesys` que ese formato local específicamente cuelga la petición (timeout), mientras que el E.164 responde al instante. No era un bug del código nuevo -- era un dato de prueba mal formado. Corregido el teléfono de prueba y confirmado el envío real exitoso.
+    - Al verificar la sección "Configuración" en el sidebar, no aparecía con la primera identidad de prueba -- se determinó que `layouts/default.vue` solo muestra el sidebar completo si el empleado tiene al menos un departamento asignado (`currentDepartament`). Se le asignó un departamento real a la identidad de prueba para completar la verificación (comportamiento correcto y preexistente, no un bug).
+- **Decisión Final y Justificación:** Se siguió el mismo nivel de robustez que el equivalente en dtf (sin rate-limiting, sin hashing de contraseñas -- eso es tema de la fase de seguridad pendiente, ya señalada aparte) por instrucción explícita del usuario de no hacer algo muy robusto hoy. "Configuración" se agregó UNA sola vez en el sidebar compartido (`AppSidebar.vue`) en vez de duplicarse en cada `Sidebar<Rol>.vue`, para que cualquier rol futuro la herede automáticamente.
+- **Herramienta(s) Utilizada(s):** Read, Edit, Write, Bash (git, ssh, psql, curl, php -l), navegador (Claude in Chrome) contra servidor local `npm run dev`.
+- **Resultado:** Éxito
+- **Verificación:** `php -l` limpio en ambos archivos backend. Desplegado a Desarrollo (`ninesys-api@v1.0.27`, `app_multi@v1.0.31`). Verificado end-to-end con datos desechables (creados y eliminados al final): `/login/solicitar-clave` -- email no registrado (404), sin teléfono (400 -- no se llegó a probar por separado, cubierto por lectura de código), envío exitoso con clave nueva de 8 dígitos guardada solo tras confirmar el envío (200), clave vieja deja de servir. `/empleados/cambiar-clave` -- clave actual incorrecta (400), clave actual correcta (200), login posterior con la clave nueva exitoso. En el navegador: el modal "Recuperar clave" desde el login funciona con SweetAlert de confirmación; la sección "Configuración" > "Cambiar clave" aparece en el sidebar y el modal completo funciona end-to-end con confirmación visual.
+- **Logro Conseguido:** Cierra un vacío operativo real: hasta ahora un empleado que olvidaba su clave dependía de que un administrador la buscara a mano en la base de datos. Ahora puede recuperarla él mismo por WhatsApp sin necesitar ayuda, y cambiarla cuando quiera desde una opción de autoservicio nueva y extensible ("Configuración") disponible para todos los roles.
+- **Referencias de Sesión (Contexto):**
+    - Plan: /home/developer/.claude/plans/vamos-a-dejar-los-happy-magpie.md
+- **⚠️ NOTA DE PERSISTENCIA:** N/A -- detalle completo arriba.
+- **Observaciones de Gemini:** N/A (sesión con Claude Code).
+- **Respuesta de Gemini:** Se diseñó, implementó, desplegó y verificó end-to-end (backend + navegador) el flujo de recuperación de clave por WhatsApp y la nueva sección "Configuración" con "Cambiar clave" en el sidebar.
