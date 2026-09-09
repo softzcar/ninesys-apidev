@@ -119,9 +119,29 @@ return function (App $app) {
  */
 function moveUploadedFile($directory, $uploadedFile)
 {
-    $extension = pathinfo($uploadedFile->getClientFilename(), PATHINFO_EXTENSION);
+    // La extensión venía del nombre de archivo que declara el CLIENTE
+    // (falseable) y se movía a public/images-orders-details/ (directorio
+    // servido públicamente) sin validar el contenido real -- subir un
+    // archivo con extensión .php quedaba ejecutable ahí mismo (auditoría de
+    // seguridad 2026-09-09, riesgo de webshell). Ahora la extensión se
+    // deriva del MIME real leído del contenido del archivo (getimagesize(),
+    // no del header que manda el cliente), y si no es una imagen válida se
+    // rechaza ANTES de moverlo -- nada llega a la carpeta pública.
+    $tmpPath = $uploadedFile->getFilePath();
+    $info = @getimagesize($tmpPath);
+    $extensionesPermitidas = [
+        'image/jpeg' => 'jpg',
+        'image/png'  => 'png',
+        'image/webp' => 'webp',
+        'image/gif'  => 'gif',
+    ];
+    if ($info === false || !isset($extensionesPermitidas[$info['mime']])) {
+        throw new Exception('El archivo debe ser una imagen válida (JPG, PNG, WEBP o GIF).');
+    }
+    $extension = $extensionesPermitidas[$info['mime']];
+
     $basename = bin2hex(random_bytes(8)); // see http://php.net/manual/en/function.random-bytes.php
-    $filename = sprintf('%s.%0.8s', $basename, $extension);
+    $filename = $basename . '.' . $extension;
 
     $filepath = $directory . DIRECTORY_SEPARATOR . $filename;
 

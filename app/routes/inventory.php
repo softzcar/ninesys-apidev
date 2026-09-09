@@ -4043,10 +4043,19 @@ return function (App $app) {
             if (!is_dir($directory)) {
                 mkdir($directory, 0755, true);
             }
-            $extension = pathinfo($uploadedFile->getClientFilename(), PATHINFO_EXTENSION);
+            // La extensión venía del nombre de archivo que declara el CLIENTE
+            // (falseable) y el archivo se movía a public/downloads/... (carpeta
+            // servida públicamente) antes de validarlo -- una extensión .php
+            // ahí, aunque se borre segundos después, queda momentáneamente
+            // ejecutable (auditoría de seguridad 2026-09-09). Solo se permite
+            // la extensión real de una hoja de cálculo.
+            $extension = strtolower(pathinfo($uploadedFile->getClientFilename(), PATHINFO_EXTENSION));
+            if (!in_array($extension, ['xlsx', 'xls', 'csv'], true)) {
+                $error_message = 'El archivo debe ser una hoja de cálculo (.xlsx, .xls o .csv).';
+            } else {
             $filename = bin2hex(random_bytes(8)) . '.' . $extension;
             $filepath = $directory . DIRECTORY_SEPARATOR . $filename;
-            
+
             try {
                 $uploadedFile->moveTo($filepath);
 
@@ -4149,6 +4158,7 @@ return function (App $app) {
                 if (file_exists($filepath)) {
                     unlink($filepath);
                 }
+            }
             }
         }
 
