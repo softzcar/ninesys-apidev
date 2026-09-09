@@ -338,27 +338,80 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         }
 
-        // Identidad genuinamente nueva (ningún email coincidente en ninguna empresa) --
-        // validar teléfono de forma global (sigue siendo el mismo check de siempre,
-        // porque a esta altura no hay ninguna identidad existente con la que asociarlo)
-        // y crear todo como antes.
+        // El email no coincidió con nadie -- buscar si el TELÉFONO ya pertenece a una
+        // identidad existente en cualquier empresa (mismo caso real de Zenaida: alguien
+        // ya registrado con OTRO email pero el mismo teléfono). Antes esto bloqueaba sin
+        // ninguna salida ("El teléfono ya se encuentra registrado"), lo que empuja a
+        // "inventar" un dígito distinto para evadirlo -- así es como se creó la identidad
+        // duplicada de Zenaida (hallazgo real 2026-09-09). Se aplica el mismo criterio de
+        // 3 ramas ya usado arriba para email: vincular / ofrecer reactivar / bloquear con
+        // conflicto real.
         $telefonoDigits = preg_replace('/\D/', '', $miEmpleado['telefono']);
         if (strlen($telefonoDigits) >= 7) {
             $telefonoLast10 = substr($telefonoDigits, -10);
             $regexpReplaceExpr = DB_DRIVER === 'pgsql'
                 ? "REGEXP_REPLACE(telefono, '[^0-9]', '', 'g')"
                 : "REGEXP_REPLACE(telefono, '[^0-9]', '')";
-            $checkTelefonoSql = "SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE {$regexpReplaceExpr} LIKE ?";
+            $checkTelefonoSql = "SELECT id_usuario FROM api_empresas.empresas_usuarios WHERE {$regexpReplaceExpr} LIKE ?";
             $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, ['%' . $telefonoLast10]);
         } else {
-            $checkTelefonoSql = 'SELECT COUNT(*) as count FROM api_empresas.empresas_usuarios WHERE telefono = ?';
+            $checkTelefonoSql = 'SELECT id_usuario FROM api_empresas.empresas_usuarios WHERE telefono = ?';
             $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, [$miEmpleado['telefono']]);
         }
 
-        if (isset($telefonoCheck[0]['count']) && $telefonoCheck[0]['count'] > 0) {
+        if (!empty($telefonoCheck)) {
+            // Dato sucio preexistente (el teléfono coincide con más de una identidad
+            // distinta): no resolver a ciegas, pedir revisión manual.
+            if (count($telefonoCheck) > 1) {
+                $localConnection->disconnect();
+                $response->getBody()->write(json_encode(['error' => 'El teléfono coincide con más de un empleado ya registrado. Revise manualmente antes de continuar.']));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            }
+
+            $idUsuarioPorTelefono = (int) $telefonoCheck[0]['id_usuario'];
+
+            $asignacionActual = $localConnection->goQuery(
+                'SELECT _id, activo FROM api_empresas.empresas_usuarios_empresas WHERE id_usuario = ? AND id_empresa = ?',
+                [$idUsuarioPorTelefono, ID_EMPRESA]
+            );
+
+            if (!empty($asignacionActual)) {
+                if ((int) $asignacionActual[0]['activo'] === 1) {
+                    $localConnection->disconnect();
+                    $response->getBody()->write(json_encode(['error' => 'Ya existe un empleado activo con ese teléfono en esta empresa.']));
+                    return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+                }
+                // Inactiva en ESTA empresa -- mismo patrón que el caso de email: ofrecer
+                // reactivar en vez de bloquear sin salida.
+                $localConnection->disconnect();
+                $response->getBody()->write(json_encode([
+                    'eliminado_existente' => true,
+                    'id_usuario' => $idUsuarioPorTelefono,
+                ]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+            }
+
+            // La identidad existe pero nunca tuvo asignación a ESTA empresa -- vincularla
+            // sin duplicar su fila de empresas_usuarios (no se pisa su email/nombre/etc.
+            // real con los datos tipeados en este formulario, mismo criterio que el
+            // camino de email).
+            $localConnection->goQuery(
+                'INSERT INTO api_empresas.empresas_usuarios_empresas (id_usuario, id_empresa, activo) VALUES (?, ?, 1)',
+                [$idUsuarioPorTelefono, ID_EMPRESA]
+            );
+
+            $object = ['response_deps' => []];
+            foreach (explode(',', $miEmpleado['departamentos'] ?? '') as $idDep) {
+                if ($idDep === '') continue;
+                $sqlDep = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, ?, ?)';
+                $object['response_deps'][] = $localConnection->goQuery($sqlDep, [$idUsuarioPorTelefono, $idDep, ID_EMPRESA]);
+            }
+
             $localConnection->disconnect();
-            $response->getBody()->write(json_encode(['error' => 'El teléfono ya se encuentra registrado.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            $object['message'] = 'El teléfono ya pertenecía a un empleado de otra empresa -- se agregó como empleado de esta empresa (mismos datos de acceso).';
+            $object['id_usuario'] = $idUsuarioPorTelefono;
+            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         }
 
         // PREPARAR FECHAS
