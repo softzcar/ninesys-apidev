@@ -385,6 +385,58 @@ return function (App $app) {
         return $response;
     });
 
+    /**
+     * Solicitar clave nueva por WhatsApp ("olvidé mi clave") -- mismo patrón ya
+     * implementado y en producción en 19print_app/dtf (auth.js /solicitar-clave):
+     * el envío va SIEMPRE antes de tocar la base de datos. Si el envío falla, la
+     * clave anterior sigue funcionando -- nunca se deja a alguien sin acceso por
+     * un envío que nunca llegó.
+     */
+    $app->post('/login/solicitar-clave', function (Request $request, Response $response) {
+        $datos = $request->getParsedBody();
+        $email = $datos['email'] ?? '';
+
+        $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+
+        $usuarios = $localConnection->goQuery(
+            'SELECT id_usuario, nombre, telefono, id_empresa FROM empresas_usuarios WHERE email = ?',
+            [$email]
+        );
+
+        if (empty($usuarios)) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'Este email no está registrado en el sistema.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+        }
+
+        $usuario = $usuarios[0];
+
+        if (empty($usuario['telefono'])) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'Este usuario no tiene un teléfono registrado. Comuníquese con su administrador.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $claveNueva = str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
+        $mensaje = "Hola " . $usuario['nombre'] . ", esta es su nueva clave de acceso a Ninesys:\n\n" . $claveNueva . "\n\nÚsela junto a su email para iniciar sesión. Puede cambiarla luego desde Configuración > Cambiar clave.";
+
+        $whatsAppApiClient = new WhatsAppAPIClient(WS_API_URL);
+        $envio = $whatsAppApiClient->sendDirectMessageToNode($usuario['id_empresa'], $usuario['telefono'], $mensaje, false);
+
+        if (isset($envio['success']) && $envio['success'] === false) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'No se pudo enviar la clave por WhatsApp en este momento. Intente de nuevo en unos minutos.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(502);
+        }
+
+        // Recién acá, con el envío confirmado, se guarda la clave nueva.
+        $localConnection->goQuery('UPDATE empresas_usuarios SET password = ? WHERE id_usuario = ?', [$claveNueva, $usuario['id_usuario']]);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode(['message' => 'Se envió una nueva clave a su WhatsApp registrado.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    });
+
     /** * Refresh Session Data */
     $app->get('/refresh-session/{id}', function (Request $request, Response $response, array $args) {
         $id_usuario = $args['id'];

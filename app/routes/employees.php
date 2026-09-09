@@ -718,6 +718,47 @@ return function (App $app) {
             ->withStatus(200);
     });
 
+    // Autoservicio: el empleado cambia su propia clave desde "Configuración"
+    // (ver la nueva sección del sidebar, análoga a como el cliente de dtf pide
+    // una clave nueva). Mismo criterio de comparación de clave que usa /login.
+    $app->post('/empleados/cambiar-clave', function (Request $request, Response $response) {
+        $datos = $request->getParsedBody();
+        $idUsuario = (int) ($datos['id_usuario'] ?? 0);
+        $claveActual = $datos['clave_actual'] ?? '';
+        $claveNueva = $datos['clave_nueva'] ?? '';
+
+        $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+
+        $usuarios = $localConnection->goQuery(
+            'SELECT id_usuario, password FROM empresas_usuarios WHERE id_usuario = ?',
+            [$idUsuario]
+        );
+
+        if (empty($usuarios)) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'Usuario no encontrado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+        }
+
+        if ($usuarios[0]['password'] !== $claveActual) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'La clave actual no es correcta.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        if ($claveNueva === '') {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'La clave nueva no puede estar vacía.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $localConnection->goQuery('UPDATE empresas_usuarios SET password = ? WHERE id_usuario = ?', [$claveNueva, $idUsuario]);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode(['message' => 'Clave actualizada correctamente.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    });
+
     // Obtener empelados de produccion y diseño y los demas tambien...
     $app->get('/empleados/produccion/asignacion', function (Request $request, Response $response) {
         $localConnection = new LocalDB();
