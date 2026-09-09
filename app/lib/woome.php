@@ -1415,8 +1415,12 @@ class WooMe
         // Cliente ELIMINADO + se pidió reactivar (flujo orden/presupuesto):
         // se revive el registro existente y se actualizan sus datos. Su historial
         // (órdenes/presupuestos) queda intacto porque nunca se borró físicamente.
+        // COALESCE en pais/estado/ciudad: el llamador (nueva.vue/presupuesto.vue)
+        // no siempre envía estos 3 campos -- si no vienen, el endpoint los
+        // convierte a NULL explícito, y sin COALESCE este UPDATE pisaba datos
+        // geográficos reales ya configurados (hallazgo real 2026-09-09).
         $recibirVal = ($recibir_notificaciones !== null) ? (int)$recibir_notificaciones : 1;
-        $updSql = "UPDATE customers SET eliminado = 0, first_name = ?, last_name = ?, cedula = ?, phone = ?, email = ?, address = ?, recibir_notificaciones = ?, id_catalogo_pais = ?, id_catalogo_estado = ?, id_catalogo_ciudad = ? WHERE _id = ?";
+        $updSql = "UPDATE customers SET eliminado = 0, first_name = ?, last_name = ?, cedula = ?, phone = ?, email = ?, address = ?, recibir_notificaciones = ?, id_catalogo_pais = COALESCE(?, id_catalogo_pais), id_catalogo_estado = COALESCE(?, id_catalogo_estado), id_catalogo_ciudad = COALESCE(?, id_catalogo_ciudad) WHERE _id = ?";
         $localConnection->goQuery($updSql, [$first_name, $last_name, $cedula, $phone, $email, $address, $recibirVal, $id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad, $conflictId]);
         $response = [
           'status' => 'success',
@@ -1499,6 +1503,9 @@ class WooMe
         $recibirSql = ", recibir_notificaciones = " . (int)$recibir_notificaciones;
       }
 
+      // COALESCE en pais/estado/ciudad: ver mismo comentario en createCustomer()
+      // (hallazgo real 2026-09-09) -- si el llamador no envía estos 3 campos,
+      // preservar el valor ya guardado en vez de pisarlo con NULL.
       $sql = "UPDATE customers SET
                         eliminado = 0,
                         first_name = ?,
@@ -1507,9 +1514,9 @@ class WooMe
                         phone = ?,
                         email = ?,
                         address = ?,
-                        id_catalogo_pais = ?,
-                        id_catalogo_estado = ?,
-                        id_catalogo_ciudad = ?
+                        id_catalogo_pais = COALESCE(?, id_catalogo_pais),
+                        id_catalogo_estado = COALESCE(?, id_catalogo_estado),
+                        id_catalogo_ciudad = COALESCE(?, id_catalogo_ciudad)
                         " . $recibirSql . "
                     WHERE _id = ?";
       $params = [$first_name, $last_name, $cedula, $phone, $email, $address, $id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad, intval($id)];
@@ -1563,7 +1570,9 @@ class WooMe
     $recibirVal = ($recibir_notificaciones !== null) ? (int)$recibir_notificaciones : 1;
     $localConnection = new LocalDB();
 
-    $sql = "UPDATE customers SET eliminado = 0, first_name = ?, last_name = ?, cedula = ?, phone = ?, email = ?, address = ?, recibir_notificaciones = ?, id_catalogo_pais = ?, id_catalogo_estado = ?, id_catalogo_ciudad = ? WHERE _id = ?";
+    // COALESCE en pais/estado/ciudad: ver mismo comentario en createCustomer()
+    // (hallazgo real 2026-09-09).
+    $sql = "UPDATE customers SET eliminado = 0, first_name = ?, last_name = ?, cedula = ?, phone = ?, email = ?, address = ?, recibir_notificaciones = ?, id_catalogo_pais = COALESCE(?, id_catalogo_pais), id_catalogo_estado = COALESCE(?, id_catalogo_estado), id_catalogo_ciudad = COALESCE(?, id_catalogo_ciudad) WHERE _id = ?";
     $localConnection->goQuery($sql, [$first_name, $last_name, $cedula, $phone, $email, $address, $recibirVal, $id_catalogo_pais, $id_catalogo_estado, $id_catalogo_ciudad, intval($id)]);
 
     $sel = $localConnection->goQuery('SELECT _id, first_name, last_name, cedula, phone, email, address FROM customers WHERE _id = ?', [intval($id)]);
