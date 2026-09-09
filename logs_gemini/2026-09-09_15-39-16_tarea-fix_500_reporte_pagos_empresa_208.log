@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "ok ahora vamos a atender un bug en producción, en la pagina `/comercializacion/reportes/pagos-abonos` la url `https://api.ninesys19.com/reporte-de-pagos` responde `{\"statusCode\":500,...}` al cargar en la empresa '19 Print'"
+- **Fecha y Hora:** 2026-09-09 15:39:16
+- **Proyecto(s):** Backend (solo esquema de base de datos, sin cambio de código)
+- **Archivos Involucrados:** Ninguno (no se modificó código). Base de datos afectada: `api_emp_208` (tabla `metodos_de_pago`), en Desarrollo y Producción.
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: N/A (no requirió cambio de código)
+- **Acción Realizada:** Se revisó `/usr/local/lsws/logs/error.log` en Producción y se encontró la excepción real: `SQLSTATE[42703]: column met.verificado does not exist`, lanzada desde `finance.php:307` (`/reporte-de-pagos`). Se comparó el esquema de `metodos_de_pago` entre la empresa 194 (referencia) y la 208 y se confirmó que a la 208 le faltaban 3 columnas (`verificado`, `id_empleado_verifica`, `moment_verificacion`) que sí tiene 194 y que ya están en la plantilla de empresa nueva (`create_new_company_api_emp_N.sql`) -- una migración que nunca se le aplicó a esta empresa en particular. Se confirmó el mismo drift en Desarrollo (mismo estado, no es un gap de despliegue). Se aplicó `ALTER TABLE metodos_de_pago ADD COLUMN verificado boolean NOT NULL DEFAULT false`, `ADD COLUMN id_empleado_verifica integer`, `ADD COLUMN moment_verificacion timestamp without time zone` + `CREATE INDEX idx_met_pago_verificado`, primero en Desarrollo (verificado con curl), y tras confirmación explícita del usuario, también en Producción. Se comparó además TODA la base de 208 contra 194 columna por columna para descartar más drift oculto -- ninguno encontrado.
+- **Inconvenientes y Desafíos:** Ninguno significativo -- la causa se identificó rápido gracias al procedimiento ya documentado en memoria para depurar 500 en producción (revisar `error.log`, no el error_log del vhost).
+- **Decisión Final y Justificación:** Se corrigió el dato/esquema en vez de tocar el código de `finance.php`, porque el código está bien -- asume razonablemente que todas las empresas comparten el esquema de la plantilla, que es la convención ya establecida en este proyecto (ver instrucción de "Garantía de Esquema" en CLAUDE.md).
+- **Herramienta(s) Utilizada(s):** Bash (ssh, psql, curl), lectura de logs.
+- **Resultado:** Éxito
+- **Verificación:** `curl https://api.nineteengreen.com/reporte-de-pagos -H "Authorization: 208"` (Dev) y `curl https://api.ninesys19.com/reporte-de-pagos -H "Authorization: 208"` (Prod) devuelven 200 con datos completos tras el fix. Se confirmó también que la empresa 194 sigue funcionando sin regresión en Producción. Comparación columna por columna de toda la BD de 208 vs 194 en Producción: 0 diferencias tras el fix.
+- **Logro Conseguido:** Resuelto un 500 real que afectaba a un cliente en Producción ahora mismo, en la sección de reportes de pagos y abonos de la empresa "19 print" -- sin necesidad de deploy, con un ALTER TABLE aditivo seguro (no borra ni modifica datos existentes).
+- **Referencias de Sesión (Contexto):** N/A
+- **⚠️ NOTA DE PERSISTENCIA:** N/A -- detalle completo arriba.
+- **Observaciones de Gemini:** N/A (sesión con Claude Code).
+- **Respuesta de Gemini:** Se diagnosticó y corrigió el 500 de `/reporte-de-pagos` para la empresa 208 en Desarrollo y Producción -- era un drift de esquema (columnas nunca migradas a esa empresa), no un bug de código.
