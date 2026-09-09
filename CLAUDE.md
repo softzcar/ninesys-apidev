@@ -206,9 +206,9 @@ ssh vps-contabo-dev "chmod +x /tmp/reset_company_database.sh && /tmp/reset_compa
 # Reiniciar empresa 174 (pruebas/desarrollo)
 ssh vps-contabo-dev "chmod +x /tmp/reset_company_database.sh && /tmp/reset_company_database.sh 174"
 
-# Reiniciar empresa 163 (producción - ⚠️ usar con extrema precaución, solo en vps-contabo-prod)
-ssh vps-contabo-prod "chmod +x /tmp/reset_company_database.sh && /tmp/reset_company_database.sh 163"
 ```
+
+> Nota: la empresa 163 fue eliminada por completo (respaldada primero) el 2026-09-09 en Desarrollo y Producción -- estaba vacía (sin datos operativos reales), causaba confusión recurrente. Ya no existe, no usarla como ejemplo.
 
 #### Paso 3: Proporcionar confirmaciones
 
@@ -249,12 +249,7 @@ El script solicitará **dos confirmaciones**:
 
 ### Empresas Disponibles
 
-Según la base de datos central `api_empresas`:
-
-| ID  | Nombre | Base de Datos | Uso |
-|-----|--------|---------------|-----|
-| 163 | nineteencustom.com | `api_emp_163` | 🏭 Producción |
-| 163 | nineteengreen.com | `api_emp_163` | 🏭 Testing |
+Consultar la base de datos central `api_empresas` (tabla `empresas`) para la lista real y vigente de empresas -- no asumir una lista fija de memoria, cambia con el tiempo (194 y 208 son las reales hoy en Desarrollo/Producción; 163 fue eliminada el 2026-09-09).
 
 ### Recuperación de Datos
 
