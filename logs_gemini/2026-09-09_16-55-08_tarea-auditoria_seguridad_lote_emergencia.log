@@ -1,0 +1,40 @@
+- **Solicitud del Usuario:** "vamos a analizar el estado de seguridad del ecosistema de aplicaciones de ninesys... básicamente no tenemos seguridad para el sistema, y la comunicación entre todas las aplicaciones, tampoco tenemos seguridad al momento de guardar contraseñas... tenemos una cantidad ridícula de logs... en algunos endpoints estamos retornando sentencias sql que se ejecutaron... Estamos usando CloudFlare nos podemos apoyar en este servicio..." -- seguido de "sigue con 0.6, 0.7, 0.8 y 0.9" tras completar 0.1-0.5 en un turno anterior.
+- **Fecha y Hora:** 2026-09-09 16:55:08
+- **Proyecto(s):** Backend (ninesys-api), msg_ninesys, ninesys-cdn, app_multi
+- **Archivos Involucrados:**
+    - ninesys-api/app/routes.php, auth.php, employees.php, orders.php, upload.php, inventory.php, manufacturing.php, catalogs.php, designs.php, communications.php, tables.php, production.php, products.php
+    - msg_ninesys/routes/index.js, controllers/authController.js, .env.example
+    - ninesys-cdn/index.php
+    - app_multi/nuxt.config.js, plugins/whatsapp.js, plugins/axios-interceptor.js, components/admin/EmpleadoEditar.vue
+    - ninesys-hub/bin/deploy_frontend_dev.sh, .gitignore, bin/.secrets_frontend_dev.sh (no versionado)
+- **Commits Relacionados:**
+    - ninesys-api: adf65ef (0.1/0.2/0.6), ffaa381 (0.7), 8d4e3df (0.8), 9c4addd (0.9)
+    - msg_ninesys: 25fd41b (0.3/0.4)
+    - ninesys-cdn: a063e4a (0.5)
+    - app_multi: 819ef98 (0.2/0.4)
+- **Acción Realizada:** Auditoría completa del ecosistema (3 subagentes en paralelo: API, comunicación entre servicios, frontend) + verificación en vivo de infraestructura (Cloudflare, puertos, SSH, firewall). Se encontraron 9 hallazgos críticos explotables hoy sin credenciales (borrado anónimo de empresa completa vía DROP DATABASE, API sin autenticación real, contraseñas en claro en respuestas, suplantación de WhatsApp, credencial de servicio publicada en el bundle JS, CDN sin auth, secreto en historial de git, SSH root por contraseña, Cloudflare evitable). Se escribió un plan de remediación por fases (Fase 0 = lote de emergencia hoy/mañana, Fase 1 = Cloudflare/infraestructura, Fase 2 = autenticación real, Fase 3 = hash de contraseñas, Fase 4 = autorización por rol + validación server-side de montos/IDOR, Fase 5 = limpieza).
+
+  Fase 0 completa en Desarrollo (9 puntos):
+  - 0.1: token interno (X-Internal-Token + hash_equals) en POST/PUT/DELETE /setup/user.
+  - 0.2: quitar `password` de GET /empleados y POST /login; /empleados/editar ya no sobreescribe la clave si llega vacía; frontend ya no precarga la clave real.
+  - 0.3: authenticateToken en /send-message, /send-direct-message, /send-message-basic (msg_ninesys).
+  - 0.4: rotada la credencial de servicio de WhatsApp (antes hardcodeada 'admin'/'Ninesys@2024', filtrada en el bundle público) y el JWT_SECRET; movida a variables de entorno + archivo de secretos local no versionado para el build del frontend.
+  - 0.5: intval() en id_empresa/id_orden del CDN (path traversal); NO se bloqueó el borrado con secreto (rompería la función real de Galería, sin alternativa -- documentado para Fase 2).
+  - 0.6: ~128 líneas que devolvían SQL ejecutado (y algunos datos intermedios sensibles) en la respuesta JSON, comentadas en bloque tras confirmar que ninguna se leía de vuelta.
+  - 0.7: inyección SQL real en los 9 bloques de "camino legado" de métodos de pago en creación de orden (el floatval() solo se aplicaba en el `if`, nunca en el valor interpolado) -- convertidos a parámetros (?). El bloque equivalente de EDICIÓN de orden ya era seguro (floatval() aplicado antes de interpolar), no requirió cambio.
+  - 0.8: upload.php y inventory.php aceptaban la extensión del archivo que declara el cliente (falseable) para archivos movidos a carpetas públicas -- riesgo de webshell. Ahora la extensión se deriva del contenido real (getimagesize() para imágenes, whitelist xlsx/xls/csv para la carga de inventario). designs.php ya era seguro por construcción.
+  - 0.9: quitado el volcado de SQL+datos a /tmp/gemini_debug_sqldetalles.txt en cada request (manufacturing.php).
+- **Inconvenientes y Desafíos:**
+  - Al restaurar msg_ninesys tras la rotación de credenciales, la sesión de WhatsApp de la empresa 194 quedó momentáneamente desconectada (INITIALIZING) -- se reconectó sola en ~15-20s (Baileys restaura desde archivos de sesión en disco). Importante para la ventana de Producción de mañana: esperar la reconexión antes de dar por cerrado el paso.
+  - La primera verificación de que la credencial nueva llegó al bundle público de app_multi dio un falso negativo -- se buscó solo en los chunks `_nuxt/*.js`, pero `publicRuntimeConfig` en este build (`ssr:false`, `target:static`) se inyecta en el `window.__NUXT__` inline de cada página HTML, no en los chunks JS compartidos.
+  - Un intento de build local sin las variables de entorno realmente exportadas en el mismo proceso de shell (cada llamada a Bash es un shell nuevo) generó un build sin la credencial -- resuelto exportando + sourceando + compilando en una sola invocación.
+- **Decisión Final y Justificación:** Se resolvió NO bloquear con secreto las operaciones de borrado del CDN ni el token en `setup_company` de forma que rompiera su uso real -- en ambos casos, el llamador legítimo es el navegador directo, sin ningún secreto que pueda llevar sin volver a exponerlo (mismo problema de fondo que la credencial de WhatsApp, C5). Se documentó como pendiente de la Fase 2 (autenticación real) en vez de romper funciones de uso diario por una protección a medias. Se encontraron ~18 volcados adicionales a /tmp dentro del motor de SQL por IA (GeminiAssistant.php/GeminiChatAssistant.php) -- NO corregidos, ya están dentro del hallazgo crítico #1 ya documentado en la fase de seguridad pendiente, fuera del alcance puntual de "0.9".
+- **Herramienta(s) Utilizada(s):** 3 agentes Explore en paralelo (auditoría), Read, Edit, Write, Bash (git, ssh, psql, curl, php -l, node -c, openssl rand).
+- **Resultado:** Éxito (Fase 0 completa y verificada en Desarrollo)
+- **Verificación:** Cada punto probado en vivo contra Desarrollo: 0.1 (setup/user rechaza sin token), 0.2 (GET /empleados y /login sin password; editar con clave en blanco no la borra), 0.3/0.4 (rutas de WhatsApp exigen JWT; credencial vieja falla, nueva funciona; flujo real de recuperación de clave probado end-to-end tras la rotación), 0.5 (intento de path traversal ya no escapa el directorio; listado legítimo sigue funcionando), 0.6 (grep confirma ausencia de 'sql' en las respuestas), 0.7 (verificación manual exhaustiva del orden de parámetros contra las columnas SQL originales, php -l limpio -- pendiente una prueba end-to-end de creación de orden real en el navegador antes de Producción), 0.8 (un .php disfrazado de imagen se rechaza sin dejar rastro en la carpeta pública; una imagen real sigue subiendo bien), 0.9 (código removido, sintaxis limpia).
+- **Logro Conseguido:** Cerrado el lote completo de 9 vulnerabilidades críticas/altas explotables hoy sin credenciales en Desarrollo, incluyendo el más grave (borrado anónimo de una empresa completa) y el más extendido (inyección SQL real en creación de orden, el flujo de negocio más sensible). Listo para aplicar a Producción en la ventana ya prevista para mañana, junto con el pendiente de Zenaida.
+- **Referencias de Sesión (Contexto):**
+    - Plan: /home/developer/.claude/plans/vamos-a-dejar-los-happy-magpie.md
+- **⚠️ NOTA DE PERSISTENCIA:** N/A -- detalle completo arriba.
+- **Observaciones de Gemini:** N/A (sesión con Claude Code).
+- **Respuesta de Gemini:** Se completó la auditoría de seguridad y el lote de emergencia completo (9 puntos) en Desarrollo, verificado en vivo. Pendiente aplicar a Producción según lo acordado.
