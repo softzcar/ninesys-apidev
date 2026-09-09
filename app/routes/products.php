@@ -175,6 +175,28 @@ return function (App $app) {
       ->withStatus(200);
   });
 
+  // Tallas que un producto tiene realmente configuradas en la asignacion de
+  // insumos (product_insumos_asignados) -- usado por nueva orden/presupuesto
+  // para restringir el select de Talla a solo las tallas que aplican a ese
+  // producto (ej. un producto que solo se fabrica en tallas infantiles), en
+  // vez de mostrar siempre el catalogo completo. Una sola consulta para toda
+  // la empresa (no por producto) para evitar N+1 al cargar la pagina.
+  // IMPORTANTE: debe declararse ANTES de /products/{id} (sin restriccion
+  // numerica) -- si se declara despues, {id} captura "tallas-asignadas"
+  // como si fuera un ID de producto y esta ruta nunca se alcanza (hallazgo
+  // real 2026-09-09, 500 por getProductById("tallas-asignadas")).
+  $app->get('/products/tallas-asignadas', function (Request $request, Response $response) {
+    $localConnection = new LocalDB();
+    $sql = 'SELECT DISTINCT id_product, id_talla FROM product_insumos_asignados';
+    $result = $localConnection->goQuery($sql);
+    $localConnection->disconnect();
+
+    $response->getBody()->write(json_encode($result, JSON_NUMERIC_CHECK));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   // Obtener prodcuto por ID
   $app->get('/products/{id}', function (Request $request, Response $response, array $args) {
     $woo = new WooMe();
@@ -1322,24 +1344,6 @@ return function (App $app) {
     $uso['total'] = array_sum($uso);
 
     $response->getBody()->write(json_encode($uso, JSON_NUMERIC_CHECK));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
-  // Tallas que un producto tiene realmente configuradas en la asignacion de
-  // insumos (product_insumos_asignados) -- usado por nueva orden/presupuesto
-  // para restringir el select de Talla a solo las tallas que aplican a ese
-  // producto (ej. un producto que solo se fabrica en tallas infantiles), en
-  // vez de mostrar siempre el catalogo completo. Una sola consulta para toda
-  // la empresa (no por producto) para evitar N+1 al cargar la pagina.
-  $app->get('/products/tallas-asignadas', function (Request $request, Response $response) {
-    $localConnection = new LocalDB();
-    $sql = 'SELECT DISTINCT id_product, id_talla FROM product_insumos_asignados';
-    $result = $localConnection->goQuery($sql);
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($result, JSON_NUMERIC_CHECK));
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
