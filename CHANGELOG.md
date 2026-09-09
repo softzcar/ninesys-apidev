@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.28] - 2026-09-09
+- Auditoria de seguridad: quitar SQL de respuestas, fix inyeccion en creacion de orden, whitelist de subida de archivos, quitar volcado a /tmp.
+
 ## [v1.0.27] - 2026-09-09
 - Recuperar clave por WhatsApp (/login/solicitar-clave) + cambiar clave desde Configuracion (/empleados/cambiar-clave).
 
