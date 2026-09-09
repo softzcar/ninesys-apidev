@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.23] - 2026-09-09
+- Mensajes de WhatsApp por defecto al crear empresa nueva (bienvenida/despedida/saldo + 4 departamentos)
+
 ## [v1.0.22] - 2026-09-09
 - Fix: pais/estado/ciudad de cliente se pisaban a NULL al reactivar/editar sin enviar esos campos
 
