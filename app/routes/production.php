@@ -661,7 +661,7 @@ return function (App $app) {
               ';
       }
       $items = $localConnection->goQuery($sql);
-      $obj['sql_empleados'] = $sql;
+      // $obj['sql_empleados'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
       // Decodificar el campo `departamentos`
       foreach ($items as &$item) {
@@ -819,11 +819,11 @@ return function (App $app) {
                                                                                                                                                                                                                                                                                                                                                                         $filtroEmpleado
                                                                                                                                                                                                                                                                                                                                                                         ORDER BY b.talla ASC, b.corte ASC, b.tela ASC;
                                                                                                                                                                                                                                                                                                                                                                         ";
-    $obj[0]['sql'] = $sql;
+    // $obj[0]['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $obj[0]['name'] = 'items';
 
     $sql = "SELECT id_usuario id_empleado, nombre FROM api_empresas.empresas_usuarios WHERE departamento IN (SELECT departamento FROM departamentos WHERE tipo = 'corte') AND activo = 1 AND id_empresa = " . ID_EMPRESA;
-    $obj[1]['sql'] = $sql;
+    // $obj[1]['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $obj[1]['name'] = 'empleados';
 
     // 2026-08-13: la clase SSE (SsePrint) manda headers de text/event-stream y
@@ -884,7 +884,7 @@ return function (App $app) {
                     a.id_orden
                 DESC
         ";
-    $obj['sql_items'] = $sql;
+    // $obj['sql_items'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
     $obj['items'] = $localConnection->goQuery($sql);
 
@@ -911,7 +911,7 @@ return function (App $app) {
             ORDER BY
                 a.id_orden ASC, a._id DESC
         ";
-    $obj['sql_revisiones'] = $sql;
+    // $obj['sql_revisiones'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $obj['revisiones'] = $localConnection->goQuery($sql);
 
     $sql = 'SELECT a.id_diseno, a.tipo, a.cantidad, b.id_orden FROM disenos_ajustes_y_personalizaciones a JOIN disenos b ON b._id = a.id_diseno WHERE b.id_empleado = ' . $args['id_empleado'];
@@ -947,7 +947,7 @@ return function (App $app) {
       : "d.id_orden = a._id";
 
     $sql = "SELECT COALESCE(d._id, 0) AS id_diseno, a._id id_orden, a._id tallas_personalizacion, d.id_empleado AS id_disenador FROM ordenes a LEFT JOIN disenos d ON $joinDisenoCondition WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' ORDER BY a._id DESC";
-    $obj['sql_items'] = $sql;
+    // $obj['sql_items'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $obj['items'] = $localConnection->goQuery($sql);
 
     $sql = "SELECT
@@ -961,7 +961,7 @@ return function (App $app) {
         JOIN disenos b ON
         b._id = a.id_diseno
         WHERE o.status = 'activa' OR o.status = 'pausada' OR o.status = 'En espera' ORDER BY o._id DESC";
-    $obj['sql_ajustes'] = $sql;
+    // $obj['sql_ajustes'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $obj['ajustes'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
@@ -1023,7 +1023,7 @@ return function (App $app) {
             a.id_ordenes_productos = c._id
         WHERE
             a.id_ordenes_productos = ' . $args['id_ordenes_productos'] . ' AND a.id_orden = ' . $args['id_orden'] . ' AND a.eliminada = 0';
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['data'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
@@ -1697,7 +1697,7 @@ return function (App $app) {
     $localConnection->beginTransaction();
 
     $sql = 'INSERT INTO reposiciones ' . $campos . ' VALUES ' . $values;
-    $object['sql_insert_reposiciones'] = $sql;
+    // $object['sql_insert_reposiciones'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['response'] = $localConnection->goQuery($sql);
 
     // Si la inserción fue exitosa y tenemos un ID de reposición
@@ -1712,7 +1712,7 @@ return function (App $app) {
       }
 
       $sql_fila_repo = "INSERT INTO ordenes_fila_reposiciones(id_reposicion, orden_fila) VALUES ({$id_reposicion_creada}, {$nextOrdenFilaRepo})";
-      $object['sql_orden_fila_reposicion'] = $sql_fila_repo;
+      // $object['sql_orden_fila_reposicion'] = $sql_fila_repo; // Removido para producción (auditoría de seguridad 2026-09-09)
       $object['response_orden_fila_reposicion'] = $localConnection->goQuery($sql_fila_repo);
     }
 
@@ -1955,7 +1955,7 @@ return function (App $app) {
 
     // VERIFCAR SI EXISTE PERSONAL ASIGNADO APR ESTE PRODUCTO EN EL LOTE
     $sql = 'SELECT COUNT(*) cuenta FROM lotes_detalles WHERE id_orden = ? AND departamento = ?';
-    $object['sql_empty'] = $sql;
+    // $object['sql_empty'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $cuenta = $localConnection->goQuery($sql, [$data['id_orden'], $data['paso']]);
 
     $asignados = $cuenta[0]['cuenta'];
@@ -2171,7 +2171,7 @@ return function (App $app) {
     // se movio a su propia tabla ordenes_observaciones (una fila por orden, patron upsert
     // usado en orders.php). Bug preexistente en ambos motores, no especifico de esta migracion.
     $sql = 'SELECT observaciones FROM ordenes_observaciones WHERE id_orden = ' . $args['id'];
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['detalle'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();

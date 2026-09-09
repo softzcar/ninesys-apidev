@@ -76,7 +76,7 @@ return function (App $app) {
 
     if ($campo != 'Unknown') {
       $sql = 'UPDATE config SET ' . $campo . ' = ' . $datos['estado'] . ' WHERE _id = 1';
-      $object['sql'] = $sql;
+      // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
       $object['departamento'] = $departamento;
       $object['id_departamento'] = $id_departamento;
       $object['response'] = $localConnection->goQuery($sql);

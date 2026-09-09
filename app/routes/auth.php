@@ -242,7 +242,12 @@ return function (App $app) {
             $login_successful = false;
             $error_messages[] = 'Error al obtener datos del empleado: ' . $items['message'];
         } else {
+            // Quitar la clave real de la respuesta de login -- se devolvía en
+            // texto plano en cada login exitoso (auditoría de seguridad
+            // 2026-09-09). Ya se validó arriba (paso 2), no hace falta que el
+            // frontend la vuelva a ver.
             foreach ($items as &$item) {
+                unset($item['password']);
                 if (!empty($item['departamentos'])) {
                     $item['departamentos'] = json_decode($item['departamentos'], true);
                 }

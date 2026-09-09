@@ -1072,7 +1072,7 @@ return function (App $app) {
         $localConnection = new LocalDB();
 
         $sql = 'UPDATE inventario SET eliminado = 1 WHERE _id = ?';
-        $object['sql'] = $sql;
+        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['response'] = json_encode($localConnection->goQuery($sql, [$miEmpleado['id']]));
 
         $localConnection->disconnect();
@@ -1145,7 +1145,7 @@ return function (App $app) {
             $now = $myDate->today();
 
             $sql = 'INSERT INTO inventario_movimientos (moment, departamento, id_empleado, id_insumo, id_orden, valor_inicial, id_producto) VALUES (?, ?, ?, ?, ?, ?, ?)';
-            $object['sql'] = $sql;
+            // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
             $object['insert'] = json_encode($localConnection->goQuery($sql, [
                 $now,
                 $miInsumo['departamento'],
@@ -1171,7 +1171,7 @@ return function (App $app) {
         $localConnection = new LocalDB();
 
         $sql = 'INSERT INTO piezas_cortadas (peso, id_orden, id_inventario, id_ordenes_productos, id_empleado) VALUES (?, ?, ?, ?, ?)';
-        $object['sql'] = $sql;
+        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['response'] = json_encode($localConnection->goQuery($sql, [
             $miPieza['peso'],
             $miPieza['id_orden'],
@@ -1274,7 +1274,7 @@ return function (App $app) {
 
         // buscar cantidad actual del producto
         $sql_check = 'SELECT cantidad, sku, rendimiento, tipo_insumo, departamento FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
-        $object['sql_cantidad_producto'] = $sql_check;
+        // $object['sql_cantidad_producto'] = $sql_check; // Removido para producción (auditoría de seguridad 2026-09-09)
         $cantidad_producto = $localConnection->goQuery($sql_check);
         $object['cantidad_producto'] = $cantidad_producto;
 
@@ -1343,7 +1343,7 @@ return function (App $app) {
                 $rem_result = $localConnection->goQuery($sql_rem);
 
                 $object['remanente_updated_auto'] = $current_qty;
-                $object['debug_sql_rem'] = $sql_rem;
+                // $object['debug_sql_rem'] = $sql_rem; // Removido para producción (auditoría de seguridad 2026-09-09)
                 $object['debug_rem_result'] = $rem_result;
                 $object['debug_auto_remanente_triggered'] = true;
             }
@@ -1414,7 +1414,7 @@ return function (App $app) {
                 $rem_result = $localConnection->goQuery($sql_rem);
 
                 $object['remanente_updated_auto'] = $current_qty;
-                $object['debug_sql_rem'] = $sql_rem;
+                // $object['debug_sql_rem'] = $sql_rem; // Removido para producción (auditoría de seguridad 2026-09-09)
                 $object['debug_rem_result'] = $rem_result;
                 $object['debug_auto_remanente_triggered'] = true;
             }
@@ -1549,7 +1549,7 @@ return function (App $app) {
                 $cantidad_consumida,
                 $existing_mov[0]['_id']
             ];
-            $object['sql_inventario_movimientos'] = $sql;
+            // $object['sql_inventario_movimientos'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
             $object['resp_invetario_movimientos'] = $localConnection->goQuery($sql, $params);
             $object['movimiento_actualizado'] = true;
             $object['movimiento_id'] = isset($existing_mov[0]['_id']) ? $existing_mov[0]['_id'] : null;
@@ -1582,7 +1582,7 @@ return function (App $app) {
                 $id_reposicion
             ];
 
-            $object['sql_inventario_movimientos'] = $sql;
+            // $object['sql_inventario_movimientos'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
             $object['resp_invetario_movimientos'] = $localConnection->goQuery($sql, $params);
             $object['movimiento_creado'] = true;
         }
@@ -1688,7 +1688,7 @@ return function (App $app) {
         $localConnection = new LocalDB();
 
         $sql = 'UPDATE lotes SET prioridad = ' . $prioridad['prioridad'] . ' WHERE id_orden = ' . $prioridad['id'];
-        $object['sql'] = $sql;
+        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['response'] = json_encode($localConnection->goQuery($sql));
 
         $localConnection->disconnect();
@@ -1723,7 +1723,7 @@ return function (App $app) {
         $momentExpr = DB_DRIVER === 'pgsql' ? "TO_CHAR(a.moment, 'DD/MM/YYYY')" : "DATE_FORMAT(a.moment, '%d/%m/%Y')";
         $sql = "SELECT b._id id_insumo, a.id_orden,  b.insumo, b.sku, a.valor_inicial, a.valor_final, a.id_producto, $momentExpr moment FROM inventario_movimientos a JOIN inventario b ON a.id_insumo = b._id WHERE a.id_orden = " . $args['id'] . ' ORDER BY a.id_producto';
 
-        $object['sql'] = $sql;
+        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
         $object['items'] = $localConnection->goQuery($sql);
 
@@ -1766,7 +1766,7 @@ return function (App $app) {
         } else {
             $sql = "SELECT a.id_orden, b.nombre, c.insumo, c.sku, a.valor_inicial, a.valor_final, DATE_FORMAT(a.moment, '%d/%m/%Y') moment FROM inventario_movimientos a JOIN empleados b ON a.id_empleado = b._id JOIN inventario c ON a.id_insumo = c._id WHERE a.id_insumo =" . $args['id'] . ' ORDER BY c.insumo';
         }
-        $object['sql'] = $sql;
+        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['items'] = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();
@@ -1845,7 +1845,7 @@ return function (App $app) {
     ";
         }
 
-        $object['sql'] = $sql;
+        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['items'] = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();
@@ -1938,7 +1938,7 @@ return function (App $app) {
             ORDER BY
                 i.insumo ASC;";
         }
-        $object['sql'] = $sql;
+        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['items'] = $localConnection->goQuery($sql);
 
         $localConnection->disconnect();

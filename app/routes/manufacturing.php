@@ -103,7 +103,7 @@ return function (App $app) {
       $update_result = $localConnection->goQuery($sql_update_lote, [$id_lote]);
 
       // Guardar información de depuración
-      $debug_info['update_lote_sql'] = $sql_update_lote;
+      // $debug_info['update_lote_sql'] = $sql_update_lote; // Removido para producción (auditoría de seguridad 2026-09-09)
       $debug_info['update_lote_result'] = $update_result;
 
       // 3. Obtener todas las órdenes que pertenecen a este lote
@@ -321,7 +321,7 @@ return function (App $app) {
 
       // verificar que la revision exista
       $sql = 'SELECT _id FROM revisiones WHERE id_diseno = ' . $miRevision['id_diseno'] . ' AND id_orden = ' . $miRevision['id_orden'];
-      $object['sql_count'] = $sql;
+      // $object['sql_count'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
       // obtener numero de la última revision
       $object['exist'] = $exist = $localConnection->goQuery($sql);
 
@@ -332,7 +332,7 @@ return function (App $app) {
           $localConnection->disconnect();
 
       } else {
-          $object['sql_MAX_REVIEW'] = $sql;
+          // $object['sql_MAX_REVIEW'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
           $sql = 'SELECT MAX(revision) revision FROM revisiones WHERE id_diseno = ' . $miRevision['id_diseno'] . ' AND id_orden = ' . $miRevision['id_orden'];
           $tmpRevID = $localConnection->goQuery($sql);
 
@@ -351,7 +351,7 @@ return function (App $app) {
           $sql = 'INSERT INTO revisiones (id_diseno, id_orden, revision) VALUES ' . $values;
           $object['response_insert'] = json_encode($localConnection->goQuery($sql));
 
-          $object['sql_insert'] = $sql;
+          // $object['sql_insert'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
           $sql =
               'SELECT * FROM revisiones WHERE id_diseno = ' . $miRevision['id_diseno'] . ' AND id_orden = ' . $miRevision['id_orden'];
@@ -363,12 +363,12 @@ return function (App $app) {
               $object['revision'] = $tmpRevision;
           }
 
-          $object['sql_get_review'] = $sql;
+          // $object['sql_get_review'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
           // obtener numero de la última revision
           $sql = 'SELECT MAX(revision) revision FROM revisiones WHERE id_diseno = ' . $miRevision['id_diseno'] . ' AND id_orden = ' . $miRevision['id_orden'];
 
-          $object['sql_MAX_REVIEW'] = $sql;
+          // $object['sql_MAX_REVIEW'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['lastId'] = $localConnection->goQuery($sql);
 
           $object['image_name'] = $miRevision['id_orden'] . '-' . $miRevision['id_diseno'] . '-' . $object['lastId'][0]['revision'];
@@ -405,7 +405,7 @@ return function (App $app) {
         a._id
     DESC'; */
     $sql = 'SELECT a._id id_revision, a.id_orden, a.id_diseno, a.id_empleado, a.id_product, a.revision, a.estatus, a.detalles FROM revisiones a JOIN disenos b ON b.id_orden = a.id_orden WHERE a.id_empleado = ' . $args['id_empleado'] . ' AND b.id_empleado = ' . $args['id_empleado'] . ' ORDER BY a._id DESC';
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
@@ -484,7 +484,7 @@ return function (App $app) {
         AND id_ordenes_productos = {$data['id_ordenes_productos']}";
     }
 
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['response'] = json_encode($localConnection->goQuery($sql));
 
     $localConnection->disconnect();
@@ -574,7 +574,7 @@ return function (App $app) {
       if (!isset($miEmpleado['es_reposicion']) || !$miEmpleado['es_reposicion']) {
         $sqlUpdateLote = "UPDATE lotes SET paso = '{$miEmpleado['departamento']}', id_departamento_actual = {$miEmpleado['id_departamento']}  WHERE id_orden = " . $miEmpleado['id_orden'] . ";";
         $localConnection->goQuery($sqlUpdateLote);
-        $object['sql_update_lote'] = $sqlUpdateLote;
+        // $object['sql_update_lote'] = $sqlUpdateLote; // Removido para producción (auditoría de seguridad 2026-09-09)
       }
 
 
@@ -740,7 +740,7 @@ return function (App $app) {
                        )
                      ORDER BY d.orden_proceso ASC
                      LIMIT 1';
-          $object['sql_select_next_departament'] = $sqlDep;
+          // $object['sql_select_next_departament'] = $sqlDep; // Removido para producción (auditoría de seguridad 2026-09-09)
           $response_departamentos = $localConnection->goQuery($sqlDep, [$current_orden_proceso, $miEmpleado['id_orden']]);
 
           // Verificar si existe el departamento, de no ser así indica que es el último paso.
@@ -869,7 +869,7 @@ return function (App $app) {
               a._id
           ;
         ";
-        $object['sql_comision_porcentaje'] = $sql;
+        // $object['sql_comision_porcentaje'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $respComision = $localConnection->goQuery($sql);
 
         $piezas = $respComision[0]['total_productos_empleado'];
@@ -932,7 +932,7 @@ return function (App $app) {
 
         if (empty($check)) {
           $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
-          $object['sql_pagos'][] = $sql;
+          // $object['sql_pagos'][] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['resp_pagos'] = $localConnection->goQuery($sql);
         }
       } elseif ($comisionTipo === 'fija') {
@@ -967,7 +967,7 @@ return function (App $app) {
               b.comision_tipo
           ;
         ";
-        $object['sql_comision_fija'] = $sql;
+        // $object['sql_comision_fija'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $respComision = $localConnection->goQuery($sql);
 
         $piezas = $respComision[0]['total_productos_empleado'];
@@ -1017,7 +1017,7 @@ return function (App $app) {
 
         if (empty($check)) {
           $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
-          $object['sql_pagos'][] = $sql;
+          // $object['sql_pagos'][] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['resp_pagos'] = $localConnection->goQuery($sql);
         }
       } else {
@@ -1058,7 +1058,7 @@ return function (App $app) {
               $granularWhereSql
           ;
         ";
-        $object['sql_comision_variable'] = $sql;
+        // $object['sql_comision_variable'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $respComision = $localConnection->goQuery($sql);
 
         // GUARDAR PAGO PARA CADA PRODUCTO EN COMISIÓN VARIABLE (Agrupado por Asignación)
@@ -1117,7 +1117,7 @@ return function (App $app) {
 
         if (empty($check)) {
           $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comision_referencial . ", 'variable', " . $piezasTotales . ', ' . $id_lotes_detalles_principal . ", 'aprobado', " . $montoTotalVariable . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
-          $object['sql_pagos'][] = $sql;
+          // $object['sql_pagos'][] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
           $localConnection->goQuery($sql);
         }
 
@@ -1156,7 +1156,7 @@ return function (App $app) {
             $checkExc = $localConnection->goQuery($sqlCheckExc);
             if (empty($checkExc)) {
               $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES ({$miEmpleado['id_orden']}, 0, {$miEmpleado['id_departamento']}, {$comision_exc}, 'variable', {$excedente_piezas}, {$id_lotes_exc}, 'aprobado', {$monto_exc}, {$miEmpleado['id_empleado']}, 'Corte-Excedente');";
-              $object['sql_pagos_excedente'][] = $sqlExcIns;
+              // $object['sql_pagos_excedente'][] = $sqlExcIns; // Removido para producción (auditoría de seguridad 2026-09-09)
               $localConnection->goQuery($sqlExcIns);
             }
           }
@@ -1193,7 +1193,7 @@ return function (App $app) {
     // ELIMINAR REGISTRO DE EMPLEADO ASIGNADO
     $sql = "DELETE FROM lotes_detalles_empleados_asignados WHERE id_empleado = {$miEmpleado['id_empleado']} AND id_orden = {$miEmpleado['id_orden']} AND id_departamento = {$miEmpleado['id_departamento']}";
     $resultados = $localConnection->goQuery($sql);
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['resultados'] = $resultados;
 
     // ACTUALIAR PROCENTAJE
@@ -1226,7 +1226,7 @@ return function (App $app) {
     $sql = 'SELECT _id, unidades_solicitadas FROM lotes_detalles WHERE id_ordenes_productos = ? AND departamento = ? AND id_orden = ?';
     $exist = $localConnection->goQuery($sql, [$miEmpleado['id_ordenes_productos'], $miEmpleado['departamento'], $miEmpleado['id_orden']]);
 
-    $object['sql_count'] = $sql;
+    // $object['sql_count'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['count'] = count($exist);
 
     if ($object['count']) {
@@ -1301,7 +1301,7 @@ return function (App $app) {
         ];
       }
     }
-    $object['sql_asignacion'] = $sql;
+    // $object['sql_asignacion'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
     $object['asigancion'] = json_encode($localConnection->goQuery($sql, $params));
 
@@ -1346,7 +1346,7 @@ return function (App $app) {
     // -> -> VERIFICAR SI EL REGISTRO EXISTE EN `lotes_fisicos`
     $sql = 'SELECT _id, piezas_actuales FROM lotes_fisicos WHERE tela = ? AND talla = ? AND corte = ? AND categoria = ?';
 
-    $object['sql_count_lotes_fisicos'] = $sql;
+    // $object['sql_count_lotes_fisicos'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $cantidad_lotes_fisicos = $localConnection->goQuery($sql, [$data['tela'], $data['talla'], $data['corte'], $data['id_category']]);
     $object['response_lotes_fisicos'] = $cantidad_lotes_fisicos;
 
@@ -1390,7 +1390,7 @@ return function (App $app) {
     $sql = 'SELECT _id id_lotes_fisicos, piezas_actuales, tela, talla, corte, categoria, moment FROM lotes_fisicos';
     $object['lotes_fisicos'] = $localConnection->goQuery($sql);
 
-    $object['sql_with_error'] = $sql;
+    // $object['sql_with_error'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object));
@@ -1405,7 +1405,7 @@ return function (App $app) {
 
     $sql = 'UPDATE lotes SET prioridad = ? WHERE _id = ?';
 
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['response_orden'] = json_encode($localConnection->goQuery($sql, [$data['prioridad'], $data['id']]));
 
     $localConnection->disconnect();
@@ -1506,7 +1506,7 @@ return function (App $app) {
 
     $object['miEmpleado'] = $miEmpleado;
     $sql = 'DELETE FROM lotes_fisicos WHERE _id = ?';
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
     $object['response'] = json_encode($localConnection->goQuery($sql, [$miEmpleado['id']]));
 
@@ -1525,7 +1525,7 @@ return function (App $app) {
 
     $sql = 'UPDATE lotes_fisicos SET piezas_actuales = ? WHERE _id = ?';
 
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['response_orden'] = json_encode($localConnection->goQuery($sql, [$data['cantidad'], $data['id_lote']]));
 
     $localConnection->disconnect();
@@ -1581,7 +1581,7 @@ return function (App $app) {
 
   /* CÓDIGO HUÉRFANO ELIMINADO
           $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $miEmpleado['id_reposicion'] . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . ' - Producto ID: ' . $producto['id_producto'] . "');";
-          $object['sql_pagos'][] = $sql;
+          // $object['sql_pagos'][] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['resp_pagos'][] = $localConnection->goQuery($sql);
         }
       }
@@ -1593,8 +1593,8 @@ return function (App $app) {
     // ACTUALIZAR DATOS DE INICIO DE TAREA
     $sql = 'UPDATE lotes_detalles_empleados_asignados SET ' . $campo . " = '" . $now . "', progreso = '" . $progreso . "' WHERE id_departamento = " . $miEmpleado['id_departamento'] . ' AND id_orden = ' . $miEmpleado['id_orden'];
 
-    $object['sql_update_ld'] = $sql;
-    $object['sql_update_lotes_detalles'] = $sql;
+    // $object['sql_update_ld'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
+    // $object['sql_update_lotes_detalles'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     /* $object['items'] = $localConnection->goQuery($sql);
 
     $sql = "UPDATE lotes_detalles_empleados_asignados SET $campo = '$now', progreso = '$progreso' WHERE id_departamento = {$miEmpleado['id_departamento']} AND id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']};";
@@ -2583,7 +2583,7 @@ return function (App $app) {
 
     // REGISTRAR EL PASO ACTUAL EN lotes
     $sql = 'SELECT id_orden FROM lotes_detalles WHERE _id = ?';
-    $object['sql_total_pendientes'] = $sql;
+    // $object['sql_total_pendientes'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $id_orden = $localConnection->goQuery($sql, [$args['id_lotes_detalles']])[0]['id_orden'];
     $object['id_orden'] = $id_orden;
 
@@ -2598,7 +2598,7 @@ return function (App $app) {
       $progreso = 'en curso';
 
       $sqln = 'UPDATE lotes SET paso = ? WHERE id_orden = ?';
-      $object['sql_update_lotes'] = $sqln;
+      // $object['sql_update_lotes'] = $sqln; // Removido para producción (auditoría de seguridad 2026-09-09)
       $response_update = $localConnection->goQuery($sqln, [$args['departamento'], $object['id_orden']]);
       $object['response_update'] = $response_update;
     }
@@ -2628,7 +2628,7 @@ return function (App $app) {
                  FROM lotes_detalles a
                  LEFT JOIN products_comisiones pc ON pc.id_product = a.id_woo AND pc.id_departamento = ?
                  WHERE a._id = ?';
-        $object['sql_comision_variable'] = $sqlc;
+        // $object['sql_comision_variable'] = $sqlc; // Removido para producción (auditoría de seguridad 2026-09-09)
         $comisionEmpleado = $localConnection->goQuery($sqlc, [$id_dep_actual, $args['id_lotes_detalles']]);
         $miComision = $comisionEmpleado[0]['comision'];
       } elseif ($comisionTipo === 'porcentaje') {
@@ -2728,8 +2728,8 @@ return function (App $app) {
 
     // ACTUALIZAR DATOS DE INICIO DE TAREA
     $sql = 'UPDATE lotes_detalles SET ' . $campo . ' = ?, progreso = ? WHERE _id = ?';
-    $object['sql'] = $sql;
-    $object['sql_update_pagos'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
+    // $object['sql_update_pagos'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['items'] = $localConnection->goQuery($sql, [$now, $progreso, $args['id_lotes_detalles']]);
 
     $localConnection->commit();
@@ -3352,7 +3352,7 @@ return function (App $app) {
                 )
                 -- Filtramos por departamento para ver los logs de el departamento unicamente
         ";
-    $object['sql_reposiciones'] = $sql;
+    // $object['sql_reposiciones'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['reposiciones'] = $localConnection->goQuery($sql);
 
     if (DB_DRIVER === 'pgsql') {
@@ -3487,7 +3487,7 @@ return function (App $app) {
             y.progreso ASC; -- El orden del progreso ahora se basa en 'y'; a.id_orden = y.id_orden (mismo join) y si esta en el SELECT (requerido por PostgreSQL en SELECT DISTINCT)
         ";
 
-    $object['sql_ordenes'] = $sql;
+    // $object['sql_ordenes'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['ordenes'] = $localConnection->goQuery($sql);
 
     // ORDENES VINCULADAS

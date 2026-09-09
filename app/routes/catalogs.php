@@ -760,7 +760,7 @@ return function (App $app) {
       $sql = "UPDATE products_tiempos_de_produccion SET tiempo = $tiempo, usa_desperdicio = $usa_desperdicio WHERE id_product = $id_product AND id_departamento = $departamento;";
     }
 
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['response'] = $localConnection->goQuery($sql);
 
     $localConnection->disconnect();
@@ -790,7 +790,7 @@ return function (App $app) {
       $sql = "UPDATE products_tiempos_de_produccion SET usa_desperdicio = $usa_desperdicio WHERE id_product = $id_product AND id_departamento = $id_departamento;";
     }
 
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['response'] = $localConnection->goQuery($sql);
     $localConnection->disconnect();
 
@@ -859,7 +859,7 @@ return function (App $app) {
       $id_talla
     ];
 
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['response'] = $localConnection->goQuery($sql, $params);
     $object['error'] = false;
     $localConnection->disconnect();

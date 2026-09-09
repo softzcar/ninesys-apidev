@@ -37,7 +37,7 @@ return function (App $app) {
         $sql = 'SELECT SUM(cantidad*precio_unitario) AS total FROM ordenes_productos WHERE id_orden = ?';
 
         $resp = $localConnection->goQuery($sql, [$data['id_orden']]);
-        $object['total_sql'] = $sql;
+        // $object['total_sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $nuevototal = $resp[0]['total'];
 
         $sql = 'UPDATE ordenes SET pago_total = ? WHERE _id = ?';
@@ -53,7 +53,7 @@ return function (App $app) {
         $sql = 'SELECT SUM(cantidad*precio_unitario) AS total FROM ordenes_productos WHERE id_orden = ?';
 
         $resp = $localConnection->goQuery($sql, [$data['id_orden']]);
-        $object['total_sql'] = $sql;
+        // $object['total_sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $nuevototal = $resp[0]['total'];
 
         // Guardar nuevo pago_total de la orden
@@ -418,7 +418,7 @@ return function (App $app) {
             WHERE b._id = " . intval($args['id']);
     $datosAbono = $localConnection->goQuery($sql);
 
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['data'] = $datosAbono[0];
 
     $localConnection->disconnect();
@@ -1054,7 +1054,7 @@ return function (App $app) {
             ORDER BY a.id_orden ASC
         ";
     }
-    $object['sql_terminadas'] = $sql;
+    // $object['sql_terminadas'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
     $pagos = $localConnection->goQuery($sql);
     $object['ordenes_terminadas'] = $pagos;
@@ -1146,7 +1146,7 @@ return function (App $app) {
         ";
     }
     $pendientes = $localConnection->goQuery($sql);
-    $object['sql_pendientes'] = $sql;
+    // $object['sql_pendientes'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['ordenes_pendientes'] = $pendientes;
 
     // ORDENES PARA CALCULO DE TIEMPO
@@ -1273,7 +1273,7 @@ return function (App $app) {
     }
 
     $ordenes = $localConnection->goQuery($sql);
-    $object['sql_ordenes'] = $sql;
+    // $object['sql_ordenes'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['ordenes'] = $ordenes;
 
     // EFICIENCIA DE INSUMOS
@@ -1481,7 +1481,7 @@ return function (App $app) {
         ";
     }
     $reficiencia_insumos = $localConnection->goQuery($sql);
-    $object['sql_eficiencia_insumos'] = $sql;
+    // $object['sql_eficiencia_insumos'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['eficiencia_insumos'] = $reficiencia_insumos;
 
     // HORAS TRABAJADAS: tiempo real de tareas terminadas, independientemente
@@ -1540,7 +1540,7 @@ return function (App $app) {
             ORDER BY ldea.fecha_terminado DESC
         ";
     }
-    $object['sql_ordenes_semana'] = $sqlHoras;
+    // $object['sql_ordenes_semana'] = $sqlHoras; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['ordenes_semana'] = $localConnection->goQuery($sqlHoras);
 
     $localConnection->disconnect();
@@ -2272,7 +2272,7 @@ return function (App $app) {
         $id_tela = (isset($decodedObj['tela']) && is_numeric($decodedObj['tela'])) ? $decodedObj['tela'] : null;
 
         $sql2 = 'INSERT INTO presupuestos_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, talla, corte, tela, id_products_attributes, id_size, id_tela) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-        $object['sql_presupuestos_productos'] = $sql2;
+        // $object['sql_presupuestos_productos'] = $sql2; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['producto_detalle'][] = $localConnection->goQuery($sql2, [
           $now,
           $decodedObj['precio'],
@@ -2650,7 +2650,7 @@ return function (App $app) {
           $telaBindExtra,
           [$id_products_attributes, $multiplicador_porcentaje]
         ));
-        $object['sql_insert_new_product'] = $sql2;
+        // $object['sql_insert_new_product'] = $sql2; // Removido para producción (auditoría de seguridad 2026-09-09)
 
         /* $response->getBody()->write(json_encode($res_insert));
         $localConnection->disconnect();
@@ -2683,7 +2683,7 @@ return function (App $app) {
     $localConnection->goQuery($sql_update_orden, [
       $arr['total'], $nuevo_abono_total, $arr['descuento'], $arr['fechaEntrega'], $id_orden_a_editar,
     ]);
-    $object['sql_update_orden'] = $sql_update_orden;
+    // $object['sql_update_orden'] = $sql_update_orden; // Removido para producción (auditoría de seguridad 2026-09-09)
 
     // Lógica para insertar o actualizar las observaciones
     if ($is_presupuesto) {
@@ -2702,7 +2702,7 @@ return function (App $app) {
         $localConnection->goQuery($sql_obs, [$arr['obs'], $id_orden_a_editar]);
       }
     }
-    $object['sql_observaciones'] = $sql_obs;
+    // $object['sql_observaciones'] = $sql_obs; // Removido para producción (auditoría de seguridad 2026-09-09)
 
     // DEFINIR FECHA ACTUAL
     $myDate = new CustomTime();
@@ -2717,7 +2717,7 @@ return function (App $app) {
       // Insertar directamente el incremento
       $sql_insert_desc = 'INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento, detalle) VALUES (?, ?, ?, 0, ?, ?)';
       $localConnection->goQuery($sql_insert_desc, [$now, $id_orden_a_editar, $arr['responsable'], $nuevo_descuento, $detalle_descuento]);
-      $object['sql_nuevo_descuento'] = $sql_insert_desc;
+      // $object['sql_nuevo_descuento'] = $sql_insert_desc; // Removido para producción (auditoría de seguridad 2026-09-09)
     }
 
     // 5. REGISTRAR NUEVOS ABONOS Y COMISIONES (Solo sobre el nuevo pago)
@@ -2725,7 +2725,7 @@ return function (App $app) {
       // Crear registro del nuevo abono
       $sql_abono = 'INSERT INTO abonos (moment, id_orden, id_empleado, abono) VALUES (?, ?, ?, ?)';
       $localConnection->goQuery($sql_abono, [$now, $id_orden_a_editar, $arr['responsable'], $arr['abono']]);
-      $object['sql_nuevo_abono'] = $sql_abono;
+      // $object['sql_nuevo_abono'] = $sql_abono; // Removido para producción (auditoría de seguridad 2026-09-09)
 
       // Calcular comisión SOLO sobre el nuevo abono
       if ($arr['sales_commission'] === true) {
@@ -2745,9 +2745,9 @@ return function (App $app) {
 
         $sql_pago = "INSERT INTO pagos (moment, comision, comision_tipo, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES ('" . $now . "', " . $comision . ",
        '" . $respComision['comision_tipo'] . "', '" . $id_orden_a_editar . "',  '" . $arr['responsable'] . "', '" . $pago_vendedor . "', 'Abono a orden', 'aprobado')";
-        $object['sql_pago_response'] = $localConnection->goQuery($sql_pago);
+        // $object['sql_pago_response'] = $localConnection->goQuery($sql_pago); // Removido para producción (auditoría de seguridad 2026-09-09)
 
-        $object['sql_pago'] = $sql_pago;
+        // $object['sql_pago'] = $sql_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['pago_a_vendedor_por_abono'] = 'SI hubo comisión por el nuevo abono.';
       }
     }
@@ -3134,7 +3134,7 @@ return function (App $app) {
         date('Y-m-d'),
         'En espera',
       ]);
-      $object['nueva_oreden_sql'] = $sql;
+      // $object['nueva_oreden_sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
       // $object['nueva_oreden_response'] = $nueva_oreden_response['message'];
 
@@ -3154,7 +3154,7 @@ return function (App $app) {
       // NUEVO: Guardar las observaciones en la tabla dedicada
       if (!empty($newJson['obs'])) {
         $sql_obs = 'INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)';
-        $object['sql_observaciones'] = $sql_obs;
+        // $object['sql_observaciones'] = $sql_obs; // Removido para producción (auditoría de seguridad 2026-09-09)
         $localConnection->goQuery($sql_obs, [$last_id, $newJson['obs']]);
       }
 
@@ -3163,7 +3163,7 @@ return function (App $app) {
       $lastOrdenFila = $lastOrdenFila[0]['max'] + 1;
 
       $sql = 'INSERT INTO ordenes_fila_orden(id_orden, orden_fila) VALUES (?, ?)';
-      $object['sql_orden_fila'] = $sql;
+      // $object['sql_orden_fila'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
       $response_last_fila = $localConnection->goQuery($sql, [$last_id, $lastOrdenFila]);
 
       // Guardar orden vinculada
@@ -3174,7 +3174,7 @@ return function (App $app) {
 
       // Crear abono inicial de la orden
       $sql = 'INSERT INTO abonos (moment, id_orden, id_empleado, abono, descuento) VALUES (?, ?, ?, ?, ?)';
-      $object['sql_abonos'] = $sql;
+      // $object['sql_abonos'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
       $object['response_primer_abono'] = json_encode($localConnection->goQuery($sql, [
         $now, $last_id, $newJson['responsable'], $newJson['abono'], $newJson['descuento'],
       ]));
@@ -3198,7 +3198,7 @@ return function (App $app) {
           $comision = number_format($comisionFloat, 2);
         }
 
-        $object['sql'] = $sql;
+        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['comision'] = $comision;
 
         $pago_vendedor = floatval($newJson['abono']) * $comision / 100;
@@ -3260,7 +3260,7 @@ $object['sales_commission_ISSET'][] = false;
                       } */
           /* $sqlc = 'SELECT `nombre` FROM `categories` WHERE  _id = ' . $decodedObj['categoria'];
            $cat_name_base = $localConnection->goQuery($sqlc);
-           $object['CAT_sql'] = $sqlc;
+           // $object['CAT_sql'] = $sqlc; // Removido para producción (auditoría de seguridad 2026-09-09)
            $object['CAT_response'] = $cat_name_base[0]['nombre'];
 
             if (empty($cat_name_base)) {
@@ -3338,7 +3338,7 @@ $object['sales_commission_ISSET'][] = false;
 
           $sql2 = "INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes, multiplicador_porcentaje)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $tallaSql, ?, ?, $telaSql, ?, ?)";
-          $object['sql_ordenes_productos'] = $sql2;
+          // $object['sql_ordenes_productos'] = $sql2; // Removido para producción (auditoría de seguridad 2026-09-09)
           $producto_detalle_response = $localConnection->goQuery($sql2, array_merge(
             [
               $now, $precio_item, $precio_item, $decodedObj['producto'], $last_id,
@@ -3393,7 +3393,7 @@ $object['sales_commission_ISSET'][] = false;
                 }
               }
               // Para depuración, esto mostrará la última query de atributos ejecutada
-              $object['sql_atributos_seleccionados'] = $sql_attr;
+              // $object['sql_atributos_seleccionados'] = $sql_attr; // Removido para producción (auditoría de seguridad 2026-09-09)
             }
             // === FIN DE CORRECCIÓN ===
           }
@@ -3402,7 +3402,7 @@ $object['sales_commission_ISSET'][] = false;
           if ($misProductos[$i] != '') {  // Esta condición ($misProductos[$i] != '') es redundante aquí porque ya se usó isset($misProductos[$i])
             $sql_order = 'SELECT * FROM ordenes WHERE _id = ' . $last_id;
             $myOrder = $localConnection->goQuery($sql_order);
-            $object['myOrder_sql'] = $sql_order;
+            // $object['myOrder_sql'] = $sql_order; // Removido para producción (auditoría de seguridad 2026-09-09)
             $object['myOrder'] = $myOrder;
 
             // Obtenr ultimo ID del producto creado - This is now available from $producto_detalle_response
@@ -3495,20 +3495,20 @@ $object['sales_commission_ISSET'][] = false;
       // Aumentos por orden interna
       foreach ($stock_additions as $product_id => $total_quantity) {
         $sql_stock_update = "UPDATE products SET stock_quantity = stock_quantity + {$total_quantity} WHERE _id = {$product_id};";
-        $object['custom_stock_update_sql'][] = $sql_stock_update;
+        // $object['custom_stock_update_sql'][] = $sql_stock_update; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['custom_stock_update_response'][] = $localConnection->goQuery($sql_stock_update);
       }
 
       // Descuentos por venta estándar
       foreach ($stock_deductions as $product_id => $total_quantity) {
         $sql_stock_update = "UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - {$total_quantity}) WHERE _id = {$product_id};";
-        $object['custom_stock_update_sql'][] = $sql_stock_update;
+        // $object['custom_stock_update_sql'][] = $sql_stock_update; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['custom_stock_update_response'][] = $localConnection->goQuery($sql_stock_update);
       }
       // FIN: Lógica para actualizar stock en /nueva/custom
 
       // GUARDAR METODOS DE PAGO UTILIZADOS EN LA ORDEN
-      $object['sql_metodos_pago'] = [];
+      // $object['sql_metodos_pago'] = []; // Removido para producción (auditoría de seguridad 2026-09-09)
       $object['metodos_pago'] = [];
 
       $pagosGenericos = decodificarPagosGenericos($newJson);
@@ -3541,72 +3541,72 @@ $object['sales_commission_ISSET'][] = false;
         if (floatval($arr['montoDolaresEfectivo']) > 0) {  // Usar floatval para comparar con 0
           list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dólares', 'Efectivo');
           $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle, id_moneda, id_metodo_pago) VALUES ('" . $last_id . "', 'Dólares', 'Efectivo', '" . $arr['montoDolaresEfectivo'] . "', '1', '', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
           $sql_metodos_pago = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle, id_moneda) VALUES ('" . $arr['montoDolaresEfectivo'] . "', 'Dólares', 1, 'Orden Nueva', '" . $newJson['responsable'] . "', 'Nueva Orden', " . ($idMoneda ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
         }
 
         if (floatval($arr['montoDolaresZelle']) > 0) {
           list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dólares', 'Zelle');
           $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle, id_moneda, id_metodo_pago) VALUES ('" . $last_id . "', 'Dólares', 'Zelle', '" . $arr['montoDolaresZelle'] . "', '1', '" . addslashes($arr['montoDolaresZelleDetalle'] ?? '') . "', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
         }
 
         if (floatval($arr['montoDolaresPanama']) > 0) {
           list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Dólares', 'Panamá');
           $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle, id_moneda, id_metodo_pago) VALUES ('" . $last_id . "', 'Dólares', 'Panamá', '" . $arr['montoDolaresPanama'] . "', '1', '" . addslashes($arr['montoDolaresPanamaDetalle'] ?? '') . "', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
         }
 
         if (floatval($arr['montoPesosEfectivo']) > 0) {
           list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Pesos', 'Efectivo');
           $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle, id_moneda, id_metodo_pago) VALUES ('" . $last_id . "', 'Pesos', 'Efectivo', '" . $arr['montoPesosEfectivo'] . "', '" . $arr['tasa_peso'] . "', '', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
           $sql_metodos_pago = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle, id_moneda) VALUES ('" . $arr['montoPesosEfectivo'] . "', 'Pesos', '" . $arr['tasa_peso'] . "', 'Orden Nueva', '" . $newJson['responsable'] . "', 'Nueva Orden', " . ($idMoneda ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
         }
 
         if (floatval($arr['montoPesosTransferencia']) > 0) {
           list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Pesos', 'Transferencia');
           $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle, id_moneda, id_metodo_pago) VALUES ('" . $last_id . "', 'Pesos', 'Transferencia', '" . $arr['montoPesosTransferencia'] . "', '" . $arr['tasa_peso'] . "', '" . addslashes($arr['montoPesosTransferenciaDetalle'] ?? '') . "', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
         }
 
         if (floatval($arr['montoBolivaresEfectivo']) > 0) {
           list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Bolívares', 'Efectivo');
           $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle, id_moneda, id_metodo_pago) VALUES ('" . $last_id . "', 'Bolívares', 'Efectivo', '" . $arr['montoBolivaresEfectivo'] . "', '" . $arr['tasa_dolar'] . "', '', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
           $sql_metodos_pago = "INSERT INTO caja (monto, moneda, tasa, tipo, id_empleado, detalle, id_moneda) VALUES ('" . $arr['montoBolivaresEfectivo'] . "', 'Bolívares', '" . $arr['tasa_dolar'] . "', 'Orden Nueva', '" . $newJson['responsable'] . "', 'Nueva Orden', " . ($idMoneda ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
         }
 
         if (floatval($arr['montoBolivaresPunto']) > 0) {
           list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Bolívares', 'Punto');
           $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle, id_moneda, id_metodo_pago) VALUES ('" . $last_id . "', 'Bolívares', 'Punto', '" . $arr['montoBolivaresPunto'] . "', '" . $arr['tasa_dolar'] . "', '', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
         }
 
         if (floatval($arr['montoBolivaresPagomovil']) > 0) {
           list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Bolívares', 'Pagomovil');
           $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle, id_moneda, id_metodo_pago) VALUES ('" . $last_id . "', 'Bolívares', 'Pagomovil', '" . $arr['montoBolivaresPagomovil'] . "', '" . $arr['tasa_dolar'] . "', '" . addslashes($arr['montoBolivaresPagomovilDetalle'] ?? '') . "', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
         }
 
         if (floatval($arr['montoBolivaresTransferencia']) > 0) {
           list($idMoneda, $idMetodo) = resolverIdsMonedaMetodo($localConnection, 'Bolívares', 'Transferencia');
           $sql_metodos_pago = "INSERT INTO metodos_de_pago (id_orden, moneda, metodo_pago, monto, tasa, detalle, id_moneda, id_metodo_pago) VALUES ('" . $last_id . "', 'Bolívares', 'Transferencia', '" . $arr['montoBolivaresTransferencia'] . "', '" . $arr['tasa_dolar'] . "', '" . addslashes($arr['montoBolivaresTransferenciaDetalle'] ?? '') . "', " . ($idMoneda ?? 'NULL') . ", " . ($idMetodo ?? 'NULL') . ");";
-          $object['sql_metodos_pago'][] = $sql_metodos_pago;
+          // $object['sql_metodos_pago'][] = $sql_metodos_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
           $object['metodos_pago'][] = $localConnection->goQuery($sql_metodos_pago);
         }
       }
@@ -3780,7 +3780,7 @@ $object['sales_commission_ISSET'][] = false;
         $newJson['fechaEntrega'],
         date('Y-m-d'),
       ]);
-      $object['nueva_oreden_sql'] = $sql;
+      // $object['nueva_oreden_sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
       if (isset($nueva_oreden_response['status']) && $nueva_oreden_response['status'] === 'error') {
         throw new Exception("Error al crear la orden en BD: " . ($nueva_oreden_response['message'] ?? 'Desconocido'));
@@ -3795,7 +3795,7 @@ $object['sales_commission_ISSET'][] = false;
 
       if (!empty($newJson['obs'])) {
         $sql_obs = 'INSERT INTO ordenes_observaciones (id_orden, observaciones) VALUES (?, ?)';
-        $object['sql_observaciones'] = $sql_obs;
+        // $object['sql_observaciones'] = $sql_obs; // Removido para producción (auditoría de seguridad 2026-09-09)
         $localConnection->goQuery($sql_obs, [$last_id, $newJson['obs']]);
       }
 
@@ -3859,7 +3859,7 @@ $object['sales_commission_ISSET'][] = false;
           $params2[] = $multiplicador_porcentaje;
 
           $sql2 = 'INSERT INTO ordenes_productos (moment, precio_unitario, precio_woo, name, id_orden, id_woo, cantidad, id_category, category_name, id_size, talla, corte, id_tela, tela, id_products_attributes, multiplicador_porcentaje) VALUES (' . $values . ', ?, ?)';
-          $object['sql_ordenes_productos'] = $sql2;
+          // $object['sql_ordenes_productos'] = $sql2; // Removido para producción (auditoría de seguridad 2026-09-09)
           $producto_detalle_response = $localConnection->goQuery($sql2, $params2);
           $object['producto_detalle'][] = $producto_detalle_response;
 
@@ -4053,7 +4053,7 @@ $object['sales_commission_ISSET'][] = false;
       $estatusTerminado = 1;
       $sql = 'UPDATE disenos SET terminado = ' . $estatusTerminado . ' WHERE id_orden = ' . $miDiseno[0]['id_orden'] . ';';
       $miRevision = $localConnection->goQuery($sql);
-      $object['sql_revision'] = $sql;
+      // $object['sql_revision'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
       // Guard: no reactivar una orden que ya está terminada/entregada como
       // efecto secundario de aprobar una revisión de diseño -- este UPDATE
       // no validaba el estado actual en absoluto, así que una aprobación
@@ -4062,7 +4062,7 @@ $object['sales_commission_ISSET'][] = false;
       // POST /orden/actualizar-estado).
       $sql = "UPDATE ordenes SET status = 'activa' WHERE _id = " . $args['id_orden'] . " AND status NOT IN ('terminada', 'entregada');";
       $miRevision = $localConnection->goQuery($sql);
-      $object['sql_orden'] = $sql;
+      // $object['sql_orden'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
       // BUSCAR DATOS DE LA REVISON
       $sql = 'SELECT id_empleado, id_product FROM revisiones WHERE _id = ' . $args['id_revision'];
@@ -4093,7 +4093,7 @@ $object['sales_commission_ISSET'][] = false;
         $comision = $comision_tmp[0]['comision'];
         // Verificar si el pago existe
         /* $sql = "SELECT _id FROM pagos WHERE detalle = 'Diseño' AND id_empleado = " . $miDiseno[0]['id_empleado'] . ' AND id_orden = ' . $args['id_orden'];
-        $object['sql_pago_exist'] = $sql;
+        // $object['sql_pago_exist'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $miPago = $localConnection->goQuery($sql); */
 
         /*$object['id_woo'] = $idWoo[0]['id_woo'];
@@ -4150,11 +4150,11 @@ $object['sales_commission_ISSET'][] = false;
         } else {
             // UPDATE pagos
             $sqlPago = 'UPDATE pagos SET monto_pago = ' . $comision . ' WHERE id_orden = ' . $args['id_orden'] . ' AND id_empleado = ' . $miDiseno[0]['id_empleado'];
-            $object['sqlPago'] = $sqlPago;
+            // $object['sqlPago'] = $sqlPago; // Removido para producción (auditoría de seguridad 2026-09-09)
             $object['resultInsertPago'] = $localConnection->goQuery($sqlPago);
         } */
         $sqlPago = 'INSERT INTO pagos (cantidad, comision, comision_tipo, id_orden, estatus, monto_pago, id_empleado, detalle) VALUES (1, ' . $comision . ", '" . $comision_tipo . "',  " . $args['id_orden'] . ", 'aprobado' , " . $comision . ', ' . $miDiseno[0]['id_empleado'] . ", 'Diseño');";
-        $object['sql_pago'] = $sqlPago;
+        // $object['sql_pago'] = $sqlPago; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['resultInsertPago'] = $localConnection->goQuery($sqlPago);
       }
     }
@@ -4225,7 +4225,7 @@ $object['sales_commission_ISSET'][] = false;
     }
 
     $sql = 'UPDATE ordenes_fila_reposiciones SET orden_fila = ? WHERE id_reposicion = ?';
-    $object['sql_update_fila_reposicion'] = $sql;
+    // $object['sql_update_fila_reposicion'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['response'] = $localConnection->goQuery($sql, [intval($data['orden_fila']), intval($data['id_reposicion'])]);
 
     $localConnection->disconnect();
@@ -5731,7 +5731,7 @@ moment
   // tiene cliente vinculado (mismo criterio ya usado en /ordenes/nueva/custom).
   $id_wp_presupuesto = !empty($presupuesto['id_wp']) ? intval($presupuesto['id_wp']) : null;
 
-  $object['sql_orden'] = $sql_orden;
+  // $object['sql_orden'] = $sql_orden; // Removido para producción (auditoría de seguridad 2026-09-09)
   $localConnection->goQuery($sql_orden, [
     $id_wp_presupuesto,
     $presupuesto['tipo'],

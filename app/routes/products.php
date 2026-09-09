@@ -390,7 +390,7 @@ return function (App $app) {
       $sqlParams = [$data['comision'], $data['id_product'], $data['id_departamento']];
     }
 
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
     $object['response'] = $tmpConnection->goQuery($sql, $sqlParams);
 
@@ -587,7 +587,7 @@ return function (App $app) {
         }
 
         $queryResult = $tmpConnection->goQuery($sql, [$comision, $id_product, $id_departamento]);
-        $operationResult['sql'] = $sql;
+        // $operationResult['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $operationResult['response'] = $queryResult;
 
         // Recálculo retroactivo en pagos (para lotes no pagados)
@@ -1286,7 +1286,7 @@ return function (App $app) {
     // $sql = 'UPDATE departamentos SET orden_proceso = (orden_proceso + 1) WHERE orden_proceso > ' . $data['orden_proceso_cur'] . ';';
     $localConnection->goQuery('UPDATE departamentos SET orden_proceso = ? WHERE _id = ?', [$data['orden_proceso'], $data['id_departamento']]);
     $sql = 'SELECT _id, departamento, orden_proceso FROM departamentos WHERE _id = ? ORDER BY orden_proceso ASC';
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['response'] = $localConnection->goQuery($sql, [$data['id_departamento']]);
 
     $localConnection->disconnect();
@@ -1792,7 +1792,7 @@ return function (App $app) {
     // VERIFICAR REGISTRO EN lotes_detalles_empleados_asigandos
     $sql2 = "SELECT _id cantida_registros FROM lotes_detalles_empleados_asignados WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']}";
     $resultados = $localConnection->goQuery($sql2);
-    $object['sql_verificar'] = $sql;
+    // $object['sql_verificar'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['result_verificar'] = $resultados;
 
     if (empty($resultados)) {
@@ -1801,7 +1801,7 @@ return function (App $app) {
       $sql = "UPDATE lotes_detalles_empleados_asignados SET id_empleado = {$miEmpleado['id_empleado']}, procentaje_comision = {$miEmpleado['porcentaje']}, id_departamento = {$miEmpleado['id_departamento']} WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']}";
     }
     $afectarEmpleado = $localConnection->goQuery($sql);
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['result'] = $afectarEmpleado;
 
     // ACTUALIZAR id_departamento_actual EN LOTES si es necesario

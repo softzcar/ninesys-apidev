@@ -400,7 +400,7 @@ return function (App $app) {
 
     // ELIMINAR DISEÑO Y REVISIONES
     $sql = 'DELETE FROM revisiones WHERE id_orden =  ' . $data['id_orden'] . ' AND id_empleado = ' . $data['id_empleado'] . ';';
-    $object['response_delete_diseno_sql'] = $sql;
+    // $object['response_delete_diseno_sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['response_delete_diseno'] = $localConnection->goQuery($sql);
     $sql = 'DELETE FROM disenos WHERE _id =  ' . $data['id_diseno'] . ';';
     $object['response_delete_diseno_sql'] .= $sql;
@@ -408,7 +408,7 @@ return function (App $app) {
 
     // ELIMINAR PAGOS
     $sql = 'DELETE FROM pagos WHERE id_empleado =  ' . $data['id_empleado'] . ' AND id_orden = ' . $data['id_orden'] . ';';
-    $object['response_delete_pagos_sql'] = $sql;
+    // $object['response_delete_pagos_sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $object['response_delete_pagos'] = $localConnection->goQuery($sql);
 
     $localConnection->commit();

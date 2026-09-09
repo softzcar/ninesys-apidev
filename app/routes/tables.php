@@ -319,12 +319,12 @@ return function (App $app) {
       $sql2 = 'DELETE FROM presupuestos WHERE _id = ' . $id;
       $localConnection->goQuery($sql1);
       $localConnection->goQuery($sql2);
-      $object['sql_delete'] = "$sql1; $sql2";
+      // $object['sql_delete'] = "$sql1; $sql2"; // Removido para producción (auditoría de seguridad 2026-09-09)
     } else {
       // Eliminar borrador
       $sql = 'DELETE FROM ordenes_tmp WHERE _id =  ' . $id;
       $localConnection->goQuery($sql);
-      $object['sql_delete'] = $sql;
+      // $object['sql_delete'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     }
 
     $object['response_delete'] = "OK";
@@ -431,7 +431,7 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     $sql = 'INSERT INTO ordenes_tmp (form, id_empleado, tipo) VALUES (?, ?, ?)';
-    $object['sql_insert'] = $sql;
+    // $object['sql_insert'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
     $localConnection->goQuery($sql, [$data['form'], $data['id_empleado'], $data['tipo']]);
 
     if (DB_DRIVER === 'pgsql') {
@@ -517,7 +517,7 @@ return function (App $app) {
         }
     }
     $object['items'] = $results;
-    $object['sql'] = $sql;
+    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
 
     $localConnection->disconnect();
 

@@ -185,8 +185,13 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
 
-        // Decodificar el campo `departamentos` y `carga_familiar`
+        // Decodificar el campo `departamentos` y `carga_familiar`, y quitar la
+        // clave real -- este listado la devolvía en texto plano a cualquiera
+        // que pudiera llamar el endpoint (auditoría de seguridad 2026-09-09).
+        // El formulario de edición ya no la necesita: dejar el campo de clave
+        // en blanco significa "no cambiarla" (ver /empleados/editar).
         foreach ($items as &$item) {
+            unset($item['password']);
             if (!empty($item['departamentos'])) {
                 $item['departamentos'] = json_decode($item['departamentos'], true);
             }
@@ -553,15 +558,24 @@ return function (App $app) {
         }
         // Para 'variable' no se actualiza ningún campo de comisión
 
-        // Actualizar empleado
-        $sql = 'UPDATE api_empresas.empresas_usuarios SET nombre = ?, acceso = ?, password = ?, email = ?, telefono = ?, comision_tipo = ?, comision = ?, comision_porcentaje = ?, salario_tipo = ?, salario_monto = ?, salario_periodo = ?, dni = ?, fecha_ingreso = ?, id_seguridad_social = ? WHERE id_usuario = ?';
-        $params = [
-            $miEmpleado['nombre'], $miEmpleado['acceso'], $miEmpleado['password'], $miEmpleado['email'],
-            $miEmpleado['telefono'], $miEmpleado['comsion_tipo'], $comision, $comision_porcentaje,
+        // Actualizar empleado. La clave solo se actualiza si el admin escribió
+        // una nueva -- dejar el campo en blanco significa "no cambiarla" (ver
+        // auditoría de seguridad 2026-09-09: antes el formulario precargaba la
+        // clave real del empleado en texto plano para poder reenviarla igual
+        // si no se tocaba, y la API la devolvía en claro en GET /empleados).
+        $cambiarClave = isset($miEmpleado['password']) && $miEmpleado['password'] !== '';
+        $sql = 'UPDATE api_empresas.empresas_usuarios SET nombre = ?, acceso = ?' . ($cambiarClave ? ', password = ?' : '') . ', email = ?, telefono = ?, comision_tipo = ?, comision = ?, comision_porcentaje = ?, salario_tipo = ?, salario_monto = ?, salario_periodo = ?, dni = ?, fecha_ingreso = ?, id_seguridad_social = ? WHERE id_usuario = ?';
+        $params = [$miEmpleado['nombre'], $miEmpleado['acceso']];
+        if ($cambiarClave) {
+            $params[] = $miEmpleado['password'];
+        }
+        array_push(
+            $params,
+            $miEmpleado['email'], $miEmpleado['telefono'], $miEmpleado['comsion_tipo'], $comision, $comision_porcentaje,
             $miEmpleado['salario_tipo'], $miEmpleado['salario'], $miEmpleado['periodo_pago'], $miEmpleado['id_legal'],
             $miEmpleado['fecha_ingreso'], $miEmpleado['id_seguridad_social'], (int) $miEmpleado['_id'],
-        ];
-        $object['response'] = json_encode($localConnection->goQuery($sql, $params));
+        );
+        $localConnection->goQuery($sql, $params);
 
         // Limpiar registros anteriores -- SOLO de esta empresa (una identidad puede
         // tener asignaciones de departamento en otra(s) empresa(s) también, no se tocan).
@@ -571,11 +585,11 @@ return function (App $app) {
         // Insertar nuevas asiganciones de departamentos
         $misDeps = explode(',', $miEmpleado['departamentos']);
 
-        $object['sql_update'] = [];
+        // $object['sql_update'] = []; // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['response_update'] = [];
         foreach ($misDeps as $id_dep) {
             $sql = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, ?, ?)';
-            $object['sql_update'][] = $sql;
+            // $object['sql_update'][] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
             $object['response_update'][] = json_encode($localConnection->goQuery($sql, [(int) $miEmpleado['_id'], (int) $id_dep, ID_EMPRESA]));
         }
 
@@ -927,7 +941,7 @@ return function (App $app) {
             WHERE a.activo = 1 AND ((b.moment LIKE '" . $fecha . "%') OR (b.moment IS NULL))
             ORDER BY a.nombre ASC;";
         }
-        $object['sql_diarias'] = $sql;
+        // $object['sql_diarias'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $mod_date = strtotime($date . '+ 0 days');
         $object['diarias'] = $localConnection->goQuery($sql);
 
