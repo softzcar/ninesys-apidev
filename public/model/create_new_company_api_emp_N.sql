@@ -270,9 +270,31 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    NULL,
-    NULL,
-    NULL,
+    'Hola [CLIENTE], gracias por tu pedido #[ORDEN_ID].
+
+Productos:
+[PRODUCTOS]
+
+Total: $[TOTAL_ORDEN]
+Fecha de entrega estimada: [FECHA_ENTREGA]
+
+Ya comenzamos a trabajar en tu pedido. Te mantendremos informado sobre su avance.',
+    'Hola [CLIENTE], tu pedido #[ORDEN_ID] ya está terminado.
+
+Productos:
+[PRODUCTOS]
+
+Total: $[TOTAL_ORDEN]
+
+Puedes coordinar la entrega o retiro cuando lo prefieras. Gracias por tu confianza.',
+    'Hola [CLIENTE], este es el estado de cuenta de tu pedido #[ORDEN_ID]:
+
+Total: $[TOTAL_ORDEN]
+Abonado: $[TOTAL_ABONOS]
+Descuentos: $[TOTAL_DESCUENTOS]
+Saldo pendiente: $[TOTAL_DEUDA]
+
+Quedamos atentos para coordinar el pago.',
     0,
     0,
     1,
@@ -397,7 +419,7 @@ VALUES (
     'Impresión',
     1,
     1,
-    NULL,
+    'Hola [CLIENTE], tu pedido #[ORDEN_ID] avanzó al proceso de impresión. Te avisaremos cuando continúe al siguiente paso.',
     'impresion',
     '2025-09-24 19:50:20'
   ),
@@ -408,7 +430,7 @@ VALUES (
     'Estampado',
     1,
     1,
-    NULL,
+    'Hola [CLIENTE], tu pedido #[ORDEN_ID] avanzó al proceso de estampado. Te avisaremos cuando continúe al siguiente paso.',
     'estampado',
     '2025-09-24 19:50:20'
   ),
@@ -419,7 +441,7 @@ VALUES (
     'Corte',
     1,
     1,
-    NULL,
+    'Hola [CLIENTE], tu pedido #[ORDEN_ID] avanzó al proceso de corte. Te avisaremos cuando continúe al siguiente paso.',
     'corte',
     '2025-09-24 19:50:20'
   ),
@@ -430,7 +452,7 @@ VALUES (
     'Costura',
     1,
     1,
-    NULL,
+    'Hola [CLIENTE], tu pedido #[ORDEN_ID] avanzó al proceso de costura. Te avisaremos cuando continúe al siguiente paso.',
     'costura',
     '2025-09-24 19:50:20'
   ),
