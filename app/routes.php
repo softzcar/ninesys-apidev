@@ -849,8 +849,12 @@ return function (App $app) {
       $nombre = 'Administrador';  // Definir nombre por defecto para el administrador
 
       // 4. Crear registro en empresas_usuarios
+      // $password_generated se guarda hasheada (Fase 3, auditoría de
+      // seguridad 2026-09-10) -- la respuesta más abajo sigue devolviendo el
+      // valor en claro una sola vez, para que el operador lo vea; lo único
+      // que cambia es lo que se persiste en la base de datos.
       $stmt = $pdo->prepare('INSERT INTO empresas_usuarios (nombre, email, password, departamento, id_empresa, activo, acceso, comision, comision_tipo, comision_porcentaje, salario_monto, salario_periodo) VALUES (?, ?, ?, ?, ?, 1, 1, 1.00, ?, 0.00, ?, ?)');
-      $stmt->execute([$nombre, $email, $password_generated, 'Administración', $id_empresa, 'fija', 200.00, 'semanal']);
+      $stmt->execute([$nombre, $email, hashearClave($password_generated), 'Administración', $id_empresa, 'fija', 200.00, 'semanal']);
       $id_usuario = $pdo->lastInsertId();
       error_log("DEBUG: Usuario creado con ID: {$id_usuario}");
 
@@ -977,7 +981,7 @@ return function (App $app) {
           $empleado_data['nombre'],
           $empleado_data['email'],
           $empleado_data['telefono'],
-          $empleado_data['password'],
+          hashearClave($empleado_data['password']),
           $empleado_data['departamento'],
           $id_empresa,
           $empleado_data['comision'],

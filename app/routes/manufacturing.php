@@ -3850,6 +3850,9 @@ return function (App $app) {
       } else {
         $item['carga_familiar'] = [];
       }
+      // password nunca debe viajar al frontend (auditoría de seguridad
+      // 2026-09-09/10, mismo criterio que GET /empleados).
+      unset($item['password']);
     }
 
     $object['items'] = $items;

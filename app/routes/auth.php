@@ -55,9 +55,11 @@ return function (App $app) {
         }
 
         $usuario_data = null;
-        // Buscar entre los resultados si alguno coincide con la contraseña
+        // Buscar entre los resultados si alguno coincide con la contraseña --
+        // hash o texto plano legado, ver PasswordHelper.php (Fase 3, auditoría
+        // de seguridad 2026-09-10).
         foreach ($credenciales as $posible_usuario) {
-            if ($posible_usuario['password'] === $datosAcceso['password']) {
+            if (verificarClave($datosAcceso['password'], $posible_usuario['password'])) {
                 $usuario_data = $posible_usuario;
                 break;
             }
@@ -69,11 +71,19 @@ return function (App $app) {
         }
 
         // Paso 2: Verificar contraseña ANTES de cualquier otra validación
-        if ($usuario_data['password'] !== $datosAcceso['password']) {
+        if (!verificarClave($datosAcceso['password'], $usuario_data['password'])) {
             $object['msg'] = 'Los datos de acceso proporcionados no son correctos';
             $object['data']['access'] = false;
             $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        // Migración transparente a hash (Fase 3): si la clave todavía estaba
+        // en texto plano (o el hash quedó con un algoritmo desactualizado),
+        // se rehashea en este mismo request -- nadie pierde acceso, no hace
+        // falta avisar a nadie ni resetear nada en bloque.
+        if (necesitaRehash($usuario_data['password'])) {
+            $localConnection->goQuery('UPDATE empresas_usuarios SET password = ? WHERE id_usuario = ?', [hashearClave($datosAcceso['password']), $usuario_data['id_usuario']]);
         }
 
         // Paso 2.5: Resolver a qué empresa se conecta esta identidad -- una persona puede
@@ -439,8 +449,9 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(502);
         }
 
-        // Recién acá, con el envío confirmado, se guarda la clave nueva.
-        $localConnection->goQuery('UPDATE empresas_usuarios SET password = ? WHERE id_usuario = ?', [$claveNueva, $usuario['id_usuario']]);
+        // Recién acá, con el envío confirmado, se guarda la clave nueva --
+        // siempre hasheada (Fase 3, auditoría de seguridad 2026-09-10).
+        $localConnection->goQuery('UPDATE empresas_usuarios SET password = ? WHERE id_usuario = ?', [hashearClave($claveNueva), $usuario['id_usuario']]);
         $localConnection->disconnect();
 
         $response->getBody()->write(json_encode(['message' => 'Se envió una nueva clave a su WhatsApp registrado.']));
@@ -479,7 +490,9 @@ return function (App $app) {
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
         // 1. Obtener datos del usuario
-        $sql_user = 'SELECT id_usuario, email, password, nombre, telefono, departamento, id_empresa, activo, acceso, comision FROM empresas_usuarios WHERE id_usuario = ?';
+        // password NO se incluye -- este endpoint no la usa para nada (Fase 3,
+        // auditoría de seguridad 2026-09-10).
+        $sql_user = 'SELECT id_usuario, email, nombre, telefono, departamento, id_empresa, activo, acceso, comision FROM empresas_usuarios WHERE id_usuario = ?';
         $credenciales = $localConnection->goQuery($sql_user, [$id_usuario]);
 
         if (empty($credenciales)) {
@@ -629,13 +642,29 @@ return function (App $app) {
             a.email usuario_email,
             a.telefono usuario_email,
             a.departamento usuario_departamento,
-            a.nombre usuario_nombre
+            a.nombre usuario_nombre,
+            a.password usuario_password
         FROM
             empresas_usuarios a
         JOIN empresas b ON a.id_empresa = b.id_empresa
         WHERE
-            a.email = ? AND a.password = ?";
-        $resp = $localConnection->goQuery($sql, [$datosAcceso['username'] ?? '', $datosAcceso['password'] ?? '']);
+            a.email = ?";
+        $candidatos = $localConnection->goQuery($sql, [$datosAcceso['username'] ?? '']);
+
+        // La contraseña ya no se compara en SQL (Fase 3, auditoría de
+        // seguridad 2026-09-10) -- puede estar hasheada o en texto plano
+        // legado, ver PasswordHelper.php.
+        $resp = [];
+        foreach ($candidatos as $candidato) {
+            if (verificarClave($datosAcceso['password'] ?? '', $candidato['usuario_password'])) {
+                if (necesitaRehash($candidato['usuario_password'])) {
+                    $localConnection->goQuery('UPDATE empresas_usuarios SET password = ? WHERE id_usuario = ?', [hashearClave($datosAcceso['password']), $candidato['usuario_id']]);
+                }
+                unset($candidato['usuario_password']);
+                $resp = [$candidato];
+                break;
+            }
+        }
 
         if (empty($resp)) {
             $object['access'] = false;

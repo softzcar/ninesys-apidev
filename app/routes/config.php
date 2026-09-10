@@ -235,7 +235,7 @@ return function (App $app) {
 
         if (isset($data['password']) && $data['password'] !== 'null' && !empty($data['password'])) {
             $updateFields[] = 'password = ?';
-            $params[] = $data['password'];
+            $params[] = hashearClave($data['password']);
         }
 
         $updateFields[] = 'fecha_actualizacion = NOW()';

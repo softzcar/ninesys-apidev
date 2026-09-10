@@ -446,7 +446,7 @@ return function (App $app) {
             $miEmpleado['telefono'],
             $miEmpleado['nombre'],
             ID_EMPRESA,
-            $miEmpleado['password'],
+            hashearClave($miEmpleado['password']),
             $miEmpleado['salario_tipo'],
             $miEmpleado['salario'],
             $miEmpleado['periodo_pago'],
@@ -567,7 +567,7 @@ return function (App $app) {
         $sql = 'UPDATE api_empresas.empresas_usuarios SET nombre = ?, acceso = ?' . ($cambiarClave ? ', password = ?' : '') . ', email = ?, telefono = ?, comision_tipo = ?, comision = ?, comision_porcentaje = ?, salario_tipo = ?, salario_monto = ?, salario_periodo = ?, dni = ?, fecha_ingreso = ?, id_seguridad_social = ? WHERE id_usuario = ?';
         $params = [$miEmpleado['nombre'], $miEmpleado['acceso']];
         if ($cambiarClave) {
-            $params[] = $miEmpleado['password'];
+            $params[] = hashearClave($miEmpleado['password']);
         }
         array_push(
             $params,
@@ -754,7 +754,7 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
         }
 
-        if ($usuarios[0]['password'] !== $claveActual) {
+        if (!verificarClave($claveActual, $usuarios[0]['password'])) {
             $localConnection->disconnect();
             $response->getBody()->write(json_encode(['error' => 'La clave actual no es correcta.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
@@ -766,7 +766,10 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
-        $localConnection->goQuery('UPDATE empresas_usuarios SET password = ? WHERE id_usuario = ?', [$claveNueva, $idUsuario]);
+        // La clave nueva siempre se guarda hasheada (Fase 3, auditoría de
+        // seguridad 2026-09-10) -- sin importar si la anterior todavía estaba
+        // en texto plano.
+        $localConnection->goQuery('UPDATE empresas_usuarios SET password = ? WHERE id_usuario = ?', [hashearClave($claveNueva), $idUsuario]);
         $localConnection->disconnect();
 
         $response->getBody()->write(json_encode(['message' => 'Clave actualizada correctamente.']));
