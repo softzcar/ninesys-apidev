@@ -43,9 +43,24 @@ return function (App $app) {
   }
 
   $app->options('/{routes:.*}', function (Request $request, Response $response, array $args) {
-    // CORS Pre-Flight OPTIONS Request Handler
+    // CORS Pre-Flight OPTIONS Request Handler -- en la práctica CorsMiddleware
+    // (registrado globalmente en app/middleware.php) intercepta TODAS las
+    // peticiones OPTIONS antes de que lleguen a esta ruta, así que esto es
+    // inalcanzable hoy -- se deja corregido igual, por si el orden de
+    // middleware cambia en el futuro, para no dejar un '*' obsoleto.
+    $origin = $request->getHeaderLine('Origin');
+    $allowedOrigins = [
+      'https://app.ninesys19.com',
+      'https://app.nineteengreen.com',
+      'https://setup.ninesys19.com',
+      'https://setup.nineteengreen.com',
+      'http://localhost:3000',
+    ];
+    if (in_array($origin, $allowedOrigins, true)) {
+      $response = $response->withHeader('Access-Control-Allow-Origin', $origin);
+    }
     return $response
-      ->withHeader('Access-Control-Allow-Origin', '*')
+      ->withHeader('Vary', 'Origin')
       ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
       ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
       ->withHeader('Content-Type', 'application/json')
