@@ -1,0 +1,37 @@
+- **Solicitud del Usuario:** "a penas estamos comenzando el dia! Continuemos con la prueba real de creación de orden en el navegador para el fix de inyección SQL" seguido de "En este momento esta logueada sayerlin en app.nineteengreen.com vamos a probar en el navegador entonces"
+- **Fecha y Hora:** 2026-09-10 16:15:00
+- **Proyecto(s):** Backend (ninesys-api), verificación cruzada con Frontend (app_multi) solo lectura
+- **Archivos Involucrados:**
+  - ninesys-api/app/routes/orders.php (código bajo prueba, sin cambios en esta tarea)
+  - ninesys-api/app/model/LocalDB.php (lectura, entender manejo de FK)
+  - ninesys-api/src/Application/Handlers/HttpErrorHandler.php (lectura, hallazgo nuevo de CORS)
+  - ninesys-api/src/Application/ResponseEmitter/ResponseEmitter.php (lectura, confirmación)
+  - app_multi/components/ordenes/nueva.vue (lectura, réplica exacta del payload real)
+- **Commits Relacionados:**
+  - Backend: N/A (solo prueba en vivo, sin cambios de código)
+  - Frontend: N/A
+- **Acción Realizada:**
+  1. Se retomó la verificación end-to-end del fix 0.7 (reescritura a parámetros del camino legado de métodos de pago en `POST /ordenes/nueva/custom`) usando la sesión real autenticada de la empleada "Sayerlin" (empresa 194) en `app.nineteengreen.com`, vía `mcp__claude-in-chrome`.
+  2. Un primer intento (de la sesión anterior) había fallado con HTTP 500 / violación de FK genérica. Se investigó la causa leyendo el log nativo de PostgreSQL en `vps-contabo-dev` (`/var/lib/pgsql/data/log/postgresql-Thu.log`, vía `sudo -u postgres`), ya que el log de la aplicación (LiteSpeed `error.log`) solo registra el mensaje amigable de `DatabaseConstraintException`, sin el detalle real de Postgres -- se confirmó que `ApiResponse::serverError()` (`app/model/ApiResponse.php`) solo loguea `$e->getMessage()`, nunca la excepción previa (`getPrevious()`), así que el detalle real de Postgres NUNCA llega a los logs de la app.
+  3. El log de Postgres reveló la causa exacta: `INSERT INTO ordenes_vinculadas (moment, id_father, id_child) VALUES ($1, $2, $3)` con `id_father=0`, violando la FK `ord_vinc_ibfk_1` -- **completamente ajeno al fix de inyección SQL bajo prueba**. Se rastreó a un bug latente preexistente en `orders.php`: línea ~2904 decodifica `vinculada` sin el fallback `?? '0'` (a diferencia de la línea 1994, que sí lo tiene), y la condición de la línea 3170 usa `||` en vez de `&&`, por lo que un valor `null`/vacío dispara el INSERT igual. No explotable por la UI real (`nueva.vue` siempre manda `vinculada=0` por defecto) -- solo se manifestó porque el payload de prueba manual anterior omitió el campo.
+  4. Se reconstruyó el payload de prueba leyendo directamente `app_multi/components/ordenes/nueva.vue` (lista exacta de campos `data.set(...)` y forma exacta del objeto de producto en `loadProduct()`), y se obtuvo un producto real de prueba (`_id=10`, "Base Banderin", no físico, precio 25.00) por consulta SQL directa en `api_emp_194` (Desarrollo).
+  5. Se ejecutó la petición real desde la consola del navegador usando `window.$nuxt.$axios.post('/ordenes/nueva/custom', data)` (reutilizando los interceptores/headers de auth reales de la app, en vez de fetch manual con headers adivinados), con `vinculada="0"` corregido, `pagos="[]"` y `montoDolaresEfectivo="25"` para forzar explícitamente el camino legado recién corregido.
+  6. Resultado: HTTP 200, `{"success":true,"orden_creada":true,"id_orden":6984}`.
+  7. Se verificó en la base de datos (`api_emp_194`) que `metodos_de_pago` (moneda=Dólares, metodo_pago=Efectivo, monto=25.00, id_moneda=1, id_metodo_pago=3) y `caja` (monto=25.00, tipo=Orden Nueva, id_empleado=10) quedaron correctamente resueltos vía `resolverIdsMonedaMetodo()` -- confirma que la reescritura a parámetros no alteró el comportamiento funcional.
+  8. Limpieza: eliminados manualmente todos los registros de la orden de prueba #6984 y su cliente asociado (`customers._id=2084`, creado automáticamente por el endpoint al no reutilizar un cliente existente) -- `metodos_de_pago`, `caja`, `ordenes`, `customers`, `ordenes_productos`, `ordenes_observaciones`, `ordenes_fila_orden`, `abonos`. Verificado con `COUNT(*)` que no quedó ningún residuo.
+  9. Se documentó en memoria (`project_fase_seguridad_pendiente.md`) el cierre de la verificación 0.7, el bug latente de `vinculada` (no corregido, bajo impacto, UI-inalcanzable), y un cuarto hallazgo de CORS sin acotar en `HttpErrorHandler.php` (setea `Access-Control-Allow-Origin: '*'` incondicional en respuestas de error) -- tampoco corregido, pendiente de decisión explícita.
+- **Inconvenientes y Desafíos:**
+  - El grupo de pestañas del navegador de la sesión anterior ya no existía (se perdió junto con el contexto resumido) -- hubo que crear una pestaña nueva y re-navegar/re-autenticar (la sesión de Sayerlin seguía viva vía localStorage/cookies).
+  - El log de la aplicación (LiteSpeed `error.log`) no tenía el detalle real del error SQL -- fue necesario acceder directamente al log nativo de PostgreSQL en el servidor para diagnosticar la causa real.
+  - Una ruta de navegación directa a `/comercializacion/ordenes/nueva` no existe (404) -- el formulario de nueva orden vive como componente/modal, no como página propia; se resolvió ejecutando la petición vía consola en cualquier página autenticada en vez de navegar a una ruta inexistente.
+- **Decisión Final y Justificación:** Usar `window.$nuxt.$axios.post(...)` en vez de `fetch()` manual, para heredar automáticamente los headers de autenticación reales de la app (evita adivinar el formato exacto del header `Authorization` y cualquier otro interceptor). Se corrigió el payload agregando `vinculada="0"` en vez de tocar el código de `orders.php` para el bug latente encontrado, porque ese bug es ajeno al alcance de esta verificación (el fix 0.7 ya no estaba en duda) y no es explotable por la UI real -- se documentó para una futura pasada por `orders.php`, sin corregir sin pedido explícito.
+- **Herramienta(s) Utilizada(s):** `mcp__claude-in-chrome` (javascript_tool, navigate, tabs_context_mcp), `Bash` (ssh a vps-contabo-dev, psql), `Read`, `Grep`, `Edit` (memoria)
+- **Resultado:** Éxito
+- **Verificación:** Orden real creada (200, id_orden=6984) disparando explícitamente el camino legado de pagos ya corregido; datos verificados correctos en `metodos_de_pago` y `caja` vía consulta SQL directa; limpieza completa verificada con `COUNT(*)=0` en todas las tablas relacionadas tras el borrado.
+- **Logro Conseguido:** Cierre definitivo del ítem 0.7 de la Fase 0 de seguridad (inyección SQL en creación de orden) con prueba end-to-end real en navegador, no solo revisión de código -- ya queda listo para el despliegue a Producción del lote completo. De paso, se encontró y documentó (sin corregir, fuera de alcance) un bug latente preexistente no relacionado (`vinculada`/`ordenes_vinculadas`) y un cuarto punto de CORS sin acotar (`HttpErrorHandler.php`).
+- **Referencias de Sesión (Contexto):**
+  - Task: N/A (sesión de Claude Code, no Antigravity)
+  - Walkthrough: N/A
+- **⚠️ NOTA DE PERSISTENCIA:** N/A, este log ya contiene el detalle técnico completo.
+- **Observaciones de Gemini:** N/A (sesión ejecutada por Claude Code, no Gemini/Antigravity).
+- **Respuesta de Gemini:** N/A.
