@@ -4985,7 +4985,10 @@ $object['sales_commission_ISSET'][] = false;
    * inteligentes durante la creación conversacional de órdenes.
    */
   $app->post('/ordenes/contexto-ia', function (Request $request, Response $response) {
-    $empresaId = $request->getHeader('Authorization')[0] ?? null;
+    // Auditoría de seguridad 2026-09-10: releía Authorization a mano; con el
+    // middleware tri-modal ese header puede ser "Bearer <jwt>". ID_EMPRESA ya
+    // está resuelto correctamente por IdEmpresaMiddleware en los 3 modos.
+    $empresaId = ID_EMPRESA;
     $localConnection = new LocalDB($empresaId);
 
     try {

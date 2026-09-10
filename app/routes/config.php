@@ -1472,7 +1472,11 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
-        $id_empresa = $request->getHeader('Authorization')[0] ?? 0;
+        // Auditoría de seguridad 2026-09-10: releía Authorization a mano; con
+        // el middleware tri-modal ese header puede ser "Bearer <jwt>", que
+        // rompería esta comparación. ID_EMPRESA ya está resuelto correctamente
+        // por IdEmpresaMiddleware sin importar el modo de autenticación.
+        $id_empresa = ID_EMPRESA ?? 0;
         if (!$id_empresa || $id_empresa == 0) {
             $object['message'] = 'No se pudo identificar la empresa';
             $response->getBody()->write(json_encode($object));

@@ -271,6 +271,11 @@ return function (App $app) {
         $object['empresa']['activo'] = $empresa_data['activo'];
 
         if ($login_successful) {
+            // Sesión real (JWT) -- auditoría de seguridad 2026-09-10, ver
+            // memoria de seguridad (hallazgo C2). Campo adicional, no
+            // reemplaza nada de la respuesta existente; el frontend lo usa
+            // gradualmente (ver app_multi/plugins/axios-interceptor.js).
+            $object['token'] = generarJwtSesion($usuario_data, (int) $empresa_data['id_empresa']);
             $object['msg'] = 'Bienvenido ' . $usuario_data['nombre'] . '.';
             $object['data']['access'] = true;
             $object['company_full_config'] = true;
@@ -648,12 +653,16 @@ return function (App $app) {
 
         $localConnection->disconnect();
 
+        // El header Authorization con un Bearer decorativo se quitó (auditoría
+        // de seguridad 2026-09-10): era generateRandomToken() sin firma ni
+        // validación en ningún middleware -- el único consumidor
+        // (msg_ninesys/controllers/authController.js) nunca lo leía, solo usa
+        // el `access` del body para generar su propio JWT con su propio secreto.
         $response = $response
             ->withHeader('Access-Control-Allow-Origin', '*')
             ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
             ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
             ->withHeader('Content-Type', 'application/json')
-            ->withHeader('Authorization', 'Bearer ' . generateRandomToken())  // Añade el token en la cabecera
             ->withStatus(200);
 
         $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));

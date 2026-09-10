@@ -14,33 +14,13 @@ return function (App $app) {
   // $app->add(new CorsMiddleware());
   // $app->add(new IdEmpresaMiddleware());
 
-  function generateRandomToken($length = 32)
-  {
-    return bin2hex(random_bytes($length));
-  }
-
   // /setup/user (POST/PUT/DELETE) crea/edita/elimina empresas completas
   // (incluye DROP DATABASE) y no tenía NINGÚN control de autenticación --
   // cualquiera en Internet podía borrar cualquier empresa no protegida por
   // el hardcode de id_empresa 163/194 (auditoría de seguridad 2026-09-09).
-  // Mismo token/patrón ya usado para las rutas /internal/* de
-  // msg_service.php (X-Internal-Token + hash_equals, comparación
-  // constant-time). Devuelve null si el token es válido, o la Response 401
-  // ya lista para retornar si no lo es.
-  function validarTokenInternoSetup(Request $request, Response $response): ?Response
-  {
-    $providedToken = $request->getHeaderLine('X-Internal-Token');
-    $expectedToken = getenv('MSG_SERVICE_INTERNAL_TOKEN') ?: '';
-
-    if ($expectedToken === '' || !hash_equals($expectedToken, $providedToken)) {
-      $response->getBody()->write(json_encode([
-        'error' => 'Unauthorized',
-        'message' => 'Token interno inválido o ausente.'
-      ]));
-      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
-    }
-    return null;
-  }
+  // La validación en sí (antes duplicada aquí como validarTokenInternoSetup())
+  // se unificó en app/lib/InternalAuth.php::validarTokenInterno() junto con
+  // la de /internal/* de msg_service.php (auditoría de seguridad 2026-09-10).
 
   $app->options('/{routes:.*}', function (Request $request, Response $response, array $args) {
     // CORS Pre-Flight OPTIONS Request Handler -- en la práctica CorsMiddleware
@@ -526,7 +506,7 @@ return function (App $app) {
   });
   // PUT /setup/user - Editar email del empleado
   $app->put('/setup/user', function (Request $request, Response $response) {
-    if ($errorResponse = validarTokenInternoSetup($request, $response)) {
+    if ($errorResponse = validarTokenInterno($request, $response)) {
       return $errorResponse;
     }
     $data = json_decode($request->getBody()->getContents(), true);
@@ -596,7 +576,7 @@ return function (App $app) {
   });
   // DELETE /setup/user/{id} - Eliminar usuario
   $app->delete('/setup/user/{id}', function (Request $request, Response $response, array $args) {
-    if ($errorResponse = validarTokenInternoSetup($request, $response)) {
+    if ($errorResponse = validarTokenInterno($request, $response)) {
       return $errorResponse;
     }
     $id_empleado = $args['id'];
@@ -696,7 +676,7 @@ return function (App $app) {
   });
   // POST /setup/user - Crear nuevo usuario (empleado)
   $app->post('/setup/user', function (Request $request, Response $response) {
-    if ($errorResponse = validarTokenInternoSetup($request, $response)) {
+    if ($errorResponse = validarTokenInterno($request, $response)) {
       return $errorResponse;
     }
     $data = json_decode($request->getBody()->getContents(), true);

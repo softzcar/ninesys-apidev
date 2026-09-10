@@ -27,6 +27,11 @@ return function (App $app) {
      */
     $app->get('/internal/db-credentials/{id_empresa}', function (Request $request, Response $response, $args) {
         // --- 1. Validar token interno (comparación constant-time) ---
+        // Deliberadamente NO se generalizó a validarTokenInterno() (que
+        // acepta también PRINT_SERVICE_INTERNAL_TOKEN): este endpoint
+        // devuelve credenciales REALES de conexión a base de datos, solo
+        // msg_ninesys debe poder pedirlas -- no se amplía ese alcance sin
+        // necesidad real (auditoría de seguridad 2026-09-10).
         $providedToken = $request->getHeaderLine('X-Internal-Token');
         $expectedToken = getenv('MSG_SERVICE_INTERNAL_TOKEN') ?: '';
 
@@ -193,6 +198,12 @@ return function (App $app) {
      *   - dias_laborales_invalid_items  (+ `invalid: [...]`)
      */
     $app->get('/internal/business-hours', function (Request $request, Response $response) {
+        // Auditoría de seguridad 2026-09-10: este endpoint /internal/* no
+        // validaba X-Internal-Token pese a que el comentario de cabecera del
+        // archivo afirma que todos lo hacen -- gap real, cerrado aquí.
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
         $respondJson = function (array $payload, int $status) use ($response) {
             $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
             return $response
@@ -409,14 +420,14 @@ return function (App $app) {
      * conectividad y validez del token en el arranque.
      */
     $app->get('/internal/ping', function (Request $request, Response $response) {
-        $providedToken = $request->getHeaderLine('X-Internal-Token');
-        $expectedToken = getenv('MSG_SERVICE_INTERNAL_TOKEN') ?: '';
-
-        if ($expectedToken === '' || !hash_equals($expectedToken, $providedToken)) {
-            $response->getBody()->write(json_encode(['error' => 'Unauthorized']));
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus(401);
+        // Health check inofensivo -- generalizado para aceptar cualquier
+        // token de servicio válido (MSG_SERVICE_INTERNAL_TOKEN o
+        // PRINT_SERVICE_INTERNAL_TOKEN), a diferencia de
+        // /internal/db-credentials que sigue exigiendo específicamente el de
+        // msg_ninesys (devuelve credenciales reales de BD, no se amplía su
+        // alcance sin necesidad real).
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
         }
 
         $response->getBody()->write(json_encode([
@@ -435,6 +446,9 @@ return function (App $app) {
      * Simple test endpoint to verify routes are being loaded correctly.
      */
     $app->get('/internal/catalog-test', function (Request $request, Response $response) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
         $respondJson = function (array $payload, int $status) use ($response) {
             $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
             return $response
@@ -455,6 +469,9 @@ return function (App $app) {
      * Test endpoint with path parameter to verify Slim can handle routes with params.
      */
     $app->get('/internal/catalog-test/{id}', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
         $respondJson = function (array $payload, int $status) use ($response) {
             $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
             return $response
@@ -515,6 +532,9 @@ return function (App $app) {
      *   500: error al conectar a la BD del tenant
      */
     $app->get('/internal/catalog/{id_empresa}', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
         $respondJson = function (array $payload, int $status) use ($response) {
             $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
             return $response
@@ -723,6 +743,9 @@ return function (App $app) {
      *   { "found": false }
      */
     $app->get('/internal/cliente/{id_empresa}/by-phone', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
         $respondJson = function (array $payload, int $status) use ($response) {
             $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
             return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
@@ -836,6 +859,9 @@ return function (App $app) {
      * Respuesta 200: { "vendedor_id": int|null }
      */
     $app->get('/internal/vendedor-aleatorio/{id_empresa}', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
         $respondJson = function (array $payload, int $status) use ($response) {
             $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
             return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
@@ -892,6 +918,9 @@ return function (App $app) {
      *   { "found": false }
      */
     $app->get('/internal/ordenes/{id_empresa}/by-phone', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
         $respondJson = function (array $payload, int $status) use ($response) {
             $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
             return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
@@ -1038,6 +1067,9 @@ return function (App $app) {
      * Respuesta 200: { "id_customer": int, "upserted": bool }
      */
     $app->post('/internal/cliente/{id_empresa}', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
         $respondJson = function (array $payload, int $status) use ($response) {
             $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
             return $response->withHeader('Content-Type', 'application/json')->withStatus($status);

@@ -12,8 +12,51 @@ class IdEmpresaMiddleware implements Middleware
 {
     public function process(Request $request, RequestHandler $handler): Response
     {
-        // Obtener el parámetro del encabezado `Authorization`
-        $id_empresa = isset($request->getHeader('Authorization')[0]) ? (int) $request->getHeader('Authorization')[0] : null;
+        // Auditoría de seguridad 2026-09-10 (hallazgo C2, ver memoria de
+        // seguridad [[project_fase_seguridad_pendiente]]): el header
+        // `Authorization` era literalmente el id_empresa en texto plano, sin
+        // firma -- cualquiera que lo adivinara/incrementara obtenía acceso
+        // completo a esa empresa. Reemplazado gradualmente por 3 modos
+        // (transición: el modo legado sigue funcionando mientras los 4 repos
+        // clientes migran, ver plan de despliegue en la memoria):
+        //
+        //   1) X-Internal-Token válido -> modo SERVICIO (msg_ninesys/
+        //      19print_app, llamadas servidor-a-servidor multi-tenant que
+        //      necesitan pasar id_empresa como parámetro, no una sesión de
+        //      usuario). El Authorization crudo sigue siendo el id_empresa,
+        //      pero ahora autenticado por el secreto compartido.
+        //   2) `Authorization: Bearer <jwt>` -> modo SESIÓN (app_multi). Se
+        //      deriva id_empresa/id_usuario del token firmado, nunca del
+        //      header crudo. Un JWT inválido/expirado es 401 inmediato --
+        //      NUNCA cae al modo legado (evita una ambigüedad de seguridad
+        //      innecesaria y le da al frontend la señal clara de reloguearse).
+        //   3) Cualquier otra cosa -> modo LEGADO, comportamiento IDÉNTICO al
+        //      actual (id_empresa crudo, sin firma). Se loguea cada uso para
+        //      poder confirmar más adelante cuándo ya no hay tráfico en este
+        //      modo antes de retirarlo.
+        $authHeaderRaw = isset($request->getHeader('Authorization')[0]) ? $request->getHeader('Authorization')[0] : '';
+        $internalToken = $request->getHeaderLine('X-Internal-Token');
+
+        if ($internalToken !== '' && esTokenInternoValido($internalToken)) {
+            $id_empresa = $authHeaderRaw !== '' ? (int) $authHeaderRaw : null;
+        } elseif (stripos($authHeaderRaw, 'Bearer ') === 0) {
+            $jwt = trim(substr($authHeaderRaw, 7));
+            $claims = validarJwtSesion($jwt);
+            if ($claims === null) {
+                $response = new \Slim\Psr7\Response();
+                $response->getBody()->write(json_encode([
+                    'error' => 'invalid_token',
+                    'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+                ]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+            }
+            $id_empresa = (int) ($claims['id_empresa'] ?? 0);
+            define('ID_USUARIO_TOKEN', (int) ($claims['id_usuario'] ?? 0));
+            define('ACCESO_TOKEN', $claims['acceso'] ?? null);
+        } else {
+            $id_empresa = $authHeaderRaw !== '' ? (int) $authHeaderRaw : null;
+            error_log('[auth_mode=legacy] ' . $request->getUri()->getPath());
+        }
 
         define('ID_EMPRESA', $id_empresa);
 
