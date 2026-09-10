@@ -924,8 +924,8 @@ return function (App $app) {
     $app->get('/insumos/{id_insumo}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
 
-        $sql = 'SELECT * FROM inventario WHERE _id = ' . $args['id_insumo'];
-        $object['items'] = $localConnection->goQuery($sql);
+        $sql = 'SELECT * FROM inventario WHERE _id = ?';
+        $object['items'] = $localConnection->goQuery($sql, [intval($args['id_insumo'])]);
 
         $localConnection->disconnect();
 
@@ -1203,6 +1203,26 @@ return function (App $app) {
         $miInsumo['es_reposicion'] = $miInsumo['es_reposicion'] ?? 0;
         $miInsumo['id_insumo'] = $miInsumo['id_insumo'] ?? null;
         $miInsumo['tipo'] = $miInsumo['tipo'] ?? 'consumo';
+        // Auditoría de seguridad 2026-09-10: estos campos se concatenaban
+        // crudos (sin intval()) en decenas de puntos de esta función -- se
+        // castean una sola vez aquí. id_departamento se deja fuera a propósito
+        // porque más abajo se usa isset() para decidir si hay que derivarlo
+        // por nombre; se castea en cada punto de uso en su lugar.
+        if (isset($miInsumo['id_orden'])) {
+            $miInsumo['id_orden'] = intval($miInsumo['id_orden']);
+        }
+        if (isset($miInsumo['id_empleado'])) {
+            $miInsumo['id_empleado'] = intval($miInsumo['id_empleado']);
+        }
+        if (isset($miInsumo['id_producto'])) {
+            $miInsumo['id_producto'] = intval($miInsumo['id_producto']);
+        }
+        if (isset($miInsumo['id_reposicion'])) {
+            $miInsumo['id_reposicion'] = intval($miInsumo['id_reposicion']);
+        }
+        if (isset($miInsumo['id_catalogo'])) {
+            $miInsumo['id_catalogo'] = intval($miInsumo['id_catalogo']);
+        }
         // -----------------------------------------------
 
         // --- VALIDACIÓN ESTRICTA: id_insumo obligatorio ---
@@ -1235,21 +1255,24 @@ return function (App $app) {
                     // Si no hay id_departamento especificado, buscamos el ID correspondiente en la base de datos
                     if (!isset($miInsumo['id_departamento'])) {
                         $miInsumo['departamento'] = $miInsumo['departamento'] ?? 'N/A';
-                        $sql_id_dep = "SELECT _id FROM departamentos WHERE departamento = '{$miInsumo['departamento']}' LIMIT 1";
-                        $res_id_dep = $localConnection->goQuery($sql_id_dep);
+                        $sql_id_dep = 'SELECT _id FROM departamentos WHERE departamento = ? LIMIT 1';
+                        $res_id_dep = $localConnection->goQuery($sql_id_dep, [$miInsumo['departamento']]);
                         $miInsumo['id_departamento'] = !empty($res_id_dep) ? $res_id_dep[0]['_id'] : 0;
                     }
+                    $miInsumo['id_departamento'] = intval($miInsumo['id_departamento']);
 
-                    $sql_exist = "SELECT COUNT(id_orden) as total FROM rendimiento WHERE id_orden = {$miInsumo['id_orden']} AND id_insumo = $id_insumo_query AND id_departamento = {$miInsumo['id_departamento']}";
-                    $exist = $localConnection->goQuery($sql_exist);
+                    $sql_exist = 'SELECT COUNT(id_orden) as total FROM rendimiento WHERE id_orden = ? AND id_insumo = ? AND id_departamento = ?';
+                    $exist = $localConnection->goQuery($sql_exist, [$miInsumo['id_orden'], $id_insumo_query === 'NULL' ? null : $id_insumo_query, $miInsumo['id_departamento']]);
 
                     if ($exist[0]['total'] > 0) {
-                        $sql = "UPDATE rendimiento SET cantidad = {$cantidad_input_rendimiento}, desperdicio = {$valor_desperdicio}, id_empleado = {$miInsumo['id_empleado']} WHERE id_orden = {$miInsumo['id_orden']} AND id_insumo = $id_insumo_query AND id_departamento = {$miInsumo['id_departamento']};";
+                        $sql = 'UPDATE rendimiento SET cantidad = ?, desperdicio = ?, id_empleado = ? WHERE id_orden = ? AND id_insumo = ? AND id_departamento = ?';
+                        $params_rendimiento = [$cantidad_input_rendimiento, $valor_desperdicio, $miInsumo['id_empleado'], $miInsumo['id_orden'], $id_insumo_query === 'NULL' ? null : $id_insumo_query, $miInsumo['id_departamento']];
                     } else {
-                        $sql = "INSERT INTO rendimiento (id_orden, id_insumo, id_departamento, id_empleado, cantidad, desperdicio) VALUES ({$miInsumo['id_orden']}, $id_insumo_query, {$miInsumo['id_departamento']}, {$miInsumo['id_empleado']}, {$cantidad_input_rendimiento}, {$valor_desperdicio});";
+                        $sql = 'INSERT INTO rendimiento (id_orden, id_insumo, id_departamento, id_empleado, cantidad, desperdicio) VALUES (?, ?, ?, ?, ?, ?)';
+                        $params_rendimiento = [$miInsumo['id_orden'], $id_insumo_query === 'NULL' ? null : $id_insumo_query, $miInsumo['id_departamento'], $miInsumo['id_empleado'], $cantidad_input_rendimiento, $valor_desperdicio];
                     }
 
-                    $object['response_rendimiento'] = json_encode($localConnection->goQuery($sql));
+                    $object['response_rendimiento'] = json_encode($localConnection->goQuery($sql, $params_rendimiento));
                     $object['update_success'] = true;
                 } else {
                     $object['response_rendimiento'] = "Ignorado: Consumo y Desperdicio son Cero";
@@ -1273,9 +1296,8 @@ return function (App $app) {
         }
 
         // buscar cantidad actual del producto
-        $sql_check = 'SELECT cantidad, sku, rendimiento, tipo_insumo, departamento FROM inventario WHERE _id = ' . $miInsumo['id_insumo'];
-        // $object['sql_cantidad_producto'] = $sql_check; // Removido para producción (auditoría de seguridad 2026-09-09)
-        $cantidad_producto = $localConnection->goQuery($sql_check);
+        $sql_check = 'SELECT cantidad, sku, rendimiento, tipo_insumo, departamento FROM inventario WHERE _id = ?';
+        $cantidad_producto = $localConnection->goQuery($sql_check, [$id_insumo_val]);
         $object['cantidad_producto'] = $cantidad_producto;
 
         // --- SANITIZACIÓN Y NORMALIZACIÓN DE PAYLOAD ---
@@ -1285,10 +1307,11 @@ return function (App $app) {
         
         // Si no hay departamento especificado, buscamos el ID correspondiente en la base de datos
         if (!isset($miInsumo['id_departamento'])) {
-            $sql_id_dep = "SELECT _id FROM departamentos WHERE departamento = '{$miInsumo['departamento']}' LIMIT 1";
-            $res_id_dep = $localConnection->goQuery($sql_id_dep);
+            $sql_id_dep = 'SELECT _id FROM departamentos WHERE departamento = ? LIMIT 1';
+            $res_id_dep = $localConnection->goQuery($sql_id_dep, [$miInsumo['departamento']]);
             $miInsumo['id_departamento'] = !empty($res_id_dep) ? $res_id_dep[0]['_id'] : 0;
         }
+        $miInsumo['id_departamento'] = intval($miInsumo['id_departamento']);
 
         // "tipo" es el comportamiento configurado del departamento (permite tener
         // varios departamentos que se comporten como Corte, ej. "Corte Láser",
@@ -1339,8 +1362,8 @@ return function (App $app) {
                     $object['remanente_mt'] = $current_qty_display;
                 }
 
-                $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Empleado)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
-                $rem_result = $localConnection->goQuery($sql_rem);
+                $sql_rem = 'INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES (?, ?, ?, ?, ?, NOW())';
+                $rem_result = $localConnection->goQuery($sql_rem, [$id_insumo_val, $current_qty, 'Consumo Total (Empleado)', 'Generado automáticamente al terminar todo desde empleados', $miInsumo['id_empleado']]);
 
                 $object['remanente_updated_auto'] = $current_qty;
                 // $object['debug_sql_rem'] = $sql_rem; // Removido para producción (auditoría de seguridad 2026-09-09)
@@ -1351,15 +1374,15 @@ return function (App $app) {
             // Now update inventory based on consumption (or set to 0 if finishing)
             if (isset($miInsumo['tipo']) && ($miInsumo['tipo'] === 'fin' || $miInsumo['tipo'] === 'terminacion_manual')) {
                 // Set to 0 when finishing
-                $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . intval($miInsumo['id_insumo']) . ';';
                 $cantidad_consumida = 0;
             } else {
                 // Normal consumption update
-                $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . intval($miInsumo['id_insumo']) . ';';
             }
             // PostgreSQL no permite multiples comandos en un solo prepared statement (MySQL lo tolera).
             $localConnection->goQuery($sql);
-            $sqlSelectCantidad = 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $sqlSelectCantidad = 'SELECT cantidad FROM inventario WHERE _id = ' . intval($miInsumo['id_insumo']) . ';';
             $update_cantidad_inventario = $localConnection->goQuery($sqlSelectCantidad);
             $object['update_cantidad_invrntario_SQL'] = $sql;
             $object['update_cantidad_inventario_RSP'] = $update_cantidad_inventario;
@@ -1374,25 +1397,25 @@ return function (App $app) {
             $object['cantidad_inicial'] = $cantidad_inicial;
             $object['cantidad_consumida_kilos'] = $cantidad_consumida_kg;
 
-            $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . intval($miInsumo['id_insumo']) . ';';
 
             // Logic for Auto Remanente (Employee Finish)
             if (isset($miInsumo['auto_remanente']) && $miInsumo['auto_remanente'] == 'true') {
                 $current_qty = $cantidad_consumida;
                 $current_qty = $cantidad_consumida;
-                $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Producción)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
-                $localConnection->goQuery($sql_rem);
+                $sql_rem = 'INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES (?, ?, ?, ?, ?, NOW())';
+                $localConnection->goQuery($sql_rem, [$id_insumo_val, $current_qty, 'Consumo Total (Producción)', 'Generado automáticamente al terminar todo desde empleados', $miInsumo['id_empleado']]);
                 $object['remanente_updated_auto'] = $current_qty;
             }
 
             // Check if finishing
             if (isset($miInsumo['tipo']) && ($miInsumo['tipo'] === 'fin' || $miInsumo['tipo'] === 'terminacion_manual')) {
-                $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . intval($miInsumo['id_insumo']) . ';';
                 $cantidad_consumida = 0; // Ensure movement history records final value as 0
             }
             // PostgreSQL no permite multiples comandos en un solo prepared statement (MySQL lo tolera).
             $localConnection->goQuery($sql);
-            $sqlSelectCantidad = 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $sqlSelectCantidad = 'SELECT cantidad FROM inventario WHERE _id = ' . intval($miInsumo['id_insumo']) . ';';
             $update_cantidad_inventario = $localConnection->goQuery($sqlSelectCantidad);
             $object['update_cantidad_invrntario_SQL'] = $sql;
             $object['update_cantidad_inventario_RSP'] = $update_cantidad_inventario;
@@ -1410,8 +1433,8 @@ return function (App $app) {
             if (isset($miInsumo['auto_remanente']) && ($miInsumo['auto_remanente'] == 'true' || $miInsumo['auto_remanente'] === true)) {
                 // Use INITIAL quantity (current in DB) as remanente, not the calculated one after consumption
                 $current_qty = $cantidad_inicial;
-                $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$current_qty}, 'Consumo Total (Empleado)', 'Generado automáticamente al terminar todo desde empleados', {$miInsumo['id_empleado']}, NOW())";
-                $rem_result = $localConnection->goQuery($sql_rem);
+                $sql_rem = 'INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES (?, ?, ?, ?, ?, NOW())';
+                $rem_result = $localConnection->goQuery($sql_rem, [$id_insumo_val, $current_qty, 'Consumo Total (Empleado)', 'Generado automáticamente al terminar todo desde empleados', $miInsumo['id_empleado']]);
 
                 $object['remanente_updated_auto'] = $current_qty;
                 // $object['debug_sql_rem'] = $sql_rem; // Removido para producción (auditoría de seguridad 2026-09-09)
@@ -1422,15 +1445,15 @@ return function (App $app) {
             // Now update inventory based on consumption (or set to 0 if finishing)
             if (isset($miInsumo['tipo']) && ($miInsumo['tipo'] === 'fin' || $miInsumo['tipo'] === 'terminacion_manual')) {
                 // Set to 0 when finishing
-                $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $sql = 'UPDATE inventario SET cantidad = 0 WHERE _id = ' . intval($miInsumo['id_insumo']) . ';';
                 $cantidad_consumida = 0;
             } else {
                 // Normal consumption update
-                $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+                $sql = 'UPDATE inventario SET cantidad = ' . $cantidad_consumida . ' WHERE _id = ' . intval($miInsumo['id_insumo']) . ';';
             }
             // PostgreSQL no permite multiples comandos en un solo prepared statement (MySQL lo tolera).
             $localConnection->goQuery($sql);
-            $sqlSelectCantidad = 'SELECT cantidad FROM inventario WHERE _id = ' . $miInsumo['id_insumo'] . ';';
+            $sqlSelectCantidad = 'SELECT cantidad FROM inventario WHERE _id = ' . intval($miInsumo['id_insumo']) . ';';
             $update_cantidad_inventario = $localConnection->goQuery($sqlSelectCantidad);
             $object['update_cantidad_invrntario_SQL'] = $sql;
             $object['update_cantidad_inventario_RSP'] = $update_cantidad_inventario;
@@ -1451,8 +1474,8 @@ return function (App $app) {
             $motivo = isset($miInsumo['motivo']) ? $miInsumo['motivo'] : 'Terminación (Manual)';
             $observacion = isset($miInsumo['observacion']) ? $miInsumo['observacion'] : '';
 
-            $sql_rem = "INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES ({$miInsumo['id_insumo']}, {$remanente_val}, '{$motivo}', '{$observacion}', {$miInsumo['id_empleado']}, NOW())";
-            $localConnection->goQuery($sql_rem);
+            $sql_rem = 'INSERT INTO inventario_remanentes (id_insumo, cantidad, motivo, observacion, id_empleado, fecha) VALUES (?, ?, ?, ?, ?, NOW())';
+            $localConnection->goQuery($sql_rem, [$id_insumo_val, $remanente_val, $motivo, $observacion, $miInsumo['id_empleado']]);
             $object['remanente_updated'] = $remanente_val;
         }
 
@@ -1687,9 +1710,8 @@ return function (App $app) {
         $prioridad = $request->getParsedBody();
         $localConnection = new LocalDB();
 
-        $sql = 'UPDATE lotes SET prioridad = ' . $prioridad['prioridad'] . ' WHERE id_orden = ' . $prioridad['id'];
-        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-        $object['response'] = json_encode($localConnection->goQuery($sql));
+        $sql = 'UPDATE lotes SET prioridad = ? WHERE id_orden = ?';
+        $object['response'] = json_encode($localConnection->goQuery($sql, [intval($prioridad['prioridad']), intval($prioridad['id'])]));
 
         $localConnection->disconnect();
 
@@ -1721,11 +1743,9 @@ return function (App $app) {
     $app->get('/insumos/reporte/orden/{id}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
         $momentExpr = DB_DRIVER === 'pgsql' ? "TO_CHAR(a.moment, 'DD/MM/YYYY')" : "DATE_FORMAT(a.moment, '%d/%m/%Y')";
-        $sql = "SELECT b._id id_insumo, a.id_orden,  b.insumo, b.sku, a.valor_inicial, a.valor_final, a.id_producto, $momentExpr moment FROM inventario_movimientos a JOIN inventario b ON a.id_insumo = b._id WHERE a.id_orden = " . $args['id'] . ' ORDER BY a.id_producto';
+        $sql = "SELECT b._id id_insumo, a.id_orden,  b.insumo, b.sku, a.valor_inicial, a.valor_final, a.id_producto, $momentExpr moment FROM inventario_movimientos a JOIN inventario b ON a.id_insumo = b._id WHERE a.id_orden = ? ORDER BY a.id_producto";
 
-        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-
-        $object['items'] = $localConnection->goQuery($sql);
+        $object['items'] = $localConnection->goQuery($sql, [intval($args['id'])]);
 
         $localConnection->disconnect();
 
@@ -1762,12 +1782,11 @@ return function (App $app) {
         $localConnection = new LocalDB();
 
         if (DB_DRIVER === 'pgsql') {
-            $sql = "SELECT a.id_orden, b.nombre, c.insumo, c.sku, a.valor_inicial, a.valor_final, TO_CHAR(a.moment, 'DD/MM/YYYY') moment FROM inventario_movimientos a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario JOIN inventario c ON a.id_insumo = c._id WHERE a.id_insumo =" . $args['id'] . ' ORDER BY c.insumo';
+            $sql = "SELECT a.id_orden, b.nombre, c.insumo, c.sku, a.valor_inicial, a.valor_final, TO_CHAR(a.moment, 'DD/MM/YYYY') moment FROM inventario_movimientos a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario JOIN inventario c ON a.id_insumo = c._id WHERE a.id_insumo = ? ORDER BY c.insumo";
         } else {
-            $sql = "SELECT a.id_orden, b.nombre, c.insumo, c.sku, a.valor_inicial, a.valor_final, DATE_FORMAT(a.moment, '%d/%m/%Y') moment FROM inventario_movimientos a JOIN empleados b ON a.id_empleado = b._id JOIN inventario c ON a.id_insumo = c._id WHERE a.id_insumo =" . $args['id'] . ' ORDER BY c.insumo';
+            $sql = "SELECT a.id_orden, b.nombre, c.insumo, c.sku, a.valor_inicial, a.valor_final, DATE_FORMAT(a.moment, '%d/%m/%Y') moment FROM inventario_movimientos a JOIN empleados b ON a.id_empleado = b._id JOIN inventario c ON a.id_insumo = c._id WHERE a.id_insumo = ? ORDER BY c.insumo";
         }
-        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-        $object['items'] = $localConnection->goQuery($sql);
+        $object['items'] = $localConnection->goQuery($sql, [intval($args['id'])]);
 
         $localConnection->disconnect();
 
@@ -1933,13 +1952,12 @@ return function (App $app) {
             LEFT JOIN
                 catalogo_colores_tintas cct ON i.id_color_tinta = cct._id
             WHERE
-                i.departamento = '" . $args['departamento'] . "'
+                i.departamento = ?
                 AND i.eliminado = 0
             ORDER BY
-                i.insumo ASC;";
+                i.insumo ASC";
         }
-        // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-        $object['items'] = $localConnection->goQuery($sql);
+        $object['items'] = $localConnection->goQuery($sql, $args['departamento'] === 'todos' ? [] : [$args['departamento']]);
 
         $localConnection->disconnect();
 
@@ -2029,11 +2047,11 @@ return function (App $app) {
                 JOIN inventario_movimientos b ON b.id_orden = a.id_orden
                 JOIN product_insumos_asignados c ON c.id_product = a.id_woo
                 WHERE
-                    a.id_orden = {$args['id_orden']} AND c.id_departamento = {$args['id_departamento']}
-                $groupByEficiencia;
+                    a.id_orden = ? AND c.id_departamento = ?
+                $groupByEficiencia
         ";
 
-        $object = $localConnection->goQuery($sql);
+        $object = $localConnection->goQuery($sql, [intval($args['id_orden']), intval($args['id_departamento'])]);
 
         $localConnection->disconnect();
 
@@ -2047,6 +2065,7 @@ return function (App $app) {
     // Eficiencia Orden
     $app->get('/eficiencia-orden/{id_orden}', function (Request $request, Response $response, array $args) {
         $localConnection = new LocalDB();
+        $args['id_orden'] = intval($args['id_orden']);
 
         // sizes._id/products_sizes_eficiencia.id_size son enteros y ordenes_productos.talla es
         // varchar; MySQL compara con coercion implicita, PostgreSQL exige cast explicito.
@@ -2127,12 +2146,11 @@ return function (App $app) {
                   LEFT JOIN product_insumos_asignados b ON b.id_product = a.id_woo
                   LEFT JOIN products_tiempos_de_produccion tp ON tp.id_product = a.id_woo AND tp.id_departamento = b.id_departamento
                   WHERE
-                      a.id_orden = {$args['id_orden']}
+                      a.id_orden = ?
                       AND $granularWhere
                   ORDER BY a.talla ASC";
 
-        $object['insumos_asignados'] = $localConnection->goQuery($sql, array_merge($params, $paramsWhere));
-        // $object['insumos_asignados'] = null;
+        $object['insumos_asignados'] = $localConnection->goQuery($sql, array_merge($params, [$args['id_orden']], $paramsWhere));
 
         $sql = "SELECT
                 a.id_orden,
@@ -2152,9 +2170,9 @@ return function (App $app) {
             LEFT JOIN products_sizes_eficiencia b ON $sizeJoinExpr
             JOIN catalogo_insumos_productos c ON c._id = b.id_catalogo_insumos_prodcutos
             WHERE
-                id_orden =  {$args['id_orden']}
+                id_orden = ?
         ";
-        $object['detalles'] = $localConnection->goQuery($sql);
+        $object['detalles'] = $localConnection->goQuery($sql, [$args['id_orden']]);
 
         $groupByEficienciaTotal = DB_DRIVER === 'pgsql' ? 'GROUP BY a.id_orden' : '';
         $sql = "SELECT
@@ -2164,10 +2182,10 @@ return function (App $app) {
             ordenes_productos a
         LEFT JOIN products_sizes_eficiencia b ON $sizeJoinExpr
         WHERE
-            id_orden = {$args['id_orden']}
+            id_orden = ?
         $groupByEficienciaTotal
         ";
-        $object['total_eficiencia'] = $localConnection->goQuery($sql);
+        $object['total_eficiencia'] = $localConnection->goQuery($sql, [$args['id_orden']]);
 
         $localConnection->disconnect();
 

@@ -163,9 +163,9 @@ return function (App $app) {
   // Obtener todos los productos asignados a una orden
   $app->get('/productos-asignados/{orden}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
-    $sql = 'SELECT _id, id_orden, _id item, id_woo cod, name producto, cantidad, talla, tela, corte, precio_unitario precio, precio_woo precioWoo FROM ordenes_productos WHERE id_orden = ' . $args['orden'] . " AND category_name != 'Diseños'";
+    $sql = "SELECT _id, id_orden, _id item, id_woo cod, name producto, cantidad, talla, tela, corte, precio_unitario precio, precio_woo precioWoo FROM ordenes_productos WHERE id_orden = ? AND category_name != 'Diseños'";
 
-    $object['data'] = $localConnection->goQuery($sql);
+    $object['data'] = $localConnection->goQuery($sql, [intval($args['orden'])]);
 
     $localConnection->disconnect();
 
@@ -748,25 +748,26 @@ return function (App $app) {
 
     // PostgreSQL no permite multiples comandos en un solo prepared statement (a diferencia de
     // MySQL, que lo tolera); se separan en dos llamadas.
-    $sqlUpdate = 'UPDATE products SET comision = ' . floatval($args['comision']) . ' WHERE _id = ' . $args['id'] . ';';
-    $tmpConnection->goQuery($sqlUpdate);
-    $sql = 'SELECT * FROM products WHERE _id = ' . $args['id'];
-    $object['res'] = $tmpConnection->goQuery($sql);
+    $idProductoComision = intval($args['id']);
+    $sqlUpdate = 'UPDATE products SET comision = ? WHERE _id = ?';
+    $tmpConnection->goQuery($sqlUpdate, [floatval($args['comision']), $idProductoComision]);
+    $sql = 'SELECT * FROM products WHERE _id = ?';
+    $object['res'] = $tmpConnection->goQuery($sql, [$idProductoComision]);
 
-    $sql1 = 'SELECT _id id_lotes_detalles, unidades_solicitadas, id_empleado FROM lotes_detalles WHERE id_woo = ' . $args['id'] . " AND departamento = 'Costura' AND fecha_terminado IS NOT NULL";
-    $resp = $tmpConnection->goQuery($sql1);
+    $sql1 = "SELECT _id id_lotes_detalles, unidades_solicitadas, id_empleado FROM lotes_detalles WHERE id_woo = ? AND departamento = 'Costura' AND fecha_terminado IS NOT NULL";
+    $resp = $tmpConnection->goQuery($sql1, [$idProductoComision]);
 
     if (!empty($resp)) {
       foreach ($resp as $row) {
         // Obtener la cantidad desde la tabla pagos en lugar de unidades_solicitadas
-        $sql_cantidad = 'SELECT cantidad FROM pagos WHERE id_empleado = ' . $row['id_empleado'] . ' AND fecha_pago IS NULL AND id_lotes_detalles = ' . $row['id_lotes_detalles'];
-        $cantidad_resp = $tmpConnection->goQuery($sql_cantidad);
+        $sql_cantidad = 'SELECT cantidad FROM pagos WHERE id_empleado = ? AND fecha_pago IS NULL AND id_lotes_detalles = ?';
+        $cantidad_resp = $tmpConnection->goQuery($sql_cantidad, [$row['id_empleado'], $row['id_lotes_detalles']]);
 
         if (!empty($cantidad_resp)) {
           $cantidad = intval($cantidad_resp[0]['cantidad']);
           $nuevo_pago = floatval($args['comision']) * $cantidad;
-          $sql2 = 'UPDATE pagos SET monto_pago = ' . $nuevo_pago . ' WHERE id_empleado = ' . $row['id_empleado'] . ' AND fecha_pago IS NULL AND id_lotes_detalles = ' . $row['id_lotes_detalles'];
-          $tmpConnection->goQuery($sql2);
+          $sql2 = 'UPDATE pagos SET monto_pago = ? WHERE id_empleado = ? AND fecha_pago IS NULL AND id_lotes_detalles = ?';
+          $tmpConnection->goQuery($sql2, [$nuevo_pago, $row['id_empleado'], $row['id_lotes_detalles']]);
         }
       }
     }
@@ -874,8 +875,8 @@ return function (App $app) {
 
     // Buscar si teiene ordenes activas en el sistema de prodsucción
     $localConnection = new LocalDB();
-    $sql = "SELECT COUNT(a._id) total_ordenes FROM ordenes a WHERE (a.status = 'En espera' OR a.status = 'Pausada' OR a.status = 'activa') AND a.id_wp =  " . $args['customer_id'];
-    $tmpRes = $localConnection->goQuery($sql);
+    $sql = "SELECT COUNT(a._id) total_ordenes FROM ordenes a WHERE (a.status = 'En espera' OR a.status = 'Pausada' OR a.status = 'activa') AND a.id_wp = ?";
+    $tmpRes = $localConnection->goQuery($sql, [intval($args['customer_id'])]);
     $object['ordenes_ns'] = (is_array($tmpRes) && isset($tmpRes[0]['total_ordenes'])) ? intval($tmpRes[0]['total_ordenes']) : 0;
 
     $response->getBody()->write(json_encode($object));
@@ -1156,8 +1157,8 @@ return function (App $app) {
   $app->get('/departamentos-empleado/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = "SELECT a.id_departamento, b.departamento, b.orden_proceso, b.tipo from api_empresas.empresas_usuarios_departamentos a JOIN departamentos b On b._id = a.id_departamento AND b.eliminado = 0 WHERE a.id_empleado = {$args['id_empleado']}";
-    $data = $localConnection->goQuery($sql);
+    $sql = 'SELECT a.id_departamento, b.departamento, b.orden_proceso, b.tipo from api_empresas.empresas_usuarios_departamentos a JOIN departamentos b On b._id = a.id_departamento AND b.eliminado = 0 WHERE a.id_empleado = ?';
+    $data = $localConnection->goQuery($sql, [intval($args['id_empleado'])]);
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($data, JSON_NUMERIC_CHECK));
@@ -1653,8 +1654,8 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     // -> VERIFICAR EXISTENCIA DEL REGISTRO
-    $sql = "SELECT _id FROM lotes_detalles WHERE id_ordenes_productos  = '" . $args['id_ordenes_productos'] . "' AND departamento = '" . $args['departamento'] . "' AND id_orden = " . $args['id_orden'];
-    $object['data'] = $localConnection->goQuery($sql);
+    $sql = 'SELECT _id FROM lotes_detalles WHERE id_ordenes_productos = ? AND departamento = ? AND id_orden = ?';
+    $object['data'] = $localConnection->goQuery($sql, [intval($args['id_ordenes_productos']), $args['departamento'], intval($args['id_orden'])]);
 
     // BUSCAR ORENES EN CURSO EXCLUYENDO LOS DISEÑOS FILTADOS POR ID DE WOOCOMMERCE ???
 
@@ -1669,6 +1670,7 @@ return function (App $app) {
   // OBTENER DATOS PARA REPOSICIONES EN EL MODULO DE EMPLEADOS
   $app->get('/empleados/reposicion/{id_orden}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
+    $args['id_orden'] = intval($args['id_orden']);
 
     // ITEM
     $sql = "SELECT DISTINCT
@@ -1763,6 +1765,15 @@ return function (App $app) {
   $app->post('/lotes/empleados/reasignar', function (Request $request, Response $response, $args) {
     $miEmpleado = $request->getParsedBody();
     $localConnection = new LocalDB();
+
+    // Auditoría de seguridad 2026-09-10: estos campos se concatenaban crudos
+    // (sin intval()) más abajo -- casteados una sola vez aquí.
+    $miEmpleado['id_departamento'] = intval($miEmpleado['id_departamento']);
+    $miEmpleado['id_empleado'] = intval($miEmpleado['id_empleado']);
+    $miEmpleado['id_orden'] = intval($miEmpleado['id_orden']);
+    if (isset($miEmpleado['porcentaje'])) {
+      $miEmpleado['porcentaje'] = floatval($miEmpleado['porcentaje']);
+    }
 
     // Atomicidad FK: reasignación (lotes_detalles + LDEA + lotes) en una transacción
     $localConnection->beginTransaction();

@@ -404,9 +404,8 @@ return function (App $app) {
         a.id_orden =' . $args['id'] . ' ORDER BY
         a._id
     DESC'; */
-    $sql = 'SELECT a._id id_revision, a.id_orden, a.id_diseno, a.id_empleado, a.id_product, a.revision, a.estatus, a.detalles FROM revisiones a JOIN disenos b ON b.id_orden = a.id_orden WHERE a.id_empleado = ' . $args['id_empleado'] . ' AND b.id_empleado = ' . $args['id_empleado'] . ' ORDER BY a._id DESC';
-    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-    $object = $localConnection->goQuery($sql);
+    $sql = 'SELECT a._id id_revision, a.id_orden, a.id_diseno, a.id_empleado, a.id_product, a.revision, a.estatus, a.detalles FROM revisiones a JOIN disenos b ON b.id_orden = a.id_orden WHERE a.id_empleado = ? AND b.id_empleado = ? ORDER BY a._id DESC';
+    $object = $localConnection->goQuery($sql, [intval($args['id_empleado']), intval($args['id_empleado'])]);
 
     $localConnection->disconnect();
 
@@ -429,9 +428,8 @@ return function (App $app) {
             revisiones rev
         LEFT JOIN disenos dis ON rev.id_diseno = dis._id AND rev.id_orden = dis.id_orden AND rev.id_empleado = dis.id_empleado
         WHERE
-            rev._id = ' . $args['id_revision'];
-    // $object = $localConnection->goQuery($sql)[0];
-    $object = $localConnection->goQuery($sql);
+            rev._id = ?';
+    $object = $localConnection->goQuery($sql, [intval($args['id_revision'])]);
 
     $localConnection->disconnect();
 
@@ -459,33 +457,33 @@ return function (App $app) {
      */
     $miTerminado = intval($data['terminado']);
 
+    $idOrdenTarea = intval($data['id_orden']);
+    $idLotesDetallesTarea = intval($data['id_lotes_detalles']);
+    $idOrdenesProductosTarea = intval($data['id_ordenes_productos']);
+    $idDepartamentoTarea = intval($data['id_departamento']);
+    $idEmpleadoTarea = intval($data['id_empleado']);
+
     if ($miTerminado) {
-      $sql = "INSERT INTO check_tareas (
+      $sql = 'INSERT INTO check_tareas (
         id_orden,
         id_lotes_detalles_empleados_asigandos,
         id_ordenes_productos,
         id_departamento,
         id_empleado,
         moment
-    ) VALUES (
-        {$data['id_orden']},
-        {$data['id_lotes_detalles']},
-        {$data['id_ordenes_productos']},
-        {$data['id_departamento']},
-        {$data['id_empleado']},
-        '{$time_terminado}'
-    )";
+    ) VALUES (?, ?, ?, ?, ?, ?)';
+      $params = [$idOrdenTarea, $idLotesDetallesTarea, $idOrdenesProductosTarea, $idDepartamentoTarea, $idEmpleadoTarea, $time_terminado];
     } else {
-      $sql = "DELETE FROM check_tareas 
-        WHERE id_orden = {$data['id_orden']} 
-        AND id_empleado = {$data['id_empleado']} 
-        AND id_departamento = {$data['id_departamento']} 
-        AND id_lotes_detalles_empleados_asigandos = {$data['id_lotes_detalles']} 
-        AND id_ordenes_productos = {$data['id_ordenes_productos']}";
+      $sql = 'DELETE FROM check_tareas
+        WHERE id_orden = ?
+        AND id_empleado = ?
+        AND id_departamento = ?
+        AND id_lotes_detalles_empleados_asigandos = ?
+        AND id_ordenes_productos = ?';
+      $params = [$idOrdenTarea, $idEmpleadoTarea, $idDepartamentoTarea, $idLotesDetallesTarea, $idOrdenesProductosTarea];
     }
 
-    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-    $object['response'] = json_encode($localConnection->goQuery($sql));
+    $object['response'] = json_encode($localConnection->goQuery($sql, $params));
 
     $localConnection->disconnect();
 
@@ -538,12 +536,24 @@ return function (App $app) {
   $app->post('/registrar-paso-empleado', function (Request $request, Response $response, array $args) {
     $miEmpleado = $request->getParsedBody();
 
+    // Auditoría de seguridad 2026-09-10: id_orden/id_empleado/id_departamento
+    // se concatenaban crudos (sin intval()) en decenas de sentencias SQL a lo
+    // largo de todo este endpoint -- se castean una sola vez aquí (mismo
+    // patrón que obtenerRespuestaBuscar() en buscar.php) para que TODA
+    // interpolación directa {$miEmpleado['id_orden']}/etc. de más abajo quede
+    // segura sin tener que tocar cada línea por separado.
+    $miEmpleado['id_orden'] = intval($miEmpleado['id_orden'] ?? 0);
+    $miEmpleado['id_empleado'] = intval($miEmpleado['id_empleado'] ?? 0);
+    $miEmpleado['id_departamento'] = intval($miEmpleado['id_departamento'] ?? 0);
+
     // Sanitizar valores booleanos y nulos que vienen como strings
     if (isset($miEmpleado['es_reposicion'])) {
       $miEmpleado['es_reposicion'] = filter_var($miEmpleado['es_reposicion'], FILTER_VALIDATE_BOOLEAN);
     }
     if (isset($miEmpleado['id_reposicion']) && $miEmpleado['id_reposicion'] === 'null') {
       $miEmpleado['id_reposicion'] = null;
+    } elseif (isset($miEmpleado['id_reposicion'])) {
+      $miEmpleado['id_reposicion'] = intval($miEmpleado['id_reposicion']);
     }
     // PREPARAR FECHAS
     $myDate = new CustomTime();
@@ -572,8 +582,8 @@ return function (App $app) {
       // CRITICAL FIX: Only update the global order step if it's NOT a reposition.
       // Repositions are partial and shouldn't move the entire order backward.
       if (!isset($miEmpleado['es_reposicion']) || !$miEmpleado['es_reposicion']) {
-        $sqlUpdateLote = "UPDATE lotes SET paso = '{$miEmpleado['departamento']}', id_departamento_actual = {$miEmpleado['id_departamento']}  WHERE id_orden = " . $miEmpleado['id_orden'] . ";";
-        $localConnection->goQuery($sqlUpdateLote);
+        $sqlUpdateLote = 'UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?';
+        $localConnection->goQuery($sqlUpdateLote, [$miEmpleado['departamento'], $miEmpleado['id_departamento'], $miEmpleado['id_orden']]);
         // $object['sql_update_lote'] = $sqlUpdateLote; // Removido para producción (auditoría de seguridad 2026-09-09)
       }
 
@@ -931,9 +941,20 @@ return function (App $app) {
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
-          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
-          // $object['sql_pagos'][] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-          $object['resp_pagos'] = $localConnection->goQuery($sql);
+          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          $object['resp_pagos'] = $localConnection->goQuery($sql, [
+            $miEmpleado['id_orden'],
+            $id_reposicion_val === 'NULL' ? null : $id_reposicion_val,
+            $miEmpleado['id_departamento'],
+            $comimision,
+            $comisionTipo,
+            $piezas,
+            $id_lotes_detalles,
+            'aprobado',
+            $totalComimision,
+            $miEmpleado['id_empleado'],
+            $miEmpleado['departamento'],
+          ]);
         }
       } elseif ($comisionTipo === 'fija') {
         // Para comisión fija: consulta agrupada para obtener total
@@ -1016,9 +1037,20 @@ return function (App $app) {
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
-          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comimision . ", '" . $comisionTipo . "', " . $piezas . ', ' . $id_lotes_detalles . ", 'aprobado', " . $totalComimision . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
-          // $object['sql_pagos'][] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-          $object['resp_pagos'] = $localConnection->goQuery($sql);
+          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          $object['resp_pagos'] = $localConnection->goQuery($sql, [
+            $miEmpleado['id_orden'],
+            $id_reposicion_val === 'NULL' ? null : $id_reposicion_val,
+            $miEmpleado['id_departamento'],
+            $comimision,
+            $comisionTipo,
+            $piezas,
+            $id_lotes_detalles,
+            'aprobado',
+            $totalComimision,
+            $miEmpleado['id_empleado'],
+            $miEmpleado['departamento'],
+          ]);
         }
       } else {
         // Para comisión variable: consulta por producto individual usando comisión por departamento
@@ -1116,9 +1148,20 @@ return function (App $app) {
         $check = $localConnection->goQuery($sqlCheck);
 
         if (empty($check)) {
-          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (' . $miEmpleado['id_orden'] . ', ' . $id_reposicion_val . ', ' . $miEmpleado['id_departamento'] . ', ' . $comision_referencial . ", 'variable', " . $piezasTotales . ', ' . $id_lotes_detalles_principal . ", 'aprobado', " . $montoTotalVariable . ', ' . $miEmpleado['id_empleado'] . ", '" . $miEmpleado['departamento'] . "');";
-          // $object['sql_pagos'][] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-          $localConnection->goQuery($sql);
+          $sql = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          $localConnection->goQuery($sql, [
+            $miEmpleado['id_orden'],
+            $id_reposicion_val === 'NULL' ? null : $id_reposicion_val,
+            $miEmpleado['id_departamento'],
+            $comision_referencial,
+            'variable',
+            $piezasTotales,
+            $id_lotes_detalles_principal,
+            'aprobado',
+            $montoTotalVariable,
+            $miEmpleado['id_empleado'],
+            $miEmpleado['departamento'],
+          ]);
         }
 
         // Resolve type of department
@@ -1944,6 +1987,8 @@ return function (App $app) {
       $response->getBody()->write(json_encode(['error' => 'Falta el parámetro requerido: id_departamento.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
+    $id_departamento = intval($id_departamento);
+    $id_empleado_lote = intval($data['id_empleado'] ?? 0);
 
     $localConnection = new LocalDB();
     try {
@@ -1969,9 +2014,9 @@ return function (App $app) {
             FROM
                 empleados_lotes_fabricacion elf
             WHERE
-                elf.id_departamento_creador = {$data['id_departamento']} 
+                elf.id_departamento_creador = ?
                 AND
-                elf.id_empleado = {$data['id_empleado']} 
+                elf.id_empleado = ?
                 AND elf.estado IN ('pendiente', 'en_curso')
             ORDER BY
                 elf.fecha_inicio DESC, elf._id DESC
@@ -1998,9 +2043,9 @@ return function (App $app) {
                 ordenes o ON elfi.id_orden = o._id
             WHERE
                 -- elf.id_departamento_actual > 0 -- Hack para saltar el departamento del empelado y trascender el resultado a los demás departamentos
-                elf.id_departamento_creador = {$data['id_departamento']} 
+                elf.id_departamento_creador = ?
                 AND
-                elf.id_empleado = {$data['id_empleado']} 
+                elf.id_empleado = ?
                 AND elf.estado IN ('pendiente', 'en_curso')
             GROUP BY
                 elf._id, elf.estado, elf.fecha_inicio, elf.fecha_fin
@@ -2009,9 +2054,8 @@ return function (App $app) {
         ";
       }
 
-      $params = [$id_departamento];
-      // $query_result = $localConnection->goQuery($sql, $params);
-      $query_result = $localConnection->goQuery($sql);
+      $params = [$id_departamento, $id_empleado_lote];
+      $query_result = $localConnection->goQuery($sql, $params);
 
       foreach ($query_result as &$row) {
         if (!empty($row['ordenes'])) {
@@ -2645,8 +2689,8 @@ return function (App $app) {
 
       // FIX: Recalcular unidades para excluir no físicos (diseños)
       // Nota: args['id_lotes_detalles'] es el ID de la ASIGNACIÓN (tabla lotes_detalles_empleados_asignados)
-      $sql_orden_id = 'SELECT id_orden FROM lotes_detalles_empleados_asignados WHERE _id = ' . $args['id_lotes_detalles'];
-      $resOrden = $localConnection->goQuery($sql_orden_id);
+      $sql_orden_id = 'SELECT id_orden FROM lotes_detalles_empleados_asignados WHERE _id = ?';
+      $resOrden = $localConnection->goQuery($sql_orden_id, [intval($args['id_lotes_detalles'])]);
       $idOrdenActual = $resOrden[0]['id_orden'] ?? 0;
 
       if ($idOrdenActual > 0) {
@@ -2918,9 +2962,9 @@ return function (App $app) {
   $app->get('/empleados/ordenes-asignadas/v1/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT c.prioridad, a.id_orden, b.unidades_solicitadas, b.unidades_solicitadas piezas_actuales, b.fecha_inicio, b.fecha_terminado, b._id id_lotes_detalles, b.departamento, a.id_woo, a._id id_ordenes_productos, a.name producto, b.id_empleado, a.talla, a.corte, a.tela, b.departamento, b.progreso, b.detalles detalles_revision FROM ordenes_productos a JOIN lotes_detalles b ON a._id = b.id_ordenes_productos LEFT JOIN lotes c ON c.id_orden = b.id_orden WHERE b.id_empleado = ' . $args['id_empleado'] . " AND b.progreso NOT LIKE 'terminada' ORDER BY c.prioridad DESC , b.progreso ASC, b.id_orden ASC";
+    $sql = "SELECT c.prioridad, a.id_orden, b.unidades_solicitadas, b.unidades_solicitadas piezas_actuales, b.fecha_inicio, b.fecha_terminado, b._id id_lotes_detalles, b.departamento, a.id_woo, a._id id_ordenes_productos, a.name producto, b.id_empleado, a.talla, a.corte, a.tela, b.departamento, b.progreso, b.detalles detalles_revision FROM ordenes_productos a JOIN lotes_detalles b ON a._id = b.id_ordenes_productos LEFT JOIN lotes c ON c.id_orden = b.id_orden WHERE b.id_empleado = ? AND b.progreso NOT LIKE 'terminada' ORDER BY c.prioridad DESC , b.progreso ASC, b.id_orden ASC";
 
-    $items = $localConnection->goQuery($sql);
+    $items = $localConnection->goQuery($sql, [intval($args['id_empleado'])]);
     $object['ordenes'] = $items;
 
     /* $sql = "SELECT a.id_orden orden, a.id_woo, b.name producto,  a.unidades_solicitadas unidades, a.unidades_solicitadas piezas_actuales, b.talla talla, b.corte, b.tela FROM lotes_detalles a JOIN ordenes_productos b ON a.id_ordenes_productos = b._id WHERE id_empleado = " . $args['id_empleado'] . " AND progreso = 'en curso'";
@@ -2932,8 +2976,8 @@ return function (App $app) {
       $object['pagos'] = [];
     } else {
       foreach ($ordenes as $key => $item_lote) {
-        $sqlx = 'SELECT id_lotes_detalles, monto_pago, estatus, fecha_pago FROM pagos WHERE id_lotes_detalles = ' . $item_lote['id_lotes_detalles'];
-        $tmpPago = $localConnection->goQuery($sqlx);
+        $sqlx = 'SELECT id_lotes_detalles, monto_pago, estatus, fecha_pago FROM pagos WHERE id_lotes_detalles = ?';
+        $tmpPago = $localConnection->goQuery($sqlx, [intval($item_lote['id_lotes_detalles'])]);
 
         if (!empty($tmpPago)) {
           $object['pagos'][] = $tmpPago;
@@ -2969,17 +3013,21 @@ return function (App $app) {
     $sql = '';
     $status_order = 'En espera';
 
+    $params = [];
+
     if ($data['accion'] === 'iniciar') {
       // Actualizar status de la orden
       $status_order = 'pausada';
 
       // SQL Iniciar pausa
-      $sql = "INSERT INTO lotes_detalles_empleados_asignados_pausas (motivo, pausa_inicio, id_lotes_detalles_empleados_asignados) VALUES ('{$data['motivo']}', '{$now}', '{$data['id_lote_detalles_empleados']}');";
+      $sql = 'INSERT INTO lotes_detalles_empleados_asignados_pausas (motivo, pausa_inicio, id_lotes_detalles_empleados_asignados) VALUES (?, ?, ?)';
+      $params = [$data['motivo'], $now, intval($data['id_lote_detalles_empleados'])];
     }
 
     if ($data['accion'] === 'reanudar') {
       $status_order = 'activa';
-      $sql = "UPDATE lotes_detalles_empleados_asignados_pausas SET pausa_fin = '$now' WHERE _id = {$data['id_pausa']};";
+      $sql = 'UPDATE lotes_detalles_empleados_asignados_pausas SET pausa_fin = ? WHERE _id = ?';
+      $params = [$now, intval($data['id_pausa'])];
     }
 
     if ($data['accion'] === 'eliminar') {
@@ -2995,11 +3043,11 @@ return function (App $app) {
     // Atomicidad FK: pausa + actualización de estado de la orden en una transacción
     $localConnection->beginTransaction();
     if ($sql !== '') {
-      $object['response_pausa'] = $localConnection->goQuery($sql);
+      $object['response_pausa'] = $localConnection->goQuery($sql, $params);
     }
     // Actualizar Status de la orden
-    $sqlOrden = "UPDATE ordenes SET status = '$status_order' WHERE _id = {$data['id_orden']}";
-    $object['response'] = $localConnection->goQuery($sqlOrden);
+    $sqlOrden = 'UPDATE ordenes SET status = ? WHERE _id = ?';
+    $object['response'] = $localConnection->goQuery($sqlOrden, [$status_order, intval($data['id_orden'])]);
     $localConnection->commit();
 
     $localConnection->disconnect();
@@ -3153,6 +3201,10 @@ return function (App $app) {
   $app->get('/empleados/mi-asignacion/{id_orden}/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
     $object = [];
+    // Auditoría de seguridad 2026-09-10: id_orden/id_empleado se concatenaban
+    // crudos (sin intval()) más abajo -- casteados una sola vez aquí.
+    $args['id_orden'] = intval($args['id_orden']);
+    $args['id_empleado'] = intval($args['id_empleado']);
 
     // Obtener datos del empleado en esta asignación
     $sqlAsignacion = "SELECT
@@ -3218,8 +3270,8 @@ return function (App $app) {
       $deptTipo = $deptRow[0]['tipo'];
     }
     if ($deptTipo === 'corte') {
-      $sqlExc = "SELECT id_ordenes_productos, cantidad AS cantidad_real FROM inventario_corte WHERE id_orden = {$args['id_orden']}";
-      $excedentes = $localConnection->goQuery($sqlExc);
+      $sqlExc = 'SELECT id_ordenes_productos, cantidad AS cantidad_real FROM inventario_corte WHERE id_orden = ?';
+      $excedentes = $localConnection->goQuery($sqlExc, [intval($args['id_orden'])]);
       foreach ($excedentes as $exc) {
         $excedentesMap[intval($exc['id_ordenes_productos'])] = floatval($exc['cantidad_real']);
       }
@@ -3286,6 +3338,17 @@ return function (App $app) {
   // Obtener ordenes asociadas a los empleados V2
   $app->get('/empleados/ordenes-asignadas/v2/{id_empleado}/{id_departamento}/{orden_proceso}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
+
+    // Auditoría de seguridad 2026-09-10: los 3 parámetros de ruta se
+    // concatenaban crudos (sin intval()) en decenas de puntos de una consulta
+    // gigante más abajo -- se castean una sola vez aquí (mismo patrón que
+    // /registrar-paso-empleado) para que TODA interpolación directa
+    // {$args['id_empleado']}/etc. de más abajo quede segura sin tocar cada
+    // línea por separado.
+    $args['id_empleado'] = intval($args['id_empleado']);
+    $args['id_departamento'] = intval($args['id_departamento']);
+    $args['orden_proceso'] = intval($args['orden_proceso']);
+
     // Reposiciones
     // Buscar orden_proceso
     $sql = "SELECT orden_proceso, departamento FROM departamentos WHERE _id = {$args['id_departamento']}";
@@ -3609,6 +3672,7 @@ return function (App $app) {
   // abajo sobre el fix de b.id_empleado, que originalmente también incluía
   // una consulta 'items' con el mismo bug pero sin ningún consumidor).
   $app->get('/sse/empleados/ordenes-asignadas/{id_empleado}', function (Request $request, Response $response, array $args) {
+    $args['id_empleado'] = intval($args['id_empleado']);
     if (DB_DRIVER === 'pgsql') {
       $fechaEntregaSelect = "TO_CHAR(NULLIF(d.fecha_entrega, '')::timestamp, 'DD-MM-YYYY') AS fecha_entrega";
     } else {
@@ -4713,11 +4777,11 @@ return function (App $app) {
       $sql = "SELECT DISTINCT
                   id_orden
               FROM lotes_detalles_empleados_asignados
-              WHERE id_empleado = {$args['id_empleado']}
-                AND id_departamento = {$args['id_departamento']}
+              WHERE id_empleado = ?
+                AND id_departamento = ?
                 AND $fechaTerminadoCond";
 
-      $result = $localConnection->goQuery($sql);
+      $result = $localConnection->goQuery($sql, [intval($args['id_empleado']), intval($args['id_departamento'])]);
       $ids = [];
       if (is_array($result)) {
         foreach ($result as $row) {
@@ -4741,15 +4805,15 @@ return function (App $app) {
 
     try {
       // Si existe un registro en pagos con fecha_pago NULL, el trabajo está terminado pero no pagado
-      $sql = "SELECT DISTINCT
+      $sql = 'SELECT DISTINCT
                   p.id_orden
               FROM pagos p
-              WHERE p.id_empleado = {$args['id_empleado']}
-                AND p.id_departamento = {$args['id_departamento']}
+              WHERE p.id_empleado = ?
+                AND p.id_departamento = ?
                 AND p.fecha_pago IS NULL
-              ORDER BY p.id_orden DESC";
+              ORDER BY p.id_orden DESC';
 
-      $result = $localConnection->goQuery($sql);
+      $result = $localConnection->goQuery($sql, [intval($args['id_empleado']), intval($args['id_departamento'])]);
 
       // Asegurar que siempre devolvemos un array
       $unpaid_orders = is_array($result) ? $result : [];

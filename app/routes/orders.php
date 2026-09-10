@@ -434,8 +434,8 @@ return function (App $app) {
   $app->get('/ordenes/verificar-edición/{id}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT paso  FROM lotes WHERE id_orden = ' . $args['id'];
-    $datosAbono = $localConnection->goQuery($sql);
+    $sql = 'SELECT paso FROM lotes WHERE id_orden = ?';
+    $datosAbono = $localConnection->goQuery($sql, [intval($args['id'])]);
     $object = $datosAbono[0];
 
     $localConnection->disconnect();
@@ -1769,7 +1769,9 @@ return function (App $app) {
   // BUSCAR ORDEN POR ID
 
   $app->get('/ordenes/reporte/{id}', function (Request $request, Response $response, array $args) {
-    $id = $args['id'];
+    // Auditoría de seguridad 2026-09-10: casteado una sola vez aquí -- antes
+    // quedaba crudo y se reutilizaba sin cast en 5 consultas de esta función.
+    $id = intval($args['id']);
     $localConnection = new LocalDB();
 
     //  Verificar existencia de la orden
@@ -2752,11 +2754,9 @@ return function (App $app) {
         $pago_vendedor = floatval($arr['abono']) * $comision / 100;
         $pago_vendedor = number_format($pago_vendedor, 2);
 
-        $sql_pago = "INSERT INTO pagos (moment, comision, comision_tipo, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES ('" . $now . "', " . $comision . ",
-       '" . $respComision['comision_tipo'] . "', '" . $id_orden_a_editar . "',  '" . $arr['responsable'] . "', '" . $pago_vendedor . "', 'Abono a orden', 'aprobado')";
-        // $object['sql_pago_response'] = $localConnection->goQuery($sql_pago); // Removido para producción (auditoría de seguridad 2026-09-09)
-
-        // $object['sql_pago'] = $sql_pago; // Removido para producción (auditoría de seguridad 2026-09-09)
+        $sql_pago = 'INSERT INTO pagos (moment, comision, comision_tipo, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+        $sql_pago_params = [$now, $comision, $respComision['comision_tipo'], $id_orden_a_editar, $arr['responsable'], $pago_vendedor, 'Abono a orden', 'aprobado'];
+        // $object['sql_pago_response'] = $localConnection->goQuery($sql_pago, $sql_pago_params); // Removido para producción (auditoría de seguridad 2026-09-09)
         $object['pago_a_vendedor_por_abono'] = 'SI hubo comisión por el nuevo abono.';
       }
     }
@@ -3222,8 +3222,8 @@ return function (App $app) {
         $pago_vendedor = floatval($newJson['abono']) * $comision / 100;
         $pago_vendedor = number_format($pago_vendedor, 2);
 
-        $sql = "INSERT INTO pagos (moment, comision, comision_tipo, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES ('" . $now . "', " . $comision . ", '" . $comisionTipo . "', '" . $last_id . "',  '" . $newJson['responsable'] . "', '" . $pago_vendedor . "', 'Comercialización', 'aprobado')";
-        $comisionPagoResult = $localConnection->goQuery($sql);
+        $sql = 'INSERT INTO pagos (moment, comision, comision_tipo, id_orden, id_empleado, monto_pago, detalle, estatus) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+        $comisionPagoResult = $localConnection->goQuery($sql, [$now, $comision, $comisionTipo, $last_id, intval($newJson['responsable']), $pago_vendedor, 'Comercialización', 'aprobado']);
         $comisionPagoId = $comisionPagoResult['insert_id'] ?? null;
         $object['resultado_abono'] = json_encode($comisionPagoResult);
         $object['pago a vendedor'] = 'SI hubo comisión, cliente normal';
@@ -4031,50 +4031,51 @@ $object['sales_commission_ISSET'][] = false;
   $app->post('/comercializacion/revisiones-estatus/{estatus}/{id_revision}/{id_orden}', function (Request $request, Response $response, array $args) {
     $localConnection = new localDB();
 
+    // Auditoría de seguridad 2026-09-10: este endpoint concatenaba
+    // {estatus}/{id_revision}/{id_orden} crudo en ~10 sentencias SQL, sin
+    // ningún cast -- reescrito completo a parámetros preparados (?), sin
+    // cambiar el comportamiento funcional.
+    $estatusParam = (string) $args['estatus'];
+    $idRevisionParam = intval($args['id_revision']);
+    $idOrdenParam = intval($args['id_orden']);
+
     // Atomicidad FK: revisiones + disenos + ordenes + pago del diseñador en una transacción
     $localConnection->beginTransaction();
 
-    $sql = "UPDATE revisiones SET estatus = '" . $args['estatus'] . "' WHERE _id = " . $args['id_revision'];
-    $localConnection->goQuery($sql);
-
-    // BUSCAR EL ID DE LA ORDEN EN `revisiones`
-    // $sql = "SELECT id_orden FROM revisiones WHERE _id = " . $args["id_revision"];
-    // $miRevision = $localConnection->goQuery($sql);
-    // $miRevision = $args['id_revision'];
+    $sql = 'UPDATE revisiones SET estatus = ? WHERE _id = ?';
+    $localConnection->goQuery($sql, [$estatusParam, $idRevisionParam]);
 
     // CON EL ID DE LA ORDEN BUSCAMOS EL ID DEL DISEÑADOR EN `disenos` `revisiones`
-    $sql = 'SELECT id_orden, id_empleado FROM revisiones WHERE _id = ' . $args['id_revision'];
-    $miDiseno = $localConnection->goQuery($sql);
+    $sql = 'SELECT id_orden, id_empleado FROM revisiones WHERE _id = ?';
+    $miDiseno = $localConnection->goQuery($sql, [$idRevisionParam]);
 
     // VERIFICAR PAGO EXISTENTE
-    $sqlPago = "SELECT count(_id) exist FROM pagos WHERE detalle = 'Diseño' AND id_orden = " . $miDiseno[0]['id_orden'] . ' AND id_empleado = ' . $miDiseno[0]['id_empleado'];
-    $object['pago_exist'] = $localConnection->goQuery($sqlPago)[0];
+    $sqlPago = "SELECT count(_id) exist FROM pagos WHERE detalle = 'Diseño' AND id_orden = ? AND id_empleado = ?";
+    $object['pago_exist'] = $localConnection->goQuery($sqlPago, [$miDiseno[0]['id_orden'], $miDiseno[0]['id_empleado']])[0];
 
     // ELIMINAR PAGO A DISEñADOR POR RECHAZO DE PROPUESTA
-    if ($args['estatus'] === 'Rechazado') {
-      $sql = "UPDATE revisiones SET estatus = 'Rechazado' WHERE _id = " . $args['id_revision'];
-      $resultUpdateRevisiones = $localConnection->goQuery($sql);
+    if ($estatusParam === 'Rechazado') {
+      $sql = "UPDATE revisiones SET estatus = 'Rechazado' WHERE _id = ?";
+      $resultUpdateRevisiones = $localConnection->goQuery($sql, [$idRevisionParam]);
     }
 
     // APROBAR PROPUESTA
-    if ($args['estatus'] === 'Aprobado') {
+    if ($estatusParam === 'Aprobado') {
       $estatusTerminado = 1;
-      $sql = 'UPDATE disenos SET terminado = ' . $estatusTerminado . ' WHERE id_orden = ' . $miDiseno[0]['id_orden'] . ';';
-      $miRevision = $localConnection->goQuery($sql);
-      // $object['sql_revision'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
+      $sql = 'UPDATE disenos SET terminado = ? WHERE id_orden = ?';
+      $miRevision = $localConnection->goQuery($sql, [$estatusTerminado, $miDiseno[0]['id_orden']]);
       // Guard: no reactivar una orden que ya está terminada/entregada como
       // efecto secundario de aprobar una revisión de diseño -- este UPDATE
       // no validaba el estado actual en absoluto, así que una aprobación
       // tardía o fuera de orden podía "resucitar" una orden ya cerrada
       // silenciosamente (mismo riesgo que ya se bloqueó explícitamente en
       // POST /orden/actualizar-estado).
-      $sql = "UPDATE ordenes SET status = 'activa' WHERE _id = " . $args['id_orden'] . " AND status NOT IN ('terminada', 'entregada');";
-      $miRevision = $localConnection->goQuery($sql);
-      // $object['sql_orden'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
+      $sql = "UPDATE ordenes SET status = 'activa' WHERE _id = ? AND status NOT IN ('terminada', 'entregada')";
+      $miRevision = $localConnection->goQuery($sql, [$idOrdenParam]);
 
       // BUSCAR DATOS DE LA REVISON
-      $sql = 'SELECT id_empleado, id_product FROM revisiones WHERE _id = ' . $args['id_revision'];
-      $id_tmp = $localConnection->goQuery($sql);
+      $sql = 'SELECT id_empleado, id_product FROM revisiones WHERE _id = ?';
+      $id_tmp = $localConnection->goQuery($sql, [$idRevisionParam]);
       $id_disenador = $id_tmp[0]['id_empleado'];
       $id_product = $id_tmp[0]['id_product'];
 
@@ -4090,52 +4091,29 @@ $object['sales_commission_ISSET'][] = false;
                 LEFT JOIN products pro ON
                     dis.id_product = pro._id
                 WHERE
-                    rev._id = ' . $args['id_revision'] . ' AND rev.id_orden = ' . $args['id_orden'] . ' AND dis.id_empleado = ' . $miDiseno[0]['id_empleado'] . '
+                    rev._id = ? AND rev.id_orden = ? AND dis.id_empleado = ?
             ';
-      $comision_tmp = $localConnection->goQuery($sql);
+      $comision_tmp = $localConnection->goQuery($sql, [$idRevisionParam, $idOrdenParam, $miDiseno[0]['id_empleado']]);
 
       if (empty($comision_tmp)) {
         $object['comision_diseno'] = 0;
         $comision = 0;
       } else {
         $comision = $comision_tmp[0]['comision'];
-        // Verificar si el pago existe
-        /* $sql = "SELECT _id FROM pagos WHERE detalle = 'Diseño' AND id_empleado = " . $miDiseno[0]['id_empleado'] . ' AND id_orden = ' . $args['id_orden'];
-        // $object['sql_pago_exist'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-        $miPago = $localConnection->goQuery($sql); */
 
-        /*$object['id_woo'] = $idWoo[0]['id_woo'];
-
-         // Buscar en WooMe la comision asociada a el producto $idWoo
-        $woo = new WooMe();
-        $woomeResponse = $woo->getProductById($idWoo[0]['id_woo']);
-
-        // $object["woo-response"] = json_encode($woomeResponse);
-        if (isset($woomeResponse->attributes[0]->options[0])) {
-            $object['comision_diseno'] = json_encode($woomeResponse->attributes[0]->options[0]);
-        } else {
-            $object['comision_diseno'] = 0;
-        }
-
-        if (empty($woomeResponse->attributes)) {
-            $comision = 0;
-        } else {
-            $comision = $woomeResponse->attributes[0]->options[0];
-        } */
-
-        $sql = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ' . $miDiseno[0]['id_empleado'];
-        $respComision = $localConnection->goQuery($sql);
+        $sql = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+        $respComision = $localConnection->goQuery($sql, [$miDiseno[0]['id_empleado']]);
         $comision_tipo = $respComision[0]['comision_tipo'];
 
         if ($comision_tipo === 'variable') {
           // Buscar la comision en el producto
-          $sql = 'SELECT comision FROM products WHERE _id = ' . $id_product;
-          $respComisionProd = $localConnection->goQuery($sql);
+          $sql = 'SELECT comision FROM products WHERE _id = ?';
+          $respComisionProd = $localConnection->goQuery($sql, [$id_product]);
           $comision = $respComisionProd[0]['comision'];
         } elseif ($comision_tipo === 'porcentaje') {
           // Para porcentaje: calcular basado en el precio del producto
-          $sql_precio = 'SELECT precio_unitario FROM ordenes_productos WHERE id_orden = ' . $args['id_orden'] . ' LIMIT 1';
-          $respPrecio = $localConnection->goQuery($sql_precio);
+          $sql_precio = 'SELECT precio_unitario FROM ordenes_productos WHERE id_orden = ? LIMIT 1';
+          $respPrecio = $localConnection->goQuery($sql_precio, [$idOrdenParam]);
           if (!empty($respPrecio)) {
             $precioProducto = floatval($respPrecio[0]['precio_unitario']);
             $porcentaje = floatval($respComision[0]['comision_porcentaje']);
@@ -4150,20 +4128,8 @@ $object['sales_commission_ISSET'][] = false;
           $comision = number_format($floatValue, 2);
         }
 
-        // $comision_disenador = number_format(floatval($comision, 2));
-
-        /* if (empty($miPago)) {
-            $sqlPago = 'INSERT INTO pagos (cantidad, comision, comision_tipo, id_orden, estatus, monto_pago, id_empleado, detalle) VALUES (1, ' . $comision . ", '" . $comision_tipo . "',  " . $args['id_orden'] . ", 'aprobado' , " . $comision . ', ' . $miDiseno[0]['id_empleado'] . ", 'Diseño');";
-            $object['resultInsertPago'] = $localConnection->goQuery($sqlPago);
-        } else {
-            // UPDATE pagos
-            $sqlPago = 'UPDATE pagos SET monto_pago = ' . $comision . ' WHERE id_orden = ' . $args['id_orden'] . ' AND id_empleado = ' . $miDiseno[0]['id_empleado'];
-            // $object['sqlPago'] = $sqlPago; // Removido para producción (auditoría de seguridad 2026-09-09)
-            $object['resultInsertPago'] = $localConnection->goQuery($sqlPago);
-        } */
-        $sqlPago = 'INSERT INTO pagos (cantidad, comision, comision_tipo, id_orden, estatus, monto_pago, id_empleado, detalle) VALUES (1, ' . $comision . ", '" . $comision_tipo . "',  " . $args['id_orden'] . ", 'aprobado' , " . $comision . ', ' . $miDiseno[0]['id_empleado'] . ", 'Diseño');";
-        // $object['sql_pago'] = $sqlPago; // Removido para producción (auditoría de seguridad 2026-09-09)
-        $object['resultInsertPago'] = $localConnection->goQuery($sqlPago);
+        $sqlPago = 'INSERT INTO pagos (cantidad, comision, comision_tipo, id_orden, estatus, monto_pago, id_empleado, detalle) VALUES (1, ?, ?, ?, ?, ?, ?, ?)';
+        $object['resultInsertPago'] = $localConnection->goQuery($sqlPago, [$comision, $comision_tipo, $idOrdenParam, 'aprobado', $comision, $miDiseno[0]['id_empleado'], 'Diseño']);
       }
     }
 
@@ -4196,20 +4162,21 @@ $object['sales_commission_ISSET'][] = false;
   $app->get('/comercializacion/revisiones/{id_empleado}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT acceso FROM  empresas_usuarios  WHERE id_usuario = ' . $args['id_empleado'];
-    $miEmpleado = $localConnection->goQuery($sql);
+    $idEmpleadoParam = intval($args['id_empleado']);
+    $sql = 'SELECT acceso FROM empresas_usuarios WHERE id_usuario = ?';
+    $miEmpleado = $localConnection->goQuery($sql, [$idEmpleadoParam]);
 
     $localConnection = new localDB();
 
     if ($miEmpleado[0]['acceso']) {
       // Mostrar todos los registros de revisiones
       $sql = "SELECT a.id_orden, a._id id_revision, a.id_diseno, b.id_wp id_cliente, a.revision, b.cliente_nombre cliente, a.detalles, a.estatus FROM revisiones a JOIN ordenes b ON a.id_orden = b._id WHERE b.status != 'entregada' AND b.status != 'cancelada' AND b.status != 'terminado' ORDER BY a._id DESC";
+      $object['revisiones'] = $localConnection->goQuery($sql);
     } else {
       // Mostrar solo los registros del venededor
-      $sql = 'SELECT a.id_orden, a._id id_revision, a.id_diseno, b.id_wp id_cliente, a.revision, b.cliente_nombre cliente, a.detalles, a.estatus FROM revisiones a JOIN ordenes b ON a.id_orden = b._id AND b.responsable = ' . $args['id_empleado'] . " WHERE b.responsable = '" . $args['id_empleado'] . "' AND b.status != 'entregada' AND b.status != 'cancelada' AND b.status != 'terminado' ORDER BY a._id DESC";
+      $sql = "SELECT a.id_orden, a._id id_revision, a.id_diseno, b.id_wp id_cliente, a.revision, b.cliente_nombre cliente, a.detalles, a.estatus FROM revisiones a JOIN ordenes b ON a.id_orden = b._id AND b.responsable = ? WHERE b.responsable = ? AND b.status != 'entregada' AND b.status != 'cancelada' AND b.status != 'terminado' ORDER BY a._id DESC";
+      $object['revisiones'] = $localConnection->goQuery($sql, [$idEmpleadoParam, $idEmpleadoParam]);
     }
-
-    $object['revisiones'] = $localConnection->goQuery($sql);
 
     $object['total_revisiones'] = count($object['revisiones']);
 
@@ -4246,14 +4213,14 @@ $object['sales_commission_ISSET'][] = false;
     $localConnection = new LocalDB();
 
     // Se corrige la consulta para seleccionar el campo 'observaciones'
-    $sql = "SELECT
+    $sql = 'SELECT
             observaciones
         FROM
             ordenes_observaciones a
         WHERE
-            a.id_orden = {$args['id_orden']}";
+            a.id_orden = ?';
 
-    $object = $localConnection->goQuery($sql);
+    $object = $localConnection->goQuery($sql, [intval($args['id_orden'])]);
 
     // Se añade JSON_UNESCAPED_UNICODE para asegurar que los caracteres especiales
     // dentro del HTML (como tildes o eñes) se envíen correctamente.

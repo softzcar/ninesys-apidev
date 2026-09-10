@@ -307,7 +307,7 @@ return function (App $app) {
   $app->post('/ordenes/guardadas/eliminar', function (Request $request, Response $response) {
     $localConnection = new LocalDB();
     $data = $request->getParsedBody();
-    $id = $data['id'];
+    $id = intval($data['id']);
     $tipo = $data['tipo'] ?? 'Borrador'; // 'Presupuesto Finalizado' o cualquier otra cosa (Borrador)
 
     // Atomicidad: borrado de presupuesto + sus productos en una transacción
@@ -315,16 +315,14 @@ return function (App $app) {
 
     if ($tipo === 'Presupuesto Finalizado') {
       // Eliminar presupuesto finalizado y sus productos
-      $sql1 = 'DELETE FROM presupuestos_productos WHERE id_orden = ' . $id;
-      $sql2 = 'DELETE FROM presupuestos WHERE _id = ' . $id;
-      $localConnection->goQuery($sql1);
-      $localConnection->goQuery($sql2);
-      // $object['sql_delete'] = "$sql1; $sql2"; // Removido para producción (auditoría de seguridad 2026-09-09)
+      $sql1 = 'DELETE FROM presupuestos_productos WHERE id_orden = ?';
+      $sql2 = 'DELETE FROM presupuestos WHERE _id = ?';
+      $localConnection->goQuery($sql1, [$id]);
+      $localConnection->goQuery($sql2, [$id]);
     } else {
       // Eliminar borrador
-      $sql = 'DELETE FROM ordenes_tmp WHERE _id =  ' . $id;
-      $localConnection->goQuery($sql);
-      // $object['sql_delete'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
+      $sql = 'DELETE FROM ordenes_tmp WHERE _id = ?';
+      $localConnection->goQuery($sql, [$id]);
     }
 
     $object['response_delete'] = "OK";

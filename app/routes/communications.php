@@ -75,11 +75,12 @@ return function (App $app) {
     }
 
     if ($campo != 'Unknown') {
-      $sql = 'UPDATE config SET ' . $campo . ' = ' . $datos['estado'] . ' WHERE _id = 1';
-      // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
+      // $campo viene de un whitelist fijo (switch de arriba), nunca de input
+      // directo -- seguro interpolarlo como nombre de columna.
+      $sql = "UPDATE config SET {$campo} = ? WHERE _id = 1";
       $object['departamento'] = $departamento;
       $object['id_departamento'] = $id_departamento;
-      $object['response'] = $localConnection->goQuery($sql);
+      $object['response'] = $localConnection->goQuery($sql, [intval($datos['estado'])]);
       $localConnection->disconnect();
     } else {
       $object['error'] = 'No existe una configuración para el departamento ' . $departamento;
@@ -199,7 +200,9 @@ return function (App $app) {
     }
 
     $tipo = $dataMensaje['tipo'];
-    $id_orden = $dataMensaje['id_orden'];  // Considera sanitizar/validar $id_orden antes de usarlo en SQL
+    // Auditoría de seguridad 2026-09-10: casteado una sola vez aquí -- antes
+    // quedaba crudo y algunos usos más abajo lo interpolaban sin intval().
+    $id_orden = intval($dataMensaje['id_orden']);
 
     // Buscar datos de la orden
     // Es MUY RECOMENDABLE usar sentencias preparadas para prevenir inyección SQL
@@ -269,7 +272,7 @@ return function (App $app) {
         break;
 
       case 'paso':
-        $sql_config = "SELECT mensaje msg FROM departamentos WHERE _id = {$dataMensaje['id_departamento']}";
+        $sql_config = 'SELECT mensaje msg FROM departamentos WHERE _id = ' . intval($dataMensaje['id_departamento']);
         break;
 
       case 'custom':
@@ -510,14 +513,14 @@ return function (App $app) {
 
     // VERIFICAR EL TIPO DE MENSAJE welcome ó bye
     if ($dataMensaje['tipo'] === 'welcome') {
-      $sql = "UPDATE config SET msg_welcome = '{$dataMensaje['mensaje']}' WHERE _id = 1";
+      $sql = 'UPDATE config SET msg_welcome = ? WHERE _id = 1';
     } else if ($dataMensaje['tipo'] === 'bye') {
-      $sql = "UPDATE config SET msg_bye = '{$dataMensaje['mensaje']}' WHERE _id = 1";
+      $sql = 'UPDATE config SET msg_bye = ? WHERE _id = 1';
     } else if ($dataMensaje['tipo'] === 'saldo') {
-      $sql = "UPDATE config SET msg_saldo = '{$dataMensaje['mensaje']}' WHERE _id = 1";
+      $sql = 'UPDATE config SET msg_saldo = ? WHERE _id = 1';
     }
 
-    $result = $localConnection->goQuery($sql);
+    $result = $localConnection->goQuery($sql, [$dataMensaje['mensaje']]);
 
     $localConnection->disconnect();
 
@@ -670,7 +673,8 @@ return function (App $app) {
   // ENVIAR MENSAJES A CLIENTES PASOS DE PRODUCCIÓN
   $app->post('/send-message-produccion', function (Request $request, Response $response, $args) {
     $dataMensaje = $request->getParsedBody();
-    $id_dep = $dataMensaje['id_departamento_empelado'];
+    $id_dep = intval($dataMensaje['id_departamento_empelado']);
+    $dataMensaje['id_orden'] = intval($dataMensaje['id_orden']);
 
     $localConnection = new LocalDB();
 
@@ -679,8 +683,8 @@ return function (App $app) {
     $msg = ['mensaje' => ''];
 
     // Buscar estado de enviar_mensaje
-    $sql = "SELECT enviar_mensaje FROM departamentos WHERE _id = $id_dep";
-    $response_departamentos = $localConnection->goQuery($sql);
+    $sql = 'SELECT enviar_mensaje FROM departamentos WHERE _id = ?';
+    $response_departamentos = $localConnection->goQuery($sql, [$id_dep]);
     $enviar_mensaje = intval($response_departamentos[0]['enviar_mensaje'] ?? 0);
 
     // Buscamos el nombre y teléfono del cliente
@@ -692,8 +696,8 @@ return function (App $app) {
                     ordenes a
                 LEFT JOIN customers b ON b._id = a.id_wp
                 WHERE
-                    a._id = ' . $dataMensaje['id_orden'];
-    $response_client = $localConnection->goQuery($sql);
+                    a._id = ?';
+    $response_client = $localConnection->goQuery($sql, [$dataMensaje['id_orden']]);
     $cliente = $response_client[0]['first_name'] ?? 'Cliente';
     $phone_cliente = $response_client[0]['phone'] ?? null;
 

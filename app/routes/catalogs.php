@@ -625,8 +625,8 @@ return function (App $app) {
   $app->delete('/insumos-productos-asignados/{id_insumo}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'DELETE FROM product_insumos_asignados WHERE _id =  ' . $args['id_insumo'];
-    $object = $localConnection->goQuery($sql);
+    $sql = 'DELETE FROM product_insumos_asignados WHERE _id = ?';
+    $object = $localConnection->goQuery($sql, [intval($args['id_insumo'])]);
 
     $localConnection->disconnect();
 
@@ -670,8 +670,8 @@ return function (App $app) {
                 JOIN departamentos d ON
                     d._id = a.id_departamento
                 JOIN ordenes_productos e ON a.id_product = e.id_woo
-                WHERE e.id_orden = {$args['id_orden']} AND d._id = {$args['id_departamento']}        ";
-    $object = $localConnection->goQuery($sql);
+                WHERE e.id_orden = ? AND d._id = ?";
+    $object = $localConnection->goQuery($sql, [intval($args['id_orden']), intval($args['id_departamento'])]);
     $localConnection->disconnect();
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));

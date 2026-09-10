@@ -775,6 +775,7 @@ return function (App $app) {
 
   // SSE CORTE
   $app->get('/sse/produccion/corte/{id_empleado}', function (Request $request, Response $response, array $args) {  // /lotes/en-proceso
+    $args['id_empleado'] = intval($args['id_empleado']);
     // 2026-08-13: el filtro por empleado usaba lotes_detalles.id_empleado,
     // una columna legacy que ya no se puebla (100% NULL para las tareas
     // pendientes reales -- mismo hallazgo que en /sse/produccion/ordenes-activas).
@@ -846,7 +847,7 @@ return function (App $app) {
 
   // SSE DISENO
   $app->get('/sse/diseno/{id_empleado}', function (Request $request, Response $response, array $args) {  // /lotes/en-proceso
-    // $sql = "SELECT a._id orden, a._id vinculada, a.cliente_nombre cliente, b.prioridad, b.paso, a.fecha_inicio inicio, a.fecha_entrega entrega, a.observaciones detalles, a._id acciones, a.status estatus FROM ordenes a JOIN lotes b ON a._id = b.id_orden  WHERE a.status = 'activa' OR a.status = 'pausada' OR a.status = 'En espera' ORDER BY a._id DESC";
+    $args['id_empleado'] = intval($args['id_empleado']);
     $localConnection = new LocalDB();
     $sql = "SELECT
                     c._id id_revision,
@@ -980,8 +981,8 @@ return function (App $app) {
     $localConnection = new LocalDB();
 
     // BUSCAR PASO ACTUAL EN EL LOTE
-    $sql = 'SELECT paso from lotes WHERE _id = ' . $args['id_orden'];
-    $tmpPaso = $localConnection->goQuery($sql);
+    $sql = 'SELECT paso from lotes WHERE _id = ?';
+    $tmpPaso = $localConnection->goQuery($sql, [intval($args['id_orden'])]);
 
     $localConnection->disconnect();
 
@@ -1022,9 +1023,8 @@ return function (App $app) {
         JOIN ordenes_productos c ON
             a.id_ordenes_productos = c._id
         WHERE
-            a.id_ordenes_productos = ' . $args['id_ordenes_productos'] . ' AND a.id_orden = ' . $args['id_orden'] . ' AND a.eliminada = 0';
-    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-    $object['data'] = $localConnection->goQuery($sql);
+            a.id_ordenes_productos = ? AND a.id_orden = ? AND a.eliminada = 0';
+    $object['data'] = $localConnection->goQuery($sql, [intval($args['id_ordenes_productos']), intval($args['id_orden'])]);
 
     $localConnection->disconnect();
 
@@ -1556,8 +1556,8 @@ return function (App $app) {
   $app->post('/produccion/reposicion', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
-    $sql = 'SELECT * FROM ordenes_productos WHERE _id = ' . $data['id_ordenes_productos'];
-    $producto = $localConnection->goQuery($sql)[0];
+    $sql = 'SELECT * FROM ordenes_productos WHERE _id = ?';
+    $producto = $localConnection->goQuery($sql, [intval($data['id_ordenes_productos'])])[0];
     $id_orden = $producto['id_orden'];
 
     $myDate = new CustomTime();
@@ -1742,12 +1742,12 @@ return function (App $app) {
 
     // Validar si la reposicion ha sido aprobada
     if ($data['aprobada'] === '0') {
-      $sql = "UPDATE reposiciones SET aprobada = 0, detalle = '" . $data['detalle'] . "' WHERE _id = " . $data['id_reposicion'];
-      $aprobacion = $localConnection->goQuery($sql);
+      $sql = 'UPDATE reposiciones SET aprobada = 0, detalle = ? WHERE _id = ?';
+      $aprobacion = $localConnection->goQuery($sql, [$data['detalle'], intval($data['id_reposicion'])]);
       $object['resp_reposiciones'] = $aprobacion;
     } else {
-      $sql = "UPDATE reposiciones SET aprobada = 1, detalle = '" . $data['detalle'] . "', id_empleado = " . $data['id_empleado'] . ', id_departamento = ' . $data['id_departamento'] . ' WHERE _id = ' . $data['id_reposicion'];
-      $aprobacion = $localConnection->goQuery($sql);
+      $sql = 'UPDATE reposiciones SET aprobada = 1, detalle = ?, id_empleado = ?, id_departamento = ? WHERE _id = ?';
+      $aprobacion = $localConnection->goQuery($sql, [$data['detalle'], intval($data['id_empleado']), intval($data['id_departamento']), intval($data['id_reposicion'])]);
       $object['resp_reposiciones'] = $aprobacion;
     }
 
@@ -1908,8 +1908,12 @@ return function (App $app) {
     $localConnection->beginTransaction();
     $object['response_update'] = [];
     foreach ($object['request_data'] as $key => $item) {
-      $sql = 'UPDATE lotes_detalles SET id_empleado = ' . $data['id_empleado'] . ', unidades_solicitadas = ' . $object['request_data'][$key]->cantidad . '  WHERE _id = ' . $object['request_data'][$key]->id_lotes_detalles . ';';
-      $object['response_update'][] = $localConnection->goQuery($sql);
+      $sql = 'UPDATE lotes_detalles SET id_empleado = ?, unidades_solicitadas = ? WHERE _id = ?';
+      $object['response_update'][] = $localConnection->goQuery($sql, [
+        intval($data['id_empleado']),
+        floatval($object['request_data'][$key]->cantidad),
+        intval($object['request_data'][$key]->id_lotes_detalles),
+      ]);
     }
     $localConnection->commit();
 
@@ -1941,8 +1945,7 @@ return function (App $app) {
                                 $sql .= "UPDATE lotes_detalles SET id_empleado = " . $data["id_epleado"] . " WHERE id_orden = " . $idOrden . " AND ";
                             } */
 
-    // $response->getBody()->write(json_encode($object));
-    $response->getBody()->write(json_encode($sql));
+    $response->getBody()->write(json_encode($object));
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
@@ -1983,6 +1986,7 @@ return function (App $app) {
   // PROGRESSBAR
   $app->get('/produccion/progressbar/{id_orden}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
+    $args['id_orden'] = intval($args['id_orden']);
 
     try {
       // VERIFICAR STATUS DE LA ORDEN
@@ -2079,18 +2083,16 @@ return function (App $app) {
 
   // Detalles para la asignacion de personal V2
   $app->get('/lotes/detalles/v2/{id}', function (Request $request, Response $response, array $args) {
-    $id = $args['id'];
+    $id = intval($args['id']);
     $localConnection = new LocalDB();
 
     // OBTENER PRODUCTOS DEL LOTE
     // EXCLUIR DISEÑOS FILTRANDO POR NOMBRE
-    $sql = "SELECT * FROM ordenes_productos WHERE category_name != 'Diseños' AND id_orden = " . $id;
-    $object['query_orden_productos'] = $sql;
-    $object['orden_productos'] = $localConnection->goQuery($sql);
+    $sql = "SELECT * FROM ordenes_productos WHERE category_name != 'Diseños' AND id_orden = ?";
+    $object['orden_productos'] = $localConnection->goQuery($sql, [$id]);
 
-    $sql = 'SELECT * FROM lotes_detalles WHERE id_orden = ' . $id;
-    $object['query_lotes_detalle'] = $sql;
-    $object['lote_detalles'] = $localConnection->goQuery($sql);
+    $sql = 'SELECT * FROM lotes_detalles WHERE id_orden = ?';
+    $object['lote_detalles'] = $localConnection->goQuery($sql, [$id]);
 
     $localConnection->disconnect();
 
@@ -2133,25 +2135,24 @@ return function (App $app) {
 
   // Detalles para la asignacion de personal
   $app->get('/lotes/detalles/{id}', function (Request $request, Response $response, array $args) {
-    $id = $args['id'];
+    $id = intval($args['id']);
     $localConnection = new LocalDB();
 
     // OBTENER LOTE
-    $sql = 'SELECT _id, lote, fecha, id_orden, paso  FROM lotes WHERE _id = ' . $id;
-    $object['lote'] = $localConnection->goQuery($sql);
+    $sql = 'SELECT _id, lote, fecha, id_orden, paso FROM lotes WHERE _id = ?';
+    $object['lote'] = $localConnection->goQuery($sql, [$id]);
 
     // OBTENER PRODUCTOS DEL LOTE
-    $sql = 'SELECT _id, name producto FROM ordenes_productos WHERE id_orden = ' . $id;
-    $object['orden_productos'] = $localConnection->goQuery($sql);
+    $sql = 'SELECT _id, name producto FROM ordenes_productos WHERE id_orden = ?';
+    $object['orden_productos'] = $localConnection->goQuery($sql, [$id]);
 
     // OBTENER PAGOS
-    $sql = 'SELECT * FROM pagos WHERE id_orden = ' . $id;
-    $object['orden_pagos'] = $localConnection->goQuery($sql);
+    $sql = 'SELECT * FROM pagos WHERE id_orden = ?';
+    $object['orden_pagos'] = $localConnection->goQuery($sql, [$id]);
 
     // OBTENER DETALLES DEL LOTE
-    $sql = 'SELECT * FROM lotes_detalles WHERE id_orden = ' . $id;
-    $object['lote_detalles'] = $localConnection->goQuery($sql);
-    $object['lote_detalles_SQL'] = $sql;
+    $sql = 'SELECT * FROM lotes_detalles WHERE id_orden = ?';
+    $object['lote_detalles'] = $localConnection->goQuery($sql, [$id]);
 
     $localConnection->disconnect();
 
@@ -2170,9 +2171,8 @@ return function (App $app) {
     // NOTA: "observaciones" ya no es columna de ordenes en ningun motor (MySQL ni Postgres);
     // se movio a su propia tabla ordenes_observaciones (una fila por orden, patron upsert
     // usado en orders.php). Bug preexistente en ambos motores, no especifico de esta migracion.
-    $sql = 'SELECT observaciones FROM ordenes_observaciones WHERE id_orden = ' . $args['id'];
-    // $object['sql'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-    $object['detalle'] = $localConnection->goQuery($sql);
+    $sql = 'SELECT observaciones FROM ordenes_observaciones WHERE id_orden = ?';
+    $object['detalle'] = $localConnection->goQuery($sql, [intval($args['id'])]);
 
     $localConnection->disconnect();
 
@@ -2187,8 +2187,8 @@ return function (App $app) {
   $app->get('/ordenes/vinculadas/{id_orden_father}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
-    $sql = 'SELECT id_child FROM ordenes_vinculadas WHERE id_father = ' . $args['id_orden_father'];
-    $vinculadas = $localConnection->goQuery($sql);
+    $sql = 'SELECT id_child FROM ordenes_vinculadas WHERE id_father = ?';
+    $vinculadas = $localConnection->goQuery($sql, [intval($args['id_orden_father'])]);
 
     $localConnection->disconnect();
 

@@ -925,8 +925,8 @@ return function (App $app) {
             b.detalle
             FROM api_empresas.empresas_usuarios a
             LEFT JOIN asistencias b ON b.id_empleado = a.id_usuario
-            WHERE a.activo = 1 AND a.id_empresa = " . ID_EMPRESA . " AND ((b.moment::text LIKE '" . $fecha . "%') OR (b.moment IS NULL))
-            ORDER BY a.nombre ASC;";
+            WHERE a.activo = 1 AND a.id_empresa = " . ID_EMPRESA . " AND ((b.moment::text LIKE ?) OR (b.moment IS NULL))
+            ORDER BY a.nombre ASC";
         } else {
             $sql = "SELECT
             a._id id_empleado,
@@ -938,12 +938,11 @@ return function (App $app) {
             b.detalle
             FROM empleados a
             LEFT JOIN asistencias b ON b.id_empleado = a._id
-            WHERE a.activo = 1 AND ((b.moment LIKE '" . $fecha . "%') OR (b.moment IS NULL))
-            ORDER BY a.nombre ASC;";
+            WHERE a.activo = 1 AND ((b.moment LIKE ?) OR (b.moment IS NULL))
+            ORDER BY a.nombre ASC";
         }
-        // $object['sql_diarias'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
         $mod_date = strtotime($date . '+ 0 days');
-        $object['diarias'] = $localConnection->goQuery($sql);
+        $object['diarias'] = $localConnection->goQuery($sql, [$fecha . '%']);
 
         // NUEVO REPORTE
         if (DB_DRIVER === 'pgsql') {
@@ -1036,8 +1035,8 @@ return function (App $app) {
                       ) AS horas_trabajadas
                 FROM asistencias a
                 JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado
-                WHERE a.moment::date BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
-                GROUP BY a.id_empleado, b.nombre;
+                WHERE a.moment::date BETWEEN ? AND ?
+                GROUP BY a.id_empleado, b.nombre
                 ";
         } else {
             $sql = "SELECT
@@ -1062,13 +1061,13 @@ return function (App $app) {
                              ),
                       2
                       ) AS horas_trabajadas
-                FROM asistencias a 
-                JOIN empleados b ON b._id = a.id_empleado 
-                WHERE DATE(a.moment) BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
-                GROUP BY a.id_empleado;
+                FROM asistencias a
+                JOIN empleados b ON b._id = a.id_empleado
+                WHERE DATE(a.moment) BETWEEN ? AND ?
+                GROUP BY a.id_empleado
                 ";
         }
-        $object['resumen'] = $localConnection->goQuery($sql);
+        $object['resumen'] = $localConnection->goQuery($sql, [$args['fecha_inicio'], $args['fecha_fin']]);
 
         // REPORTE DETALLADO
         if (DB_DRIVER === 'pgsql') {
@@ -1086,7 +1085,7 @@ return function (App $app) {
                 END AS registro 
                 FROM asistencias a
                 JOIN api_empresas.empresas_usuarios b ON b.id_usuario = a.id_empleado
-                WHERE a.moment::date BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
+                WHERE a.moment::date BETWEEN ? AND ?
                 ORDER BY b.nombre ASC, a.moment ASC,
                 CASE 
                 WHEN a.registro = 'entrada_manana' THEN 1 
@@ -1108,14 +1107,14 @@ return function (App $app) {
                 WHEN a.registro = 'salida_tarde' THEN 'Salida tarde'
                 ELSE a.registro 
                 END AS registro 
-                FROM asistencias a 
-                JOIN empleados b ON b._id = a.id_empleado 
-                WHERE DATE(a.moment) BETWEEN '" . $args['fecha_inicio'] . "' AND '" . $args['fecha_fin'] . "'
+                FROM asistencias a
+                JOIN empleados b ON b._id = a.id_empleado
+                WHERE DATE(a.moment) BETWEEN ? AND ?
                 ORDER BY b.nombre ASC, a.moment ASC,
-                FIELD(a.registro, 'entrada_manana', 'salida_manana', 'entrada_tarde', 'salida_tarde');
+                FIELD(a.registro, 'entrada_manana', 'salida_manana', 'entrada_tarde', 'salida_tarde')
                 ";
         }
-        $object['detallado'] = $localConnection->goQuery($sql);
+        $object['detallado'] = $localConnection->goQuery($sql, [$args['fecha_inicio'], $args['fecha_fin']]);
 
         $localConnection->disconnect();
 
