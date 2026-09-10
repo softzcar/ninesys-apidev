@@ -449,6 +449,30 @@ return function (App $app) {
 
     /** * Refresh Session Data */
     $app->get('/refresh-session/{id}', function (Request $request, Response $response, array $args) {
+        // Fix de seguridad 2026-09-10 (hallazgo IDOR, ver [[project_fase_seguridad_pendiente]]):
+        // antes confiaba ciegamente en {id} de la URL -- con el header crudo de
+        // siempre (sin firma), cualquiera podía leer los datos de sesión (email,
+        // empresa, gastos fijos, moneda base, wizard operativo) de CUALQUIER
+        // usuario del sistema con solo adivinar/incrementar su id_usuario. Ahora
+        // que existe la sesión JWT real (IdEmpresaMiddleware modo 2), este
+        // endpoint la exige explícitamente -- no basta con estar autenticado
+        // como servicio o en modo legado, hace falta un JWT válido cuyo
+        // id_usuario coincida con el {id} pedido.
+        if (!defined('ID_USUARIO_TOKEN')) {
+            $response->getBody()->write(json_encode([
+                'error' => 'invalid_token',
+                'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+        if ((int) ID_USUARIO_TOKEN !== (int) $args['id']) {
+            $response->getBody()->write(json_encode([
+                'error' => 'forbidden',
+                'message' => 'No tiene permiso para refrescar la sesión de otro usuario.',
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+        }
+
         $id_usuario = $args['id'];
         $object = ['debug' => []];
 
