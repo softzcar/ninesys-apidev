@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.31] - 2026-09-10
+- Auditoria de seguridad: fix real de CORS -- ResponseEmitter sobrescribia el fix anterior y agregaba Allow-Credentials sin validar.
+
 ## [v1.0.30] - 2026-09-10
 - Auditoria de seguridad Fase 1: acotar CORS a origenes reales en vez de '*'.
 
