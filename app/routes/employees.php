@@ -190,8 +190,17 @@ return function (App $app) {
         // que pudiera llamar el endpoint (auditoría de seguridad 2026-09-09).
         // El formulario de edición ya no la necesita: dejar el campo de clave
         // en blanco significa "no cambiarla" (ver /empleados/editar).
+        //
+        // Salario/comisión también se quitan para quien no sea administrador
+        // (Fase 4, auditoría de seguridad 2026-09-10, cierra A6) -- el listado
+        // sigue disponible para selectores/dropdowns que solo necesitan
+        // nombre/departamento, no los datos financieros de todos.
+        $esAdmin = defined('ACCESO_TOKEN') && (int) ACCESO_TOKEN === 1;
         foreach ($items as &$item) {
             unset($item['password']);
+            if (!$esAdmin) {
+                unset($item['salario_tipo'], $item['salario_monto'], $item['salario_periodo'], $item['comision'], $item['comision_tipo'], $item['comision_porcentaje']);
+            }
             if (!empty($item['departamentos'])) {
                 $item['departamentos'] = json_decode($item['departamentos'], true);
             }
@@ -248,6 +257,9 @@ return function (App $app) {
 
     // Nuevo Empleado
     $app->post('/empleados/nuevo', function (Request $request, Response $response) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $miEmpleado = $request->getParsedBody();
 
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
@@ -509,6 +521,9 @@ return function (App $app) {
 
     // Elditar Empleados
     $app->post('/empleados/editar', function (Request $request, Response $response) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $miEmpleado = $request->getParsedBody();
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
@@ -635,6 +650,9 @@ return function (App $app) {
 
     // Eliminar Empleados
     $app->post('/empleados/eliminar', function (Request $request, Response $response) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $miEmpleado = $request->getParsedBody();
         $id_empleado = (int) $miEmpleado['id'];
         $localConnection = new LocalDB();

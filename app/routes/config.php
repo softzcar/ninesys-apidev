@@ -214,6 +214,9 @@ return function (App $app) {
 
     // CONFIGURACIÓN WIZARD - ADMIN
     $app->post('/configuracion/admin/{id}', function (Request $request, Response $response, array $args) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $data = $request->getParsedBody();
         $id = $args['id'];
 
@@ -259,6 +262,9 @@ return function (App $app) {
 
     // CONFIGURACIÓN WIZARD - EMPRESA
     $app->post('/configuracion/empresa/{id}', function (Request $request, Response $response, array $args) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $data = $request->getParsedBody();
         $employeeId = $args['id'];
 
@@ -447,6 +453,9 @@ return function (App $app) {
 
     // CONFIGURACIÓN WIZARD - MONEDAS
     $app->post('/configuracion/monedas', function (Request $request, Response $response, array $args) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $rawBody = $request->getBody()->getContents();
         $data = json_decode($rawBody, true);
 
@@ -521,6 +530,9 @@ return function (App $app) {
 
     // CONFIGURACIÓN WIZARD - HORARIO
     $app->post('/configuracion/horario', function (Request $request, Response $response, array $args) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $rawBody = $request->getBody()->getContents();
         $data = json_decode($rawBody, true);
 
@@ -684,6 +696,9 @@ return function (App $app) {
 
     // CONFIGURACIÓN WIZARD - PERSONALIZACIÓN
     $app->post('/configuracion/personalizacion', function (Request $request, Response $response) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         try {
             $json = $request->getBody()->getContents();
             $data = json_decode($json, true);
@@ -809,6 +824,11 @@ return function (App $app) {
         if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
             $response->getBody()->write(json_encode(['success' => false, 'message' => 'Acceso no autorizado.']));
             return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+        // Fase 4, auditoría de seguridad 2026-09-10 (cierra A6) -- misma
+        // categoría que el resto de /configuracion/*, agregado al barrido.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
         }
 
         try {

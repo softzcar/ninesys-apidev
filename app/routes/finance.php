@@ -11,6 +11,12 @@ return function (App $app) {
 
   // REPORTE GENERAL DE PAGOS Y ABONOS
   $app->get('/reporte-de-pagos[/{inicio}/{fin}/{id_vendedor}]', function (Request $request, Response $response, array $args) {
+    // Fase 4, auditoría de seguridad 2026-09-10 (cierra A6) -- confirmado que
+    // solo pagos-abonos.vue (admin) lo llama, a diferencia de cierre-de-caja/
+    // reporte-de-caja (operación diaria de cualquier vendedor, sin tocar).
+    if ($errorResponse = requiereAdmin($request, $response)) {
+        return $errorResponse;
+    }
     /** FONDO */
     $localConnection = new LocalDB();
     if (DB_DRIVER !== 'pgsql') {
@@ -1165,6 +1171,11 @@ return function (App $app) {
 
   // Balance de Cierres de Caja
   $app->get('/balance-de-cierres/{inicio}/{fin}/{id_vendedor}', function (Request $request, Response $response, array $args) {
+    // Fase 4, auditoría de seguridad 2026-09-10 (cierra A6) -- confirmado
+    // que solo balance-cierres.vue (admin) lo llama.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+        return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $inicio = $args['inicio'];
     $fin = $args['fin'];

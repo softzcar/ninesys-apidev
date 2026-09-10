@@ -96,6 +96,11 @@ return function (App $app) {
     // REPORTE DE COSTOS DE PRODUCCIÓN
     // =================================================================
     $app->get('/reportes/costos-produccion/{inicio}/{fin}', function (Request $request, Response $response, array $args) {
+        // Fase 4, auditoría de seguridad 2026-09-10 (cierra A6) -- confirmado
+        // que solo ReporteCostosProduccion.vue (components/admin/) lo llama.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $inicio = $args['inicio'] ?? null;
         $fin = $args['fin'] ?? null;
         $id_empresa = ID_EMPRESA;
