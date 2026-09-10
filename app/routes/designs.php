@@ -539,15 +539,19 @@ return function (App $app) {
     $id_orden = intval($data['id_orden']);
     $id_empleado = intval($data['id_empleado']);
     // Usar valores por defecto si no se proporcionan
-    $id_product = isset($data['id_product']) ? intval($data['id_product']) : 'NULL';
-    $tipo_diseno = isset($data['tipo_diseno']) ? addslashes($data['tipo_diseno']) : 'Diseño por definir';
+    $id_product = isset($data['id_product']) ? intval($data['id_product']) : null;
+    // Auditoría de seguridad 2026-09-10: addslashes() no protege nada contra
+    // esta base de datos (Postgres corre con standard_conforming_strings=on)
+    // -- mismo hallazgo que orders.php/BaseQuery.php, ver memoria de
+    // seguridad. Se pasa como parámetro preparado (?) en vez de concatenado.
+    $tipo_diseno = isset($data['tipo_diseno']) ? $data['tipo_diseno'] : 'Diseño por definir';
 
     // Atomicidad FK: crear el diseño y su primera revisión en una transacción
     $localConnection->beginTransaction();
 
     // 3. Crear el nuevo "Proyecto de Diseño" en la tabla `disenos`
-    $sqlDiseno = "INSERT INTO disenos (id_orden, id_empleado, id_product, tipo, origen) VALUES ({$id_orden}, {$id_empleado}, {$id_product}, '{$tipo_diseno}', 'agregado_posterior')";
-    $resultDiseno = $localConnection->goQuery($sqlDiseno);
+    $sqlDiseno = 'INSERT INTO disenos (id_orden, id_empleado, id_product, tipo, origen) VALUES (?, ?, ?, ?, ?)';
+    $resultDiseno = $localConnection->goQuery($sqlDiseno, [$id_orden, $id_empleado, $id_product, $tipo_diseno, 'agregado_posterior']);
 
     // Verificar si hubo un error en la primera inserción
     if (isset($resultDiseno['status']) && $resultDiseno['status'] === 'error') {
@@ -573,8 +577,8 @@ return function (App $app) {
     }
 
     // 5. Crear la primera revisión para este nuevo proyecto en la tabla `revisiones`
-    $sqlRevision = "INSERT INTO revisiones (id_orden, id_diseno, id_empleado, id_product, revision, tipo) VALUES ({$id_orden}, {$id_diseno_nuevo}, {$id_empleado}, {$id_product}, 1, '{$tipo_diseno}')";
-    $resultRevision = $localConnection->goQuery($sqlRevision);
+    $sqlRevision = 'INSERT INTO revisiones (id_orden, id_diseno, id_empleado, id_product, revision, tipo) VALUES (?, ?, ?, ?, 1, ?)';
+    $resultRevision = $localConnection->goQuery($sqlRevision, [$id_orden, $id_diseno_nuevo, $id_empleado, $id_product, $tipo_diseno]);
 
     // 5b. Obtener el ID de la revisión recién creada -- el frontend lo necesita
     // de inmediato en el mismo flujo de clic (ahora este endpoint se llama al
@@ -598,7 +602,7 @@ return function (App $app) {
     $payload = json_encode([
       'success' => true,
       'message' => 'Nuevo proyecto de diseño y su primera revisión han sido creados.',
-      'sql_rev' => $sqlRevision,
+      // 'sql_rev' => $sqlRevision, // Removido para producción (auditoría de seguridad 2026-09-10)
       'id_diseno_nuevo' => $id_diseno_nuevo,
       'id_revision_nuevo' => $id_revision_nuevo
     ], JSON_NUMERIC_CHECK);
