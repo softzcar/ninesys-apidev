@@ -579,6 +579,20 @@ return function (App $app) {
         // clave real del empleado en texto plano para poder reenviarla igual
         // si no se tocaba, y la API la devolvía en claro en GET /empleados).
         $cambiarClave = isset($miEmpleado['password']) && $miEmpleado['password'] !== '';
+
+        // Email ANTES del update -- si el bloqueo de fuerza bruta (Capa 2,
+        // auditoría de seguridad 2026-09-11) existe, está guardado contra el
+        // email actual del empleado, no el nuevo si este mismo request
+        // también lo está cambiando.
+        $emailAntesDelCambio = null;
+        if ($cambiarClave) {
+            $filaActual = $localConnection->goQuery(
+                'SELECT email FROM api_empresas.empresas_usuarios WHERE id_usuario = ?',
+                [(int) $miEmpleado['_id']]
+            );
+            $emailAntesDelCambio = $filaActual[0]['email'] ?? null;
+        }
+
         $sql = 'UPDATE api_empresas.empresas_usuarios SET nombre = ?, acceso = ?' . ($cambiarClave ? ', password = ?' : '') . ', email = ?, telefono = ?, comision_tipo = ?, comision = ?, comision_porcentaje = ?, salario_tipo = ?, salario_monto = ?, salario_periodo = ?, dni = ?, fecha_ingreso = ?, id_seguridad_social = ? WHERE id_usuario = ?';
         $params = [$miEmpleado['nombre'], $miEmpleado['acceso']];
         if ($cambiarClave) {
@@ -591,6 +605,13 @@ return function (App $app) {
             $miEmpleado['fecha_ingreso'], $miEmpleado['id_seguridad_social'], (int) $miEmpleado['_id'],
         );
         $localConnection->goQuery($sql, $params);
+
+        // Cambiar la clave de un empleado también lo desbloquea si estaba
+        // bloqueado por fuerza bruta -- caso real mencionado explícitamente
+        // por el usuario (Capa 2, auditoría de seguridad 2026-09-11).
+        if ($cambiarClave && $emailAntesDelCambio) {
+            limpiarIntentos($localConnection, $emailAntesDelCambio);
+        }
 
         // Limpiar registros anteriores -- SOLO de esta empresa (una identidad puede
         // tener asignaciones de departamento en otra(s) empresa(s) también, no se tocan).
@@ -646,6 +667,46 @@ return function (App $app) {
         return $response
             ->withHeader('Content-Type', 'application/json')
             ->withStatus(200);
+    });
+
+    // Desbloquear login -- auditoría de seguridad 2026-09-11 (Capa 2 de
+    // protección contra fuerza bruta, ver memoria de seguridad
+    // [[project_fase_seguridad_pendiente]]). Caso real: un empleado agota
+    // los intentos y necesita seguir trabajando; un Administrador confirma
+    // su identidad (o le cambia la clave, que también desbloquea
+    // automáticamente, ver /empleados/editar) y libera el bloqueo sin
+    // esperar los 15 minutos. EXCLUSIVO de Administradores -- requiereAdmin()
+    // es la PRIMERA línea, antes de tocar cualquier otra cosa.
+    $app->post('/empleados/desbloquear-login', function (Request $request, Response $response) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
+
+        $datos = $request->getParsedBody();
+        $idUsuario = isset($datos['id_usuario']) ? (int) $datos['id_usuario'] : null;
+        $email = isset($datos['email']) ? trim((string) $datos['email']) : null;
+
+        $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+
+        if (!$email && $idUsuario) {
+            $fila = $localConnection->goQuery(
+                'SELECT email FROM api_empresas.empresas_usuarios WHERE id_usuario = ?',
+                [$idUsuario]
+            );
+            $email = $fila[0]['email'] ?? null;
+        }
+
+        if (!$email) {
+            $localConnection->disconnect();
+            $response->getBody()->write(json_encode(['error' => 'Debe indicar email o id_usuario del empleado a desbloquear.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        limpiarIntentos($localConnection, $email);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode(['message' => 'Acceso desbloqueado correctamente.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     });
 
     // Eliminar Empleados

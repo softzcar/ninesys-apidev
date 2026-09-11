@@ -40,7 +40,35 @@ return function (App $app) {
         $datosAcceso = $request->getParsedBody();
         $object = ['debug' => []];
 
+        // Protección contra fuerza bruta -- auditoría de seguridad 2026-09-11,
+        // ver memoria de seguridad [[project_fase_seguridad_pendiente]].
+        $serverParams = $request->getServerParams();
+        $ipCliente = $request->getHeaderLine('CF-Connecting-IP') ?: ($serverParams['REMOTE_ADDR'] ?? '');
+        $emailIntentado = trim((string) ($datosAcceso['email'] ?? ''));
+
+        // Capa 1: CAPTCHA (Cloudflare Turnstile) -- se verifica ANTES de tocar
+        // la base de datos. Si falla, ni siquiera cuenta como intento fallido
+        // para la Capa 2 (un bot sin token no debería poder gastar el cupo de
+        // intentos de un email real).
+        $turnstileToken = (string) ($datosAcceso['cf-turnstile-response'] ?? '');
+        if (!verificarTurnstile($turnstileToken, $ipCliente)) {
+            $object['msg'] = 'No se pudo verificar que la solicitud proviene de una persona. Intente de nuevo.';
+            $object['data']['access'] = false;
+            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+
+        // Capa 2: límite de intentos por email (ver LoginIntentosHelper.php --
+        // nunca por IP, para no bloquear oficinas enteras que comparten una
+        // sola IP de salida).
+        if (estaBloqueado($localConnection, $emailIntentado) !== null) {
+            $object['msg'] = 'Demasiados intentos. Intente de nuevo en unos minutos.';
+            $object['data']['access'] = false;
+            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(429);
+        }
 
         // Paso 1: Buscar usuario solo por email
         $sql_user = 'SELECT id_usuario, email, password, nombre, telefono, departamento, id_empresa, activo, acceso, comision FROM empresas_usuarios WHERE email = ?';
@@ -50,6 +78,7 @@ return function (App $app) {
         if (empty($credenciales)) {
             // Mensaje genérico a propósito -- auditoría de seguridad 2026-09-11
             // (Fase 5, M5): antes revelaba si un email estaba registrado o no.
+            registrarIntentoFallido($localConnection, $emailIntentado);
             $object['msg'] = 'Los datos de acceso proporcionados no son correctos';
             $object['data']['access'] = false;
             $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
@@ -74,11 +103,20 @@ return function (App $app) {
 
         // Paso 2: Verificar contraseña ANTES de cualquier otra validación
         if (!verificarClave($datosAcceso['password'], $usuario_data['password'])) {
+            registrarIntentoFallido($localConnection, $emailIntentado);
             $object['msg'] = 'Los datos de acceso proporcionados no son correctos';
             $object['data']['access'] = false;
             $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
+
+        // Clave correcta: limpiar el contador de intentos fallidos de este
+        // email (Capa 2 de protección contra fuerza bruta). Se hace acá, tan
+        // pronto se confirma la clave, y no más abajo -- un fallo posterior
+        // no relacionado con las credenciales (ej. configuración de empresa
+        // incompleta) no debería mantener el bloqueo de alguien que sí probó
+        // la clave correcta.
+        limpiarIntentos($localConnection, $usuario_data['email']);
 
         // Migración transparente a hash (Fase 3): si la clave todavía estaba
         // en texto plano (o el hash quedó con un algoritmo desactualizado),
