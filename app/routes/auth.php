@@ -346,9 +346,16 @@ return function (App $app) {
             // El "reclamo" (lo que efectivamente cierra cualquier sesión
             // anterior) ocurre acá, justo antes de emitir el token -- nunca
             // antes, para no quitarle la sesión a nadie por un login que
-            // termina fallando más abajo.
+            // termina fallando más abajo. `sesiones_activas` vive en la BD
+            // CENTRAL -- $localConnection ya cambió a la BD de la empresa
+            // más arriba (switchDatabase(), línea ~252), así que hace falta
+            // una conexión aparte (bug real encontrado en producción de
+            // pruebas 2026-09-11: daba 500 porque intentaba escribir en una
+            // tabla que no existe en la BD de la empresa).
             $sessionId = generarSessionId();
-            reclamarSesion($localConnection, (int) $usuario_data['id_usuario'], $sessionId, $dispositivoInfo, $ipCliente);
+            $conexionCentralSesion = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            reclamarSesion($conexionCentralSesion, (int) $usuario_data['id_usuario'], $sessionId, $dispositivoInfo, $ipCliente);
+            $conexionCentralSesion->disconnect();
 
             // Sesión real (JWT) -- auditoría de seguridad 2026-09-10, ver
             // memoria de seguridad (hallazgo C2). Campo adicional, no
