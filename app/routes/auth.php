@@ -48,16 +48,31 @@ return function (App $app) {
         // Sesión única por empleado -- auditoría de seguridad 2026-09-11.
         $dispositivoInfo = describirDispositivo($request->getHeaderLine('User-Agent'));
 
+        // Token corto de confirmación de sesión (ver SesionUnicaHelper.php) --
+        // si el cliente ya pasó por un conflicto de sesión en el intento
+        // anterior (mismo flujo de /login, Turnstile+clave ya verificados
+        // ahí), puede reenviar este token en vez de un nuevo
+        // cf-turnstile-response para completar el "sí, cerrar la otra
+        // sesión" sin pedir un segundo CAPTCHA. Se valida la firma/vigencia
+        // acá; el cruce contra el usuario real y la sesión vigente ocurre
+        // más abajo, después de verificar la clave.
+        $tokenConfirmacionSesion = (string) ($datosAcceso['token_confirmacion_sesion'] ?? '');
+        $claimsConfirmacionSesion = decodificarTokenConfirmacionSesion(getenv('JWT_SECRET') ?: '', $tokenConfirmacionSesion);
+
         // Capa 1: CAPTCHA (Cloudflare Turnstile) -- se verifica ANTES de tocar
-        // la base de datos. Si falla, ni siquiera cuenta como intento fallido
-        // para la Capa 2 (un bot sin token no debería poder gastar el cupo de
-        // intentos de un email real).
-        $turnstileToken = (string) ($datosAcceso['cf-turnstile-response'] ?? '');
-        if (!verificarTurnstile($turnstileToken, $ipCliente)) {
-            $object['msg'] = 'No se pudo verificar que la solicitud proviene de una persona. Intente de nuevo.';
-            $object['data']['access'] = false;
-            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        // la base de datos, salvo que ya se haya confirmado humanidad+clave
+        // en el intento anterior (token de confirmación válido, ver arriba).
+        // Si falla, ni siquiera cuenta como intento fallido para la Capa 2
+        // (un bot sin token no debería poder gastar el cupo de intentos de
+        // un email real).
+        if ($claimsConfirmacionSesion === null) {
+            $turnstileToken = (string) ($datosAcceso['cf-turnstile-response'] ?? '');
+            if (!verificarTurnstile($turnstileToken, $ipCliente)) {
+                $object['msg'] = 'No se pudo verificar que la solicitud proviene de una persona. Intente de nuevo.';
+                $object['data']['access'] = false;
+                $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            }
         }
 
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
@@ -120,23 +135,45 @@ return function (App $app) {
         // la clave correcta.
         limpiarIntentos($localConnection, $usuario_data['email']);
 
+        // El token de confirmación solo cuenta para ESTA cuenta -- si
+        // alguien intentara reutilizar el de otra persona, se descarta acá y
+        // el request cae al camino normal (exigirá Turnstile si no lo mandó).
+        if ($claimsConfirmacionSesion !== null && (int) $claimsConfirmacionSesion->id_usuario !== (int) $usuario_data['id_usuario']) {
+            $claimsConfirmacionSesion = null;
+        }
+
         // Sesión única por empleado -- pedido explícito del usuario
         // 2026-09-11 (ver SesionUnicaHelper.php y memoria de seguridad
         // [[project_fase_seguridad_pendiente]]). Si ya hay una sesión activa
-        // y el cliente no confirmó todavía (forzar_sesion), se le avisa cuál
-        // es antes de cerrarla -- sin tocar la tabla todavía.
-        $forzarSesion = !empty($datosAcceso['forzar_sesion']);
-        if (!$forzarSesion) {
-            $sesionExistente = sesionActivaDe($localConnection, (int) $usuario_data['id_usuario']);
-            if ($sesionExistente !== null) {
-                $object['requiere_confirmacion_sesion'] = true;
-                $object['sesion_activa'] = [
-                    'dispositivo' => $sesionExistente['dispositivo_info'] ?: 'un dispositivo desconocido',
-                    'desde' => date('d/m/Y H:i', strtotime($sesionExistente['creado_en'])),
-                ];
-                $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
-                return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-            }
+        // y el cliente no confirmó todavía (forzar_sesion, o un token de
+        // confirmación válido para esta misma sesión), se le avisa cuál es
+        // antes de cerrarla -- sin tocar la tabla todavía.
+        $sesionExistente = sesionActivaDe($localConnection, (int) $usuario_data['id_usuario']);
+
+        // El token de confirmación de un solo uso solo cuenta si TODAVÍA
+        // apunta a la sesión que sigue activa en este momento -- si alguien
+        // más ya reclamó la sesión entre que se emitió el token y ahora,
+        // deja de servir automáticamente, sin necesidad de una lista de
+        // tokens usados.
+        $confirmadoPorToken = $claimsConfirmacionSesion !== null
+            && $sesionExistente !== null
+            && hash_equals((string) $sesionExistente['session_id'], (string) $claimsConfirmacionSesion->sid_objetivo);
+
+        $forzarSesion = !empty($datosAcceso['forzar_sesion']) || $confirmadoPorToken;
+
+        if (!$forzarSesion && $sesionExistente !== null) {
+            $object['requiere_confirmacion_sesion'] = true;
+            $object['sesion_activa'] = [
+                'dispositivo' => $sesionExistente['dispositivo_info'] ?: 'un dispositivo desconocido',
+                'desde' => date('d/m/Y H:i', strtotime($sesionExistente['creado_en'])),
+            ];
+            // Turnstile y la clave ya se verificaron en ESTE mismo request --
+            // se entrega un token corto (2 min, un solo uso) para que, si el
+            // usuario confirma, el reintento no tenga que pedir un nuevo
+            // CAPTCHA (bug reportado 2026-09-11).
+            $object['token_confirmacion_sesion'] = generarTokenConfirmacionSesion(getenv('JWT_SECRET') ?: '', (int) $usuario_data['id_usuario'], $sesionExistente['session_id']);
+            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         }
 
         // Migración transparente a hash (Fase 3): si la clave todavía estaba

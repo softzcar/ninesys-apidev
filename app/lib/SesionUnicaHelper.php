@@ -1,5 +1,8 @@
 <?php
 
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
 /**
  * Sesión única por empleado -- pedido explícito del usuario 2026-09-11 (ver
  * memoria de seguridad [[project_fase_seguridad_pendiente]]): un mismo
@@ -72,6 +75,51 @@ function sesionEsValida(LocalDB $central, int $idUsuario, string $sessionId): bo
 function cerrarSesionDe(LocalDB $central, int $idUsuario): void
 {
     $central->goQuery('DELETE FROM sesiones_activas WHERE id_usuario = ?', [$idUsuario]);
+}
+
+/**
+ * Token corto y de un solo uso que autoriza confirmar "cerrar la otra
+ * sesión" sin pedir un nuevo CAPTCHA -- auditoría de seguridad 2026-09-11
+ * (el usuario reportó que cada conflicto real de sesión obligaba a verificar
+ * Turnstile dos veces). Se emite justo cuando /login detecta el conflicto --
+ * en ESE MISMO request ya se probaron Turnstile y la clave correcta, así que
+ * reutilizar esa prueba para el reintento no reduce ninguna protección real.
+ * Queda atado al `session_id` vigente en ese momento (`sid_objetivo`): en
+ * cuanto se reclame la sesión (o cualquier otra cosa la cambie), ese
+ * session_id deja de coincidir y el token deja de servir para cualquier
+ * conflicto futuro -- de un solo uso sin necesidad de una lista de
+ * usados. Vence a los 2 minutos, tiempo de sobra para leer el diálogo de
+ * confirmación y responder.
+ */
+function generarTokenConfirmacionSesion(string $secret, int $idUsuario, string $sessionIdObjetivo): string
+{
+    $ahora = time();
+    $payload = [
+        'iss' => 'ninesys-confirmacion-sesion',
+        'iat' => $ahora,
+        'exp' => $ahora + 120,
+        'id_usuario' => $idUsuario,
+        'sid_objetivo' => $sessionIdObjetivo,
+    ];
+    return JWT::encode($payload, $secret, 'HS256');
+}
+
+/**
+ * Decodifica el token anterior. Nunca lanza excepción hacia afuera --
+ * cualquier problema (firma inválida, vencido, malformado, ausente) se trata
+ * igual: no hay confirmación previa válida, /login cae al camino normal y
+ * exige un cf-turnstile-response fresco.
+ */
+function decodificarTokenConfirmacionSesion(string $secret, string $token): ?object
+{
+    if ($secret === '' || $token === '') {
+        return null;
+    }
+    try {
+        return JWT::decode($token, new Key($secret, 'HS256'));
+    } catch (\Throwable $e) {
+        return null;
+    }
 }
 
 /**
