@@ -1,0 +1,26 @@
+- **Solicitud del Usuario:** Incomodidad explícita del usuario con que `Authorization` mandara el `id_empresa` crudo (permite deducir el nombre de la base de datos y da acceso a los endpoints de esa empresa a cualquiera que lo adivine) -- implementar sesión real de usuario.
+- **Fecha y Hora:** 2026-09-10 15:00:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:** app/lib/JwtHelper.php (nuevo), app/lib/InternalAuth.php (nuevo), src/Application/Middleware/IdEmpresaMiddleware.php, app/routes/auth.php, app/routes/msg_service.php, app/routes/config.php, app/routes/orders.php, composer.json (firebase/php-jwt:^7.0)
+- **Commits Relacionados:**
+    - Backend: 8f1871a ("sesión real (JWT) para reemplazar Authorization: <id_empresa> crudo"), d36521b ("exigir sesión JWT real en /refresh-session/{id} (IDOR)") -- pusheados y desplegados en Desarrollo
+    - Frontend: f55bd41 en `app_multi` (ver log separado de ese repo)
+- **Acción Realizada:**
+  1. Diseñado e implementado JWT de sesión real: `firebase/php-jwt:^7.0`, HS256, `JWT_SECRET` propio del repo (no reutiliza los tokens de servicio existentes), vida larga 24h sin refresh token (decisión de producto: al expirar, el usuario vuelve a loguearse).
+  2. `IdEmpresaMiddleware.php` reescrito a modo tri-modal por prioridad: (1) `X-Internal-Token` válido → modo servicio (msg_ninesys/19print_app, pasan `id_empresa` como parámetro, no como sesión humana), (2) `Authorization: Bearer <jwt>` → modo sesión (deriva `id_empresa`/`id_usuario` del token firmado), (3) cualquier otra cosa → modo legado (comportamiento de siempre, sin cambios, logueado como `[auth_mode=legacy]` para poder medir cuándo se puede retirar). JWT inválido/expirado → 401 inmediato, NUNCA cae al modo legado.
+  3. `/login` empieza a emitir `token` en la respuesta.
+  4. Hallazgo colateral cerrado de paso: de los 8 endpoints `/internal/*` en `msg_service.php`, solo 2 realmente validaban `X-Internal-Token` pese a que el comentario de cabecera afirmaba que todos estaban protegidos -- los otros 6 quedaban completamente abiertos. Cerrado al generalizar el mecanismo (`InternalAuth.php`).
+  5. `config.php`/`orders.php` migrados a usar la constante `ID_EMPRESA` ya resuelta por el middleware en vez de releer el header crudo.
+  6. Cerrado en el mismo lote el IDOR real de `/refresh-session/{id}` (`auth.php`): confiaba ciegamente en `{id}` de la URL -- con el header crudo de siempre, CUALQUIERA podía leer los datos de sesión completos (email, empresa, gastos fijos, moneda base, wizard operativo) de cualquier usuario adivinando/incrementando su `id_usuario`. Corregido: exige el JWT de sesión y verifica `ID_USUARIO_TOKEN === (int) $args['id']` -- 401 si no hay JWT válido (incluye el modo legado, bloqueado a propósito solo en este endpoint), 403 si el JWT es de otro usuario.
+- **Inconvenientes y Desafíos:** Diseñar la transición gradual (los 3 modos conviven a la vez) para que los 4 repos puedan desplegarse a Producción en cualquier orden/momento sin coordinar un corte exacto -- no era solo "agregar JWT", era no romper nada de lo que ya funcionaba con el header crudo mientras se migra.
+- **Decisión Final y Justificación:** Middleware tri-modal en vez de un corte duro, para permitir despliegue gradual sin ventana de mantenimiento coordinada entre repos. Vida larga (24h) sin refresh token, por simplicidad de producto -- reloguearse al expirar es aceptable para este sistema.
+- **Herramienta(s) Utilizada(s):** `Read`, `Write`, `Edit`, `Bash` (composer require, curl de verificación con JWT sintéticos), `git`
+- **Resultado:** Éxito
+- **Verificación:** Login real emite JWT con claims correctos (`exp-iat=86400s` exacto); JWT válido aceptado (dashboard con datos reales, captura de red confirmó `Authorization: Bearer` en el 100% de las peticiones); JWT corrupto/expirado → 401 inmediato; modo legado sigue funcionando; `/internal/*` exige el token en los 8 endpoints. `/refresh-session/{id}` verificado con los 4 casos: sin header → 401; `Authorization: 194` crudo → 401; JWT válido con `id_usuario` correcto → 200 con datos reales; JWT válido con `id_usuario` de otro → 403.
+- **Logro Conseguido:** Cierra de raíz el hallazgo crítico C2 (API completa sin autenticación real, solo `id_empresa` adivinable) para el vector `Authorization` de la API principal, más un IDOR real independiente en `/refresh-session/{id}`, sin romper compatibilidad con el resto del ecosistema todavía no migrado.
+- **Referencias de Sesión (Contexto):**
+    - Task: N/A (sesión de Claude Code, no Antigravity)
+    - Walkthrough: N/A
+- **⚠️ NOTA DE PERSISTENCIA:** N/A, este log ya contiene el detalle técnico completo.
+- **Observaciones de Gemini:** N/A (sesión ejecutada por Claude Code, no Gemini/Antigravity). Log reconstruido el 2026-09-11 a partir de memoria de sesión y `git log`, a pedido del usuario, porque no se generó en el momento.
+- **Respuesta de Gemini:** N/A.

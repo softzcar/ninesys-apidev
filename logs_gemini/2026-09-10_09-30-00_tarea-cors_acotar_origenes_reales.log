@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** Continuación de la Fase 1 de seguridad (Cloudflare/infraestructura) -- acotar CORS a orígenes reales en los 3 servicios que hoy responden `Access-Control-Allow-Origin: *`.
+- **Fecha y Hora:** 2026-09-10 09:30:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:** src/Application/Middleware/CorsMiddleware.php, src/Application/ResponseEmitter/ResponseEmitter.php
+- **Commits Relacionados:**
+    - Backend: 025ed90 ("fix: acotar CORS a los origenes reales en vez de '*'"), dd7b1e1 ("fix: ResponseEmitter sobrescribia el fix de CORS y agregaba Allow-Credentials sin validar") -- ambos pusheados y desplegados en Desarrollo
+    - Frontend: N/A
+- **Acción Realizada:**
+  1. Investigado por grep de código en los 4 repos frontend qué origen llama realmente desde el navegador a cada servicio -- confirmado que solo `app_multi` (Prod+Dev) y el portal `setup_company` (Prod+Dev, solo para la API) lo hacen; `19print_app`/`dtf` nunca llaman directo desde su frontend (siempre pasan por su propio backend, servidor-a-servidor, no necesitan CORS).
+  2. Lista blanca definida: `app.ninesys19.com`, `app.nineteengreen.com`, `setup.ninesys19.com`, `setup.nineteengreen.com`, `localhost:3000`.
+  3. `CorsMiddleware.php` reescrito para reflejar el header `Origin` solo si está en la lista blanca (commit `025ed90`).
+  4. Verificando el fix se encontró que `src/Application/ResponseEmitter/ResponseEmitter.php` -- el emisor final real de las respuestas de Slim -- SOBRESCRIBÍA lo que el middleware ya había puesto, reflejando CUALQUIER `Origin` sin validar y agregando además `Access-Control-Allow-Credentials: true`, dejando el resultado neto PEOR que el `*` original. Corregido en el mismo lote (commit `dd7b1e1`).
+- **Inconvenientes y Desafíos:** El hallazgo de `ResponseEmitter.php` no estaba previsto -- el middleware por sí solo daba una falsa sensación de estar resuelto; hubo que verificar el header de la respuesta REAL, no solo leer el middleware.
+- **Decisión Final y Justificación:** Whitelist explícita por origen en vez de `*`, replicada en el único lugar que de verdad decide el header final (`ResponseEmitter.php`), documentado para que cualquier cambio futuro de CORS en esta API recuerde revisar ambos archivos.
+- **Herramienta(s) Utilizada(s):** `Grep`, `Read`, `Edit`, `Bash` (curl de verificación), `git`
+- **Resultado:** Éxito
+- **Verificación:** Origen permitido refleja el header, origen no permitido no lo recibe, preflight `OPTIONS` correcto, uso normal (sin `Origin`, curl/servidor-a-servidor) sigue funcionando -- verificado en Desarrollo.
+- **Logro Conseguido:** Cierra el vector de CORS abierto (`*`) en la API principal, con el hallazgo adicional de un segundo punto de fuga (`ResponseEmitter.php`) que habría dejado el fix incompleto si no se hubiera verificado el header de la respuesta real.
+- **Referencias de Sesión (Contexto):**
+    - Task: N/A (sesión de Claude Code, no Antigravity)
+    - Walkthrough: N/A
+- **⚠️ NOTA DE PERSISTENCIA:** N/A, este log ya contiene el detalle técnico completo.
+- **Observaciones de Gemini:** N/A (sesión ejecutada por Claude Code, no Gemini/Antigravity). Log reconstruido el 2026-09-11 a partir de memoria de sesión y `git log`, a pedido del usuario, porque no se generó en el momento.
+- **Respuesta de Gemini:** N/A.

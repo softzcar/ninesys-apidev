@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** Cerrar los 3 ítems que habían quedado anotados como "no bloqueantes" al cerrar la Fase 5 completa: rol de solo lectura dedicado para el motor SQL de IA, logger Monolog real, y el modelo Gemini descontinuado.
+- **Fecha y Hora:** 2026-09-11 11:40:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:** app/lib/GeminiAssistant.php, public/index.php, app/settings.php, .gitignore, public/model/create_new_company_api_emp_N.sql, routes.php (setup_company)
+- **Commits Relacionados:**
+    - Backend: c815d9a ("rol de solo lectura para IA, logger Monolog, modelo Gemini"), e46015b ("corregir ruta ignorada de logs (logs/ en la raíz, no app/logs/)") -- ambos pusheados y desplegados en Desarrollo
+    - Frontend: N/A
+- **Acción Realizada:**
+  1. **Modelo de Gemini** (`GeminiAssistant.php:16`): `gemini-2.0-flash` (descontinuado por Google) → `gemini-3.6-flash`.
+  2. **Rol de PostgreSQL de solo lectura para el motor SQL de la IA** (`ninesys_ai_readonly`, cluster-wide): hallazgo clave que cambió el diseño original durante la investigación -- `GeminiChatAssistant`/`GeminiReportAssistant` comparten UNA sola conexión entre `executeSqlQuery()` (el SQL arbitrario del LLM) y su propia lógica interna legítima, incluida la creación real de órdenes por chat de IA (INSERT con transacción). Migrar toda la conexión a solo lectura habría roto esa función real. Resuelto de forma más precisa: solo `executeSqlQuery()` abre una conexión nueva y efímera con el rol de solo lectura, el resto del asistente sigue con la conexión normal. Configurado en `api_emp_194`, `api_emp_208` y la base central `api_empresas` (`GRANT SELECT` + `ALTER DEFAULT PRIVILEGES` + `CREATE USER MAPPING` para el FDW), y agregado también al flujo de `/setup/user` para que empresas nuevas lo tengan automáticamente.
+  3. **Logger Monolog conectado al manejador de errores de Slim** (`public/index.php`): Monolog ya estaba 100% configurado en `dependencies.php` pero nadie se lo pasaba al `HttpErrorHandler`, que caía al logger mínimo default de Slim -- se pasa el `LoggerInterface` ya registrado como tercer argumento al construirlo.
+  4. Bug real encontrado en la propia verificación: el path del logger (`app/settings.php`) resuelve a `logs/` en la raíz del repo, no `app/logs/` como se asumió al principio -- confirmado que `logs/app.log` ya existía y el logger ya escribía ahí correctamente desde el primer deploy; el único ajuste real fue corregir `.gitignore` (tenía `/app/logs/`, quedó `/logs/`) y borrar un directorio `app/logs/` vacío creado por error de más (commit `e46015b`).
+- **Inconvenientes y Desafíos:** El diseño original planeaba migrar toda la conexión del asistente de IA a solo lectura -- se detectó a tiempo (antes de implementar) que eso habría roto la creación real de órdenes por chat, evitando una regresión funcional.
+- **Decisión Final y Justificación:** Conexión efímera y aislada solo para la ejecución del SQL generado por el LLM, en vez de tocar la conexión principal del asistente -- resuelve el riesgo real (SQL arbitrario con privilegios de escritura) sin afectar funcionalidad legítima. Los ~100 `error_log()` sueltos en `routes/*.php` se dejaron sin tocar a propósito -- ya limpiados de datos sensibles en la Fase 5, convertir cada uno a Monolog sería un refactor mucho más grande e invasivo.
+- **Herramienta(s) Utilizada(s):** `Read`, `Write`, `Edit`, `Bash` (ssh + psql para los GRANT/FDW, curl de verificación), `git`
+- **Resultado:** Éxito
+- **Verificación:** rol de solo lectura verificado por SQL directo (SELECT funciona, INSERT/DELETE dan `permission denied`), vía `/ai/chat` real (mismo resultado que consultar directo: 6976 órdenes), y con una empresa de prueba real y desechable (211, creada y borrada limpiamente) confirmando que el rol queda funcional ahí sin ningún paso manual. Modelo Gemini verificado con `/ai/chat` real: ya no da 404, genera SQL y responde con datos reales. Monolog verificado con una petición real a una ruta inexistente: quedó en `logs/app.log` con formato completo (timestamp, canal, stack trace, `uid`) en vez de una línea cruda.
+- **Logro Conseguido:** Cierra la Fase 5 completa del plan de seguridad al 100% en Desarrollo, incluidos los 3 ítems que habían quedado como mejoras futuras -- de paso, el logger Monolog recién conectado fue directamente instrumental horas después para diagnosticar un bug real de producción (ver bitácora de "sesión única por empleado").
+- **Referencias de Sesión (Contexto):**
+    - Task: N/A (sesión de Claude Code, no Antigravity)
+    - Walkthrough: N/A
+- **⚠️ NOTA DE PERSISTENCIA:** N/A, este log ya contiene el detalle técnico completo.
+- **Observaciones de Gemini:** N/A (sesión ejecutada por Claude Code, no Gemini/Antigravity). Log reconstruido el 2026-09-11 a partir de memoria de sesión y `git log`, a pedido del usuario, porque no se generó en el momento.
+- **Respuesta de Gemini:** N/A.

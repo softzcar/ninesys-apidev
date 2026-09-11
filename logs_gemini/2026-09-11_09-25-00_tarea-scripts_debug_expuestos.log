@@ -1,0 +1,25 @@
+- **Solicitud del Usuario:** "Arreglar esto YA, en Dev y Prod" -- hallazgo colateral encontrado investigando el resto de la Fase 5, autorización explícita en el momento por la exposición activa.
+- **Fecha y Hora:** 2026-09-11 09:25:00
+- **Proyecto(s):** Backend (ninesys-api) -- Desarrollo Y Producción
+- **Archivos Involucrados:** 21 archivos sueltos en `public/` (`debug_*.php`, `test_*.php`, `phpinfo.php`, `error_log`, `php_errorlog`, `cors_test.php`, `check_repo_5149.php`, `clear_cache.php`)
+- **Commits Relacionados:**
+    - Backend: e33f4da ("eliminar scripts de depuración y logs expuestos en public/") -- rama `feature/postgresql-support`, pusheado y desplegado en Desarrollo; Producción corregida aparte por SSH (ver detalle)
+    - Frontend: N/A
+- **Acción Realizada:**
+  1. Hallazgo colateral de un agente que revisaba `error_log()` para el resto de la Fase 5: `ninesys-api/public/` tenía 21 archivos PHP sueltos que NO pasan por el router de Slim -- el `.htaccess` solo reescribe a `index.php` cuando el archivo pedido no existe en disco, y como estos SÍ existían, se ejecutaban directo, sin ningún middleware de autenticación JWT.
+  2. Confirmado por HTTP público (sin credenciales) que los 21 estaban accesibles (200) simultáneamente en Desarrollo Y Producción antes de tocar nada. El más grave: `public/debug_query.php` tenía hardcodeadas las credenciales de PostgreSQL (`dev_user`/`dev_pass`) en texto plano y ejecutaba una consulta real (pagos/comisiones de `api_emp_195`) -- este archivo en particular ni siquiera estaba trackeado en git (subido manualmente a Producción por fuera del flujo normal, dueño `root`, no presente en Desarrollo).
+  3. Los 20 archivos sí trackeados se borraron vía `git rm` + commit `e33f4da` + push + `deploy_backend_dev.sh` normal.
+  4. Producción corregida aparte, con `rm` directo por SSH sobre los 21 archivos (incluido `debug_query.php`), NO con `deploy_backend_prod.sh` -- ese script promueve un TAG completo (`git checkout`), y Producción estaba ~10 versiones detrás de Desarrollo (`v1.0.21` vs `v1.0.31`) por la política vigente de bloqueo de Producción; usar el flujo normal habría arrastrado a Producción todo el trabajo pendiente de Fase 3/4/5 sin haber sido pedido, así que se optó por el fix quirúrgico mínimo.
+- **Inconvenientes y Desafíos:** `debug_query.php` no estaba en git, así que el fix normal (commit + deploy) no lo habría tocado -- hubo que identificarlo y borrarlo manualmente por SSH además del resto.
+- **Decisión Final y Justificación:** Fix quirúrgico inmediato (borrar solo los archivos expuestos) en vez del flujo normal de despliegue a Producción, para no arrastrar trabajo de seguridad pendiente que el usuario no había pedido desplegar todavía, mientras la exposición activa se cerraba sin demora.
+- **Herramienta(s) Utilizada(s):** `Grep`/agente de investigación, `Bash` (curl de verificación pública, ssh + rm, git rm), `git`
+- **Resultado:** Éxito
+- **Verificación:** `curl` confirmó que los 21 archivos devuelven ahora 405 (ya no 200) en ambos servidores, y que la API sigue respondiendo con normalidad (`GET /` → 200) en ambos.
+- **Logro Conseguido:** Cierra una exposición pública activa y explotable (incluidas credenciales de base de datos en texto plano) en Desarrollo Y Producción simultáneamente, con autorización explícita del usuario para tocar Producción fuera del flujo/ventana habitual dado el riesgo activo.
+- **Inconvenientes y Desafíos (pendiente relacionado, no hecho, menor prioridad):** verificar si `dev_pass` (la que estaba hardcodeada en el archivo borrado) coincide con la contraseña real y vigente de `dev_user` -- si coincide, rotarla sería prudente.
+- **Referencias de Sesión (Contexto):**
+    - Task: N/A (sesión de Claude Code, no Antigravity)
+    - Walkthrough: N/A
+- **⚠️ NOTA DE PERSISTENCIA:** N/A, este log ya contiene el detalle técnico completo.
+- **Observaciones de Gemini:** N/A (sesión ejecutada por Claude Code, no Gemini/Antigravity). Log reconstruido el 2026-09-11 a partir de memoria de sesión y `git log`, a pedido del usuario, porque no se generó en el momento.
+- **Respuesta de Gemini:** N/A.

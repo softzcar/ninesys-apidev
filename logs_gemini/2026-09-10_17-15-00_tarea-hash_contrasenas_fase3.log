@@ -1,0 +1,26 @@
+- **Solicitud del Usuario:** "vamos con esas fases" -- continuar con la Fase 3 del plan de seguridad (hash de contraseñas), pendiente desde la auditoría de inyección SQL.
+- **Fecha y Hora:** 2026-09-10 17:15:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:** app/lib/PasswordHelper.php (nuevo), app/routes/auth.php, app/routes/employees.php, base de datos central `api_empresas` (columna `empresas_usuarios.password`) y las tablas foráneas espejo de cada empresa
+- **Commits Relacionados:**
+    - Backend: cb23b07 ("hash de contraseñas con migración transparente (Fase 3)") -- pusheado y desplegado en Desarrollo
+    - Frontend: N/A
+- **Acción Realizada:**
+  1. Implementado `PasswordHelper.php` (`hashearClave()`, `verificarClave()`, `necesitaRehash()`) usando `password_hash()`/`password_verify()` nativos de PHP.
+  2. Migración transparente sin reseteo masivo: cada login exitoso con clave todavía en texto plano la rehashea en el mismo request (`/login`, `/verify-credentials`). Todo punto de escritura de clave (alta/edición de empleado, cambio de clave self-service, recuperación por WhatsApp, alta de empresa nueva) hashea desde ahora.
+  3. Ampliada `empresas_usuarios.password` de `character varying(24)` (insuficiente para un hash bcrypt de 60 caracteres) a `VARCHAR(255)`. Al ser una tabla central con una VISTA dependiente (`api_empresas.api_empresas.empresas_usuarios`), hubo que hacer `DROP VIEW` → `ALTER TABLE` → recrear la vista. Además, cada base de datos por empresa tiene su propia tabla foránea (`postgres_fdw`) con su propia declaración de tipo -- ampliar solo la tabla central no bastaba, hubo que correr `ALTER FOREIGN TABLE ... ALTER COLUMN password TYPE VARCHAR(255)` en cada base de datos de empresa por separado (documentado en memoria para cualquier cambio de esquema futuro sobre esta tabla).
+  4. Hallazgo colateral cerrado de paso: `login_endpoint.php`, un fragmento suelto en la raíz del repo con un `/login` viejo cuyo SQL se armaba por concatenación de string (inyección SQL real, no solo texto plano) -- confirmado sin ninguna ruta de ejecución activa, borrado en vez de corregido.
+  5. Cerrada también una fuga de `password` sin usar en las respuestas de `/empleados-todos` y `/refresh-session/{id}`.
+- **Inconvenientes y Desafíos:** El `ALTER TABLE`/`ALTER FOREIGN TABLE` resultó más complejo de lo esperado por la arquitectura real de la base central (vista + tablas foráneas por empresa) -- sin el paso de las tablas foráneas, cualquier query que uniera `empresas_usuarios` desde el contexto de una empresa seguía fallando con un error engañoso ("value too long...", sin mencionar "foreign table" en el mensaje principal).
+- **Decisión Final y Justificación:** Migración transparente (rehash al vuelo) en vez de forzar un reseteo masivo de contraseñas -- nadie pierde acceso, no hace falta avisar a nadie ni coordinar nada.
+- **Herramienta(s) Utilizada(s):** `Read`, `Write`, `Edit`, `Bash` (ssh + psql para el `ALTER TABLE`/`ALTER FOREIGN TABLE`, curl de verificación), `git`
+- **Resultado:** Éxito
+- **Verificación (empleados de prueba desechables, creados y borrados al final):** login con clave en texto plano (simulando estado legado) → 200, y la clave queda hasheada inmediatamente después; login con esa misma clave ya hasheada → 200; clave incorrecta → 401; `/verify-credentials` sin fuga de `password`; `/empleados/cambiar-clave` (self-service) → clave vieja deja de servir, la nueva sirve, queda hasheada; `/empleados/nuevo` → clave nueva guardada hasheada desde el alta; `/empleados-todos` sin `password` en la respuesta; `login_endpoint.php` confirmado eliminado del servidor.
+- **Logro Conseguido:** Cierra la Fase 3 completa del plan de seguridad -- ninguna contraseña se compara ni se guarda en texto plano desde este despliegue, con migración transparente que no requiere reseteo ni aviso a los usuarios.
+- **Inconvenientes y Desafíos (bug preexistente encontrado, NO relacionado, fuera de alcance):** `POST /empleados/nuevo` devuelve 500 después de crear el empleado correctamente (la fila SÍ se crea, con password hasheado) -- causa: `LocalDB.php` llama `$this->pdo->lastInsertId()` sin el nombre de secuencia, que en PDO+Postgres no devuelve el ID de forma confiable (a diferencia de MySQL), rompiendo el INSERT siguiente. No corregido -- pertenece a una auditoría de bugs de la migración a Postgres, no a esta fase de seguridad.
+- **Referencias de Sesión (Contexto):**
+    - Task: N/A (sesión de Claude Code, no Antigravity)
+    - Walkthrough: N/A
+- **⚠️ NOTA DE PERSISTENCIA:** N/A, este log ya contiene el detalle técnico completo.
+- **Observaciones de Gemini:** N/A (sesión ejecutada por Claude Code, no Gemini/Antigravity). Log reconstruido el 2026-09-11 a partir de memoria de sesión y `git log`, a pedido del usuario, porque no se generó en el momento.
+- **Respuesta de Gemini:** N/A.

@@ -1,0 +1,26 @@
+- **Solicitud del Usuario:** "sigamos con la Fase 4" -- autorización por rol server-side, pendiente del plan de seguridad.
+- **Fecha y Hora:** 2026-09-10 17:45:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:** app/lib/AuthzHelper.php (nuevo), app/routes/employees.php, app/routes/config.php, app/routes/reports.php, app/routes/products_reports.php
+- **Commits Relacionados:**
+    - Backend: 56b9a90 ("autorización por rol server-side (Fase 4, cierra A6)") -- pusheado y desplegado en Desarrollo
+    - Frontend: N/A
+- **Acción Realizada:**
+  1. Investigado a fondo (2 barridos de solo lectura) antes de diseñar: el modelo real de permisos es mucho más simple que "roles" sugiere -- no hay tabla de roles/permisos, solo un flag binario `acceso` (0=Empleado, 1=Administrador) en `empresas_usuarios.acceso`, más pertenencia a departamentos (organización de flujo de trabajo, no límite de seguridad). El JWT de sesión (Fase 2) ya traía el claim `acceso`, y `IdEmpresaMiddleware.php` ya definía la constante `ACCESO_TOKEN` -- nada la usaba hasta ahora.
+  2. Confirmado que hoy no había ningún guard de ruta en el frontend ni chequeo sistemático en el backend -- todo el enforcement vivía en `v-if="isAdmin"` de Vue, editable desde DevTools (hallazgo A6 de la auditoría original).
+  3. Implementada función-guardia `requiereAdmin()` (`AuthzHelper.php`, nuevo) -- mismo patrón que `validarTokenInterno()`/`exigirSesionCdn()` de Fase 2/C6: 401 si no hay sesión JWT real, 403 si `ACCESO_TOKEN !== 1`.
+  4. Aplicada donde el frontend YA lo trataba como admin-only, confirmado por código (no supuesto): `/empleados/nuevo`, `/empleados/editar`, `/empleados/eliminar` (cerraba una auto-escalación de privilegios real -- cualquier empleado podía subirse a sí mismo a Administrador), los 6 endpoints de `/configuracion/*` (incluido `/configuracion/gastos`, encontrado durante la implementación, no en el barrido original), y 2 reportes financieros (`/reporte-de-pagos`, `/balance-de-cierres`, `/reportes/costos-produccion`).
+  5. `GET /empleados` no se bloqueó (lo usan selectores reales) -- en cambio se le quita `salario_monto`/`salario_tipo`/`salario_periodo`/`comision*` de la respuesta si quien pide no es admin, mismo patrón ya usado para sacar `password`.
+  6. Corrección de alcance a mitad de la implementación: el barrido inicial se había equivocado por generalizar "reportes financieros" -- `/cierre-de-caja`, `/reporte-de-caja`, `/reporte-de-caja-transacciones` y `/retiros/*` NO se tocaron, confirmado por grep cruzado contra `app_multi` que `SidebarComercializacion.vue` (no solo `SidebarAdmin.vue`) enlaza a esas páginas: es el cierre de caja diario de cualquier vendedor, una operación normal, no un reporte admin-only.
+- **Inconvenientes y Desafíos:** El primer barrido generalizó "reportes financieros" como admin-only sin verificar contra qué sidebars enlazaban realmente esas páginas -- de no corregirse a tiempo, habría roto el cierre de caja diario de todo el equipo de ventas.
+- **Decisión Final y Justificación:** Guardia server-side mínima basada en el flag `acceso` real ya existente (no inventar un sistema de roles nuevo), aplicada solo donde el frontend ya asumía admin-only y estaba confirmado por código -- eliminaciones de catálogo y autorización por departamento quedaron deliberadamente fuera de alcance, documentadas como pendiente, no como resueltas.
+- **Herramienta(s) Utilizada(s):** `Grep`, `Read`, `Write`, `Edit`, `Bash` (curl con JWT sintéticos), `git`
+- **Resultado:** Éxito
+- **Verificación:** con 2 JWT sintéticos (uno `acceso=1`, uno `acceso=0`, sin tocar ninguna cuenta real) -- empleado no-admin → 403 en los 5 endpoints protegidos probados, 200 sin datos de salario en `GET /empleados`, y sigue pudiendo usar `/cierre-de-caja` (endpoint NO tocado) con normalidad; admin → 200/400 normal (nunca 403) en los mismos 5, `GET /empleados` con salario incluido, y una alta real de empleado de prueba funcionó de punta a punta (creado con `acceso=0` y clave ya hasheada, confirmado en la base de datos, luego borrado); sin token → 401.
+- **Logro Conseguido:** Cierra el hallazgo A6 (autorización solo en frontend, editable desde DevTools) y una auto-escalación de privilegios real en la gestión de empleados, sin romper el flujo de cierre de caja del equipo de ventas.
+- **Referencias de Sesión (Contexto):**
+    - Task: N/A (sesión de Claude Code, no Antigravity)
+    - Walkthrough: N/A
+- **⚠️ NOTA DE PERSISTENCIA:** N/A, este log ya contiene el detalle técnico completo.
+- **Observaciones de Gemini:** N/A (sesión ejecutada por Claude Code, no Gemini/Antigravity). Log reconstruido el 2026-09-11 a partir de memoria de sesión y `git log`, a pedido del usuario, porque no se generó en el momento.
+- **Respuesta de Gemini:** N/A.

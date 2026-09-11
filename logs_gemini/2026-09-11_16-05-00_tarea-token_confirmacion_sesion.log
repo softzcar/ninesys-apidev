@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** Tras confirmar en vivo (probando PC + teléfono) que el conflicto real de sesión pedía verificar Cloudflare Turnstile DOS veces (una para detectar el conflicto, otra para confirmar "cerrar la otra sesión"), el usuario preguntó explícitamente: "¿Cómo podemos hacer que no pida hacer lo mismo dos veces en este caso?"
+- **Fecha y Hora:** 2026-09-11 16:05:00
+- **Proyecto(s):** Ambos (Backend ninesys-api + Frontend app_multi)
+- **Archivos Involucrados:** app/lib/SesionUnicaHelper.php, app/routes/auth.php; app_multi/components/login/form.vue, components/SesionExpiradaOverlay.vue
+- **Commits Relacionados:**
+    - Backend: c5e66a1 ("token corto de confirmación evita un segundo CAPTCHA en conflicto real de sesión"), a44e8ce ("el token de confirmación solo salta Turnstile para la MISMA cuenta") -- ambos pusheados y desplegados en Desarrollo
+    - Frontend: 13a29cc en `app_multi` (ver log de ese repo)
+- **Acción Realizada:**
+  1. Se presentaron 2 opciones con su tradeoff: (a) adelantar el chequeo de sesión activa antes del CAPTCHA (más simple, pero filtraría si una cuenta está activa sin haber probado la clave), o (b) emitir un token corto de un solo uso cuando se detecta el conflicto, ya que en ese mismo request se probaron Turnstile y la clave correctos. El usuario aprobó la opción (b).
+  2. Implementado `generarTokenConfirmacionSesion()`/`decodificarTokenConfirmacionSesion()` (`SesionUnicaHelper.php`) -- JWT firmado, corto (2 minutos), atado al `session_id` vigente en ese momento (`sid_objetivo`): en cuanto se reclama la sesión, ese `session_id` cambia y el token deja de servir para cualquier conflicto futuro, sin necesidad de una lista de tokens usados.
+  3. `/login` (`auth.php`) entrega el token junto con `requiere_confirmacion_sesion`. El reintento puede mandarlo en vez de un nuevo `cf-turnstile-response` -- `/login` salta la verificación de Turnstile si el token es válido, está firmado con `JWT_SECRET`, y (tras el fix de autorevisión) pertenece a la misma cuenta que acaba de autenticarse con la clave correcta.
+  4. **Hallazgo de seguridad en el propio diseño, corregido ANTES de desplegar (autorevisión, no reportado por el usuario):** la primera versión saltaba Turnstile con solo que el token decodificara bien (firma + vigencia), sin comprobar de qué cuenta era -- un token legítimo de CUALQUIER cuenta habría servido para saltarse el CAPTCHA al probar contraseñas contra CUALQUIER OTRA cuenta durante su ventana de 2 minutos, reabriendo el riesgo de fuerza bruta/DoS sobre bcrypt que la protección de Turnstile-antes-de-tocar-la-BD existe para evitar. Corregido resolviendo el `id_usuario` real del email (consulta liviana e indexada, solo cuando de verdad llega un token) ANTES de decidir si se salta Turnstile, comparándolo contra el `id_usuario` del token.
+- **Inconvenientes y Desafíos:** El hallazgo de seguridad del punto 4 se encontró en revisión propia antes de desplegar, no en producción -- requirió reestructurar el orden de las validaciones (mover la apertura de la conexión central antes del chequeo de Turnstile, solo quando hay un token presente) sin afectar el camino normal (sin token), que quedó exactamente igual en rendimiento y comportamiento.
+- **Decisión Final y Justificación:** Token de un solo uso, atado a cuenta y a sesión vigente, en vez de simplemente adelantar el chequeo de conflicto -- preserva ambas propiedades de seguridad que motivaron el diseño original (CAPTCHA antes de tocar la BD, y no filtrar actividad de cuentas sin probar la clave).
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Bash` (ssh + php -r para minteo de JWT sintéticos, curl de verificación, psql), `git`
+- **Resultado:** Éxito
+- **Verificación:** end-to-end con HTTP real contra Desarrollo (empleado desechable 736, borrado después) -- (1) login normal sin token sigue exigiendo Turnstile (400 sin él), camino normal intacto; (2) token válido de la MISMA cuenta con `cf-turnstile-response` vacío -- login exitoso (200, `access:true`, token JWT presente) Y la fila de `sesiones_activas` cambió de `session_id` (confirma que `reclamarSesion()` corrió); (3) token con `id_usuario` de OTRA cuenta -- rechazado, cae a exigir Turnstile normal (400), confirma que el fix de scoping por cuenta funciona.
+- **Logro Conseguido:** Reduce a UNA sola verificación humana el flujo completo de sesión única, incluido el conflicto real entre dispositivos, sin sacrificar ninguna de las 2 protecciones de seguridad ya existentes -- con el hallazgo propio corregido antes de que llegara a producción.
+- **Referencias de Sesión (Contexto):**
+    - Task: N/A (sesión de Claude Code, no Antigravity)
+    - Walkthrough: N/A
+- **⚠️ NOTA DE PERSISTENCIA:** N/A, este log ya contiene el detalle técnico completo.
+- **Observaciones de Gemini:** N/A (sesión ejecutada por Claude Code, no Gemini/Antigravity).
+- **Respuesta de Gemini:** N/A.

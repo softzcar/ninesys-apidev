@@ -1,0 +1,23 @@
+- **Solicitud del Usuario:** "¿Esta desplegado en desarrollo para probarlo yo?" (confirmado que sí) -- el usuario probó en vivo la sesión única por empleado y reportó: "OK, ahora el botón permanece deshabilitado hasta que Cloudflare confirma que es un humano, pero al enviar las credenciales recibo `{"statusCode": 500,...}`".
+- **Fecha y Hora:** 2026-09-11 14:25:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:** app/routes/auth.php
+- **Commits Relacionados:**
+    - Backend: 2fda731 ("reclamarSesion() escribía en la BD equivocada") -- pusheado y desplegado en Desarrollo
+    - Frontend: N/A
+- **Acción Realizada:**
+  1. Diagnosticado leyendo `logs/app.log` en el servidor de Desarrollo (posible gracias al logger Monolog conectado horas antes ese mismo día) -- stack trace exacto: `PDOException: SQLSTATE[42P01]: relation "sesiones_activas" does not exist`, originado en `reclamarSesion()` llamado desde `auth.php` en el punto donde el login ya se había decidido exitoso.
+  2. Causa raíz: `$localConnection->switchDatabase(...)` (una línea anterior en el mismo handler de `/login`, ya existente antes de la implementación de sesión única) repunta la conexión de la base central a la base específica de la empresa para las consultas siguientes (config, departamentos, empleados). `reclamarSesion()` fue agregado DESPUÉS de ese punto en el archivo, pero necesita escribir en `sesiones_activas`, que vive solo en la base central -- la implementación original asumió erróneamente que `$localConnection` seguía apuntando a la base central en ese punto del flujo.
+  3. Corregido: se abre una conexión nueva y dedicada a la base central (`new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS)`) específicamente para la llamada a `reclamarSesion()`, se desconecta inmediatamente después, dejando `$localConnection` (ya apuntando a la empresa) intacta para el resto del flujo.
+- **Inconvenientes y Desafíos:** El bug solo se manifestaba con credenciales reales completando el flujo entero (Turnstile válido + clave correcta) -- no era visible en las pruebas anteriores con JWT sintéticos que no pasaban por el punto real de `switchDatabase()`.
+- **Decisión Final y Justificación:** Conexión dedicada y de corta vida para el único punto que necesita tocar la base central después del cambio de contexto, en vez de reordenar el resto del archivo (menos invasivo, no afecta ningún otro flujo ya probado).
+- **Herramienta(s) Utilizada(s):** `Bash` (ssh, tail de logs), `Read`, `Edit`, `git`
+- **Resultado:** Éxito
+- **Verificación:** `php -l` limpio; desplegado a Desarrollo; confirmado con el usuario en una prueba posterior con credenciales reales que el login se completa sin el 500 (ver bitácora siguiente, donde además se corrigió un problema de UX relacionado detectado en el mismo round de pruebas).
+- **Logro Conseguido:** Resuelve un bug real de producción reportado por el usuario en su primera prueba en vivo de la función, usando directamente el logger Monolog conectado esa misma mañana -- demostración concreta del valor de esa mejora, aplicada a diagnóstico real horas después de implementarse.
+- **Referencias de Sesión (Contexto):**
+    - Task: N/A (sesión de Claude Code, no Antigravity)
+    - Walkthrough: N/A
+- **⚠️ NOTA DE PERSISTENCIA:** N/A, este log ya contiene el detalle técnico completo.
+- **Observaciones de Gemini:** N/A (sesión ejecutada por Claude Code, no Gemini/Antigravity). Log reconstruido el 2026-09-11 a partir de memoria de sesión y `git log`, a pedido del usuario, porque no se generó en el momento.
+- **Respuesta de Gemini:** N/A.

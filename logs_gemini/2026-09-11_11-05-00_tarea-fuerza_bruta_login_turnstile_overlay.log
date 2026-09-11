@@ -1,0 +1,27 @@
+- **Solicitud del Usuario:** Pregunta del usuario sobre qué pasa si alguien intenta fuerza bruta contra `/login` (sin límites hasta ese momento) -- pidió CAPTCHA Y límite de intentos (ambos, no uno u otro), y en la misma conversación agregó pedir un overlay de reautenticación (sin perder el trabajo en curso) para cuando el JWT expira, y que un Administrador pueda revertir manualmente un bloqueo.
+- **Fecha y Hora:** 2026-09-11 11:05:00
+- **Proyecto(s):** Ambos (Backend ninesys-api + Frontend app_multi)
+- **Archivos Involucrados:** app/lib/TurnstileHelper.php (nuevo), app/lib/LoginIntentosHelper.php (nuevo), app/routes/auth.php, app/routes/employees.php, tabla nueva `login_intentos_fallidos`; app_multi/components/login/form.vue, components/SesionExpiradaOverlay.vue (nuevo), plugins/axios-interceptor.js, components/admin/EmpleadoEditar.vue
+- **Commits Relacionados:**
+    - Backend: 63b016c ("protección contra fuerza bruta en /login") -- pusheado y desplegado en Desarrollo
+    - Frontend: bc7ffb6 ("CAPTCHA en login + overlay de reautenticación"), 4388ab3 ("limpiar widgets huérfanos al destruir el componente") -- pusheados y desplegados en Desarrollo
+- **Acción Realizada:**
+  1. **Capa 1, Cloudflare Turnstile:** widget creado manualmente por el usuario en el dashboard de Cloudflare (dominio `app.nineteengreen.com` por ahora). Verificado server-side en `/login` (`TurnstileHelper.php`) contra la API de Cloudflare ANTES de tocar la base de datos, con verificación SSL estricta. Widget agregado también en `SesionExpiradaOverlay.vue`, ya que la reautenticación reusa el mismo `/login`.
+  2. **Capa 2, límite por email** (`LoginIntentosHelper.php`, tabla nueva `login_intentos_fallidos`): 6 intentos fallidos en 15 minutos → bloqueo de 15 minutos. Se cuenta por el email tal como se envió, exista o no, para no reabrir la enumeración cerrada en la tarea anterior -- verificado con un harness que ambos casos (email real vs inventado) llegan exactamente al mismo estado. Nunca por IP (decisión explícita: bloquear por IP habría bloqueado oficinas enteras que comparten una sola IP de salida).
+  3. **Desbloqueo manual por Administrador** (pedido explícito, con énfasis en seguridad): `POST /empleados/desbloquear-login`, gateado con `requiereAdmin()` como primera línea. También se desbloquea automáticamente al cambiar la clave de un empleado (usa el email ANTES del cambio, por si el mismo request también edita el email). Botón agregado en `EmpleadoEditar.vue`.
+  4. **Capa 3, overlay de reautenticación** (`SesionExpiradaOverlay.vue`, 100% frontend): reemplaza el `logout()` + redirect duro que hacía `axios-interceptor.js` en cada 401 de sesión -- ahora solo activa el overlay sin navegar, preservando cualquier formulario/editor a medio llenar en la página de atrás (el árbol de componentes de Nuxt nunca se desmonta). Al reautenticar, solo se actualiza el `apiToken` en el store, nunca `dataUser`/`departamentos`/`modulos`.
+  5. Documentado en el propio componente, tras pregunta explícita del usuario sobre si esto es seguro: el overlay es puramente UX, la seguridad real la sigue haciendo el backend (rechaza cualquier request con JWT inválido sin importar el DOM).
+- **Inconvenientes y Desafíos:**
+  - Bug real encontrado y corregido antes del deploy final: la reautenticación mandaba el `apiToken` VIEJO/expirado como `Authorization: Bearer` en su propia petición (el interceptor global lo agrega a todo), rechazado por el middleware antes de llegar al handler real de `/login` -- corregido limpiando `apiToken` a `null` justo antes de esa llamada puntual.
+  - Bug encontrado en pruebas manuales en vivo: los widgets de Turnstile quedaban huérfanos en el registro interno de Cloudflare cuando Vue destruye el componente sin recargar la página -- el siguiente `render()` en la misma pestaña fallaba en crear un iframe funcional. Corregido con limpieza explícita del widget al destruir el componente, en ambos lugares que lo usan.
+- **Decisión Final y Justificación:** CAPTCHA + límite por email (no por IP) + overlay no-destructivo, combinando las 3 capas pedidas por el usuario en una sola implementación coherente en vez de tratarlas por separado.
+- **Herramienta(s) Utilizada(s):** `Read`, `Write`, `Edit`, navegador real, `Bash` (curl, harness de intentos), `git`
+- **Resultado:** Éxito
+- **Verificación:** end-to-end en el navegador real contra Desarrollo (no solo curl) -- empleado de prueba desechable, login completo resolviendo el CAPTCHA en vivo ("¡Operación exitosa!"), sesión expirada simulada con un JWT inválido y una petición real que disparó el interceptor -- overlay apareció mostrando datos correctos sin navegar, clave incorrecta mostró el error inline sin cerrar el overlay ni perder estado, "Cerrar sesión" hizo logout real. Toda la data de prueba borrada al terminar.
+- **Logro Conseguido:** Cierra la falta total de protección contra fuerza bruta en `/login` con 3 capas independientes, y de paso resuelve el problema de perder trabajo en curso al expirar la sesión (antes forzaba logout+redirect).
+- **Referencias de Sesión (Contexto):**
+    - Task: N/A (sesión de Claude Code, no Antigravity)
+    - Walkthrough: N/A
+- **⚠️ NOTA DE PERSISTENCIA:** N/A, este log ya contiene el detalle técnico completo.
+- **Observaciones de Gemini:** N/A (sesión ejecutada por Claude Code, no Gemini/Antigravity). Log reconstruido el 2026-09-11 a partir de memoria de sesión y `git log`, a pedido del usuario, porque no se generó en el momento.
+- **Respuesta de Gemini:** N/A.
