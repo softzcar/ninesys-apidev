@@ -5,7 +5,7 @@
 /var/
 /tmp/
 deploy_log_*.log
-/app/logs/
+/logs/
 
 # Archivos de configuración de entorno (¡MUY IMPORTANTE!)
 # Si tienes un archivo .env con contraseñas o claves de API, añádelo aquí.
