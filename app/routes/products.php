@@ -1004,8 +1004,6 @@ return function (App $app) {
     $idCatalogoCiudad = isset($data['id_catalogo_ciudad']) && $data['id_catalogo_ciudad'] !== '' ? intval($data['id_catalogo_ciudad']) : null;
     $recibir = isset($data['recibir_notificaciones']) ? $data['recibir_notificaciones'] : null;
 
-    error_log("DEBUG PUT CUSTOMER - raw_body: " . $raw_body_debug);
-    error_log("DEBUG PUT CUSTOMER - parsed data: " . json_encode($data));
     error_log("DEBUG PUT CUSTOMER - values: " . json_encode([
       'id' => $args['id'],
       'id_catalogo_pais' => $idCatalogoPais,

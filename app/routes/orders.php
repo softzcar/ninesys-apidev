@@ -4307,7 +4307,6 @@ $object['sales_commission_ISSET'][] = false;
       if ($data === null) {
         $rawBody = (string) $request->getBody();
         $data = json_decode($rawBody, true);
-        error_log('/ordenes/nueva/simple - Raw body: ' . $rawBody);
       }
 
 

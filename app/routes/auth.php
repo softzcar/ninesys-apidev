@@ -48,7 +48,9 @@ return function (App $app) {
         $credenciales = $localConnection->goQuery($sql_user, [$datosAcceso['email']]);
 
         if (empty($credenciales)) {
-            $object['msg'] = 'El email ' . $datosAcceso['email'] . ' no está registrado en el sistema.';
+            // Mensaje genérico a propósito -- auditoría de seguridad 2026-09-11
+            // (Fase 5, M5): antes revelaba si un email estaba registrado o no.
+            $object['msg'] = 'Los datos de acceso proporcionados no son correctos';
             $object['data']['access'] = false;
             $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
@@ -424,9 +426,13 @@ return function (App $app) {
         );
 
         if (empty($usuarios)) {
+            // Respuesta idéntica al caso de éxito, a propósito -- auditoría de
+            // seguridad 2026-09-11 (Fase 5, M5): antes un 404 acá revelaba
+            // directamente si un email estaba registrado o no. No se toca la
+            // base de datos ni se envía nada, solo se responde igual.
             $localConnection->disconnect();
-            $response->getBody()->write(json_encode(['error' => 'Este email no está registrado en el sistema.']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+            $response->getBody()->write(json_encode(['message' => 'Se envió una nueva clave a su WhatsApp registrado.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
         }
 
         $usuario = $usuarios[0];

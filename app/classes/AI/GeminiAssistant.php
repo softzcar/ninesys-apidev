@@ -356,27 +356,55 @@ abstract class GeminiAssistant
      */
     protected function validateSqlQuery(string $sql): bool
     {
-        $sql = strtoupper(trim($sql));
+        $sqlUpper = strtoupper(trim($sql));
 
         // Debe empezar con SELECT
-        if (strpos($sql, 'SELECT') !== 0) {
+        if (strpos($sqlUpper, 'SELECT') !== 0) {
             return false;
         }
 
-        // No debe contener comandos peligrosos
-        $forbidden = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'TRUNCATE', 'ALTER', 'CREATE', 'GRANT', 'REVOKE', 'EXEC', 'EXECUTE', '--', '/*', 'UNION'];
+        // No debe contener comandos ni funciones peligrosas -- lista ampliada
+        // en la auditoría de seguridad 2026-09-11 (Fase 5): la lista original
+        // no bloqueaba pg_sleep/COPY/CALL/dblink/lectura de archivos ni
+        // comentarios estilo MySQL.
+        $forbidden = [
+            'INSERT', 'UPDATE', 'DELETE', 'DROP', 'TRUNCATE', 'ALTER', 'CREATE', 'GRANT', 'REVOKE',
+            'EXEC', 'EXECUTE', '--', '/*', 'UNION',
+            'PG_SLEEP', 'PG_READ_FILE', 'PG_READ_BINARY_FILE', 'COPY', 'CALL', 'DBLINK',
+            'LO_IMPORT', 'LO_EXPORT', 'INTO OUTFILE', '#',
+        ];
 
         foreach ($forbidden as $word) {
-            if (strpos($sql, $word) !== false) {
+            if (strpos($sqlUpper, $word) !== false) {
                 // Permitir UNION solo si es UNION SELECT (no inyección)
-                if ($word === 'UNION' && strpos($sql, 'UNION SELECT') !== false) {
+                if ($word === 'UNION' && strpos($sqlUpper, 'UNION SELECT') !== false) {
                     continue;
                 }
                 return false;
             }
         }
 
+        // Bloquea multi-statement: solo se permite un ';' y únicamente si es
+        // el último carácter no-espacio del string.
+        $sinPuntoYComaFinal = rtrim(rtrim($sql), ';');
+        if (strpos($sinPuntoYComaFinal, ';') !== false) {
+            return false;
+        }
+
         return true;
+    }
+
+    /**
+     * Agrega un techo duro de filas si la consulta no trae ya un LIMIT
+     * propio -- auditoría de seguridad 2026-09-11 (Fase 5).
+     */
+    protected function conLimiteForzado(string $sql): string
+    {
+        $sql = rtrim(rtrim($sql), ';');
+        if (stripos($sql, 'LIMIT') === false) {
+            $sql .= ' LIMIT 500';
+        }
+        return $sql;
     }
 
     /**
@@ -393,7 +421,19 @@ abstract class GeminiAssistant
         }
 
         try {
-            $results = $this->dbConnection->goQuery($sql);
+            // Techo de tiempo real a nivel de sesión -- auditoría de seguridad
+            // 2026-09-11 (Fase 5): la lista negra de validateSqlQuery() es una
+            // primera barrera, pero no la única. Esta conexión es nueva por
+            // request (ver app/routes/ai.php), así que no hace falta resetear
+            // el timeout después.
+            try {
+                $this->dbConnection->goQuery("SET statement_timeout = '5000'");
+            } catch (\Exception $e) {
+                // Si el SET falla por algún motivo, seguir sin timeout antes
+                // que romper una consulta legítima.
+            }
+
+            $results = $this->dbConnection->goQuery($this->conLimiteForzado($sql));
             return $results ?: [];
         } catch (\Exception $e) {
             throw new \Exception('Error al ejecutar consulta: ' . $e->getMessage());

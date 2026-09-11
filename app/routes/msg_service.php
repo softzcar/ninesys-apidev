@@ -109,14 +109,11 @@ return function (App $app) {
                 ->withStatus(422);
         }
 
-        // --- 4. Log de auditoría (sin exponer el password) ---
+        // --- 4. Log de auditoría (sin exponer credenciales ni metadata de BD) ---
         error_log(sprintf(
-            '[msg_service] Credenciales entregadas para empresa %d (%s) → %s@%s/%s',
+            '[msg_service] Credenciales de BD entregadas para empresa %d (%s)',
             $idEmpresa,
-            $empresa['nombre'] ?? '',
-            $empresa['db_user'],
-            $empresa['db_host'],
-            $empresa['db_name']
+            $empresa['nombre'] ?? ''
         ));
 
         // --- 5. Respuesta ---

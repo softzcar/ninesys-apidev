@@ -228,8 +228,6 @@ return function (App $app) {
       $data = json_decode($body, true);
     }
 
-    error_log('DEBUG procesar-lote-pagos DATA: ' . print_r($data, true));
-
     $localConnection = new LocalDB();
 
     $myDate = new CustomTime();
@@ -242,8 +240,6 @@ return function (App $app) {
     } else {
       $pagosLote = $data['pagos'] ?? [];
     }
-
-    error_log('DEBUG procesar-lote-pagos pagosLote: ' . print_r($pagosLote, true));
 
     if (!is_array($pagosLote) || count($pagosLote) === 0) {
       error_log('DEBUG procesar-lote-pagos FALLO VALIDACION: no hay pagos o no es array. ' . (is_array($pagosLote) ? 'Es array vacío' : 'No es array'));
