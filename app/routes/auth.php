@@ -45,6 +45,8 @@ return function (App $app) {
         $serverParams = $request->getServerParams();
         $ipCliente = $request->getHeaderLine('CF-Connecting-IP') ?: ($serverParams['REMOTE_ADDR'] ?? '');
         $emailIntentado = trim((string) ($datosAcceso['email'] ?? ''));
+        // Sesión única por empleado -- auditoría de seguridad 2026-09-11.
+        $dispositivoInfo = describirDispositivo($request->getHeaderLine('User-Agent'));
 
         // Capa 1: CAPTCHA (Cloudflare Turnstile) -- se verifica ANTES de tocar
         // la base de datos. Si falla, ni siquiera cuenta como intento fallido
@@ -117,6 +119,25 @@ return function (App $app) {
         // incompleta) no debería mantener el bloqueo de alguien que sí probó
         // la clave correcta.
         limpiarIntentos($localConnection, $usuario_data['email']);
+
+        // Sesión única por empleado -- pedido explícito del usuario
+        // 2026-09-11 (ver SesionUnicaHelper.php y memoria de seguridad
+        // [[project_fase_seguridad_pendiente]]). Si ya hay una sesión activa
+        // y el cliente no confirmó todavía (forzar_sesion), se le avisa cuál
+        // es antes de cerrarla -- sin tocar la tabla todavía.
+        $forzarSesion = !empty($datosAcceso['forzar_sesion']);
+        if (!$forzarSesion) {
+            $sesionExistente = sesionActivaDe($localConnection, (int) $usuario_data['id_usuario']);
+            if ($sesionExistente !== null) {
+                $object['requiere_confirmacion_sesion'] = true;
+                $object['sesion_activa'] = [
+                    'dispositivo' => $sesionExistente['dispositivo_info'] ?: 'un dispositivo desconocido',
+                    'desde' => date('d/m/Y H:i', strtotime($sesionExistente['creado_en'])),
+                ];
+                $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+            }
+        }
 
         // Migración transparente a hash (Fase 3): si la clave todavía estaba
         // en texto plano (o el hash quedó con un algoritmo desactualizado),
@@ -321,11 +342,19 @@ return function (App $app) {
         $object['empresa']['activo'] = $empresa_data['activo'];
 
         if ($login_successful) {
+            // Sesión única por empleado -- auditoría de seguridad 2026-09-11.
+            // El "reclamo" (lo que efectivamente cierra cualquier sesión
+            // anterior) ocurre acá, justo antes de emitir el token -- nunca
+            // antes, para no quitarle la sesión a nadie por un login que
+            // termina fallando más abajo.
+            $sessionId = generarSessionId();
+            reclamarSesion($localConnection, (int) $usuario_data['id_usuario'], $sessionId, $dispositivoInfo, $ipCliente);
+
             // Sesión real (JWT) -- auditoría de seguridad 2026-09-10, ver
             // memoria de seguridad (hallazgo C2). Campo adicional, no
             // reemplaza nada de la respuesta existente; el frontend lo usa
             // gradualmente (ver app_multi/plugins/axios-interceptor.js).
-            $object['token'] = generarJwtSesion($usuario_data, (int) $empresa_data['id_empresa']);
+            $object['token'] = generarJwtSesion($usuario_data, (int) $empresa_data['id_empresa'], $sessionId);
             $object['msg'] = 'Bienvenido ' . $usuario_data['nombre'] . '.';
             $object['data']['access'] = true;
             $object['company_full_config'] = true;
@@ -443,6 +472,32 @@ return function (App $app) {
         $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
 
         return $response;
+    });
+
+    /**
+     * Logout real -- auditoría de seguridad 2026-09-11 (sesión única por
+     * empleado). Hasta ahora "cerrar sesión" era 100% del frontend (solo
+     * limpiaba el store local); sin avisar al backend, la fila de
+     * sesiones_activas nunca se liberaba, y el siguiente login (desde donde
+     * sea) pedía confirmación innecesaria. Exige una sesión JWT válida --
+     * no tiene sentido para el modo legado/servicio, que no representan una
+     * sesión de persona.
+     */
+    $app->post('/logout', function (Request $request, Response $response) {
+        if (!defined('ID_USUARIO_TOKEN')) {
+            $response->getBody()->write(json_encode([
+                'error' => 'invalid_token',
+                'message' => 'Sesión inválida o expirada.',
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+        cerrarSesionDe($localConnection, ID_USUARIO_TOKEN);
+        $localConnection->disconnect();
+
+        $response->getBody()->write(json_encode(['message' => 'Sesión cerrada.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
     });
 
     /**

@@ -51,7 +51,27 @@ class IdEmpresaMiddleware implements Middleware
                 return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
             }
             $id_empresa = (int) ($claims['id_empresa'] ?? 0);
-            define('ID_USUARIO_TOKEN', (int) ($claims['id_usuario'] ?? 0));
+            $idUsuarioClaim = (int) ($claims['id_usuario'] ?? 0);
+
+            // Sesión única por empleado -- auditoría de seguridad 2026-09-11
+            // (ver SesionUnicaHelper.php). Si otro login reemplazó a esta
+            // sesión (sid distinto al guardado en sesiones_activas), este
+            // JWT queda invalidado aunque su firma/expiración sean válidas --
+            // 401 con un código DISTINTO al de "token inválido" normal, para
+            // que el frontend pueda avisar el motivo real.
+            $centralParaSesion = new \LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            if (!sesionEsValida($centralParaSesion, $idUsuarioClaim, (string) ($claims['sid'] ?? ''))) {
+                $centralParaSesion->disconnect();
+                $response = new \Slim\Psr7\Response();
+                $response->getBody()->write(json_encode([
+                    'error' => 'session_superseded',
+                    'message' => 'Su sesión se cerró porque se inició sesión en otro dispositivo.',
+                ]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+            }
+            $centralParaSesion->disconnect();
+
+            define('ID_USUARIO_TOKEN', $idUsuarioClaim);
             define('ACCESO_TOKEN', $claims['acceso'] ?? null);
         } else {
             $id_empresa = $authHeaderRaw !== '' ? (int) $authHeaderRaw : null;

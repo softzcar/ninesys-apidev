@@ -17,8 +17,12 @@ use Firebase\JWT\Key;
  *   id_usuario, email, acceso -- los mismos campos que ya usa auth.php al
  *   armar la respuesta de /login).
  * @param int $idEmpresa Empresa a la que pertenece la sesión.
+ * @param string $sessionId Identificador de sesión única -- auditoría de
+ *   seguridad 2026-09-11 (ver SesionUnicaHelper.php). IdEmpresaMiddleware
+ *   invalida cualquier JWT cuyo `sid` ya no coincida con el guardado en
+ *   `sesiones_activas` (otra sesión lo reemplazó).
  */
-function generarJwtSesion(array $usuario, int $idEmpresa): string
+function generarJwtSesion(array $usuario, int $idEmpresa, string $sessionId): string
 {
     $secret = getenv('JWT_SECRET') ?: '';
     $ttlHoras = (float) (getenv('JWT_TTL_HOURS') ?: 24);
@@ -33,6 +37,7 @@ function generarJwtSesion(array $usuario, int $idEmpresa): string
         'id_empresa' => $idEmpresa,
         'email' => $usuario['email'] ?? null,
         'acceso' => isset($usuario['acceso']) ? (int) $usuario['acceso'] : null,
+        'sid' => $sessionId,
     ];
 
     return JWT::encode($payload, $secret, 'HS256');
