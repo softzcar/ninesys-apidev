@@ -13,7 +13,9 @@
 abstract class GeminiAssistant
 {
     protected string $apiKey;
-    protected string $model = 'gemini-2.0-flash';
+    // gemini-2.0-flash fue descontinuado por Google (2026-09-11) -- el error
+    // real observado indicaba migrar a gemini-3.6-flash.
+    protected string $model = 'gemini-3.6-flash';
     protected string $apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/';
     protected array $dbSchema;
     protected $dbConnection;
@@ -421,19 +423,38 @@ abstract class GeminiAssistant
         }
 
         try {
+            // Defensa en profundidad -- auditoría de seguridad 2026-09-11: el
+            // SQL generado por el LLM corre con un rol de PostgreSQL de solo
+            // lectura DEDICADO (ninesys_ai_readonly), separado de
+            // $this->dbConnection (que sigue usando el rol normal de
+            // lectura/escritura para el resto del asistente -- búsquedas de
+            // clientes/productos, creación de órdenes en
+            // handleCrearOrdenFinal()). Así, aunque algo se le escape a
+            // validateSqlQuery() en el futuro, PostgreSQL mismo impide
+            // cualquier escritura, sin depender de que la lista negra sea
+            // perfecta. Misma base de datos que ya está activa (LOCAL_DNS ya
+            // resuelto por IdEmpresaMiddleware para la empresa de la sesión),
+            // solo cambian las credenciales.
+            $usuarioSoloLectura = getenv('AI_READONLY_DB_USER') ?: '';
+            $claveSoloLectura = getenv('AI_READONLY_DB_PASSWORD') ?: '';
+            if ($usuarioSoloLectura === '' || $claveSoloLectura === '') {
+                throw new \Exception('El rol de solo lectura para el motor SQL de IA no está configurado (AI_READONLY_DB_USER/AI_READONLY_DB_PASSWORD).');
+            }
+            $conexionSoloLectura = new \LocalDB('', LOCAL_DNS, $usuarioSoloLectura, $claveSoloLectura);
+
             // Techo de tiempo real a nivel de sesión -- auditoría de seguridad
             // 2026-09-11 (Fase 5): la lista negra de validateSqlQuery() es una
-            // primera barrera, pero no la única. Esta conexión es nueva por
-            // request (ver app/routes/ai.php), así que no hace falta resetear
-            // el timeout después.
+            // primera barrera, pero no la única. Esta conexión es nueva y
+            // efímera, así que no hace falta resetear el timeout después.
             try {
-                $this->dbConnection->goQuery("SET statement_timeout = '5000'");
+                $conexionSoloLectura->goQuery("SET statement_timeout = '5000'");
             } catch (\Exception $e) {
                 // Si el SET falla por algún motivo, seguir sin timeout antes
                 // que romper una consulta legítima.
             }
 
-            $results = $this->dbConnection->goQuery($this->conLimiteForzado($sql));
+            $results = $conexionSoloLectura->goQuery($this->conLimiteForzado($sql));
+            $conexionSoloLectura->disconnect();
             return $results ?: [];
         } catch (\Exception $e) {
             throw new \Exception('Error al ejecutar consulta: ' . $e->getMessage());

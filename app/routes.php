@@ -816,6 +816,28 @@ return function (App $app) {
         $new_db_pdo->exec('GRANT SELECT ON ALL TABLES IN SCHEMA api_empresas TO "' . EMPRESAS_USER . '"');
         $new_db_pdo->exec('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "' . EMPRESAS_USER . '"');
         $new_db_pdo->exec('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "' . EMPRESAS_USER . '"');
+
+        // 5. Rol de solo lectura dedicado para el motor SQL de la IA --
+        // auditoría de seguridad 2026-09-11 (Fase 5). Garantía de esquema:
+        // el rol ninesys_ai_readonly ya existe a nivel de clúster (creado
+        // una vez, manualmente), acá solo se le dan permisos sobre la BD de
+        // ESTA empresa nueva, igual que se hizo para api_emp_194/208.
+        $aiReadonlyUser = getenv('AI_READONLY_DB_USER') ?: '';
+        $aiReadonlyPass = getenv('AI_READONLY_DB_PASSWORD') ?: '';
+        if ($aiReadonlyUser !== '' && $aiReadonlyPass !== '') {
+          error_log("DEBUG: Configurando rol de solo lectura de IA en {$db_name}");
+          $new_db_pdo->exec('GRANT USAGE ON SCHEMA public TO "' . $aiReadonlyUser . '"');
+          $new_db_pdo->exec('GRANT SELECT ON ALL TABLES IN SCHEMA public TO "' . $aiReadonlyUser . '"');
+          $new_db_pdo->exec('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO "' . $aiReadonlyUser . '"');
+          $new_db_pdo->exec('GRANT USAGE ON SCHEMA api_empresas TO "' . $aiReadonlyUser . '"');
+          $new_db_pdo->exec('GRANT SELECT ON ALL TABLES IN SCHEMA api_empresas TO "' . $aiReadonlyUser . '"');
+          $new_db_pdo->exec(
+            'CREATE USER MAPPING IF NOT EXISTS FOR "' . $aiReadonlyUser . '" SERVER api_empresas_server '
+            . 'OPTIONS (user \'' . $aiReadonlyUser . '\', password \'' . $aiReadonlyPass . '\')'
+          );
+        } else {
+          error_log("ADVERTENCIA: AI_READONLY_DB_USER/PASSWORD no configurados -- el chat de IA en {$db_name} no tendrá su rol de solo lectura hasta que se configure manualmente.");
+        }
       } catch (Exception $e) {
         // Si falla la creación de BD/schema, eliminar la empresa creada y,
         // si la BD llegó a crearse, también eliminarla para no dejar huérfanos.

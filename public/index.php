@@ -9,6 +9,7 @@ use App\Application\Handlers\ShutdownHandler;
 use App\Application\ResponseEmitter\ResponseEmitter;
 use App\Application\Settings\SettingsInterface;
 use DI\ContainerBuilder;
+use Psr\Log\LoggerInterface;
 use Slim\Factory\AppFactory;
 use Slim\Factory\ServerRequestCreatorFactory;
 
@@ -70,7 +71,13 @@ $request = $serverRequestCreator->createServerRequestFromGlobals();
 
 // Create Error Handler
 $responseFactory = $app->getResponseFactory();
-$errorHandler = new HttpErrorHandler($callableResolver, $responseFactory);
+// Monolog ya estaba registrado en dependencies.php pero nadie se lo pasaba a
+// nadie -- Slim's ErrorHandler::logError() ya es PSR-3 por dentro, solo
+// hacía falta este logger en vez de caer al default mínimo de Slim (auditoría
+// 2026-09-11). Esto cubre las excepciones no capturadas (500), no los
+// error_log() sueltos de cada route (fuera de alcance, ver memoria).
+$logger = $container->get(LoggerInterface::class);
+$errorHandler = new HttpErrorHandler($callableResolver, $responseFactory, $logger);
 
 // Create Shutdown Handler
 $shutdownHandler = new ShutdownHandler($request, $errorHandler, $displayErrorDetails);
