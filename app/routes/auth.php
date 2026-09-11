@@ -48,23 +48,45 @@ return function (App $app) {
         // Sesión única por empleado -- auditoría de seguridad 2026-09-11.
         $dispositivoInfo = describirDispositivo($request->getHeaderLine('User-Agent'));
 
+        $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+
         // Token corto de confirmación de sesión (ver SesionUnicaHelper.php) --
         // si el cliente ya pasó por un conflicto de sesión en el intento
         // anterior (mismo flujo de /login, Turnstile+clave ya verificados
         // ahí), puede reenviar este token en vez de un nuevo
         // cf-turnstile-response para completar el "sí, cerrar la otra
-        // sesión" sin pedir un segundo CAPTCHA. Se valida la firma/vigencia
-        // acá; el cruce contra el usuario real y la sesión vigente ocurre
-        // más abajo, después de verificar la clave.
+        // sesión" sin pedir un segundo CAPTCHA.
+        //
+        // El token SOLO permite saltar Turnstile si de verdad pertenece a la
+        // MISMA cuenta que se está intentando loguear -- si no se exigiera
+        // esto, un token válido de CUALQUIER cuenta serviría para saltarse
+        // el CAPTCHA al probar contraseñas contra CUALQUIER OTRA cuenta,
+        // reabriendo justo el riesgo (fuerza bruta/DoS sobre el hash bcrypt)
+        // que Turnstile-antes-de-tocar-la-BD existe para evitar. Se resuelve
+        // con una consulta liviana (indexada por email) ANTES de decidir si
+        // se salta Turnstile -- este costo extra solo se paga cuando de
+        // verdad llega un token_confirmacion_sesion (caso raro), el camino
+        // normal (sin token) no cambia en nada.
         $tokenConfirmacionSesion = (string) ($datosAcceso['token_confirmacion_sesion'] ?? '');
         $claimsConfirmacionSesion = decodificarTokenConfirmacionSesion(getenv('JWT_SECRET') ?: '', $tokenConfirmacionSesion);
+        if ($claimsConfirmacionSesion !== null) {
+            $idUsuarioPorEmail = $localConnection->goQuery(
+                'SELECT id_usuario FROM empresas_usuarios WHERE email = ?',
+                [$datosAcceso['email'] ?? '']
+            );
+            $tokenPerteneceAEstaCuenta = !empty($idUsuarioPorEmail)
+                && (int) $idUsuarioPorEmail[0]['id_usuario'] === (int) $claimsConfirmacionSesion->id_usuario;
+            if (!$tokenPerteneceAEstaCuenta) {
+                $claimsConfirmacionSesion = null;
+            }
+        }
 
-        // Capa 1: CAPTCHA (Cloudflare Turnstile) -- se verifica ANTES de tocar
-        // la base de datos, salvo que ya se haya confirmado humanidad+clave
-        // en el intento anterior (token de confirmación válido, ver arriba).
-        // Si falla, ni siquiera cuenta como intento fallido para la Capa 2
-        // (un bot sin token no debería poder gastar el cupo de intentos de
-        // un email real).
+        // Capa 1: CAPTCHA (Cloudflare Turnstile) -- se verifica ANTES de
+        // continuar, salvo que ya se haya confirmado humanidad+clave para
+        // ESTA MISMA cuenta en el intento anterior (token de confirmación
+        // válido, ver arriba). Si falla, ni siquiera cuenta como intento
+        // fallido para la Capa 2 (un bot sin token no debería poder gastar
+        // el cupo de intentos de un email real).
         if ($claimsConfirmacionSesion === null) {
             $turnstileToken = (string) ($datosAcceso['cf-turnstile-response'] ?? '');
             if (!verificarTurnstile($turnstileToken, $ipCliente)) {
@@ -74,8 +96,6 @@ return function (App $app) {
                 return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
             }
         }
-
-        $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
         // Capa 2: límite de intentos por email (ver LoginIntentosHelper.php --
         // nunca por IP, para no bloquear oficinas enteras que comparten una
