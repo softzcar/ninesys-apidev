@@ -479,9 +479,17 @@ return function (App $app) {
         $sql = 'DELETE FROM api_empresas.empresas_usuarios_departamentos WHERE id_empleado = ? AND id_empresa = ?';
         $object['response_delete'] = $localConnection->goQuery($sql, [$lastInsert, ID_EMPRESA]);
 
-        $departamentos = explode(',', $miEmpleado['departamentos']);
+        // 500 real reportado (2026-09-14, verificado en vivo): crear un empleado
+        // sin ningún departamento manda departamentos="" -- explode() sobre un
+        // string vacío devuelve [''], y el INSERT fallaba con "invalid input
+        // syntax for type integer" (Postgres) al intentar guardar un
+        // id_departamento vacío. El empleado ya se había creado correctamente
+        // en ese punto (bug puramente en este bucle), mismo guard que ya usan
+        // los otros 2 bucles idénticos de este archivo (líneas ~292, ~346).
+        $departamentos = explode(',', $miEmpleado['departamentos'] ?? '');
         $object['response_deps'] = [];
         foreach ($departamentos as $id) {
+            if ($id === '') continue;
             $sqlDep = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, ?, ?)';
             $object['response_deps'][] = $localConnection->goQuery($sqlDep, [$lastInsert, $id, ID_EMPRESA]);
         }

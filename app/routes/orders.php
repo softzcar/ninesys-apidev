@@ -2919,7 +2919,7 @@ return function (App $app) {
 
     $arr['id_wp'] = json_decode($newJson['id']);
     $arr['nombre'] = json_decode($newJson['nombre']);
-    $arr['vinculada'] = json_decode($newJson['vinculada']);
+    $arr['vinculada'] = json_decode($newJson['vinculada'] ?? '0');
     $arr['apellido'] = json_decode($newJson['apellido']);
     $arr['cedula'] = json_decode($newJson['cedula']);
     $arr['telefono'] = json_decode($newJson['telefono']);
@@ -3184,8 +3184,14 @@ return function (App $app) {
       // $object['sql_orden_fila'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
       $response_last_fila = $localConnection->goQuery($sql, [$last_id, $lastOrdenFila]);
 
-      // Guardar orden vinculada
-      if ($arr['vinculada'] != 0 || $arr['vinculada'] != '0') {
+      // Guardar orden vinculada -- bug real (2026-09-14, documentado desde
+      // 2026-09-11): con "||" la condición es casi siempre verdadera (basta
+      // con que UNA de las dos comparaciones sea distinta), incluida cuando
+      // $arr['vinculada'] es null (campo omitido en la petición) -- eso
+      // disparaba un INSERT con id_father=0, que viola la FK contra
+      // `ordenes` y hacía fallar la creación completa de la orden. Corregido
+      // a una comparación directa del valor entero real.
+      if ((int) $arr['vinculada'] > 0) {
         $sql = 'INSERT INTO ordenes_vinculadas (moment, id_father, id_child) VALUES (?, ?, ?)';
         $object['response_orden_vinculada'] = json_encode($localConnection->goQuery($sql, [$now, (int) $arr['vinculada'], $last_id]));
       }
@@ -3732,7 +3738,7 @@ $object['sales_commission_ISSET'][] = false;
       // Manteniendo la lógica de decodificación original detallada
       $arr['id_wp'] = json_decode($newJson['id']);
       $arr['nombre'] = json_decode($newJson['nombre']);
-      $arr['vinculada'] = json_decode($newJson['vinculada']);
+      $arr['vinculada'] = json_decode($newJson['vinculada'] ?? '0');
       $arr['apellido'] = json_decode($newJson['apellido']);
       $arr['cedula'] = json_decode($newJson['cedula']);
       $arr['telefono'] = json_decode($newJson['telefono']);
