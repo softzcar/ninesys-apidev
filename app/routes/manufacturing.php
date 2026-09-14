@@ -1665,12 +1665,17 @@ return function (App $app) {
     $data = json_decode($json_body, true);
 
     $id_departamento = $data['id_departamento'] ?? null;
-    $id_empleado = $data['id_empleado'] ?? null;
+    // Auditoría de seguridad 2026-09-14: id_empleado ya NO se toma del body.
+    $id_empleado = ID_USUARIO_TOKEN;
     $consumos_lote = $data['consumos_lote'] ?? null;
 
     if (empty($id_departamento) || empty($id_empleado) || !is_array($consumos_lote)) {
       $response->getBody()->write(json_encode(['error' => 'Faltan parámetros requeridos o el array consumos_lote es inválido.', 'debug_data_received' => $data]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    if ($errorResponse = perteneceADepartamento($request, $response, (int) $id_departamento)) {
+      return $errorResponse;
     }
 
     $localConnection = new LocalDB();
@@ -2088,7 +2093,8 @@ return function (App $app) {
     $data = json_decode($json_body, true);
 
     $id_departamento = $data['id_departamento'] ?? null;
-    $id_empleado = $data['id_empleado'] ?? null;
+    // Auditoría de seguridad 2026-09-14: id_empleado ya NO se toma del body.
+    $id_empleado = ID_USUARIO_TOKEN;
     $consumo_papel = $data['consumo_papel'] ?? null;
     $consumo_tintas = $data['consumo_tintas'] ?? null;
 
@@ -2101,6 +2107,10 @@ return function (App $app) {
         ->withHeader('Access-Control-Allow-Origin', '*')
         ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
         ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    }
+
+    if ($errorResponse = perteneceADepartamento($request, $response, (int) $id_departamento)) {
+      return $errorResponse;
     }
 
     $localConnection = new LocalDB();
@@ -2318,7 +2328,10 @@ return function (App $app) {
 
     // 1. Validar payload específico para Corte
     $id_departamento = $data['id_departamento'] ?? null;
-    $id_empleado = $data['id_empleado'] ?? null;
+    // Auditoría de seguridad 2026-09-14: id_empleado ya NO se toma del body
+    // (el cliente podía acreditarle/quitarle trabajo a cualquier otro
+    // empleado) -- siempre es el usuario real de la sesión.
+    $id_empleado = ID_USUARIO_TOKEN;
     $consumos_lote = $data['consumos_lote'] ?? null;
 
     if (empty($id_empleado) || empty($id_departamento) || !is_array($consumos_lote) || empty($consumos_lote)) {
@@ -2330,6 +2343,10 @@ return function (App $app) {
         ->withHeader('Access-Control-Allow-Origin', '*')
         ->withHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-ID-Empresa')
         ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    }
+
+    if ($errorResponse = perteneceADepartamento($request, $response, (int) $id_departamento)) {
+      return $errorResponse;
     }
 
     $localConnection = new LocalDB();
@@ -2615,6 +2632,24 @@ return function (App $app) {
   $app->post('/empleados/registrar-paso/{tipo}/{departamento}/{id_lotes_detalles}/{unidades}', function (Request $request, Response $response, array $args) {
     // PREPARAR FECHAS
     $localConnection = new LocalDB();
+
+    // Autorización por departamento -- auditoría de seguridad 2026-09-14.
+    // {departamento} llega como NOMBRE (no id) en esta ruta -- se resuelve
+    // al id real para validar contra DEPARTAMENTOS_TOKEN. Nota: a diferencia
+    // de finalizar-corte/impresion/departamento, aquí el id_empleado que se
+    // acredita/paga NO viene del body -- se resuelve de
+    // `lotes_detalles.id_empleado` (la tarea ya tenía un empleado asignado
+    // de antes). No se fuerza ese valor al llamante real todavía: los
+    // componentes "Grupal"/"por-lotes" que usan la ruta hermana
+    // (registrar-paso-por-lotes) sugieren un flujo real de un
+    // supervisor/coordinador procesando tareas de varios empleados a la vez
+    // -- pendiente de confirmar con el usuario antes de bloquearlo.
+    $depNombre = (string) $args['departamento'];
+    $depFila = $localConnection->goQuery('SELECT _id FROM departamentos WHERE departamento = ? AND eliminado = 0', [$depNombre]);
+    if (!empty($depFila) && ($errorResponse = perteneceADepartamento($request, $response, (int) $depFila[0]['_id']))) {
+      return $errorResponse;
+    }
+
     $myDate = new CustomTime();
     $now = $myDate->today();
     $sql = '';
@@ -2791,6 +2826,16 @@ return function (App $app) {
     $object['request'] = json_decode($misTareas['item']);
     $object['args'] = $args;
     $localConnection = new LocalDB();
+
+    // Autorización por departamento -- auditoría de seguridad 2026-09-14
+    // (mismo criterio y misma nota sobre id_empleado que /registrar-paso,
+    // ver comentario ahí -- este endpoint procesa varias tareas/empleados
+    // por request, posible flujo real de supervisor/coordinador).
+    $depNombre = (string) $args['departamento'];
+    $depFila = $localConnection->goQuery('SELECT _id FROM departamentos WHERE departamento = ? AND eliminado = 0', [$depNombre]);
+    if (!empty($depFila) && ($errorResponse = perteneceADepartamento($request, $response, (int) $depFila[0]['_id']))) {
+      return $errorResponse;
+    }
 
     $myDate = new CustomTime();
     $now = $myDate->today();

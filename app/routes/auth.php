@@ -418,7 +418,11 @@ return function (App $app) {
             // memoria de seguridad (hallazgo C2). Campo adicional, no
             // reemplaza nada de la respuesta existente; el frontend lo usa
             // gradualmente (ver app_multi/plugins/axios-interceptor.js).
-            $object['token'] = generarJwtSesion($usuario_data, (int) $empresa_data['id_empresa'], $sessionId);
+            // Autorización por departamento -- auditoría de seguridad
+            // 2026-09-14: reutiliza el array ya calculado para la respuesta
+            // de login (arriba, línea ~380), sin ninguna consulta nueva.
+            $idsDepartamentos = array_column($object['empleado'][0]['departamentos'] ?? [], 'id');
+            $object['token'] = generarJwtSesion($usuario_data, (int) $empresa_data['id_empresa'], $sessionId, $idsDepartamentos);
             $object['msg'] = 'Bienvenido ' . $usuario_data['nombre'] . '.';
             $object['data']['access'] = true;
             $object['company_full_config'] = true;

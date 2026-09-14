@@ -1162,6 +1162,25 @@ return function (App $app) {
 
   // Departamentos por empleado
   $app->get('/departamentos-empleado/{id_empleado}', function (Request $request, Response $response, array $args) {
+    // IDOR (auditoría de seguridad 2026-09-14, mismo patrón ya corregido en
+    // /refresh-session/{id}): antes cualquiera podía leer los departamentos
+    // de CUALQUIER empleado pasando su id en la URL. Ahora exige sesión JWT
+    // real cuyo id_usuario coincida (o sea Administrador).
+    if (!defined('ID_USUARIO_TOKEN')) {
+      $response->getBody()->write(json_encode([
+        'error' => 'invalid_token',
+        'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
+    if ((int) ID_USUARIO_TOKEN !== (int) $args['id_empleado'] && (int) (defined('ACCESO_TOKEN') ? ACCESO_TOKEN : 0) !== 1) {
+      $response->getBody()->write(json_encode([
+        'error' => 'forbidden',
+        'message' => 'No tiene permiso para ver los departamentos de otro empleado.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
+
     $localConnection = new LocalDB();
 
     $sql = 'SELECT a.id_departamento, b.departamento, b.orden_proceso, b.tipo from api_empresas.empresas_usuarios_departamentos a JOIN departamentos b On b._id = a.id_departamento AND b.eliminado = 0 WHERE a.id_empleado = ?';

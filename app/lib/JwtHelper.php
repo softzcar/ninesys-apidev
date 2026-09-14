@@ -21,8 +21,15 @@ use Firebase\JWT\Key;
  *   seguridad 2026-09-11 (ver SesionUnicaHelper.php). IdEmpresaMiddleware
  *   invalida cualquier JWT cuyo `sid` ya no coincida con el guardado en
  *   `sesiones_activas` (otra sesión lo reemplazó).
+ * @param array $idsDepartamentos IDs de los departamentos asignados al
+ *   empleado (auditoría de seguridad 2026-09-14, autorización por
+ *   departamento) -- IdEmpresaMiddleware los expone como
+ *   `DEPARTAMENTOS_TOKEN` para `perteneceADepartamento()` (AuthzHelper.php).
+ *   Igual que `acceso`: si el departamento del empleado cambia a mitad de
+ *   sesión, se refleja recién en el próximo login (sin refresh token, mismo
+ *   precedente ya aceptado).
  */
-function generarJwtSesion(array $usuario, int $idEmpresa, string $sessionId): string
+function generarJwtSesion(array $usuario, int $idEmpresa, string $sessionId, array $idsDepartamentos = []): string
 {
     $secret = getenv('JWT_SECRET') ?: '';
     $ttlHoras = (float) (getenv('JWT_TTL_HOURS') ?: 24);
@@ -38,6 +45,7 @@ function generarJwtSesion(array $usuario, int $idEmpresa, string $sessionId): st
         'email' => $usuario['email'] ?? null,
         'acceso' => isset($usuario['acceso']) ? (int) $usuario['acceso'] : null,
         'sid' => $sessionId,
+        'departamentos' => array_values(array_map('intval', $idsDepartamentos)),
     ];
 
     return JWT::encode($payload, $secret, 'HS256');

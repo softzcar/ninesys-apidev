@@ -42,3 +42,42 @@ function requiereAdmin(\Psr\Http\Message\ServerRequestInterface $request, \Psr\H
 
     return null;
 }
+
+/**
+ * Autorización por departamento -- auditoría de seguridad 2026-09-14.
+ * Mismo patrón que requiereAdmin(): 401 si no hay sesión JWT real, 403 si la
+ * sesión es real pero el empleado no pertenece a $idDepartamento.
+ * Administrador (`acceso=1`) siempre pasa -- mismo criterio que ya usa el
+ * frontend (las páginas de departamento aceptan `id_modulo` propio O el de
+ * Administración).
+ *
+ * `DEPARTAMENTOS_TOKEN` viaja en el JWT desde el login (ver JwtHelper.php);
+ * si el empleado cambia de departamento a mitad de sesión, se refleja recién
+ * en el próximo login (sin refresh token, mismo precedente ya aceptado con
+ * `acceso`).
+ */
+function perteneceADepartamento(\Psr\Http\Message\ServerRequestInterface $request, \Psr\Http\Message\ResponseInterface $response, int $idDepartamento): ?\Psr\Http\Message\ResponseInterface
+{
+    if (!defined('ID_USUARIO_TOKEN')) {
+        $response->getBody()->write(json_encode([
+            'error' => 'invalid_token',
+            'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+        ]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
+
+    if ((int) (defined('ACCESO_TOKEN') ? ACCESO_TOKEN : 0) === 1) {
+        return null;
+    }
+
+    $departamentos = defined('DEPARTAMENTOS_TOKEN') ? DEPARTAMENTOS_TOKEN : [];
+    if (!in_array($idDepartamento, array_map('intval', (array) $departamentos), true)) {
+        $response->getBody()->write(json_encode([
+            'error' => 'forbidden',
+            'message' => 'No pertenece al departamento correspondiente a esta acción.',
+        ]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
+
+    return null;
+}

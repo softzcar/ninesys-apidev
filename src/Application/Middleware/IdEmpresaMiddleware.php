@@ -73,6 +73,9 @@ class IdEmpresaMiddleware implements Middleware
 
             define('ID_USUARIO_TOKEN', $idUsuarioClaim);
             define('ACCESO_TOKEN', $claims['acceso'] ?? null);
+            // Autorización por departamento -- auditoría de seguridad
+            // 2026-09-14, ver AuthzHelper.php::perteneceADepartamento().
+            define('DEPARTAMENTOS_TOKEN', $claims['departamentos'] ?? []);
         } else {
             $id_empresa = $authHeaderRaw !== '' ? (int) $authHeaderRaw : null;
             error_log('[auth_mode=legacy] ' . $request->getUri()->getPath());

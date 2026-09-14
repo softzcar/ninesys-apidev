@@ -1901,6 +1901,18 @@ return function (App $app) {
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
+    // Autorización por departamento -- auditoría de seguridad 2026-09-14.
+    // A diferencia de los endpoints "finalizar-*", este NO es "registro de mi
+    // propio trabajo" -- es una ASIGNACIÓN real (un coordinador reparte
+    // trabajo entre varios empleados de Corte, ver
+    // components/produccionsse/asignacionDeCorteGrupalGuardar.vue). Por eso
+    // NO se toca `id_empleado` (sigue siendo a quién se asigna, no quién
+    // llama) -- solo se exige que el llamante pertenezca a Corte.
+    $depFila = $localConnection->goQuery("SELECT _id FROM departamentos WHERE departamento = 'Corte' AND eliminado = 0");
+    if (!empty($depFila) && ($errorResponse = perteneceADepartamento($request, $response, (int) $depFila[0]['_id']))) {
+      return $errorResponse;
+    }
+
     $object['data'] = $data;
     $object['request_data'] = json_decode($data['data']);
 
@@ -2355,6 +2367,16 @@ return function (App $app) {
       $localConnection->disconnect();
       $response->getBody()->write(json_encode(['error' => 'Faltan datos requeridos.']));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    // Autorización por departamento -- auditoría de seguridad 2026-09-14.
+    // "id_empleado_ajuste" es quien solicita/ajusta (comentario original más
+    // abajo) -- self-atribución, igual que finalizar-corte/impresion, así
+    // que se fuerza al usuario real de la sesión en vez del body.
+    $data['id_empleado_ajuste'] = ID_USUARIO_TOKEN;
+    $depFila = $localConnection->goQuery("SELECT _id FROM departamentos WHERE departamento = 'Corte' AND eliminado = 0");
+    if (!empty($depFila) && ($errorResponse = perteneceADepartamento($request, $response, (int) $depFila[0]['_id']))) {
+      return $errorResponse;
     }
 
     // Modificado para registrar en inventario_corte, que es lo que suma el avance.
