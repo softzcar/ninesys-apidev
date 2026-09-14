@@ -1898,6 +1898,16 @@ return function (App $app) {
 
   // ASIGNAR VARIAS ORDENES A CORTE A LA VEZ
   $app->post('/produccion/asignar-varias-ordenes-a-corte', function (Request $request, Response $response, array $args) {
+    // Chequeo de sesión ANTES de abrir conexión a la base de datos (mismo
+    // bug real que en /empleados/registrar-paso, ver ese comentario).
+    if (!defined('ID_USUARIO_TOKEN')) {
+      $response->getBody()->write(json_encode([
+        'error' => 'invalid_token',
+        'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
+
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 

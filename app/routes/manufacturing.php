@@ -2657,6 +2657,18 @@ return function (App $app) {
 
   // Control de de estado del proceso de produccion del empleado
   $app->post('/empleados/registrar-paso/{tipo}/{departamento}/{id_lotes_detalles}/{unidades}', function (Request $request, Response $response, array $args) {
+    // Chequeo de sesión ANTES de abrir conexión a la base de datos (bug real
+    // encontrado en la propia verificación 2026-09-14: sin sesión real,
+    // `new LocalDB()` falla con un 500 genérico antes de llegar siquiera a
+    // perteneceADepartamento() más abajo).
+    if (!defined('ID_USUARIO_TOKEN')) {
+      $response->getBody()->write(json_encode([
+        'error' => 'invalid_token',
+        'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
+
     // PREPARAR FECHAS
     $localConnection = new LocalDB();
 
@@ -2848,13 +2860,25 @@ return function (App $app) {
   });
 
   $app->post('/empleados/registrar-paso-por-lotes/{departamento}', function (Request $request, Response $response, array $args) {
+    // Autorización por departamento -- auditoría de seguridad 2026-09-14.
+    // Guardia debe ir ANTES de `new LocalDB()`: se confirmó en vivo que ese
+    // constructor falla (500) cuando no hay ninguna sesión JWT, antes de
+    // llegar a perteneceADepartamento() más abajo (mismo bug ya corregido en
+    // /registrar-paso y /produccion/asignar-varias-ordenes-a-corte).
+    if (!defined('ID_USUARIO_TOKEN')) {
+      $response->getBody()->write(json_encode([
+        'error' => 'invalid_token',
+        'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
+
     // OBTENER DATOS VIA POST
     $misTareas = $request->getParsedBody();
     $object['request'] = json_decode($misTareas['item']);
     $object['args'] = $args;
     $localConnection = new LocalDB();
 
-    // Autorización por departamento -- auditoría de seguridad 2026-09-14
     // (mismo criterio y misma nota sobre id_empleado que /registrar-paso,
     // ver comentario ahí -- este endpoint procesa varias tareas/empleados
     // por request, posible flujo real de supervisor/coordinador).
