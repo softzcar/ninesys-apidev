@@ -1660,6 +1660,17 @@ return function (App $app) {
    * siguiente departamento o lo finaliza.
    */
   $app->post('/lotes/{id}/finalizar-departamento', function (Request $request, Response $response, array $args) {
+    // Bug real encontrado en la propia verificación (2026-09-14): sin este
+    // chequeo, leer ID_USUARIO_TOKEN sin sesión real es una constante
+    // indefinida -- error fatal de PHP (500), no el 401 limpio esperado.
+    if (!defined('ID_USUARIO_TOKEN')) {
+      $response->getBody()->write(json_encode([
+        'error' => 'invalid_token',
+        'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
+
     $id_lote = intval($args['id']);
     $json_body = $request->getBody()->getContents();
     $data = json_decode($json_body, true);
@@ -2087,6 +2098,14 @@ return function (App $app) {
 
   // FINALIZAR LOTE DE ORDENES DE IMPRESION
   $app->post('/lotes/{id}/finalizar-impresion', function (Request $request, Response $response, array $args) {
+    if (!defined('ID_USUARIO_TOKEN')) {
+      $response->getBody()->write(json_encode([
+        'error' => 'invalid_token',
+        'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
+
     $id_lote = intval($args['id']);
 
     $json_body = $request->getBody()->getContents();
@@ -2321,6 +2340,14 @@ return function (App $app) {
 
   // FINALIZAR LOTE DE ORDENES DE CORTE
   $app->post('/lotes/{id}/finalizar-corte', function (Request $request, Response $response, array $args) {
+    if (!defined('ID_USUARIO_TOKEN')) {
+      $response->getBody()->write(json_encode([
+        'error' => 'invalid_token',
+        'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
+
     $id_lote = intval($args['id']);
 
     $json_body = $request->getBody()->getContents();

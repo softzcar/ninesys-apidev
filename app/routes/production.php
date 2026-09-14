@@ -2353,6 +2353,14 @@ return function (App $app) {
    * Registra el ajuste de cantidad a cortar definido por el jefe de producción.
    */
   $app->post('/production/corte/ajuste', function (Request $request, Response $response) {
+    if (!defined('ID_USUARIO_TOKEN')) {
+      $response->getBody()->write(json_encode([
+        'error' => 'invalid_token',
+        'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
+
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
     $now = date('Y-m-d H:i:s');
