@@ -11,6 +11,10 @@ use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 return function (App $app) {
 
     $app->get('/api/inventario/template-excel', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         try {
             $localConnection = new LocalDB();
 
@@ -242,39 +246,11 @@ return function (App $app) {
         }
     });
 
-    $app->get('/api/products/template-excel-test', function (Request $request, Response $response) {
-        // Conexiona a la base de datos
-        $localConnection = new LocalDB();
-
-        // ATRIBUTOS
-        $sql = 'SELECT _id, attribute_name FROM products_attributes';
-        $datax['atributos'] = $localConnection->goQuery($sql);
-
-        // CATEGORIAS
-        $sql = 'SELECT _id, nombre FROM categories';
-        $datax['categorias'] = $localConnection->goQuery($sql);
-
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setCellValue('A1', 'Hola Mundo desde PhpSpreadsheet (Correcto)!');
-
-        $writer = new Xlsx($spreadsheet);
-
-        $idEmpresa = ID_EMPRESA;
-        $filePath = $_SERVER['DOCUMENT_ROOT'] . "/public/downloads/carga_productos/carga_de_productos_{$idEmpresa}.xlsx";  // Guardar en el directorio public
-        $writer->save($filePath);
-
-        $fileUrl = "/downloads/carga_productos/carga_de_productos_{$idEmpresa}.xlsx";  // URL para acceder al archivo
-
-        $localConnection->disconnect();
-        // $response->getBody()->write(json_encode(['message' => 'Archivo Excel generado correctamente (Correcto)!', 'file_url' => $fileUrl], JSON_NUMERIC_CHECK));
-        $response->getBody()->write(json_encode($datax, JSON_NUMERIC_CHECK));
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(200);
-    });
-
     $app->post('/api/products/bulk-load', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $data = $request->getParsedBody();
 
         // Forzar la conversión a array asociativo para asegurar compatibilidad
@@ -385,6 +361,10 @@ return function (App $app) {
     });
 
     $app->post('/api/inventario/bulk-load', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $data = $request->getParsedBody();
 
         // Forzar la conversión a array asociativo para asegurar compatibilidad
@@ -516,6 +496,10 @@ return function (App $app) {
     });
 
     $app->get('/api/products/template-excel', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         try {
             $localConnection = new LocalDB();
 
@@ -674,6 +658,10 @@ return function (App $app) {
 
     // REPORTE DE INSUMOS CONSUMIDO RPO PRODUCTOS DE CADA ORDEN
     $app->get('/reporte/insumos-cosumidos-por-orden[/{id_orden}[/{fecha_inicio}[/{fecha_fin}]]]', function (Request $request, Response $response, array $args) {
+        // Autorización -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $localConnection = new LocalDB();
 
         $fecha_inicio = $args['fecha_inicio'] ?? null;
@@ -938,6 +926,10 @@ return function (App $app) {
 
     // NUEVO INSUMO
     $app->post('/insumos/nuevo', function (Request $request, Response $response, $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $miInsumo = $request->getParsedBody();
         $localConnection = new LocalDB();
         $myDate = new CustomTime();
@@ -1032,6 +1024,10 @@ return function (App $app) {
 
     // EDITAR INSUMO
     $app->post('/insumos/editar', function (Request $request, Response $response, $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $miInsumo = $request->getParsedBody();
         $localConnection = new LocalDB();
 
@@ -1068,6 +1064,10 @@ return function (App $app) {
     // Eliminar Insumos
 
     $app->post('/insumos/eliminar', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $miEmpleado = $request->getParsedBody();
         $localConnection = new LocalDB();
 
@@ -1086,6 +1086,10 @@ return function (App $app) {
 
     // Insumos por empleado
     $app->get('/inventario-movimientos/{id_orden}/{id_empleado}', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $localConnection = new LocalDB();
 
         // NOTA: ordenes_productos nunca tuvo columna id_empleado (confirmado en MySQL prod y
@@ -1121,6 +1125,10 @@ return function (App $app) {
 
     // Crear nuevo insumo asignado a empleados
     $app->post('/inventario-movimientos/nuevo', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $miInsumo = $request->getParsedBody();
         $localConnection = new LocalDB();
         $object['body'] = $miInsumo;
@@ -1167,6 +1175,16 @@ return function (App $app) {
 
     // Actualizar cantidad del insumo desde produccion
     $app->post('/inventario-movimientos/piezas-cortadas', function (Request $request, Response $response) {
+        // Autorización -- auditoría de seguridad 2026-09-14. Se exige sesión
+        // real porque el id_empleado que se acredita ya no viene del body
+        // (ver más abajo) sino de ID_USUARIO_TOKEN.
+        if (!defined('ID_USUARIO_TOKEN')) {
+            $response->getBody()->write(json_encode([
+                'error' => 'invalid_token',
+                'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
         $miPieza = $request->getParsedBody();
         $localConnection = new LocalDB();
 
@@ -1177,7 +1195,9 @@ return function (App $app) {
             $miPieza['id_orden'],
             $miPieza['id_inventario'],
             $miPieza['id_ordenes_productos'],
-            $miPieza['id_empleado'],
+            // id_empleado forzado a ID_USUARIO_TOKEN -- auditoría de seguridad
+            // 2026-09-14: antes se confiaba en el body del cliente.
+            ID_USUARIO_TOKEN,
         ]));
 
         $localConnection->disconnect();
@@ -1191,6 +1211,16 @@ return function (App $app) {
 
     // Actualizar invetario_movimientos desde módulo de empleados
     $app->post('/inventario-movimientos/empleados/update-insumo', function (Request $request, Response $response) {
+        // Autorización -- auditoría de seguridad 2026-09-14. Se exige sesión
+        // real porque el id_empleado que se acredita ya no viene del body
+        // (ver más abajo) sino de ID_USUARIO_TOKEN.
+        if (!defined('ID_USUARIO_TOKEN')) {
+            $response->getBody()->write(json_encode([
+                'error' => 'invalid_token',
+                'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
         $miInsumo = $request->getParsedBody();
         if (empty($miInsumo)) {
             $miInsumo = json_decode($request->getBody()->getContents(), true);
@@ -1211,9 +1241,10 @@ return function (App $app) {
         if (isset($miInsumo['id_orden'])) {
             $miInsumo['id_orden'] = intval($miInsumo['id_orden']);
         }
-        if (isset($miInsumo['id_empleado'])) {
-            $miInsumo['id_empleado'] = intval($miInsumo['id_empleado']);
-        }
+        // id_empleado forzado a ID_USUARIO_TOKEN -- auditoría de seguridad
+        // 2026-09-14: antes se confiaba en el body del cliente para atribuir
+        // la tarea (usado más abajo en rendimiento/remanentes/movimientos).
+        $miInsumo['id_empleado'] = ID_USUARIO_TOKEN;
         if (isset($miInsumo['id_producto'])) {
             $miInsumo['id_producto'] = intval($miInsumo['id_producto']);
         }
@@ -1707,6 +1738,10 @@ return function (App $app) {
 
     // Actualizar prioridad del lote
     $app->post('/inventario-movimientos/update-prioridad', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $prioridad = $request->getParsedBody();
         $localConnection = new LocalDB();
 
@@ -1724,6 +1759,10 @@ return function (App $app) {
 
     // Eliminar insumo asignado
     $app->post('/inventario-movimientos/eliminar', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $data = $request->getParsedBody();
         $localConnection = new LocalDB();
 
@@ -1741,6 +1780,10 @@ return function (App $app) {
 
     // Reporte de insumos por número de orden
     $app->get('/insumos/reporte/orden/{id}', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $localConnection = new LocalDB();
         $momentExpr = DB_DRIVER === 'pgsql' ? "TO_CHAR(a.moment, 'DD/MM/YYYY')" : "DATE_FORMAT(a.moment, '%d/%m/%Y')";
         $sql = "SELECT b._id id_insumo, a.id_orden,  b.insumo, b.sku, a.valor_inicial, a.valor_final, a.id_producto, $momentExpr moment FROM inventario_movimientos a JOIN inventario b ON a.id_insumo = b._id WHERE a.id_orden = ? ORDER BY a.id_producto";
@@ -1779,6 +1822,10 @@ return function (App $app) {
 
     // Reporte de insumos por insumo
     $app->get('/insumos/reporte/insumos/{id}', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $localConnection = new LocalDB();
 
         if (DB_DRIVER === 'pgsql') {
@@ -1814,6 +1861,10 @@ return function (App $app) {
     });
     // Reporte de insumos por producto
     $app->get('/insumos/reporte/insumos/producto/{id_producto}', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $localConnection = new LocalDB();
 
         // id_producto viene de la URL (route param) y se concatenaba crudo en
@@ -1994,6 +2045,10 @@ return function (App $app) {
 
     // INVENTARIO DE TINTAS
     $app->get('/inventario-tintas', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $localConnection = new LocalDB();
         // $localConnection->conectar();
 
@@ -2021,42 +2076,6 @@ return function (App $app) {
             $data,
             JSON_NUMERIC_CHECK
         ));
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(200);
-    });
-
-    // EFICIENCIA CON DATOS COMPLETOS
-    // TODO ESTABLECER PARÁMETROS APRA OBTENER VARIAS ORDENES
-    $app->get('/inventario/eficiencia/{id_orden}/{id_departamento}', function (Request $request, Response $response, array $args) {
-        $localConnection = new LocalDB();
-
-        // SUM(a.cantidad) es la unica agregacion; el resto de columnas no agregadas necesitan
-        // GROUP BY explicito en PostgreSQL (MySQL lo tolera sin el, escogiendo un valor arbitrario).
-        $groupByEficiencia = DB_DRIVER === 'pgsql' ? 'GROUP BY a.name, a.id_woo, b.valor_inicial, b.valor_final, c.cantidad' : '';
-        $sql = "SELECT
-                    a.name producto,
-                    (SELECT insumo FROM inventario WHERE _id = a.id_woo) insumo,
-                    (SELECT sku FROM inventario WHERE _id = a.id_woo) sku,
-                    SUM(a.cantidad) cantidadProductosOrden,
-                    (b.valor_inicial - b.valor_final) consumoRealTotalOrdenUnidadBase,
-                    (SELECT rendimiento FROM inventario WHERE _id = a.id_woo) factorConversionUnidadInsumo,
-                    c.cantidad consumoTeoricoPorProductoUnidadConvertida
-                FROM
-                    ordenes_productos a
-                JOIN inventario_movimientos b ON b.id_orden = a.id_orden
-                JOIN product_insumos_asignados c ON c.id_product = a.id_woo
-                WHERE
-                    a.id_orden = ? AND c.id_departamento = ?
-                $groupByEficiencia
-        ";
-
-        $object = $localConnection->goQuery($sql, [intval($args['id_orden']), intval($args['id_departamento'])]);
-
-        $localConnection->disconnect();
-
-        $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
-
         return $response
             ->withHeader('Content-Type', 'application/json')
             ->withStatus(200);
@@ -2196,57 +2215,12 @@ return function (App $app) {
             ->withStatus(200);
     });
 
-    // EFICIENCIA PARA MODULO DE EMPLEADOS
-    $app->post('/empleados/eficiencia', function (Request $request, Response $response) {
-        /**
-         * Recibimos:
-         *
-         * id_orden
-         * id_insumo
-         * id_departamento
-         */
-        $data = $request->getParsedBody();
-        $localConnection = new LocalDB();
-
-        $sql = 'SELECT
-                    a._id id_insumo,
-                    a.insumo nombre_inusmo,
-                    a.sku,
-                    a.rendimiento,
-                    a.cantidad cantidad_insumo,
-                    (SELECT SUM(cantidad) FROM ordenes_productos WHERE id_orden = ?) total_productos
-                FROM
-                    inventario a
-                WHERE
-                    a._id = ?';
-
-        $object['insumos'] = $localConnection->goQuery($sql, [$data['id_orden'], $data['id_insumo']]);
-
-        $sql = 'SELECT
-                    a.id_woo id_product,
-                        a.name,
-                        a.cantidad,
-                        a.talla id_talla,
-                        (SELECT nombre FROM sizes WHERE _id = b._id) talla,
-                        b.cantidad rendimiento_talla,
-                        b.unidad
-                    FROM
-                        ordenes_productos a
-                    LEFT JOIN products_sizes_eficiencia b on a.talla = b.id_size::text
-                    WHERE a.id_orden = ?';
-        $object['productos'] = $localConnection->goQuery($sql, [$data['id_orden']]);
-
-        $localConnection->disconnect();
-
-        $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
-
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(200);
-    });
-
     // OBTENER CONSUMO DE MATERIAL POR INSUMO
     $app->get('/inventario/consumo/{id_insumo}', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $id_insumo = $args['id_insumo'] ?? null;
 
         if (!$id_insumo || !is_numeric($id_insumo)) {
@@ -2343,6 +2317,10 @@ return function (App $app) {
 
     // ACTUALIZAR CONSUMO DE MATERIAL Y REGISTRAR EN HISTORIAL
     $app->patch('/inventario/consumo/{id_movimiento}', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $id_movimiento = $args['id_movimiento'] ?? null;
 
         if (!$id_movimiento || !is_numeric($id_movimiento)) {
@@ -2372,23 +2350,16 @@ return function (App $app) {
 
         $nuevo_valor = $data['material_consumido'] ?? null;
         $observaciones = $data['observaciones'] ?? '';
-        $id_usuario = $data['id_usuario'] ?? null;
+        // id_usuario forzado a ID_USUARIO_TOKEN -- auditoría de seguridad
+        // 2026-09-14: antes se confiaba en el body del cliente para atribuir
+        // quién hizo el cambio en el historial de inventario_movimientos_historial.
+        $id_usuario = ID_USUARIO_TOKEN;
 
         // Validaciones
         if ($nuevo_valor === null || !is_numeric($nuevo_valor) || $nuevo_valor < 0) {
             $response->getBody()->write(json_encode([
                 'success' => false,
                 'message' => 'Valor de material consumido inválido'
-            ]));
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus(400);
-        }
-
-        if (!$id_usuario || !is_numeric($id_usuario)) {
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => 'ID de usuario inválido'
             ]));
             return $response
                 ->withHeader('Content-Type', 'application/json')
@@ -2508,6 +2479,10 @@ return function (App $app) {
 
     // OBTENER HISTORIAL DE CAMBIOS DE UN MOVIMIENTO
     $app->get('/inventario/consumo/{id_movimiento}/historial', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $id_movimiento = $args['id_movimiento'] ?? null;
 
         if (!$id_movimiento || !is_numeric($id_movimiento)) {
@@ -2610,6 +2585,10 @@ return function (App $app) {
      * Lista remanentes con filtros, paginación y ordenamiento
      */
     $app->get('/api/inventario/remanentes', function (Request $request, Response $response) {
+        // Autorización -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         try {
             $localConnection = new LocalDB();
             $params = $request->getQueryParams();
@@ -2730,6 +2709,10 @@ return function (App $app) {
      * Edita un remanente existente
      */
     $app->put('/api/inventario/remanentes/{id}', function (Request $request, Response $response, array $args) {
+        // Autorización -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         try {
             $localConnection = new LocalDB();
             $id_remanente = $args['id'];
@@ -2823,6 +2806,10 @@ return function (App $app) {
      * Elimina un remanente
      */
     $app->delete('/api/inventario/remanentes/{id}', function (Request $request, Response $response, array $args) {
+        // Autorización -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         try {
             $localConnection = new LocalDB();
             $id_remanente = $args['id'];
@@ -2877,6 +2864,10 @@ return function (App $app) {
      * Reporte de movimientos de inventario con auditoría
      */
     $app->get('/inventario/reportes/movimientos', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         try {
             $params = $request->getQueryParams();
             $inicio = $params['inicio'] ?? null;
@@ -2954,6 +2945,10 @@ return function (App $app) {
      * Reporte general de inventario con filtros y datos para gráficos
      */
     $app->get('/inventario/reportes/general', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         try {
             $params = $request->getQueryParams();
             $departamento = $params['departamento'] ?? null;
@@ -3338,91 +3333,14 @@ return function (App $app) {
         }
     });
     /**
-     * GET /inventario/reportes/graficos-consumo
-     * Endpoint consolidado para los gráficos de Telas/Insumos, Tintas y Papel (Últimos 30 días)
-     */
-    $app->get('/inventario/reportes/graficos-consumo', function (Request $request, Response $response) {
-        try {
-            $localConnection = new LocalDB();
-            $data = [];
-
-            // 1. Telas e Insumos Más Usados (Top 5 - Últimos 30 días)
-            // Agrupamos por SKU para sumar el consumo de diferentes rollos del mismo producto
-            $ultimos30Dias = DB_DRIVER === 'pgsql' ? "CURRENT_TIMESTAMP - INTERVAL '30 days'" : 'DATE_SUB(NOW(), INTERVAL 30 DAY)';
-            $weekExpr = DB_DRIVER === 'pgsql' ? 'EXTRACT(WEEK FROM im.moment)' : 'WEEK(im.moment, 1)';
-            $groupByMateriales = DB_DRIVER === 'pgsql' ? 'i.sku, i.insumo, i.tipo_insumo, i.unidad' : 'i.sku';
-            $sqlMateriales = "SELECT
-                                i.insumo as label,
-                                ROUND(SUM((im.valor_inicial - im.valor_final) * CASE WHEN i.tipo_insumo = 'tela' THEN COALESCE(NULLIF(i.rendimiento, 0), 1) ELSE 1 END), 2) as value,
-                                CASE WHEN i.tipo_insumo = 'tela' THEN 'Mts' ELSE i.unidad END as unidad
-                            FROM inventario_movimientos im
-                            JOIN inventario i ON im.id_insumo = i._id
-                            WHERE im.moment >= $ultimos30Dias
-                              AND (im.valor_inicial - im.valor_final) > 0
-                            GROUP BY {$groupByMateriales}
-                            ORDER BY value DESC
-                            LIMIT 5";
-            $data['materiales'] = $localConnection->goQuery($sqlMateriales);
-
-            // 2. Distribución de Tintas por Color (Suma total - Últimos 30 días)
-            $sqlTintas = "SELECT
-                            ROUND(SUM(COALESCE(c, 0)), 2) as C,
-                            ROUND(SUM(COALESCE(m, 0)), 2) as M,
-                            ROUND(SUM(COALESCE(y, 0)), 2) as Y,
-                            ROUND(SUM(COALESCE(k, 0)), 2) as K,
-                            ROUND(SUM(COALESCE(w, 0)), 2) as W
-                        FROM tintas
-                        WHERE moment >= $ultimos30Dias";
-            $tintasResult = $localConnection->goQuery($sqlTintas);
-            if (!empty($tintasResult)) {
-                $t = $tintasResult[0];
-                $data['tintas'] = [
-                    'labels' => ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'],
-                    'values' => [$t['C'], $t['M'], $t['Y'], $t['K'], $t['W']],
-                    'colors' => ['#00FFFF', '#FF00FF', '#FFFF00', '#000000', '#FFFFFF']
-                ];
-            } else {
-                $data['tintas'] = ['labels' => [], 'values' => [], 'colors' => []];
-            }
-
-            // 3. Consumo de Papel (Agrupado por Semana - Últimos 30 días)
-            $sqlPapel = "SELECT
-                            CONCAT('Sem ', {$weekExpr}) as label,
-                            ROUND(SUM(im.valor_inicial - im.valor_final), 2) as value
-                        FROM inventario_movimientos im
-                        JOIN inventario i ON im.id_insumo = i._id
-                        WHERE im.moment >= $ultimos30Dias
-                          AND (i.insumo LIKE '%Papel%' OR i.departamento IN ('Impresión', 'Impresion'))
-                          AND (im.valor_inicial - im.valor_final) > 0
-                        GROUP BY {$weekExpr}
-                        ORDER BY MIN(im.moment) ASC";
-            $data['papel'] = $localConnection->goQuery($sqlPapel);
-
-            $localConnection->disconnect();
-
-            $response->getBody()->write(json_encode([
-                'success' => true,
-                'data' => $data
-            ], JSON_NUMERIC_CHECK));
-
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-
-        } catch (\Exception $e) {
-            if (isset($localConnection)) $localConnection->disconnect();
-            $response->getBody()->write(json_encode([
-                'success' => false, 
-                'message' => 'Error al obtener datos para gráficos',
-                'error' => $e->getMessage()
-            ]));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
-        }
-    });
-
-    /**
      * GET /inventario/movimientos/{id}/historial
      * Detalle de auditoría de un movimiento
      */
     $app->get('/inventario/movimientos/{id}/historial', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         try {
             $id_movimiento = $args['id'];
             $localConnection = new LocalDB();
@@ -3458,6 +3376,17 @@ return function (App $app) {
 
     // === NUEVAS RUTAS PARA CARGA DIRECTA DE EXCEL (SOPORTE FRONTEND LEGACY) ===
     $app->get('/api/inventario/carga-directa', function (Request $request, Response $response) {
+        // Autorización -- auditoría de seguridad 2026-09-14. Caso especial:
+        // este portal identificaba la empresa destino solo por un código
+        // numérico en la URL (?empresa=163), sin ningún mecanismo de
+        // autenticación propio (ver auditoría del 2026-09-14, no había
+        // password/token/pin en todo el handler) -- cualquiera que
+        // adivinara/conociera el código podía cargar inventario en esa
+        // empresa. Se exige sesión de administrador real para poder usar el
+        // portal en absoluto.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $queryParams = $request->getQueryParams();
         $empresa_id = isset($queryParams['empresa']) ? (int) $queryParams['empresa'] : null;
 
@@ -4024,6 +3953,13 @@ return function (App $app) {
     });
 
     $app->post('/api/inventario/carga-directa', function (Request $request, Response $response) {
+        // Autorización -- auditoría de seguridad 2026-09-14. Mismo caso
+        // especial que el GET hermano: sin esta guardia, cualquiera que
+        // conociera/adivinara el código numérico de empresa podía subir un
+        // archivo y cargar inventario directamente, sin ninguna sesión.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $queryParams = $request->getQueryParams();
         $empresa_id = isset($queryParams['empresa']) ? (int) $queryParams['empresa'] : null;
 

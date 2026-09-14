@@ -12,6 +12,10 @@ return function (App $app) {
   // Editar orden -> Actualixar datos cambio de endpoint a _null previniendo acceso
 
   $app->post('/orden/editar', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     /**
      * opciones de edición
      *   - editar-talla
@@ -122,6 +126,10 @@ return function (App $app) {
   // PREVIA CANCELACIÓN - Obtener tareas pendientes antes de cancelar
   // ============================================================
   $app->post('/orden/previa-cancelacion', function (Request $request, Response $response, $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+      return $errorResponse;
+    }
     $body = $request->getParsedBody();
     $idOrden = isset($body['id']) ? intval($body['id']) : 0;
 
@@ -162,6 +170,10 @@ return function (App $app) {
 
   // Actualizar estado de la orden
   $app->post('/orden/actualizar-estado', function (Request $request, Response $response, $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+      return $errorResponse;
+    }
     $order = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -335,7 +347,9 @@ return function (App $app) {
     // No registrar auditoría manual si es el flujo normal terminada -> entregada
     if (!$esFlujoNormalTerminadaAEntrega && ($order['estado'] === 'cancelada' || $order['estado'] === 'terminada' || $estadoActual === 'cancelada' || $estadoActual === 'terminada' || $estadoActual === 'entregada') && $order['estado'] !== $estadoActual) {
       $motivo = trim($order['motivo']);
-      $idAdmin = isset($order['id_admin']) ? intval($order['id_admin']) : 0;
+      // Forzado a ID_USUARIO_TOKEN -- auditoría de seguridad 2026-09-14: el
+      // autor de la auditoría no puede depender de un campo del body.
+      $idAdmin = (int) ID_USUARIO_TOKEN;
       $nombreAdmin = isset($order['nombre_admin']) ? $order['nombre_admin'] : 'Desconocido';
 
       // Determinar la acción para la auditoría
@@ -404,6 +418,10 @@ return function (App $app) {
 
   // BUSCAR ORDEN PPARA EL ABONO
   $app->get('/ordenes/abono/{id}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     //  Verificar existencia de la orden
@@ -432,6 +450,10 @@ return function (App $app) {
 
   // VERIFICAR SI LA ORDEN SE PUEDE EDITAR DESDE COMERCIALIZACION
   $app->get('/ordenes/verificar-edición/{id}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $sql = 'SELECT paso FROM lotes WHERE id_orden = ?';
@@ -447,7 +469,15 @@ return function (App $app) {
   });
 
   $app->post('/orden/abono', function (Request $request, Response $response, $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+      return $errorResponse;
+    }
     $datosAbono = $request->getParsedBody();
+    // Forzado a ID_USUARIO_TOKEN -- auditoría de seguridad 2026-09-14: a
+    // quién se atribuye el abono no puede depender de un campo del body.
+    $datosAbono['empleado'] = (int) ID_USUARIO_TOKEN;
+    $datosAbono['responsable'] = (int) ID_USUARIO_TOKEN;
     $localConnection = new LocalDB();
     $object = [];
 
@@ -708,6 +738,10 @@ return function (App $app) {
 
   // GUARDAR OBSERVACIONES DESDE EDITAR EN COMERCIALIZACION
   $app->post('/orden/edit/obs', function (Request $request, Response $response, $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $datosObs = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -734,6 +768,10 @@ return function (App $app) {
 
   // BUSCAR DETALLES DEL ABONO
   $app->get('/ordenes/abono-detale/{id}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $object['fields'][0]['key'] = 'moment';
@@ -892,6 +930,17 @@ return function (App $app) {
   });
   // REPORTE PAGOS DISEÑADORES
   $app->get('/reportes/resumen/disenadores/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 3, 4])) {
+      return $errorResponse;
+    }
+    // IDOR -- auditoría de seguridad 2026-09-14: un empleado del módulo no
+    // puede consultar el salario/comisión de OTRO empleado cambiando el ID
+    // en la URL. Admin (acceso=1) sí puede consultar cualquiera.
+    if ((int) (defined('ACCESO_TOKEN') ? ACCESO_TOKEN : 0) !== 1 && (int) $args['id_empleado'] !== (int) ID_USUARIO_TOKEN) {
+      $response->getBody()->write(json_encode(['error' => 'forbidden', 'message' => 'No puede consultar el resumen de otro empleado.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
     $localConnection = new LocalDB();
 
     $idDepartamento = (int) $args['id_departamento'];
@@ -951,6 +1000,17 @@ return function (App $app) {
 
   // REPORTE PAGOS DE EMPLEADOS
   $app->get('/reportes/resumen/empleados/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 3, 4])) {
+      return $errorResponse;
+    }
+    // IDOR -- auditoría de seguridad 2026-09-14: un empleado del módulo no
+    // puede consultar el salario/comisión de OTRO empleado cambiando el ID
+    // en la URL. Admin (acceso=1) sí puede consultar cualquiera.
+    if ((int) (defined('ACCESO_TOKEN') ? ACCESO_TOKEN : 0) !== 1 && (int) $args['id_empleado'] !== (int) ID_USUARIO_TOKEN) {
+      $response->getBody()->write(json_encode(['error' => 'forbidden', 'message' => 'No puede consultar el resumen de otro empleado.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
     $localConnection = new LocalDB();
 
     // Casteados a entero: se reusan muchas veces dentro de varias consultas
@@ -1562,6 +1622,17 @@ return function (App $app) {
 
   // DASHBOARD COMERCIALIZACIÓN
   $app->get('/comercializacion/dashboard/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAModulo($request, $response, 2)) {
+      return $errorResponse;
+    }
+    // IDOR -- auditoría de seguridad 2026-09-14: un empleado de Comercialización
+    // no puede consultar el dashboard de OTRO empleado cambiando el ID en la
+    // URL. Admin (acceso=1) sí puede consultar cualquiera.
+    if ((int) (defined('ACCESO_TOKEN') ? ACCESO_TOKEN : 0) !== 1 && (int) $args['id_empleado'] !== (int) ID_USUARIO_TOKEN) {
+      $response->getBody()->write(json_encode(['error' => 'forbidden', 'message' => 'No puede consultar el dashboard de otro empleado.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
     $localConnection = new LocalDB();
     $id_empleado = (int) $args['id_empleado'];
     $id_departamento = (int) $args['id_departamento']; // Disponible para lógica futura de validación
@@ -1825,6 +1896,10 @@ return function (App $app) {
 
   // ORDENES ACTIVAS, TERMINADAS Y PAUSADAS
   $app->get('/comercializacion/ordenes/reporte', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     // BUSCAR ORENES EN CURSO
@@ -1857,6 +1932,10 @@ return function (App $app) {
 
   // ORDENES TERMNADAS Y NO ENTREGADAS
   $app->get('/comercializacion/ordenes/reporte/terminadas/{rango}/{id_empleado}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $object['rango'] = $args['rango'];
     $id_empleado = (int) $args['id_empleado'];
     $localConnection = new LocalDB();
@@ -1933,6 +2012,10 @@ return function (App $app) {
 
   // ORDENES ENTREGADAS
   $app->get('/comercializacion/ordenes/reporte/entregadas/{rango}/{id_empleado}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $object['rango'] = $args['rango'];
     $id_empleado = (int) $args['id_empleado'];
     $localConnection = new LocalDB();
@@ -1993,7 +2076,15 @@ return function (App $app) {
 
   // CREAR NUEVO PRESUPUESTO
   $app->post('/presupuesto/nuevo', function (Request $request, Response $response, $arg) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $newJson = $request->getParsedBody();
+    // Forzado a ID_USUARIO_TOKEN -- auditoría de seguridad 2026-09-14: a
+    // quién se atribuye el presupuesto no puede depender de un campo del
+    // body (se usa tal cual, sin json_decode, en el INSERT más abajo).
+    $newJson['responsable'] = (int) ID_USUARIO_TOKEN;
     $misProductos = json_decode($newJson['productos'], true);
     $localConnection = new LocalDB();
 
@@ -2334,30 +2425,12 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // OBTENER LISTA DE PRESUPUESTOS FINALIZADOS (guardados en tabla presupuestos)
-  $app->get('/presupuestos/lista', function (Request $request, Response $response) {
-    $localConnection = new LocalDB();
-
-    $sql = "SELECT p._id, p.cliente_nombre, p.cliente_cedula, p.pago_total, 
-                   p.fecha_creacion, p.fecha_entrega, p.status, p.observaciones, p.responsable,
-                   u.nombre as empleado_nombre
-            FROM presupuestos p
-            LEFT JOIN api_empresas.empresas_usuarios u ON p.responsable = u.id_usuario
-            WHERE p.status != 'Convertido'
-            ORDER BY p._id DESC";
-
-    $result = $localConnection->goQuery($sql);
-
-    $response->getBody()->write(json_encode($result));
-    $localConnection->disconnect();
-
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   // OBTENER UN PRESUPUESTO FINALIZADO ESPECÍFICO CON SUS PRODUCTOS
   $app->get('/presupuesto/detalle/{id}', function (Request $request, Response $response, $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $id_presupuesto = intval($args['id']);
     $localConnection = new LocalDB();
     $object = [];
@@ -2400,28 +2473,17 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // ACTUALIZR ORDEN DE LA FILA DE PRODUCCIÓN
-  $app->post('/ordenes/actualizar-fila', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
-    $localConnection = new localDB();
-
-    $sql = 'UPDATE ordenes_fila_orden SET orden_fila = ? WHERE id_orden = ?';
-    $localConnection->goQuery($sql, [$data['orden_fila'], $data['id_orden']]);
-
-    $sql = 'SELECT * FROM ordenes_fila_orden ORDER BY orden_fila ASC';
-    $object = $localConnection->goQuery($sql);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   // EDITAR UNA ORDEN EXISTENTE
   $app->post('/ordenes/nueva/custom/edit', function (Request $request, Response $response, $arg) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $newJson = $request->getParsedBody();
+    // Forzado a ID_USUARIO_TOKEN -- auditoría de seguridad 2026-09-14: a
+    // quién se atribuye el abono/comisión de esta edición no puede depender
+    // de un campo del body (se procesa más abajo como $arr['responsable']).
+    $newJson['responsable'] = (int) ID_USUARIO_TOKEN;
     $localConnection = new LocalDB();
     $object = [];  // Objeto de respuesta
 
@@ -2895,7 +2957,15 @@ return function (App $app) {
 
   // CREAR NUEVA ORDEN ANTES DE CUSTOM CON VALIDACIONES
   $app->post('/ordenes/nueva/custom', function (Request $request, Response $response, $arg) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $newJson = $request->getParsedBody();
+    // Forzado a ID_USUARIO_TOKEN -- auditoría de seguridad 2026-09-14: a
+    // quién se atribuye la orden/comisión no puede depender de un campo del
+    // body (se usa tal cual, y vía $arr['responsable'], más abajo).
+    $newJson['responsable'] = (int) ID_USUARIO_TOKEN;
 
     // ========== VALIDACIONES TEMPRANAS (antes de procesar datos) ==========
     $productosRaw = $newJson['productos'] ?? '';
@@ -3706,7 +3776,15 @@ $object['sales_commission_ISSET'][] = false;
   // CREAR NUEVA ORDEN ANTES DE SPORT
   // CREAR NUEVA ORDEN ANTES DE SPORT
   $app->post('/ordenes/nueva/sport', function (Request $request, Response $response, $arg) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $newJson = $request->getParsedBody();
+    // Forzado a ID_USUARIO_TOKEN -- auditoría de seguridad 2026-09-14: a
+    // quién se atribuye la orden/comisión no puede depender de un campo del
+    // body.
+    $newJson['responsable'] = (int) ID_USUARIO_TOKEN;
 
     // ========== VALIDACIONES TEMPRANAS ==========
     $productosRaw = $newJson['productos'] ?? '';
@@ -4035,6 +4113,11 @@ $object['sales_commission_ISSET'][] = false;
 
   // CAMBIAR ESTATUS DE LA REVISIÓN
   $app->post('/comercializacion/revisiones-estatus/{estatus}/{id_revision}/{id_orden}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    // Alcance ampliado a propósito (antes solo lo usaba una página admin-only).
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $localConnection = new localDB();
 
     // Auditoría de seguridad 2026-09-10: este endpoint concatenaba
@@ -4148,73 +4231,6 @@ $object['sales_commission_ISSET'][] = false;
       ->withStatus(200);
   });
 
-  // GUARDAR DETALLES DE LA REVISIÓN
-  $app->post('/comercializacion/revisiones-detalles/{id_revision}', function (Request $request, Response $response, array $args) {
-    $data = $request->getParsedBody();
-    $localConnection = new localDB();
-
-    $sql = 'UPDATE revisiones SET detalles = ? WHERE _id = ?';
-    $object['revisiones'] = $localConnection->goQuery($sql, [htmlspecialchars($data['detalles']), $args['id_revision']]);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
-  // REVISAR REVISIONES PENDIENTES
-  $app->get('/comercializacion/revisiones/{id_empleado}', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB();
-
-    $idEmpleadoParam = intval($args['id_empleado']);
-    $sql = 'SELECT acceso FROM empresas_usuarios WHERE id_usuario = ?';
-    $miEmpleado = $localConnection->goQuery($sql, [$idEmpleadoParam]);
-
-    $localConnection = new localDB();
-
-    if ($miEmpleado[0]['acceso']) {
-      // Mostrar todos los registros de revisiones
-      $sql = "SELECT a.id_orden, a._id id_revision, a.id_diseno, b.id_wp id_cliente, a.revision, b.cliente_nombre cliente, a.detalles, a.estatus FROM revisiones a JOIN ordenes b ON a.id_orden = b._id WHERE b.status != 'entregada' AND b.status != 'cancelada' AND b.status != 'terminado' ORDER BY a._id DESC";
-      $object['revisiones'] = $localConnection->goQuery($sql);
-    } else {
-      // Mostrar solo los registros del venededor
-      $sql = "SELECT a.id_orden, a._id id_revision, a.id_diseno, b.id_wp id_cliente, a.revision, b.cliente_nombre cliente, a.detalles, a.estatus FROM revisiones a JOIN ordenes b ON a.id_orden = b._id AND b.responsable = ? WHERE b.responsable = ? AND b.status != 'entregada' AND b.status != 'cancelada' AND b.status != 'terminado' ORDER BY a._id DESC";
-      $object['revisiones'] = $localConnection->goQuery($sql, [$idEmpleadoParam, $idEmpleadoParam]);
-    }
-
-    $object['total_revisiones'] = count($object['revisiones']);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
-  // ACTUALIZAR ORDEN DE LA FILA DE REPOSICIONES
-  $app->post('/reposiciones/actualizar-fila', function (Request $request, Response $response) {
-    $data = $request->getParsedBody();
-    $localConnection = new localDB();
-
-    // Validar que los datos necesarios están presentes
-    if (!isset($data['id_reposicion']) || !isset($data['orden_fila'])) {
-      $response->getBody()->write(json_encode(['error' => 'Faltan parámetros requeridos: id_reposicion u orden_fila.']));
-      return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
-    }
-
-    $sql = 'UPDATE ordenes_fila_reposiciones SET orden_fila = ? WHERE id_reposicion = ?';
-    // $object['sql_update_fila_reposicion'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-    $object['response'] = $localConnection->goQuery($sql, [intval($data['orden_fila']), intval($data['id_reposicion'])]);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-  });
-
   $app->get('/ordenes-observaciones/{id_orden}', function (Request $request, Response $response, array $args) {
     $localConnection = new LocalDB();
 
@@ -4241,6 +4257,10 @@ $object['sales_commission_ISSET'][] = false;
    * Obtiene los materiales estimados para un conjunto de órdenes de un lote
    */
   $app->post('/ordenes/materiales-lote', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 4, 5])) {
+      return $errorResponse;
+    }
     $json_body = $request->getBody()->getContents();
     $data = json_decode($json_body, true);
     $id_ordenes = $data['id_ordenes'] ?? null;
@@ -4303,6 +4323,10 @@ $object['sales_commission_ISSET'][] = false;
    * }
    */
   $app->post('/ordenes/nueva/simple', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $object = [];
 
@@ -4315,7 +4339,10 @@ $object['sales_commission_ISSET'][] = false;
         $data = json_decode($rawBody, true);
       }
 
-
+      // Forzado a ID_USUARIO_TOKEN -- auditoría de seguridad 2026-09-14: este
+      // campo decidía tanto la autorización interna por departamento (abajo)
+      // como a quién se atribuye la orden, y venía del body (falsificable).
+      $data['responsable_id'] = (int) ID_USUARIO_TOKEN;
 
       $id_empresa = defined('ID_EMPRESA') ? ID_EMPRESA : 163;
 
@@ -4688,6 +4715,10 @@ $object['sales_commission_ISSET'][] = false;
    */
   // VALIDAR STOCK DE PRODUCTOS FÍSICOS
   $app->post('/ordenes/validar-stock', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $object = [];
 
@@ -4742,245 +4773,6 @@ $object['sales_commission_ISSET'][] = false;
     }
   });
 
-  $app->post('/ordenes/prevalidar', function (Request $request, Response $response) {
-    $localConnection = new LocalDB();
-    $object = [];
-
-    try {
-      $data = $request->getParsedBody();
-
-      // Debug: Si data es null, intentar parsear el body manualmente
-      if ($data === null) {
-        $rawBody = (string) $request->getBody();
-        $data = json_decode($rawBody, true);
-      }
-
-      $id_empresa = defined('ID_EMPRESA') ? ID_EMPRESA : 163;
-
-      // Validar campos requeridos
-      if (empty($data['cliente_nombre'])) {
-        return ApiResponse::validationError($response, 'Debe especificar el nombre del cliente');
-      }
-      if (empty($data['productos']) || !is_array($data['productos'])) {
-        return ApiResponse::validationError($response, 'Debe especificar al menos un producto');
-      }
-      if (empty($data['responsable_id'])) {
-        return ApiResponse::validationError($response, 'Debe especificar el ID del responsable');
-      }
-
-      $responsable_id = intval($data['responsable_id']);
-
-      // Validar permisos
-      $departamentos_autorizados = ['Administración', 'Comercialización'];
-      $sql_dept = "SELECT departamento FROM api_empresas.empresas_usuarios 
-                   WHERE id_usuario = ? AND id_empresa = ?";
-      $user_result = $localConnection->goQuery($sql_dept, [$responsable_id, $id_empresa]);
-
-      if (empty($user_result) || isset($user_result['status'])) {
-        return ApiResponse::error($response, 'Usuario no encontrado', 404);
-      }
-
-      $user_dept = $user_result[0]['departamento'];
-
-      if (!in_array($user_dept, $departamentos_autorizados)) {
-        return ApiResponse::error(
-          $response,
-          "No estás autorizado para crear órdenes. Tu departamento actual es: {$user_dept}. " .
-          "Solo personal de Administración o Comercialización puede crear órdenes.",
-          403
-        );
-      }
-
-      // ==========================================================
-      // BUSCAR CLIENTE
-      // ==========================================================
-      $cliente_nombre = trim($data['cliente_nombre']);
-      $sql_cliente = "SELECT _id, first_name, last_name, phone, cedula, email, address
-                      FROM customers
-                      WHERE eliminado = 0 AND CONCAT(first_name, ' ', COALESCE(last_name, '')) LIKE ?
-                      LIMIT 5";
-      $clientes = $localConnection->goQuery($sql_cliente, ["%{$cliente_nombre}%"]);
-
-      if (empty($clientes) || isset($clientes['status'])) {
-        return ApiResponse::error(
-          $response,
-          "No se encontró ningún cliente con el nombre '{$cliente_nombre}'.",
-          404
-        );
-      }
-
-      // Formatear clientes encontrados
-      $clientes_formateados = [];
-      foreach ($clientes as $c) {
-        $clientes_formateados[] = [
-          'id' => $c['_id'],
-          'nombre' => trim($c['first_name'] . ' ' . ($c['last_name'] ?? '')),
-          'telefono' => $c['phone'] ?? null,
-          'cedula' => $c['cedula'] ?? null,
-          'email' => $c['email'] ?? null,
-          'direccion' => $c['address'] ?? null
-        ];
-      }
-
-      // ==========================================================
-      // OBTENER TELAS DISPONIBLES
-      // ==========================================================
-      $sql_telas = "SELECT _id, tela FROM catalogo_telas WHERE eliminado = 0 ORDER BY tela ASC";
-      $telas_result = $localConnection->goQuery($sql_telas);
-      $telas_disponibles = [];
-      if (!empty($telas_result) && !isset($telas_result['status'])) {
-        foreach ($telas_result as $t) {
-          $telas_disponibles[] = ['id' => $t['_id'], 'nombre' => $t['tela']];
-        }
-      }
-
-      // ==========================================================
-      // OBTENER TALLAS DISPONIBLES
-      // ==========================================================
-      $sql_tallas = "SELECT _id, nombre FROM sizes ORDER BY _id ASC";
-      $tallas_result = $localConnection->goQuery($sql_tallas);
-      $tallas_disponibles = [];
-      if (!empty($tallas_result) && !isset($tallas_result['status'])) {
-        foreach ($tallas_result as $t) {
-          $tallas_disponibles[] = ['id' => $t['_id'], 'nombre' => $t['nombre']];
-        }
-      }
-
-      // ==========================================================
-      // CORTES DISPONIBLES (fijos)
-      // ==========================================================
-      $cortes_disponibles = [
-        ['id' => 'V', 'nombre' => 'Cuello V'],
-        ['id' => 'redondo', 'nombre' => 'Cuello Redondo'],
-        ['id' => '', 'nombre' => 'Sin especificar']
-      ];
-
-      // ==========================================================
-      // PROCESAR PRODUCTOS
-      // ==========================================================
-      $productos_validados = [];
-      $errores_productos = [];
-
-      foreach ($data['productos'] as $index => $prod) {
-        $producto_item = [
-          'index' => $index,
-          'nombre_buscado' => $prod['nombre'] ?? '',
-          'cantidad' => intval($prod['cantidad'] ?? 1),
-          'talla_buscada' => $prod['talla'] ?? null,
-          'tela_buscada' => $prod['tela'] ?? null,
-          'encontrado' => false
-        ];
-
-        // Buscar producto
-        $sql_prod = "SELECT _id, product, category_ids FROM products
-                     WHERE product LIKE ? LIMIT 5";
-        $producto_result = $localConnection->goQuery($sql_prod, ["%{$prod['nombre']}%"]);
-
-        if (empty($producto_result) || isset($producto_result['status']) || !isset($producto_result[0])) {
-          $errores_productos[] = "Producto '{$prod['nombre']}' no encontrado";
-          $productos_validados[] = $producto_item;
-          continue;
-        }
-
-        // Si encontramos múltiples productos, los listamos
-        $productos_encontrados = [];
-        foreach ($producto_result as $pr) {
-          // Obtener precios del producto
-          $sql_precios = "SELECT _id, price, descripcion FROM products_prices 
-                          WHERE id_product = ? ORDER BY _id ASC";
-          $precios = $localConnection->goQuery($sql_precios, [$pr['_id']]);
-
-          $precios_lista = [];
-          if (!empty($precios) && !isset($precios['status'])) {
-            foreach ($precios as $p) {
-              $precios_lista[] = [
-                'id' => $p['_id'],
-                'precio' => floatval($p['price']),
-                'descripcion' => $p['descripcion']
-              ];
-            }
-          }
-
-          $productos_encontrados[] = [
-            'id' => $pr['_id'],
-            'nombre' => $pr['product'],
-            'categoria' => $pr['category_ids'],
-            'precios' => $precios_lista
-          ];
-        }
-
-        $producto_item['encontrado'] = true;
-        $producto_item['opciones'] = $productos_encontrados;
-
-        // Buscar talla si se especificó
-        if (!empty($prod['talla'])) {
-          $sql_talla = "SELECT _id, nombre FROM sizes WHERE nombre LIKE ? LIMIT 1";
-          $talla_result = $localConnection->goQuery($sql_talla, ["%{$prod['talla']}%"]);
-          if (!empty($talla_result) && !isset($talla_result['status'])) {
-            $producto_item['talla_encontrada'] = [
-              'id' => $talla_result[0]['_id'],
-              'nombre' => $talla_result[0]['nombre']
-            ];
-          }
-        }
-
-        // Buscar tela si se especificó
-        if (!empty($prod['tela'])) {
-          $sql_tela = "SELECT _id, tela FROM catalogo_telas WHERE tela LIKE ? LIMIT 1";
-          $tela_result = $localConnection->goQuery($sql_tela, ["%{$prod['tela']}%"]);
-          if (!empty($tela_result) && !isset($tela_result['status'])) {
-            $producto_item['tela_encontrada'] = [
-              'id' => $tela_result[0]['_id'],
-              'nombre' => $tela_result[0]['tela']
-            ];
-          }
-        }
-
-        $productos_validados[] = $producto_item;
-      }
-
-      // ==========================================================
-      // CALCULAR FECHA DE ENTREGA ESTIMADA
-      // ==========================================================
-      $sql_ordenes_activas = "SELECT COUNT(*) as total FROM ordenes 
-                              WHERE status IN ('En espera', 'En proceso')";
-      $ordenes_activas = $localConnection->goQuery($sql_ordenes_activas);
-      $total_ordenes = $ordenes_activas[0]['total'] ?? 0;
-      $dias_estimados = min(2 + ceil($total_ordenes * 0.5), 14);
-      $fecha_entrega = date('Y-m-d', strtotime("+{$dias_estimados} days"));
-
-      // ==========================================================
-      // PREPARAR RESPUESTA
-      // ==========================================================
-      $object['success'] = true;
-      $object['validacion'] = 'pendiente_confirmacion';
-      $object['clientes'] = $clientes_formateados;
-      $object['cliente_seleccionado'] = $clientes_formateados[0] ?? null;
-      $object['productos'] = $productos_validados;
-      $object['fecha_entrega_estimada'] = $fecha_entrega;
-      $object['opciones'] = [
-        'tallas' => $tallas_disponibles,
-        'telas' => $telas_disponibles,
-        'cortes' => $cortes_disponibles
-      ];
-
-      if (!empty($errores_productos)) {
-        $object['advertencias'] = $errores_productos;
-      }
-
-      $object['mensaje'] = 'Por favor selecciona el precio para cada producto y confirma para crear la orden.';
-
-      $response->getBody()->write(json_encode($object));
-      return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
-
-    } catch (\Throwable $e) {
-      error_log('Error en /ordenes/prevalidar: ' . $e->getMessage());
-      return ApiResponse::error($response, 'Error al prevalidar la orden: ' . $e->getMessage(), 500);
-    } finally {
-      $localConnection->disconnect();
-    }
-  });
-
   /**
    * CONTEXTO PARA IA - Proporciona datos de BD para enriquecer prompts de Gemini
    * 
@@ -4990,6 +4782,10 @@ $object['sales_commission_ISSET'][] = false;
    * inteligentes durante la creación conversacional de órdenes.
    */
   $app->post('/ordenes/contexto-ia', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     // Auditoría de seguridad 2026-09-10: releía Authorization a mano; con el
     // middleware tri-modal ese header puede ser "Bearer <jwt>". ID_EMPRESA ya
     // está resuelto correctamente por IdEmpresaMiddleware en los 3 modos.
@@ -5617,6 +5413,10 @@ $object['sales_commission_ISSET'][] = false;
 
   // CONVERTIR PRESUPUESTO A ORDEN
   $app->post('/presupuesto/{id}/convertir-a-orden', function (Request $request, Response $response, $args) {
+  // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+  if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+    return $errorResponse;
+  }
   $id_presupuesto = intval($args['id']);
   $data = $request->getParsedBody();
   $localConnection = new LocalDB();

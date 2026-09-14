@@ -10,6 +10,10 @@ return function (App $app) {
   /** * Diseños * */
   // OBTENER TODAS LAS REVISIONES
   $app->get('/diseno/revisiones', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAModulo($request, $response, 1)) {
+      return $errorResponse;
+    }
     $localConnection = new localDB();
 
     $sql = "SELECT
@@ -49,45 +53,12 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // REVISAR DISEÑOS APRBADOS Y RECHAZADOS
-  $app->get('/diseno/revisiones/{id_empleado}', function (Request $request, Response $response, array $args) {
-    $localConnection = new localDB();
-
-    $sql = "SELECT a.id_orden, b._id id_revision, a._id id_diseno, b.detalles, b.estatus, b.revision, c.id_wp id_cliente, c.cliente_nombre cliente FROM disenos a JOIN revisiones b ON a._id = b.id_diseno JOIN ordenes c ON c._id = a.id_orden WHERE a.id_empleado = ? AND c.status != 'entregada' AND c.status != 'cancelada' AND c.status != 'terminado'";
-    $object['revisiones'] = $localConnection->goQuery($sql, [(int) $args['id_empleado']]);
-
-    $localConnection->disconnect();
-
-    $object['total_revisiones'] = count($object['revisiones']);
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
-  // REVISAR DISEÑO APROBADO
-  $app->get('/diseno/aprobado/{id_orden}', function (Request $request, Response $response, array $args) {
-    $localConnection = new localDB();
-    $sql = "SELECT revision, estatus, id_diseno FROM revisiones WHERE id_orden = ? AND estatus = 'Aprobado'";
-    $resp = $localConnection->goQuery($sql, [(int) $args['id_orden']]);
-    $localConnection->disconnect();
-
-    if (empty($resp)) {
-      $object['aprobado'] = false;
-    } else {
-      $object['aprobado'] = true;
-      $object['data'] = $resp[0];
-    }
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   // Guardar link de google drive
   $app->post('/disenos/link', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -104,6 +75,10 @@ return function (App $app) {
 
   // ACTAULOZAR TIPO DE DISEÑO
   $app->post('/diseno/update-tipo', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -199,6 +174,10 @@ return function (App $app) {
 
   // Guardar ajustes y personalizaciones
   $app->post('/diseno/ajustes-y-personalizaciones', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $rawBody = $request->getParsedBody();
     $data = is_array($rawBody) ? $rawBody : [];
     if (empty($data)) {
@@ -235,7 +214,9 @@ return function (App $app) {
     // (comision perdida en silencio) y la busqueda por id_orden solo tomaba
     // la PRIMERA fila que encontrara, atribuyendo el pago al diseñador
     // equivocado cuando hay mas de uno en la misma orden.
-    $idEmpleadoActual = intval($data['id_empleado'] ?? 0);
+    // Determina a quién se le paga la comisión -- forzado al usuario real de
+    // la sesión, no confiado del body (auditoría de seguridad 2026-09-14).
+    $idEmpleadoActual = (int) ID_USUARIO_TOKEN;
 
     $sqlord = 'SELECT id_orden, id_empleado FROM disenos WHERE _id = ?';
     $resultDiseno = $localConnection->goQuery($sqlord, [$idDiseno]);
@@ -332,6 +313,10 @@ return function (App $app) {
 
   // Obtener ajustes y personalizaciones de un diseno
   $app->get('/disenos/ajustes-y-personalizaciones/{id_diseno}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $sql = 'SELECT a.tipo, a.cantidad, b.id_orden FROM disenos_ajustes_y_personalizaciones a JOIN disenos b ON b._id = a.id_diseno WHERE a.id_diseno = ?';
@@ -347,6 +332,10 @@ return function (App $app) {
 
   // Obtener link de google drive
   $app->get('/disenos/link/{id}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $sql = 'SELECT linkdrive FROM disenos WHERE _id = ?';
@@ -362,6 +351,10 @@ return function (App $app) {
 
   // Obtener codigo del diseño
   $app->get('/disenos/codigo/{id}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $sql = 'SELECT codigo_diseno FROM disenos WHERE _id = ?';
@@ -377,6 +370,10 @@ return function (App $app) {
 
   // Guardar codigo de diseno
   $app->post('/disenos/codigo', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -392,6 +389,10 @@ return function (App $app) {
   });
 
   $app->post('/disenador-asignado', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [2, 1])) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -423,6 +424,10 @@ return function (App $app) {
 
   // Obtener diseños sin asignar
   $app->get('/disenos', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [2, 1])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $localConnection_emp = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
@@ -527,6 +532,10 @@ return function (App $app) {
 
   // Crear un nuevo "Proyecto de Diseño" con su primera revisión
   $app->post('/disenos/nuevo-con-revision', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -538,7 +547,9 @@ return function (App $app) {
 
     // 2. Sanitizar datos de entrada para prevenir inyección SQL
     $id_orden = intval($data['id_orden']);
-    $id_empleado = intval($data['id_empleado']);
+    // Autoría/comisión del diseño creado -- forzado al usuario real de la
+    // sesión, no confiado del body (auditoría de seguridad 2026-09-14).
+    $id_empleado = (int) ID_USUARIO_TOKEN;
     // Usar valores por defecto si no se proporcionan
     $id_product = isset($data['id_product']) ? intval($data['id_product']) : null;
     // Auditoría de seguridad 2026-09-10: addslashes() no protege nada contra
@@ -618,6 +629,10 @@ return function (App $app) {
   // ninesys-cdn (mismo servicio al que ya sube las imágenes) -- este endpoint
   // solo maneja el registro en la base de datos.
   $app->delete('/disenos/revision/{id_revision}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $id_revision = (int) $args['id_revision'];
     $localConnection = new LocalDB();
 
@@ -652,65 +667,12 @@ return function (App $app) {
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
   });
 
-  // Todos los diseños asignados
-  $app->get('/disenos/asignados', function (Request $request, Response $response) {
-    $localConnection = new LocalDB();
-
-    $object['disenos']['fields'][0]['key'] = 'id';
-    $object['disenos']['fields'][0]['label'] = 'Orden';
-    $object['disenos']['fields'][1]['key'] = 'tipo';
-    $object['disenos']['fields'][1]['label'] = 'Tipo';
-    $object['disenos']['fields'][2]['key'] = 'empleado';
-    $object['disenos']['fields'][2]['label'] = 'Empleado';
-
-    $sql = "SELECT a.tipo, a.id_orden, b.email username, b.nombre, b.id_usuario id_empleado FROM disenos a JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario  WHERE (a.tipo = 'modas' OR a.tipo = 'gráfico') AND a.id_empleado > 0 AND b.activo = 1";
-
-    $object['disenos']['items'] = $localConnection->goQuery($sql);
-    $object['empleados'] = $localConnection->goQuery('SELECT * FROM api_empresas.empresas_usuarios');
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
-  // diseños asignados por empleado
-  $app->get('/disenos/asignar/{id_orden}', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB();
-
-    $sql = 'SELECT DISTINCT
-            a._id id_diseno,
-            a.tipo,
-            a.id_orden,
-            a.id_empleado,
-            a.linkdrive,
-            a.codigo_diseno,
-            a.moment creacion_diseno,
-            b.status orden_estatus,
-            b.id_wp id_cliente,
-            b.cliente_nombre
-        FROM
-            disenos a
-        LEFT JOIN ordenes b ON
-            b._id = a.id_orden
-        WHERE
-            a.terminado = 0 AND a.id_orden = ?
-        ';
-
-    $object = $localConnection->goQuery($sql, [(int) $args['id_orden']]);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   // Todos los diseños terminados (con filtros opcionales de id_empleado y días)
   $app->get('/disenos/terminados', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $params = $request->getQueryParams();
 
@@ -780,6 +742,10 @@ return function (App $app) {
   // Diseñosasignados a Diseñador
 
   $app->get('/disenos/asignados/{id_empleado}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $object['fields'][0]['key'] = 'id';
@@ -851,23 +817,12 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // TODO eliminar ninesys antiguo => Obtener diseños pendientes por diseñador
-  $app->get('/disenos/pendientes/{id_empleado}', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB();
-    $sql = 'SELECT a.id_orden orden, b.cliente_nombre cliente, b.fecha_inicio, b.status FROM disenos a JOIN ordenes b ON b._id = a.id_orden WHERE a.id_empleado = ? AND terminado = 0';
-
-    $disenos = $localConnection->goQuery($sql, [(int) $args['id_empleado']]);
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($disenos));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   // Asignar diseñador
   $app->put('/disenos/asign/{id_orden}/{empleado}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [2, 1])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     // Sanitizar datos de entrada
@@ -931,10 +886,19 @@ return function (App $app) {
 
   // Diseñador dar diseño por terminado
   $app->put('/disenos/close/{id_orden}/{empleado}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
+    // No hay ningún caso real de "cerrar la tarea de otro" -- siempre es
+    // self en el único caller vivo. Se fuerza al usuario real de la sesión
+    // en vez de confiar en el {empleado} de la URL (auditoría de seguridad
+    // 2026-09-14).
+    $empleadoReal = (int) ID_USUARIO_TOKEN;
     $sql = 'UPDATE disenos SET terminado = 1 WHERE id_orden = ? AND id_empleado = ?';
-    $asignacion = $localConnection->goQuery($sql, [$args['id_orden'], $args['empleado']]);
+    $asignacion = $localConnection->goQuery($sql, [$args['id_orden'], $empleadoReal]);
 
     $localConnection->disconnect();
 
@@ -974,6 +938,10 @@ return function (App $app) {
   });
 
   $app->get('/revision/image/{id_revision}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $sql = "SELECT url_image FROM revisiones WHERE _id = ?";
@@ -986,123 +954,11 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  $app->get('/migracion/nineteencustom', function (Request $request, Response $response, array $args) {
-    // Array para almacenar el reporte final de la ejecución 510530.Dev@Admin
-    $log_report = [];
-    $log_report['inicio_proceso'] = date('Y-m-d H:i:s');
-    $log_report['resumen_por_orden'] = [];
-    $status_code = 200;
-
-    try {
-      // --- Conexiones (Validadas) ---
-      $db_antigua_host = 'localhost';
-      $db_antigua_name = 'api_emp_3';
-      $db_antigua_user = 'api_user_3';
-      $db_antigua_pass = 'aqfh-4u3Eifp!hvD';
-      $pdo_antigua = new PDO("mysql:host=$db_antigua_host;dbname=$db_antigua_name;charset=utf8mb4", $db_antigua_user, $db_antigua_pass);
-      $pdo_antigua->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-      $db_nueva_host = 'localhost';
-      $db_nueva_name = 'api_emp_1';
-      $db_nueva_user = 'api_user_1';
-      $db_nueva_pass = '+e0o2GE+3rG%ari*';
-      $pdo_nueva = new PDO("mysql:host=$db_nueva_host;dbname=$db_nueva_name;charset=utf8mb4", $db_nueva_user, $db_nueva_pass);
-      $pdo_nueva->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-      // La lista completa de órdenes a procesar
-      // $ordenes_en_produccion = [1584, 1611, 1647, 1654, 1658, 1670, 1671, 1687, 1701, 1703, 1706, 1723, 1731, 1733, 1738, 1739, 1744, 1745, 1747, 1756, 1760];
-      $ordenes_en_produccion = [1683];
-
-      // Bucle principal sobre cada orden de producción
-      foreach ($ordenes_en_produccion as $id_orden) {
-        $orden_log = ['id_orden' => $id_orden];
-
-        try {
-          $pdo_nueva->beginTransaction();
-
-          // 1. Limpieza previa para esta orden
-          $pdo_nueva->prepare('DELETE FROM lotes_detalles_empleados_asignados WHERE id_orden = ?')->execute([$id_orden]);
-          $pdo_nueva->prepare('DELETE FROM lotes_detalles WHERE id_orden = ?')->execute([$id_orden]);
-
-          // 2. Leer todas las tareas de la BD antigua para esta orden
-          $stmt_select = $pdo_antigua->prepare('SELECT * FROM lotes_detalles WHERE id_orden = ?');
-          $stmt_select->execute([$id_orden]);
-          $tareas_antiguas = $stmt_select->fetchAll(PDO::FETCH_ASSOC);
-
-          if (empty($tareas_antiguas)) {
-            $orden_log['status'] = 'OMITIDA';
-            $orden_log['mensaje'] = 'No se encontraron tareas de producción.';
-            $pdo_nueva->commit();  // Es importante hacer commit para guardar las eliminaciones
-            $log_report['resumen_por_orden'][] = $orden_log;
-            continue;  // Pasa a la siguiente orden
-          }
-
-          // 3. Bucle interno para migrar cada tarea
-          $tareas_migradas = 0;
-          foreach ($tareas_antiguas as $tarea_a_migrar) {
-            // Insertar en lotes_detalles
-            $sql_insert_detalle = 'INSERT INTO lotes_detalles (id_orden, id_woo, progreso, id_ordenes_productos, id_reposicion, terminado, id_departamento, departamento, unidades_solicitadas, detalles, fecha_inicio, fecha_terminado, moment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-            $stmt_insert_detalle = $pdo_nueva->prepare($sql_insert_detalle);
-            $stmt_insert_detalle->execute([
-              $tarea_a_migrar['id_orden'],
-              $tarea_a_migrar['id_woo'],
-              $tarea_a_migrar['progreso'],
-              $tarea_a_migrar['id_ordenes_productos'],
-              $tarea_a_migrar['id_reposicion'],
-              $tarea_a_migrar['terminado'],
-              $tarea_a_migrar['id_departamento'],
-              $tarea_a_migrar['departamento'],
-              $tarea_a_migrar['unidades_solicitadas'],
-              $tarea_a_migrar['detalles'],
-              $tarea_a_migrar['fecha_inicio'],
-              $tarea_a_migrar['fecha_terminado'],
-              $tarea_a_migrar['moment']
-            ]);
-            $new_lote_detalle_id = $pdo_nueva->lastInsertId();
-
-            // Insertar en lotes_detalles_empleados_asignados
-            $sql_insert_asignado = 'INSERT INTO lotes_detalles_empleados_asignados (id_lotes_detalles, id_orden, id_empleado, id_departamento, procentaje_comision, progreso, terminado, fecha_inicio, fecha_terminado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
-            $stmt_insert_asignado = $pdo_nueva->prepare($sql_insert_asignado);
-            $stmt_insert_asignado->execute([
-              $new_lote_detalle_id,
-              $tarea_a_migrar['id_orden'],
-              $tarea_a_migrar['id_empleado'],
-              $tarea_a_migrar['id_departamento'],
-              100.0,
-              $tarea_a_migrar['progreso'],
-              $tarea_a_migrar['terminado'],
-              $tarea_a_migrar['fecha_inicio'],
-              $tarea_a_migrar['fecha_terminado']
-            ]);
-            $tareas_migradas++;
-          }
-
-          // Si todas las tareas de esta orden se migraron, guardar cambios
-          $pdo_nueva->commit();
-          $orden_log['status'] = 'EXITO';
-          $orden_log['mensaje'] = "Se migraron $tareas_migradas tareas correctamente.";
-        } catch (PDOException $e) {
-          $pdo_nueva->rollBack();
-          $orden_log['status'] = 'ERROR';
-          $orden_log['mensaje'] = 'Error en la transacción: ' . $e->getMessage();
-        }
-        $log_report['resumen_por_orden'][] = $orden_log;
-      }
-    } catch (PDOException $e) {
-      $status_code = 500;
-      $log_report['error_general'] = 'Fallo crítico durante la ejecución (posiblemente en la conexión inicial): ' . $e->getMessage();
-    }
-
-    $log_report['fin_proceso'] = date('Y-m-d H:i:s');
-
-    // Devolvemos el reporte final en el formato que sabemos que funciona
-    $response->getBody()->write(json_encode($log_report, JSON_PRETTY_PRINT));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus($status_code);
-  });
-
   $app->delete('/disenos/images/{id_orden}/{image_name}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     // Path traversal real (hallazgo 2026-08-06): ni id_orden ni image_name
     // se validaban antes de pasar la ruta construida a unlink() -- un
     // image_name con "../../../algo" permitía BORRAR cualquier archivo del
@@ -1135,6 +991,10 @@ return function (App $app) {
   });
 
   $app->post('/disenos/imagen/{id_orden}/{id_diseno}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
     // id_orden casteado a entero: sin esto, un valor con "../" permitía
     // crear directorios y escribir el archivo subido en una ruta arbitraria
     // del servidor (path traversal, hallazgo real 2026-08-06).
