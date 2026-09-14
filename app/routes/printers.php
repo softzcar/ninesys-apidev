@@ -279,6 +279,12 @@ return function (App $app) {
   });
 
   $app->get('/impresoras-tintas-actual[/{id_impresora}]', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    // Verificado en frontend (impresoras/tintas-actual.vue): enlazada solo
+    // desde SidebarAdmin.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     try {
       $id_impresora = $args['id_impresora'] ?? null;

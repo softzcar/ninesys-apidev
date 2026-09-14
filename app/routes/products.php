@@ -1195,6 +1195,12 @@ return function (App $app) {
 
   /* NUEVO DEPARTAMENTO */
   $app->post('/departamentos/nuevo', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    // Mismo criterio que DELETE /departamentos/{id} (ya gateado): crear/
+    // editar/reordenar departamentos es igual de estructural que borrarlos.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -1256,6 +1262,10 @@ return function (App $app) {
 
   /* ACTUALIZAR NOMBRE DEL DEPARTAMENTO */
   $app->post('/departamentos/editar', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -1274,6 +1284,10 @@ return function (App $app) {
 
   /* ACTUALIZAR NOMBRE ENVIO DE MENSAJE */
   $app->post('/departamentos/editar/mensaje', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -1308,6 +1322,13 @@ return function (App $app) {
 
   /* ACTUALIZAR ORDEN DE PROCESO DE DEPARTAMENTO */
   $app->post('/departamentos/orden-paso', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    // Cierra también el hueco real de `pages/departamentos/gestiontest.vue`
+    // (frontend sin ningún gate propio, ver auditoría) que llama a este mismo
+    // endpoint.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
     $nuevoOrden = intval($data['orden_proceso']);

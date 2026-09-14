@@ -11,6 +11,13 @@ return function (App $app) {
 
     // GET /servicios-maquinas - Listado de servicios con filtros
     $app->get('/servicios-maquinas', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        // Verificado en frontend (impresoras/servicios/index.vue): enlazada
+        // desde SidebarAdmin Y SidebarProduccion -- Administración (1) y
+        // Producción (5).
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $queryParams = $request->getQueryParams();
         $search = $queryParams['search'] ?? '';
         $id_maquina = $queryParams['id_maquina'] ?? '';
@@ -58,6 +65,10 @@ return function (App $app) {
 
     // POST /servicios-maquinas - Registrar servicio
     $app->post('/servicios-maquinas', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $body = $request->getBody()->getContents();
         $data = json_decode($body, true);
         $localConnection = new LocalDB();
@@ -85,6 +96,10 @@ return function (App $app) {
 
     // PUT /servicios-maquinas/{id} - Editar servicio
     $app->put('/servicios-maquinas/{id}', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $body = $request->getBody()->getContents();
         $data = json_decode($body, true);
         $localConnection = new LocalDB();
@@ -110,6 +125,10 @@ return function (App $app) {
 
     // DELETE /servicios-maquinas/{id} - Eliminar
     $app->delete('/servicios-maquinas/{id}', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+            return $errorResponse;
+        }
         $localConnection = new LocalDB();
         $sql = "DELETE FROM servicios_maquinas WHERE _id = ?";
         $result = $localConnection->goQuery($sql, [$args['id']]);

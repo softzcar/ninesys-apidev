@@ -955,6 +955,12 @@ return function (App $app) {
             $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        // Mismo criterio que DELETE /gastos/{id} (ya gateado): crear un gasto
+        // es igual de sensible que borrarlo.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
 
         $data = $request->getParsedBody();
         if (empty($data['nombre']) || !isset($data['monto'])) {
@@ -1050,6 +1056,10 @@ return function (App $app) {
      * Actualiza una plantilla de gasto existente.
      */
     $app->put('/gastos/{id}', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $id = (int) $args['id'];
         $put_body = $request->getBody()->getContents();
         parse_str($put_body, $data);
@@ -1268,6 +1278,11 @@ return function (App $app) {
      * PUT /gastos/registros/{id}
      */
     $app->put('/gastos/registros/{id}', function (Request $request, Response $response, array $args) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        // Mismo criterio que DELETE /gastos/registros/{id} (ya gateado).
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $id_registro = $args['id'];
         $put_body = $request->getBody()->getContents();
         parse_str($put_body, $data);
@@ -1559,6 +1574,11 @@ return function (App $app) {
             $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        // Mismo criterio que el resto de /configuracion/* en este archivo.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
 
         try {
             $db = new LocalDB();
@@ -1577,6 +1597,11 @@ return function (App $app) {
         if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
             $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
         }
 
         $clave = $args['clave'];
@@ -1612,6 +1637,10 @@ return function (App $app) {
             $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
 
         try {
             $db = new LocalDB();
@@ -1633,6 +1662,10 @@ return function (App $app) {
         if (!defined('ID_EMPRESA') || !ID_EMPRESA) {
             $response->getBody()->write(json_encode(['error' => 'Acceso no autorizado.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
         }
 
         try {

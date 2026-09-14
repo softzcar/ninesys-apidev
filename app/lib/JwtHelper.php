@@ -28,8 +28,18 @@ use Firebase\JWT\Key;
  *   Igual que `acceso`: si el departamento del empleado cambia a mitad de
  *   sesión, se refleja recién en el próximo login (sin refresh token, mismo
  *   precedente ya aceptado).
+ * @param array $idsModulos IDs de módulo (`departamentos.id_modulo`, tabla
+ *   central `api_empresas.modulos`) derivados de los mismos departamentos del
+ *   empleado -- auditoría de seguridad 2026-09-14 (autorización por
+ *   módulo/página). IdEmpresaMiddleware los expone como `MODULOS_TOKEN` para
+ *   `perteneceAModulo()` (AuthzHelper.php). Es un dato DISTINTO de
+ *   `id_departamento`: un mismo módulo agrupa varios departamentos (ej. las
+ *   4 estaciones de línea de Producción comparten `id_modulo`), y es lo que
+ *   el frontend ya usa hoy (`accessModule.accessData.id_modulo`) para
+ *   mostrar/ocultar páginas -- este claim permite validar lo mismo en el
+ *   backend, por ID, en vez de solo confiar en el cliente.
  */
-function generarJwtSesion(array $usuario, int $idEmpresa, string $sessionId, array $idsDepartamentos = []): string
+function generarJwtSesion(array $usuario, int $idEmpresa, string $sessionId, array $idsDepartamentos = [], array $idsModulos = []): string
 {
     $secret = getenv('JWT_SECRET') ?: '';
     $ttlHoras = (float) (getenv('JWT_TTL_HOURS') ?: 24);
@@ -46,6 +56,7 @@ function generarJwtSesion(array $usuario, int $idEmpresa, string $sessionId, arr
         'acceso' => isset($usuario['acceso']) ? (int) $usuario['acceso'] : null,
         'sid' => $sessionId,
         'departamentos' => array_values(array_map('intval', $idsDepartamentos)),
+        'modulos' => array_values(array_unique(array_map('intval', $idsModulos))),
     ];
 
     return JWT::encode($payload, $secret, 'HS256');

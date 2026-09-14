@@ -3157,6 +3157,12 @@ return function (App $app) {
 
   // PROYECCION DE FECHAS DE ENTREGA DE ORDENES
   $app->get('/ordenes/proyeccion-entrega', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    // Verificado en frontend (pages/ordenes-fechas-entrega.vue): enlazada
+    // desde SidebarProduccion -- Administración (1) y Producción (5).
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     // --- INICIO DE LA SEGUNDA CORRECCIÓN ---

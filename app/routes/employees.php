@@ -236,6 +236,12 @@ return function (App $app) {
 
     // Activación/Desactivación de Empleados
     $app->post('/empleados/activacion', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        // Activa/desactiva la cuenta de OTRO empleado -- mismo nivel de
+        // sensibilidad que /empleados/nuevo (justo debajo, ya gateado).
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $miEmpleado = $request->getParsedBody();
         $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
@@ -823,8 +829,23 @@ return function (App $app) {
     // (ver la nueva sección del sidebar, análoga a como el cliente de dtf pide
     // una clave nueva). Mismo criterio de comparación de clave que usa /login.
     $app->post('/empleados/cambiar-clave', function (Request $request, Response $response) {
+        // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+        // `id_usuario` venía del body -- el frontend (ModalCambiarClave.vue)
+        // siempre manda el propio id_empleado de la sesión, sin flujo
+        // legítimo de cambiar la clave de otro (eso ya lo cubre
+        // /empleados/editar, admin-only). Se fuerza a la sesión real para
+        // cerrar la suplantación; la reverificación de `clave_actual` ya
+        // existía, pero igual sin sesión cualquiera podía intentarlo a
+        // fuerza bruta contra un id_usuario ajeno.
+        if (!defined('ID_USUARIO_TOKEN')) {
+            $response->getBody()->write(json_encode([
+                'error' => 'invalid_token',
+                'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
         $datos = $request->getParsedBody();
-        $idUsuario = (int) ($datos['id_usuario'] ?? 0);
+        $idUsuario = (int) ID_USUARIO_TOKEN;
         $claveActual = $datos['clave_actual'] ?? '';
         $claveNueva = $datos['clave_nueva'] ?? '';
 

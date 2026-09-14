@@ -60,6 +60,11 @@ return function (App $app) {
   });
 
   $app->post('/monedas', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    // Mismo criterio que /monedas/eliminar (ya gateado): alta de moneda.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $codigo = strtoupper(trim($data['codigo'] ?? ''));
     $nombre = trim($data['nombre'] ?? '');
@@ -158,6 +163,12 @@ return function (App $app) {
   // puede desasignar (ver /monedas/eliminar) y este endpoint exige que el
   // destino ya esté activo antes de convertirlo en base.
   $app->post('/monedas/establecer-base', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    // Cambia la moneda base del sistema completo -- mismo nivel de
+    // sensibilidad que /monedas/eliminar (ya gateado).
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $id = (int) ($data['id'] ?? 0);
     $localConnection = new LocalDB();
@@ -216,6 +227,11 @@ return function (App $app) {
   // pero no sustituye en silencio esta elección. La moneda base nunca la
   // necesita -- siempre reporta tasa=1 desde ese mismo endpoint.
   $app->post('/monedas/establecer-tasa', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    // "la elección deliberada del administrador" (ver comentario arriba).
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $id = (int) ($data['id'] ?? 0);
     $tasa = isset($data['tasa']) ? (float) $data['tasa'] : null;
@@ -257,6 +273,10 @@ return function (App $app) {
   // ISO: bolivar->VES, dolar->USD, peso_colombiano->COP) y no cargan el
   // catálogo completo de catalogo_monedas con sus IDs.
   $app->post('/monedas/establecer-tasa-por-codigo', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $codigo = strtoupper(trim($data['codigo'] ?? ''));
     $tasa = isset($data['tasa']) ? (float) $data['tasa'] : null;

@@ -245,6 +245,12 @@ return function (App $app) {
   });
 
   $app->post('/catalogo-tintas/eliminar', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    // Verificado en frontend (impresoras/catalogo-tintas.vue): accesible a
+    // Administración (1) Y Producción (5) -- no solo admin, a propósito.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $body = $request->getParsedBody();
     $id = isset($body['id']) ? intval($body['id']) : 0;
@@ -310,6 +316,12 @@ return function (App $app) {
   });
 
   $app->post('/catalogo-colores-tintas/eliminar', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    // Verificado en frontend (impresoras/colores.vue): Administración (1) y
+    // Producción (5).
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $body = $request->getParsedBody();
     $id = isset($body['id']) ? intval($body['id']) : 0;
@@ -455,6 +467,12 @@ return function (App $app) {
   });
 
   $app->post('/catalogo-insumos-productos/eliminar', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
+    // Llamado desde 2 páginas (catalogo-insumos-productos.vue: Admin(1) ||
+    // Producción(5); insumos/index.vue: solo Admin(1)) -- unión de ambas.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
