@@ -1126,6 +1126,9 @@ return function (App $app) {
      * diferencia de eliminar un registro de pago, no dejaba ningún rastro).
      */
     $app->delete('/gastos/{id}', function (Request $request, Response $response, array $args) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         try {
             $id = (int) $args['id'];
             $bodyRaw = $request->getBody()->getContents();
@@ -1330,6 +1333,9 @@ return function (App $app) {
      * DELETE /gastos/registros/{id}
      */
     $app->delete('/gastos/registros/{id}', function (Request $request, Response $response, array $args) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $id_registro = $args['id'];
         $bodyRaw = $request->getBody()->getContents();
         parse_str($bodyRaw, $bodyData);

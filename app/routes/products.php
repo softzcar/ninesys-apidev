@@ -134,6 +134,9 @@ return function (App $app) {
   // lo que arrastraba en cascada products_attributes_values -- ahora se
   // marca como eliminado para preservar el histórico y permitir reactivarlo).
   $app->post('/products-attributes/eliminar', function (Request $request, Response $response) {
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
     $sql = 'UPDATE products_attributes SET eliminado = 1 WHERE _id = ?';
@@ -311,6 +314,9 @@ return function (App $app) {
 
   // Eliminar un precio de producto
   $app->delete('/products-prices/{id}', function (Request $request, Response $response, array $args) {
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $id_price = $args['id'];
     $localConnection = new LocalDB();
 
@@ -354,6 +360,9 @@ return function (App $app) {
 
   // Eliminar Producto (Usamos el metodo `options` porque noo acepta metodo `delete`  da ERROR 405)
   $app->delete('/products/{id}', function (Request $request, Response $response, array $args) {
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $sql = 'UPDATE products SET eliminado = 1 WHERE _id = ?';
@@ -1262,6 +1271,9 @@ return function (App $app) {
 
   /* ELIMINAR DEPARTAMENTO */
   $app->delete('/departamentos/{id_departamento}', function (Request $request, Response $response, array $args) {
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $sql = 'UPDATE departamentos SET eliminado = 1 WHERE _id = ?';

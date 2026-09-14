@@ -299,6 +299,9 @@ return function (App $app) {
   });
 
   $app->post('/monedas/eliminar', function (Request $request, Response $response) {
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $id = (int) $data['id'];
     $localConnection = new LocalDB();
@@ -448,6 +451,9 @@ return function (App $app) {
   });
 
   $app->post('/metodos-pago/eliminar', function (Request $request, Response $response) {
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
     $sql = 'UPDATE catalogo_metodos_pago SET eliminado = 1 WHERE _id = ?';

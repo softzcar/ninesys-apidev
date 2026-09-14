@@ -608,6 +608,9 @@ return function (App $app) {
   });
 
   $app->post('/telas/eliminar', function (Request $request, Response $response) {
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $miEmpleado = $request->getParsedBody();
     $sql = 'UPDATE catalogo_telas SET eliminado = 1 WHERE _id = ?';
@@ -623,6 +626,9 @@ return function (App $app) {
   });
   /** FIN TELAS */
   $app->delete('/insumos-productos-asignados/{id_insumo}', function (Request $request, Response $response, array $args) {
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $sql = 'DELETE FROM product_insumos_asignados WHERE _id = ?';
