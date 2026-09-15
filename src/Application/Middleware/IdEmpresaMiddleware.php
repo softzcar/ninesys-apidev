@@ -30,7 +30,20 @@ class IdEmpresaMiddleware implements Middleware
         //      header crudo. Un JWT inválido/expirado es 401 inmediato --
         //      NUNCA cae al modo legado (evita una ambigüedad de seguridad
         //      innecesaria y le da al frontend la señal clara de reloguearse).
-        //   3) Cualquier otra cosa -> modo LEGADO, comportamiento IDÉNTICO al
+        //   3) Un `?token=` de aprobación de cliente válido (query string) ->
+        //      modo APROBACIÓN CLIENTE (ver AprobacionClienteHelper.php,
+        //      auditoría de seguridad 2026-09-15/Fase G). El enlace que recibe
+        //      un cliente externo por WhatsApp no manda NINGÚN header -- sin
+        //      este modo, IdEmpresaMiddleware nunca resolvía id_empresa y la
+        //      conexión a base de datos fallaba (500 real, "could not
+        //      translate host name none"). Deliberadamente NO define
+        //      ID_USUARIO_TOKEN/ACCESO_TOKEN/DEPARTAMENTOS_TOKEN/MODULOS_TOKEN
+        //      -- este token solo resuelve a qué base conectar, nunca
+        //      autoriza nada por sí mismo (cualquier endpoint gateado por
+        //      rol/módulo lo sigue rechazando igual que al modo legado; la
+        //      autorización real de este flujo puntual la hace cada endpoint,
+        //      ver orders.php::/ordenes/reporte/{id}).
+        //   4) Cualquier otra cosa -> modo LEGADO, comportamiento IDÉNTICO al
         //      actual (id_empresa crudo, sin firma). Se loguea cada uso para
         //      poder confirmar más adelante cuándo ya no hay tráfico en este
         //      modo antes de retirarlo.
@@ -79,6 +92,8 @@ class IdEmpresaMiddleware implements Middleware
             // Autorización por módulo/página -- auditoría de seguridad
             // 2026-09-14, ver AuthzHelper.php::perteneceAModulo().
             define('MODULOS_TOKEN', $claims['modulos'] ?? []);
+        } elseif (($claimsAprobacion = decodificarTokenAprobacionCliente(getenv('JWT_SECRET') ?: '', (string) ($request->getQueryParams()['token'] ?? ''))) !== null) {
+            $id_empresa = (int) ($claimsAprobacion->id_empresa ?? 0);
         } else {
             $id_empresa = $authHeaderRaw !== '' ? (int) $authHeaderRaw : null;
             error_log('[auth_mode=legacy] ' . $request->getUri()->getPath());

@@ -19,7 +19,7 @@ use Firebase\JWT\Key;
  * medio que justifique una ventana corta -- 90 días cubre con margen
  * cualquier ciclo real de producción.
  */
-function generarTokenAprobacionCliente(string $secret, int $idOrden): string
+function generarTokenAprobacionCliente(string $secret, int $idOrden, int $idEmpresa): string
 {
     $ahora = time();
     $payload = [
@@ -27,6 +27,17 @@ function generarTokenAprobacionCliente(string $secret, int $idOrden): string
         'iat' => $ahora,
         'exp' => $ahora + (86400 * 90),
         'id_orden' => $idOrden,
+        // Auditoría de seguridad 2026-09-15 (Fase G, hallazgo real probando
+        // end-to-end con un pedido real): sin esto, un cliente anónimo (sin
+        // sesión de staff ni header alguno) hacía que IdEmpresaMiddleware
+        // nunca resolviera a qué base de datos conectarse -- 500 real
+        // ("could not translate host name none"). Este token ahora también
+        // sirve para que ese middleware determine el tenant correcto (ver
+        // IdEmpresaMiddleware::process(), nuevo modo "aprobación cliente") --
+        // no amplía privilegios: sigue sin otorgar ID_USUARIO_TOKEN/ACCESO_TOKEN/
+        // módulos, así que cualquier endpoint gateado por rol/módulo sigue
+        // rechazándolo igual que antes.
+        'id_empresa' => $idEmpresa,
     ];
     return JWT::encode($payload, $secret, 'HS256');
 }

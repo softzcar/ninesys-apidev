@@ -131,7 +131,7 @@ return function (App $app) {
     if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
       return $errorResponse;
     }
-    $token = generarTokenAprobacionCliente(getenv('JWT_SECRET') ?: '', (int) $args['id_orden']);
+    $token = generarTokenAprobacionCliente(getenv('JWT_SECRET') ?: '', (int) $args['id_orden'], (int) ID_EMPRESA);
     $response->getBody()->write(json_encode(['token' => $token]));
     return $response
       ->withHeader('Content-Type', 'application/json')
