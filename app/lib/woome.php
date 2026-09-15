@@ -1085,7 +1085,15 @@ class WooMe
     $data = $localConnection->goQuery($sql, [intval($id)]);
     $localConnection->disconnect();
 
-    return json_encode($data);
+    // Auditoría de seguridad 2026-09-15 (Fase G, hallazgo real probando
+    // end-to-end con un pedido real): devolver un string ya-json_encode()ado
+    // producía doble codificación en el único caller vivo (orders.php,
+    // /ordenes/reporte/{id} -- $object['customer'][0] = ..., que luego se
+    // vuelve a json_encode() para la respuesta HTTP completa), dejando
+    // customer[0] como un STRING JSON en vez de un objeto -- el frontend
+    // (pages/clientes/aprobacion/_id.vue) leía "Cliente: undefined undefined".
+    // Mismo fix ya aplicado antes en el método hermano getCustomerByIdWP().
+    return $data;
   }
 
   public function getCustomerByIdWP($id)

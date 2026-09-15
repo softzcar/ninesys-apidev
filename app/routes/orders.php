@@ -1883,8 +1883,14 @@ return function (App $app) {
       $sql = 'SELECT a._id id_diseno, a.tipo, a.id_orden, b.revision revision FROM disenos a JOIN revisiones b ON b.id_diseno = a._id WHERE a.id_orden =' . $id;
       $object['diseno'] = $localConnection->goQuery($sql);
 
-      // Buscar datos del cliente
-      $object['customer'][0] = $woo->getCustomerById($id_customer);
+      // Buscar datos del cliente -- auditoría de seguridad 2026-09-15 (Fase
+      // G): antes era `$object['customer'][0] = ...`, pero getCustomerById()
+      // ya devuelve un array de filas ([$fila]) -- eso anidaba un nivel de
+      // más (customer[0] terminaba siendo un array, no la fila), y sumado al
+      // bug de doble json_encode() ya corregido en woome.php, el único
+      // caller real (pages/clientes/aprobacion/_id.vue) leía
+      // customer[0].first_name como undefined.
+      $object['customer'] = $woo->getCustomerById($id_customer);
 
       // Buscar datos de productos
       $sql = 'SELECT _id, name, id_woo cod, cantidad, talla, corte, precio_unitario precio FROM ordenes_productos WHERE id_orden = ' . $id;
