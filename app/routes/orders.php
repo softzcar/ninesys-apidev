@@ -1843,6 +1843,20 @@ return function (App $app) {
     // Auditoría de seguridad 2026-09-10: casteado una sola vez aquí -- antes
     // quedaba crudo y se reutilizaba sin cast en 5 consultas de esta función.
     $id = intval($args['id']);
+
+    // Token firmado -- auditoría de seguridad 2026-09-15. Único caller real:
+    // pages/clientes/aprobacion/_id.vue (aprobación de diseño por el
+    // cliente, sin sesión de empleado). Antes el único "control de acceso"
+    // era este mismo id_orden secuencial en la URL -- cualquiera podía ver
+    // el cliente/diseño/productos completos de OTRA orden adivinando el
+    // número. Mismo token que protege POST /disenos/parobacion-de-cliente,
+    // ver AprobacionClienteHelper.php y GET
+    // /disenos/aprobacion-de-cliente/{id_orden}/enlace para emitirlo.
+    $tokenClaims = decodificarTokenAprobacionCliente(getenv('JWT_SECRET') ?: '', (string) ($request->getQueryParams()['token'] ?? ''));
+    if ($tokenClaims === null || (int) ($tokenClaims->id_orden ?? 0) !== $id) {
+      $response->getBody()->write(json_encode(['error' => 'forbidden', 'message' => 'Enlace inválido o expirado.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
     $localConnection = new LocalDB();
 
     //  Verificar existencia de la orden
