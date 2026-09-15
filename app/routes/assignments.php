@@ -10,6 +10,9 @@ return function (App $app) {
   /** Asignacion */
   // Obtener datos para la asignaciond e empelados
   $app->get('/asignacion/ordenes', function (Request $request, Response $response, array $args) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+        return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $object['fields'][0]['key'] = 'orden';

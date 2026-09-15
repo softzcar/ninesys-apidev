@@ -10,6 +10,10 @@ return function (App $app) {
   /** PAGOS */
   // Terminar planilla de pago
   $app->post('/pagos/terminar-planilla', function (Request $request, Response $response, $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $myDate = new CustomTime();
     $now = $myDate->today();
@@ -50,6 +54,10 @@ return function (App $app) {
 
   // REALIZAR PAGO A EMPLEADOS
   $app->post('/pagos/pagar-a-empleados', function (Request $request, Response $response, $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -220,6 +228,10 @@ return function (App $app) {
 
   // PROCESAR LOTE MASIVO DE PAGOS
   $app->post('/pagos/procesar-lote-pagos', function (Request $request, Response $response, $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
 
     // Fallback if getParsedBody is empty (sometimes Content-Type issues cause this)
@@ -401,6 +413,10 @@ return function (App $app) {
 
   // Lista de pagos semanales
   $app->get('/pagos/semana/disenadores', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAModulo($request, $response, 1)) {
+      return $errorResponse;
+    }
     // OBTENER PAGOS DE DISEÑADORES
     $localConnection = new LocalDB();
 
@@ -624,6 +640,10 @@ return function (App $app) {
   });
 
   $app->get('/pagos/semana/empleados', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAModulo($request, $response, 1)) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $queryParams = $request->getQueryParams();
@@ -1001,6 +1021,10 @@ return function (App $app) {
   });
 
   $app->get('/pagos/semana/vendedores', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAModulo($request, $response, 1)) {
+      return $errorResponse;
+    }
     // OBTERER PAGOS DE VENDEDORES
     $localConnection = new LocalDB();
 
@@ -1112,6 +1136,16 @@ return function (App $app) {
   });
 
   $app->get('/pagos/vendedor/{id_vendedoor}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
+    // IDOR -- auditoría de seguridad 2026-09-15: un vendedor no puede consultar
+    // los pagos de OTRO vendedor cambiando el ID en la URL. Admin (acceso=1) sí puede consultar cualquiera.
+    if ((int) (defined('ACCESO_TOKEN') ? ACCESO_TOKEN : 0) !== 1 && (int) $args['id_vendedoor'] !== (int) ID_USUARIO_TOKEN) {
+      $response->getBody()->write(json_encode(['error' => 'forbidden', 'message' => 'No puede consultar los pagos de otro vendedor.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
     // OBTERER PAGOS DE VENDEDORES
     $localConnection = new LocalDB();
 
@@ -1211,6 +1245,10 @@ return function (App $app) {
   // Params: ?pendiente=1 (planilla actual) ó ?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD (histórico)
   // =============================================
   $app->get('/pagos/reporte-empleado/{id_empleado}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $params = $request->getQueryParams();
     $idEmpleado = intval($args['id_empleado']);
@@ -1224,6 +1262,11 @@ return function (App $app) {
       $whereFecha = "AND a.fecha_pago IS NULL";
       $whereFechaP = "AND p.fecha_pago IS NULL";
     } elseif ($fechaInicio && $fechaFin) {
+      // Sanitizar -- auditoría de seguridad 2026-09-15: $fechaInicio/$fechaFin vienen de
+      // query params y se interpolaban directo en el SQL sin sanitizar (inyección SQL real).
+      // Mismo patrón ya usado en semana/disenadores, semana/empleados y semana/vendedores.
+      $fechaInicio = preg_replace('/[^0-9\-]/', '', $fechaInicio);
+      $fechaFin = preg_replace('/[^0-9\-]/', '', $fechaFin);
       if (DB_DRIVER === 'pgsql') {
         $whereFecha = "AND a.fecha_pago::date BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
         $whereFechaP = "AND p.fecha_pago::date BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
@@ -1369,6 +1412,10 @@ return function (App $app) {
   });
 
   $app->get('/pagos/historico/{semana}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAModulo($request, $response, 1)) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $queryParams = $request->getQueryParams();
 
@@ -1644,180 +1691,10 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // Lista de pagos semanales con filtro de fechas
-  $app->post('/pagos/semana', function (Request $request, Response $response, array $args) {
-    $data = $request->getParsedBody();
-    $localConnection = new LocalDB();
-
-    $paramsWhere = [];
-    $paramsWhereEmpleados = [];
-
-    if (isset($data['numero_semana'])) {
-      if (DB_DRIVER === 'pgsql') {
-        $where = 'EXTRACT(WEEK FROM e.moment) = ? AND e.fecha_pago IS NULL';
-      } else {
-        $where = 'WEEK(e.moment, 1) = ? AND e.fecha_pago IS NULL';
-      }
-      $paramsWhere[] = $data['numero_semana'];
-      $whereEmpleados = DB_DRIVER === 'pgsql' ? 'b.fecha_terminado::text LIKE ? AND a.fecha_pago IS NULL ' : 'b.fecha_terminado LIKE ? AND a.fecha_pago IS NULL ';
-      $paramsWhereEmpleados[] = $data['fecha_inicio'] . '%';
-    }
-
-    if ($data['fecha_inicio'] === $data['fecha_fin']) {
-      $where = DB_DRIVER === 'pgsql' ? 'e.moment::text LIKE ? AND e.fecha_pago IS NULL' : 'e.moment LIKE ? AND e.fecha_pago IS NULL';
-      $paramsWhere = [$data['fecha_inicio'] . '%'];
-      $whereEmpleados = DB_DRIVER === 'pgsql' ? 'b.fecha_terminado::text LIKE ? AND a.fecha_pago IS NULL ' : 'b.fecha_terminado LIKE ? AND a.fecha_pago IS NULL ';
-      $paramsWhereEmpleados = [$data['fecha_inicio'] . '%'];
-    } else {
-      if (DB_DRIVER === 'pgsql') {
-        $where = "(e.moment::date BETWEEN ? AND ?) ";
-        $paramsWhere = [$data['fecha_inicio'], $data['fecha_fin']];
-        $whereEmpleados = "b.fecha_inicio >= ? AND (b.fecha_terminado - INTERVAL '1 day')::date <= ? ";
-        $paramsWhereEmpleados = [$data['fecha_inicio'], $data['fecha_fin']];
-      } else {
-        $where = '(DATE(e.moment) BETWEEN ? AND ?) ';
-        $paramsWhere = [$data['fecha_inicio'], $data['fecha_fin']];
-        $whereEmpleados = 'b.fecha_inicio >= ? AND DATE_ADD(b.fecha_terminado, INTERVAL -1 DAY) <= ? ';
-        $paramsWhereEmpleados = [$data['fecha_inicio'], $data['fecha_fin']];
-      }
-    }
-
-    if (DB_DRIVER === 'pgsql') {
-      $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, TO_CHAR(a.moment, 'DD/MM/YYYY') fecha_de_pago FROM pagos a JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
-    } else {
-      $sql = "SELECT a._id id_pago, a.id_orden, a.id_empleado, a.detalle, a.cantidad, a.monto_pago pago, c.nombre, d.status, e.tipo_de_pago, DATE_FORMAT(a.moment, '%d/%m/%Y') fecha_de_pago FROM pagos a JOIN empleados c ON a.id_empleado = c._id JOIN ordenes d ON a.id_orden = d._id LEFT JOIN metodos_de_pago e ON e._id = a.id_metodos_de_pago WHERE " . $where . ' AND fecha_pago IS NULL ORDER BY d._id ASC, a._id ASC';
-    }
-    $object['data']['vendedores'] = $localConnection->goQuery($sql, $paramsWhere);
-    // FIN BUSCAR PAGOS DE VENDEDORES
-
-    // OBTENER PAGOS DE EMPLEADOS
-    if (DB_DRIVER === 'pgsql') {
-      $sql = 'SELECT
-              a._id id_pago,
-              b._id id_lotes_detalles,
-              a.id_orden orden,
-              NULL as id_woo,
-              \'Pago Multi-Producto\' as producto,
-              \'N/A\' as talla,
-              c.id_usuario id_empleado,
-              c.nombre,
-              c.comision,
-              b.id_departamento,
-              a.detalle as departamento,
-              TO_CHAR(b.fecha_terminado, \'Dy\') dia,
-              TO_CHAR(b.fecha_terminado, \'IW\') semana,
-              TO_CHAR(b.fecha_terminado, \'DD/MM/YY\') fecha,
-              a.cantidad cantidad,
-              a.monto_pago pago,
-              a.fecha_pago,
-              to_char(b.fecha_terminado - b.fecha_inicio, \'HH24:MI:SS\') tiempo_transcurrido
-              FROM
-              pagos a
-              LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
-              JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
-              WHERE ' . $whereEmpleados . ' AND a.fecha_pago IS NULL
-              ORDER BY
-              c.nombre ASC,
-              a.id_orden ASC,
-              a._id ASC;
-          ';
-    } else {
-      $sql = 'SELECT
-              a._id id_pago,
-              b._id id_lotes_detalles,
-              a.id_orden orden,
-              NULL as id_woo,
-              \'Pago Multi-Producto\' as producto,
-              \'N/A\' as talla,
-              c.id_usuario id_empleado,
-              c.nombre,
-              c.comision,
-              b.id_departamento,
-              a.detalle as departamento,
-              DATE_FORMAT(b.fecha_terminado, "%a") dia,
-              DATE_FORMAT(b.fecha_terminado, "%v") semana,
-              DATE_FORMAT(b.fecha_terminado, "%d/%m/%y") fecha,
-              a.cantidad cantidad,
-              a.monto_pago pago,
-              a.fecha_pago,
-              TIMEDIFF(b.fecha_terminado, b.fecha_inicio) tiempo_transcurrido
-              FROM
-              pagos a
-              LEFT JOIN lotes_detalles_empleados_asignados b ON a.id_lotes_detalles = b._id
-              JOIN api_empresas.empresas_usuarios c ON a.id_empleado = c.id_usuario
-              WHERE ' . $whereEmpleados . ' AND a.fecha_pago IS NULL
-              ORDER BY
-              c.nombre ASC,
-              a.id_orden ASC,
-              a._id ASC;
-          ';
-    }
-
-    $object['sql']['empleados'] = $sql;
-    $object['data']['empleados'] = $localConnection->goQuery($sql, $paramsWhereEmpleados);
-    // FIN PAGOS EMPLEADOS
-
-    // OBTENER INFORMACION DE DISEÑADORES
-    $sql = "SELECT
-        e._id id_pago,
-        e.id_orden,
-        e.id_empleado,
-        e.detalle detalle_pago,
-        a._id id_diseno,
-        b.nombre nombre,
-        b.departamento,
-        e.monto_pago pago,
-        e.cantidad,
-        c.name producto
-        FROM pagos e
-        JOIN disenos a ON a.id_empleado = e.id_empleado AND a.id_orden = e.id_orden
-        JOIN api_empresas.empresas_usuarios b
-        ON b.id_usuario = e.id_empleado
-        JOIN ordenes_productos c
-        ON e.id_orden = c.id_orden AND c.category_name = 'Diseños'
-        WHERE " . $where . ' AND e.monto_pago > 0 AND e.fecha_pago IS NULL';
-    $object['sql']['diseno'] = $sql;
-    $object['data']['diseno'] = $localConnection->goQuery($sql, $paramsWhere);
-
-    foreach ($object['data']['diseno'] as $key => $value) {
-      // $sqlTMP = "SELECT a.id_orden, a.tipo, a.cantidad FROM disenos_ajustes_y_personalizaciones a WHERE a.id_orden = " . $value["id_orden"];
-      $sqlTMP = 'SELECT * FROM disenos_ajustes_y_personalizaciones WHERE id_orden = ?';
-      $tmpResp = $localConnection->goQuery($sqlTMP, [$value['id_orden']]);
-      if (!empty($tmpResp)) {
-        foreach ($tmpResp as $key2 => $value2) {
-          $object['data']['trabajos_adicionales'][] = $value2;
-        }
-      }
-    }
-
-    $trabajos_adicionales_nuevos = [];
-
-    if (!empty($object['data']['trabajos_adicionales'])) {
-      foreach ($object['data']['trabajos_adicionales'] as $trabajo_adicional) {
-        $existe = false;
-        foreach ($trabajos_adicionales_nuevos as $trabajo_adicional_nuevo) {
-          if ($trabajo_adicional['_id'] == $trabajo_adicional_nuevo['_id']) {
-            $existe = true;
-            break;
-          }
-        }
-        if (!$existe) {
-          $trabajos_adicionales_nuevos[] = $trabajo_adicional;
-        }
-      }
-      $object['data']['trabajos_adicionales'] = $trabajos_adicionales_nuevos;
-    } else {
-      $object['data']['trabajos_adicionales'] = [];
-    }
-    // FIN PAGOS DISEÑADORES
-
-    $localConnection->disconnect();
-
-    $response->getBody()->write(json_encode($object));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
+  // ELIMINADO -- auditoría de seguridad 2026-09-15: POST /pagos/semana sin caller vivo en
+  // app_multi. El único componente que lo llamaba fuera de código comentado,
+  // PagosEmpleadosDetallado.vue, es huérfano (no importado por ningún .vue del proyecto).
+  // Reconfirmado con grep antes de eliminar.
 
 
   /** FIN PAGOS */

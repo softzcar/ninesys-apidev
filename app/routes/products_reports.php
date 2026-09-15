@@ -86,6 +86,9 @@ return function (App $app) {
     // ENDPOINT: LISTADO CONSOLIDADO POR PRODUCTO (REAL VS ESTIMADO)
     // =================================================================
     $app->get('/reportes/costos-productos', function (Request $request, Response $response) use ($getSalarios, $getHorarioLaboral) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $queryParams = $request->getQueryParams();
         $fecha_inicio = !empty($queryParams['fecha_inicio']) ? $queryParams['fecha_inicio'] : null;
         $fecha_fin = !empty($queryParams['fecha_fin']) ? $queryParams['fecha_fin'] : null;
@@ -484,6 +487,9 @@ return function (App $app) {
     // ENDPOINT: CONSOLIDADO POR CATEGORÍA
     // =================================================================
     $app->get('/reportes/costos-productos/categorias', function (Request $request, Response $response) use ($getSalarios, $getHorarioLaboral) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $queryParams = $request->getQueryParams();
         $fecha_inicio = !empty($queryParams['fecha_inicio']) ? $queryParams['fecha_inicio'] : null;
         $fecha_fin = !empty($queryParams['fecha_fin']) ? $queryParams['fecha_fin'] : null;
@@ -891,6 +897,9 @@ return function (App $app) {
     // ENDPOINT: DETALLE DE PRODUCTO POR TALLAS
     // =================================================================
     $app->get('/reportes/costos-productos/{id_producto}/detalle', function (Request $request, Response $response, array $args) use ($getSalarios, $getHorarioLaboral) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         $id_producto = (int)$args['id_producto'];
         $queryParams = $request->getQueryParams();
         $fecha_inicio = !empty($queryParams['fecha_inicio']) ? $queryParams['fecha_inicio'] : null;

@@ -10,6 +10,9 @@ return function (App $app) {
   /** * TABLAS */
   // REPORTE SEMANAL DE ORDENES
   $app->get('/ordenes-reporte-semanal/{fecha}', function (Request $request, Response $response, array $args) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $fechaSegundos = strtotime($args['fecha']);
     $week = date('W', $fechaSegundos);
     $object['week'] = $week;
@@ -63,28 +66,11 @@ return function (App $app) {
       ->withStatus(200);
   });
 
-  // OBTENER PRESUPUESTOS GUARDADOS
-  $app->get('/presupuestos/guardados', function (Request $request, Response $response) {
-    $localConnection = new LocalDB();
-
-    $sql = 'SELECT a._id, a.form, a.tipo, b.id_usuario AS id_empleadodo, b.nombre AS empleado
-          FROM ordenes_tmp a
-          JOIN api_empresas.empresas_usuarios b ON a.id_empleado = b.id_usuario';
-
-    $object['items'] = $localConnection->goQuery($sql);
-
-    foreach ($object['items'] as $key => $item) {
-      $item[$key]['form'] = json_decode($item['form']);
-    }
-
-    $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
-    return $response
-      ->withHeader('Content-Type', 'application/json')
-      ->withStatus(200);
-  });
-
   // OBTENER ORDENES GUARDADAS (Borradores + Presupuestos Finalizados con observaciones y productos)
   $app->get('/ordenes/guardadas', function (Request $request, Response $response) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     // Consultamos borradores y presupuestos finalizados en una sola query
@@ -192,9 +178,19 @@ return function (App $app) {
   });
 
   $app->get('/ordenes/observaciones/{id_orden}/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
+    if (!defined('ID_USUARIO_TOKEN')) {
+      $response->getBody()->write(json_encode([
+        'error' => 'invalid_token',
+        'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
     $localConnection = new LocalDB();
     $idOrden = (int) $args['id_orden'];
-    $idEmpleado = (int) $args['id_empleado'];
+    // IDOR: el id_empleado de la URL filtra una nota privada
+    // (ordenes_borrador_empleado) -- se ignora y se fuerza a la sesión real
+    // (auditoría de seguridad 2026-09-15).
+    $idEmpleado = (int) ID_USUARIO_TOKEN;
     $idDepartamento = (int) $args['id_departamento'];
 
     $sql = "SELECT
@@ -246,6 +242,13 @@ return function (App $app) {
 
 
   $app->get('/ordenes/borrador/reporte-semanal/{id_empleado}/{id_departamento}', function (Request $request, Response $response, array $args) {
+    if (!defined('ID_USUARIO_TOKEN')) {
+      $response->getBody()->write(json_encode([
+        'error' => 'invalid_token',
+        'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
     $localConnection = new LocalDB();
     $yearweekCond = DB_DRIVER === 'pgsql'
         ? "EXTRACT(WEEK FROM a.moment) = EXTRACT(WEEK FROM CURRENT_DATE) AND EXTRACT(YEAR FROM a.moment) = EXTRACT(YEAR FROM CURRENT_DATE)"
@@ -264,7 +267,9 @@ return function (App $app) {
               AND $yearweekCond
         ";
 
-    $object = $localConnection->goQuery($sql, [(int) $args['id_empleado'], (int) $args['id_departamento']]);
+    // IDOR: el id_empleado de la URL se ignora y se fuerza a la sesión real
+    // (auditoría de seguridad 2026-09-15).
+    $object = $localConnection->goQuery($sql, [(int) ID_USUARIO_TOKEN, (int) $args['id_departamento']]);
 
     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
     return $response
@@ -274,11 +279,20 @@ return function (App $app) {
 
   // GUARDAR BORRADOR DEL EMPLEADO
   $app->post('/ordenes/borrador', function (Request $request, Response $response) {
+    if (!defined('ID_USUARIO_TOKEN')) {
+      $response->getBody()->write(json_encode([
+        'error' => 'invalid_token',
+        'message' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+      ]));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
     $data = $request->getParsedBody();
     $localConnection = new LocalDB();
 
     $idOrden = (int) $data['id_orden'];
-    $idEmpleado = (int) $data['id_empleado'];
+    // Escritura -- el id_empleado del body se ignora y se fuerza a la sesión
+    // real (auditoría de seguridad 2026-09-15).
+    $idEmpleado = (int) ID_USUARIO_TOKEN;
     $idDepartamento = (int) $data['id_departamento'];
     $borrador = $data['borrador'] ?? '';
 
@@ -305,6 +319,9 @@ return function (App $app) {
 
   // ELIMINAR ORDENES GUARDADAS
   $app->post('/ordenes/guardadas/eliminar', function (Request $request, Response $response) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $data = $request->getParsedBody();
     $id = intval($data['id']);
@@ -424,13 +441,20 @@ return function (App $app) {
 
   // GUARDAR ORDEN PARA REPTMARLA LUEGO
   $app->post('/orden/guardar', function (Request $request, Response $response) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
 
     $localConnection = new LocalDB();
 
+    // El id_empleado del body decidía a nombre de quién se guarda la orden
+    // temporal, sin flujo legítimo de "guardar en nombre de otro vendedor" en
+    // el frontend -- se ignora y se fuerza a la sesión real (auditoría de
+    // seguridad 2026-09-15).
     $sql = 'INSERT INTO ordenes_tmp (form, id_empleado, tipo) VALUES (?, ?, ?)';
     // $object['sql_insert'] = $sql; // Removido para producción (auditoría de seguridad 2026-09-09)
-    $localConnection->goQuery($sql, [$data['form'], $data['id_empleado'], $data['tipo']]);
+    $localConnection->goQuery($sql, [$data['form'], (int) ID_USUARIO_TOKEN, $data['tipo']]);
 
     if (DB_DRIVER === 'pgsql') {
       // form es TEXT; se castea a json para usar los operadores ->/->>. JSON_ARRAYAGG/JSON_OBJECT
@@ -528,11 +552,9 @@ return function (App $app) {
 
   // ORDENES ACTIVAS
   $app->get('/table/ordenes-activas/{id_empleado}', function (Request $request, Response $response, array $args) {
-    $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
-
-    $sql = 'SELECT departamento FROM empresas_usuarios WHERE id_usuario = ?';
-    $departamento = $localConnection->goQuery($sql, [(int) $args['id_empleado']])[0]['departamento'];
-
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $queryParams = $request->getQueryParams();
@@ -579,9 +601,16 @@ return function (App $app) {
     // pasar 4 ordenes canceladas reales (status='Cancelada') hacia "Ordenes en Curso".
     $whereClauses = ["LOWER(ord.status) != 'cancelada'", "($saldoFilter)"];
     $whereParams = [];
-    if (strpos($departamento, 'Admin') === false) {
+    // IDOR -- auditoría de seguridad 2026-09-15: antes "es Admin" se
+    // determinaba buscando el departamento del id_empleado DE LA URL (mismo
+    // valor que decide qué se muestra) -- alguien podía pasar el ID de un
+    // admin real y el código concluía "soy Admin, mostrame todo", sin
+    // importar quién fuera realmente. Ahora se usa el flag de la sesión
+    // real (ACCESO_TOKEN); el id_empleado de la URL se ignora por completo
+    // para esta decisión.
+    if ((int) (defined('ACCESO_TOKEN') ? ACCESO_TOKEN : 0) !== 1) {
       $whereClauses[] = 'ord.responsable = ?';
-      $whereParams[] = (int) $args['id_empleado'];
+      $whereParams[] = (int) ID_USUARIO_TOKEN;
     }
 
     // Filtros opcionales (mismo patrón que /table/ordenes-todas): fecha se ignora si no se
@@ -737,6 +766,9 @@ return function (App $app) {
   // OPCIONES DE FILTRO PARA "TODAS LAS ORDENES" -- catálogo completo, desacoplado de la
   // paginación (las opciones de un filtro no pueden depender de qué página esté cargada).
   $app->get('/table/ordenes-todas/opciones', function (Request $request, Response $response) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     // Deduplicado case-insensitive en PHP -- datos reales confirmados con nombres/estados
@@ -801,6 +833,9 @@ return function (App $app) {
 
   // TODAS LAS ORDENES
   $app->get('/table/ordenes-todas', function (Request $request, Response $response) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+      return $errorResponse;
+    }
     $params = $request->getQueryParams();
     $fecha_inicio = $params['fecha_inicio'] ?? date('Y-m-01');
     $fecha_fin = $params['fecha_fin'] ?? date('Y-m-d');
@@ -993,6 +1028,9 @@ LIMIT ?";
 
   // ORDENES CON DEUDAA
   $app->get('/table/ordenes-con-deuda', function (Request $request, Response $response, array $args) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+      return $errorResponse;
+    }
     $fechaFormat = DB_DRIVER === 'pgsql'
         ? "TO_CHAR(a.moment, 'DD/MM/YYYY')"
         : "DATE_FORMAT(a.moment, '%d/%m/%Y')";

@@ -8,6 +8,9 @@ return function (App $app) {
 
   /** * CATALOGO PAISES (con migración auto-ejecutable y datos estáticos embebidos) */
   $app->get('/catalogo-paises', function (Request $request, Response $response) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+        return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     // Esta migración auto-ejecutable (CREATE TABLE/ALTER TABLE con sintaxis MySQL: AUTO_INCREMENT,
@@ -593,6 +596,9 @@ return function (App $app) {
 
   /** * CATALOGO ESTADOS DE UN PAIS */
   $app->get('/catalogo-estados/{id_pais}', function (Request $request, Response $response, array $args) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+        return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $idPais = intval($args['id_pais']);
 
@@ -613,6 +619,9 @@ return function (App $app) {
 
   /** * CATALOGO CIUDADES DE UN ESTADO */
   $app->get('/catalogo-ciudades/{id_estado}', function (Request $request, Response $response, array $args) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 5])) {
+        return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $idEstado = intval($args['id_estado']);
 

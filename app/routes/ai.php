@@ -2,11 +2,11 @@
 
 /**
  * Rutas del Asistente de IA con Gemini
- * 
+ *
  * Endpoints:
- * - POST /ai/chat   - Chat conversacional con respuestas en lenguaje natural
- * - POST /ai/report - Generador de reportes con formato bootstrap-vue
- * 
+ * - POST /ai/chat       - Chat conversacional con respuestas en lenguaje natural
+ * - POST /ai/chat-orden - Chat con contexto de BD, puede crear órdenes
+ *
  * @package NineSys\Routes
  */
 
@@ -115,6 +115,18 @@ return function (App $app) {
      *   - orden_en_progreso: object|null (estado actual de la orden)
      */
     $app->post('/ai/chat-orden', function (Request $request, Response $response) {
+        // Guard de sesión (no de módulo -- este endpoint se deja transversal a propósito,
+        // ver auditoría de seguridad 2026-09-15): sin esto ID_USUARIO_TOKEN podría no estar
+        // definida y handleCrearOrdenFinal() no tendría a quién atribuir la orden creada.
+        if (!defined('ID_USUARIO_TOKEN')) {
+            $result = [
+                'success' => false,
+                'error' => 'Sesión inválida o expirada. Debe iniciar sesión nuevamente.',
+            ];
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
         require_once __DIR__ . '/../classes/AI/GeminiChatAssistant.php';
         require_once __DIR__ . '/../schemas/db-schema-gemini.php';
         require_once __DIR__ . '/../config.php';
@@ -277,121 +289,6 @@ return function (App $app) {
             $response->getBody()->write(json_encode($result));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
-    });
-
-    /**
-     * POST /ai/report
-     * 
-     * Procesa una pregunta y devuelve datos estructurados para una tabla.
-     * Compatible con el formato de bootstrap-vue b-table.
-     * 
-     * Body:
-     *   - query: string (descripción del reporte deseado)
-     * 
-     * Response:
-     *   - success: boolean
-     *   - fields: array (estructura de columnas para b-table)
-     *   - items: array (datos del reporte)
-     *   - total: int (cantidad de registros)
-     *   - description: string (descripción del reporte)
-     */
-    $app->post('/ai/report', function (Request $request, Response $response) {
-        require_once __DIR__ . '/../classes/AI/GeminiReportAssistant.php';
-        require_once __DIR__ . '/../schemas/db-schema-gemini.php';
-        require_once __DIR__ . '/../config.php';
-
-        // Parsear body JSON
-        $body = $request->getBody()->getContents();
-        $data = json_decode($body, true);
-
-        if ($data === null) {
-            $data = $request->getParsedBody() ?? [];
-        }
-
-        // Validar que se envió una consulta
-        if (empty($data['query'])) {
-            $result = [
-                'success' => false,
-                'error' => 'Se requiere el parámetro "query" con la descripción del reporte',
-                'fields' => [],
-                'items' => []
-            ];
-            $response->getBody()->write(json_encode($result));
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus(400);
-        }
-
-        // Verificar API Key
-        if (empty(GEMINI_API_KEY)) {
-            $result = [
-                'success' => false,
-                'error' => 'La API Key de Gemini no está configurada',
-                'fields' => [],
-                'items' => []
-            ];
-            $response->getBody()->write(json_encode($result));
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus(500);
-        }
-
-        // Obtener schema de la BD
-        $schema = require __DIR__ . '/../schemas/db-schema-gemini.php';
-
-        // Crear conexión a la BD
-        $localConnection = new LocalDB();
-
-        try {
-            // Crear asistente y procesar consulta
-            $assistant = new GeminiReportAssistant(GEMINI_API_KEY, $schema, $localConnection);
-            $result = $assistant->processUserQuery($data['query']);
-
-            $localConnection->disconnect();
-
-            $response->getBody()->write(json_encode($result, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK));
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus($result['success'] ? 200 : 400);
-
-        } catch (Exception $e) {
-            $localConnection->disconnect();
-
-            $result = [
-                'success' => false,
-                'error' => 'Error interno: ' . $e->getMessage(),
-                'fields' => [],
-                'items' => []
-            ];
-            $response->getBody()->write(json_encode($result));
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus(500);
-        }
-    });
-
-    /**
-     * GET /ai/status
-     * 
-     * Verifica el estado del servicio de IA.
-     */
-    $app->get('/ai/status', function (Request $request, Response $response) {
-        require_once __DIR__ . '/../config.php';
-
-        $result = [
-            'service' => 'AI Assistant',
-            'status' => !empty(GEMINI_API_KEY) ? 'configured' : 'missing_api_key',
-            'model' => 'gemini-2.0-flash',
-            'endpoints' => [
-                '/ai/chat' => 'POST - Chat conversacional',
-                '/ai/report' => 'POST - Generador de reportes'
-            ]
-        ];
-
-        $response->getBody()->write(json_encode($result));
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(200);
     });
 
 }; // Fin de la función que envuelve las rutas

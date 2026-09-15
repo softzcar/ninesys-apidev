@@ -125,25 +125,48 @@ return function (App $app) {
     }
   });
 
+  // Genera el enlace firmado de aprobación para compartir con el cliente --
+  // auditoría de seguridad 2026-09-15 (ver AprobacionClienteHelper.php).
+  $app->get('/disenos/aprobacion-de-cliente/{id_orden}/enlace', function (Request $request, Response $response, array $args) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [3, 2, 1])) {
+      return $errorResponse;
+    }
+    $token = generarTokenAprobacionCliente(getenv('JWT_SECRET') ?: '', (int) $args['id_orden']);
+    $response->getBody()->write(json_encode(['token' => $token]));
+    return $response
+      ->withHeader('Content-Type', 'application/json')
+      ->withStatus(200);
+  });
+
   // Obtener datos para la aprobación del cliente
   $app->get('/disenos/aprobacion-de-cliente/{id_orden}', function (Request $request, Response $response, array $args) {
+    // Token firmado -- auditoría de seguridad 2026-09-15. Antes el único
+    // "control de acceso" era el id_orden de la URL (secuencial, adivinable)
+    // -- cualquiera podía ver el diseño/cliente de OTRA orden con solo
+    // cambiar el número. Ver AprobacionClienteHelper.php.
+    $idOrden = (int) $args['id_orden'];
+    $tokenClaims = decodificarTokenAprobacionCliente(getenv('JWT_SECRET') ?: '', (string) ($request->getQueryParams()['token'] ?? ''));
+    if ($tokenClaims === null || (int) ($tokenClaims->id_orden ?? 0) !== $idOrden) {
+      $response->getBody()->write(json_encode(['error' => 'forbidden', 'message' => 'Enlace inválido o expirado.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
+
     $localConnection = new LocalDB();
 
-    // $sql = "INSERT INTO aprobacion_clientes(id_orden, id_diseno) VALUES (" . $data["id_orden"] . ", " . $data["id_diseno"] . ");";
     $sql = 'SELECT
-            a._id id_orden,    
+            a._id id_orden,
             b._id id_diseno,
             c.revision revision,
-            c.estatus estatus_aprobado, 
+            c.estatus estatus_aprobado,
             a.cliente_nombre nombre_cliente
         FROM
             ordenes AS a
         LEFT JOIN disenos AS b ON a._id = b.id_orden
-        LEFT JOIN revisiones AS c ON c.id_diseno = b._id 
+        LEFT JOIN revisiones AS c ON c.id_diseno = b._id
         WHERE
             a._id = ?';
 
-    $object['data'] = $localConnection->goQuery($sql, [(int) $args['id_orden']]);
+    $object['data'] = $localConnection->goQuery($sql, [$idOrden]);
 
     $localConnection->disconnect();
 
@@ -156,12 +179,36 @@ return function (App $app) {
   // Guardar registro de aprobacion de clientes
   $app->post('/disenos/parobacion-de-cliente', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
+    $idOrden = (int) ($data['id_orden'] ?? 0);
+    $idDiseno = (int) ($data['id_diseno'] ?? 0);
+
+    // Token firmado -- auditoría de seguridad 2026-09-15 (mismo criterio que
+    // el GET hermano de arriba).
+    $tokenClaims = decodificarTokenAprobacionCliente(getenv('JWT_SECRET') ?: '', (string) ($data['token'] ?? ''));
+    if ($tokenClaims === null || (int) ($tokenClaims->id_orden ?? 0) !== $idOrden) {
+      $response->getBody()->write(json_encode(['error' => 'forbidden', 'message' => 'Enlace inválido o expirado.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
+
     $localConnection = new LocalDB();
+
+    // Integridad -- auditoría de seguridad 2026-09-15: antes no se validaba
+    // que id_diseno perteneciera realmente a id_orden, así que un id_diseno
+    // arbitrario en el body podía quedar "aprobado" a nombre de cualquier
+    // orden con un token válido para esa orden.
+    $disenoValido = $localConnection->goQuery('SELECT _id FROM disenos WHERE _id = ? AND id_orden = ?', [$idDiseno, $idOrden]);
+    if (empty($disenoValido)) {
+      $localConnection->disconnect();
+      $response->getBody()->write(json_encode(['error' => 'not_found', 'message' => 'El diseño no pertenece a esta orden.']));
+      return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+    }
 
     // Atomicidad FK: aprobación (revisiones + aprobacion_clientes) en una transacción
     $localConnection->beginTransaction();
-    $localConnection->goQuery('UPDATE revisiones SET estatus = ? WHERE id_orden = ?', ['Aprobado', $data['id_orden']]);
-    $object = $localConnection->goQuery('INSERT INTO aprobacion_clientes(id_orden, id_diseno) VALUES (?, ?)', [$data['id_orden'], $data['id_diseno']]);
+    // Antes filtraba solo por id_orden (podía aprobar TODAS las revisiones
+    // de la orden, de cualquier diseño) -- ahora también por id_diseno.
+    $localConnection->goQuery('UPDATE revisiones SET estatus = ? WHERE id_orden = ? AND id_diseno = ?', ['Aprobado', $idOrden, $idDiseno]);
+    $object = $localConnection->goQuery('INSERT INTO aprobacion_clientes(id_orden, id_diseno) VALUES (?, ?)', [$idOrden, $idDiseno]);
     $localConnection->commit();
 
     $localConnection->disconnect();

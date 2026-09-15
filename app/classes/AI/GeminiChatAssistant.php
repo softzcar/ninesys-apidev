@@ -935,7 +935,10 @@ class GeminiChatAssistant extends GeminiAssistant
             $db->beginTransaction();
 
             // 3. Insertar Orden - CRÍTICO: incluir id_wp (ID del cliente) para que funcionen los JOINs
-            $idResponsable = 1;
+            // Atribuir la orden al empleado real de la sesión (antes hardcodeado a 1, ver
+            // auditoría de seguridad 2026-09-15) -- el endpoint /ai/chat-orden exige sesión
+            // JWT real antes de llegar acá, así que ID_USUARIO_TOKEN siempre está definida.
+            $idResponsable = (int) ID_USUARIO_TOKEN;
             $sqlOrden = "INSERT INTO ordenes (
                 responsable, moment, pago_descuento, pago_abono, 
                 cliente_cedula, pago_total, cliente_nombre, 

@@ -447,6 +447,9 @@ return function (App $app) {
 
   // GET /setup/user
   $app->get('/setup/user', function (Request $request, Response $response) {
+    if ($errorResponse = validarTokenInterno($request, $response)) {
+      return $errorResponse;
+    }
     try {
       // Fase 8.5 (auditoría de creación de empresa nueva): este endpoint
       // seguía conectando a MySQL con credenciales hardcodeadas, previo a la

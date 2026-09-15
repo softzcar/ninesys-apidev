@@ -8,6 +8,10 @@ return function (App $app) {
 
   // 1. GET /crm/oportunidades - Obtener todas las oportunidades en el embudo
   $app->get('/crm/oportunidades', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $dbEmpresas = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
@@ -61,6 +65,10 @@ return function (App $app) {
 
   // 2. POST /crm/oportunidades/nueva - Registrar una nueva oportunidad de venta
   $app->post('/crm/oportunidades/nueva', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $rawBody = $request->getBody()->getContents();
     $data = json_decode($rawBody, true);
     if (!is_array($data)) {
@@ -107,6 +115,10 @@ return function (App $app) {
 
   // 3. PUT /crm/oportunidades/estado - Mover lead en el embudo (Kanban)
   $app->put('/crm/oportunidades/estado', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $rawBody = $request->getBody()->getContents();
     $data = json_decode($rawBody, true);
     if (!is_array($data)) {
@@ -135,9 +147,16 @@ return function (App $app) {
 
   // 4. GET /customers/orders-local/{id_customer} - Historial de órdenes locales de producción
   $app->get('/customers/orders-local/{id_customer}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $id_customer = intval($args['id_customer']);
     $queryParams = $request->getQueryParams();
     $id_vendedor = isset($queryParams['id_vendedor']) ? intval($queryParams['id_vendedor']) : null;
+    if ($id_vendedor !== null && (int) (defined('ACCESO_TOKEN') ? ACCESO_TOKEN : 0) !== 1) {
+      $id_vendedor = (int) ID_USUARIO_TOKEN;
+    }
     $localConnection = new LocalDB();
 
     try {
@@ -184,9 +203,16 @@ return function (App $app) {
 
   // 5. GET /customers/presupuestos-local/{id_customer} - Historial de presupuestos locales
   $app->get('/customers/presupuestos-local/{id_customer}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $id_customer = intval($args['id_customer']);
     $queryParams = $request->getQueryParams();
     $id_vendedor = isset($queryParams['id_vendedor']) ? intval($queryParams['id_vendedor']) : null;
+    if ($id_vendedor !== null && (int) (defined('ACCESO_TOKEN') ? ACCESO_TOKEN : 0) !== 1) {
+      $id_vendedor = (int) ID_USUARIO_TOKEN;
+    }
     $localConnection = new LocalDB();
 
     try {
@@ -231,6 +257,10 @@ return function (App $app) {
 
   // 6. GET /crm/notas/{id_customer} - Obtener la bitácora de notas de un cliente
   $app->get('/crm/notas/{id_customer}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $id_customer = intval($args['id_customer']);
     $localConnection = new LocalDB();
     $dbEmpresas = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
@@ -268,6 +298,10 @@ return function (App $app) {
 
   // 7. POST /crm/notas/nueva - Agregar nota a la bitácora
   $app->post('/crm/notas/nueva', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $rawBody = $request->getBody()->getContents();
     $data = json_decode($rawBody, true);
     if (!is_array($data)) {
@@ -278,7 +312,8 @@ return function (App $app) {
     try {
       $id_customer = intval($data['id_customer']);
       $id_oportunidad = (isset($data['id_oportunidad']) && intval($data['id_oportunidad']) > 0) ? intval($data['id_oportunidad']) : null;
-      $id_usuario_creador = intval($data['id_usuario_creador']);
+      // No confiar en id_usuario_creador del body -- suplantación; siempre el usuario del token.
+      $id_usuario_creador = (int) ID_USUARIO_TOKEN;
       $nota = $data['nota'];
 
       $sql = "INSERT INTO crm_notas (id_customer, id_oportunidad, id_usuario_creador, nota)
@@ -298,6 +333,10 @@ return function (App $app) {
 
   // 8. GET /crm/soporte/{id_customer} - Obtener incidencias de soporte
   $app->get('/crm/soporte/{id_customer}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $id_customer = intval($args['id_customer']);
     $localConnection = new LocalDB();
 
@@ -321,6 +360,10 @@ return function (App $app) {
 
   // 9. POST /crm/soporte/nueva - Registrar incidencia de soporte
   $app->post('/crm/soporte/nueva', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $rawBody = $request->getBody()->getContents();
     $data = json_decode($rawBody, true);
     if (!is_array($data)) {
@@ -351,6 +394,10 @@ return function (App $app) {
 
   // 9.5 PUT /crm/soporte/estado - Actualizar estado de soporte (ej: resolver ticket)
   $app->put('/crm/soporte/estado', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $rawBody = $request->getBody()->getContents();
     $data = json_decode($rawBody, true);
     if (!is_array($data)) {
@@ -378,6 +425,10 @@ return function (App $app) {
 
   // 10. POST /crm/campanas/enviar - Enviar campaña de WhatsApp a clientes segmentados por producto
   $app->post('/crm/campanas/enviar', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $rawBody = $request->getBody()->getContents();
     $data = json_decode($rawBody, true);
     if (!is_array($data)) {
@@ -474,6 +525,10 @@ return function (App $app) {
 
   // 11. GET /crm/reports/dashboard - Métricas comerciales e ROI de campañas
   $app->get('/crm/reports/dashboard', function (Request $request, Response $response) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
     $dbEmpresas = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
 
@@ -576,6 +631,10 @@ return function (App $app) {
 
   // 12. GET /crm/clientes-por-producto/{id_product} - Obtener IDs de clientes que compraron un producto
   $app->get('/crm/clientes-por-producto/{id_product}', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-15.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $id_product = intval($args['id_product']);
     $localConnection = new LocalDB();
 

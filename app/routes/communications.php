@@ -12,6 +12,9 @@ return function (App $app) {
   // GUARDAR DATOS DE LA CONFIGURACIÓN DEL SISTEMA
   // $app->get('/config', function (Request $request, Response $response) {
   $app->post('/config/select-empleados', function (Request $request, Response $response, $args) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $datos = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -508,6 +511,9 @@ return function (App $app) {
 
   // GUARDAR MENSAJES DE INICIO Y FIN DE ORDEN
   $app->post('/update-message', function (Request $request, Response $response, $args) {
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     $dataMensaje = $request->getParsedBody();
     $localConnection = new LocalDB();
 
@@ -579,6 +585,9 @@ return function (App $app) {
 
   // Endpoint para actualizar la configuración de mensajes (mensaje y enviar_mensaje) de un departamento
   $app->post('/departamentos/editar/settings', function (Request $request, Response $response, $args) {  // Añadimos 'use ($localConnection)' si es una variable externa
+    if ($errorResponse = requiereAdmin($request, $response)) {
+      return $errorResponse;
+    }
     // Obtener los datos del cuerpo de la solicitud POST
     $data = $request->getParsedBody();
 
@@ -809,6 +818,9 @@ return function (App $app) {
 
   /** * GENERAL */
   $app->get('/next-id-order', function (Request $request, Response $response) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $sql = 'SELECT MAX(_id) + 1 id FROM ordenes';
@@ -830,6 +842,9 @@ return function (App $app) {
   });
 
   $app->get('/next-id-budget', function (Request $request, Response $response) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+      return $errorResponse;
+    }
     $localConnection = new LocalDB();
 
     $sql = 'SELECT MAX(_id) + 1 id FROM presupuestos';

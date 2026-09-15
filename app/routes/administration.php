@@ -13,6 +13,9 @@ return function ($app) {
     // DASHBOARD DE ADMINISTRACIÓN - ESTADÍSTICAS GLOBALES
     // =====================================================================
     $app->get('/administracion/dashboard-stats', function (Request $request, Response $response) {
+        if ($errorResponse = requiereAdmin($request, $response)) {
+            return $errorResponse;
+        }
         // Conectar a la base de datos de la empresa (configurado por IdEmpresaMiddleware)
         $localConnection = new LocalDB();
 
