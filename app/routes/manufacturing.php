@@ -2258,9 +2258,10 @@ return function (App $app) {
           $localConnection->goQuery('UPDATE lotes SET paso = ?, id_departamento_actual = ? WHERE id_orden = ?', [$next_dep_info[0]['departamento'], $next_dep_info[0]['_id'], $id_orden_actual]);
         }
 
-        $sql_comision_empleado = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
+        $sql_comision_empleado = 'SELECT comision, comision_tipo, comision_porcentaje, salario_tipo FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
         $resp_comision_empleado = $localConnection->goQuery($sql_comision_empleado, [$id_empleado]);
         $comision_tipo = $resp_comision_empleado[0]['comision_tipo'] ?? 'fija';
+        $salario_tipo = $resp_comision_empleado[0]['salario_tipo'] ?? '';
         if ($comision_tipo === 'porcentaje') {
           $comision_valor = floatval($resp_comision_empleado[0]['comision_porcentaje'] ?? 0);
         } else {
@@ -2299,6 +2300,15 @@ return function (App $app) {
         $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
         if (!empty($resp_comision)) {
           $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
+
+          // Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
+          // -- mismo criterio ya aplicado en /registrar-paso-empleado,
+          // /finalizar-departamento y /finalizar-corte (este endpoint era el
+          // único de los 4 que no lo verificaba).
+          if ($salario_tipo === 'Salario') {
+            $total_comision = 0;
+          }
+
           $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
           $params_pago = [$id_orden_actual, null, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
           $localConnection->goQuery($sql_pago, $params_pago);

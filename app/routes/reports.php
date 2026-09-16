@@ -242,8 +242,8 @@ return function (App $app) {
                 // 4. BATCH: Costo de Insumos (Solo si hay órdenes)
                 $insumosMap = [];
                 if (!empty($orderIds)) {
-                    $insumosSql = "SELECT c.id_orden, SUM(COALESCE(ABS(c.valor_inicial - c.valor_final), 0) * (COALESCE(d.costo, 0) / COALESCE(NULLIF(d.cantidad_inicial, 0), NULLIF(d.cantidad, 0), 1))) as total 
-                                   FROM $companyDB.inventario_movimientos c JOIN $companyDB.inventario d ON c.id_insumo = d._id 
+                    $insumosSql = "SELECT c.id_orden, SUM(COALESCE(ABS(c.valor_inicial - c.valor_final), 0) * (COALESCE(d.costo, 0) / COALESCE(NULLIF(d.cantidad_inicial, 0), NULLIF(d.cantidad, 0), 1))) as total
+                                   FROM $companyDB.inventario_movimientos c JOIN $companyDB.inventario d ON c.id_insumo = d._id
                                    WHERE c.id_orden IN ($orderIdsStr) GROUP BY c.id_orden";
                     $insumosRaw = $dbEmpresas->goQuery($insumosSql);
                     if (is_array($insumosRaw) && !isset($insumosRaw['status'])) {
@@ -251,10 +251,34 @@ return function (App $app) {
                     }
                 }
 
+                // 4b. Insumos "huérfanos" (el insumo consumido ya fue eliminado del
+                // catálogo `inventario` -- el INNER JOIN de arriba los excluye en
+                // silencio de $insumosMap porque su costo original se perdió junto
+                // con el registro borrado; no es recuperable, pero al menos se hace
+                // visible cuántos movimientos/órdenes quedan afectados en vez de que
+                // el costo de insumos aparezca incompleto sin ninguna señal.
+                $insumosHuerfanosMap = [];
+                if (!empty($orderIds)) {
+                    $insumosHuerfanosSql = "SELECT c.id_orden, COUNT(*) as total
+                                             FROM $companyDB.inventario_movimientos c
+                                             LEFT JOIN $companyDB.inventario d ON c.id_insumo = d._id
+                                             WHERE c.id_orden IN ($orderIdsStr) AND d._id IS NULL
+                                             GROUP BY c.id_orden";
+                    $insumosHuerfanosRaw = $dbEmpresas->goQuery($insumosHuerfanosSql);
+                    if (is_array($insumosHuerfanosRaw) && !isset($insumosHuerfanosRaw['status'])) {
+                        foreach ($insumosHuerfanosRaw as $ih) $insumosHuerfanosMap[$ih['id_orden']] = (int)$ih['total'];
+                    }
+                }
+
                 // 5. BATCH: Costo Mano de Obra (Pagos) (Solo si hay órdenes)
                 $pagosMap = [];
                 if (!empty($orderIds)) {
-                    $pagosSql = "SELECT p.id_orden, SUM(p.monto_pago) as total FROM $companyDB.pagos p WHERE p.id_orden IN ($orderIdsStr) GROUP BY p.id_orden";
+                    // Excluir comisión de venta (Comercialización/Abono a orden) del costo de
+                    // mano de obra -- mismo criterio ya corregido en products_reports.php
+                    // (Hallazgo #3, 2026-07-28): pagos.detalle también registra pagos al
+                    // vendedor por cerrar/cobrar la orden, que no son trabajo físico de
+                    // producción y no deben sumarse aquí.
+                    $pagosSql = "SELECT p.id_orden, SUM(p.monto_pago) as total FROM $companyDB.pagos p WHERE p.id_orden IN ($orderIdsStr) AND p.detalle NOT IN ('Comercialización', 'Abono a orden') GROUP BY p.id_orden";
                     $pagosRaw = $dbEmpresas->goQuery($pagosSql);
                     if (is_array($pagosRaw) && !isset($pagosRaw['status'])) {
                         foreach ($pagosRaw as $p) $pagosMap[$p['id_orden']] = $p['total'];
@@ -264,7 +288,10 @@ return function (App $app) {
                 // 6. BATCH: Reposiciones (Solo si hay órdenes)
                 $reposMap = [];
                 if (!empty($orderIds)) {
-                    $reposSql = "SELECT id_orden, COUNT(_id) as total FROM $companyDB.reposiciones WHERE id_orden IN ($orderIdsStr) GROUP BY id_orden";
+                    // No contar reposiciones eliminadas lógicamente (eliminada=1) --
+                    // ya no representan una solicitud vigente, mismo criterio usado en
+                    // production.php (ej. líneas 229-231) para excluirlas.
+                    $reposSql = "SELECT id_orden, COUNT(_id) as total FROM $companyDB.reposiciones WHERE id_orden IN ($orderIdsStr) AND eliminada = 0 GROUP BY id_orden";
                     $reposRaw = $dbEmpresas->goQuery($reposSql);
                     if (is_array($reposRaw) && !isset($reposRaw['status'])) {
                         foreach ($reposRaw as $r) $reposMap[$r['id_orden']] = $r['total'];
@@ -361,32 +388,63 @@ return function (App $app) {
                     }
                 }
 
-                // 7. BATCH: Empleados Asignados y Tiempo de Producción (Optimizado)
+                // 7. BATCH: Empleados Asignados (lista por orden, solo agregación de texto)
                 if (DB_DRIVER === 'pgsql') {
-                    $empAsigSql = "SELECT
-                            id_orden,
-                            string_agg(DISTINCT id_empleado::text, ',') as empleados,
-                            SUM(EXTRACT(EPOCH FROM (fecha_terminado::timestamp - fecha_inicio::timestamp)) / 3600) as tiempo_total
+                    $empAsigSql = "SELECT id_orden, string_agg(DISTINCT id_empleado::text, ',') as empleados
                         FROM $companyDB.lotes_detalles_empleados_asignados
                         WHERE id_orden IN ($orderIdsStr)
                         GROUP BY id_orden";
                 } else {
-                    $empAsigSql = "SELECT
-                            id_orden,
-                            GROUP_CONCAT(DISTINCT id_empleado) as empleados,
-                            SUM(TIME_TO_SEC(TIMEDIFF(fecha_terminado, fecha_inicio)) / 3600) as tiempo_total
+                    $empAsigSql = "SELECT id_orden, GROUP_CONCAT(DISTINCT id_empleado) as empleados
                         FROM $companyDB.lotes_detalles_empleados_asignados
                         WHERE id_orden IN ($orderIdsStr)
                         GROUP BY id_orden";
                 }
                 $empAsigRaw = $dbEmpresas->goQuery($empAsigSql);
                 $empAsigMap = [];
-                $tiempoMap = [];
                 if (!empty($empAsigRaw) && !isset($empAsigRaw['status'])) {
                     foreach ($empAsigRaw as $ea) {
                         $empAsigMap[$ea['id_orden']] = $ea['empleados'];
-                        $tiempoMap[$ea['id_orden']] = (float)$ea['tiempo_total'];
                     }
+                }
+
+                // 7b. Tiempo de Producción -- horas realmente laboradas dentro del
+                // horario laboral de la empresa, no la resta cruda de timestamps
+                // (mismo patrón ya usado para el costo de mano de obra en este mismo
+                // archivo: una tarea puede quedar "abierta" varios días sin cerrarse
+                // de inmediato, inflando absurdamente el tiempo si se suma crudo).
+                // DISTINCT evita contar dos veces filas duplicadas exactas (mismo
+                // empleado/orden/departamento/fecha_inicio/fecha_terminado, ya
+                // detectadas en datos reales).
+                $tareasTiempoSql = "SELECT DISTINCT id_orden, id_empleado, fecha_inicio, fecha_terminado
+                    FROM $companyDB.lotes_detalles_empleados_asignados
+                    WHERE id_orden IN ($orderIdsStr) AND fecha_inicio IS NOT NULL AND fecha_terminado IS NOT NULL";
+                $tareasTiempoRaw = $dbEmpresas->goQuery($tareasTiempoSql);
+                $tiempoMap = [];
+                $horasCrudasTotalPorEmpleado = [];
+                if (!empty($tareasTiempoRaw) && !isset($tareasTiempoRaw['status'])) {
+                    foreach ($tareasTiempoRaw as $tt) {
+                        $horas = calcularHorasLaboradasReales($tt['fecha_inicio'], $tt['fecha_terminado'], $horarioObj);
+                        $tiempoMap[$tt['id_orden']] = ($tiempoMap[$tt['id_orden']] ?? 0) + $horas;
+                        $horasCrudasTotalPorEmpleado[$tt['id_empleado']] = ($horasCrudasTotalPorEmpleado[$tt['id_empleado']] ?? 0) + $horas;
+                    }
+                }
+
+                // Factor de ajuste por solapamiento de tareas del mismo empleado en
+                // distintas órdenes (cierre por lotes): sin este ajuste, el mismo
+                // bloque de minutos reales se cuenta una vez por cada orden abierta
+                // simultáneamente por el empleado, inflando la suma de su costo de
+                // mano de obra en el periodo varias veces por encima de su salario
+                // real (verificado con datos reales: 6x-9x en lotes de cierre
+                // masivo). Se topa la suma de horas de cada empleado en el rango al
+                // máximo teórico de su jornada en ese mismo rango.
+                $diasRangoFactor = ($inicio && $fin) ? ((new DateTime($inicio))->diff(new DateTime($fin))->days + 1) : 0;
+                $horasTeoricasEnRangoFactor = $horasSemana * ($diasRangoFactor / 7);
+                $factorAjusteEmpleado = [];
+                foreach ($horasCrudasTotalPorEmpleado as $idEmpFactor => $crudasTotal) {
+                    $factorAjusteEmpleado[$idEmpFactor] = ($horasTeoricasEnRangoFactor > 0 && $crudasTotal > $horasTeoricasEnRangoFactor)
+                        ? round($horasTeoricasEnRangoFactor / $crudasTotal, 6)
+                        : 1;
                 }
 
                 // 8. BATCH: Tintas
@@ -524,7 +582,8 @@ return function (App $app) {
                     $row['vendedor'] = $vendedoresMap[$row['id_vendedor']] ?? 'Desconocido';
                     $row['total_productos'] = $productosMap[$id] ?? 0;
                     $row['costos_de_insumos'] = $insumosMap[$id] ?? 0;
-                    
+                    $row['insumos_sin_costo'] = $insumosHuerfanosMap[$id] ?? 0;
+
                     // Distribuir el salario proporcional no trackeado
                     $proporcional = $costoSalarioNoTrackedPorProducto * $row['total_productos'];
                     $row['costo_mano_de_obra'] = ($pagosMap[$id] ?? 0) + $proporcional;
@@ -558,13 +617,22 @@ return function (App $app) {
                 $finalResponse['insumos_resumen'] = [];
                 $finalResponse['insumos_detalles'] = [];
 
-                // 11. Tareas de Empleados
+                // 11. Tareas de Empleados (DISTINCT: evita contar dos veces filas
+                // duplicadas exactas ya detectadas en datos reales)
                 if (DB_DRIVER === 'pgsql') {
-                    $sqlTareas = "SELECT a.id_orden, a.id_empleado, a.fecha_inicio, a.fecha_terminado, EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp)) / 60 AS minutos_transcurridos FROM $companyDB.lotes_detalles_empleados_asignados a WHERE a.id_orden IN ($orderIdsStr) AND a.fecha_terminado IS NOT NULL";
+                    $sqlTareas = "SELECT DISTINCT a.id_orden, a.id_empleado, a.fecha_inicio, a.fecha_terminado, EXTRACT(EPOCH FROM (a.fecha_terminado::timestamp - a.fecha_inicio::timestamp)) / 60 AS minutos_transcurridos FROM $companyDB.lotes_detalles_empleados_asignados a WHERE a.id_orden IN ($orderIdsStr) AND a.fecha_terminado IS NOT NULL";
                 } else {
-                    $sqlTareas = "SELECT a.id_orden, a.id_empleado, a.fecha_inicio, a.fecha_terminado, TIME_TO_SEC(TIMEDIFF(a.fecha_terminado, a.fecha_inicio)) / 60 AS minutos_transcurridos FROM $companyDB.lotes_detalles_empleados_asignados a WHERE a.id_orden IN ($orderIdsStr) AND a.fecha_terminado IS NOT NULL";
+                    $sqlTareas = "SELECT DISTINCT a.id_orden, a.id_empleado, a.fecha_inicio, a.fecha_terminado, TIME_TO_SEC(TIMEDIFF(a.fecha_terminado, a.fecha_inicio)) / 60 AS minutos_transcurridos FROM $companyDB.lotes_detalles_empleados_asignados a WHERE a.id_orden IN ($orderIdsStr) AND a.fecha_terminado IS NOT NULL";
                 }
                 $finalResponse['tareas_data'] = $dbEmpresas->goQuery($sqlTareas);
+
+                // Factor de ajuste por solapamiento (ver comentario en el bloque de
+                // "Tiempo de Producción" más arriba) -- el frontend lo aplica en
+                // calcularCostoSalariosOrden() (mixins/mixin-time.js) antes de sumar
+                // el costo por hora, para que el link de la tabla ("Costo M.O.") no
+                // quede inflado por el mismo mecanismo que ya se corrigió en el
+                // modal de detalle.
+                $finalResponse['factor_ajuste_empleado'] = $factorAjusteEmpleado;
             }
 
                 // 12. Gastos (Reglas: Fijos siempre por plantilla, Variables/Adicionales por registro real)
@@ -732,6 +800,11 @@ return function (App $app) {
             $totalGastosSemanales = 0; // Se mantiene por legacy si el frontend lo pide
             $costoOperativoPorProducto = 0;
 
+            // Insumos huérfanos: visibilidad de cuánto costo de insumos no se pudo
+            // calcular en el periodo (ver comentario en el bloque "4b" más arriba).
+            $totalMovimientosHuerfanos = isset($insumosHuerfanosMap) ? array_sum($insumosHuerfanosMap) : 0;
+            $totalOrdenesConInsumosHuerfanos = isset($insumosHuerfanosMap) ? count(array_filter($insumosHuerfanosMap)) : 0;
+
             $finalResponse['costos_operativos'] = [
                 'total_gastos_semanales' => $totalGastosSemanales,
                 'total_productos_periodo' => $totalProductosPeriodo,
@@ -742,7 +815,9 @@ return function (App $app) {
                 'total_remanentes_periodo' => round($totalRemanentesPeriodo, 2),
                 'remanentes_detalles' => $remanentesDetalles,
                 'total_mantenimiento_periodo' => round($totalMantenimientoPeriodo, 2),
-                'mantenimiento_detalles' => $mantenimientoDetalles
+                'mantenimiento_detalles' => $mantenimientoDetalles,
+                'total_movimientos_insumos_huerfanos' => $totalMovimientosHuerfanos,
+                'total_ordenes_con_insumos_huerfanos' => $totalOrdenesConInsumosHuerfanos
             ];
 
             if (false) {
@@ -812,7 +887,19 @@ return function (App $app) {
         $id_orden = $args['id_orden'];
         $id_empresa = ID_EMPRESA;
 
-        $sqlPagos = 'SELECT
+        // inicio/fin se necesitan desde el arranque del endpoint (además de para
+        // el bloque de "no trackeados" más abajo) para calcular el factor de
+        // ajuste por solapamiento de horas entre órdenes del mismo empleado.
+        $queryParams = $request->getQueryParams();
+        $inicio = $queryParams['inicio'] ?? null;
+        $fin = $queryParams['fin'] ?? null;
+
+        // Excluir comisión de venta (Comercialización/Abono a orden) del costo de
+        // mano de obra -- mismo criterio ya corregido en products_reports.php
+        // (Hallazgo #3, 2026-07-28): pagos.detalle también registra pagos al
+        // vendedor por cerrar/cobrar la orden, que no son trabajo físico de
+        // producción y no deben mostrarse aquí como "Comisiones de Fabricación".
+        $sqlPagos = "SELECT
                         p._id AS id_pago,
                         p.id_empleado,
                         eu.nombre AS nombre_empleado,
@@ -828,8 +915,9 @@ return function (App $app) {
                         api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario
                     WHERE
                         p.id_orden = ?
+                        AND p.detalle NOT IN ('Comercialización', 'Abono a orden')
                     ORDER BY
-                        eu.nombre, p.detalle';
+                        eu.nombre, p.detalle";
 
         $db = new LocalDB();
         $pagosData = $db->goQuery($sqlPagos, [$id_orden]);
@@ -854,7 +942,10 @@ return function (App $app) {
         // -- filtrando por horario laboral real de la empresa, no la resta
         // cruda de fecha_terminado - fecha_inicio (que infla el costo cuando
         // una tarea queda "abierta" varios días sin cerrarse de inmediato).
-        $sqlSalarios = "SELECT
+        // DISTINCT evita contar dos veces filas duplicadas exactas (mismo
+        // empleado/orden/departamento/fecha_inicio/fecha_terminado, ya
+        // detectadas en datos reales).
+        $sqlSalarios = "SELECT DISTINCT
                             ldea.id_empleado,
                             eu.nombre AS nombre_empleado,
                             eu.salario_monto,
@@ -893,6 +984,52 @@ return function (App $app) {
             }
         }
         $salariosRaw = array_values($salariosRaw);
+
+        // Tope proporcional por solapamiento de tareas del mismo empleado en
+        // distintas órdenes ("cierre por lotes"): sin este ajuste, el mismo
+        // bloque de minutos reales se cuenta una vez por cada orden que el
+        // empleado tenía abierta simultáneamente, inflando la suma de su
+        // salario_proporcional en el periodo varias veces por encima de su
+        // salario real (verificado con datos reales: 6x-9x en lotes de cierre
+        // masivo). Se topa la suma de horas de cada empleado en el rango
+        // inicio/fin al máximo teórico de su jornada en ese mismo rango.
+        if ($inicio && $fin && !empty($salariosRaw)) {
+            $empleadoIds = array_map('intval', array_column($salariosRaw, 'id_empleado'));
+            $empleadoIdsStr = implode(',', $empleadoIds);
+
+            $fechaTerminadoCond = DB_DRIVER === 'pgsql' ? 'fecha_terminado::date' : 'DATE(fecha_terminado)';
+            $sqlTareasEmpleadoRango = "SELECT DISTINCT id_empleado, fecha_inicio, fecha_terminado
+                FROM lotes_detalles_empleados_asignados
+                WHERE id_empleado IN ($empleadoIdsStr)
+                  AND fecha_inicio IS NOT NULL
+                  AND fecha_terminado IS NOT NULL
+                  AND $fechaTerminadoCond BETWEEN ? AND ?";
+            $dbFactor = new LocalDB();
+            $tareasRangoRaw = $dbFactor->goQuery($sqlTareasEmpleadoRango, [$inicio, $fin]);
+            $dbFactor->disconnect();
+
+            $horasCrudasTotalPorEmpleado = [];
+            if (is_array($tareasRangoRaw)) {
+                foreach ($tareasRangoRaw as $t) {
+                    $h = calcularHorasLaboradasReales($t['fecha_inicio'], $t['fecha_terminado'], $horarioObj);
+                    $idE = $t['id_empleado'];
+                    $horasCrudasTotalPorEmpleado[$idE] = ($horasCrudasTotalPorEmpleado[$idE] ?? 0) + $h;
+                }
+            }
+
+            $diasRango = (new DateTime($inicio))->diff(new DateTime($fin))->days + 1;
+            $horasTeoricasEnRango = $horasSemana * ($diasRango / 7);
+
+            foreach ($salariosRaw as &$sr) {
+                $idE = $sr['id_empleado'];
+                $crudasTotal = $horasCrudasTotalPorEmpleado[$idE] ?? $sr['horas_trabajadas'];
+                if ($horasTeoricasEnRango > 0 && $crudasTotal > $horasTeoricasEnRango) {
+                    $factor = $horasTeoricasEnRango / $crudasTotal;
+                    $sr['horas_trabajadas'] = $sr['horas_trabajadas'] * $factor;
+                }
+            }
+            unset($sr);
+        }
 
         $salariosData = [];
         if (is_array($salariosRaw)) {
@@ -940,10 +1077,7 @@ return function (App $app) {
         }
 
         // Distribuir proporcionalmente los salarios fijos de empleados no trackeados si se proveen fechas de periodo
-        $queryParams = $request->getQueryParams();
-        $inicio = $queryParams['inicio'] ?? null;
-        $fin = $queryParams['fin'] ?? null;
-        
+        // ($inicio/$fin ya se extrajeron al inicio del endpoint)
         if ($inicio && $fin) {
             if (DB_DRIVER === 'pgsql') {
                 $dbEmpresas = new LocalDB('', LOCAL_DNS, LOCAL_USER, LOCAL_PASS);
