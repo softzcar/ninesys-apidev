@@ -538,24 +538,28 @@ return function (App $app) {
                 
                 $totalSalarioMensualNoTracked = 0;
                 if ($inicio && $fin) {
+                    // Mismo fix que en /reportes/mano-obra-por-orden (hallazgo real
+                    // 2026-09-17, empresa 208): JOIN contra empresas_usuarios_empresas
+                    // en vez del puntero legado empresas_usuarios.id_empresa/activo --
+                    // esta es la copia que alimenta el "TOTAL MANO DE OBRA (API)" del
+                    // reporte principal (costoManoObra), separada de la del modal de
+                    // detalle -- ambas debian corregirse, esta habia quedado afuera.
                     if (DB_DRIVER === 'pgsql') {
-                        $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto
-                                         FROM api_empresas.empresas_usuarios
-                                         WHERE id_empresa = :id_empresa
-                                           AND activo = 1
-                                           AND salario_tipo IN ('Salario', 'Salario más Comisión')
-                                           AND id_usuario NOT IN (
+                        $sqlNoTracked = "SELECT eu.id_usuario, eu.nombre, eu.salario_monto
+                                         FROM api_empresas.empresas_usuarios eu
+                                         JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = eu.id_usuario AND eue.id_empresa = :id_empresa AND eue.activo = 1
+                                         WHERE eu.salario_tipo IN ('Salario', 'Salario más Comisión')
+                                           AND eu.id_usuario NOT IN (
                                                SELECT DISTINCT id_empleado
                                                FROM $companyDB.lotes_detalles_empleados_asignados
                                                WHERE fecha_terminado::date BETWEEN :inicio AND :fin
                                            )";
                     } else {
-                        $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto
-                                         FROM api_empresas.empresas_usuarios
-                                         WHERE id_empresa = :id_empresa
-                                           AND activo = 1
-                                           AND salario_tipo IN ('Salario', 'Salario más Comisión')
-                                           AND id_usuario NOT IN (
+                        $sqlNoTracked = "SELECT eu.id_usuario, eu.nombre, eu.salario_monto
+                                         FROM api_empresas.empresas_usuarios eu
+                                         JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = eu.id_usuario AND eue.id_empresa = :id_empresa AND eue.activo = 1
+                                         WHERE eu.salario_tipo IN ('Salario', 'Salario más Comisión')
+                                           AND eu.id_usuario NOT IN (
                                                SELECT DISTINCT id_empleado
                                                FROM $companyDB.lotes_detalles_empleados_asignados
                                                WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
