@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.33] - 2026-09-17
+- Fix 403 en /ordenes/proyeccion-entrega para empleados de Comercializacion, Diseno y planta (modulos 2/3/4)
+
 ## [v1.0.32] - 2026-09-16
 - Fase de seguridad completa: autorización backend, WhatsApp/CDN/19print, sesión única, aprobación de cliente por WhatsApp, esquema de BD sincronizado
 
