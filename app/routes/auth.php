@@ -81,13 +81,32 @@ return function (App $app) {
             }
         }
 
+        // Mismo mecanismo que el token de arriba, para el caso de identidades
+        // con más de una empresa asignada (ver requiere_seleccion_empresa más
+        // abajo): el request que completa el login con la empresa elegida no
+        // debe volver a exigir Turnstile (hallazgo real 2026-09-17, ver
+        // SesionUnicaHelper.php::generarTokenSeleccionEmpresa).
+        $tokenSeleccionEmpresa = (string) ($datosAcceso['token_seleccion_empresa'] ?? '');
+        $claimsSeleccionEmpresa = decodificarTokenSeleccionEmpresa(getenv('JWT_SECRET') ?: '', $tokenSeleccionEmpresa);
+        if ($claimsSeleccionEmpresa !== null) {
+            $idUsuarioPorEmail = $localConnection->goQuery(
+                'SELECT id_usuario FROM empresas_usuarios WHERE email = ?',
+                [$datosAcceso['email'] ?? '']
+            );
+            $tokenPerteneceAEstaCuenta = !empty($idUsuarioPorEmail)
+                && (int) $idUsuarioPorEmail[0]['id_usuario'] === (int) $claimsSeleccionEmpresa->id_usuario;
+            if (!$tokenPerteneceAEstaCuenta) {
+                $claimsSeleccionEmpresa = null;
+            }
+        }
+
         // Capa 1: CAPTCHA (Cloudflare Turnstile) -- se verifica ANTES de
         // continuar, salvo que ya se haya confirmado humanidad+clave para
-        // ESTA MISMA cuenta en el intento anterior (token de confirmación
-        // válido, ver arriba). Si falla, ni siquiera cuenta como intento
-        // fallido para la Capa 2 (un bot sin token no debería poder gastar
-        // el cupo de intentos de un email real).
-        if ($claimsConfirmacionSesion === null) {
+        // ESTA MISMA cuenta en el intento anterior (alguno de los dos tokens
+        // de confirmación válido, ver arriba). Si falla, ni siquiera cuenta
+        // como intento fallido para la Capa 2 (un bot sin token no debería
+        // poder gastar el cupo de intentos de un email real).
+        if ($claimsConfirmacionSesion === null && $claimsSeleccionEmpresa === null) {
             $turnstileToken = (string) ($datosAcceso['cf-turnstile-response'] ?? '');
             if (!verificarTurnstile($turnstileToken, $ipCliente)) {
                 $object['msg'] = 'No se pudo verificar que la solicitud proviene de una persona. Intente de nuevo.';
@@ -225,6 +244,10 @@ return function (App $app) {
                     $object['empresas'] = array_map(function ($a) {
                         return ['id_empresa' => (int) $a['id_empresa'], 'nombre' => $a['nombre']];
                     }, $asignaciones);
+                    // Turnstile y la clave YA se verificaron en este mismo
+                    // request -- el reintento con la empresa elegida no debe
+                    // pedir un nuevo CAPTCHA (ver token arriba).
+                    $object['token_seleccion_empresa'] = generarTokenSeleccionEmpresa(getenv('JWT_SECRET') ?: '', (int) $usuario_data['id_usuario']);
                     $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
                     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
                 }

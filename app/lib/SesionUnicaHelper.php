@@ -123,6 +123,49 @@ function decodificarTokenConfirmacionSesion(string $secret, string $token): ?obj
 }
 
 /**
+ * Token corto y de un solo uso que autoriza completar el login sin pedir un
+ * nuevo CAPTCHA cuando la identidad tiene más de una empresa asignada y el
+ * cliente ya eligió cuál usar (ver `requiere_seleccion_empresa` en /login) --
+ * hallazgo real 2026-09-17: el segundo request (con `id_empresa` elegido)
+ * reenviaba email+clave+Turnstile completos, pero el widget de Turnstile ya
+ * no está en pantalla (se reemplazó por el selector de empresa) y, aunque lo
+ * estuviera, un token de Cloudflare es de un solo uso -- el login se quedaba
+ * colgado sin avisar nada. En ESE MISMO request donde se detecta la
+ * necesidad de elegir empresa ya se probaron Turnstile y la clave correcta,
+ * así que reutilizar esa prueba para completar el login no reduce ninguna
+ * protección real. Mismo patrón que generarTokenConfirmacionSesion() de
+ * arriba, sin `sid_objetivo` porque acá no hay ninguna sesión que cerrar.
+ * Vence a los 2 minutos.
+ */
+function generarTokenSeleccionEmpresa(string $secret, int $idUsuario): string
+{
+    $ahora = time();
+    $payload = [
+        'iss' => 'ninesys-seleccion-empresa',
+        'iat' => $ahora,
+        'exp' => $ahora + 120,
+        'id_usuario' => $idUsuario,
+    ];
+    return JWT::encode($payload, $secret, 'HS256');
+}
+
+/**
+ * Decodifica el token anterior. Nunca lanza excepción hacia afuera -- ver
+ * mismo criterio en decodificarTokenConfirmacionSesion().
+ */
+function decodificarTokenSeleccionEmpresa(string $secret, string $token): ?object
+{
+    if ($secret === '' || $token === '') {
+        return null;
+    }
+    try {
+        return JWT::decode($token, new Key($secret, 'HS256'));
+    } catch (\Throwable $e) {
+        return null;
+    }
+}
+
+/**
  * Traduce un User-Agent a un texto corto y legible, mejor esfuerzo (no es un
  * fingerprint exacto). Ej. "Chrome en Windows", "Safari en iPhone".
  */
