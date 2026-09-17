@@ -278,6 +278,79 @@ return function (App $app) {
 
         $reactivarId = (isset($miEmpleado['reactivar_id']) && $miEmpleado['reactivar_id'] !== '') ? (int) $miEmpleado['reactivar_id'] : null;
 
+        // Segundo envío del formulario, ya confirmado por el admin en el modal
+        // "Empleado ya existe en otra empresa" (ver identidad_existente_otra_empresa
+        // más abajo): el email/teléfono tipeados coinciden con una identidad real que
+        // aún no está asignada a esta empresa. En vez de vincularla en silencio con
+        // los datos viejos (comportamiento anterior), se actualiza su perfil con lo
+        // recién tipeado -- la contraseña NUNCA se toca acá, para no dejar a la
+        // persona sin poder loguearse en sus otras empresas sin aviso (hallazgo real
+        // 2026-09-17, caso Sayerlin/194→208).
+        $confirmarVinculacionId = (isset($miEmpleado['confirmar_vinculacion_id']) && $miEmpleado['confirmar_vinculacion_id'] !== '') ? (int) $miEmpleado['confirmar_vinculacion_id'] : null;
+
+        if ($confirmarVinculacionId) {
+            $comisionVinc = 0;
+            $comisionPorcentajeVinc = 0;
+            if ($miEmpleado['comsion_tipo'] === 'fija') {
+                $comisionVinc = $miEmpleado['comision'];
+            } elseif ($miEmpleado['comsion_tipo'] === 'porcentaje') {
+                $comisionPorcentajeVinc = $miEmpleado['comision_porcentaje'];
+            }
+
+            $sqlUpdate = 'UPDATE api_empresas.empresas_usuarios SET nombre = ?, email = ?, telefono = ?, acceso = ?, comision = ?, comision_tipo = ?, comision_porcentaje = ?, salario_tipo = ?, salario_monto = ?, salario_periodo = ?, dni = ?, fecha_ingreso = ?, id_seguridad_social = ? WHERE id_usuario = ?';
+            $localConnection->goQuery($sqlUpdate, [
+                $miEmpleado['nombre'],
+                $miEmpleado['email'],
+                $miEmpleado['telefono'],
+                $miEmpleado['acceso'],
+                $comisionVinc,
+                $miEmpleado['comsion_tipo'],
+                $comisionPorcentajeVinc,
+                $miEmpleado['salario_tipo'],
+                $miEmpleado['salario'],
+                $miEmpleado['periodo_pago'],
+                $miEmpleado['id_legal'],
+                $miEmpleado['fecha_ingreso'],
+                $miEmpleado['id_seguridad_social'],
+                $confirmarVinculacionId,
+            ]);
+
+            $localConnection->goQuery(
+                'INSERT INTO api_empresas.empresas_usuarios_empresas (id_usuario, id_empresa, activo) VALUES (?, ?, 1)',
+                [$confirmarVinculacionId, ID_EMPRESA]
+            );
+
+            $object = ['response_deps' => []];
+            foreach (explode(',', $miEmpleado['departamentos'] ?? '') as $idDep) {
+                if ($idDep === '') continue;
+                $sqlDep = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, ?, ?)';
+                $object['response_deps'][] = $localConnection->goQuery($sqlDep, [$confirmarVinculacionId, $idDep, ID_EMPRESA]);
+            }
+
+            if (isset($miEmpleado['dependientes_json']) && !empty($miEmpleado['dependientes_json'])) {
+                $dependientes = json_decode($miEmpleado['dependientes_json'], true);
+                if (is_array($dependientes) && count($dependientes) > 0) {
+                    foreach ($dependientes as $dependiente) {
+                        $sql_dep = 'INSERT INTO salario_carga_familiar (id_empleado, nombre_completo, cedula_o_id, tipo_relacion, fecha_nacimiento, es_deducible_impuesto) VALUES (?, ?, ?, ?, ?, ?)';
+                        $localConnection->goQuery($sql_dep, [
+                            $confirmarVinculacionId,
+                            $dependiente['nombre_completo'],
+                            $dependiente['cedula_o_id'],
+                            $dependiente['parentesco'],
+                            $dependiente['fecha_nacimiento'],
+                            $dependiente['es_deducible'] ? 1 : 0,
+                        ]);
+                    }
+                }
+            }
+
+            $localConnection->disconnect();
+            $object['message'] = 'Datos actualizados y empleado vinculado también a esta empresa.';
+            $object['id_usuario'] = $confirmarVinculacionId;
+            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+        }
+
         if ($reactivarId) {
             // La identidad ya tenía una asignación INACTIVA a esta empresa (mismo
             // email, empresa ya usada antes) -- reactivarla en vez de bloquear para
@@ -309,7 +382,7 @@ return function (App $app) {
 
         // ¿Ya existe una identidad con este email, en cualquier empresa?
         $identidadExistente = $localConnection->goQuery(
-            'SELECT id_usuario FROM api_empresas.empresas_usuarios WHERE email = ?',
+            'SELECT id_usuario, nombre FROM api_empresas.empresas_usuarios WHERE email = ?',
             [$miEmpleado['email']]
         );
 
@@ -339,26 +412,23 @@ return function (App $app) {
             }
 
             // La identidad existe pero nunca tuvo asignación a ESTA empresa -- caso
-            // Zenaida: agregarla a esta empresa sin duplicar su fila de
-            // empresas_usuarios (comparte password/nombre/teléfono/comisión/salario
-            // con su(s) otra(s) empresa(s), por decisión explícita del usuario).
-            $localConnection->goQuery(
-                'INSERT INTO api_empresas.empresas_usuarios_empresas (id_usuario, id_empresa, activo) VALUES (?, ?, 1)',
-                [$idUsuarioExistente, ID_EMPRESA]
+            // Zenaida/Sayerlin: en vez de vincularla en silencio con datos
+            // potencialmente viejos, se le pide confirmación explícita al admin
+            // (hallazgo real 2026-09-17: el alta a la 208 no avisaba nada y no
+            // actualizaba nombre/teléfono con lo recién tipeado). El segundo envío
+            // (confirmar_vinculacion_id) hace el UPDATE + INSERT real, más arriba.
+            $empresasActuales = $localConnection->goQuery(
+                'SELECT e.nombre FROM api_empresas.empresas_usuarios_empresas eue JOIN api_empresas.empresas e ON e.id_empresa = eue.id_empresa WHERE eue.id_usuario = ? AND eue.activo = 1',
+                [$idUsuarioExistente]
             );
-
-            $object = ['response_deps' => []];
-            foreach (explode(',', $miEmpleado['departamentos'] ?? '') as $idDep) {
-                if ($idDep === '') continue;
-                $sqlDep = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, ?, ?)';
-                $object['response_deps'][] = $localConnection->goQuery($sqlDep, [$idUsuarioExistente, $idDep, ID_EMPRESA]);
-            }
-
             $localConnection->disconnect();
-            $object['message'] = 'El email ya pertenecía a un empleado de otra empresa -- se agregó como empleado de esta empresa (mismos datos de acceso).';
-            $object['id_usuario'] = $idUsuarioExistente;
-            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+            $response->getBody()->write(json_encode([
+                'identidad_existente_otra_empresa' => true,
+                'id_usuario' => $idUsuarioExistente,
+                'nombre_actual' => $identidadExistente[0]['nombre'] ?? '',
+                'empresas_actuales' => array_column($empresasActuales, 'nombre'),
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
         }
 
         // El email no coincidió con nadie -- buscar si el TELÉFONO ya pertenece a una
@@ -375,10 +445,10 @@ return function (App $app) {
             $regexpReplaceExpr = DB_DRIVER === 'pgsql'
                 ? "REGEXP_REPLACE(telefono, '[^0-9]', '', 'g')"
                 : "REGEXP_REPLACE(telefono, '[^0-9]', '')";
-            $checkTelefonoSql = "SELECT id_usuario FROM api_empresas.empresas_usuarios WHERE {$regexpReplaceExpr} LIKE ?";
+            $checkTelefonoSql = "SELECT id_usuario, nombre FROM api_empresas.empresas_usuarios WHERE {$regexpReplaceExpr} LIKE ?";
             $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, ['%' . $telefonoLast10]);
         } else {
-            $checkTelefonoSql = 'SELECT id_usuario FROM api_empresas.empresas_usuarios WHERE telefono = ?';
+            $checkTelefonoSql = 'SELECT id_usuario, nombre FROM api_empresas.empresas_usuarios WHERE telefono = ?';
             $telefonoCheck = $localConnection->goQuery($checkTelefonoSql, [$miEmpleado['telefono']]);
         }
 
@@ -414,27 +484,21 @@ return function (App $app) {
                 return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
             }
 
-            // La identidad existe pero nunca tuvo asignación a ESTA empresa -- vincularla
-            // sin duplicar su fila de empresas_usuarios (no se pisa su email/nombre/etc.
-            // real con los datos tipeados en este formulario, mismo criterio que el
-            // camino de email).
-            $localConnection->goQuery(
-                'INSERT INTO api_empresas.empresas_usuarios_empresas (id_usuario, id_empresa, activo) VALUES (?, ?, 1)',
-                [$idUsuarioPorTelefono, ID_EMPRESA]
+            // La identidad existe pero nunca tuvo asignación a ESTA empresa -- mismo
+            // criterio que el camino de email: pedir confirmación explícita en vez de
+            // vincular en silencio (ver identidad_existente_otra_empresa arriba).
+            $empresasActuales = $localConnection->goQuery(
+                'SELECT e.nombre FROM api_empresas.empresas_usuarios_empresas eue JOIN api_empresas.empresas e ON e.id_empresa = eue.id_empresa WHERE eue.id_usuario = ? AND eue.activo = 1',
+                [$idUsuarioPorTelefono]
             );
-
-            $object = ['response_deps' => []];
-            foreach (explode(',', $miEmpleado['departamentos'] ?? '') as $idDep) {
-                if ($idDep === '') continue;
-                $sqlDep = 'INSERT INTO api_empresas.empresas_usuarios_departamentos (id_empleado, id_departamento, id_empresa) VALUES (?, ?, ?)';
-                $object['response_deps'][] = $localConnection->goQuery($sqlDep, [$idUsuarioPorTelefono, $idDep, ID_EMPRESA]);
-            }
-
             $localConnection->disconnect();
-            $object['message'] = 'El teléfono ya pertenecía a un empleado de otra empresa -- se agregó como empleado de esta empresa (mismos datos de acceso).';
-            $object['id_usuario'] = $idUsuarioPorTelefono;
-            $response->getBody()->write(json_encode($object, JSON_NUMERIC_CHECK));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+            $response->getBody()->write(json_encode([
+                'identidad_existente_otra_empresa' => true,
+                'id_usuario' => $idUsuarioPorTelefono,
+                'nombre_actual' => $telefonoCheck[0]['nombre'] ?? '',
+                'empresas_actuales' => array_column($empresasActuales, 'nombre'),
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
         }
 
         // PREPARAR FECHAS
