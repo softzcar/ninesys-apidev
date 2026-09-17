@@ -3167,10 +3167,18 @@ return function (App $app) {
 
   // PROYECCION DE FECHAS DE ENTREGA DE ORDENES
   $app->get('/ordenes/proyeccion-entrega', function (Request $request, Response $response, array $args) {
-    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
-    // Verificado en frontend (pages/ordenes-fechas-entrega.vue): enlazada
-    // desde SidebarProduccion -- Administración (1) y Producción (5).
-    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 5])) {
+    // Autorización por módulo/página -- auditoría de seguridad 2026-09-14,
+    // corregida 2026-09-17: el alcance original (solo [1, 5]) se basó en un
+    // único caller (pages/ordenes-fechas-entrega.vue). En realidad este
+    // endpoint también lo llama SseOrdenesAsignadasV4/V5.vue (dashboard
+    // genérico de CUALQUIER empleado, /empleados/dashboard) y
+    // ordenes/nueva.vue + presupuesto.vue (Comercializacion, módulo 2) --
+    // bloqueaba con 403 a empleados de Comercialización, Diseño y planta
+    // (Producción operativa, módulo 4: Impresión/Corte/Costura/Revisión/etc).
+    // Los datos que retorna (fechas proyectadas de entrega, sin info de
+    // salario/comisión) no son sensibles por departamento, así que se
+    // habilita a los 5 módulos reales del sistema.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2, 3, 4, 5])) {
       return $errorResponse;
     }
     $localConnection = new LocalDB();
