@@ -3872,7 +3872,7 @@ return function (App $app) {
         $sql = "SELECT
                 a.id_usuario AS _id,
                 a.email AS username,
-                a.activo,
+                eue.activo,
                 a.password,
                 a.nombre,
                 a.email,
@@ -3892,6 +3892,17 @@ return function (App $app) {
                 COALESCE(carga.carga_familiar, '[]') AS carga_familiar
             FROM
                 api_empresas.empresas_usuarios a
+            -- JOIN (no LEFT) por diseño: esta empresa es la fuente real de si el
+            -- empleado esta activo/inactivo AQUI (empresas_usuarios_empresas.activo),
+            -- no el flag global legado de empresas_usuarios.activo -- una identidad
+            -- puede estar activa en una empresa e inactiva en otra (ver /login y
+            -- /empleados/nuevo, 2026-08-12). Antes esta query filtraba por el
+            -- puntero mutable a.id_empresa (que cambia con el ultimo login) y
+            -- mostraba el flag global, por eso el switch de Activacion de Empleados
+            -- decia 'exito' pero el estado no cambiaba en la lista (hallazgo real
+            -- 2026-09-17, empresa 208: empleados de plantilla que parecian
+            -- imposibles de desactivar).
+            JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = a.id_usuario AND eue.id_empresa = $idEmp
             LEFT JOIN (
                 SELECT
                     b.id_empleado,
@@ -3916,14 +3927,12 @@ return function (App $app) {
                     salario_carga_familiar d
                 GROUP BY
                     d.id_empleado
-            ) carga ON carga.id_empleado = a.id_usuario
-            WHERE
-                a.id_empresa = $idEmp;";
+            ) carga ON carga.id_empleado = a.id_usuario;";
     } else {
         $sql = 'SELECT
                 a.id_usuario AS _id,
                 a.email AS username,
-                a.activo,
+                eue.activo,
                 a.password,
                 a.nombre,
                 a.email,
@@ -3948,15 +3957,15 @@ return function (App $app) {
                     SEPARATOR ","), "]"), "[]") AS carga_familiar
             FROM
                 api_empresas.empresas_usuarios a
+            JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = a.id_usuario AND eue.id_empresa = ' . ID_EMPRESA . '
             LEFT JOIN api_empresas.empresas_usuarios_departamentos b ON b.id_empleado = a.id_usuario
             LEFT JOIN ' . LOCAL_DB . '.departamentos c ON c._id = b.id_departamento
             LEFT JOIN ' . LOCAL_DB . '.salario_carga_familiar d ON d.id_empleado = a.id_usuario
-            WHERE
-                a.id_empresa = ' . ID_EMPRESA . ' GROUP BY
+            GROUP BY
                 a.id_usuario, a.email, a.password, a.nombre, a.departamento,
                 a.telefono, a.comision, a.comision_porcentaje,
                 a.salario_tipo, a.salario_monto, a.salario_periodo,
-                a.comision_tipo, a.acceso, a.dni, a.fecha_ingreso, a.id_seguridad_social;';
+                a.comision_tipo, a.acceso, a.dni, a.fecha_ingreso, a.id_seguridad_social, eue.activo;';
     }
     $items = $localConnection->goQuery($sql);
 

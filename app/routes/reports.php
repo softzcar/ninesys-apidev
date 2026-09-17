@@ -1113,25 +1113,33 @@ return function (App $app) {
             $prodPeriodoRaw = $dbEmpresas->goQuery($sqlTotalProdPeriodo, [':inicio' => $inicio, ':fin' => $fin]);
             $totalProductosPeriodo = (float)($prodPeriodoRaw[0]['total'] ?? 0);
 
-            // 2. Obtener empleados activos con salario fijo que no trackean tiempo
+            // 2. Obtener empleados activos EN ESTA EMPRESA con salario fijo que no
+            // trackean tiempo -- JOIN contra empresas_usuarios_empresas (fuente real
+            // de membresía/actividad por empresa desde el rediseño multi-empresa
+            // 2026-08-12), no el filtro legado `empresas_usuarios.id_empresa`
+            // (puntero mutable que cambia con el último login) ni el flag global
+            // `activo`. Sin este fix, empleados de PLANTILLA de otra empresa (o de
+            // esta, ya desactivados vía "Activación de Empleados") seguían
+            // contando su salario completo como overhead de mano de obra --
+            // hallazgo real 2026-09-17, empresa 208: 5 empleados de ejemplo nunca
+            // asignados a ningún trabajo real inflaban el costo de TODAS las
+            // órdenes en ~$1160/mes repartidos entre la producción real.
             if (DB_DRIVER === 'pgsql') {
-                $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto
-                                 FROM api_empresas.empresas_usuarios
-                                 WHERE id_empresa = :id_empresa
-                                   AND activo = 1
-                                   AND salario_tipo IN ('Salario', 'Salario más Comisión')
-                                   AND id_usuario NOT IN (
+                $sqlNoTracked = "SELECT eu.id_usuario, eu.nombre, eu.salario_monto
+                                 FROM api_empresas.empresas_usuarios eu
+                                 JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = eu.id_usuario AND eue.id_empresa = :id_empresa AND eue.activo = 1
+                                 WHERE eu.salario_tipo IN ('Salario', 'Salario más Comisión')
+                                   AND eu.id_usuario NOT IN (
                                        SELECT DISTINCT id_empleado
                                        FROM $companyDB.lotes_detalles_empleados_asignados
                                        WHERE fecha_terminado::date BETWEEN :inicio AND :fin
                                    )";
             } else {
-                $sqlNoTracked = "SELECT id_usuario, nombre, salario_monto
-                                 FROM api_empresas.empresas_usuarios
-                                 WHERE id_empresa = :id_empresa
-                                   AND activo = 1
-                                   AND salario_tipo IN ('Salario', 'Salario más Comisión')
-                                   AND id_usuario NOT IN (
+                $sqlNoTracked = "SELECT eu.id_usuario, eu.nombre, eu.salario_monto
+                                 FROM api_empresas.empresas_usuarios eu
+                                 JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = eu.id_usuario AND eue.id_empresa = :id_empresa AND eue.activo = 1
+                                 WHERE eu.salario_tipo IN ('Salario', 'Salario más Comisión')
+                                   AND eu.id_usuario NOT IN (
                                        SELECT DISTINCT id_empleado
                                        FROM $companyDB.lotes_detalles_empleados_asignados
                                        WHERE DATE(fecha_terminado) BETWEEN :inicio AND :fin
