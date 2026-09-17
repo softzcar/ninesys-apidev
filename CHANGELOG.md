@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.35] - 2026-09-17
+- Fix: bloqueo enganoso al vincular empleado existente a otra empresa, ahora pide confirmacion y actualiza datos + fix plantilla pagos.cantidad/detalle
+
 ## [v1.0.33] - 2026-09-17
 - Fix 403 en /ordenes/proyeccion-entrega para empleados de Comercializacion, Diseno y planta (modulos 2/3/4)
 
