@@ -1,0 +1,21 @@
+- **Solicitud del Usuario:** Tras el fix de permisos, un segundo reporte: "me dice que el teléfono ya se encuentra asignado a otro usuario... Pero ya implementamos que un empleado puede trabajar en varias empresas usando los mismos datos." Al aclarar que se trataba de dos identidades distintas para la misma persona real, el usuario confirmó: "Es la misma persona que trabaja en las dos empresas, por eso tiene un solo número de teléfono y un solo email... El sistema debería detectar que [...] debe tener dos registros y mostrarle la pantalla adicional para que seleccione la empresa a la que debe loguearse."
+- **Fecha y Hora:** 2026-09-17 15:15:00
+- **Proyecto(s):** Backend (ninesys-api) -- fix de datos, sin cambio de código en esta tarea puntual (el fix de código relacionado quedó como tarea aparte, ver log de `/empleados/nuevo`).
+- **Archivos Involucrados:** Ninguno de código; datos de la base central `api_empresas` en Producción (tablas `empresas_usuarios`, `empresas_usuarios_empresas`, `empresas_usuarios_departamentos`).
+- **Commits Relacionados:**
+  - Backend: N/A (corrección de datos directa, no versionable como commit).
+- **Acción Realizada:**
+  1. Confirmado en la base real: `id_usuario=34` ("Ricardo", `elvisricardo1@gmail.com`, sin teléfono, creado ese mismo día, asignado solo a la empresa 194) y `id_usuario=695` ("Ricardo Fernandez", `19printve@gmail.com`, teléfono `584121256558`, asignado a la 208 desde el 21-ago) eran la MISMA persona real, registrada por error bajo dos emails distintos -- mismo patrón ya documentado antes para el caso de Zenaida.
+  2. Verificado que `id_usuario=34` no tenía ningún dato operativo (0 lotes, 0 pagos, 0 órdenes) en la base de la empresa 194 -- la fusión no requería migrar historial, solo mover la asignación de departamento recién creada.
+  3. Respaldo previo de las filas afectadas (`empresas_usuarios`, `empresas_usuarios_empresas`, `empresas_usuarios_departamentos` para ambos `id_usuario`) exportado a `/home/backups/consolidaciones_empleados/` en `vps-contabo-prod`.
+  4. Confirmado con el usuario cuál identidad conservar como canónica (`695`, sin tocar su email existente) antes de ejecutar cualquier cambio.
+  5. Ejecutado en una transacción: `UPDATE` de la asignación de departamento de la 194 (`id_empleado` 34 -> 695), `INSERT` de la asignación de empresa 194 para `id_usuario=695`, `DELETE` de la asignación duplicada de la 194 para `id_usuario=34`, `DELETE` de la fila duplicada en `empresas_usuarios` (`id_usuario=34`).
+  6. Verificado el estado final: `id_usuario=695` con dos asignaciones activas (208 y 194), departamento id 5 en ambas, `id_usuario=34` eliminado.
+- **Inconvenientes y Desafíos:** Ninguno relevante -- el bajo volumen de datos de la identidad duplicada (creada el mismo día) hizo la fusión de bajo riesgo.
+- **Decisión Final y Justificación:** Conservar la identidad más antigua con historial real (695) como canónica, en vez de la recién creada -- minimiza el riesgo de perder datos y respeta el email/clave que la persona ya usa hoy para loguearse.
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (lectura, respaldo vía `COPY ... TO STDOUT`, y escritura transaccional en Producción, con autorización explícita del usuario en cada paso).
+- **Resultado:** Éxito.
+- **Verificación:** Consultas posteriores confirmaron una sola identidad (`695`) con las dos asignaciones de empresa y el departamento correcto en cada una.
+- **Logro Conseguido:** Corrige en Producción el mismo tipo de duplicado de identidad que ya se había resuelto antes para Zenaida en Desarrollo, sin pérdida de datos.
+- **Observaciones de Gemini:** El usuario señaló explícitamente que esta era "la tercera vez" que se abordaba el tema de empleados multi-empresa -- la causa raíz real (bug de UX en `/empleados/nuevo` que permite que esto se repita) se atacó en una tarea de código aparte inmediatamente después de esta fusión puntual.
+- **Respuesta de Gemini:** Identidad duplicada fusionada: Ricardo/Ricardo Fernandez ahora es una sola identidad (`id_usuario=695`, email sin cambios) activa en ambas empresas (208 y 194), sin pérdida de datos (la identidad duplicada no tenía historial operativo). Respaldo tomado antes de la fusión.

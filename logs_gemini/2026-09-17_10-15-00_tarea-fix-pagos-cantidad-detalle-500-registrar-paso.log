@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** El endpoint es `https://api.ninesys19.com/registrar-paso-empleado` que está respondiendo con error 500 y no permite terminar la tarea en la página `https://app.ninesys19.com/empleados/dashboard`, con un payload como `id_empleado=23&id_departamento=4&id_lotes_detalles=undefined&id_orden=7001&tipo=fin&...` (surgió en medio de una investigación previa sobre horas/comisiones infladas en `/empleados/pagos` para la empleada Gladys).
+- **Fecha y Hora:** 2026-09-17 10:15:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - Esquema real de Producción: tabla `pagos` en `api_emp_194` y `api_emp_208`.
+  - `public/model/create_new_company_api_emp_N_postgres.sql` (plantilla de empresa nueva).
+- **Commits Relacionados:**
+  - Backend: `88ae13d` (rama `feature/postgresql-support`) -- solo la plantilla; el `ALTER TABLE` real se aplicó directo por SSH (no versionado, es una migración de datos/esquema contra las bases vivas).
+- **Acción Realizada:**
+  1. Antes de este hallazgo se hizo una investigación extensa de pagos duplicados en el módulo de empleados/pagos (bug de carrera de condición en `check-then-insert` sin atomicidad en `manufacturing.php` y `products.php`), que quedó documentada pero superada por la urgencia de este 500 en vivo.
+  2. Primera prueba (`curl` sin sesión) llevó a una pista falsa de "toda la API caída" -- corregida al notar que sin `Authorization` el middleware cae a `LOCAL_DNS=host:none` a propósito (comportamiento esperado, no el bug real).
+  3. Detectado que `api.ninesys19.com`/`app.ninesys19.com` en realidad corren en el VPS `vps-contabo-prod` (185.214.135.74), no en `vps-contabo-dev` como se venía asumiendo -- confirmado por mapeo de dominios en `httpd_config.conf` de LiteSpeed (`api.nineteengreen.com` responde también como alias de `api.ninesys19.com`).
+  4. Revisado `logs/app.log` en el servidor correcto: error real `SQLSTATE[22P02]: invalid input syntax for type integer: "42.0"` y `SQLSTATE[22001]: value too long for type character varying(16)`, ambos originados en el `INSERT INTO pagos` de `manufacturing.php` (rama de comisión "variable").
+  5. Confirmado en la orden real (7001, producto "DTF 60CM") que `ordenes_productos.cantidad = 0.2` (producto vendido por metro) -- la columna `pagos.cantidad` era `INTEGER`, no acepta decimales. `pagos.detalle` era `varchar(16)`, insuficiente para descripciones reales.
+  6. Aplicado en vivo (autorizado explícitamente por el usuario) en `api_emp_194` y `api_emp_208`: `ALTER TABLE pagos ALTER COLUMN cantidad TYPE numeric(6,1)` y `ALTER COLUMN detalle TYPE varchar(64)`.
+  7. Actualizada la plantilla de empresa nueva (`create_new_company_api_emp_N_postgres.sql`) con los mismos tipos, para que una empresa nueva no herede el mismo defecto.
+- **Inconvenientes y Desafíos:** El primer intento de reproducir el problema con `curl` sin credenciales generó una falsa alarma de caída total del sistema -- se corrigió al revisar el código de `IdEmpresaMiddleware.php` y confirmar que ese comportamiento es el fallback esperado para requests sin sesión, no el bug real reportado.
+- **Decisión Final y Justificación:** Ensanchar los tipos de columna en vez de truncar/redondear los datos en el backend -- las cantidades fraccionarias (productos por metro) y las descripciones largas son datos legítimos, el esquema estaba desalineado con lo que la aplicación ya necesitaba guardar desde hace tiempo.
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (lectura y escritura en Producción, con autorización explícita), `curl`, `grep`/`Read` sobre logs y código, `Edit` sobre la plantilla SQL.
+- **Resultado:** Éxito, verificado en producción real (Maria Norvis Barahona pudo terminar su tarea tras el fix).
+- **Verificación:** Se pidió al usuario reintentar la acción real en producción tras el `ALTER TABLE`; confirmó que funcionó.
+- **Logro Conseguido:** Desbloquea en Producción a cualquier empleado que trabaje con productos vendidos por metro (DTF, sublimación) al intentar registrar su pago -- error activo desde al menos el día anterior (10 ocurrencias registradas).
+- **Observaciones de Gemini:** Mismo patrón de "esquema desalineado con lo que el código ya produce legítimamente" que ya se había visto antes en este proyecto (columnas `varchar` demasiado angostas) -- vale la pena, en una futura auditoría, revisar sistemáticamente los tipos de columna de tablas que reciben datos calculados por el código contra los rangos reales que el negocio permite (ventas por metro, descripciones largas de reposición/excedente, etc.).
+- **Respuesta de Gemini:** Encontrada y corregida la causa real del 500: la tabla `pagos` en Producción tenía `cantidad` como `INTEGER` (no acepta productos vendidos por metro, ej. 0.2) y `detalle` como `varchar(16)` (trunca descripciones). Corregido con `ALTER TABLE` en ambas empresas de Producción y actualizada la plantilla de empresa nueva para que no se repita.

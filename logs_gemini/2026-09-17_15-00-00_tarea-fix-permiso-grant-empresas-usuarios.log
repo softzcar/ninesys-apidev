@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** "se intentó añadir a 'Riccardo' como Administrador en la empresa 194 que ya es un usuario en la empresa 208, pero ha generado error [500 / Error de Registro: 'Ocurrió un error al guardar: [object Object]'] sin embargo este mismo procedimiento en desarrollo pasó bien."
+- **Fecha y Hora:** 2026-09-17 15:00:00
+- **Proyecto(s):** Backend (ninesys-api) -- fix de datos/permisos, sin cambio de código.
+- **Archivos Involucrados:** Ninguno de código; permisos de la base central `api_empresas` en Producción.
+- **Commits Relacionados:**
+  - Backend: N/A (corrección de permisos directa en la base de datos, no versionable como commit).
+- **Acción Realizada:**
+  1. Revisado `logs/app.log` en `vps-contabo-prod`: `SQLSTATE[42501]: Insufficient privilege: permission denied for view empresas_usuarios`, originado en `employees.php:311` (`SELECT ... FROM api_empresas.empresas_usuarios`).
+  2. Confirmado que `api_empresas` (la base central) tiene un schema interno también llamado `api_empresas`, con vistas de compatibilidad (`empresas`, `empresas_gastos`, `empresas_usuarios`, `empresas_usuarios_departamentos`, `empresas_usuarios_empresas`, `modulos`, `salario_*`) usadas por las queries cross-base del código.
+  3. Comparado el propietario y los `GRANT` de cada vista para el rol `dev_user` (el que usa la aplicación) entre Desarrollo y Producción: todas las vistas eran propiedad de `dev_user` con permisos completos en ambos servidores, EXCEPTO `empresas_usuarios` en Producción, que era propiedad de `postgres` y no tenía ningún `GRANT` para `dev_user` -- quedó huérfana de algún proceso manual anterior que la recreó sin repetir el `GRANT`.
+  4. Aplicado (con autorización explícita del usuario) en Producción: `GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON api_empresas.empresas_usuarios TO dev_user;` -- igualando los permisos a los que ya tenían las demás vistas del mismo schema.
+  5. Verificado que la consulta que fallaba ahora corre sin error autenticado como `dev_user`, y que no había ningún dato a medio escribir (el error ocurría en la primera consulta de lectura, antes de cualquier `INSERT`).
+- **Inconvenientes y Desafíos:** El mensaje de error original en el frontend (`[object Object]`) no daba ninguna pista útil -- hizo falta revisar directamente el log del servidor para encontrar el `SQLSTATE` real.
+- **Decisión Final y Justificación:** Igualar el `GRANT` al patrón ya existente en las demás vistas del mismo schema, en vez de cambiar el propietario de la vista (menor cambio posible sobre un objeto de base de datos en Producción).
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (lectura y escritura en Producción, con autorización explícita).
+- **Resultado:** Éxito.
+- **Verificación:** Consulta de prueba (`SELECT id_usuario FROM api_empresas.empresas_usuarios WHERE email = ...`) ejecutada como `dev_user` tras el `GRANT`, sin error.
+- **Logro Conseguido:** Desbloquea en Producción el alta de cualquier empleado nuevo o la vinculación de un empleado existente a una empresa adicional -- el endpoint `/empleados/nuevo` estaba completamente inoperante en Producción por este permiso faltante.
+- **Observaciones de Gemini:** Mismo patrón de "drift" entre Desarrollo y Producción visto varias veces hoy (columnas de esquema desalineadas, y ahora permisos) -- sugiere que sería valioso, en algún momento, hacer una comparación sistemática de permisos/esquema de la base central entre ambos servidores en vez de descubrirlo reactivamente caso por caso.
+- **Respuesta de Gemini:** Encontrada la causa real: a la vista `api_empresas.empresas_usuarios` en Producción le faltaba el permiso para el usuario de la aplicación (quedó huérfana de un proceso manual anterior). Corregido con un `GRANT` igual al que ya tienen las demás vistas del mismo schema. Verificado que no quedó ningún dato a medio escribir.

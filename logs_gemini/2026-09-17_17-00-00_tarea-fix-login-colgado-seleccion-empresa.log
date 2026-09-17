@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** "ok ahora he podido registrar un empleado ya existente en otra empresa, al ingresar las credenciales me muestra las empresas en las que está activo para que se elija una, hasta aquí bien pero una vez que selecciono la empresa se muestra 'Verificando sus datos, por favor espere...' y allí se queda no hace nada más."
+- **Fecha y Hora:** 2026-09-17 17:00:00
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - `app/routes/auth.php` (endpoint `POST /login`)
+  - `app/lib/SesionUnicaHelper.php`
+- **Commits Relacionados:**
+  - Backend: `151ce32` (rama `feature/postgresql-support`)
+- **Acción Realizada:**
+  1. Confirmado que el selector de empresa post-login (para identidades con más de una empresa activa) ya estaba completamente implementado desde el 2026-08-12 (`requiere_seleccion_empresa` en `auth.php`), y que el frontend ya lo mostraba correctamente -- el problema aparecía recién al COMPLETAR el login tras elegir una empresa.
+  2. Identificada la causa: el segundo request (con `id_empresa` ya elegido) reenvía email+clave+`cf-turnstile-response` completos, pero para ese momento el widget de Cloudflare Turnstile ya no está en pantalla (fue reemplazado por el selector de empresa) y, aunque lo estuviera, un token de Turnstile es de un solo uso -- el `verificarTurnstile()` del backend rechazaría un token reciclado.
+  3. Mismo patrón de causa raíz ya resuelto antes para el conflicto de "sesión activa en otro dispositivo" (`token_confirmacion_sesion`, `SesionUnicaHelper.php`), nunca aplicado a este otro flujo.
+  4. Agregadas dos funciones nuevas en `SesionUnicaHelper.php`: `generarTokenSeleccionEmpresa()`/`decodificarTokenSeleccionEmpresa()` -- token JWT corto (2 min), ligado al `id_usuario`, sin el `sid_objetivo` del token de sesión (acá no hay ninguna sesión que cerrar).
+  5. En `auth.php`: se decodifica y valida el nuevo token (mismo chequeo anti-abuso que el existente -- debe pertenecer al `id_usuario` real del email enviado), y se usa junto con el token de confirmación de sesión para decidir si se salta la verificación de Turnstile. Se emite el token nuevo junto con `requiere_seleccion_empresa`.
+- **Inconvenientes y Desafíos:** Ninguno relevante -- el patrón a replicar ya existía en el mismo archivo para un caso análogo.
+- **Decisión Final y Justificación:** Replicar el mecanismo ya probado en producción (token corto de un solo uso, ligado al usuario) en vez de, por ejemplo, quitar la verificación de Turnstile para el segundo request sin ninguna prueba de que el primero fue legítimo -- mantiene la misma protección contra fuerza bruta.
+- **Herramienta(s) Utilizada(s):** `Read`/`Edit`, `php -l`, `deploy_backend_dev.sh`.
+- **Resultado:** Éxito.
+- **Verificación:** Confirmado por el usuario en Desarrollo: "ya ingresa correctamente" tras elegir empresa.
+- **Logro Conseguido:** Corrige un bug que dejaba completamente inutilizable el login para CUALQUIER identidad con más de una empresa activa (Zenaida, Ricardo/695, Sayerlin, y cualquier futuro caso similar) -- el selector de empresa se mostraba pero nunca se podía completar el ingreso.
+- **Observaciones de Gemini:** Este bug probablemente llevaba latente desde el 2026-08-12 (cuando se implementó el selector) sin que nadie lo hubiera probado end-to-end con una cuenta real de más de una empresa activa hasta hoy.
+- **Respuesta de Gemini:** Corregido: el login se colgaba al elegir empresa porque reenviaba un token de Turnstile ya usado. Se emite ahora un token corto adicional (mismo mecanismo ya usado para el conflicto de sesión) que permite completar el login sin pedir un segundo CAPTCHA. Verificado y funcionando en Desarrollo.
