@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.40] - 2026-09-18
+- Fix urgente: /departamentos-empleado/{id} bloqueaba "Reposiciones por aprobar"/"Asignar reposicion" en Control de Produccion (/test) al consultar otro empleado -- ampliado a modulo 5
+
 ## [v1.0.39] - 2026-09-18
 - Fix: comision de venta (vendedor) ahora se incluye en el costo de mano de obra del Reporte de Costos de Produccion (antes excluida a proposito, decision de negocio revertida)
 
