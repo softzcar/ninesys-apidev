@@ -259,8 +259,9 @@ return function (App $app) {
                 ordenes ord
             JOIN lotes_detalles_empleados_asignados loa ON loa.id_orden = ord._id
             JOIN api_empresas.empresas_usuarios emp on emp.id_usuario = loa.id_empleado 
-            JOIN departamentos dep ON dep._id = loa.id_departamento 
+            JOIN departamentos dep ON dep._id = loa.id_departamento
             WHERE ord.status IN ('En espera', 'activa', 'pausada')
+              AND loa.id_reposicion IS NULL
         ";
     $obj['emp_asignados'] = $localConnection->goQuery($sql);
 
