@@ -273,12 +273,15 @@ return function (App $app) {
                 // 5. BATCH: Costo Mano de Obra (Pagos) (Solo si hay órdenes)
                 $pagosMap = [];
                 if (!empty($orderIds)) {
-                    // Excluir comisión de venta (Comercialización/Abono a orden) del costo de
-                    // mano de obra -- mismo criterio ya corregido en products_reports.php
-                    // (Hallazgo #3, 2026-07-28): pagos.detalle también registra pagos al
-                    // vendedor por cerrar/cobrar la orden, que no son trabajo físico de
-                    // producción y no deben sumarse aquí.
-                    $pagosSql = "SELECT p.id_orden, SUM(p.monto_pago) as total FROM $companyDB.pagos p WHERE p.id_orden IN ($orderIdsStr) AND p.detalle NOT IN ('Comercialización', 'Abono a orden') GROUP BY p.id_orden";
+                    // Incluye TODOS los pagos de la orden, incluida la comisión de venta
+                    // (pagos.detalle = 'Comercialización'/'Abono a orden', pagada al
+                    // vendedor/responsable por cerrar/cobrar la orden) -- decisión de
+                    // negocio confirmada 2026-09-18: la comisión de venta es costo
+                    // operativo real de la empresa y debe sumarse al costo de mano de
+                    // obra de la orden, igual que la comisión de cualquier otro
+                    // departamento. Revierte la exclusión decidida el 2026-07-28
+                    // (Hallazgo #3).
+                    $pagosSql = "SELECT p.id_orden, SUM(p.monto_pago) as total FROM $companyDB.pagos p WHERE p.id_orden IN ($orderIdsStr) GROUP BY p.id_orden";
                     $pagosRaw = $dbEmpresas->goQuery($pagosSql);
                     if (is_array($pagosRaw) && !isset($pagosRaw['status'])) {
                         foreach ($pagosRaw as $p) $pagosMap[$p['id_orden']] = $p['total'];
@@ -898,11 +901,14 @@ return function (App $app) {
         $inicio = $queryParams['inicio'] ?? null;
         $fin = $queryParams['fin'] ?? null;
 
-        // Excluir comisión de venta (Comercialización/Abono a orden) del costo de
-        // mano de obra -- mismo criterio ya corregido en products_reports.php
-        // (Hallazgo #3, 2026-07-28): pagos.detalle también registra pagos al
-        // vendedor por cerrar/cobrar la orden, que no son trabajo físico de
-        // producción y no deben mostrarse aquí como "Comisiones de Fabricación".
+        // Incluye TODOS los pagos de la orden, incluida la comisión de venta
+        // (pagos.detalle = 'Comercialización'/'Abono a orden', pagada al
+        // vendedor/responsable por cerrar/cobrar la orden) -- decisión de
+        // negocio confirmada 2026-09-18: la comisión de venta es costo
+        // operativo real de la empresa y debe verse en el detalle de mano de
+        // obra de la orden, igual que la comisión de cualquier otro
+        // departamento. Revierte la exclusión decidida el 2026-07-28
+        // (Hallazgo #3).
         $sqlPagos = "SELECT
                         p._id AS id_pago,
                         p.id_empleado,
@@ -919,7 +925,6 @@ return function (App $app) {
                         api_empresas.empresas_usuarios eu ON p.id_empleado = eu.id_usuario
                     WHERE
                         p.id_orden = ?
-                        AND p.detalle NOT IN ('Comercialización', 'Abono a orden')
                     ORDER BY
                         eu.nombre, p.detalle";
 
