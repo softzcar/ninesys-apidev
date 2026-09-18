@@ -1173,12 +1173,22 @@ return function (App $app) {
       ]));
       return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
     }
-    if ((int) ID_USUARIO_TOKEN !== (int) $args['id_empleado'] && (int) (defined('ACCESO_TOKEN') ? ACCESO_TOKEN : 0) !== 1) {
-      $response->getBody()->write(json_encode([
-        'error' => 'forbidden',
-        'message' => 'No tiene permiso para ver los departamentos de otro empleado.',
-      ]));
-      return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    // Hallazgo real 2026-09-18 (urgencia en Producción): la guardia original
+    // solo permitía autoconsulta o Administrador -- igual que el bug de
+    // /ordenes/proyeccion-entrega del 2026-09-17, la guardia del 14-sep se
+    // basó en un único caller (autoconsulta) sin mapear los callers reales.
+    // Este endpoint también lo usan "Reposiciones por aprobar"/"Asignar
+    // reposición" y "Control de Producción" (página /test,
+    // components/produccionsse/{controlDeProduccionPro,reposicion,
+    // reposicionForm,reposicionesPendientes}.vue) para consultar los
+    // departamentos de OTRO empleado al asignarle una tarea -- esa página ya
+    // está gateada a módulo 5 (Producción/Control) o 1 (Admin), así que se
+    // amplía la autorización para igualar ese gate real en vez de bloquear
+    // un flujo de supervisión legítimo.
+    if ((int) ID_USUARIO_TOKEN !== (int) $args['id_empleado']) {
+      if ($errorResponse = perteneceAAlgunModulo($request, $response, [5])) {
+        return $errorResponse;
+      }
     }
 
     $localConnection = new LocalDB();
