@@ -1972,8 +1972,24 @@ return function (App $app) {
           $check_pago = $localConnection->goQuery($sql_check_pago, [$id_orden_actual, $id_emp_asignado, $id_departamento]);
 
           if (empty($check_pago)) {
+            // SAVEPOINT (hallazgo real 2026-09-18): este INSERT corre dentro
+            // de una transacción explícita. Si el índice UNIQUE de pagos
+            // rechaza un duplicado genuino de carrera (dos requests casi
+            // simultáneos pasando el check antes de que cualquiera inserte),
+            // Postgres marca TODA la transacción como abortada hasta el
+            // próximo ROLLBACK -- sin este SAVEPOINT, eso tumbaría también
+            // el cierre de la tarea y de otros ítems del mismo lote más
+            // abajo. goQuery() ya devuelve status=error (no lanza excepción)
+            // para violaciones de índice único; aquí solo hace falta limpiar
+            // el estado de la transacción para poder seguir.
+            $localConnection->goQuery('SAVEPOINT sp_pago_finalizar_departamento');
             $sql_pago = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, 'aprobado', ?, ?, ?)";
-            $localConnection->goQuery($sql_pago, [$id_orden_actual, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
+            $resultadoPago = $localConnection->goQuery($sql_pago, [$id_orden_actual, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
+            if (is_array($resultadoPago) && ($resultadoPago['status'] ?? null) === 'error') {
+              $localConnection->goQuery('ROLLBACK TO SAVEPOINT sp_pago_finalizar_departamento');
+            } else {
+              $localConnection->goQuery('RELEASE SAVEPOINT sp_pago_finalizar_departamento');
+            }
           }
 
           $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE _id = ?", [$now, $id_lotes_detalles]);
@@ -2331,16 +2347,31 @@ return function (App $app) {
             $total_comision = 0;
           }
 
+          // SAVEPOINT (hallazgo real 2026-09-18): este INSERT corre dentro
+          // de una transacción explícita -- si el índice UNIQUE de pagos
+          // rechaza un duplicado genuino de carrera, Postgres abortaría TODA
+          // la transacción (incluido el cierre del lote de abajo) hasta un
+          // ROLLBACK. Se aísla con SAVEPOINT para que, en ese caso raro, se
+          // descarte solo este intento sin tumbar nada más.
+          $localConnection->goQuery('SAVEPOINT sp_pago_finalizar_impresion');
           $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
           $params_pago = [$id_orden_actual, null, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
-          $localConnection->goQuery($sql_pago, $params_pago);
+          $resultadoPago = $localConnection->goQuery($sql_pago, $params_pago);
 
-          // Cierra SOLO el lote que se acaba de pagar (por _id, mismo patrón ya
-          // usado en las líneas ~1969/~2631) -- antes cerraba TODAS las filas de
-          // orden+departamento+empleado sin filtrar por _id ni por progreso,
-          // re-estampando fecha_terminado en lotes ya cerrados hace semanas cada
-          // vez que este endpoint se reinvocaba.
-          $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE _id = ?", [$now, $resp_comision[0]['id_lotes_detalles']]);
+          if (is_array($resultadoPago) && ($resultadoPago['status'] ?? null) === 'error') {
+            // Otro request ya pagó y cerró este mismo lote entre el check y
+            // el insert -- descartar sin tocar nada más.
+            $localConnection->goQuery('ROLLBACK TO SAVEPOINT sp_pago_finalizar_impresion');
+          } else {
+            $localConnection->goQuery('RELEASE SAVEPOINT sp_pago_finalizar_impresion');
+
+            // Cierra SOLO el lote que se acaba de pagar (por _id, mismo patrón ya
+            // usado en las líneas ~1969/~2631) -- antes cerraba TODAS las filas de
+            // orden+departamento+empleado sin filtrar por _id ni por progreso,
+            // re-estampando fecha_terminado en lotes ya cerrados hace semanas cada
+            // vez que este endpoint se reinvocaba.
+            $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE _id = ?", [$now, $resp_comision[0]['id_lotes_detalles']]);
+          }
         }
 
         $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ? AND progreso != 'terminada'", [$now, $id_departamento, $id_orden_actual]);
@@ -2602,8 +2633,17 @@ return function (App $app) {
           $check_pago = $localConnection->goQuery($sql_check_pago, [$id_orden_actual, $id_emp_asignado, $id_departamento]);
 
           if (empty($check_pago)) {
+            // SAVEPOINT (hallazgo real 2026-09-18): ver misma nota en
+            // finalizar-departamento/finalizar-impresion -- corre dentro de
+            // una transacción explícita.
+            $localConnection->goQuery('SAVEPOINT sp_pago_finalizar_corte');
             $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-            $localConnection->goQuery($sql_pago, [$id_orden_actual, null, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, 'aprobado', $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
+            $resultadoPago = $localConnection->goQuery($sql_pago, [$id_orden_actual, null, $id_departamento, $comision_guardar, $comision_tipo, $cantidad_piezas, $id_lotes_detalles, 'aprobado', $total_monto_pago, $id_emp_asignado, $nombre_departamento]);
+            if (is_array($resultadoPago) && ($resultadoPago['status'] ?? null) === 'error') {
+              $localConnection->goQuery('ROLLBACK TO SAVEPOINT sp_pago_finalizar_corte');
+            } else {
+              $localConnection->goQuery('RELEASE SAVEPOINT sp_pago_finalizar_corte');
+            }
           }
 
           // EXCEDENTES CORTE (Todos los tipos de comisión: variable, fija, porcentaje)
@@ -2651,8 +2691,14 @@ return function (App $app) {
             $sqlCheckExc = "SELECT _id FROM pagos WHERE id_orden = ? AND id_reposicion IS NULL AND id_empleado = ? AND id_departamento = ? AND id_lotes_detalles = ? AND detalle = 'Corte-Excedente' LIMIT 1";
             $checkExc = $localConnection->goQuery($sqlCheckExc, [$id_orden_actual, $id_emp_asignado, $id_departamento, $id_lotes_detalles]);
             if (empty($checkExc)) {
+              $localConnection->goQuery('SAVEPOINT sp_pago_excedente_corte');
               $sqlExcIns = "INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, NULL, ?, ?, ?, ?, ?, 'aprobado', ?, ?, 'Corte-Excedente')";
-              $localConnection->goQuery($sqlExcIns, [$id_orden_actual, $id_departamento, $comision_exc, $comision_tipo, $excedente_piezas, $id_lotes_detalles, $monto_exc, $id_emp_asignado]);
+              $resultadoExc = $localConnection->goQuery($sqlExcIns, [$id_orden_actual, $id_departamento, $comision_exc, $comision_tipo, $excedente_piezas, $id_lotes_detalles, $monto_exc, $id_emp_asignado]);
+              if (is_array($resultadoExc) && ($resultadoExc['status'] ?? null) === 'error') {
+                $localConnection->goQuery('ROLLBACK TO SAVEPOINT sp_pago_excedente_corte');
+              } else {
+                $localConnection->goQuery('RELEASE SAVEPOINT sp_pago_excedente_corte');
+              }
             }
           }
 
@@ -2886,7 +2932,16 @@ return function (App $app) {
     }
 
     if ($sql_pago !== null) {
-      $object['response_insert_pago'] = $localConnection->goQuery($sql_pago, $params_pago);
+      // SAVEPOINT (hallazgo real 2026-09-18): corre dentro de una
+      // transacción explícita -- ver misma nota en finalizar-impresion.
+      $localConnection->goQuery('SAVEPOINT sp_pago_registrar_paso');
+      $resultadoPago = $localConnection->goQuery($sql_pago, $params_pago);
+      if (is_array($resultadoPago) && ($resultadoPago['status'] ?? null) === 'error') {
+        $localConnection->goQuery('ROLLBACK TO SAVEPOINT sp_pago_registrar_paso');
+      } else {
+        $localConnection->goQuery('RELEASE SAVEPOINT sp_pago_registrar_paso');
+        $object['response_insert_pago'] = $resultadoPago;
+      }
     }
 
     // ACTUALIZAR DATOS DE INICIO DE TAREA
@@ -3008,8 +3063,14 @@ return function (App $app) {
         $sqlCheckPagoLote = 'SELECT _id FROM pagos WHERE id_lotes_detalles = ? AND detalle = ? LIMIT 1';
         $checkPagoLote = $localConnection->goQuery($sqlCheckPagoLote, [$value->id_lotes_detalles, $args['departamento']]);
         if (empty($checkPagoLote)) {
+          // SAVEPOINT (hallazgo real 2026-09-18): este endpoint procesa
+          // VARIOS lotes en una sola transacción (foreach) -- sin aislar
+          // este INSERT, un duplicado de carrera en UN solo lote abortaría
+          // la transacción completa y perdería el resto de los lotes de
+          // este mismo request.
+          $localConnection->goQuery('SAVEPOINT sp_pago_registrar_paso_lote');
           $sql_pago = 'INSERT INTO pagos(id_orden, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?)';
-          $results[] = $localConnection->goQuery($sql_pago, [
+          $resultadoPagoLote = $localConnection->goQuery($sql_pago, [
             $id_orden,
             $respLotesDetalles[0]['unidades'],
             $value->id_lotes_detalles,
@@ -3018,6 +3079,12 @@ return function (App $app) {
             $miEmpleado[0]['id_empleado'],
             $args['departamento'],
           ]);
+          if (is_array($resultadoPagoLote) && ($resultadoPagoLote['status'] ?? null) === 'error') {
+            $localConnection->goQuery('ROLLBACK TO SAVEPOINT sp_pago_registrar_paso_lote');
+          } else {
+            $localConnection->goQuery('RELEASE SAVEPOINT sp_pago_registrar_paso_lote');
+            $results[] = $resultadoPagoLote;
+          }
         }
         $tipo_fecha = 'fecha_terminado';
         $progreso = 'terminada';
