@@ -2298,7 +2298,19 @@ return function (App $app) {
         // 2026-09-08, primer uso real de este endpoint tras reconectarlo).
         $sql_calculo_pago = "SELECT a._id AS id_lotes_detalles, a.procentaje_comision, (SUM($cantidadRealImpSql * d.comision) * $porcentajeCaseImpSql / 100) AS total_comision_variable, (SUM($cantidadRealImpSql * eu.comision) * $porcentajeCaseImpSql / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo $granularJoinImpSql WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND a.id_reposicion IS NULL AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) $granularWhereImpSql GROUP BY a._id, a.procentaje_comision";
         $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
-        if (!empty($resp_comision)) {
+
+        // Guardia de idempotencia (hallazgo real 2026-09-18, ver bitácora): este
+        // era el ÚNICO de los tres endpoints de finalización de lote sin este
+        // chequeo -- /finalizar-corte (línea ~1961) y el bloque de asignaciones
+        // de ~línea 1905 ya lo tienen. Sin esto, cada vez que este endpoint se
+        // reinvocaba para el mismo orden+empleado+departamento (reintento del
+        // frontend, doble click) se insertaba un pago NUEVO por un lote ya
+        // pagado -- verificado en datos reales: 513 lotes pagados más de una
+        // vez en la empresa 194, ~$1,124 de sobrepago estimado.
+        $sql_check_pago = "SELECT _id FROM pagos WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion IS NULL LIMIT 1";
+        $check_pago = $localConnection->goQuery($sql_check_pago, [$id_orden_actual, $id_empleado, $id_departamento]);
+
+        if (!empty($resp_comision) && empty($check_pago)) {
           $total_comision = ($comision_tipo === 'fija') ? $resp_comision[0]['total_comision_fija'] : $resp_comision[0]['total_comision_variable'];
 
           // Si el empleado tiene compensación SÓLO SALARIO, no se paga comisión
@@ -2312,10 +2324,16 @@ return function (App $app) {
           $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
           $params_pago = [$id_orden_actual, null, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
           $localConnection->goQuery($sql_pago, $params_pago);
+
+          // Cierra SOLO el lote que se acaba de pagar (por _id, mismo patrón ya
+          // usado en las líneas ~1969/~2631) -- antes cerraba TODAS las filas de
+          // orden+departamento+empleado sin filtrar por _id ni por progreso,
+          // re-estampando fecha_terminado en lotes ya cerrados hace semanas cada
+          // vez que este endpoint se reinvocaba.
+          $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE _id = ?", [$now, $resp_comision[0]['id_lotes_detalles']]);
         }
 
-        $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ?", [$now, $id_departamento, $id_orden_actual]);
-        $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ? AND id_empleado = ?", [$now, $id_departamento, $id_orden_actual, $id_empleado]);
+        $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ? AND progreso != 'terminada'", [$now, $id_departamento, $id_orden_actual]);
       }
 
       $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
