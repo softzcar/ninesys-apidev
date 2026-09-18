@@ -1024,9 +1024,17 @@ return function (App $app) {
         }
 
         // GUARDAR PAGO PARA COMISIÓN FIJA
+        // Reposición (comisión fija): $piezas se corregía a las unidades reales
+        // de la reposición, pero $totalComimision quedaba con el monto calculado
+        // arriba sobre TODAS las piezas del pedido original -- bug real
+        // confirmado 2026-09-18 (orden 7018: reposiciones de 2 y 5 piezas
+        // cobraban ambas el mismo monto que las 12 piezas del pedido original).
+        // Recalcular el monto también, mismo patrón ya usado en la rama
+        // 'variable' (líneas ~1137-1140) para el mismo caso.
         if ($miEmpleado['es_reposicion']) {
           $sqlUnidades = "SELECT unidades FROM reposiciones WHERE _id = {$miEmpleado['id_reposicion']}";
-          $piezas = $localConnection->goQuery($sqlUnidades)[0]['unidades'];
+          $piezas = floatval($localConnection->goQuery($sqlUnidades)[0]['unidades'] ?? 0);
+          $totalComimision = ($salarioTipo === 'Salario') ? 0 : ($piezas * floatval($comimision));
         }
 
         $id_reposicion_val = isset($miEmpleado['id_reposicion']) ? $miEmpleado['id_reposicion'] : 'NULL';
