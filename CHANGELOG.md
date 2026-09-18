@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.42] - 2026-09-18
+- Fix: aislar con SAVEPOINT los INSERT de pagos que corren dentro de transaccion explicita (evita que una carrera de duplicado tumbe otras escrituras legitimas del mismo request)
+
 ## [v1.0.41] - 2026-09-18
 - Fix: blindaje completo contra pagos/cierres duplicados en todos los endpoints de lote (indices UNIQUE + guards de idempotencia faltantes + saneamiento de 425 filas duplicadas historicas)
 
