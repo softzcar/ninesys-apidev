@@ -1185,28 +1185,40 @@ return function (App $app) {
     $queryParams = $request->getQueryParams();
     $fechaInicio = $queryParams['fecha_inicio'] ?? null;
     $fechaFin = $queryParams['fecha_fin'] ?? null;
+    $idReposicionFiltro = isset($queryParams['id_reposicion']) ? intval($queryParams['id_reposicion']) : null;
 
-    // El status de ordenes NO tiene una convención de mayúsculas consistente
-    // ('activa', 'cancelada' Y 'Cancelada', 'En espera' -- verificado con datos
-    // reales). Comparar con LOWER() en ambos lados evita que el filtro por
-    // defecto ('activa') deje de matchear silenciosamente.
-    $estatusOrdenParam = strtolower((string)$args['estatus_orden']);
     $sqlParams = [];
     $whereConditions = [];
-    if ($estatusOrdenParam === 'activa') {
-      $whereConditions[] = "LOWER(ord.status) IN ('activa', 'pausada', 'en espera', 'terminada')";
-    } elseif ($estatusOrdenParam !== 'todas') {
-      $whereConditions[] = "LOWER(ord.status) = ?";
-      $sqlParams[] = $estatusOrdenParam;
+
+    if ($idReposicionFiltro) {
+      // Detalle de UNA reposición puntual (ej. desde la Planilla de Pagos, al
+      // hacer click en su número) -- ignora estatus/fechas, se busca por ID
+      // sin importar el estado actual de la orden.
+      $whereConditions[] = "re._id = ?";
+      $sqlParams[] = $idReposicionFiltro;
+    } else {
+      // El status de ordenes NO tiene una convención de mayúsculas consistente
+      // ('activa', 'cancelada' Y 'Cancelada', 'En espera' -- verificado con datos
+      // reales). Comparar con LOWER() en ambos lados evita que el filtro por
+      // defecto ('activa') deje de matchear silenciosamente.
+      $estatusOrdenParam = strtolower((string)$args['estatus_orden']);
+      if ($estatusOrdenParam === 'activa') {
+        $whereConditions[] = "LOWER(ord.status) IN ('activa', 'pausada', 'en espera', 'terminada')";
+      } elseif ($estatusOrdenParam !== 'todas') {
+        $whereConditions[] = "LOWER(ord.status) = ?";
+        $sqlParams[] = $estatusOrdenParam;
+      }
     }
 
-    if (DB_DRIVER === 'pgsql') {
-      if ($fechaInicio && $fechaFin && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaFin)) {
-        $whereConditions[] = "re.moment::date BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
-      }
-    } else {
-      if ($fechaInicio && $fechaFin && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaFin)) {
-        $whereConditions[] = "DATE(re.moment) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+    if (!$idReposicionFiltro) {
+      if (DB_DRIVER === 'pgsql') {
+        if ($fechaInicio && $fechaFin && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaFin)) {
+          $whereConditions[] = "re.moment::date BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+        }
+      } else {
+        if ($fechaInicio && $fechaFin && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaFin)) {
+          $whereConditions[] = "DATE(re.moment) BETWEEN '{$fechaInicio}' AND '{$fechaFin}'";
+        }
       }
     }
 

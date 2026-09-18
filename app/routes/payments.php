@@ -1311,6 +1311,7 @@ return function (App $app) {
     $sqlPagos = "SELECT
         a._id AS id_pago,
         a.id_orden,
+        a.id_reposicion,
         a.detalle AS departamento_pago,
         a.cantidad,
         a.monto_pago,
