@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** Reporte de bug urgente: "Reposiciones por aprobar" y "Asignar reposición" en Control de Producción (`/test`) fallaban al seleccionar OTRO empleado distinto del usuario logueado.
+- **Fecha y Hora:** 2026-09-18 14:35:18
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - `app/routes/products.php` (endpoint `GET /departamentos-empleado/{id_empleado}`)
+- **Commits Relacionados:**
+  - Backend: `736e636` (rama `feature/postgresql-support`)
+  - Frontend: N/A
+- **Acción Realizada:** Ampliada la guardia de autorización IDOR de este endpoint (agregada el 2026-09-14) para incluir también al módulo 5 (Producción/Control), que hasta ahora solo contemplaba autoconsulta o Administrador (módulo 1). Mismo patrón de "guardia basada en un solo caller" ya visto y corregido el 2026-09-17 en `/ordenes/proyeccion-entrega`.
+- **Inconvenientes y Desafíos:** La guardia de seguridad del 2026-09-14 fue demasiado restrictiva al no contemplar todos los roles legítimos que necesitan consultar el departamento de OTRO empleado (supervisores de Control de Producción).
+- **Decisión Final y Justificación:** Ampliar la lista de módulos autorizados en vez de remover la guardia -- mantiene la protección IDOR para roles que no deberían poder consultar datos de otros empleados, sin bloquear el flujo legítimo de Producción.
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `php -l`, `deploy_backend_dev.sh`, `git commit`.
+- **Resultado:** Éxito.
+- **Verificación:** Reproducido el flujo de "Asignar reposición" en Desarrollo seleccionando un empleado distinto del usuario logueado -- confirmado que ya no bloquea.
+- **Logro Conseguido:** Desbloquea un flujo crítico de Control de Producción (aprobar/asignar reposiciones) que estaba roto para cualquier supervisor que necesitara operar sobre el departamento de otro empleado.
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Segundo caso del mismo patrón de guardia-de-un-solo-caller en dos días consecutivos -- valdría la pena revisar sistemáticamente qué otros endpoints con guardias IDOR recientes (2026-09-09 a 2026-09-14) tienen la misma limitación.
+- **Respuesta de Gemini:** Corregido: `/departamentos-empleado/{id}` ahora también autoriza al módulo 5 (Producción/Control), desbloqueando "Reposiciones por aprobar" y "Asignar reposición" al operar sobre otro empleado.

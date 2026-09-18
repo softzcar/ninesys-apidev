@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** Investigar por qué `/empleados/pagos` mostraba un valor absurdo de "horas trabajadas" (ej. ~3554h) para el empleado danuill (Corte, empresa 194).
+- **Fecha y Hora:** 2026-09-18 15:28:51
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - `app/routes/manufacturing.php` (endpoint `POST /lotes/{id}/finalizar-impresion`)
+- **Commits Relacionados:**
+  - Backend: `b0e005a` (rama `feature/postgresql-support`)
+  - Frontend: N/A
+- **Acción Realizada:** Encontrada la causa raíz real: `/lotes/{id}/finalizar-impresion` podía procesar el mismo lote más de una vez (reintento del frontend, doble click), insertando un pago nuevo cada vez y re-estampando `fecha_terminado` sobre filas ya cerradas hace semanas/meses. A diferencia de sus dos endpoints hermanos (`/finalizar-corte` y el bloque de asignaciones ~línea 1905), que ya tenían la guardia de "verificar si ya existe un pago antes de insertar", este era el único sin ella. Verificado con datos reales (clon de Producción del 17-sep, empresa 194): 513 lotes pagados más de una vez, 1214 pagos generados donde debían ser 513, ~$1,124 de sobrepago estimado. Agregada la misma guardia de idempotencia (`SELECT _id FROM pagos WHERE ... LIMIT 1` antes de `INSERT`), y el `UPDATE` de cierre escopado al `_id` específico del lote en vez de a todas las filas de orden+empleado+departamento.
+- **Inconvenientes y Desafíos:** El bug llevaba generando datos corruptos desde julio; explicaba a la vez el sobrepago y el "horas trabajadas" hiper-inflado (las filas duplicadas con `fecha_inicio` antigua y `fecha_terminado` recién re-estampado se sumaban todas).
+- **Decisión Final y Justificación:** Se corta la fuga ahora mismo (guardia + `UPDATE` escopado), sin tocar todavía los ~$1,124 ya liquidados históricamente ni la vista de "Horas Trabajadas" -- ambos quedan fuera de alcance de este commit, decisión explícita, para no mezclar corrección de código con limpieza de datos históricos en el mismo cambio.
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (verificación en clon de Desarrollo), `Read`, `Edit`, `php -l`, `git commit`.
+- **Resultado:** Éxito parcial (a propósito) -- corta la fuga hacia adelante; la limpieza histórica y el fix de "Horas Trabajadas" se abordaron en tareas posteriores el mismo día.
+- **Verificación:** Reproducido en Desarrollo invocando el endpoint dos veces seguidas para el mismo lote -- confirmado que la segunda invocación ya no inserta un pago nuevo ni re-estampa `fecha_terminado`.
+- **Logro Conseguido:** Primer paso del blindaje completo contra pagos duplicados desplegado hoy -- identifica y cierra la fuga más antigua y de mayor impacto ($1,124 estimados).
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Este hallazgo motivó una auditoría completa de TODOS los endpoints de finalización de lote el mismo día (ver tarea siguiente, commit `b4a5214`), que encontró más casos del mismo patrón.
+- **Respuesta de Gemini:** Causa raíz encontrada y corregida: `/finalizar-impresion` podía procesarse dos veces para el mismo lote, duplicando pagos e inflando "horas trabajadas". Agregada guardia de idempotencia; limpieza de datos históricos queda para una tarea aparte.

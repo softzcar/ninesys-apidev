@@ -1,0 +1,28 @@
+- **Solicitud del Usuario:** A pedido explícito del usuario tras el fix puntual de `/finalizar-impresion`: auditar TODOS los endpoints de finalización de lote en busca del mismo patrón de duplicado, no solo el ya corregido.
+- **Fecha y Hora:** 2026-09-18 16:12:01
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - `app/routes/manufacturing.php` (12 puntos de `INSERT INTO pagos` y todos los `UPDATE` de `fecha_terminado`/`progreso` auditados)
+  - `public/model/create_new_company_api_emp_N_postgres.sql` (índices UNIQUE agregados a la plantilla de empresa nueva)
+- **Commits Relacionados:**
+  - Backend: `b4a5214` (rama `feature/postgresql-support`)
+  - Frontend: N/A
+- **Acción Realizada:**
+  1. Auditados los 12 puntos de `INSERT INTO pagos` y todos los `UPDATE` de cierre en `manufacturing.php`.
+  2. Corregido `/registrar-paso-empleado`: el `UPDATE` final de cierre no filtraba por `_id` ni `progreso` -- re-estampaba `fecha_terminado` en TODAS las filas de orden+empleado+departamento, incluidas ya cerradas hace semanas. Causa real confirmada del "horas trabajadas" hiper-inflado (danuill, Corte, empresa 194). Sus pagos ya estaban protegidos contra duplicados; faltaba esta pieza para la fecha.
+  3. Corregidos `/empleados/registrar-paso/{...}` y `/empleados/registrar-paso-por-lotes/{...}`: no tenían ningún guard de duplicado en el `INSERT`, a diferencia de `/registrar-paso-empleado`. Agregado el mismo patrón de "check antes de insertar".
+  4. Agregado el mismo guard de `progreso` en los `UPDATE` de `lotes_detalles` (tabla legada) en `finalizar-departamento` y `finalizar-corte`, por consistencia.
+  5. Creados dos índices `UNIQUE` parciales en `pagos` (`pagos_lote_detalle_unico_sin_reposicion` y `pagos_lote_detalle_unico_con_reposicion`) como blindaje a nivel de base de datos, además de los guards a nivel de código.
+  6. Saneamiento de datos históricos ejecutado en Desarrollo antes de crear los índices (Postgres rechaza `UNIQUE` si hay violaciones existentes): backup completo de `pagos`, 425 filas duplicadas eliminadas (261 lotes afectados, ~$441 de sobrepago histórico), 0 grupos duplicados restantes verificado antes de crear los índices.
+  7. Mismo saneamiento y creación de índices replicado en Producción (194 y 208) con backup previo, siguiendo la instrucción explícita del usuario de respaldar antes de tocar datos de Producción.
+  8. Actualizada la plantilla `create_new_company_api_emp_N_postgres.sql` para que toda empresa nueva nazca ya protegida por estos índices.
+- **Inconvenientes y Desafíos:** Postgres rechaza crear un índice `UNIQUE` si ya existen filas que lo violarían -- fue necesario limpiar los duplicados históricos primero, con mucho cuidado de no borrar pagos legítimos (verificación de conteos idénticos entre grupos duplicados y filas sobrantes antes de ejecutar el `DELETE`).
+- **Decisión Final y Justificación:** Blindaje en dos capas (guard de aplicación + índice `UNIQUE` de base de datos) en vez de confiar solo en el código: el índice protege incluso ante una futura regresión del guard de aplicación o un endpoint nuevo que se agregue sin la guardia.
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (backup, limpieza y verificación en Desarrollo y Producción), `Read`, `Edit`, `php -l`, `deploy_backend_dev.sh`, `deploy_backend_prod.sh`, `git commit`.
+- **Resultado:** Éxito.
+- **Verificación:** Verificado en Desarrollo y Producción que, tras la limpieza, 0 grupos duplicados quedan en `pagos`; verificado que los nuevos índices bloquean un segundo `INSERT` idéntico (constraint violation), probado en una transacción con `ROLLBACK` sin dejar rastro.
+- **Logro Conseguido:** Cierre completo (código + base de datos) de la fuga de pagos/cierres duplicados en los 6 endpoints de lote de la aplicación, con $441 de sobrepago histórico corregido en Desarrollo y en Producción (194 y 208).
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Este blindaje llevó directamente a la siguiente pregunta del usuario (¿se pierden otras escrituras legítimas del mismo request si el índice rechaza un duplicado de carrera?), resuelta en la tarea siguiente con SAVEPOINT (commit `d27ccfa`).
+- **Respuesta de Gemini:** Auditados y corregidos los 6 endpoints de finalización de lote contra pagos/cierres duplicados, con índices `UNIQUE` como blindaje adicional a nivel de base de datos y limpieza de 425 filas duplicadas históricas (~$441) en Desarrollo y Producción.

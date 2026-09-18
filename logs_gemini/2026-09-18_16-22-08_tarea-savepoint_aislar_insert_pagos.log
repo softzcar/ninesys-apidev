@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** Pregunta real del usuario tras el blindaje de pagos duplicados de hoy: si el índice `UNIQUE` de `pagos` rechaza un duplicado de carrera (dos requests casi simultáneos para el mismo lote), ¿se pierden otros registros legítimos del mismo request?
+- **Fecha y Hora:** 2026-09-18 16:22:08
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - `app/routes/manufacturing.php` (5 de los 6 endpoints corregidos hoy que corren dentro de `beginTransaction()` explícito)
+- **Commits Relacionados:**
+  - Backend: `d27ccfa` (rama `feature/postgresql-support`)
+  - Frontend: N/A
+- **Acción Realizada:** Confirmado que en Postgres, una sentencia fallida dentro de una transacción explícita marca TODA la transacción como abortada hasta el próximo `ROLLBACK`, aunque PHP capture la excepción con un `try/catch`. Sin aislar el `INSERT` de pago, un rechazo del índice `UNIQUE` (violación de carrera) habría tumbado también el cierre de la tarea, o el resto de un lote con varias tareas en `/registrar-paso-por-lotes`. Corregido envolviendo cada `INSERT` de pago con `SAVEPOINT` / `RELEASE SAVEPOINT` / `ROLLBACK TO SAVEPOINT` en los 5 endpoints afectados -- mismo mecanismo que `LocalDB::goQuery()` ya usa internamente para aislar `lastInsertId()`. `goQuery()` ya devolvía `status=error` (sin lanzar excepción) para violaciones de índice único (SQLSTATE 23505); el `SAVEPOINT` era la pieza que faltaba para que ese error no arrastrara el resto de la transacción. `/registrar-paso-empleado` (el endpoint más usado) no lo necesitó -- su flujo principal no corre dentro de una transacción explícita.
+- **Inconvenientes y Desafíos:** Requirió entender el comportamiento específico de Postgres ante errores dentro de una transacción (distinto de MySQL, que no aborta toda la transacción ante cualquier error de sentencia) para diagnosticar correctamente el riesgo antes de que se manifestara en producción.
+- **Decisión Final y Justificación:** `SAVEPOINT` alrededor de cada `INSERT` de pago, en vez de mover el `INSERT` fuera de la transacción -- preserva la atomicidad real del resto de la operación (el cierre de tarea y el pago deben quedar consistentes entre sí) mientras aísla específicamente el punto de posible conflicto de carrera.
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (prueba en vivo con transacción de prueba y `ROLLBACK` final para no dejar rastro), `Read`, `Edit`, `php -l`, `deploy_backend_dev.sh`, `deploy_backend_prod.sh`, `git commit`.
+- **Resultado:** Éxito.
+- **Verificación:** Verificado en vivo en Desarrollo, dentro de una transacción de prueba con `ROLLBACK` final, que un `INSERT` duplicado dentro de la transacción ya no aborta las sentencias posteriores del mismo request.
+- **Logro Conseguido:** Cierra el último riesgo latente del blindaje de pagos duplicados de hoy -- garantiza que el sistema de protección contra duplicados no introduzca, a su vez, un nuevo modo de falla (pérdida de escrituras legítimas ante una carrera).
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Cierra la secuencia de tres tareas del día sobre pagos duplicados (fix puntual → blindaje completo → aislamiento de transacción), cada una motivada por una pregunta de seguimiento real del usuario sobre la anterior.
+- **Respuesta de Gemini:** Aislados con `SAVEPOINT` los `INSERT` de pago que corren dentro de transacción explícita en 5 endpoints, evitando que un duplicado de carrera tumbe otras escrituras legítimas del mismo request.

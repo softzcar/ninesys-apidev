@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** Decisión de negocio confirmada por el usuario el 2026-09-18: la comisión de venta (vendedor) y el salario de todo trabajador activo, incluidos vendedores, deben contarse como costo operativo real de la empresa en el Reporte de Costos de Producción -- revierte una exclusión decidida el 2026-07-28 (Hallazgo #3 de la auditoría de ese día).
+- **Fecha y Hora:** 2026-09-18 11:32:30
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - `app/routes/reports.php` (listado principal `costo_mano_de_obra` y modal de detalle por orden del Reporte de Costos de Producción)
+- **Commits Relacionados:**
+  - Backend: `3bdfbd3` (rama `feature/postgresql-support`)
+  - Frontend: N/A
+- **Acción Realizada:** Revertido el filtro `pagos.detalle NOT IN ('Comercialización', 'Abono a orden')` en los dos endpoints que alimentan el Reporte de Costos de Producción, de modo que la comisión de venta y los abonos a orden vuelvan a sumarse al costo de mano de obra mostrado.
+- **Inconvenientes y Desafíos:** Ninguno técnico -- el cambio es una reversión directa de una decisión de negocio anterior, no un bug de código.
+- **Decisión Final y Justificación:** Se prioriza la decisión de negocio explícita del usuario sobre el criterio contable usado en julio; se documenta en el commit para que quede trazable el motivo del cambio si se revisa de nuevo en el futuro.
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `php -l`, `git commit`.
+- **Resultado:** Éxito.
+- **Verificación:** `php -l app/routes/reports.php` sin errores de sintaxis; revisado que ambos puntos (listado y modal) quedaron consistentes entre sí.
+- **Logro Conseguido:** El Reporte de Costos de Producción vuelve a reflejar el costo real de mano de obra incluyendo comisión de venta, alineado con la decisión de negocio vigente.
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Cambio puntual y de bajo riesgo, sin relación con los bugs de pagos duplicados encontrados más tarde el mismo día.
+- **Respuesta de Gemini:** Revertido el filtro de exclusión de comisión de venta en el Reporte de Costos de Producción, según la decisión de negocio confirmada por el usuario.
