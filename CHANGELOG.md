@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.39] - 2026-09-18
+- Fix: comision de venta (vendedor) ahora se incluye en el costo de mano de obra del Reporte de Costos de Produccion (antes excluida a proposito, decision de negocio revertida)
+
 ## [v1.0.38] - 2026-09-17
 - Fix: tercera copia del bug de empleados no trackeados, alimentaba el TOTAL MANO DE OBRA del reporte principal
 
