@@ -672,7 +672,7 @@ return function (App $app) {
             $localConnection->goQuery($sqlRepo);
 
             // Finish current tracking
-            $sqlRepoTracking = "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$repoId};";
+            $sqlRepoTracking = "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = '{$now}' WHERE id_orden = {$miEmpleado['id_orden']} AND id_empleado = {$miEmpleado['id_empleado']} AND id_departamento = {$miEmpleado['id_departamento']} AND id_reposicion = {$repoId} AND progreso != 'terminada';";
             $localConnection->goQuery($sqlRepoTracking);
           }
         }
@@ -687,7 +687,7 @@ return function (App $app) {
             $sqlRepo2 = "DELETE FROM ordenes_fila_reposiciones WHERE id_reposicion = ?;";
             $localConnection->goQuery($sqlRepo2, [$miEmpleado['id_reposicion']]);
 
-            $sqlRepo3 = "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = '{$now}' WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = ?;";
+            $sqlRepo3 = "UPDATE lotes_detalles_empleados_asignados SET progreso = 'terminada', fecha_terminado = '{$now}' WHERE id_orden = ? AND id_empleado = ? AND id_departamento = ? AND id_reposicion = ? AND progreso != 'terminada';";
             $localConnection->goQuery($sqlRepo3, [$miEmpleado['id_orden'], $miEmpleado['id_empleado'], $miEmpleado['id_departamento'], $miEmpleado['id_reposicion']]);
 
             $localConnection->commit();
@@ -1206,12 +1206,22 @@ return function (App $app) {
         }
       }
 
-      $sqlTerminar = "UPDATE lotes_detalles_empleados_asignados SET 
-          fecha_terminado = '{$now}', 
-          progreso = 'terminada' 
-          WHERE id_orden = {$miEmpleado['id_orden']} 
-          AND id_empleado = {$miEmpleado['id_empleado']} 
-          AND id_departamento = {$miEmpleado['id_departamento']};";
+      // Hallazgo real 2026-09-18: sin "AND progreso != 'terminada'", cada
+      // vez que este endpoint (el que usan los empleados a diario, no un
+      // endpoint de supervisor) se volvia a invocar para el mismo
+      // orden+empleado+departamento, re-estampaba fecha_terminado sobre
+      // TODAS las filas ya cerradas de semanas/meses atras -- causa real
+      // confirmada del "horas trabajadas" hiper-inflado (danuill, Corte,
+      // empresa 194). Los pagos ya estaban protegidos por el "CHECK
+      // DUPLICATE BEFORE INSERT" de mas arriba; esta era la pieza que
+      // faltaba para la fecha.
+      $sqlTerminar = "UPDATE lotes_detalles_empleados_asignados SET
+          fecha_terminado = '{$now}',
+          progreso = 'terminada'
+          WHERE id_orden = {$miEmpleado['id_orden']}
+          AND id_empleado = {$miEmpleado['id_empleado']}
+          AND id_departamento = {$miEmpleado['id_departamento']}
+          AND progreso != 'terminada';";
       $localConnection->goQuery($sqlTerminar);
     } // Cierre if ($miEmpleado['tipo'] === 'fin')
 
@@ -1969,7 +1979,7 @@ return function (App $app) {
           $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE _id = ?", [$now, $id_lotes_detalles]);
         }
 
-        $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ?", [$now, $id_departamento, $id_orden_actual]);
+        $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ? AND progreso != 'terminada'", [$now, $id_departamento, $id_orden_actual]);
       }
 
       $localConnection->goQuery("UPDATE empleados_lotes_fabricacion SET estado = 'terminado', fecha_fin = ? WHERE _id = ?", [$now, $id_lote]);
@@ -2649,7 +2659,7 @@ return function (App $app) {
           $localConnection->goQuery("UPDATE lotes_detalles_empleados_asignados SET fecha_terminado = ?, progreso = 'terminada' WHERE _id = ?", [$now, $id_lotes_detalles]);
         }
 
-        $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ?", [$now, $id_departamento, $id_orden_actual]);
+        $localConnection->goQuery("UPDATE lotes_detalles SET fecha_terminado = ?, progreso = 'terminada' WHERE id_departamento = ? AND id_orden = ? AND progreso != 'terminada'", [$now, $id_departamento, $id_orden_actual]);
       }
 
       // 5. Finalizar el lote principal
@@ -2848,20 +2858,27 @@ return function (App $app) {
       $monto_pago = $calculo_pago;
       $object['monto_pago'] = $monto_pago; */
 
-      // GUARDAR PAGO
-      $sql_pago = 'INSERT INTO pagos(id_orden, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
-      $params_pago = [
-        $object['id_orden'],
-        $miComision,
-        $comisionTipo,
-        $args['unidades'],
-        $args['id_lotes_detalles'],
-        'aprobado',
-        $monto_pago,
-        $miEmpleado[0]['id_empleado'],
-        $args['departamento'],
-      ];
+      // GUARDAR PAGO -- guardia de idempotencia agregada (hallazgo real
+      // 2026-09-18, ver bitácora): este endpoint no la tenía, a diferencia
+      // de /registrar-paso-empleado (donde ya existía este mismo check).
+      $sql_check_pago = 'SELECT _id FROM pagos WHERE id_lotes_detalles = ? AND detalle = ? LIMIT 1';
+      $check_pago = $localConnection->goQuery($sql_check_pago, [$args['id_lotes_detalles'], $args['departamento']]);
+
+      if (empty($check_pago)) {
+        $sql_pago = 'INSERT INTO pagos(id_orden, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $params_pago = [
+          $object['id_orden'],
+          $miComision,
+          $comisionTipo,
+          $args['unidades'],
+          $args['id_lotes_detalles'],
+          'aprobado',
+          $monto_pago,
+          $miEmpleado[0]['id_empleado'],
+          $args['departamento'],
+        ];
+      }
 
       $campo = 'fecha_terminado';
 
@@ -2983,20 +3000,25 @@ return function (App $app) {
           $object['monto_pago'] = $monto_pago;
         }
 
-        // GUARDAR PAGO
+        // GUARDAR PAGO -- guardia de idempotencia agregada (hallazgo real
+        // 2026-09-18, ver bitácora): este endpoint no la tenía.
         $sqlxxx = 'SELECT id_empleado FROM lotes_detalles WHERE _id = ?';
         $miEmpleado = $localConnection->goQuery($sqlxxx, [$value->id_lotes_detalles]);
 
-        $sql_pago = 'INSERT INTO pagos(id_orden, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?)';
-        $results[] = $localConnection->goQuery($sql_pago, [
-          $id_orden,
-          $respLotesDetalles[0]['unidades'],
-          $value->id_lotes_detalles,
-          'aprobado',
-          $monto_pago,
-          $miEmpleado[0]['id_empleado'],
-          $args['departamento'],
-        ]);
+        $sqlCheckPagoLote = 'SELECT _id FROM pagos WHERE id_lotes_detalles = ? AND detalle = ? LIMIT 1';
+        $checkPagoLote = $localConnection->goQuery($sqlCheckPagoLote, [$value->id_lotes_detalles, $args['departamento']]);
+        if (empty($checkPagoLote)) {
+          $sql_pago = 'INSERT INTO pagos(id_orden, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?)';
+          $results[] = $localConnection->goQuery($sql_pago, [
+            $id_orden,
+            $respLotesDetalles[0]['unidades'],
+            $value->id_lotes_detalles,
+            'aprobado',
+            $monto_pago,
+            $miEmpleado[0]['id_empleado'],
+            $args['departamento'],
+          ]);
+        }
         $tipo_fecha = 'fecha_terminado';
         $progreso = 'terminada';
       }
