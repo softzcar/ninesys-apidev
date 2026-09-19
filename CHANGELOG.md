@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.46] - 2026-09-18
+- Fix critico: /registrar-paso-empleado permitia completar y cobrar una reposicion eliminada/cancelada (orden 5186/reposicion #38, pago erroneo de $0.66 anulado en Produccion)
+
 ## [v1.0.45] - 2026-09-18
 - Feat: exponer id_reposicion en /pagos/reporte-empleado y permitir filtrar /reposiciones-reporte por id_reposicion puntual (soporte para columna Origen clicable en Planilla de Pagos)
 

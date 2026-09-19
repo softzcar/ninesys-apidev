@@ -562,6 +562,21 @@ return function (App $app) {
 
     $localConnection = new LocalDB();
 
+    // Guard: no permitir iniciar/terminar (y por lo tanto cobrar) una
+    // reposición que fue eliminada/cancelada -- bug real confirmado
+    // 2026-09-18, orden 5186/reposición #38: eliminada desde mayo y ya
+    // pagada por completo en junio, pero un empleado pudo "completarla" de
+    // nuevo hoy y generar un pago nuevo porque este endpoint nunca
+    // consultaba reposiciones.eliminada antes de procesar.
+    if (!empty($miEmpleado['es_reposicion']) && !empty($miEmpleado['id_reposicion']) && is_numeric($miEmpleado['id_reposicion'])) {
+      $repoEstado = $localConnection->goQuery('SELECT eliminada FROM reposiciones WHERE _id = ?', [intval($miEmpleado['id_reposicion'])]);
+      if (empty($repoEstado) || intval($repoEstado[0]['eliminada']) === 1) {
+        $localConnection->disconnect();
+        $response->getBody()->write(json_encode(['status' => 'error', 'message' => 'Esta reposición fue eliminada/cancelada y ya no puede procesarse.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(409);
+      }
+    }
+
     $object['departamento'] = $miEmpleado['departamento'];
     $object['tipo'] = $miEmpleado['tipo'];
 
