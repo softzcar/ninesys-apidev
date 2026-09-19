@@ -1,0 +1,26 @@
+- **Solicitud del Usuario:** Revisando el reporte de pago de Jesús en la Planilla de Pagos de Producción (empresa 194), el usuario detectó una inconsistencia real: "en la orden 7018 pone que 12 piezas en impresión se paga $1.32 y que 5 piezas se pagan igual". Tras confirmar el hallazgo, pidió corregirlo con urgencia: "NECESITO CUADRAR LA PLANILLA DE PAGO DE HOY!!!!! AL MENOS LOS REGISTROS DE PAGAR ESTA SEMANA SE DEBEN CORREGIR!".
+- **Fecha y Hora:** 2026-09-18 19:33:07
+- **Proyecto(s):** Backend (ninesys-api) + corrección de datos en Producción (empresa 194).
+- **Archivos Involucrados:**
+  - `app/routes/manufacturing.php` (rama `comisionTipo === 'fija'` de `/registrar-paso-empleado`)
+- **Commits Relacionados:**
+  - Backend: `49d7b97` (rama `feature/postgresql-support`, tag `v1.0.44`)
+  - Frontend: N/A
+- **Acción Realizada:**
+  1. Generados dos CSV de auditoría (planilla completa de Yervin y de Jesús, con columna `tipo_trabajo` Fabricación/Reposición y `numero_reposicion`) para poder ver a qué pertenecía cada pago -- confirmado que el total del CSV de Jesús ($182.35, 135 filas) coincidía exactamente con lo mostrado en pantalla.
+  2. Encontrada la causa exacta del reporte del usuario: cuando una reposición se paga con comisión Fija, el código corrige `$piezas` (columna "cantidad") a las unidades reales de la reposición, pero **nunca recalculaba `$totalComimision`** (el monto real a pagar) -- ese monto quedaba con el valor calculado antes, sobre TODAS las piezas del pedido original. Confirmado con datos reales: orden 7018, reposiciones de 2 y 5 piezas, ambas cobrando $1.32 (el monto de las 12 piezas originales).
+  3. Cuantificado el impacto histórico completo en Producción: 457 pagos afectados, $534.52 pagados quand debían ser $181.17 -- **$353.35 sobrepagados históricamente**, casi todo a Jesús (único empleado activo con comisión tipo Fija).
+  4. Corregido el código: mismo patrón ya usado correctamente en la rama `'variable'` (que sí recalculaba el monto tras ajustar las piezas) -- se replicó ese mismo ajuste en la rama `'fija'`.
+  5. **Respaldo previo** de la tabla `pagos` completa (empresa 194, Producción) vía `pg_dump`, antes de tocar ningún dato, guardado en `/home/backups/pagos_fixes/`.
+  6. Corregidos únicamente los 10 pagos PENDIENTES de esta semana (`fecha_pago IS NULL`, comisión Fija + reposición): recalculado `monto_pago = cantidad * comision` -- 9 filas de Jesús (-$4.37) y 1 de danuill/588 (-$1.32), total -$5.69. Verificado que 0 filas quedan con desajuste tras la corrección.
+  7. **Fuera de alcance, decisión explícita del usuario:** los $353.35 ya liquidados históricamente NO se tocan -- es un ajuste retroactivo aparte.
+- **Inconvenientes y Desafíos:** El bug llevaba meses generando sobrepago silencioso (no hay ninguna alerta cuando el monto de un pago de reposición no coincide con cantidad×tarifa) -- se detectó solo porque el usuario comparó manualmente dos filas del mismo reporte con la misma cifra y diferente cantidad.
+- **Decisión Final y Justificación:** Corregir el código para el futuro y recalcular únicamente lo pendiente de esta semana (dinero real por pagar hoy), dejando la deuda histórica como una decisión aparte que requiere más tiempo y confirmación del monto exacto -- mismo criterio ya aplicado hoy a los otros hallazgos de sobrepago.
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (backup, auditoría y corrección de datos en Producción), `Read`, `Edit`, `php -l`, `deploy_backend_dev.sh`, `deploy_backend_prod.sh` (con clave de seguridad), `git commit`/`tag`/`push`.
+- **Resultado:** Éxito.
+- **Verificación:** Total pendiente de Jesús verificado tras la corrección: bajó de $182.35 a $177.98. Desplegado y verificado en Desarrollo y Producción (`HEAD remoto` confirmado en ambos).
+- **Logro Conseguido:** Corregido un bug real de sobrepago que afectaba directamente la nómina de la semana en curso, con corrección inmediata de los montos pendientes antes de procesar la planilla, y sin tocar la deuda histórica sin una decisión explícita aparte.
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Este hallazgo llevó directamente a la siguiente tarea del día (columna "Origen" en la Planilla de Pagos), pedida por el usuario para poder ver de un vistazo si un pago es de fabricación o de reposición sin tener que auditarlo manualmente como hizo hoy.
+- **Respuesta de Gemini:** Causa encontrada y corregida: el monto de pagos de reposición con comisión Fija no se recalculaba tras ajustar la cantidad real. Corregidos los 10 pagos pendientes de esta semana en Producción (-$5.69) con backup previo; desplegado el fix de código en Desarrollo y Producción.

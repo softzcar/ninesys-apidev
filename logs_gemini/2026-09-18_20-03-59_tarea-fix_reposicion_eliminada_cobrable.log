@@ -1,0 +1,26 @@
+- **Solicitud del Usuario:** Revisando la nueva columna "Origen" en la Planilla de Pagos de Yervin (Producción, empresa 194), el usuario señaló dos filas sospechosas con una captura de pantalla: orden 6143 (1500 unidades en dos departamentos) y, en un mensaje aparte, "y esa orden 5186 ya se pagó hace tiempo" -- alertando que una orden ya cerrada volvía a aparecer como pago pendiente.
+- **Fecha y Hora:** 2026-09-18 20:03:59
+- **Proyecto(s):** Backend (ninesys-api) + corrección de datos en Producción (empresa 194).
+- **Archivos Involucrados:**
+  - `app/routes/manufacturing.php` (endpoint `POST /registrar-paso-empleado`)
+- **Commits Relacionados:**
+  - Backend: `3d4df9a` (rama `feature/postgresql-support`, tag `v1.0.46`)
+  - Frontend: N/A
+- **Acción Realizada:**
+  1. Verificada la orden 6143 (1500 unidades, "Lanyard Una Cara"): confirmado que Yervin es el ÚNICO empleado asignado a esa orden en ambos departamentos al 100%, con una sola línea de producto de 1500 unidades reales -- la cifra es correcta, no hay a quién más prorratear. Se aprovechó para auditar sistemáticamente TODOS los casos reales de reparto entre Yervin y Jesús en sus planillas pendientes: un único caso real de split (orden 7140, 16.67%/83.33%) calculó correctamente (1.1 y 5.5 unidades); los demás "casos de 2 empleados" resultaron ser el mismo empleado duplicado por el problema ya conocido de filas fantasma en `lotes_detalles_empleados_asignados` (limpieza diferida desde antes en el día) -- sin impacto en el monto pagado porque solo existe un pago real por combinación.
+  2. Investigada la orden 5186: confirmado que fue cerrada y pagada por completo entre junio y julio de 2026. Pero se encontró un pago NUEVO y real, generado el mismo día a las 17:47, por $0.66 a nombre de Yervin, sobre la reposición #38 de esa orden.
+  3. Encontrado que la reposición #38 está marcada `eliminada = 1` (cancelada) desde mayo, y ya había sido pagada por completo a otro empleado (Jesús) en junio.
+  4. Causa raíz: `/registrar-paso-empleado` nunca consultaba `reposiciones.eliminada` antes de procesar el inicio/fin de una reposición -- permitió que un empleado "completara" hoy una tarea técnicamente cancelada hace 4 meses y generara un cobro real sobre ella.
+  5. Verificado que las consultas de cola/contador de reposiciones pendientes (`production.php`) SÍ filtran `eliminada = 0` correctamente -- el hueco era puntual de este endpoint de acción, no de la visibilidad en la cola del empleado.
+  6. Agregado un guard temprano en `/registrar-paso-empleado`: si `es_reposicion` y la reposición está eliminada, responde 409 sin procesar nada.
+  7. Con confirmación explícita del usuario, anulado el pago erróneo (`pagos._id = 19124`, $0.66) directamente en Producción -- cubierto por el backup completo de la tabla `pagos` ya tomado horas antes en la tarea del fix de comisión Fija (el backup es posterior al momento en que se creó esta fila, así que ya la incluía).
+- **Inconvenientes y Desafíos:** Distinguir, para cada fila sospechosa señalada por el usuario, si el problema era real o una lectura errónea de datos legítimos -- la orden 6143 resultó ser correcta (requirió auditoría cruzada para confirmarlo con certeza), mientras que la orden 5186 sí reveló un bug real y distinto de lo que parecía a primera vista (no era un problema de reporte/duplicado, sino de falta de validación de estado en el endpoint de acción).
+- **Decisión Final y Justificación:** Bloquear la acción en el punto de entrada (antes de procesar cualquier lógica de la reposición) en vez de solo ocultar reposiciones eliminadas en las pantallas de consulta -- cierra el riesgo real de raíz (generar pagos), no solo el síntoma visual. Se anuló el pago puntual en vez de dejarlo, siguiendo la decisión explícita del usuario de que no corresponde pagar por una tarea cancelada.
+- **Herramienta(s) Utilizada(s):** `ssh`/`psql` (auditoría y corrección de datos en Producción), `Read`, `Edit`, `Grep`, `php -l`, `AskUserQuestion` (para confirmar cómo proceder con el pago y el fix), `deploy_backend_dev.sh`, `deploy_backend_prod.sh` (con clave de seguridad), `git commit`/`tag`/`push`.
+- **Resultado:** Éxito.
+- **Verificación:** Confirmado que el pago erróneo fue eliminado (`DELETE ... RETURNING *` mostró la fila borrada). Desplegado y verificado en Desarrollo y Producción (`HEAD remoto` confirmado en ambos, `3d4df9a`).
+- **Logro Conseguido:** Cerrado un hueco real que permitía cobrar por reposiciones canceladas meses después de su cierre, revertido el único pago erróneo detectado de este tipo, y descartada con evidencia una segunda sospecha del usuario (orden 6143) que resultó ser un dato legítimo.
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Queda sin investigar (a propósito, el usuario no lo pidió) cómo Yervin llegó a ver/completar esta tarea de una reposición cancelada hace 4 meses -- podría valer la pena revisarlo en el futuro si se repite el patrón.
+- **Respuesta de Gemini:** Orden 6143 confirmada correcta (dato legítimo). Orden 5186: encontrado y corregido un bug real que permitía cobrar por una reposición eliminada -- pago erróneo de $0.66 anulado en Producción, fix desplegado en Desarrollo y Producción.

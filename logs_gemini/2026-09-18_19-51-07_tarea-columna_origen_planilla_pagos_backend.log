@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** "en el reporte que se muestra en la planilla de pagos es imperioso en este momento poder ver del lado izquierdo de las Unds, una columna que especifique si el pago es de fabricación o es de reposición y el número de esa reposición, vamos a hacer el ID reposición clicable y vamos a mostrar allí los detalles de esa reposición y donde mostramos el ID de la orden ponemos el componente linkSearch, en la página /produccion/reporte-reposiciones tenemos un botón con ojo que abre el detalle de las reposiciones, ese mismo componente es el que necesitamos allí".
+- **Fecha y Hora:** 2026-09-18 19:51:07
+- **Proyecto(s):** Backend (ninesys-api) -- ver también tarea equivalente en `app_multi` (mismo pedido, lado frontend).
+- **Archivos Involucrados:**
+  - `app/routes/payments.php` (endpoint `GET /pagos/reporte-empleado/{id_empleado}`)
+  - `app/routes/production.php` (endpoint `GET /reposiciones-reporte/{estatus_orden}`)
+- **Commits Relacionados:**
+  - Backend: `ab0ca53` (rama `feature/postgresql-support`, tag `v1.0.45`)
+  - Frontend: `007bb55` (rama `refactor/modular-routes`, tag `v1.0.43`)
+- **Acción Realizada:**
+  1. Agregado `a.id_reposicion` al `SELECT` de `/pagos/reporte-empleado/{id}` -- necesario para que el frontend sepa, por cada fila, si el pago es de fabricación (`NULL`) o de una reposición puntual (número real).
+  2. Investigado cómo `/produccion/reporte-reposiciones` muestra el detalle de una reposición (botón con ícono de ojo, `verDetalleReposicion`): resultó ser un modal embebido en el propio componente (`repoDetalle = item`), sin llamada a la API -- usa datos ya cargados por la tabla completa, no un endpoint de detalle individual.
+  3. Extendido `/reposiciones-reporte/{estatus_orden}` (sin romper su comportamiento por defecto) para aceptar un query param opcional `id_reposicion`: cuando viene presente, ignora estatus/fechas y filtra `WHERE re._id = ?` -- reutiliza el 100% de la consulta existente, incluido el cálculo de costo de tinta que se hace en PHP después de la consulta SQL (no se duplicó lógica).
+  4. Verificado el filtro nuevo directamente contra la base de Desarrollo (SQL manual, sin los JOIN de `empresas_usuarios` por una limitación conocida de permisos del usuario `postgres` vía SSH con Foreign Data Wrapper) -- confirmado que devuelve exactamente la reposición pedida por ID.
+- **Inconvenientes y Desafíos:** El componente de detalle de reposición existente no era reusable (modal inline, sin llamada a API) -- se resolvió del lado del backend agregando el filtro por ID a la consulta ya existente, y del lado del frontend extrayendo el modal a un componente compartido (ver tarea de frontend).
+- **Decisión Final y Justificación:** Reusar la consulta existente con un filtro adicional opcional, en vez de crear un endpoint completamente nuevo y duplicar ~90 líneas de lógica (incluido el cálculo de costo de tinta) -- cambio mínimo, mismo resultado, cero riesgo de que el detalle de una reposición individual quede desincronizado del reporte completo si éste cambia en el futuro.
+- **Herramienta(s) Utilizada(s):** `Read`, `Edit`, `Grep`, `php -l`, `ssh`/`psql` (verificación de datos), `deploy_backend_dev.sh`, `deploy_backend_prod.sh` (con clave de seguridad), `git commit`/`tag`/`push`.
+- **Resultado:** Éxito.
+- **Verificación:** Consulta modificada probada manualmente contra Desarrollo con `id_reposicion = 141`, devolvió exactamente esa reposición (orden 7018, 5 unidades). Desplegado y verificado en Desarrollo y Producción.
+- **Logro Conseguido:** Habilita que la Planilla de Pagos pueda distinguir visualmente fabricación de reposición y mostrar el detalle completo de cualquier reposición sin salir de esa pantalla, reusando la infraestructura ya existente de `/produccion/reporte-reposiciones`.
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Este pedido nació directamente de la dificultad de auditar manualmente (vía CSV) la tarea anterior del día (fix de monto de reposición Fija) -- la nueva columna hace visible en pantalla lo que hoy solo se pudo ver cruzando datos por SQL.
+- **Respuesta de Gemini:** Backend listo: `id_reposicion` expuesto en el reporte de pago, y `/reposiciones-reporte` ahora acepta filtrar por una reposición puntual para alimentar el modal de detalle desde la Planilla de Pagos.
