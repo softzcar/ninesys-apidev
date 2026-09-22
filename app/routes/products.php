@@ -3,6 +3,9 @@
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 return function (App $app) {
 
@@ -544,6 +547,12 @@ return function (App $app) {
 
   // ASIGNAR COMISIONES EN LOTE A PRODUCTOS
   $app->post('/product-set-comisiones-batch', function (Request $request, Response $response, array $args) {
+    // Autorización por módulo/página -- agregado junto con la carga masiva
+    // de comisiones por departamento (2026-09-22), el endpoint no tenía
+    // ningún guard pese a modificar products_comisiones y recalcular pagos.
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1])) {
+      return $errorResponse;
+    }
     $data = $request->getParsedBody();
     $tmpConnection = new LocalDB();
     $results = [];  // Para almacenar los resultados de cada operación
@@ -746,6 +755,118 @@ return function (App $app) {
     return $response
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
+  });
+
+  // PLANTILLA EXCEL PRE-LLENADA PARA CARGA MASIVA DE COMISIONES POR DEPARTAMENTO
+  // (pantalla "Comisiones de Productos", 2026-09-22). A diferencia de la
+  // plantilla general de productos, esta viene con los productos y
+  // comisiones actuales YA cargados -- solo se edita la columna Comisión.
+  $app->get('/products-comisiones/template-excel/{id_departamento}', function (Request $request, Response $response, array $args) {
+    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1])) {
+      return $errorResponse;
+    }
+    $idDepartamento = intval($args['id_departamento']);
+    try {
+      $db = new LocalDB();
+
+      $departamento = $db->goQuery(
+        'SELECT _id, departamento FROM departamentos WHERE _id = ? AND eliminado = 0',
+        [$idDepartamento]
+      );
+
+      if (empty($departamento)) {
+        $db->disconnect();
+        $response->getBody()->write(json_encode(['success' => false, 'message' => 'El departamento indicado no existe.']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+      }
+      $nombreDepartamento = $departamento[0]['departamento'];
+
+      $products = $db->goQuery(
+        'SELECT p._id AS id_product, p.sku, p.product AS nombre, pc.comision AS comision_actual
+         FROM products p
+         LEFT JOIN products_comisiones pc ON pc.id_product = p._id AND pc.id_departamento = ?
+         WHERE p.eliminado = 0
+         ORDER BY p.product ASC',
+        [$idDepartamento]
+      );
+
+      $db->disconnect();
+
+      $spreadsheet = new Spreadsheet();
+      $sheet = $spreadsheet->getActiveSheet();
+      $sheet->setTitle('Comisiones');
+
+      $sheet->fromArray(['ID', 'SKU', 'Nombre', 'Comisión'], NULL, 'A1');
+      foreach (range('A', 'D') as $col) {
+        $sheet->getColumnDimension($col)->setAutoSize(true);
+      }
+
+      $lastRow = count($products) + 1;
+      if ($lastRow >= 2) {
+        $sheet->getStyle("D2:D{$lastRow}")->getNumberFormat()->setFormatCode('0.000');
+      }
+
+      $row = 2;
+      foreach ($products as $product) {
+        $sheet->setCellValue('A' . $row, $product['id_product']);
+        $sheet->setCellValue('B' . $row, $product['sku']);
+        $sheet->setCellValue('C' . $row, $product['nombre']);
+        $sheet->setCellValueExplicit(
+          'D' . $row,
+          $product['comision_actual'] !== null ? $product['comision_actual'] : '',
+          \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC
+        );
+        $row++;
+      }
+
+      // Columna ID oculta -- el frontend nunca debe pedirle al usuario que la
+      // edite ni la lea para nada, solo sirve para que el propio frontend
+      // identifique la fila al subir el archivo de vuelta.
+      $sheet->getColumnDimension('A')->setVisible(false);
+
+      // Hoja oculta "Meta": permite al frontend detectar si el archivo
+      // subido corresponde a un departamento distinto al del botón usado.
+      $sheetMeta = $spreadsheet->createSheet();
+      $sheetMeta->setTitle('Meta');
+      $sheetMeta->setCellValue('A1', $idDepartamento);
+      $sheetMeta->setCellValue('A2', $nombreDepartamento);
+      $sheetMeta->setSheetState(Worksheet::SHEETSTATE_HIDDEN);
+
+      $spreadsheet->setActiveSheetIndex(0);
+
+      $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', $nombreDepartamento));
+      $slug = trim($slug, '_');
+      $fileName = "comisiones_{$slug}_emp" . ID_EMPRESA . '.xlsx';
+      $outputDirectory = $_SERVER['DOCUMENT_ROOT'] . '/public/downloads/carga_comisiones/';
+      $filePath = $outputDirectory . $fileName;
+
+      if (!file_exists($outputDirectory)) {
+        mkdir($outputDirectory, 0777, true);
+      }
+
+      $writer = new Xlsx($spreadsheet);
+      $writer->save($filePath);
+
+      $fileUrl = '/downloads/carga_comisiones/' . $fileName . '?v=' . time();
+
+      $response->getBody()->write(json_encode([
+        'success' => true,
+        'message' => 'Plantilla de comisiones generada exitosamente.',
+        'file_url' => $fileUrl
+      ]));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+    } catch (\Exception $e) {
+      error_log('Error generando plantilla de comisiones: ' . $e->getMessage());
+      $response->getBody()->write(json_encode([
+        'success' => false,
+        'message' => 'Error al generar la plantilla de comisiones. Por favor, inténtelo de nuevo más tarde.',
+      ]));
+      return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(500);
+    }
   });
 
   // ASIGNAR COMISION A PRODUCTO Y EMPLEADO
