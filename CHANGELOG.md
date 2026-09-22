@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.48] - 2026-09-22
+- Comisiones a 3 decimales en el esquema de nueva empresa (products_comisiones, products, pagos)
+
 ## [v1.0.47] - 2026-09-22
 - Fix critico: reparto de comision entre 2+ empleados podia quedar mal armado y pagar 100% a cada uno (orden 6707, ~$9.84 corregidos en Produccion; 77 casos historicos mas detectados en CSV, sin corregir aun)
 - Fix: /lotes/empleados/asignar-productos y /lotes/empleados/reasignar reconcilian ahora contra empleados retirados de la asignacion
