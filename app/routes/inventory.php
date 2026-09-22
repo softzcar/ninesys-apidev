@@ -272,8 +272,6 @@ return function (App $app) {
             // 1. Obtener mapeos para convertir nombres de categorías y departamentos a IDs
             $categories_db = $db->goQuery('SELECT _id, nombre FROM categories');
             $category_map = array_column($categories_db, '_id', 'nombre');
-            $departments_db = $db->goQuery('SELECT _id, departamento FROM departamentos WHERE eliminado = 0');
-            $department_map = array_column($departments_db, '_id', 'departamento');
 
             $processed_count = 0;
             $error_list = [];
@@ -341,31 +339,6 @@ return function (App $app) {
                     }
                 }
 
-                // 5. Asignar comisión por departamento (opcional -- ambos campos
-                // deben venir juntos, ya validado por el frontend). Mismo patrón
-                // de upsert que /product-set-comisiones-batch en products.php.
-                $department_name = $product['Departamento'] ?? null;
-                if ($product_id && !empty($department_name)) {
-                    $department_id = $department_map[$department_name] ?? null;
-                    if ($department_id === null) {
-                        $error_list[] = "SKU {$sku}: el departamento \"{$department_name}\" no existe.";
-                    } else {
-                        $comision = $product['Comision'] ?? 0;
-                        $check_comision_sql = 'SELECT _id FROM products_comisiones WHERE id_product = ? AND id_departamento = ?';
-                        $existing_comision = $db->goQuery($check_comision_sql, [$product_id, $department_id]);
-                        if (empty($existing_comision)) {
-                            $db->goQuery(
-                                'INSERT INTO products_comisiones (comision, id_product, id_departamento) VALUES (?, ?, ?)',
-                                [$comision, $product_id, $department_id]
-                            );
-                        } else {
-                            $db->goQuery(
-                                'UPDATE products_comisiones SET comision = ? WHERE id_product = ? AND id_departamento = ?',
-                                [$comision, $product_id, $department_id]
-                            );
-                        }
-                    }
-                }
                 $processed_count++;
             }
 
@@ -534,7 +507,6 @@ return function (App $app) {
             // Obtener categorías, atributos y departamentos para las listas de validación y mapeo
             $categories = $localConnection->goQuery('SELECT _id, nombre FROM categories');
             $attributes = $localConnection->goQuery('SELECT _id, attribute_name FROM products_attributes');
-            $departamentos = $localConnection->goQuery('SELECT _id, departamento FROM departamentos WHERE eliminado = 0 ORDER BY orden_proceso ASC');
 
             // Mapear categorías por ID para fácil acceso
             $categoryMap = [];
@@ -555,17 +527,13 @@ return function (App $app) {
             $sheetProducts->setTitle('Productos');
 
             // Set headers for Products sheet
-            $headersProducts = ['SKU', 'Nombre', 'Precios', 'Precio Descripción', 'Categoría', 'Atributos', 'Departamento', 'Comisión'];
+            $headersProducts = ['SKU', 'Nombre', 'Precios', 'Precio Descripción', 'Categoría', 'Atributos'];
             $sheetProducts->fromArray($headersProducts, NULL, 'A1');
 
             // Set column widths for Products sheet
-            foreach (range('A', 'H') as $col) {  // Adjusted range
+            foreach (range('A', 'F') as $col) {  // Adjusted range
                 $sheetProducts->getColumnDimension($col)->setAutoSize(true);
             }
-
-            // Comisión (columna H) con 3 decimales -- mismo criterio de precisión
-            // ya usado en /comisiones-productos.
-            $sheetProducts->getStyle('H2:H1000')->getNumberFormat()->setFormatCode('0.000');
 
             // --- Hidden Sheet: ListadoSKUNormalizado ---
             $sheetSKUNormalizado = $spreadsheet->createSheet();
@@ -602,18 +570,6 @@ return function (App $app) {
                 $row++;
             }
             $sheetAttributes->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);  // Hide the sheet
-
-            // --- Hidden Sheet: ListadoDepartamentos ---
-            $sheetDepartamentos = $spreadsheet->createSheet();
-            $sheetDepartamentos->setTitle('ListadoDepartamentos');
-            $sheetDepartamentos->fromArray([['ID', 'Nombre']], NULL, 'A1');  // Headers for hidden sheet
-            $row = 2;
-            foreach ($departamentos as $departamento) {
-                $sheetDepartamentos->setCellValue('A' . $row, $departamento['_id']);
-                $sheetDepartamentos->setCellValue('B' . $row, $departamento['departamento']);
-                $row++;
-            }
-            $sheetDepartamentos->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);  // Hide the sheet
 
             // --- Data Validation for Products sheet (CORRECTED) ---
             // SKU (Column A) - Custom validation for uniqueness (case-insensitive, underscore-insensitive)
@@ -655,27 +611,11 @@ return function (App $app) {
             $attributeValidation->setPrompt('Por favor, seleccione un atributo de la lista.');
             $attributeValidation->setFormula1('\'ListadoAtributos\'!B$2:B$' . (count($attributes) + 1));  // Reference to names in hidden sheet
 
-            // Departamento (Column G) -- para asignar la comisión (Column H) del producto.
-            // Opcional igual que Atributos: un producto puede subirse sin comisión asignada.
-            $departmentValidation = $sheetProducts->getCell('G2')->getDataValidation();
-            $departmentValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
-            $departmentValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_INFORMATION);
-            $departmentValidation->setAllowBlank(true);
-            $departmentValidation->setShowInputMessage(true);
-            $departmentValidation->setShowErrorMessage(true);
-            $departmentValidation->setShowDropDown(true);
-            $departmentValidation->setErrorTitle('Error de entrada');
-            $departmentValidation->setError('El valor no está en la lista de departamentos.');
-            $departmentValidation->setPromptTitle('Seleccionar Departamento');
-            $departmentValidation->setPrompt('Por favor, seleccione un departamento de la lista. Si asigna un departamento, debe asignar también una Comisión.');
-            $departmentValidation->setFormula1('\'ListadoDepartamentos\'!B$2:B$' . (count($departamentos) + 1));  // Reference to names in hidden sheet
-
             // Apply validation to a range (e.g., up to row 1000 for now, can be adjusted)
             for ($i = 2; $i <= 1000; $i++) {
                 $sheetProducts->getCell('A' . $i)->setDataValidation(clone $skuValidation);
                 $sheetProducts->getCell('E' . $i)->setDataValidation(clone $categoryValidation);
                 $sheetProducts->getCell('F' . $i)->setDataValidation(clone $attributeValidation);  // Apply to Attributes column
-                $sheetProducts->getCell('G' . $i)->setDataValidation(clone $departmentValidation);  // Apply to Departamento column
             }
 
             // Save the Excel file
