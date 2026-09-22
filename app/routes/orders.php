@@ -2096,15 +2096,37 @@ return function (App $app) {
 
   // CREAR NUEVO PRESUPUESTO
   $app->post('/presupuesto/nuevo', function (Request $request, Response $response, $arg) {
+    // Endpoint dual: lo usa tanto app_multi (sesión JWT real de un empleado)
+    // como integraciones de servicio confiable (19print_app/DTF, autenticado
+    // por X-Internal-Token) -- ver IdEmpresaMiddleware.php, "modo SERVICIO",
+    // que deliberadamente NO define ID_USUARIO_TOKEN/MODULOS_TOKEN en ese
+    // modo (no hay una persona logueada, es el propio backend de DTF).
+    // Bug real 2026-09-22: la guardia de módulo agregada el 2026-09-14 no
+    // contempló esto -- rechazaba con 401 CUALQUIER llamada de DTF a este
+    // endpoint (presupuesto/nuevo), rompiendo "Enviar pedido por WhatsApp"
+    // en la app DTF por completo.
+    $esLlamadaDeServicio = esTokenInternoValido($request->getHeaderLine('X-Internal-Token'));
+
     // Autorización por módulo/página -- auditoría de seguridad 2026-09-14.
-    if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
-      return $errorResponse;
+    // Solo aplica a sesiones de usuario real; una llamada de servicio ya
+    // está autenticada por el token interno, no representa a una persona
+    // con módulos asignados.
+    if (!$esLlamadaDeServicio) {
+      if ($errorResponse = perteneceAAlgunModulo($request, $response, [1, 2])) {
+        return $errorResponse;
+      }
     }
     $newJson = $request->getParsedBody();
     // Forzado a ID_USUARIO_TOKEN -- auditoría de seguridad 2026-09-14: a
     // quién se atribuye el presupuesto no puede depender de un campo del
-    // body (se usa tal cual, sin json_decode, en el INSERT más abajo).
-    $newJson['responsable'] = (int) ID_USUARIO_TOKEN;
+    // body (se usa tal cual, sin json_decode, en el INSERT más abajo) SI
+    // viene de un navegador de cliente. En modo servicio no existe
+    // ID_USUARIO_TOKEN (no hay sesión) -- ahí sí se confía en "responsable"
+    // porque lo calculó el propio backend de DTF (getVendedorSugerido(),
+    // autenticado por el token interno), nunca un cliente final.
+    if (!$esLlamadaDeServicio) {
+      $newJson['responsable'] = (int) ID_USUARIO_TOKEN;
+    }
     $misProductos = json_decode($newJson['productos'], true);
     $localConnection = new LocalDB();
 

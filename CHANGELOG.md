@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.50] - 2026-09-22
+- Fix critico: /presupuesto/nuevo rechazaba con 401 las llamadas de servicio (19print_app/DTF) desde la auditoria de seguridad del 14/09 -- rompia por completo "Enviar pedido por WhatsApp" en la app DTF
+
 ## [v1.0.49] - 2026-09-22
 - Comisiones y departamento en plantilla/bulk-load de carga masiva de productos
 
