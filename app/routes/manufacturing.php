@@ -910,6 +910,13 @@ return function (App $app) {
           $porcentajeAsignado = 100; // Legacy support
 
         $totalComimision = $totalComimision * ($porcentajeAsignado / 100);
+        // pagos.cantidad debe reflejar lo que realmente le toca a ESTE
+        // empleado, no el total de la línea -- bug real confirmado
+        // 2026-09-22 (orden 6641/depto 1: monto_pago ya salía bien a la
+        // mitad, pero cantidad seguía mostrando el total del pedido). No es
+        // sobrepago (el dinero ya escalaba bien), pero corrompe reportes de
+        // eficiencia/productividad que usan esta columna.
+        $piezas = $piezas * ($porcentajeAsignado / 100);
 
         // Resolve type of department
         $deptTipo = 'general';
@@ -1010,6 +1017,12 @@ return function (App $app) {
         $id_lotes_detalles = $respComision[0]['id_lotes_detalles'];
         $comimision = $respComision[0]['comision_fija'];
         $totalComimision = $respComision[0]['total_comision_fija'];
+        // pagos.cantidad debe reflejar lo que le toca a ESTE empleado, no el
+        // total de la línea -- mismo bug y mismo fix que la rama
+        // 'porcentaje' de arriba (total_comision_fija ya viene escalado
+        // desde el SQL vía $porcentajeCaseSql; total_productos_empleado no).
+        $pctFija = $tieneAsignacionGranular ? 100 : (floatval($respComision[0]['procentaje_comision']) > 0 ? floatval($respComision[0]['procentaje_comision']) : 100);
+        $piezas = $piezas * ($pctFija / 100);
 
         // Resolve type of department
         $deptTipo = 'general';
@@ -1967,22 +1980,28 @@ return function (App $app) {
           $cantidad_piezas = 0;
           $comision_guardar = $comision_value_emp;
 
+          // pagos.cantidad debe reflejar lo que le toca a ESTE empleado, no
+          // el total de la línea -- bug real confirmado 2026-09-22, mismo
+          // patrón que en /registrar-paso-empleado: el monto ya escalaba
+          // bien por $procentajeLoteEfectivo en las 3 ramas, pero cantidad
+          // no. Se aplica el mismo factor a cantidad_piezas en cada rama.
           if ($comision_tipo === 'porcentaje') {
             $sql_calc = "SELECT SUM($cantidadRealLoteSql) as total_piezas, SUM($cantidadRealLoteSql * c.precio_unitario * ($comision_value_emp / 100)) AS total_monto FROM ordenes_productos c JOIN products p ON c.id_woo = p._id $granularJoinLoteSql WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL) $granularWhereLoteSql";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual]);
-            $cantidad_piezas = $res_calc[0]['total_piezas'] ?? 0;
+            $cantidad_piezas = ($res_calc[0]['total_piezas'] ?? 0) * ($procentajeLoteEfectivo / 100);
             $total_monto_pago = ($res_calc[0]['total_monto'] ?? 0) * ($procentajeLoteEfectivo / 100);
           } elseif ($comision_tipo === 'fija') {
             $sql_calc = "SELECT SUM($cantidadRealLoteSql) as total_piezas FROM ordenes_productos c JOIN products p ON c.id_woo = p._id $granularJoinLoteSql WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL) $granularWhereLoteSql";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual]);
-            $cantidad_piezas = $res_calc[0]['total_piezas'] ?? 0;
-            $total_monto_pago = ($cantidad_piezas * $comision_value_emp) * ($procentajeLoteEfectivo / 100);
+            $total_piezas_linea = $res_calc[0]['total_piezas'] ?? 0;
+            $cantidad_piezas = $total_piezas_linea * ($procentajeLoteEfectivo / 100);
+            $total_monto_pago = ($total_piezas_linea * $comision_value_emp) * ($procentajeLoteEfectivo / 100);
           } else { // Variable (por producto - usando comision departamental)
             $sql_calc = "SELECT $cantidadRealLoteSql AS cantidad, COALESCE(pc.comision, 0) AS com_prod FROM ordenes_productos c JOIN products p ON c.id_woo = p._id LEFT JOIN products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = ? $granularJoinLoteSql WHERE c.id_orden = ? AND (p.fisico = 1 OR p.fisico IS NULL) AND (p.es_diseno = 0 OR p.es_diseno IS NULL) $granularWhereLoteSql";
             $res_calc = $localConnection->goQuery($sql_calc, [$id_departamento, $id_orden_actual]);
             $comision_guardar = $res_calc[0]['com_prod'] ?? 0; // Referencia visual de la tabla
             foreach ($res_calc as $prod) {
-              $cantidad_piezas += $prod['cantidad'];
+              $cantidad_piezas += $prod['cantidad'] * ($procentajeLoteEfectivo / 100);
               $total_monto_pago += ($prod['cantidad'] * $prod['com_prod']) * ($procentajeLoteEfectivo / 100);
             }
           }
@@ -2345,7 +2364,13 @@ return function (App $app) {
         // empleado), pero se agrega igual dentro del SUM por consistencia
         // y para no necesitar agregarla al GROUP BY (hallazgo real
         // 2026-09-08, primer uso real de este endpoint tras reconectarlo).
-        $sql_calculo_pago = "SELECT a._id AS id_lotes_detalles, a.procentaje_comision, (SUM($cantidadRealImpSql * d.comision) * $porcentajeCaseImpSql / 100) AS total_comision_variable, (SUM($cantidadRealImpSql * eu.comision) * $porcentajeCaseImpSql / 100) AS total_comision_fija FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo $granularJoinImpSql WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND a.id_reposicion IS NULL AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) $granularWhereImpSql GROUP BY a._id, a.procentaje_comision";
+        // total_piezas agregado 2026-09-22: la cantidad guardada en pagos
+        // usaba intval($order['unidades_orden']) -- el total de la orden
+        // completa, sin escalar por el % del empleado -- para CUALQUIER tipo
+        // de comisión (bug real confirmado, el monto sí escalaba bien). Se
+        // calcula aquí con el mismo criterio granular/porcentaje ya usado
+        // para el dinero.
+        $sql_calculo_pago = "SELECT a._id AS id_lotes_detalles, a.procentaje_comision, (SUM($cantidadRealImpSql * d.comision) * $porcentajeCaseImpSql / 100) AS total_comision_variable, (SUM($cantidadRealImpSql * eu.comision) * $porcentajeCaseImpSql / 100) AS total_comision_fija, (SUM($cantidadRealImpSql) * $porcentajeCaseImpSql / 100) AS total_piezas FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo $granularJoinImpSql WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND a.id_reposicion IS NULL AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) $granularWhereImpSql GROUP BY a._id, a.procentaje_comision";
         $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
 
         // Guardia de idempotencia (hallazgo real 2026-09-18, ver bitácora): este
@@ -2378,7 +2403,7 @@ return function (App $app) {
           // descarte solo este intento sin tumbar nada más.
           $localConnection->goQuery('SAVEPOINT sp_pago_finalizar_impresion');
           $sql_pago = 'INSERT INTO pagos (id_orden, id_reposicion, id_departamento, comision, comision_tipo, cantidad, id_lotes_detalles, estatus, monto_pago, id_empleado, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-          $params_pago = [$id_orden_actual, null, $id_departamento, $comision_valor, $comision_tipo, intval($order['unidades_orden']), $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
+          $params_pago = [$id_orden_actual, null, $id_departamento, $comision_valor, $comision_tipo, $resp_comision[0]['total_piezas'], $resp_comision[0]['id_lotes_detalles'], 'aprobado', $total_comision, $id_empleado, $nombre_departamento];
           $resultadoPago = $localConnection->goQuery($sql_pago, $params_pago);
 
           if (is_array($resultadoPago) && ($resultadoPago['status'] ?? null) === 'error') {
@@ -2644,7 +2669,11 @@ return function (App $app) {
             $res_calc = $localConnection->goQuery($sql_calc, [$id_orden_actual, $id_departamento, $id_orden_actual]);
             $comision_guardar = $res_calc[0]['com_prod'] ?? 0;
             foreach ($res_calc as $prod) {
-              $cantidad_piezas += $prod['cantidad'];
+              // pagos.cantidad sin escalar por el % del empleado -- bug real
+              // confirmado 2026-09-22, mismo patrón que las otras ramas de
+              // este mismo endpoint (que sí escalan). El monto ya estaba
+              // correcto.
+              $cantidad_piezas += $prod['cantidad'] * ($procentajeCorteEfectivo / 100);
               $total_monto_pago += ($prod['cantidad'] * $prod['com_prod']) * ($procentajeCorteEfectivo / 100);
             }
           }

@@ -1831,12 +1831,31 @@ return function (App $app) {
     $miEmpleado['id_departamento'] = intval($miEmpleado['id_departamento']);
     $miEmpleado['id_empleado'] = intval($miEmpleado['id_empleado']);
     $miEmpleado['id_orden'] = intval($miEmpleado['id_orden']);
-    if (isset($miEmpleado['porcentaje'])) {
-      $miEmpleado['porcentaje'] = floatval($miEmpleado['porcentaje']);
-    }
+    // Corte se asigna hoy con un selector de UN solo empleado (sin reparto
+    // multi-empleado en su UI) -- ninguno de los 3 sitios del frontend que
+    // llaman a este endpoint envía "porcentaje" en el FormData, así que
+    // $miEmpleado['porcentaje'] llegaba indefinido y se interpolaba crudo
+    // más abajo. Default explícito a 100, el valor correcto para un único
+    // empleado (bug de datos real, encontrado 2026-09-22 junto con el de
+    // reconciliación de abajo).
+    $miEmpleado['porcentaje'] = isset($miEmpleado['porcentaje']) ? floatval($miEmpleado['porcentaje']) : 100;
 
     // Atomicidad FK: reasignación (lotes_detalles + LDEA + lotes) en una transacción
     $localConnection->beginTransaction();
+
+    // Reconciliación: este endpoint hace upsert de UN solo empleado, sin
+    // mirar si esta orden+departamento ya tenía otro empleado asignado --
+    // mismo patrón de bug confirmado en /lotes/empleados/asignar-productos
+    // (orden 6707, ~$9.84 sobrepagados). Al reasignar de un empleado a otro,
+    // la fila vieja del que sale debe eliminarse, no sobrevivir con su
+    // procentaje_comision anterior intacto (y ya pagado). Acotado a
+    // id_reposicion IS NULL: una reposición de OTRO empleado en el mismo
+    // departamento es un seguimiento independiente (ver manufacturing.php,
+    // fix del 2026-09-18 sobre /sse/produccion) y no debe tocarse aquí.
+    $localConnection->goQuery(
+      'DELETE FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND id_departamento = ? AND id_empleado != ? AND id_reposicion IS NULL',
+      [$miEmpleado['id_orden'], $miEmpleado['id_departamento'], $miEmpleado['id_empleado']]
+    );
 
     // BUSCAR NOMBRE DEL DEPARTAMENTO
     $sql = "SELECT departamento FROM departamentos WHERE _id = {$miEmpleado['id_departamento']}";
@@ -2026,6 +2045,36 @@ return function (App $app) {
 
     $localConnection->beginTransaction();
     try {
+      // Reconciliación contra lo que ya existía -- bug real confirmado
+      // 2026-09-22 (orden 6707, empresa 194, ~$9.84 sobrepagados): si un
+      // empleado quedaba en 0 unidades repartidas, el frontend lo omitía del
+      // payload (construirPayloadAsignaciones() en asignarEmpleadoMulti.vue),
+      // y este endpoint solo hacía INSERT/UPDATE de quien SÍ venía en el
+      // payload -- la fila vieja del empleado retirado sobrevivía con su
+      // procentaje_comision anterior intacto (típicamente 100%), y el nuevo
+      // empleado también quedaba al 100%: doble comisión sobre el mismo
+      // trabajo. Cualquier empleado con fila previa para esta orden+
+      // departamento que no venga en este payload se considera retirado y se
+      // elimina -- no hace falta recalcular el % de los que quedan porque la
+      // validación de arriba ya garantiza que la suma de unidades del
+      // payload cubre exactamente el 100% de cada línea de producto.
+      // Acotado a id_reposicion IS NULL: una reposición de otro empleado en
+      // el mismo departamento es un seguimiento independiente (ver
+      // manufacturing.php, fix del 2026-09-18 sobre /sse/produccion) y no
+      // debe eliminarse por no venir en este payload de fabricación.
+      $idsEmpleadosPayload = array_map(function ($a) {
+        return intval($a['id_empleado']);
+      }, $asignaciones);
+      $empleadosActuales = $localConnection->goQuery(
+        'SELECT _id, id_empleado FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND id_departamento = ? AND id_reposicion IS NULL',
+        [$id_orden, $id_departamento]
+      );
+      foreach ($empleadosActuales as $empActual) {
+        if (!in_array(intval($empActual['id_empleado']), $idsEmpleadosPayload, true)) {
+          $localConnection->goQuery('DELETE FROM lotes_detalles_empleados_asignados WHERE _id = ?', [$empActual['_id']]);
+        }
+      }
+
       $resultados = [];
       foreach ($asignaciones as $asig) {
         $id_empleado = intval($asig['id_empleado']);
@@ -2089,6 +2138,30 @@ return function (App $app) {
       return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
 
+    // Validación de suma=100% -- este endpoint reemplaza el reparto completo
+    // de cada orden+departamento con porcentajes tipeados a mano en
+    // AsignacionMasiva.vue, sin ningún chequeo del lado del backend. A
+    // diferencia de /lotes/empleados/reasignar y /asignar-productos (que sí
+    // podían dejar una fila vieja sobreviviendo con su % intacto), este
+    // reemplaza el estado completo por diseño, así que no comparte ese
+    // riesgo -- pero nada impedía guardar un reparto que ya nacía mal
+    // (ej. 60% + 60%). Rechazar antes de tocar nada, mismo criterio de
+    // tolerancia usado en el barrido de auditoría del 2026-09-22.
+    foreach ($asignaciones as $asig) {
+      $sumaPorcentaje = 0;
+      foreach (($asig['empleados'] ?? []) as $emp) {
+        $sumaPorcentaje += floatval($emp['porcentaje'] ?? 0);
+      }
+      if (abs($sumaPorcentaje - 100) > 0.5) {
+        $response->getBody()->write(json_encode([
+          'error' => 'La suma de porcentajes debe ser 100% para cada departamento.',
+          'id_departamento' => $asig['id_departamento'] ?? null,
+          'suma_porcentaje' => $sumaPorcentaje,
+        ]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+      }
+    }
+
     $localConnection = new LocalDB();
     $object = ['success' => true, 'results' => []];
 
@@ -2125,7 +2198,13 @@ return function (App $app) {
           // riesgo de FK sin ningún beneficio real.
 
           // 3. ASIGNAR EMPLEADOS
-          $sqlDel = 'DELETE FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND id_departamento = ?';
+          // Acotado a id_reposicion IS NULL: una reposición de otro empleado
+          // en el mismo departamento es un seguimiento independiente (ver
+          // manufacturing.php, fix del 2026-09-18 sobre /sse/produccion) y
+          // no debe borrarse al reasignar en masa el trabajo principal
+          // (hallazgo incidental 2026-09-22, mismo patrón ya corregido en
+          // /lotes/empleados/reasignar y /asignar-productos).
+          $sqlDel = 'DELETE FROM lotes_detalles_empleados_asignados WHERE id_orden = ? AND id_departamento = ? AND id_reposicion IS NULL';
           $localConnection->goQuery($sqlDel, [$id_orden, $id_departamento]);
 
           foreach ($empleados as $emp) {

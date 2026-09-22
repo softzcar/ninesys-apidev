@@ -4,6 +4,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.47] - 2026-09-22
+- Fix critico: reparto de comision entre 2+ empleados podia quedar mal armado y pagar 100% a cada uno (orden 6707, ~$9.84 corregidos en Produccion; 77 casos historicos mas detectados en CSV, sin corregir aun)
+- Fix: /lotes/empleados/asignar-productos y /lotes/empleados/reasignar reconcilian ahora contra empleados retirados de la asignacion
+- Fix: /lotes/empleados/reasignar-masiva valida que los porcentajes sumen 100%
+- Fix: pagos.cantidad ahora se escala por el % del empleado en registrar-paso-empleado, finalizar-departamento, finalizar-impresion y finalizar-corte (antes solo el monto escalaba bien)
+
 ## [v1.0.46] - 2026-09-18
 - Fix critico: /registrar-paso-empleado permitia completar y cobrar una reposicion eliminada/cancelada (orden 5186/reposicion #38, pago erroneo de $0.66 anulado en Produccion)
 
