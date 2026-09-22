@@ -21,6 +21,13 @@
  */
 function esTokenInternoValido(string $provided): bool
 {
+    // DEBUG TEMPORAL 2026-09-22 -- solo longitudes/hash, nunca el valor
+    // crudo del secreto. Revertir apenas se diagnostique.
+    error_log('[DEBUG_TOKEN_TEMP] provided_len=' . strlen($provided)
+        . ' provided_sha8=' . substr(hash('sha256', $provided), 0, 8)
+        . ' MSG_len=' . strlen(getenv('MSG_SERVICE_INTERNAL_TOKEN') ?: '')
+        . ' PRINT_len=' . strlen(getenv('PRINT_SERVICE_INTERNAL_TOKEN') ?: '')
+        . ' PRINT_sha8=' . substr(hash('sha256', getenv('PRINT_SERVICE_INTERNAL_TOKEN') ?: ''), 0, 8));
     if ($provided === '') {
         return false;
     }
