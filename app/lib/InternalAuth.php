@@ -8,9 +8,11 @@
  * `/internal/*` de `msg_service.php` (algunos de los cuales no la tenían en
  * absoluto pese a que el comentario de cabecera del archivo lo afirmaba).
  *
- * Un secreto distinto por servicio, cualquiera de los dos es válido: los
- * clientes de msg_ninesys usan `MSG_SERVICE_INTERNAL_TOKEN` y los de
- * 19print_app usan `PRINT_SERVICE_INTERNAL_TOKEN`. El `id_empresa` sigue
+ * Un secreto distinto por servicio, cualquiera es válido: los clientes de
+ * msg_ninesys usan `MSG_SERVICE_INTERNAL_TOKEN`, los de 19print_app (DTF,
+ * en retiro) usan `PRINT_SERVICE_INTERNAL_TOKEN`, y los de "imprime"
+ * (ex-sublima, reemplazo de DTF) usan `IMPRIME_SERVICE_INTERNAL_TOKEN` --
+ * secreto propio, nunca el mismo que el de DTF. El `id_empresa` sigue
  * viajando como hoy (crudo, en `Authorization`), pero ahora autenticado por
  * este secreto en vez de confiado a ciegas.
  */
@@ -27,6 +29,7 @@ function esTokenInternoValido(string $provided): bool
     $candidatos = array_filter([
         getenv('MSG_SERVICE_INTERNAL_TOKEN') ?: '',
         getenv('PRINT_SERVICE_INTERNAL_TOKEN') ?: '',
+        getenv('IMPRIME_SERVICE_INTERNAL_TOKEN') ?: '',
     ]);
     foreach ($candidatos as $expected) {
         if (hash_equals($expected, $provided)) {
