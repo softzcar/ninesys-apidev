@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** Parte del plan de retiro de DTF: darle a la nueva app "imprime" (reemplazo de DTF) su propio secreto de servicio para `POST /presupuesto/nuevo` y demás rutas `/internal/*`, distinto al de DTF.
+- **Fecha y Hora:** 2026-09-23 13:31:21
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - `ninesys-api/app/lib/InternalAuth.php` (`esTokenInternoValido()`)
+- **Commits Relacionados:**
+  - Backend: `64788a0`
+- **Acción Realizada:** Agregado un tercer candidato (`IMPRIME_SERVICE_INTERNAL_TOKEN`) al array de secretos válidos que ya comparaba `MSG_SERVICE_INTERNAL_TOKEN`/`PRINT_SERVICE_INTERNAL_TOKEN`, y dado de alta ese secreto nuevo (generado, nunca igual al de DTF) en el `.env` real de Desarrollo. Cambio mínimo y aditivo: no se tocó el comportamiento de los dos secretos existentes.
+- **Inconvenientes y Desafíos:** Ninguno -- el mecanismo ya estaba diseñado para soportar múltiples secretos de servicio.
+- **Decisión Final y Justificación:** Secreto propio para "imprime" en vez de reusar el de DTF, para que retirar DTF más adelante (revocar su secreto) no rompa a imprime.
+- **Herramienta(s) Utilizada(s):** `Edit`, `php -l`, `git commit`, `git push`, `ninesys-hub/bin/deploy_backend_dev.sh` (script centralizado, según regla del proyecto).
+- **Resultado:** Éxito.
+- **Verificación:** `php -l` sin errores; desplegado a Desarrollo (`api.nineteengreen.com`, HEAD remoto confirmado `64788a0`); verificado end-to-end en sesión: `system-nesting` (imprime) autenticándose contra `ninesys-api` con este token nuevo y recibiendo respuestas reales del catálogo (empresa 194).
+- **Logro Conseguido:** Base habilitada para que la nueva app "imprime" pueda crear presupuestos reales en Ninesys sin depender del secreto de DTF.
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Cambio cross-repo, parte de la Fase 0/1 del plan de retiro de DTF (ver `project_retiro_dtf_imprime` en memoria del asistente). Único despliegue a servidor de esta tarea en `ninesys-api` hoy; el resto del trabajo del día fue en el repo `sublima`.
+- **Respuesta de Gemini:** Cambio desplegado y verificado; se continuó con el resto del plan de retiro de DTF en el repo `sublima`.
