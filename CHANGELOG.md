@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.53] - 2026-09-23
+- Fix del 500 en template-excel de comisiones (setCellValueExplicit con string vacio) incluido en el tag
+
 ## [v1.0.52] - 2026-09-22
 - Revert de columnas Dept/Comision en carga masiva general + nueva carga masiva de comisiones por departamento con plantilla pre-llenada
 
