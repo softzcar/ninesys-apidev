@@ -811,11 +811,16 @@ return function (App $app) {
         $sheet->setCellValue('A' . $row, $product['id_product']);
         $sheet->setCellValue('B' . $row, $product['sku']);
         $sheet->setCellValue('C' . $row, $product['nombre']);
-        $sheet->setCellValueExplicit(
-          'D' . $row,
-          $product['comision_actual'] !== null ? $product['comision_actual'] : '',
-          \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC
-        );
+        // setCellValueExplicit(..., TYPE_NUMERIC) con '' revienta al
+        // serializar el xlsx -- si no hay comisión, se deja la celda vacía
+        // en vez de forzar un tipo numérico sobre un string vacío.
+        if ($product['comision_actual'] !== null) {
+          $sheet->setCellValueExplicit(
+            'D' . $row,
+            $product['comision_actual'],
+            \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC
+          );
+        }
         $row++;
       }
 
