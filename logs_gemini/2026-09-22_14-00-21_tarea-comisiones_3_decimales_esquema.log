@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** [Reconstruido desde Git -- tramo de conversación anterior a la ventana visible de esta sesión. Por el commit y el diff, el pedido fue ampliar la precisión de comisión a 3 decimales en el esquema, en soporte del rediseño de la pantalla de asignación masiva de comisiones (ver commit `230fd0e` en `app_multi`, mismo tramo de trabajo).]
+- **Fecha y Hora:** 2026-09-22 14:00:21
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - `ninesys-api/public/model/create_new_company_api_emp_N_postgres.sql` (plantilla de esquema para empresas nuevas)
+  - Bases de datos de las empresas 194 y 208 (ALTER TABLE directo, Desarrollo y Producción)
+- **Commits Relacionados:**
+  - Backend: `2fadcf9`
+  - Frontend: `230fd0e` (mismo tramo de trabajo, ver log correspondiente en `app_multi/logs_gemini/`)
+- **Acción Realizada:** Ampliadas 3 columnas de `decimal`/`numeric` en la plantilla de esquema para empresas nuevas: `products_comisiones.comision` (5,2 -> 6,3), `products.comision` (7,2 -> 8,3) y `pagos.comision` (5,2 -> 6,3) -- esta última porque `/product-set-comisiones-batch` la escribe automáticamente al recalcular pagos pendientes, y se hubiera truncado el tercer decimal si se quedaba en 2. Aplicado también como `ALTER TABLE` directo en las bases de datos de las empresas ya existentes (194 y 208), tanto en Desarrollo como en Producción, para que el cambio de esquema no quedara solo en la plantilla de empresas futuras.
+- **Inconvenientes y Desafíos:** No hay registro detallado disponible (reconstruido solo desde el commit, sin la conversación original).
+- **Decisión Final y Justificación:** No disponible en detalle -- inferido: 2 decimales resultaban insuficientes para expresar comisiones fraccionarias finas usadas en el negocio.
+- **Herramienta(s) Utilizada(s):** No registrado (reconstrucción desde Git); el mensaje de commit confirma que se aplicó `ALTER TABLE` en las 4 bases reales (194/208 x Desarrollo/Producción).
+- **Resultado:** Éxito (infraestructura compartida reusada sin incidentes en los cambios posteriores del mismo día y del día siguiente que dependen de esta precisión, incluida la carga masiva de comisiones por Excel).
+- **Verificación:** No registrada en el momento. Verificado indirectamente el 2026-09-23: la plantilla Excel de comisiones generada usa formato `0.000` (3 decimales) sobre datos reales de `products_comisiones` sin errores de truncamiento.
+- **Logro Conseguido:** Esquema de comisiones ampliado a 3 decimales de forma consistente en las 3 tablas relevantes y en las 4 bases de datos reales, evitando que el rediseño de la pantalla de comisiones (mismo día) quedara con precisión trunca al guardar.
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Este log fue reconstruido el 2026-09-23 a partir del historial de Git (mensaje de commit + diff), porque la tarea se completó sin dejar bitácora el mismo día -- detectado al cruzar `git log` del 2026-09-22 contra `logs_gemini/` antes de generar el reporte diario. El mensaje de commit original ya era detallado y sirvió como fuente principal para reconstruir "Acción Realizada".
+- **Respuesta de Gemini:** N/A (reconstrucción posterior).

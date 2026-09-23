@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** [Reconstruido desde Git -- tramo de conversación anterior a la ventana visible de esta sesión. Por el commit, el pedido inicial fue permitir asignar comisión por departamento directamente desde la plantilla Excel de la carga masiva GENERAL de productos.]
+- **Fecha y Hora:** 2026-09-22 15:21:17
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:**
+  - `ninesys-api/app/routes/inventory.php` (`POST /api/products/bulk-load`, `GET /api/products/template-excel`)
+- **Commits Relacionados:**
+  - Backend: `75d3230` (implementación) -- **revertido** el 2026-09-23 por `611b91b`
+  - Frontend: `11fce60` (implementación) -- **revertido** por `110b890`, ver log correspondiente en `app_multi/logs_gemini/`
+- **Acción Realizada:** Agregada a `GET /api/products/template-excel` una hoja oculta `ListadoDepartamentos` y dos columnas nuevas en la hoja `Productos`: Departamento (lista desplegable, mismo patrón que Categoría/Atributos) y Comisión (formato `0.000`, 3 decimales). En `POST /api/products/bulk-load`, agregado el mapeo Departamento -> `id_departamento` y un upsert en `products_comisiones` (mismo patrón de `/product-set-comisiones-batch` en `products.php`).
+- **Inconvenientes y Desafíos:** Ninguno técnico en el momento de esta implementación. El problema salió a la luz el día siguiente: el usuario aclaró que el requerimiento real no era este (agregar campos a la carga masiva GENERAL), sino una carga masiva de comisiones **dedicada**, con la hoja pre-llenada por productos reales en vez de en blanco.
+- **Decisión Final y Justificación:** Revertido por completo el 2026-09-23 (commit `611b91b`) y reemplazado por el endpoint correcto (`GET /products-comisiones/template-excel/{id_departamento}` en `products.php`, ver log `2026-09-23_09-30-00_tarea-carga_masiva_comisiones_departamento.log`). Se preservó únicamente la infraestructura compartida real: la precisión de 3 decimales en el esquema (commit `2fadcf9`, no forma parte de este revert).
+- **Herramienta(s) Utilizada(s):** No registrado para la implementación original (reconstrucción desde Git). El revert se hizo con `Read`/`Edit`/`php -l`/`git commit`/`git push`/`deploy_backend_dev.sh`.
+- **Resultado:** Parcial -- implementado y desplegado a Desarrollo, pero identificado como el enfoque equivocado y revertido por completo al día siguiente, sin llegar a desplegarse a Producción.
+- **Verificación:** No registrada en el momento de esta implementación. La reversión sí se verificó formalmente: `php -l` sin errores, y `grep` confirmando cero referencias residuales a Departamento/Comisión en el rango de ambos handlers tras el revert.
+- **Logro Conseguido:** Ninguno directo (funcionalidad descartada) -- valor indirecto: ayudó a clarificar el requerimiento real, implementado correctamente después.
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Este log fue reconstruido el 2026-09-23 a partir del historial de Git, porque la tarea se completó sin dejar bitácora el mismo día -- detectado al cruzar `git log` del 2026-09-22 contra `logs_gemini/` antes de generar el reporte diario. Se documenta explícitamente como trabajo revertido para que el reporte semanal no lo cuente como una feature entregada.
+- **Respuesta de Gemini:** N/A (reconstrucción posterior).
