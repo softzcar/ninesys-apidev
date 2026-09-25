@@ -1975,6 +1975,12 @@ return function (App $app) {
     // Atomicidad FK: reasignación (lotes_detalles + LDEA + lotes) en una transacción
     $localConnection->beginTransaction();
 
+    // Mismo lock consultivo y mismo motivo que en /lotes/empleados/asignar-productos
+    // (fix 2026-09-25): el "SELECT existe / INSERT si no" de mas abajo (linea
+    // ~2020) es la misma condicion de carrera -- doble clic/envio casi
+    // simultaneo puede crear dos filas para el mismo empleado.
+    $localConnection->goQuery('SELECT pg_advisory_xact_lock(?, ?)', [$miEmpleado['id_orden'], $miEmpleado['id_departamento']]);
+
     // Reconciliación: este endpoint hace upsert de UN solo empleado, sin
     // mirar si esta orden+departamento ya tenía otro empleado asignado --
     // mismo patrón de bug confirmado en /lotes/empleados/asignar-productos
@@ -2177,6 +2183,23 @@ return function (App $app) {
 
     $localConnection->beginTransaction();
     try {
+      // Lock consultivo por transacción, acotado a esta orden+departamento
+      // (fix 2026-09-25, bug real confirmado: ordenes 6539 y 7242, empresa
+      // 194 -- doble clic/envio casi simultaneo de este mismo endpoint hacia
+      // la misma orden+departamento). Sin esto, el "SELECT ... existe /
+      // INSERT si no" de mas abajo es una condicion de carrera clasica: dos
+      // requests casi simultaneos pueden ver ambos "no existe" antes de que
+      // cualquiera inserte, creando DOS filas para el mismo empleado en
+      // lotes_detalles_empleados_asignados -- la rama de comision variable
+      // de /registrar-paso-empleado no esta acotada a una fila especifica y
+      // suma el trabajo dos veces (monto duplicado real, verificado contra
+      // datos de Produccion). pg_advisory_xact_lock serializa cualquier
+      // segundo request hacia la MISMA orden+departamento hasta que el
+      // primero haga commit/rollback, y se libera solo automaticamente al
+      // final de la transaccion -- no requiere unlock manual ni cambio de
+      // esquema.
+      $localConnection->goQuery('SELECT pg_advisory_xact_lock(?, ?)', [$id_orden, $id_departamento]);
+
       // Reconciliación contra lo que ya existía -- bug real confirmado
       // 2026-09-22 (orden 6707, empresa 194, ~$9.84 sobrepagados): si un
       // empleado quedaba en 0 unidades repartidas, el frontend lo omitía del

@@ -1121,6 +1121,22 @@ return function (App $app) {
               AND a.id_orden = {$miEmpleado['id_orden']}
               AND a.id_departamento = {$miEmpleado['id_departamento']}
               {$idReposicionScopeSql}
+              -- Blindaje defensivo (fix 2026-09-25, ordenes 6539/7242): a
+              -- diferencia de las ramas 'fija'/'porcentaje' (que agrupan por
+              -- a._id y solo usan la primera fila), esta rama no agregaba por
+              -- fila de asignacion -- si existen filas duplicadas para el
+              -- mismo empleado/orden/departamento (ver fix de la condicion de
+              -- carrera en /lotes/empleados/asignar-productos y /reasignar),
+              -- el JOIN hacia ordenes_productos/asignacion granular hace
+              -- fan-out una vez por cada fila y duplica el monto. Acotar
+              -- siempre a una unica fila (la mas antigua) deja el calculo
+              -- correcto sin importar cuantas filas duplicadas existan.
+              AND a._id = (
+                SELECT MIN(a2._id) FROM lotes_detalles_empleados_asignados a2
+                WHERE a2.id_empleado = a.id_empleado AND a2.id_orden = a.id_orden
+                  AND a2.id_departamento = a.id_departamento
+                  AND a2.id_reposicion IS NOT DISTINCT FROM a.id_reposicion
+              )
               AND (p.fisico = 1 OR p.fisico IS NULL)
               AND (p.es_diseno = 0 OR p.es_diseno IS NULL)
               $granularWhereSql
