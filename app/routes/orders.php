@@ -1162,20 +1162,25 @@ return function (App $app) {
                 -- asignaciones historicas ya terminadas con reparto real).
                 -- Con asignación granular, cantidad ya es la porción real del
                 -- empleado y el % se trata como 100 (ver $procentajePendienteSql).
-                ((SUM($cantidadGranularSql) * e.comision) * $procentajePendienteSql / 100) AS total_comision_variable,
+                -- Fix 2026-09-25: comision variable desde products_comisiones
+                -- (tarifa por producto+departamento), no products.comision
+                -- (legacy, global, ya no se llena) -- mismo bug y mismo fix
+                -- ya aplicado en manufacturing.php /finalizar-impresion.
+                ((SUM($cantidadGranularSql) * COALESCE(pc.comision, 0)) * $procentajePendienteSql / 100) AS total_comision_variable,
                 ((SUM($cantidadGranularSql) * d.comision) * $procentajePendienteSql / 100) AS total_comision_fija
             FROM
                 lotes_detalles_empleados_asignados a
             JOIN ordenes ord ON ord._id = a.id_orden
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
+            LEFT JOIN products_comisiones pc ON pc.id_product = b.id_woo AND pc.id_departamento = {$idDepartamento}
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios d ON d.id_usuario = a.id_empleado
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = ord._id
             LEFT JOIN lotes_detalles_empleados_productos ldep ON ldep.id_lotes_detalles_empleados_asignados = a._id AND ldep.id_ordenes_productos = b._id
             WHERE a.id_empleado = {$idEmpleado} AND a.id_departamento = {$idDepartamento} AND a.progreso != 'terminada' AND (ord.status LIKE 'En espera' OR ord.status LIKE 'activa' OR ord.status LIKE 'pausada') AND e.fisico = 1
               AND $granularWhereResumenSql
-            GROUP BY a._id, a.id_orden, ord.cliente_nombre, a.fecha_inicio, a.fecha_terminado, a.progreso, d.comision_tipo, c.tiempo, b.cantidad, b.id_woo, e.product, b.talla, ofo.orden_fila, e.comision, d.comision, ldep.cantidad_asignada, ldep._id
+            GROUP BY a._id, a.id_orden, ord.cliente_nombre, a.fecha_inicio, a.fecha_terminado, a.progreso, d.comision_tipo, c.tiempo, b.cantidad, b.id_woo, e.product, b.talla, ofo.orden_fila, pc.comision, d.comision, ldep.cantidad_asignada, ldep._id
             ORDER BY ofo.orden_fila ASC, a.id_orden DESC, a.progreso ASC
         ";
     } else {
@@ -1198,13 +1203,16 @@ return function (App $app) {
                 b.talla,
                 -- Mismo criterio de la rama pgsql (ver comentario arriba): 0 en
                 -- procentaje_comision significa aun no asignado, se trata como 100.
-                ((SUM($cantidadGranularSql) * e.comision) * $procentajePendienteSql / 100) AS total_comision_variable,
+                -- Fix 2026-09-25: mismo cambio que la rama pgsql (products_comisiones
+                -- en vez de products.comision legacy).
+                ((SUM($cantidadGranularSql) * COALESCE(pc.comision, 0)) * $procentajePendienteSql / 100) AS total_comision_variable,
                 ((SUM($cantidadGranularSql) * d.comision) * $procentajePendienteSql / 100) AS total_comision_fija
             FROM
                 lotes_detalles_empleados_asignados a
             JOIN ordenes ord ON ord._id = a.id_orden
             JOIN ordenes_productos b ON b.id_orden = a.id_orden
             JOIN products e ON e._id = b.id_woo
+            LEFT JOIN products_comisiones pc ON pc.id_product = b.id_woo AND pc.id_departamento = {$idDepartamento}
             JOIN products_tiempos_de_produccion c ON c.id_product = b.id_woo AND c.id_departamento = {$idDepartamento}
             LEFT JOIN api_empresas.empresas_usuarios d ON d.id_usuario = a.id_empleado
             LEFT JOIN ordenes_fila_orden ofo ON ofo.id_orden = ord._id
@@ -4211,10 +4219,12 @@ $object['sales_commission_ISSET'][] = false;
       $id_product = $id_tmp[0]['id_product'];
 
       // BUSCAR DISEÑOS ASIGANDO PARA UBICAR EL MONTO DE LA COMISIÓN
+      // (pro.comision quitado del SELECT 2026-09-25: era la columna legacy,
+      // el valor se sobrescribia siempre mas abajo segun comision_tipo --
+      // lectura muerta.)
       $sql = 'SELECT
                     pro._id id_porducto,
-                    pro.product,
-                    pro.comision
+                    pro.product
                 FROM
                     disenos dis
                 LEFT JOIN revisiones rev ON
@@ -4230,17 +4240,23 @@ $object['sales_commission_ISSET'][] = false;
         $object['comision_diseno'] = 0;
         $comision = 0;
       } else {
-        $comision = $comision_tmp[0]['comision'];
-
         $sql = 'SELECT comision, comision_tipo, comision_porcentaje FROM api_empresas.empresas_usuarios WHERE id_usuario = ?';
         $respComision = $localConnection->goQuery($sql, [$miDiseno[0]['id_empleado']]);
         $comision_tipo = $respComision[0]['comision_tipo'];
 
         if ($comision_tipo === 'variable') {
-          // Buscar la comision en el producto
-          $sql = 'SELECT comision FROM products WHERE _id = ?';
-          $respComisionProd = $localConnection->goQuery($sql, [$id_product]);
-          $comision = $respComisionProd[0]['comision'];
+          // Buscar la comision en products_comisiones (tarifa por
+          // producto+departamento) -- fix 2026-09-25: antes leia de la
+          // columna legacy products.comision (global, ya no se llena desde
+          // ningun flujo vigente), mismo bug ya corregido en
+          // manufacturing.php /finalizar-impresion. Mismo criterio ya usado
+          // en designs.php:485 para resolver el id_departamento de Diseño.
+          $sql = "SELECT _id id FROM departamentos WHERE departamento LIKE 'Diseño' LIMIT 1";
+          $respDeptoDiseno = $localConnection->goQuery($sql, []);
+          $idDeptoDiseno = !empty($respDeptoDiseno) ? intval($respDeptoDiseno[0]['id']) : null;
+          $sql = 'SELECT COALESCE(comision, 0) AS comision FROM products_comisiones WHERE id_product = ? AND id_departamento = ?';
+          $respComisionProd = $localConnection->goQuery($sql, [$id_product, $idDeptoDiseno]);
+          $comision = !empty($respComisionProd) ? $respComisionProd[0]['comision'] : 0;
         } elseif ($comision_tipo === 'porcentaje') {
           // Para porcentaje: calcular basado en el precio del producto
           $sql_precio = 'SELECT precio_unitario FROM ordenes_productos WHERE id_orden = ? LIMIT 1';

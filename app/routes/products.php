@@ -875,12 +875,17 @@ return function (App $app) {
   });
 
   // ASIGNAR COMISION A PRODUCTO Y EMPLEADO
+  // Deshabilitado 2026-09-25: escribía en la columna legacy products.comision
+  // (global, sin distinguir departamento), a eliminar. Sin ningún consumidor
+  // vivo en app_multi (los 3 componentes que lo llamaban -- ComisionesProductosInput.vue,
+  // PagosEmpleadoResumen.vue, PagosEmpleadosDetallado.vue -- eran huérfanos y
+  // ya se eliminaron). La edición de comisión por producto+departamento
+  // vigente es POST /product-set-comision-producto, que ya escribe en
+  // products_comisiones (ver ComisionesProductos.vue). Se deja comentado en
+  // vez de borrado por pedido explícito del usuario.
+  /*
   $app->get('/product-set-comision/{id}/{comision}', function (Request $request, Response $response, array $args) {
     $tmpConnection = new LocalDB();
-    /* $woo = new WooMe();
-    $res = $woo->updateProductComision($args['id'], $args['comision']);
-    $object['res'] = $res; */
-
     // PostgreSQL no permite multiples comandos en un solo prepared statement (a diferencia de
     // MySQL, que lo tolera); se separan en dos llamadas.
     $idProductoComision = intval($args['id']);
@@ -914,6 +919,7 @@ return function (App $app) {
       ->withHeader('Content-Type', 'application/json')
       ->withStatus(200);
   });
+  */
 
   // OBTENR LOS PARODUCTOS APRA LE MANEJO DE ATRIBUTOS DE COMSIONES
   $app->get('/atributos/comisiones', function (Request $request, Response $response) {

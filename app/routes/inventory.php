@@ -515,7 +515,9 @@ return function (App $app) {
             }
 
             // Obtener productos existentes (filtrando SKUs nulos o vacíos)
-            $products = $localConnection->goQuery("SELECT _id, product, sku, fisico, comision, stock_quantity, product_description, category_ids FROM products WHERE sku IS NOT NULL AND sku <> ''");
+            // comision (legacy) quitado del SELECT 2026-09-25: se traia pero
+            // nunca se usaba para poblar la plantilla Excel generada.
+            $products = $localConnection->goQuery("SELECT _id, product, sku, fisico, stock_quantity, product_description, category_ids FROM products WHERE sku IS NOT NULL AND sku <> ''");
 
             $localConnection->disconnect();
 

@@ -575,7 +575,6 @@ La fecha de hoy es " . date('Y-m-d') . ".",
                 'fisico' => '1 = producto físico, 0 = digital',
                 'es_diseno' => '1 = pertenece a diseño',
                 'price' => 'Precio del producto',
-                'comision' => 'Monto para comisión variable',
                 'stock_quantity' => 'Cantidad en stock',
             ]
         ],

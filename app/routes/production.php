@@ -919,7 +919,10 @@ return function (App $app) {
     $sql = 'SELECT a.id_diseno, a.tipo, a.cantidad, b.id_orden FROM disenos_ajustes_y_personalizaciones a JOIN disenos b ON b._id = a.id_diseno WHERE b.id_empleado = ' . $args['id_empleado'];
     $obj['ajustes'] = $localConnection->goQuery($sql);
 
-    $sql = 'SELECT pro._id id_producto, pro.product, pro.comision FROM products pro WHERE pro.es_diseno = 1 ORDER BY pro.product ASC;';
+    // pro.comision (legacy) quitado del SELECT 2026-09-25: no lo consume
+    // ningún componente del frontend (verificado en disenosse/asignados.vue
+    // y tallasPersonalizacionTodas.vue, los únicos consumidores de este SSE).
+    $sql = 'SELECT pro._id id_producto, pro.product FROM products pro WHERE pro.es_diseno = 1 ORDER BY pro.product ASC;';
     $obj['productos'] = $localConnection->goQuery($sql);
 
     // $sse = new SSE($obj);
