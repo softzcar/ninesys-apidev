@@ -4252,8 +4252,30 @@ return function (App $app) {
 
     $idsString = implode(',', $cleanIds);
 
+    // Bug real confirmado 2026-09-25 (orden 7081, Papel SUBLIMACION mostraba
+    // Meta=148.70 Mt contra ~34 Mt reales estimados por producción -- factor
+    // de inflación exacto: 5x, la cantidad de departamentos ya terminados
+    // para esa línea). product_insumos_asignados YA define, por
+    // producto+talla+insumo, cuál es el departamento responsable de
+    // consumirlo (ej. Papel->Impresión, Tela->Estampado) -- antes esto no se
+    // usaba: "piezas completadas" sumaba cantidad_asignada de TODOS los
+    // departamentos ya terminados para la línea (cada uno registra la MISMA
+    // cantidad al pasar por ella, por diseño), así que una línea que ya
+    // pasó por 5 departamentos multiplicaba su Meta x5. Ahora cada insumo
+    // usa solo lo completado por SU departamento responsable (pia.id_departamento).
+    //
+    // Departamentos de tipo "corte" resueltos dinámicamente (puede haber más
+    // de uno por empresa, ej. "Corte" y "Corte 2") -- mismo criterio que ya
+    // usa el frontend (tipo==='corte'), nunca un id fijo.
+    $deptosCorteRows = $localConnection->goQuery("SELECT _id FROM departamentos WHERE tipo = 'corte'");
+    $deptosCorteIds = (is_array($deptosCorteRows) && !empty($deptosCorteRows))
+      ? implode(',', array_map('intval', array_column($deptosCorteRows, '_id')))
+      : '0';
+
     // Siempre hacer LEFT JOIN a inventario_corte: si hay piezas registradas a cortar
-    // (excedentes incluidos), esas son la base real de Meta. Fallback a op.cantidad.
+    // (excedentes incluidos), esas son la base real de Meta -- pero solo para
+    // insumos cuyo departamento responsable sea de tipo "corte" (ver
+    // piezas_expr más abajo). Fallback a op.cantidad.
     $ic_join = "LEFT JOIN (
                 SELECT id_ordenes_productos, SUM(cantidad) AS cantidad_cortada
                 FROM inventario_corte
@@ -4266,17 +4288,24 @@ return function (App $app) {
     // artificialmente la eficiencia mientras falten empleados por terminar su parte
     // (ej. Meta=12 unidades pero solo se han completado e informado 7 => eficiencia
     // 169% en vez de ~99%). Se usa la suma de lo YA completado (fecha_terminado NO
-    // nulo) según la asignación granular; si no hay reparto granular para esa línea,
-    // cae a op.cantidad como antes.
+    // nulo) según la asignación granular, agrupado también por departamento --
+    // cada insumo une contra SU departamento responsable (pia.id_departamento),
+    // no contra la suma de todos; si no hay reparto granular para esa línea EN
+    // ESE departamento, cae a op.cantidad como antes.
     $ldep_join = "LEFT JOIN (
-                SELECT ldep.id_ordenes_productos, SUM(ldep.cantidad_asignada) AS cantidad_completada
+                SELECT ldep.id_ordenes_productos, ldea.id_departamento, SUM(ldep.cantidad_asignada) AS cantidad_completada
                 FROM lotes_detalles_empleados_productos ldep
                 JOIN lotes_detalles_empleados_asignados ldea ON ldea._id = ldep.id_lotes_detalles_empleados_asignados
                 WHERE ldea.id_orden IN ($idsString) AND ldea.fecha_terminado IS NOT NULL
-                GROUP BY ldep.id_ordenes_productos
-            ) ldep_completado ON ldep_completado.id_ordenes_productos = op._id";
+                GROUP BY ldep.id_ordenes_productos, ldea.id_departamento
+            ) ldep_completado ON ldep_completado.id_ordenes_productos = op._id
+              AND ldep_completado.id_departamento = pia.id_departamento";
 
-    $piezas_expr = "COALESCE(ic_corte.cantidad_cortada, ldep_completado.cantidad_completada, op.cantidad)";
+    $piezas_expr = "COALESCE(
+                CASE WHEN pia.id_departamento IN ($deptosCorteIds) THEN ic_corte.cantidad_cortada END,
+                ldep_completado.cantidad_completada,
+                op.cantidad
+            )";
     // Se quitó un filtro "AND im.fecha >= hoy - 7 dias" que existía en ambas
     // subconsultas de abajo (id_insumo y cantidad_real): como el WHERE ya
     // acota a los id_orden pedidos, ese límite de 7 días no tenía ninguna
@@ -4338,14 +4367,15 @@ return function (App $app) {
                 ), 0) AS cantidad_real
 
             FROM ordenes_productos op
-            $ic_join
-            $ldep_join
             -- Deduplicar product_insumos_asignados por (producto, talla, catálogo) para evitar duplicados.
+            -- Movido ANTES de ic_join/ldep_join (2026-09-25): ldep_join ahora une
+            -- contra pia.id_departamento (ver piezas_expr), asi que pia debe estar
+            -- disponible antes en la cadena de JOINs.
             JOIN (
-                SELECT id_product, id_talla, id_catalogo_insumos_productos,
+                SELECT id_product, id_talla, id_catalogo_insumos_productos, id_departamento,
                        MAX(cantidad) AS cantidad, MAX(unidad) AS unidad
                 FROM product_insumos_asignados
-                GROUP BY id_product, id_talla, id_catalogo_insumos_productos
+                GROUP BY id_product, id_talla, id_catalogo_insumos_productos, id_departamento
             ) pia ON pia.id_product = op.id_woo
                  AND (
                     pia.id_talla = op.id_size
@@ -4366,6 +4396,8 @@ return function (App $app) {
                         )
                     )
                  )
+            $ic_join
+            $ldep_join
             JOIN catalogo_insumos_productos cip ON cip._id = pia.id_catalogo_insumos_productos
             -- Subquery agrupada por catálogo para obtener rendimiento sin multiplicar filas.
             LEFT JOIN (
