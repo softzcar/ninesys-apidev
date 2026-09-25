@@ -2376,8 +2376,17 @@ return function (App $app) {
         // columna legacy products.comision (global, ya no se llena desde
         // ningun flujo vigente) -- mismo patron ya usado en
         // /finalizar-departamento (ver ~linea 2000) y /finalizar-corte.
-        $sql_calculo_pago = "SELECT a._id AS id_lotes_detalles, a.procentaje_comision, (SUM($cantidadRealImpSql * COALESCE(pc.comision, 0)) * $porcentajeCaseImpSql / 100) AS total_comision_variable, (SUM($cantidadRealImpSql * eu.comision) * $porcentajeCaseImpSql / 100) AS total_comision_fija, (SUM($cantidadRealImpSql) * $porcentajeCaseImpSql / 100) AS total_piezas FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo LEFT JOIN products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = a.id_departamento $granularJoinImpSql WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND a.id_reposicion IS NULL AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) $granularWhereImpSql GROUP BY a._id, a.procentaje_comision";
+        $sql_calculo_pago = "SELECT a._id AS id_lotes_detalles, a.procentaje_comision, (SUM($cantidadRealImpSql * COALESCE(pc.comision, 0)) * $porcentajeCaseImpSql / 100) AS total_comision_variable, (SUM($cantidadRealImpSql * eu.comision) * $porcentajeCaseImpSql / 100) AS total_comision_fija, (SUM($cantidadRealImpSql) * $porcentajeCaseImpSql / 100) AS total_piezas, MAX(COALESCE(pc.comision, 0)) AS comision_producto_ref FROM lotes_detalles_empleados_asignados a JOIN api_empresas.empresas_usuarios eu ON eu.id_usuario = a.id_empleado JOIN ordenes_productos c ON c.id_orden = a.id_orden JOIN products d ON d._id = c.id_woo LEFT JOIN products_comisiones pc ON pc.id_product = c.id_woo AND pc.id_departamento = a.id_departamento $granularJoinImpSql WHERE a.id_empleado = ? AND a.id_orden = ? AND a.id_departamento = ? AND a.id_reposicion IS NULL AND (d.fisico = 1 OR d.fisico IS NULL) AND (d.es_diseno = 0 OR d.es_diseno IS NULL) $granularWhereImpSql GROUP BY a._id, a.procentaje_comision";
         $resp_comision = $localConnection->goQuery($sql_calculo_pago, [$id_empleado, $id_orden_actual, $id_departamento]);
+        // comision_producto_ref (2026-09-25): mismo criterio ya usado en
+        // /finalizar-departamento (linea ~2002, "Referencia visual de la
+        // tabla") -- para comision variable, pagos.comision debe mostrar la
+        // tarifa del producto, no la del empleado (que es 0 para comision
+        // variable, ver empresas_usuarios.comision). Antes quedaba en $0.00/u
+        // en el reporte pese a que el monto ya se calculaba bien.
+        if ($comision_tipo === 'variable' && !empty($resp_comision)) {
+          $comision_valor = floatval($resp_comision[0]['comision_producto_ref'] ?? 0);
+        }
 
         // Guardia de idempotencia (hallazgo real 2026-09-18, ver bitácora): este
         // era el ÚNICO de los tres endpoints de finalización de lote sin este
