@@ -1053,6 +1053,138 @@ return function (App $app) {
 
 
     /**
+     * GET /internal/ordenes/{id_empresa}/by-id?id={id_orden}
+     *
+     * Devuelve UNA orden concreta por su _id, con el mismo detalle que by-phone
+     * (estado, entrega, totales, saldo, productos) más los datos del cliente.
+     * Header: Authorization: {id_empresa}
+     * Respuesta 200: { found:true, customer_id, customer_name, orden:{...} } | { found:false }
+     */
+    $app->get('/internal/ordenes/{id_empresa}/by-id', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+
+        $idOrden = filter_var($request->getQueryParams()['id'] ?? '', FILTER_VALIDATE_INT);
+        if ($idOrden === false || $idOrden <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Parámetro id (id_orden) requerido.'], 400);
+        }
+
+        try {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $localConnection->goQuery(
+                'SELECT db_name FROM empresas WHERE id_empresa = ? AND activo = 1',
+                [$idEmpresa]
+            );
+            $localConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][ordenes/by-id] Error central empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar empresa.'], 500);
+        }
+
+        if (empty($rows) || isset($rows['status'])) {
+            return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe o está inactiva."], 404);
+        }
+
+        $dbName = DB_DRIVER === 'pgsql' ? '' : '`' . $rows[0]['db_name'] . '`.';
+
+        try {
+            $tenantConnection = new LocalDB();
+
+            $ordersQuery = "
+                SELECT
+                    o._id AS id_orden,
+                    o.status,
+                    o.fecha_entrega,
+                    o.pago_total,
+                    o.id_wp,
+                    IFNULL((SELECT SUM(a.abono) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_abonos,
+                    IFNULL((SELECT SUM(a.descuento) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_descuentos,
+                    IFNULL((SELECT SUM(a.nota_credito) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_notas_credito
+                FROM {$dbName}ordenes o
+                WHERE o._id = ?
+                LIMIT 1
+            ";
+            $orders = $tenantConnection->goQuery($ordersQuery, [$idOrden]);
+            if (isset($orders['status'])) {
+                throw new \Exception($orders['message'] ?? 'Error al buscar la orden');
+            }
+            if (empty($orders)) {
+                $tenantConnection->disconnect();
+                return $respondJson(['found' => false], 200);
+            }
+
+            $o = $orders[0];
+            $customerId = (int) $o['id_wp'];
+
+            // Datos del cliente dueño de la orden
+            $customerName = '';
+            $cust = $tenantConnection->goQuery(
+                "SELECT first_name, last_name FROM {$dbName}customers WHERE _id = ? LIMIT 1",
+                [$customerId]
+            );
+            if (!isset($cust['status']) && !empty($cust)) {
+                $customerName = trim($cust[0]['first_name'] . ' ' . $cust[0]['last_name']);
+            }
+
+            // Productos de la orden
+            $products = $tenantConnection->goQuery(
+                "SELECT name, cantidad, talla AS detalle_tallas FROM {$dbName}ordenes_productos WHERE id_orden = ?",
+                [$idOrden]
+            );
+            if (isset($products['status'])) {
+                $products = [];
+            }
+
+            $totalAbonos = (float) $o['total_abonos'];
+            $totalDescuentos = (float) $o['total_descuentos'];
+            $totalNotasCredito = (float) $o['total_notas_credito'];
+            $pagoTotal = (float) $o['pago_total'];
+            $saldoPendiente = $pagoTotal - $totalAbonos - $totalDescuentos + $totalNotasCredito;
+
+            $orden = [
+                'id_orden'         => (int) $o['id_orden'],
+                'status'           => $o['status'],
+                'fecha_entrega'    => $o['fecha_entrega'],
+                'pago_total'       => $pagoTotal,
+                'total_abonos'     => $totalAbonos,
+                'total_descuentos' => $totalDescuentos,
+                'saldo_pendiente'  => $saldoPendiente,
+                'productos'        => array_map(function ($p) {
+                    return [
+                        'name'           => $p['name'],
+                        'cantidad'       => (int) $p['cantidad'],
+                        'detalle_tallas' => $p['detalle_tallas'] ?? '',
+                    ];
+                }, (array) $products),
+            ];
+
+            $tenantConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][ordenes/by-id] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar la orden.'], 500);
+        }
+
+        return $respondJson([
+            'found'         => true,
+            'customer_id'   => $customerId,
+            'customer_name' => $customerName,
+            'orden'         => $orden,
+        ], 200);
+    });
+
+
+    /**
      * POST /internal/cliente/{id_empresa}
      *
      * Crea un nuevo cliente en la tabla customers del tenant.
