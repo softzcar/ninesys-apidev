@@ -30,74 +30,70 @@ return function (App $app) {
      *   - data: array|null (datos crudos si aplica)
      */
     $app->post('/ai/chat', function (Request $request, Response $response) {
-        require_once __DIR__ . '/../classes/AI/GeminiChatAssistant.php';
-        require_once __DIR__ . '/../schemas/db-schema-gemini.php';
         require_once __DIR__ . '/../config.php';
+
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
 
         // Parsear body JSON
         $body = $request->getBody()->getContents();
         $data = json_decode($body, true);
-
         if ($data === null) {
             $data = $request->getParsedBody() ?? [];
         }
 
-        // Validar que se envió una consulta
         if (empty($data['query'])) {
-            $result = [
-                'success' => false,
-                'error' => 'Se requiere el parámetro "query" con la pregunta'
-            ];
-            $response->getBody()->write(json_encode($result));
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus(400);
+            return $respondJson(['success' => false, 'error' => 'Se requiere el parámetro "query" con la pregunta'], 400);
         }
 
-        // Verificar API Key
-        if (empty(GEMINI_API_KEY)) {
-            $result = [
-                'success' => false,
-                'error' => 'La API Key de Gemini no está configurada'
-            ];
-            $response->getBody()->write(json_encode($result));
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus(500);
+        // La empresa se deriva del token (IdEmpresaMiddleware define ID_EMPRESA).
+        // Sin empresa identificada no hay consulta: el MCP la exige de todas formas.
+        $idEmpresa = defined('ID_EMPRESA') ? (int) ID_EMPRESA : 0;
+        if ($idEmpresa <= 0) {
+            return $respondJson(['success' => false, 'error' => 'Sesión inválida: empresa no identificada.'], 400);
         }
 
-        // Obtener schema de la BD
-        $schema = require __DIR__ . '/../schemas/db-schema-gemini.php';
+        if (empty(AGENT_TOKEN)) {
+            error_log('[ai/chat] AGENT_TOKEN no configurado en el .env');
+            return $respondJson(['success' => false, 'error' => 'El asistente no está configurado.'], 500);
+        }
 
-        // Crear conexión a la BD
-        $localConnection = new LocalDB();
-
-        // Obtener historial de conversación (si se envió)
-        $history = $data['history'] ?? [];
+        // Proxy fino al agente de IA (ninesys-ai-agent), que corre el bucle
+        // Gemini <-> MCP. La empresa viaja en el body; el agente la reenvía al
+        // MCP en la cabecera X-Ninesys-Empresa. El bucle de IA ya NO vive aquí
+        // (GeminiChatAssistant queda deprecado para este endpoint).
+        $history = is_array($data['history'] ?? null) ? $data['history'] : [];
 
         try {
-            // Crear asistente y procesar consulta (con historial)
-            $assistant = new GeminiChatAssistant(GEMINI_API_KEY, $schema, $localConnection);
-            $result = $assistant->processUserQuery($data['query'], $history);
+            $client = new \GuzzleHttp\Client(['timeout' => 45]);
+            $res = $client->post(AGENT_URL, [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . AGENT_TOKEN,
+                    'Content-Type'  => 'application/json',
+                ],
+                'json' => [
+                    'query'      => $data['query'],
+                    'history'    => $history,
+                    'id_empresa' => $idEmpresa,
+                ],
+                'http_errors' => false,
+            ]);
 
-            $localConnection->disconnect();
-
-            $response->getBody()->write(json_encode($result, JSON_UNESCAPED_UNICODE));
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus($result['success'] ? 200 : 400);
-
-        } catch (Exception $e) {
-            $localConnection->disconnect();
-
+            $agentData = json_decode((string) $res->getBody(), true) ?: [];
+            $ok = !empty($agentData['success']);
             $result = [
-                'success' => false,
-                'error' => 'Error interno: ' . $e->getMessage()
+                'success'  => $ok,
+                'response' => $agentData['text'] ?? '',
             ];
-            $response->getBody()->write(json_encode($result));
-            return $response
-                ->withHeader('Content-Type', 'application/json')
-                ->withStatus(500);
+            if (!$ok) {
+                $result['error'] = $agentData['message'] ?? 'El asistente no pudo procesar la consulta.';
+            }
+            return $respondJson($result, $ok ? 200 : 400);
+        } catch (\Throwable $e) {
+            error_log('[ai/chat] Error contactando al agente: ' . $e->getMessage());
+            return $respondJson(['success' => false, 'error' => 'No se pudo contactar al asistente. Intenta de nuevo.'], 502);
         }
     });
 

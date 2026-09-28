@@ -54,3 +54,10 @@ define('WS_API_URL', getenv('WS_API_URL') ?: 'https://ws.ninesys19.com/');
 // de 19print_app.
 define('URL_19PRINT_API', getenv('URL_19PRINT_API') ?: 'https://dtf.nineteencustom.com/api');
 define('TOKEN_19PRINT_ADMIN', getenv('TOKEN_19PRINT_ADMIN') ?: '');
+
+// Agente de IA (ninesys-ai-agent): servicio Node local que corre el bucle
+// Gemini <-> MCP. La API le hace de proxy autenticado para el chat de app_multi
+// (POST /ai/chat), pasando la empresa derivada del JWT (ID_EMPRESA). AGENT_TOKEN
+// es uno de los AGENT_CLIENT_TOKENS del agente.
+define('AGENT_URL', getenv('AGENT_URL') ?: 'http://127.0.0.1:3200/chat');
+define('AGENT_TOKEN', getenv('AGENT_TOKEN') ?: '');
