@@ -982,9 +982,9 @@ return function (App $app) {
                     o.pago_total,
                     o.pago_descuento,
                     o.pago_abono,
-                    IFNULL((SELECT SUM(a.abono) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_abonos,
-                    IFNULL((SELECT SUM(a.descuento) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_descuentos,
-                    IFNULL((SELECT SUM(a.nota_credito) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_notas_credito
+                    COALESCE((SELECT SUM(a.abono) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_abonos,
+                    COALESCE((SELECT SUM(a.descuento) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_descuentos,
+                    COALESCE((SELECT SUM(a.nota_credito) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_notas_credito
                 FROM {$dbName}ordenes o
                 WHERE o.id_wp = ? AND o.status != 'cancelada'
                 ORDER BY o._id DESC
