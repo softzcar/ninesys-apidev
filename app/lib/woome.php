@@ -7,6 +7,8 @@
 
 use Automattic\WooCommerce\Client;
 
+require_once __DIR__ . '/customer_search.php';
+
 class WooMe
 {  // HOSTINGER
 
@@ -1173,39 +1175,40 @@ class WooMe
     $localConnection = new LocalDB();
 
     $tieneBusqueda = $buscar !== null && trim($buscar) !== '';
-    $like = $tieneBusqueda ? '%' . trim($buscar) . '%' : null;
     // Sin ORDER BY, el motor no garantiza ningún orden particular -- esto
     // hacía que el orden pareciera arbitrario y confuso de leer (hallazgo
     // real 2026-09-04).
     $orderBySql = $tieneBusqueda ? ' ORDER BY first_name ASC, last_name ASC' : '';
     // Pedido explícito del usuario 2026-09-05: sin LIMIT en la búsqueda --
-    // prefiere ver TODOS los resultados (ej. los 34 "Ricardo" completos) en
-    // vez de acotar por nombre+apellido o cortar en un número fijo, aun a
-    // costa de un tiempo de respuesta mayor. Se prueba así primero.
-    // Postgres, a diferencia de MySQL, distingue mayúsculas/minúsculas con
-    // LIKE -- sin esto, buscar "ozc" no encontraba a "Ozcar" (hallazgo real
-    // 2026-08-07, mismo patrón ya usado en msg_service.php).
-    $likeOp = (defined('DB_DRIVER') && DB_DRIVER === 'pgsql') ? 'ILIKE' : 'LIKE';
+    // prefiere ver TODOS los resultados (ej. los 34 "Ricardo" completos).
+    // Búsqueda por tokens sobre el nombre completo concatenado + teléfono/cédula
+    // (ver ninesys_customer_search_where): resuelve "nombre apellido" juntos,
+    // nombres compuestos y, en Postgres, tildes vía unaccent. citext ya cubre
+    // mayúsculas/minúsculas (hallazgo 2026-08-07).
+    $driver = (defined('DB_DRIVER') && DB_DRIVER === 'pgsql') ? 'pgsql' : 'mysql';
 
     if ($id_vendedor !== null) {
-      $searchWhere = $tieneBusqueda ? " AND (c.first_name {$likeOp} ? OR c.last_name {$likeOp} ? OR c.phone {$likeOp} ? OR c.cedula {$likeOp} ?)" : '';
+      [$searchExpr, $searchParams] = $tieneBusqueda
+        ? ninesys_customer_search_where($buscar, 'c.', $driver)
+        : ['', []];
+      $searchWhere = $searchExpr !== '' ? ' AND ' . $searchExpr : '';
       $sql = 'SELECT DISTINCT c._id id, c.first_name, c.last_name, c.username, c.cedula, c.phone, c.address, c.email, c.recibir_notificaciones,
                               c.id_catalogo_pais, c.id_catalogo_estado, c.id_catalogo_ciudad
               FROM customers c
               INNER JOIN ordenes o ON o.id_wp = c._id
               WHERE c.eliminado = 0 AND o.responsable = ?' . $searchWhere . $orderBySql;
-      $params = [$id_vendedor];
-      if ($tieneBusqueda) {
-        $params = array_merge($params, [$like, $like, $like, $like]);
-      }
+      $params = array_merge([$id_vendedor], $searchParams);
       $data = $localConnection->goQuery($sql, $params);
     } else {
-      $searchWhere = $tieneBusqueda ? " AND (first_name {$likeOp} ? OR last_name {$likeOp} ? OR phone {$likeOp} ? OR cedula {$likeOp} ?)" : '';
+      [$searchExpr, $searchParams] = $tieneBusqueda
+        ? ninesys_customer_search_where($buscar, '', $driver)
+        : ['', []];
+      $searchWhere = $searchExpr !== '' ? ' AND ' . $searchExpr : '';
       $sql = 'SELECT _id id, first_name, last_name, username, cedula, phone, address, email, recibir_notificaciones,
                      id_catalogo_pais, id_catalogo_estado, id_catalogo_ciudad
               FROM customers
               WHERE eliminado = 0' . $searchWhere . $orderBySql;
-      $params = $tieneBusqueda ? [$like, $like, $like, $like] : [];
+      $params = $searchParams;
       $data = $localConnection->goQuery($sql, $params);
     }
     $localConnection->disconnect();

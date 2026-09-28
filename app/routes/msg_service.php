@@ -1185,6 +1185,89 @@ return function (App $app) {
 
 
     /**
+     * GET /internal/clientes/{id_empresa}/search?q={texto}
+     *
+     * Busca clientes por NOMBRE COMPLETO (multi-palabra) + teléfono/cédula, usando
+     * el helper ninesys_customer_search_where (tokens sobre first_name+' '+last_name,
+     * con unaccent en Postgres). Resuelve "nombre apellido" juntos y nombres
+     * compuestos. Header: Authorization: {id_empresa}. Respuesta 200:
+     * { count, customers: [{ _id, first_name, last_name, phone, cedula, email }] }
+     */
+    $app->get('/internal/clientes/{id_empresa}/search', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
+        require_once __DIR__ . '/../lib/customer_search.php';
+
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+
+        $q = trim($request->getQueryParams()['q'] ?? '');
+        if ($q === '') {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Parámetro q (texto de búsqueda) requerido.'], 400);
+        }
+
+        try {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $localConnection->goQuery(
+                'SELECT db_name FROM empresas WHERE id_empresa = ? AND activo = 1',
+                [$idEmpresa]
+            );
+            $localConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][clientes/search] Error central empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar empresa.'], 500);
+        }
+
+        if (empty($rows) || isset($rows['status'])) {
+            return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe o está inactiva."], 404);
+        }
+
+        $dbName = DB_DRIVER === 'pgsql' ? '' : '`' . $rows[0]['db_name'] . '`.';
+        $driver = (defined('DB_DRIVER') && DB_DRIVER === 'pgsql') ? 'pgsql' : 'mysql';
+
+        try {
+            $tenantConnection = new LocalDB();
+            [$where, $params] = ninesys_customer_search_where($q, '', $driver);
+            $sql = "SELECT _id, first_name, last_name, phone, cedula, email
+                    FROM {$dbName}customers
+                    WHERE eliminado = 0" . ($where !== '' ? ' AND ' . $where : '') . "
+                    ORDER BY first_name ASC, last_name ASC
+                    LIMIT 15";
+            $customers = $tenantConnection->goQuery($sql, $params);
+            $tenantConnection->disconnect();
+            if (isset($customers['status'])) {
+                throw new \Exception($customers['message'] ?? 'Error al buscar clientes');
+            }
+        } catch (\Throwable $e) {
+            error_log('[msg_service][clientes/search] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al buscar clientes.'], 500);
+        }
+
+        $list = array_map(function ($c) {
+            return [
+                '_id'        => (int) $c['_id'],
+                'first_name' => $c['first_name'],
+                'last_name'  => $c['last_name'],
+                'phone'      => $c['phone'],
+                'cedula'     => $c['cedula'],
+                'email'      => $c['email'],
+            ];
+        }, (array) $customers);
+
+        return $respondJson(['count' => count($list), 'customers' => $list], 200);
+    });
+
+
+    /**
      * POST /internal/cliente/{id_empresa}
      *
      * Crea un nuevo cliente en la tabla customers del tenant.

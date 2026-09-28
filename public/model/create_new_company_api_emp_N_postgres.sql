@@ -2,6 +2,8 @@
 -- SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS citext;
+-- Búsqueda de clientes por nombre sin acentos (ninesys_customer_search_where).
+CREATE EXTENSION IF NOT EXISTS unaccent;
 -- SET time_zone = "+00:00";
 -- /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */
 ;
