@@ -1,0 +1,22 @@
+- **Solicitud del Usuario:** Opción 2 del backlog: configurar index.html sin caché en OLS para app.nineteengreen.com para evitar el problema de "Loading…" tras deploys del frontend.
+- **Fecha y Hora:** 2026-09-29 10:58:00
+- **Proyecto(s):** Servidor / Infraestructura OLS (vps-contabo-dev) + Frontend (app_multi)
+- **Archivos Involucrados:**
+    - /usr/local/lsws/conf/vhosts/app.nineteengreen.com/vhost.conf (vps-contabo-dev)
+    - Backup previo: /usr/local/lsws/conf/vhosts/app.nineteengreen.com/vhost.conf.bak_20260929_165459
+- **Commits Relacionados:** N/A (configuración de servidor en OLS en VPS Desarrollo)
+- **Acción Realizada:** (1) Creación de respaldo previo del vhost.conf en vps-contabo-dev; (2) Configuración de contextos OpenLiteSpeed con la directiva nativa extraHeaders ("Cache-Control no-cache, no-store, must-revalidate") para exact:/, /index.html, /200.html y /sw.js; (3) Incorporación de la regla de reescritura `RewriteRule ^/?$ /index.html [L]` para garantizar que las peticiones a la raíz `/` pasen por el contexto de /index.html en lugar de servirse por el índice de directorio estándar; (4) Recarga suave de OpenLiteSpeed con `systemctl reload lsws`.
+- **Inconvenientes y Desafíos:** Inicialmente `context exact:/` no inyectaba la cabecera cuando la raíz `/` se servía por omisión mediante `indexFiles`. Se solucionó aplicando el patrón validado previamente en dtf.nineteengreen.com adaptado al contexto de servidor (`RewriteRule ^/?$ /index.html [L]`).
+- **Decisión Final y Justificación:** Inyectar Cache-Control restrictivo solo a los puntos de entrada HTML y al service worker (index.html, 200.html, sw.js), preservando la caché de los bundles estáticos con hash (_nuxt/*.js), asegurando que el navegador siempre solicite el HTML más reciente y nunca busque chunks antiguos.
+- **Herramienta(s) Utilizada(s):** Bash, SSH, Python3, curl, lswsctrl/systemctl.
+- **Resultado:** Éxito.
+- **Verificación:**
+    - `curl -s -I https://app.nineteengreen.com/` → HTTP/2 200, `cache-control: no-cache, no-store, must-revalidate`
+    - `curl -s -I https://app.nineteengreen.com/index.html` → HTTP/2 200, `cache-control: no-cache, no-store, must-revalidate`
+    - `curl -s -I https://app.nineteengreen.com/200.html` → HTTP/2 200, `cache-control: no-cache, no-store, must-revalidate`
+    - `curl -s -I https://app.nineteengreen.com/sw.js` → HTTP/2 200, `cache-control: no-cache, no-store, must-revalidate`
+    - `curl -s -I https://app.nineteengreen.com/clientes/aprobacion/123` (fallback SPA) → HTTP/2 200, `cache-control: no-cache, no-store, must-revalidate`
+    - `curl -s -I https://app.nineteengreen.com/_nuxt/00616ab.js` (asset estático) → HTTP/2 200, sin cabecera no-cache (comportamiento normal preservado)
+- **Logro Conseguido:** Se elimina la causa raíz del "Loading…" persistente tras despliegues en app.nineteengreen.com sin requerir recarga forzada (Ctrl+Shift+R) por parte del usuario.
+- **Observaciones de Gemini:** Configuración robusta y de bajo impacto. El backup del archivo original quedó preservado en el servidor.
+- **Respuesta de Gemini:** Configurado, recargado y verificado en Desarrollo.
