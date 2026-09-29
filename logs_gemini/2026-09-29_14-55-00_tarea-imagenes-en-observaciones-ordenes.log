@@ -1,0 +1,41 @@
+# Bitácora de Tarea: Extracción y visualización de imágenes en observaciones de órdenes
+Fecha y Hora: 2026-09-29 14:55:00
+Responsable: Antigravity / Gemini
+
+## Contexto del Problema
+El usuario indicó que la orden 6998 contiene una imagen adjunta en sus observaciones, pero el chat solo mostraba el texto "CON EL NUMERO 99" sin mostrar la imagen.
+
+## Diagnóstico
+1. Las observaciones de las órdenes se guardan en la tabla `ordenes_observaciones` como HTML enriquecido generado por el editor de texto. Al adjuntar imágenes por pegado o inserción, se almacenan como etiquetas `<img src="data:image/png;base64,...">` con cientos de kilobytes embebidos directamente en el HTML.
+2. La API (`GET /internal/ordenes/{id_empresa}/by-id`) aplicaba `strip_tags()` sobre el HTML de las observaciones, eliminando por completo cualquier etiqueta `<img>` y perdiendo la imagen.
+3. El frontend `AiChatPanel.vue` y el proxy de chat `POST /ai/chat` están diseñados con política de seguridad estricta: solo renderizan imágenes con protocolo HTTPS pertenecientes a los dominios autorizados del ecosistema (`cdn.nineteengreen.com` y `cdn.ninesys19.com`). No admiten data URIs base64 masivos para evitar consumo de memoria y vulnerabilidades de inyección.
+
+## Solución Aplicada
+1. **Nuevo Endpoint en `ninesys-cdn` (`action=save_obs_image`):**
+   - Recibe `id_empresa`, `id_orden`, `index` y `data` (cadena base64 o data URI).
+   - Exige autenticación de servicio interno mediante cabecera `X-Internal-Token` (`MSG_SERVICE_INTERNAL_TOKEN`).
+   - Sanea parámetros numéricos contra directory traversal.
+   - Si el archivo `obs_{id_orden}_{index}.png` ya existe en disco (`images/{id_empresa}/`), reutiliza la URL de forma instantánea.
+   - Si no existe, decodifica el base64, valida que sea una imagen real mediante `getimagesizefromstring()`, escribe el archivo en disco (`images/{id_empresa}/obs_{id_orden}_{index}.png`) con permisos 0644 y devuelve su URL HTTPS pública del CDN.
+   - Se ajustaron los permisos de infraestructura en el VPS de desarrollo para el directorio `images/` de `cdn.nineteengreen.com`.
+2. **Extracción en `ninesys-api` (`GET /internal/ordenes/{id_empresa}/by-id`):**
+   - En `msg_service.php`, antes de aplicar `strip_tags()`, se parsean las etiquetas `<img src="...">` con `preg_match_all`.
+   - Para imágenes en base64 (`data:image/`), se envían vía POST a `save_obs_image` del CDN para convertirlas en URLs HTTPS persistentes.
+   - Las URLs se agregan al arreglo `imagenes_observaciones` dentro del objeto `orden`.
+   - El texto plano de las observaciones se limpia con `strip_tags` para que el LLM lo lea sin basura HTML.
+3. **Mapeo en `mcp_ninesys` (`ninesys_get_order_by_id`):**
+   - Se añadió `imagenes_observaciones` a la interfaz `Order` en `types/api.ts`.
+   - En `tools/orders.ts`, se mapean las URLs al arreglo `images` del objeto `structured` devuelto al agente.
+   - En el formateador de texto de la orden se menciona la presencia de imágenes adjuntas.
+4. **Agente IA y Frontend:**
+   - `ninesys-ai-agent` recopila automáticamente las imágenes de `structured.images` y las envía al endpoint `/ai/chat`.
+   - `AiChatPanel.vue` renderiza la galería de miniaturas debajo del mensaje y permite abrir el visor ampliado al hacer clic.
+
+## Despliegues y Verificación
+- `ninesys-cdn`: commit `5946e23` desplegado con `deploy_cdn_dev.sh`.
+- `ninesys-api`: commit `02adfb2` desplegado con `deploy_backend_dev.sh`.
+- `mcp_ninesys`: commit `56cf40c` desplegado con `deploy_mcp_dev.sh`.
+- `ninesys-ai-agent`: reiniciado en PM2.
+- **Prueba completa en Dev:**
+  - Consulta a `/ai/chat`: `"dame los detalles de la orden 6998"`.
+  - Respuesta: Detalle completo de la orden 6998 y arreglo de imágenes con `https://cdn.nineteengreen.com/images/194/obs_6998_0.png` (archivo real en disco de 185 KB, servido vía HTTP/2 con código 200).
