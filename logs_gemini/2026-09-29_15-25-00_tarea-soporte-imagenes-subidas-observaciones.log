@@ -1,0 +1,28 @@
+# Bitácora de Tarea: Soporte para imágenes subidas a disco en observaciones de órdenes
+Fecha y Hora: 2026-09-29 15:25:00
+Responsable: Antigravity / Gemini
+
+## Contexto del Problema y Aclaratoria del Usuario
+El usuario aclaró que en el flujo actual del sistema ya no se guardan imágenes en Base64; las imágenes se suben al servidor mediante `/upload-order-detail-image` a la carpeta `public/images-orders-details/` y en el HTML de las observaciones de `ordenes_observaciones` se guarda una etiqueta `<img src="...">` apuntando directamente a esa URL (relativa o absoluta con dominio de la API). Además, se recordó que el motor de base de datos en uso es PostgreSQL.
+
+## Diagnóstico
+1. En `ninesys-api/app/routes/msg_service.php` (endpoint `GET /internal/ordenes/{id_empresa}/by-id`), la extracción de `<img src="...">` solo capturaba `data:image/` (base64) o URLs que comenzaran estrictamente por `https?://`. Si la ruta era relativa (ej. `/images-orders-details/archivo.jpg`), no era capturada.
+2. En `ninesys-api/app/routes/ai.php`, la lista `$hostsPermitidos` para el filtrado de seguridad de imágenes solo contenía los dominios del CDN (`cdn.ninesys19.com`, `cdn.nineteengreen.com`). Cualquier imagen cuya URL apuntara a la API (`api.nineteengreen.com`, `api.ninesys19.com`, `api.nineteencustom.com`) era descartada silenciosamente.
+3. En `app_multi/components/ai/AiChatPanel.vue`, `HOSTS_PERMITIDOS` también contenía únicamente los dominios CDN, descartando del visor del cliente cualquier imagen proveniente del dominio de la API.
+
+## Solución Aplicada
+1. **Normalización en `ninesys-api/app/routes/msg_service.php`:**
+   - Se detecta si la ejecución es en entorno de desarrollo (`nineteengreen.com`) o producción (`ninesys19.com`).
+   - Para etiquetas `<img>` con URLs que no sean base64:
+     - Si la ruta es relativa con slash inicial (`/images-orders-details/...`) o sin él, se le antepone `$apiBaseUrl`.
+     - Si usa protocolo relativo `//`, se le añade `https:`.
+     - Si viene con `http://`, se normaliza a `https://`.
+   - Se agregan las imágenes procesadas a `imagenes_observaciones` para que lleguen a `mcp_ninesys`.
+2. **Ampliación de dominios autorizados en Backend (`ninesys-api/app/routes/ai.php`):**
+   - Se añadieron a `$hostsPermitidos`: `api.ninesys19.com`, `api.nineteengreen.com` y `api.nineteencustom.com`.
+3. **Ampliación de dominios autorizados en Frontend (`app_multi/components/ai/AiChatPanel.vue`):**
+   - Se añadieron a `HOSTS_PERMITIDOS`: `api.ninesys19.com`, `api.nineteengreen.com` y `api.nineteencustom.com`.
+   - No se realizó compilación del frontend (`npm run build` prohibido); los cambios se cargan en caliente (hot reload).
+
+## Despliegue y Verificación
+- Backend desplegado a Contabo Desarrollo (`vps-contabo-dev`) mediante `ninesys-hub/bin/deploy_backend_dev.sh` (commit `a518182`), con reseteo exitoso de OPcache en `api.nineteengreen.com`.
