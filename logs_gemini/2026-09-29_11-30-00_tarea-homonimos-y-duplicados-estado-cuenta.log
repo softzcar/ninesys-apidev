@@ -1,0 +1,24 @@
+- **Solicitud del Usuario:** Al pedir "dame el estado de cuenta de andreina mendez" el chat dijo que hay dos clientes con ese nombre y pidió teléfono o cédula, datos que el operario no conoce. Pidió que, cuando haya más de una coincidencia, se muestre el ID del cliente con su nombre completo y se solicite el ID. Mencionó que tampoco hay búsqueda por email.
+- **Fecha y Hora:** 2026-09-29 11:30:00
+- **Proyecto(s):** Backend (ninesys-api) + MCP (mcp_ninesys)
+- **Archivos Involucrados:**
+    - ninesys-api/app/lib/customer_search.php (email en la búsqueda)
+    - ninesys-api/app/routes/msg_service.php (/internal/clientes/{id}/search y /estado-cuenta)
+    - mcp_ninesys/src/tools/customers.ts, mcp_ninesys/src/types/api.ts
+- **Commits Relacionados:**
+    - Backend (feature/postgresql-support): f3a9f2b, 94e4f6e
+    - MCP (main): e908875, 7e9ae94
+- **Acción Realizada:** (1) La búsqueda de clientes ahora incluye email (helper compartido, beneficia también a GET /customers?buscar= de app_multi). (2) /internal/clientes/{id}/search devuelve por cliente ordenes_en_curso, ultima_orden y fecha_ultima_orden, para distinguir homónimos sin conocer teléfono/cédula. (3) La tool ninesys_search_customers lista "ID — nombre — órdenes en curso — última orden" y, con varias coincidencias, instruye al modelo a mostrar la lista y pedir el ID (prohibido pedir teléfono/cédula/email); ninesys_get_account_statement acepta el ID que responda el usuario. (4) Se reemplazó la detección de pagos duplicados: ya no empareja abono↔pago por ±2 s; ahora marca un pago solo si los pagos de la orden exceden lo abonado y existe un pago idéntico anterior (método, moneda, monto, referencia).
+- **Inconvenientes y Desafíos:** Las pruebas con Andreina Mendez (ID 1303) mostraron falsos positivos: pagos de mayo 2025 marcados como duplicados. Causa: en el histórico, abonos y metodos_de_pago tienen un desfase exacto de 4 h (zona horaria), así que emparejar por instante no es confiable.
+- **Decisión Final y Justificación:** Mostrar ID + contexto de órdenes resuelve la ambigüedad con la información que el operario sí tiene (el nombre). Detección de duplicados basada en montos y repetición, no en hora, para ser robusta con datos históricos.
+- **Herramienta(s) Utilizada(s):** Edit, Write, Bash (ssh/psql/curl), php -l, tsc.
+- **Resultado:** Éxito.
+- **Verificación:**
+    - Chat turno 1 "dame el estado de cuenta de andreina mendez" → lista "ID 1303 — ANDREINA MENDEZ — 2 órdenes en curso — última orden #2147" e "ID 1566 — sin órdenes", y pide el ID.
+    - Chat turno 2 "1303" (con historial) → estado de cuenta correcto de la 1303.
+    - 1303: pagos en Bs de mayo 2025 ya NO marcados como duplicados.
+    - 118 (Asdrubal): solo el Zelle 75$ repetido de la orden 6643 marcado como posible duplicado.
+    - 1428 (María Arrieta): sin cambios.
+- **Logro Conseguido:** El chat resuelve clientes homónimos pidiendo solo el ID (sin datos que el operario no conoce) y la detección de pagos duplicados ya no genera falsas alarmas con datos históricos.
+- **Observaciones de Gemini:** El desfase de 4 h entre abonos y metodos_de_pago en datos antiguos puede afectar otros reportes que crucen ambas tablas por hora.
+- **Respuesta de Gemini:** Homónimos y detección de duplicados corregidos y verificados en Dev (empresa 194).

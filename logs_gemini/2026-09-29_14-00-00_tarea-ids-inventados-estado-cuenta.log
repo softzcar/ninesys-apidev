@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** Al pedir en el chat los abonos de la orden 6642 del cliente ALEXANDER CAÑIZALES, respondió "No se encontró el cliente con el ID 1023", aunque antes sí lo había encontrado.
+- **Fecha y Hora:** 2026-09-29 14:00:00
+- **Proyecto(s):** Backend (ninesys-api) + MCP (mcp_ninesys)
+- **Archivos Involucrados:**
+    - ninesys-api/app/routes/msg_service.php (GET /internal/clientes/{id}/estado-cuenta)
+    - mcp_ninesys/src/tools/customers.ts, mcp_ninesys/src/types/api.ts
+- **Commits Relacionados:**
+    - Backend (feature/postgresql-support): b5d5998
+    - MCP (main): fcd2c77, 30aaad0
+- **Acción Realizada:** Diagnóstico: el cliente real es ID 1427 (dueño de la orden 6642); el ID 1023 no existe. Reproduciendo la pregunta, Gemini inventó el customer_id en 4 de 4 intentos (1460, 101, 10636, 1067) sin llamar a la búsqueda, y en un caso devolvió el estado de cuenta de otra persona (Heidy Carrero) como si fuera de Alexander. Corrección en el servidor: (1) el endpoint acepta id_orden y deduce el cliente desde la orden, mostrando esa orden en cualquier estado; (2) acepta nombre y, si llega customer_id con un nombre que no coincide (tokens sin tildes), NO devuelve datos (motivo id_no_coincide_con_nombre); (3) la tool MCP recibe id_orden y nombre_cliente, su descripción prohíbe inventar IDs y define el orden de identificación (orden → búsqueda por nombre → ID), y los rechazos se devuelven como instrucción de buscar por nombre. En la vista por orden se separa "saldo de la orden" de "deuda total del cliente".
+- **Inconvenientes y Desafíos:** Las instrucciones en las descripciones no eran suficientes para evitar que el modelo adivinara IDs; hacía falta una verificación determinística del lado del servidor.
+- **Decisión Final y Justificación:** Nunca confiar en identificadores provistos por el LLM para devolver datos de personas: el servidor verifica la identidad (orden → dueño, o ID ↔ nombre). Patrón a replicar en futuras tools, especialmente de escritura.
+- **Herramienta(s) Utilizada(s):** Edit, Write, Bash (ssh/psql/curl), php -l, tsc.
+- **Resultado:** Éxito.
+- **Verificación:**
+    - Tool directa: id_orden 6642 → ALEXANDER CAÑIZALES (ID 1427), 2 abonos Zelle; customer_id 101 + nombre Alexander → "ERROR DE IDENTIFICACIÓN… corresponde a HEIDY CARRERO", sin datos; customer_id 10636 → no existe, sin datos.
+    - Agente (5 pruebas): "abonos de la orden 6642 del cliente ALEXANDER CAÑIZALES" (3/3) → id_orden 6642, respuesta correcta; "estado de cuenta de alexander cañizales" (2/2) → search_customers → customer_id 1427 + nombre, respuesta correcta (saldo $1548 en 6 órdenes).
+- **Logro Conseguido:** El asistente ya no puede mostrar el estado de cuenta de un cliente equivocado por IDs inventados; las consultas por número de orden son directas.
+- **Observaciones de Gemini:** Riesgo de privacidad/confianza evitado. Aplicar la misma verificación a get_customer_by_phone u otras tools con identificadores si se detecta el patrón.
+- **Respuesta de Gemini:** Corregido y verificado en Dev.

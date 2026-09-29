@@ -1,0 +1,23 @@
+- **Solicitud del Usuario:** Mejorar el chat para que consulte el estado de cuenta de los clientes: abonos, fechas, montos, método de pago y órdenes involucradas (hasta ahora solo daba la deuda). Explicar cómo funciona la tecnología.
+- **Fecha y Hora:** 2026-09-29 10:30:00
+- **Proyecto(s):** Backend (ninesys-api) + MCP (mcp_ninesys)
+- **Archivos Involucrados:**
+    - ninesys-api/app/routes/msg_service.php (nuevo GET /internal/clientes/{id_empresa}/estado-cuenta)
+    - mcp_ninesys/src/tools/customers.ts (tool ninesys_get_account_statement)
+    - mcp_ninesys/src/types/api.ts (AccountStatementResponse y tipos)
+- **Commits Relacionados:**
+    - Backend (feature/postgresql-support): 2e246fa, 4e9a07a
+    - MCP (main): 0686c54, 38db803
+- **Acción Realizada:** Nuevo endpoint interno que, para un cliente (customer_id o phone), devuelve: órdenes relevantes con totales y saldo (fórmula total - abonos - descuentos + notas_credito, con COALESCE), pagos desde metodos_de_pago (método, moneda, monto, tasa, monto_base = monto/tasa, referencia=detalle, tipo, verificado), ajustes (descuentos/notas de crédito desde abonos) y un resumen calculado en servidor (facturado, abonado, saldo total pendiente, entregadas con deuda, pagos sin verificar, pagos sin abono). Regla de órdenes definida por el usuario: toda orden NO entregada ni cancelada (cualquier estado, filtro por exclusión) + entregadas con saldo > 0; canceladas nunca; entregadas saldadas solo con incluir_entregadas_pagadas=1. Nueva tool MCP ninesys_get_account_statement cuya descripción guía al modelo a obtener el customer_id con ninesys_search_customers cuando solo tiene el nombre.
+- **Inconvenientes y Desafíos:** La tabla abonos no guarda el método de pago; está en metodos_de_pago sin FK a abonos (se relacionan por orden + instante). Al probar con Asdrubal García (orden 6643) se detectó un registro duplicado en metodos_de_pago (Zelle 75$ repetido 46 s después, 2026-09-10, sin abono asociado; anterior al blindaje de pagos duplicados del 18-22/09). El saldo era correcto (se calcula desde abonos) pero la lista de pagos lo mostraba como pago real. Se añadió detección: pago sin abono de la misma orden en ±2 s → marcado "posible duplicado", excluido del conteo de sin verificar y contado aparte. INTERVAL compatible pgsql/mysql.
+- **Decisión Final y Justificación:** Toda la aritmética (conversión Bs→$, saldos, totales) en el servidor, no en el LLM. Pagos no verificados se muestran marcados (consistente con app_multi). No se corrigió el dato duplicado (decisión del usuario); solo se señala.
+- **Herramienta(s) Utilizada(s):** Edit, Write, Bash (ssh/psql/curl), php -l, tsc.
+- **Resultado:** Éxito.
+- **Verificación:**
+    - María Arrieta (1428): orden 7060 activa, Zelle 100$ 11/09 verificado, saldo 80$.
+    - Asdrubal García (118): 3 órdenes terminadas + 1 entregada con deuda (#4134, 341$); saldo total 766,20$; 4 pagos sin verificar; 1 posible duplicado marcado en #6643.
+    - Johana Rincón (1959): Pagomóvil 8534,99 Bs ≈ 10,00$ a tasa 853,5 (conversión correcta).
+    - Chat /ai/chat: "dame el estado de cuenta de asdrubal garcia" y "con que metodo y cuando pago la clienta johana rincon" → el agente encadenó search_customers → get_account_statement y respondió con los datos reales.
+- **Logro Conseguido:** El asistente IA responde estados de cuenta completos (pagos, métodos, fechas, órdenes, pendientes de verificar) en lenguaje natural, y además señala registros de pago duplicados para su revisión.
+- **Observaciones de Gemini:** Orden 6643 (empresa 194) tiene la fila metodos_de_pago _id 9108 duplicada; pendiente de decisión del usuario si se limpia. El widget del chat no convierte viñetas markdown "*" (solo ** y •).
+- **Respuesta de Gemini:** Estado de cuenta implementado y verificado en Dev con datos reales de la empresa 194.

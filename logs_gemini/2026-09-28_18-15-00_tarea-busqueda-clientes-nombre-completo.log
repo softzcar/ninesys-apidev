@@ -1,0 +1,26 @@
+- **Solicitud del Usuario:** Resolver que la búsqueda de clientes por nombre no funciona al escribir nombre y apellido juntos (ej. "Ozcar vela" no encuentra a first_name='Ozcar', last_name='Vela'; "Jose Carrero" con nombre compuesto "Jose Luis" tampoco). Se pidió contemplar soluciones sin necesariamente unificar campos.
+- **Fecha y Hora:** 2026-09-28 18:15:00
+- **Proyecto(s):** Backend (ninesys-api) + MCP (mcp_ninesys) + BD (extensión)
+- **Archivos Involucrados:**
+    - app/lib/customer_search.php (NUEVO helper)
+    - app/lib/woome.php (getAllCustomesrs, ambas ramas)
+    - app/routes/msg_service.php (nuevo GET /internal/clientes/{id_empresa}/search)
+    - public/model/create_new_company_api_emp_N_postgres.sql (CREATE EXTENSION unaccent)
+    - mcp_ninesys/src/tools/customers.ts + src/types/api.ts (tool ninesys_search_customers)
+- **Commits Relacionados:**
+    - Backend (ninesys-api / feature/postgresql-support): 8ae4031
+    - MCP (mcp_ninesys / main): d729d88
+- **Acción Realizada:** Causa raíz: `WooMe::getAllCustomesrs()` (buscador de app_multi vía GET /customers?buscar=) comparaba `first_name ILIKE %term% OR last_name ILIKE %term%` por separado, así que un término multi-palabra nunca caía en un solo campo. Solución sin cambios de esquema ni de interfaces: helper `ninesys_customer_search_where($buscar,$alias,$driver)` que tokeniza el término y exige que CADA palabra aparezca en `CONCAT(first_name,' ',COALESCE(last_name,''))` (AND de tokens, cualquier orden, soporta nombres compuestos), más `phone/cedula ILIKE %término%`. En Postgres envuelve con `unaccent()` para ignorar tildes (citext ya cubre mayúsc/minúsc). Se aplicó el helper en las dos ramas de getAllCustomesrs. Se creó el endpoint interno `GET /internal/clientes/{id_empresa}/search?q=` (mismo helper) y la tool MCP `ninesys_search_customers` que lo consume y devuelve la lista con teléfono para encadenar con get_orders_by_phone. Se activó `CREATE EXTENSION IF NOT EXISTS unaccent` en api_emp_194 y api_emp_208, y se añadió a la plantilla de empresas nuevas (Garantía de Esquema).
+- **Inconvenientes y Desafíos:** Dev corre Postgres; `unaccent` no estaba instalada (sí disponible) y hubo que crearla por empresa. `IFNULL` (MySQL) no aplica aquí pero se recordó que Dev es pgsql para usar ILIKE/unaccent. No se usó pg_trgm (typos) por decisión de alcance.
+- **Decisión Final y Justificación:** Búsqueda por tokens sobre nombre concatenado + unaccent, en vez de unificar first_name/last_name en un solo campo (que implicaría migración de BD e interfaces). Resuelve el 100% de los casos reportados sin tocar frontend (getAllCustomesrs ya recibe ?buscar=). Helper compartido para no duplicar lógica entre la app y el MCP.
+- **Herramienta(s) Utilizada(s):** Edit, Write, Bash (ssh/psql/curl), php -l.
+- **Resultado:** Éxito.
+- **Verificación:**
+    - `GET /customers?buscar=maria arrieta` (empresa 194) → devuelve MARIA ARRIETA (id 1428). "arrieta maria" (invertido) también. "maria" solo → 82 resultados.
+    - `unaccent('José Ñañez')` → "Jose Nanez" en 194 y 208.
+    - MCP tools/call `ninesys_search_customers` q="maria arrieta" (194) → 1 cliente con teléfono.
+    - Chat /ai/chat (194): "busca a la clienta maria arrieta y dime cuanto debe" → "MARIA ARRIETA, tel 584126650792, deuda 80.0$ en la orden #7060" (encadenó search_customers→get_orders_by_phone).
+    - php -l OK en los 3 archivos PHP.
+- **Logro Conseguido:** Búsqueda de clientes por nombre completo funcional en toda la app (nueva orden, presupuesto, gestión de clientes) y en el asistente IA, resolviendo un problema histórico sin migrar la base de datos.
+- **Observaciones de Gemini:** Los buscadores de orders.php (/ordenes/contexto-ia y /ordenes/nueva/simple) quedaron del flujo viejo de chat retirado; pueden migrarse al helper después. Falta replicar unaccent + deploy en Producción cuando se decida.
+- **Respuesta de Gemini:** Se implementó búsqueda por nombre completo (tokens + unaccent) en app y MCP, verificada con datos reales de la empresa 194.
