@@ -1404,19 +1404,9 @@ return function (App $app) {
                 $ph = implode(',', array_fill(0, count($ids), '?'));
 
                 // 3. Pagos (desglose por método/moneda). Más recientes primero, tope 100.
-                // tiene_abono: cada pago real genera un abono de la misma orden en el
-                // mismo instante. Una fila sin abono asociado (±2 s) es un registro
-                // duplicado/huérfano (p.ej. doble envío previo al blindaje de 2026-09-18)
-                // y NO cuenta en el saldo; se marca para que el personal lo revise.
-                $intv = DB_DRIVER === 'pgsql' ? "INTERVAL '2 seconds'" : 'INTERVAL 2 SECOND';
                 $mp = $db->goQuery("
                     SELECT m.id_orden, m.moment, m.metodo_pago, m.moneda, m.monto, m.tasa, m.detalle,
-                           m.tipo_de_pago, m.verificado,
-                           EXISTS (
-                               SELECT 1 FROM {$dbName}abonos a
-                               WHERE a.id_orden = m.id_orden
-                                 AND a.moment BETWEEN m.moment - {$intv} AND m.moment + {$intv}
-                           ) AS tiene_abono
+                           m.tipo_de_pago, m.verificado
                     FROM {$dbName}metodos_de_pago m
                     WHERE m.id_orden IN ({$ph})
                     ORDER BY m.moment DESC
@@ -1437,8 +1427,38 @@ return function (App $app) {
                             'referencia'   => $p['detalle'],
                             'tipo_de_pago' => $p['tipo_de_pago'],
                             'verificado'   => in_array($p['verificado'], [true, 1, '1', 't', 'true'], true),
-                            'sin_abono'    => !in_array($p['tiene_abono'], [true, 1, '1', 't', 'true'], true),
+                            'sin_abono'    => false,
                         ];
+                    }
+
+                    // Detección de posibles duplicados (independiente de la hora: en el
+                    // histórico abonos y metodos_de_pago tienen un desfase de zona horaria,
+                    // así que emparejar por instante da falsos positivos). Se marca un pago
+                    // solo si (1) los pagos de la orden EXCEDEN lo abonado y (2) existe un
+                    // pago idéntico anterior en la misma orden (método, moneda, monto,
+                    // referencia). Esos registros no suman al saldo (que sale de abonos).
+                    $abonadoPorOrden = [];
+                    foreach ($ordenes as $o) {
+                        $abonadoPorOrden[$o['id_orden']] = $o['total_abonos'];
+                    }
+                    $basePorOrden = [];
+                    foreach ($pagos as $p) {
+                        $basePorOrden[$p['id_orden']] = ($basePorOrden[$p['id_orden']] ?? 0) + $p['monto_base'];
+                    }
+                    $vistos = [];
+                    // $pagos viene del más reciente al más antiguo: recorrer al revés para
+                    // conservar el primer registro y marcar las repeticiones posteriores.
+                    for ($i = count($pagos) - 1; $i >= 0; $i--) {
+                        $p = $pagos[$i];
+                        $exceso = ($basePorOrden[$p['id_orden']] ?? 0) - ($abonadoPorOrden[$p['id_orden']] ?? 0);
+                        $clave = $p['id_orden'] . '|' . $p['metodo_pago'] . '|' . $p['moneda'] . '|'
+                            . number_format($p['monto'], 2, '.', '') . '|' . trim((string) $p['referencia']);
+                        if (isset($vistos[$clave]) && $exceso >= $p['monto_base'] - 0.5) {
+                            $pagos[$i]['sin_abono'] = true;
+                            $basePorOrden[$p['id_orden']] -= $p['monto_base'];
+                        } else {
+                            $vistos[$clave] = true;
+                        }
                     }
                 }
 
