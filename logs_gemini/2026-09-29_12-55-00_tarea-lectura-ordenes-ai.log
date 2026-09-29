@@ -1,0 +1,100 @@
+================================================================================
+SOLICITUD:
+Implementar la capacidad del Asistente IA para consultar órdenes de trabajo de
+forma exhaustiva:
+- Por ID de orden: datos del cliente (nombre, teléfono, cédula, email, dirección),
+  cabecera de la orden (estado, vendedor, emisión, entrega), desglose financiero
+  (total, abonos, descuentos, notas de crédito, saldo pendiente, sobrepago, estado
+  de pago), métodos de pago registrados (moneda, monto, tasa, referencia), tipo
+  de diseño, observaciones limpias de marcado HTML, y productos detallados (tallas,
+  telas, cortes, atributos, precios y subtotales).
+- Por Status de la orden: listar órdenes recientes según su estado operativo
+  ('activa', 'en espera', 'terminada', 'entregada', 'pausada', 'cancelada', o 'todas')
+  con sus clientes, vendedores, fechas, balances y resumen de productos.
+
+FECHA: 2026-09-29 12:55:00
+
+PROYECTOS:
+- ninesys-api
+- mcp_ninesys
+- ninesys-ai-agent
+
+ARCHIVOS MODIFICADOS:
+- ninesys-api/app/routes/msg_service.php
+- mcp_ninesys/src/types/api.ts
+- mcp_ninesys/src/tools/orders.ts
+
+COMMITS:
+- ninesys-api: fd91c44 (rama feature/postgresql-support, pusheado y desplegado a Dev)
+- mcp_ninesys: 0916e0c (rama main, pusheado y desplegado a Dev)
+
+ACCIÓN:
+1. En ninesys-api (app/routes/msg_service.php):
+   - Se enriqueció `GET /internal/ordenes/{id_empresa}/by-id?id={id_orden}`:
+     * Consulta el vendedor uniendo con `api_empresas.empresas_usuarios`.
+     * Consulta datos del cliente en `customers`.
+     * Consulta y desglosa los métodos de pago desde `metodos_de_pago`.
+     * Consulta el tipo de diseño desde `disenos`.
+     * Consulta las observaciones desde `ordenes_observaciones`, aplicando `strip_tags()`
+       y `html_entity_decode(..., ENT_QUOTES | ENT_HTML5, 'UTF-8')` para remover HTML
+       (como `<p>...</p>`) y entregar texto plano y limpio al LLM.
+     * Consulta productos con sus tallas (`sizes`), telas, cortes, precios y atributos.
+     * Calcula en servidor: total_abonos, total_descuentos, total_notas_credito,
+       saldo_pendiente, sobrepago (a favor del cliente), y estado_pago.
+   - Se implementó `GET /internal/ordenes/{id_empresa}/by-status?status={status}&limit={limit}&offset={offset}`:
+     * Filtra órdenes por estado flexiblemente (activa, espera, terminada, entregada, etc.).
+     * Trae cabecera de orden, cliente, vendedor, fechas, montos y productos asociados en lote.
+2. En mcp_ninesys:
+   - Se actualizaron las interfaces en `src/types/api.ts` (`OrderProduct`, `OrderPaymentMethod`,
+     `OrderCustomerInfo`, `Order`, `OrderByIdResponse`, `OrderSummaryByStatus`, `OrdersByStatusResponse`).
+   - En `src/tools/orders.ts`:
+     * Se actualizó `ninesys_get_order_by_id` con descripción rica y formateador completo `formatOrderDetail`.
+     * Se registró la nueva herramienta `ninesys_list_orders_by_status` para listar órdenes filtradas por estado.
+   - Compilación exitosa con `npm run build` (tsc).
+3. Despliegue en Desarrollo:
+   - Despliegue de `ninesys-api` vía `deploy_backend_dev.sh` (HEAD `fd91c44`, OPcache reseteado).
+   - Despliegue de `mcp_ninesys` vía `deploy_mcp_dev.sh` (HEAD `0916e0c`, reinicio de PM2 `ninesys-mcp-server`).
+   - Reinicio de PM2 `ninesys-ai-agent` en `vps-contabo-dev`.
+
+INCONVENIENTES:
+- Las observaciones de órdenes vienen originalmente con etiquetas `<p>...</p>` o entidades HTML.
+  Se procesaron en el endpoint interno con decodificación de entidades y eliminación de tags antes de exponerlas.
+- Los productos pueden tener la talla en `op.id_size` (tabla `sizes`) o directamente en texto `op.talla`;
+  se resolvió con fallback en SQL (`COALESCE(s.nombre, op.talla)`).
+
+DECISIÓN:
+- Todo cálculo financiero (saldos, sobrepagos, estado de pago) se realiza de forma determinista
+  en el backend de la API y se formatea limpiamente en el MCP. El LLM no hace aritmética manual.
+- Las consultas respetan la convención del ID de empresa en el header `Authorization` / `X-Ninesys-Empresa`,
+  aislando totalmente los tenants.
+
+HERRAMIENTAS:
+- Git, PHP CLI (php -l), TypeScript (tsc), SSH, PM2, cURL, OLS / Slim 4.
+
+RESULTADO:
+- El Asistente IA ahora puede responder con total precisión a consultas sobre cualquier orden
+  por su ID, detallando vendedor, estado de pago, desglose de montos/monedas, observaciones limpias,
+  telas, tallas y cortes de cada producto.
+- El asistente puede listar órdenes en taller/producción, en espera, listas o entregadas usando
+  la nueva herramienta `ninesys_list_orders_by_status`.
+
+VERIFICACIÓN:
+1. Curl directo a `GET /internal/ordenes/194/by-id?id=7226`:
+   Devolvió exitosamente orden entregada de GRAFFI PRINT con vendedor Sarahit Mojica, observación
+   limpia "impresion dtf 0.50 graficc print", pago móvil Bs. 4267.5 @ tasa 853.5, y producto DTF 60CM.
+2. Curl directo a `GET /internal/ordenes/194/by-status?status=activa&limit=3`:
+   Devolvió órdenes activas reales (7249, 7244, 7242) con sus respectivos vendedores, saldos y productos.
+3. Test end-to-end con Gemini a través del agente IA (`/chat`):
+   - Query: "¿Qué me puedes decir de la orden 7226? ¿Tiene observaciones y cómo fue pagada?"
+     Respuesta IA: Ejecutó `ninesys_get_order_by_id`, detalló que fue entregada, pagada con Pago Móvil
+     en Bolívares (4267.5 Bs @ tasa 853.5, ref 24092026), e incluyó la observación limpia.
+   - Query: "¿Qué órdenes están actualmente activas o en producción?"
+     Respuesta IA: Ejecutó `ninesys_list_orders_by_status`, listando órdenes activas con sus clientes,
+     vendedores, entregas y saldos.
+   - Query: "¿Qué productos y qué tallas o telas tiene la orden 7242?"
+     Respuesta IA: "La orden 7242 tiene 1 Franela Sublimada Licra, Talla: S, Tela: LICRA SPRINT 1.50, Corte: Damas."
+
+LOGRO:
+Capacidad integral de consulta de órdenes de trabajo por ID y por estado completamente implementada,
+desplegada y verificada en el entorno de desarrollo sin afectar operaciones ni esquemas de BD.
+================================================================================
