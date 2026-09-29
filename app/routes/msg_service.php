@@ -1203,18 +1203,70 @@ return function (App $app) {
             );
             $disenoTipo = (!empty($disenoRows) && !isset($disenoRows['status'])) ? ($disenoRows[0]['tipo'] ?? 'Ninguno') : 'Ninguno';
 
-            // 6. Observaciones de la orden (sanitizadas de HTML)
+            // 6. Observaciones de la orden (sanitizadas de HTML) e imágenes adjuntas
             $obsRows = $tenantConnection->goQuery(
                 "SELECT observaciones FROM {$dbName}ordenes_observaciones WHERE id_orden = ?",
                 [$idOrden]
             );
             $observacionesLimpias = '';
+            $imagenesObservaciones = [];
             if (!empty($obsRows) && !isset($obsRows['status'])) {
                 $obsTextos = [];
+                $cdnBaseUrl = getenv('NINESYS_CDN_URL') ?: (
+                    (strpos($_SERVER['HTTP_HOST'] ?? '', 'nineteengreen.com') !== false)
+                        ? 'https://cdn.nineteengreen.com'
+                        : 'https://cdn.ninesys19.com'
+                );
+                $internalToken = getenv('MSG_SERVICE_INTERNAL_TOKEN') ?: (defined('MSG_SERVICE_INTERNAL_TOKEN') ? MSG_SERVICE_INTERNAL_TOKEN : '');
+
+                $imgIndex = 0;
                 foreach ($obsRows as $ob) {
-                    if (!empty($ob['observaciones'])) {
+                    $rawObs = (string) ($ob['observaciones'] ?? '');
+                    if ($rawObs !== '') {
+                        // Extraer imágenes embebidas (<img src="...">)
+                        if (preg_match_all('/<img[^>]+src=["\']([^"\']+)["\']/i', $rawObs, $imgMatches)) {
+                            foreach ($imgMatches[1] as $src) {
+                                $src = trim($src);
+                                if (strpos($src, 'data:image/') === 0) {
+                                    // Imagen base64: guardar en CDN para URL HTTPS limpia
+                                    try {
+                                        $guzzle = new \GuzzleHttp\Client(['timeout' => 10]);
+                                        $cdnRes = $guzzle->post($cdnBaseUrl . '/?action=save_obs_image', [
+                                            'headers' => [
+                                                'X-Internal-Token' => $internalToken,
+                                                'Content-Type'     => 'application/json',
+                                            ],
+                                            'json' => [
+                                                'id_empresa' => $idEmpresa,
+                                                'id_orden'   => $idOrden,
+                                                'index'      => $imgIndex,
+                                                'data'       => $src,
+                                            ],
+                                            'http_errors' => false,
+                                        ]);
+                                        $cdnData = json_decode((string) $cdnRes->getBody(), true);
+                                        if (!empty($cdnData['success']) && !empty($cdnData['url'])) {
+                                            $imagenesObservaciones[] = [
+                                                'url'     => $cdnData['url'],
+                                                'caption' => "Orden #{$idOrden} — observación" . ($imgIndex > 0 ? " (" . ($imgIndex + 1) . ")" : ""),
+                                            ];
+                                            $imgIndex++;
+                                        }
+                                    } catch (\Throwable $e) {
+                                        error_log('[msg_service][ordenes/by-id] Error guardando imagen obs en CDN: ' . $e->getMessage());
+                                    }
+                                } elseif (preg_match('/^https?:\/\//i', $src)) {
+                                    $imagenesObservaciones[] = [
+                                        'url'     => $src,
+                                        'caption' => "Orden #{$idOrden} — observación" . ($imgIndex > 0 ? " (" . ($imgIndex + 1) . ")" : ""),
+                                    ];
+                                    $imgIndex++;
+                                }
+                            }
+                        }
+
                         // Quitar HTML y decodificar caracteres &aacute; etc.
-                        $limpio = trim(html_entity_decode(strip_tags((string) $ob['observaciones']), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                        $limpio = trim(html_entity_decode(strip_tags($rawObs), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
                         if ($limpio !== '') {
                             $obsTextos[] = $limpio;
                         }
@@ -1311,6 +1363,7 @@ return function (App $app) {
                 'observaciones'       => $observacionesLimpias,
                 'metodos_pago'        => $metodosPago,
                 'productos'           => $productos,
+                'imagenes_observaciones' => $imagenesObservaciones,
             ];
 
             $tenantConnection->disconnect();
