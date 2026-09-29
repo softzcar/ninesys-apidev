@@ -914,6 +914,194 @@ return function (App $app) {
         return $response;
     });
 
+    /**
+     * POST /internal/imprime/verificar-empleado
+     *
+     * Verificación de credenciales de empleado para el login de "imprime"
+     * (ex-sublima, reemplazo de DTF) -- 2026-09-29, pedido explícito del
+     * usuario: los empleados de imprime deben loguearse con sus credenciales
+     * REALES de Ninesys, validando además que pertenezcan a uno de los 4
+     * departamentos habilitados (Impresión=1, Administración=5,
+     * Comercialización=6, Diseño=7 -- IDs fijos, los departamentos se crean
+     * por defecto al aprovisionar una empresa y no se pueden editar ni
+     * eliminar, confirmado por el usuario).
+     *
+     * A propósito NO reutiliza /login ni /verify-credentials:
+     * - /login reclama sesiones_activas (sesión única por empleado) -- si
+     *   imprime lo llamara, loguearse ahí cerraría la sesión de esa persona
+     *   en app_multi. Este endpoint NUNCA toca sesiones_activas.
+     * - /verify-credentials exige usuario_nivel_acceso=1 (solo admins) --
+     *   imprime necesita dejar entrar también a empleados (acceso=0).
+     * Sin Turnstile (llamada servidor-a-servidor, autenticada por
+     * X-Internal-Token, no expuesta a navegadores).
+     *
+     * Header: X-Internal-Token: IMPRIME_SERVICE_INTERNAL_TOKEN
+     * Body: { email, password, id_empresa?, id_departamento? }
+     *
+     * Respuestas (siempre 200 salvo credenciales/token inválidos):
+     * - { acceso:false, motivo:'credenciales_invalidas' }
+     * - { requiere_seleccion_empresa:true, empresas:[{id_empresa,nombre}] }
+     * - { acceso:false, motivo:'departamento_no_habilitado' }
+     * - { requiere_seleccion_departamento:true, departamentos:[{id_departamento,nombre}] }
+     * - { acceso:true, id_usuario, nombre, email, acceso_admin, id_empresa, id_departamento, nombre_departamento }
+     */
+    $app->post('/internal/imprime/verificar-empleado', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
+
+        $respondJson = function (array $payload, int $status = 200) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $datosAcceso = $request->getParsedBody() ?? [];
+        $email = trim((string) ($datosAcceso['email'] ?? ''));
+        $password = (string) ($datosAcceso['password'] ?? '');
+        if ($email === '' || $password === '') {
+            return $respondJson(['error' => 'bad_request', 'message' => 'email y password son requeridos.'], 400);
+        }
+
+        // Departamentos habilitados para imprime -- fijos, ver comentario de
+        // cabecera. Si en el futuro alguno cambia, actualizar acá.
+        $departamentosPermitidos = [1, 5, 6, 7];
+
+        $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+
+        $sql_user = 'SELECT id_usuario, email, password, nombre, activo, acceso, id_empresa FROM empresas_usuarios WHERE email = ?';
+        $credenciales = $localConnection->goQuery($sql_user, [$email]);
+
+        $usuario_data = null;
+        foreach ((array) $credenciales as $posible_usuario) {
+            if (!empty($posible_usuario['activo']) && verificarClave($password, $posible_usuario['password'])) {
+                $usuario_data = $posible_usuario;
+                break;
+            }
+        }
+
+        if ($usuario_data === null) {
+            $localConnection->disconnect();
+            return $respondJson(['acceso' => false, 'motivo' => 'credenciales_invalidas']);
+        }
+
+        if (necesitaRehash($usuario_data['password'])) {
+            $localConnection->goQuery('UPDATE empresas_usuarios SET password = ? WHERE id_usuario = ?', [hashearClave($password), $usuario_data['id_usuario']]);
+        }
+
+        // Resolver empresa -- mismo criterio exacto que /login (nunca confiar
+        // en el id_empresa del body sin validarlo contra las asignaciones
+        // reales con activo=1).
+        $sql_asignaciones = 'SELECT eue.id_empresa, e.nombre FROM empresas_usuarios_empresas eue JOIN empresas e ON e.id_empresa = eue.id_empresa WHERE eue.id_usuario = ? AND eue.activo = 1';
+        $asignaciones = $localConnection->goQuery($sql_asignaciones, [$usuario_data['id_usuario']]);
+
+        $idEmpresaSolicitada = (isset($datosAcceso['id_empresa']) && $datosAcceso['id_empresa'] !== '')
+            ? (int) $datosAcceso['id_empresa']
+            : null;
+
+        if (!empty($asignaciones)) {
+            $idsAsignados = array_map('intval', array_column($asignaciones, 'id_empresa'));
+
+            if ($idEmpresaSolicitada === null) {
+                if (count($asignaciones) > 1) {
+                    $localConnection->disconnect();
+                    return $respondJson([
+                        'requiere_seleccion_empresa' => true,
+                        'empresas' => array_map(function ($a) {
+                            return ['id_empresa' => (int) $a['id_empresa'], 'nombre' => $a['nombre']];
+                        }, $asignaciones),
+                    ]);
+                }
+                $idEmpresaFinal = $idsAsignados[0];
+            } else {
+                if (!in_array($idEmpresaSolicitada, $idsAsignados, true)) {
+                    $localConnection->disconnect();
+                    return $respondJson(['acceso' => false, 'motivo' => 'sin_acceso_a_empresa'], 403);
+                }
+                $idEmpresaFinal = $idEmpresaSolicitada;
+            }
+        } else {
+            // Identidad huérfana / sin backfill de empresas_usuarios_empresas --
+            // mismo comportamiento retrocompatible que /login: usar el
+            // id_empresa que ya trae la fila de empresas_usuarios.
+            $idEmpresaFinal = $idEmpresaSolicitada ?? (int) $usuario_data['id_empresa'];
+        }
+
+        // Departamentos del empleado EN ESA EMPRESA -- empresas_usuarios_departamentos
+        // es central pero departamentos vive en la BD de la empresa, así que
+        // hace falta cambiar de conexión antes de poder unir ambas (mismo
+        // patrón exacto que /login: JOIN contra api_empresas.<tabla_central>
+        // desde la conexión ya cambiada a la BD de la empresa, vía FDW).
+        $sql_empresa = 'SELECT db_host, db_user, db_password, db_name FROM empresas WHERE id_empresa = ? AND activo = 1';
+        $empresaRows = $localConnection->goQuery($sql_empresa, [$idEmpresaFinal]);
+        if (empty($empresaRows)) {
+            $localConnection->disconnect();
+            return $respondJson(['acceso' => false, 'motivo' => 'empresa_no_disponible'], 404);
+        }
+        $empresa_data = $empresaRows[0];
+
+        $company_dns = (DB_DRIVER === 'pgsql')
+            ? 'pgsql:host=' . $empresa_data['db_host'] . ';port=' . (getenv('DB_PORT') ?: '5432') . ';dbname=' . $empresa_data['db_name']
+            : 'mysql:host=' . $empresa_data['db_host'] . ';dbname=' . $empresa_data['db_name'];
+        $localConnection->switchDatabase($company_dns, $empresa_data['db_user'], $empresa_data['db_password']);
+
+        $sql_deptos_empleado = 'SELECT DISTINCT b.id_departamento, c.departamento AS nombre
+            FROM api_empresas.empresas_usuarios_departamentos b
+            JOIN departamentos c ON c._id = b.id_departamento AND c.eliminado = 0
+            WHERE b.id_empleado = ? AND b.id_empresa = ?';
+        $deptosEmpleado = $localConnection->goQuery($sql_deptos_empleado, [$usuario_data['id_usuario'], $idEmpresaFinal]);
+        $localConnection->disconnect();
+
+        $deptosHabilitados = array_values(array_filter((array) $deptosEmpleado, function ($d) use ($departamentosPermitidos) {
+            return in_array((int) $d['id_departamento'], $departamentosPermitidos, true);
+        }));
+
+        if (empty($deptosHabilitados)) {
+            return $respondJson(['acceso' => false, 'motivo' => 'departamento_no_habilitado']);
+        }
+
+        $idDepartamentoSolicitado = (isset($datosAcceso['id_departamento']) && $datosAcceso['id_departamento'] !== '')
+            ? (int) $datosAcceso['id_departamento']
+            : null;
+
+        if ($idDepartamentoSolicitado === null) {
+            if (count($deptosHabilitados) > 1) {
+                return $respondJson([
+                    'requiere_seleccion_departamento' => true,
+                    'id_empresa' => $idEmpresaFinal,
+                    'departamentos' => array_map(function ($d) {
+                        return ['id_departamento' => (int) $d['id_departamento'], 'nombre' => $d['nombre']];
+                    }, $deptosHabilitados),
+                ]);
+            }
+            $idDepartamentoFinal = (int) $deptosHabilitados[0]['id_departamento'];
+            $nombreDepartamentoFinal = $deptosHabilitados[0]['nombre'];
+        } else {
+            $match = null;
+            foreach ($deptosHabilitados as $d) {
+                if ((int) $d['id_departamento'] === $idDepartamentoSolicitado) {
+                    $match = $d;
+                    break;
+                }
+            }
+            if ($match === null) {
+                return $respondJson(['acceso' => false, 'motivo' => 'sin_acceso_a_departamento'], 403);
+            }
+            $idDepartamentoFinal = (int) $match['id_departamento'];
+            $nombreDepartamentoFinal = $match['nombre'];
+        }
+
+        return $respondJson([
+            'acceso' => true,
+            'id_usuario' => (int) $usuario_data['id_usuario'],
+            'nombre' => $usuario_data['nombre'],
+            'email' => $usuario_data['email'],
+            'acceso_admin' => (bool) $usuario_data['acceso'],
+            'id_empresa' => $idEmpresaFinal,
+            'id_departamento' => $idDepartamentoFinal,
+            'nombre_departamento' => $nombreDepartamentoFinal,
+        ]);
+    });
+
     /** FIN LOGIN */
 
 }; // Fin de la función que envuelve las rutas
