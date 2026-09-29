@@ -1,0 +1,26 @@
+# Bitácora de Tarea: Corrección de consulta de órdenes específicas y observaciones (Orden 6998)
+Fecha y Hora: 2026-09-29 14:35:00
+Responsable: Antigravity / Gemini
+
+## Contexto del Problema
+Al consultar por la orden específica 6998 en el chat de la empresa 194, el asistente respondía que no la encontraba, a pesar de que la orden existe en la base de datos (JESUS TAPIAS, status: 'entregada', observación: 'CON EL NUMERO 99', 1 Jersey Sublimado). Además, en turnos sucesivos cuando el usuario insistía que la orden sí existía o pedía sus observaciones, el modelo se rehusaba a consultar la herramienta respondiendo de memoria a partir del historial negativo de la conversación.
+
+## Diagnóstico
+1. **Validación Zod estricta:** En `mcp_ninesys/src/tools/orders.ts` y `designs.ts`, `id_orden` utilizaba `z.number()`. Cuando el LLM enviaba el ID como cadena (`"6998"` en lugar de `6998`), Zod rechazaba la llamada provocando un fallo silencioso o un mensaje de error que Gemini interpretaba como "no encontrada".
+2. **Sesgo por historial conversacional:** En `ninesys-ai-agent`, cuando un turno previo en el historial contenía "No se encontró la orden 6998", Gemini asumía de memoria que la orden no existía y en los turnos posteriores respondía sin llamar a ninguna herramienta (`toolCalls: []`, `steps: 1`).
+3. **Mapeo de usuario FDW para postgres:** En PostgreSQL `api_emp_194`, la tabla foránea `api_empresas.empresas_usuarios` tenía una contraseña desactualizada para el mapeo del superusuario `postgres` hacia `dev_user` en `api_empresas_server`. Se corrigió con `ALTER USER MAPPING`.
+
+## Solución Aplicada
+1. **Actualización de Schemas en `mcp_ninesys`:**
+   - Modificados `mcp_ninesys/src/tools/orders.ts` y `mcp_ninesys/src/tools/designs.ts` para usar `z.coerce.number().int().positive()` en `id_orden`, admitiendo tanto enteros como cadenas numéricas.
+   - Reforzada la descripción de `ninesys_get_order_by_id` para explicitar su aplicación directa y prioritaria al consultar observaciones, notas, estado de pago o productos de cualquier orden por su ID.
+2. **Antisesgo en `ninesys-ai-agent`:**
+   - En `ninesys-ai-agent/src/agent.ts` y `.env` (`AI_SYSTEM_PROMPT`), se instruyó explícitamente al agente a invocar SIEMPRE las herramientas en vivo cuando el usuario mencione un número de orden, cliente o producto, incluso si en turnos previos del historial no se encontró o se produjo un error, o si el usuario insiste.
+   - En `server.ts` se habilitó el paso opcional de `systemPrompt` desde el body de la petición.
+3. **Despliegues realizados:**
+   - `mcp_ninesys` desplegado con `ninesys-hub/bin/deploy_mcp_dev.sh` (commit `a512973`).
+   - `ninesys-ai-agent` desplegado con `ninesys-hub/bin/deploy_agent_dev.sh` (commit `aecc851`) y reiniciado en PM2.
+
+## Verificación
+- Prueba con historial previo negativo: simulación donde el turno anterior decía "No se encontró la orden 6998 en la empresa 194" e insistencia del usuario: el agente ejecutó `ninesys_get_order_by_id` (steps: 2) y devolvió con éxito los datos reales de JESUS TAPIAS, su estado entregada, el pago de $20 y su observación "CON EL NUMERO 99".
+- Prueba de orden 7226: respondió limpiamente con la observación sin tags HTML (`impresion dtf 0.50 graficc print`), producto DTF 60CM x 0.5 y total de $5.00.
