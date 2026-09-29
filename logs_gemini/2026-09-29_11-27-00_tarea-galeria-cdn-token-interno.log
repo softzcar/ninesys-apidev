@@ -1,0 +1,30 @@
+- **Solicitud del Usuario:** Opción 1 del backlog: solucionar la galería rota en el CDN permitiendo autenticación vía token de servicio para llamadas de solo lectura desde MCP y bot de WhatsApp.
+- **Fecha y Hora:** 2026-09-29 11:27:00
+- **Proyecto(s):** CDN (ninesys-cdn) + Servidor MCP (mcp_ninesys) + WhatsApp Bot (msg_ninesys)
+- **Archivos Involucrados:**
+    - ninesys-cdn/jwt_verify.php (helper obtenerInternalTokenHeader, esTokenInternoValido y exigirSesionOLecturaInternaCdn)
+    - ninesys-cdn/index.php (Access-Control-Allow-Headers y llamada a exigirSesionOLecturaInternaCdn en list, catalog y gallery_categories)
+    - ninesys-cdn/.env.example (documentación de MSG_SERVICE_INTERNAL_TOKEN)
+    - mcp_ninesys/src/services/apiClient.ts (inyección de X-Internal-Token en cdnHttp)
+    - msg_ninesys/src/lib/galleryClient.js (inyección de X-Internal-Token en cliente axios de galería)
+- **Commits Relacionados:**
+    - ninesys-cdn (main): 2fda76c
+    - mcp_ninesys (main): 9fe4271
+    - msg_ninesys (feat/baileys-7-upgrade): efb5fdd
+- **Acción Realizada:** (1) En ninesys-cdn/jwt_verify.php se implementaron funciones para extraer el header X-Internal-Token y validarlo con hash_equals() contra MSG_SERVICE_INTERNAL_TOKEN. (2) Se creó exigirSesionOLecturaInternaCdn() para permitir el acceso a endpoints de lectura si el token interno es válido, delegando a exigirSesionCdn() (JWT de usuario) en caso contrario. (3) En ninesys-cdn/index.php se aplicó este guard exclusivamente en las 3 acciones de lectura GET (list, catalog, gallery_categories), manteniendo todas las operaciones de escritura y eliminación bajo estricta verificación de JWT de usuario. (4) En mcp_ninesys/src/services/apiClient.ts se configuró cdnHttp para enviar X-Internal-Token. (5) En msg_ninesys/src/lib/galleryClient.js se añadió X-Internal-Token a axios. (6) Se sincronizó MSG_SERVICE_INTERNAL_TOKEN en el .env del CDN en Desarrollo (vps-contabo-dev). (7) Se desplegó ninesys-cdn y mcp_ninesys en Desarrollo y se reiniciaron los procesos PM2 (ninesys-mcp-server y ninesys-ai-agent).
+- **Inconvenientes y Desafíos:** Ninguno. Se verificó que en el tenant 194 de Desarrollo ya existía la carpeta images/194/gallery/franelas con 4 imágenes reales, permitiendo pruebas end-to-end completas sin requerir datos ficticios.
+- **Decisión Final y Justificación:** Limitar el uso del token de servicio estrictamente a operaciones de lectura (GET), preservando el principio de menor privilegio: ningún proceso puede escribir o borrar imágenes en el CDN usando solo el token de servicio sin un JWT de sesión válido.
+- **Herramienta(s) Utilizada(s):** Edit, Replace, Bash, Python3, curl, npm/tsc, pm2.
+- **Resultado:** Éxito.
+- **Verificación:**
+    - Test de seguridad CDN sin token: HTTP 401.
+    - Test de seguridad CDN con token inválido: HTTP 401.
+    - Test de seguridad CDN con POST/escritura y token interno: HTTP 401 (bloqueo garantizado).
+    - Test directo CDN gallery_categories con token: HTTP 200, {"categories":[{"name":"franelas","count":4}]}.
+    - Test directo CDN catalog franelas con token: HTTP 200, count: 4, 4 imágenes retornadas.
+    - Test completo /ai/chat consulta categorías (empresa 194): responde correctamente identificando la categoría "franelas" (4 imágenes).
+    - Test completo /ai/chat solicitud de fotos de franelas: Gemini llama a ninesys_list_gallery_images y responde con texto y el arreglo images conteniendo las 4 URLs con sus respectivos captions.
+    - Test completo /ai/chat solicitud de fotos de gorras (inexistente): informa correctamente que no hay imágenes de gorras sin inventar ni fallar.
+- **Logro Conseguido:** El Asistente de IA (y el bot de WhatsApp) ahora pueden consultar categorías de galería y mostrar fotografías de productos en el chat sin errores 401 en el CDN.
+- **Observaciones de Gemini:** La galería está plenamente integrada con el chat y entrega las imágenes en structuredContent.images tal como espera el frontend.
+- **Respuesta de Gemini:** Solucionado, desplegado y verificado en Desarrollo.
