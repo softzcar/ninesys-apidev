@@ -1212,10 +1212,10 @@ return function (App $app) {
             $imagenesObservaciones = [];
             if (!empty($obsRows) && !isset($obsRows['status'])) {
                 $obsTextos = [];
+                $isDev = (strpos($_SERVER['HTTP_HOST'] ?? '', 'nineteengreen.com') !== false);
+                $apiBaseUrl = $isDev ? 'https://api.nineteengreen.com' : 'https://api.ninesys19.com';
                 $cdnBaseUrl = getenv('NINESYS_CDN_URL') ?: (
-                    (strpos($_SERVER['HTTP_HOST'] ?? '', 'nineteengreen.com') !== false)
-                        ? 'https://cdn.nineteengreen.com'
-                        : 'https://cdn.ninesys19.com'
+                    $isDev ? 'https://cdn.nineteengreen.com' : 'https://cdn.ninesys19.com'
                 );
                 $internalToken = getenv('MSG_SERVICE_INTERNAL_TOKEN') ?: (defined('MSG_SERVICE_INTERNAL_TOKEN') ? MSG_SERVICE_INTERNAL_TOKEN : '');
 
@@ -1227,8 +1227,11 @@ return function (App $app) {
                         if (preg_match_all('/<img[^>]+src=["\']([^"\']+)["\']/i', $rawObs, $imgMatches)) {
                             foreach ($imgMatches[1] as $src) {
                                 $src = trim($src);
+                                if ($src === '') {
+                                    continue;
+                                }
                                 if (strpos($src, 'data:image/') === 0) {
-                                    // Imagen base64: guardar en CDN para URL HTTPS limpia
+                                    // Imagen base64 legacy fallback: guardar en CDN para URL HTTPS limpia
                                     try {
                                         $guzzle = new \GuzzleHttp\Client(['timeout' => 10]);
                                         $cdnRes = $guzzle->post($cdnBaseUrl . '/?action=save_obs_image', [
@@ -1255,7 +1258,21 @@ return function (App $app) {
                                     } catch (\Throwable $e) {
                                         error_log('[msg_service][ordenes/by-id] Error guardando imagen obs en CDN: ' . $e->getMessage());
                                     }
-                                } elseif (preg_match('/^https?:\/\//i', $src)) {
+                                } else {
+                                    // Imagen por URL (subida a images-orders-details o externa)
+                                    if (strpos($src, '//') === 0) {
+                                        $src = 'https:' . $src;
+                                    } elseif (strpos($src, '/') === 0) {
+                                        $src = $apiBaseUrl . $src;
+                                    } elseif (!preg_match('/^https?:\/\//i', $src)) {
+                                        $src = $apiBaseUrl . '/' . $src;
+                                    }
+
+                                    // Forzar https
+                                    if (strpos($src, 'http://') === 0) {
+                                        $src = 'https://' . substr($src, 7);
+                                    }
+
                                     $imagenesObservaciones[] = [
                                         'url'     => $src,
                                         'caption' => "Orden #{$idOrden} — observación" . ($imgIndex > 0 ? " (" . ($imgIndex + 1) . ")" : ""),

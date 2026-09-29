@@ -85,8 +85,14 @@ return function (App $app) {
             $ok = !empty($agentData['success']);
 
             // Imágenes: vienen de los datos de las tools (no del texto del modelo).
-            // Defensa en profundidad: solo https de los CDN del ecosistema.
-            $hostsPermitidos = ['cdn.ninesys19.com', 'cdn.nineteengreen.com'];
+            // Defensa en profundidad: solo https de los CDN y APIs del ecosistema.
+            $hostsPermitidos = [
+                'cdn.ninesys19.com',
+                'cdn.nineteengreen.com',
+                'api.ninesys19.com',
+                'api.nineteengreen.com',
+                'api.nineteencustom.com',
+            ];
             $images = [];
             foreach ((array) ($agentData['images'] ?? []) as $img) {
                 $url = is_array($img) ? (string) ($img['url'] ?? '') : '';
