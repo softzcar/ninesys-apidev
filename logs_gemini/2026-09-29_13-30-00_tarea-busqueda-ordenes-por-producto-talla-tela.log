@@ -1,0 +1,87 @@
+================================================================================
+SOLICITUD:
+Mejorar la búsqueda de órdenes en el Asistente IA para permitir filtrar y buscar
+por productos específicos y atributos de producción:
+- Búsqueda por producto general o término (ej: "franelas", "dtf", "gorras"),
+  tolerando plurales/singulares y nombres compuestos (sublimadas, estampadas, licra).
+- Búsqueda y filtrado por tallas (ej: "talla S", "M", "L", "XL", etc.).
+- Búsqueda y filtrado por tipo de tela (ej: "ESCOSIA", "LICRA SPRINT", "DRY FIT").
+- Filtrado por corte (Damas, Caballeros, etc.).
+- Por defecto, las búsquedas de taller/producción deben mostrar órdenes en curso
+  (excluyendo órdenes entregadas y canceladas), permitiendo opcionalmente buscar
+  todas o por un status particular.
+
+FECHA: 2026-09-29 13:30:00
+
+PROYECTOS:
+- ninesys-api
+- mcp_ninesys
+- ninesys-ai-agent
+
+ARCHIVOS MODIFICADOS:
+- ninesys-api/app/routes/msg_service.php
+- mcp_ninesys/src/types/api.ts
+- mcp_ninesys/src/tools/orders.ts
+
+COMMITS:
+- ninesys-api: eb904c1 (rama feature/postgresql-support, pusheado y desplegado a Dev)
+- mcp_ninesys: 3872af9 (rama main, pusheado y desplegado a Dev)
+
+ACCIÓN:
+1. En ninesys-api (app/routes/msg_service.php):
+   - Se implementó el endpoint `GET /internal/ordenes/{id_empresa}/search-by-product`:
+     * Soporta parámetros query: `producto` (o `q`), `talla`, `tela`, `corte`, `status`, `limit`, `offset`.
+     * Despluralización en español: normaliza términos terminados en 's' o 'es' (ej: "franelas" -> "franela")
+       para hacer match tanto en la variante exacta como singular sobre `op.name`.
+     * Filtro de talla: match prioritario insensible a mayúsculas sobre `s.nombre` (`sizes`) y `op.talla`.
+     * Filtro de tela: búsqueda parcial sobre `op.tela` y `ct.tela` (`catalogo_telas`).
+     * Filtro de corte: búsqueda parcial sobre `op.corte`.
+     * Filtro de status por defecto: `o.status NOT IN ('entregada', 'cancelada')` para mostrar órdenes
+       vivas en taller (activas, en espera, terminadas), con opción de indicar 'todas' o un status específico.
+     * Retorna cabecera financiera de la orden y el desglose de productos que hicieron match (`productos_coincidentes`).
+2. En mcp_ninesys:
+   - Se agregaron las interfaces `OrderSearchProductItem`, `OrderSearchItem`, y `OrdersSearchByProductResponse`
+     en `src/types/api.ts`.
+   - Se registró la nueva herramienta `ninesys_search_orders_by_product` en `src/tools/orders.ts`
+     con formateo detallado en markdown y salida estructurada en JSON.
+   - Compilación limpia con `npm run build` (tsc).
+3. Despliegue en Desarrollo:
+   - Despliegue a `vps-contabo-dev` de `ninesys-api` con `deploy_backend_dev.sh` (HEAD `eb904c1`).
+   - Despliegue a `vps-contabo-dev` de `mcp_ninesys` con `deploy_mcp_dev.sh` (HEAD `3872af9`).
+   - Reinicio de PM2 `ninesys-ai-agent`.
+
+INCONVENIENTES:
+- Si el usuario busca "franelas" en plural, la base de datos contiene "Franela Sublimada" (singular).
+  Un LIKE '%franelas%' directo fallaría. Se resolvió con una rutina de despluralización en español
+  que genera tanto el término original como la raíz singular en la cláusula OR del SQL.
+- El catálogo de telas puede estar en `catalogo_telas.tela` o en `ordenes_productos.tela`; la consulta
+  unió ambas fuentes con `COALESCE`.
+
+DECISIÓN:
+- Por defecto, el asistente asume que el usuario busca órdenes en curso cuando pregunta por prendas o telas
+  en producción, a menos que solicite explícitamente órdenes entregadas o todas.
+
+HERRAMIENTAS:
+- Git, PHP CLI (php -l), TypeScript (tsc), SSH, PM2, cURL, PostgreSQL.
+
+RESULTADO:
+- El Asistente IA ahora puede responder con total fluidez a búsquedas por producto a secas ("órdenes con franelas"),
+  por talla puntual ("franelas talla S"), por tipo de tela ("órdenes con tela ESCOSIA") o combinadas.
+
+VERIFICACIÓN:
+1. Curl directo a `/internal/ordenes/194/search-by-product?producto=franelas&talla=S`:
+   Retornó 5 órdenes activas reales (7242, 7233, 7190, 7188, 7179) con sus productos y especificaciones.
+2. Curl directo a `/internal/ordenes/194/search-by-product?tela=ESCOSIA`:
+   Retornó 5 órdenes en curso con tela ESCOSIA (7231, 7220, 7132, 7012, 6980).
+3. Pruebas end-to-end con Gemini vía `ninesys-ai-agent`:
+   - "¿Qué órdenes tienen franelas talla S?" -> Ejecutó `ninesys_search_orders_by_product` con `{"producto": "franela", "talla": "S"}`
+     y enumeró las 20 órdenes encontradas con telas, cortes y precios.
+   - "¿Qué órdenes tienen tela ESCOSIA?" -> Ejecutó `ninesys_search_orders_by_product` con `{"tela": "ESCOSIA"}`
+     y enumeró 10 órdenes con clientes y estados.
+   - "¿Qué órdenes tienen franelas?" -> Ejecutó `ninesys_search_orders_by_product` con `{"producto": "franela"}`
+     y listó todas las órdenes en curso con franelas de cualquier tipo (sublimadas, cuello V, licra, etc.).
+
+LOGRO:
+Búsqueda contextual de órdenes de trabajo por producto, talla, tela y corte implementada,
+desplegada y verificada con 100% de éxito en el entorno de desarrollo.
+================================================================================
