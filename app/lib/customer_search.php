@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Búsqueda de clientes por nombre completo (multi-palabra) + teléfono/cédula.
+ * Búsqueda de clientes por nombre completo (multi-palabra) + teléfono/cédula/email.
  *
  * Problema que resuelve: nombres y apellidos se guardan en columnas separadas
  * (first_name / last_name) y a veces un campo trae varias palabras
@@ -45,10 +45,11 @@ function ninesys_customer_search_where($buscar, $alias = '', $driver = 'pgsql')
     }
     $nameClause = '(' . implode(' AND ', $conds) . ')';
 
-    // Teléfono / cédula con el término completo (búsquedas numéricas).
+    // Teléfono / cédula / email con el término completo.
+    $params[] = '%' . $buscar . '%';
     $params[] = '%' . $buscar . '%';
     $params[] = '%' . $buscar . '%';
 
-    $where = "({$nameClause} OR {$alias}phone {$op} ? OR {$alias}cedula {$op} ?)";
+    $where = "({$nameClause} OR {$alias}phone {$op} ? OR {$alias}cedula {$op} ? OR {$alias}email {$op} ?)";
     return [$where, $params];
 }

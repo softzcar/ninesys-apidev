@@ -1236,11 +1236,19 @@ return function (App $app) {
 
         try {
             $tenantConnection = new LocalDB();
-            [$where, $params] = ninesys_customer_search_where($q, '', $driver);
-            $sql = "SELECT _id, first_name, last_name, phone, cedula, email
-                    FROM {$dbName}customers
-                    WHERE eliminado = 0" . ($where !== '' ? ' AND ' . $where : '') . "
-                    ORDER BY first_name ASC, last_name ASC
+            [$where, $params] = ninesys_customer_search_where($q, 'c.', $driver);
+            // ordenes_en_curso / ultima_orden: permiten al operario distinguir
+            // clientes homónimos sin conocer su teléfono ni cédula.
+            $sql = "SELECT c._id, c.first_name, c.last_name, c.phone, c.cedula, c.email,
+                           (SELECT COUNT(*) FROM {$dbName}ordenes o
+                             WHERE o.id_wp = c._id AND LOWER(o.status) NOT IN ('entregada', 'cancelada')) AS ordenes_en_curso,
+                           (SELECT o._id FROM {$dbName}ordenes o
+                             WHERE o.id_wp = c._id ORDER BY o._id DESC LIMIT 1) AS ultima_orden,
+                           (SELECT o.fecha_creacion FROM {$dbName}ordenes o
+                             WHERE o.id_wp = c._id ORDER BY o._id DESC LIMIT 1) AS fecha_ultima_orden
+                    FROM {$dbName}customers c
+                    WHERE c.eliminado = 0" . ($where !== '' ? ' AND ' . $where : '') . "
+                    ORDER BY c.first_name ASC, c.last_name ASC
                     LIMIT 15";
             $customers = $tenantConnection->goQuery($sql, $params);
             $tenantConnection->disconnect();
@@ -1260,6 +1268,9 @@ return function (App $app) {
                 'phone'      => $c['phone'],
                 'cedula'     => $c['cedula'],
                 'email'      => $c['email'],
+                'ordenes_en_curso'   => (int) ($c['ordenes_en_curso'] ?? 0),
+                'ultima_orden'       => isset($c['ultima_orden']) ? (int) $c['ultima_orden'] : null,
+                'fecha_ultima_orden' => $c['fecha_ultima_orden'] ?? null,
             ];
         }, (array) $customers);
 
