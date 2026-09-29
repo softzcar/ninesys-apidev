@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** Corregir la maquetación y apariencia de los botones superiores en la vista móvil (screenshot Captura de pantalla_20260929_115128.png): el botón del Asistente IA no se veía en móvil (rectángulo vacío sin icono), su estilo no concordaba con los botones que lo acompañaban (WhatsApp y conexión a internet), y los botones se desalineaban en pantallas pequeñas.
+- **Fecha y Hora:** 2026-09-29 12:05:00
+- **Proyecto(s):** Frontend (app_multi)
+- **Archivos Involucrados:**
+    - app_multi/components/menus/MenuLoader.vue
+    - app_multi/components/checkConnection.vue
+    - app_multi/components/ai/AiChatToggle.vue
+    - app_multi/components/ai/AiChatPanel.vue
+- **Commits Relacionados:**
+    - app_multi (refactor/modular-routes): bf47476
+- **Acción Realizada:** (1) Diagnóstico: El icono b-icon icon="robot" era inválido en BootstrapVue Icons (no existe tal icono), lo que provocaba que al ocultar el texto en móvil con d-none d-md-inline el botón quedase completamente vacío. Además, checkConnection usaba .floatme y estaba envuelto en b-nav-item generando enlaces <a> alrededor de botones con desalineación vertical y colapso de iconos WhatsApp/WiFi en vertical. (2) Se reemplazó el icono inválido robot por "stars" (icono nativo de BootstrapVue universal para IA/asistente) tanto en AiChatToggle.vue como en la cabecera de AiChatPanel.vue. (3) Se armonizó AiChatToggle.vue con checkConnection.vue: mismo estilo base (variant="light", height: 38px, border-radius: 8px, borde #ced4da, fondo blanco), con el icono stars en color turquesa institucional (#17a2b8) en estado inactivo y fondo sólido con icono blanco cuando el chat está abierto. (4) En checkConnection.vue se eliminó .floatme y se configuró contenedor flex inline para asegurar que WhatsApp y WiFi se mantengan siempre horizontales. (5) En MenuLoader.vue se reestructuró la cabecera con contenedor flex semántico (.top-navbar con .header-actions-container) garantizando que el buscador se ubique a la izquierda y los botones a la derecha con espaciado consistente. (6) Compilación con npm run generate y despliegue a Desarrollo (vps-contabo-dev).
+- **Inconvenientes y Desafíos:** Ninguno. La compilación estática completó satisfactoriamente y la sincronización rsync preservó el backup remoto en el VPS.
+- **Decisión Final y Justificación:** Utilizar "stars" para representar el Asistente IA (estándar de la industria) y unificar dimensiones, bordes y alturas entre checkConnection y AiChatToggle para que se perciban visualmente como un conjunto integrado de herramientas de cabecera.
+- **Herramienta(s) Utilizada(s):** View (imagen y código), Replace, Bash, npm run generate, rsync, git.
+- **Resultado:** Éxito.
+- **Verificación:** Compilación limpia de Nuxt, archivos estáticos generados y desplegados en app.nineteengreen.com. Headers no-cache activos.
+- **Logro Conseguido:** El botón del Asistente IA ahora es visible en móvil con su icono de destellos perfectamente centrado, y los botones de WhatsApp/conexión e IA lucen armónicos, alineados y con la misma altura y estilo.
+- **Observaciones de Gemini:** La cabecera superior ahora responde fluidamente tanto en pantallas móviles (<576px) como en tablets y escritorios.
+- **Respuesta de Gemini:** Corregido, compilado y desplegado en Desarrollo.
