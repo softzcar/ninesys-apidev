@@ -1,0 +1,74 @@
+================================================================================
+SOLICITUD:
+El usuario consultó en el chat "¿cuántas órdenes tienen franelas?" (respuesta: 20 órdenes),
+y al repreguntar "¿Cuántas franelas tiene esas 20 órdenes?", el asistente respondió:
+"No puedo calcular la cantidad total de franelas en esas 20 órdenes. Solo puedo mostrar la cantidad
+de franelas por orden...".
+El usuario preguntó por qué no podía contarlas si sabía que había 20 órdenes.
+
+FECHA: 2026-09-29 13:45:00
+
+PROYECTOS:
+- ninesys-api
+- mcp_ninesys
+- ninesys-ai-agent
+
+ARCHIVOS MODIFICADOS:
+- ninesys-api/app/routes/msg_service.php
+- mcp_ninesys/src/types/api.ts
+- mcp_ninesys/src/tools/orders.ts
+
+COMMITS:
+- ninesys-api: 2680317 (rama feature/postgresql-support, pusheado y desplegado a Dev)
+- mcp_ninesys: aa541da (rama main, pusheado y desplegado a Dev)
+
+ACCIÓN:
+1. Causa raíz:
+   - La herramienta `ninesys_search_orders_by_product` devolvía el listado de órdenes y los productos
+     coincidentes por orden, pero el endpoint de la API no sumaba en el servidor el total de piezas/unidades
+     físicas ni generaba el resumen acumulado por tallas ni por telas.
+   - De acuerdo con la regla fundamental del sistema ("Cálculos en el servidor, no en el LLM"), el modelo
+     no debe inventar sumas matemáticas complejas si el servidor no se las entrega calculadas.
+2. Solución en Backend (ninesys-api/app/routes/msg_service.php):
+   - Se añadió el cálculo del objeto `resumen`:
+     * `total_ordenes`: número de órdenes encontradas.
+     * `total_unidades`: suma acumulada de las cantidades de los productos coincidentes (`cantidad`).
+     * `unidades_por_talla`: diccionario con la suma exacta de prendas por cada talla (ej: S: 24, M: 52, L: 39).
+     * `unidades_por_tela`: diccionario con la suma exacta de prendas por cada tipo de tela (ej: DRY FIT: 84, ATLÉTICA: 29).
+     * `unidades_por_producto`: diccionario con la suma por tipo de producto.
+3. Solución en MCP (mcp_ninesys):
+   - Se tipó `OrderSearchSummary` en `src/types/api.ts`.
+   - En `src/tools/orders.ts`:
+     * Se integró en el formateador Markdown y en el objeto structured el total de prendas y los desgloses por talla y tela.
+     * Se actualizó la descripción de la herramienta indicando expresamente que calcula el total de prendas y que debe
+       usarse para responder preguntas de "¿cuántas prendas/franelas hay en total?".
+4. Despliegue y verificación en Desarrollo:
+   - Backend desplegado vía `deploy_backend_dev.sh` (HEAD `2680317`).
+   - MCP compilado y desplegado vía `deploy_mcp_dev.sh` (HEAD `aa541da`).
+   - Reinicio de PM2 `ninesys-ai-agent`.
+
+INCONVENIENTES:
+- Ninguno. La suma se calcula en memoria tras consultar los productos de las órdenes sin generar queries adicionales.
+
+DECISIÓN:
+- Todo agregado numérico (conteo de prendas, distribución de tallas, distribución de telas) se realiza en el servidor
+  y se pasa de forma determinista al asistente de IA.
+
+HERRAMIENTAS:
+- Git, TypeScript, PHP CLI, SSH, PM2, cURL.
+
+RESULTADO:
+- Ante la pregunta "¿Cuántas franelas tiene esas 20 órdenes?", el asistente ahora responde de inmediato:
+  "Las 20 órdenes en curso que incluyen franelas suman un total de 145 franelas.
+  El desglose por talla es: Talla M: 52 unidades, Talla L: 39 unidades, Talla S: 24 unidades, Talla XL: 12 unidades...
+  El desglose por tela es: DRY FIT 1.60: 84 unidades, ATLÉTICA 1.60: 29 unidades, ESCOSIA 1.60: 12 unidades..."
+
+VERIFICACIÓN:
+- Prueba directa simulando el flujo con historial conversacional:
+  Query: "¿Cuantas franelas tiene esas 20 ordenes?" con history previo de "cuantas ordenes tienen franelas?".
+  Respuesta: Ejecutó `ninesys_search_orders_by_product` con `{"producto": "franela"}` y devolvió el total de 145 franelas
+  con el desglose exacto de tallas y telas.
+
+LOGRO:
+Capacidad de conteo consolidado y desglose de unidades de productos implementada y operativa al 100%.
+================================================================================
