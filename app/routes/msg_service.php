@@ -1055,10 +1055,17 @@ return function (App $app) {
     /**
      * GET /internal/ordenes/{id_empresa}/by-id?id={id_orden}
      *
-     * Devuelve UNA orden concreta por su _id, con el mismo detalle que by-phone
-     * (estado, entrega, totales, saldo, productos) más los datos del cliente.
+     * Devuelve UNA orden concreta por su _id con detalle exhaustivo:
+     * - Datos del cliente (id, nombre, teléfono, cédula, email, dirección)
+     * - Datos de la orden (status, vendedor, fecha_inicio, fecha_entrega, cliente_nombre)
+     * - Resumen financiero (pago_total, total_abonos, total_descuentos, total_notas_credito,
+     *   saldo_pendiente, sobrepago, estado_pago, descuento_detalle)
+     * - Métodos de pago registrados (moneda, metodo_pago, monto, tasa, detalle)
+     * - Diseño (tipo)
+     * - Observaciones (limpias de HTML)
+     * - Productos detallados (nombre, cantidad, precio, subtotal, talla, tela, corte, atributo)
      * Header: Authorization: {id_empresa}
-     * Respuesta 200: { found:true, customer_id, customer_name, orden:{...} } | { found:false }
+     * Respuesta 200: { found:true, customer_id, customer_name, cliente:{...}, orden:{...} } | { found:false }
      */
     $app->get('/internal/ordenes/{id_empresa}/by-id', function (Request $request, Response $response, $args) {
         if ($errorResponse = validarTokenInterno($request, $response)) {
@@ -1101,10 +1108,14 @@ return function (App $app) {
         try {
             $tenantConnection = new LocalDB();
 
+            // 1. Cabecera de la orden y totales de abonos / notas de crédito
             $ordersQuery = "
                 SELECT
                     o._id AS id_orden,
                     o.status,
+                    o.cliente_nombre,
+                    c.nombre AS vendedor,
+                    o.fecha_inicio,
                     o.fecha_entrega,
                     o.pago_total,
                     o.id_wp,
@@ -1112,6 +1123,7 @@ return function (App $app) {
                     COALESCE((SELECT SUM(a.descuento) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_descuentos,
                     COALESCE((SELECT SUM(a.nota_credito) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_notas_credito
                 FROM {$dbName}ordenes o
+                LEFT JOIN api_empresas.empresas_usuarios c ON c.id_usuario = o.responsable
                 WHERE o._id = ?
                 LIMIT 1
             ";
@@ -1125,48 +1137,180 @@ return function (App $app) {
             }
 
             $o = $orders[0];
-            $customerId = (int) $o['id_wp'];
+            $customerId = (int) ($o['id_wp'] ?? 0);
 
-            // Datos del cliente dueño de la orden
-            $customerName = '';
-            $cust = $tenantConnection->goQuery(
-                "SELECT first_name, last_name FROM {$dbName}customers WHERE _id = ? LIMIT 1",
-                [$customerId]
-            );
-            if (!isset($cust['status']) && !empty($cust)) {
-                $customerName = trim($cust[0]['first_name'] . ' ' . $cust[0]['last_name']);
+            // 2. Detalle de descuentos en abonos
+            $descuentoDetalleSql = DB_DRIVER === 'pgsql'
+                ? "SELECT STRING_AGG(CASE WHEN descuento > 0 AND detalle IS NOT NULL AND TRIM(detalle) != '' THEN detalle ELSE NULL END, ', ') AS descuento_detalle FROM {$dbName}abonos WHERE id_orden = ?"
+                : "SELECT GROUP_CONCAT(CASE WHEN descuento > 0 AND detalle IS NOT NULL AND TRIM(detalle) != '' THEN detalle ELSE NULL END SEPARATOR ', ') AS descuento_detalle FROM {$dbName}abonos WHERE id_orden = ?";
+            $descRows = $tenantConnection->goQuery($descuentoDetalleSql, [$idOrden]);
+            $descuentoDetalle = (!empty($descRows) && !isset($descRows['status'])) ? ($descRows[0]['descuento_detalle'] ?? '') : '';
+
+            // 3. Datos del cliente
+            $customerName = trim($o['cliente_nombre'] ?? '');
+            $clienteData = [
+                'id'        => $customerId,
+                'nombre'    => $customerName,
+                'telefono'  => '',
+                'cedula'    => '',
+                'email'     => '',
+                'direccion' => '',
+            ];
+            if ($customerId > 0) {
+                $cust = $tenantConnection->goQuery(
+                    "SELECT _id, first_name, last_name, phone, cedula, email, address FROM {$dbName}customers WHERE _id = ? LIMIT 1",
+                    [$customerId]
+                );
+                if (!isset($cust['status']) && !empty($cust)) {
+                    $cRow = $cust[0];
+                    $nombreCompuesto = trim(($cRow['first_name'] ?? '') . ' ' . ($cRow['last_name'] ?? ''));
+                    if ($nombreCompuesto !== '') {
+                        $customerName = $nombreCompuesto;
+                    }
+                    $clienteData = [
+                        'id'        => (int) $cRow['_id'],
+                        'nombre'    => $customerName,
+                        'telefono'  => (string) ($cRow['phone'] ?? ''),
+                        'cedula'    => (string) ($cRow['cedula'] ?? ''),
+                        'email'     => (string) ($cRow['email'] ?? ''),
+                        'direccion' => (string) ($cRow['address'] ?? ''),
+                    ];
+                }
             }
 
-            // Productos de la orden
-            $products = $tenantConnection->goQuery(
-                "SELECT name, cantidad, talla AS detalle_tallas FROM {$dbName}ordenes_productos WHERE id_orden = ?",
+            // 4. Métodos de pago registrados
+            $metodosRows = $tenantConnection->goQuery(
+                "SELECT moneda, metodo_pago, detalle, monto, tasa FROM {$dbName}metodos_de_pago WHERE id_orden = ? ORDER BY _id ASC",
                 [$idOrden]
             );
-            if (isset($products['status'])) {
-                $products = [];
+            $metodosPago = [];
+            if (!isset($metodosRows['status']) && is_array($metodosRows)) {
+                foreach ($metodosRows as $mp) {
+                    $metodosPago[] = [
+                        'moneda'      => $mp['moneda'] ?? '',
+                        'metodo_pago' => $mp['metodo_pago'] ?? '',
+                        'monto'       => (float) ($mp['monto'] ?? 0),
+                        'tasa'        => (float) ($mp['tasa'] ?? 0),
+                        'detalle'     => (string) ($mp['detalle'] ?? ''),
+                    ];
+                }
             }
 
+            // 5. Tipo de diseño
+            $disenoRows = $tenantConnection->goQuery(
+                "SELECT tipo FROM {$dbName}disenos WHERE id_orden = ? LIMIT 1",
+                [$idOrden]
+            );
+            $disenoTipo = (!empty($disenoRows) && !isset($disenoRows['status'])) ? ($disenoRows[0]['tipo'] ?? 'Ninguno') : 'Ninguno';
+
+            // 6. Observaciones de la orden (sanitizadas de HTML)
+            $obsRows = $tenantConnection->goQuery(
+                "SELECT observaciones FROM {$dbName}ordenes_observaciones WHERE id_orden = ?",
+                [$idOrden]
+            );
+            $observacionesLimpias = '';
+            if (!empty($obsRows) && !isset($obsRows['status'])) {
+                $obsTextos = [];
+                foreach ($obsRows as $ob) {
+                    if (!empty($ob['observaciones'])) {
+                        // Quitar HTML y decodificar caracteres &aacute; etc.
+                        $limpio = trim(html_entity_decode(strip_tags((string) $ob['observaciones']), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                        if ($limpio !== '') {
+                            $obsTextos[] = $limpio;
+                        }
+                    }
+                }
+                $observacionesLimpias = implode("\n", $obsTextos);
+            }
+
+            // 7. Productos de la orden con tallas, tela, corte y atributos
+            $productsRows = $tenantConnection->goQuery(
+                "SELECT
+                    op._id,
+                    op.name,
+                    pr.sku AS sku,
+                    pr._id AS cod,
+                    op.cantidad,
+                    op.id_size AS id_talla,
+                    s.nombre AS talla_nombre,
+                    op.talla AS talla_raw,
+                    op.id_tela,
+                    op.tela,
+                    op.corte,
+                    op.precio_unitario AS precio,
+                    (SELECT attribute_name FROM {$dbName}products_attributes WHERE _id = op.id_products_attributes) AS atributo_nombre
+                FROM {$dbName}ordenes_productos op
+                LEFT JOIN {$dbName}products pr ON pr._id = op.id_woo
+                LEFT JOIN {$dbName}sizes s ON s._id = op.id_size
+                WHERE op.id_orden = ?
+                ORDER BY op._id ASC",
+                [$idOrden]
+            );
+            if (isset($productsRows['status'])) {
+                $productsRows = [];
+            }
+
+            $productos = [];
+            foreach ((array) $productsRows as $p) {
+                $cant = (float) ($p['cantidad'] ?? 0);
+                $precio = (float) ($p['precio'] ?? 0);
+                $tallaVal = !empty($p['talla_nombre']) ? $p['talla_nombre'] : ($p['talla_raw'] ?? '');
+                $productos[] = [
+                    'id'             => (int) ($p['_id'] ?? 0),
+                    'cod'            => $p['cod'] !== null ? (int) $p['cod'] : null,
+                    'sku'            => $p['sku'] ?? '',
+                    'name'           => (string) ($p['name'] ?? ''),
+                    'cantidad'       => $cant,
+                    'precio'         => $precio,
+                    'subtotal'       => round($cant * $precio, 2),
+                    'talla'          => (string) $tallaVal,
+                    'detalle_tallas' => (string) ($p['talla_raw'] ?? $tallaVal),
+                    'tela'           => (string) ($p['tela'] ?? ''),
+                    'corte'          => (string) ($p['corte'] ?? ''),
+                    'atributo'       => (string) ($p['atributo_nombre'] ?? ''),
+                ];
+            }
+
+            // 8. Cálculos financieros
             $totalAbonos = (float) $o['total_abonos'];
             $totalDescuentos = (float) $o['total_descuentos'];
             $totalNotasCredito = (float) $o['total_notas_credito'];
             $pagoTotal = (float) $o['pago_total'];
-            $saldoPendiente = $pagoTotal - $totalAbonos - $totalDescuentos + $totalNotasCredito;
+
+            $balance = round($pagoTotal - $totalAbonos - $totalDescuentos + $totalNotasCredito, 2);
+            $saldoPendiente = $balance > 0 ? $balance : 0.0;
+            $sobrepago = $balance < 0 ? abs($balance) : 0.0;
+
+            $estadoPago = 'pendiente_pago';
+            if ($pagoTotal <= 0) {
+                $estadoPago = 'sin_costo';
+            } elseif ($sobrepago > 0) {
+                $estadoPago = 'sobrepago';
+            } elseif ($saldoPendiente == 0.0) {
+                $estadoPago = 'pagado_total';
+            } elseif ($totalAbonos > 0) {
+                $estadoPago = 'abono_parcial';
+            }
 
             $orden = [
-                'id_orden'         => (int) $o['id_orden'],
-                'status'           => $o['status'],
-                'fecha_entrega'    => $o['fecha_entrega'],
-                'pago_total'       => $pagoTotal,
-                'total_abonos'     => $totalAbonos,
-                'total_descuentos' => $totalDescuentos,
-                'saldo_pendiente'  => $saldoPendiente,
-                'productos'        => array_map(function ($p) {
-                    return [
-                        'name'           => $p['name'],
-                        'cantidad'       => (int) $p['cantidad'],
-                        'detalle_tallas' => $p['detalle_tallas'] ?? '',
-                    ];
-                }, (array) $products),
+                'id_orden'            => (int) $o['id_orden'],
+                'status'              => $o['status'],
+                'cliente_nombre'      => $customerName,
+                'vendedor'            => $o['vendedor'] ?? 'Sin asignar',
+                'fecha_inicio'        => $o['fecha_inicio'],
+                'fecha_entrega'       => $o['fecha_entrega'],
+                'pago_total'          => $pagoTotal,
+                'total_abonos'        => $totalAbonos,
+                'total_descuentos'    => $totalDescuentos,
+                'total_notas_credito' => $totalNotasCredito,
+                'saldo_pendiente'     => $saldoPendiente,
+                'sobrepago'           => $sobrepago,
+                'estado_pago'         => $estadoPago,
+                'descuento_detalle'   => $descuentoDetalle,
+                'diseno_tipo'         => $disenoTipo,
+                'observaciones'       => $observacionesLimpias,
+                'metodos_pago'        => $metodosPago,
+                'productos'           => $productos,
             ];
 
             $tenantConnection->disconnect();
@@ -1179,7 +1323,197 @@ return function (App $app) {
             'found'         => true,
             'customer_id'   => $customerId,
             'customer_name' => $customerName,
+            'cliente'       => $clienteData,
             'orden'         => $orden,
+        ], 200);
+    });
+
+
+    /**
+     * GET /internal/ordenes/{id_empresa}/by-status?status={status}&limit={limit}&offset={offset}
+     *
+     * Consulta y filtra órdenes por estado (ej: 'activa', 'en espera', 'terminada', 'entregada', 'pausada', 'cancelada', o 'todas').
+     * Devuelve información financiera resumida, cliente, vendedor, fechas y productos principales.
+     * Header: Authorization: {id_empresa}
+     * Respuesta 200: { total: number, status_filter: string, ordenes: [...] }
+     */
+    $app->get('/internal/ordenes/{id_empresa}/by-status', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+
+        $params = $request->getQueryParams();
+        $statusQuery = trim((string) ($params['status'] ?? ''));
+        $limit = filter_var($params['limit'] ?? 20, FILTER_VALIDATE_INT);
+        if ($limit === false || $limit < 1) $limit = 20;
+        if ($limit > 50) $limit = 50;
+
+        $offset = filter_var($params['offset'] ?? 0, FILTER_VALIDATE_INT);
+        if ($offset === false || $offset < 0) $offset = 0;
+
+        try {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $localConnection->goQuery(
+                'SELECT db_name FROM empresas WHERE id_empresa = ? AND activo = 1',
+                [$idEmpresa]
+            );
+            $localConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][ordenes/by-status] Error central empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar empresa.'], 500);
+        }
+
+        if (empty($rows) || isset($rows['status'])) {
+            return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe o está inactiva."], 404);
+        }
+
+        $dbName = DB_DRIVER === 'pgsql' ? '' : '`' . $rows[0]['db_name'] . '`.';
+
+        try {
+            $tenantConnection = new LocalDB();
+
+            $whereClause = '';
+            $queryParams = [];
+
+            if ($statusQuery !== '' && !in_array(strtolower($statusQuery), ['todas', 'todos', 'all', '*'])) {
+                $st = strtolower($statusQuery);
+                if (strpos($st, 'activa') !== false || strpos($st, 'producc') !== false) {
+                    $whereClause = "WHERE LOWER(o.status) LIKE '%activa%'";
+                } elseif (strpos($st, 'espera') !== false) {
+                    $whereClause = "WHERE LOWER(o.status) LIKE '%espera%'";
+                } elseif (strpos($st, 'terminad') !== false || strpos($st, 'lista') !== false) {
+                    $whereClause = "WHERE LOWER(o.status) LIKE '%terminad%'";
+                } elseif (strpos($st, 'entregad') !== false) {
+                    $whereClause = "WHERE LOWER(o.status) LIKE '%entregad%'";
+                } elseif (strpos($st, 'pausad') !== false) {
+                    $whereClause = "WHERE LOWER(o.status) LIKE '%pausad%'";
+                } elseif (strpos($st, 'cancelad') !== false) {
+                    $whereClause = "WHERE LOWER(o.status) LIKE '%cancelad%'";
+                } else {
+                    $whereClause = "WHERE LOWER(o.status) = LOWER(?)";
+                    $queryParams[] = $statusQuery;
+                }
+            }
+
+            $sql = "
+                SELECT
+                    o._id AS id_orden,
+                    o.status,
+                    o.cliente_nombre,
+                    c.nombre AS vendedor,
+                    o.fecha_inicio,
+                    o.fecha_entrega,
+                    o.pago_total,
+                    o.id_wp,
+                    COALESCE((SELECT SUM(a.abono) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_abonos,
+                    COALESCE((SELECT SUM(a.descuento) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_descuentos,
+                    COALESCE((SELECT SUM(a.nota_credito) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_notas_credito
+                FROM {$dbName}ordenes o
+                LEFT JOIN api_empresas.empresas_usuarios c ON c.id_usuario = o.responsable
+                {$whereClause}
+                ORDER BY o._id DESC
+                LIMIT {$limit} OFFSET {$offset}
+            ";
+
+            $orders = $tenantConnection->goQuery($sql, $queryParams);
+            if (isset($orders['status'])) {
+                throw new \Exception($orders['message'] ?? 'Error al listar órdenes por estado');
+            }
+
+            if (empty($orders)) {
+                $tenantConnection->disconnect();
+                return $respondJson([
+                    'total'         => 0,
+                    'status_filter' => $statusQuery ?: 'todas',
+                    'ordenes'       => [],
+                ], 200);
+            }
+
+            // Cargar productos en lote para las órdenes devueltas
+            $orderIds = array_column($orders, 'id_orden');
+            $productsByOrder = [];
+            if (!empty($orderIds)) {
+                $idsStr = implode(',', array_map('intval', $orderIds));
+                $prodRows = $tenantConnection->goQuery("
+                    SELECT id_orden, name, cantidad, talla
+                    FROM {$dbName}ordenes_productos
+                    WHERE id_orden IN ({$idsStr})
+                    ORDER BY _id ASC
+                ");
+                if (!isset($prodRows['status']) && is_array($prodRows)) {
+                    foreach ($prodRows as $pr) {
+                        $oid = (int) $pr['id_orden'];
+                        $productsByOrder[$oid][] = [
+                            'name'     => (string) ($pr['name'] ?? ''),
+                            'cantidad' => (float) ($pr['cantidad'] ?? 0),
+                            'talla'    => (string) ($pr['talla'] ?? ''),
+                        ];
+                    }
+                }
+            }
+
+            $formatted = [];
+            foreach ($orders as $o) {
+                $oid = (int) $o['id_orden'];
+                $pagoTotal = (float) $o['pago_total'];
+                $totalAbonos = (float) $o['total_abonos'];
+                $totalDescuentos = (float) $o['total_descuentos'];
+                $totalNotasCredito = (float) $o['total_notas_credito'];
+
+                $balance = round($pagoTotal - $totalAbonos - $totalDescuentos + $totalNotasCredito, 2);
+                $saldoPendiente = $balance > 0 ? $balance : 0.0;
+                $sobrepago = $balance < 0 ? abs($balance) : 0.0;
+
+                $estadoPago = 'pendiente_pago';
+                if ($pagoTotal <= 0) {
+                    $estadoPago = 'sin_costo';
+                } elseif ($sobrepago > 0) {
+                    $estadoPago = 'sobrepago';
+                } elseif ($saldoPendiente == 0.0) {
+                    $estadoPago = 'pagado_total';
+                } elseif ($totalAbonos > 0) {
+                    $estadoPago = 'abono_parcial';
+                }
+
+                $prods = $productsByOrder[$oid] ?? [];
+
+                $formatted[] = [
+                    'id_orden'          => $oid,
+                    'status'            => $o['status'],
+                    'cliente_nombre'    => (string) ($o['cliente_nombre'] ?? ''),
+                    'vendedor'          => (string) ($o['vendedor'] ?? 'Sin asignar'),
+                    'fecha_inicio'      => $o['fecha_inicio'],
+                    'fecha_entrega'     => $o['fecha_entrega'],
+                    'pago_total'        => $pagoTotal,
+                    'total_abonos'      => $totalAbonos,
+                    'total_descuentos'  => $totalDescuentos,
+                    'saldo_pendiente'   => $saldoPendiente,
+                    'sobrepago'         => $sobrepago,
+                    'estado_pago'       => $estadoPago,
+                    'productos_resumen' => $prods,
+                ];
+            }
+
+            $tenantConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][ordenes/by-status] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar órdenes por estado.'], 500);
+        }
+
+        return $respondJson([
+            'total'         => count($formatted),
+            'status_filter' => $statusQuery ?: 'todas',
+            'ordenes'       => $formatted,
         ], 200);
     });
 
