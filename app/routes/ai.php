@@ -83,9 +83,26 @@ return function (App $app) {
 
             $agentData = json_decode((string) $res->getBody(), true) ?: [];
             $ok = !empty($agentData['success']);
+
+            // Imágenes: vienen de los datos de las tools (no del texto del modelo).
+            // Defensa en profundidad: solo https de los CDN del ecosistema.
+            $hostsPermitidos = ['cdn.ninesys19.com', 'cdn.nineteengreen.com'];
+            $images = [];
+            foreach ((array) ($agentData['images'] ?? []) as $img) {
+                $url = is_array($img) ? (string) ($img['url'] ?? '') : '';
+                $parts = parse_url($url);
+                if (($parts['scheme'] ?? '') === 'https' && in_array($parts['host'] ?? '', $hostsPermitidos, true)) {
+                    $images[] = [
+                        'url'     => $url,
+                        'caption' => mb_substr((string) ($img['caption'] ?? ''), 0, 200),
+                    ];
+                }
+            }
+
             $result = [
                 'success'  => $ok,
                 'response' => $agentData['text'] ?? '',
+                'images'   => $images,
             ];
             if (!$ok) {
                 $result['error'] = $agentData['message'] ?? 'El asistente no pudo procesar la consulta.';

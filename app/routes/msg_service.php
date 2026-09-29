@@ -1516,6 +1516,160 @@ return function (App $app) {
 
 
     /**
+     * Resuelve el db_name de la empresa (activa) a partir del header Authorization.
+     * Devuelve [idEmpresa, dbPrefix] o una Response de error.
+     */
+    $resolverEmpresaInterna = function (Request $request, callable $respondJson) {
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+        try {
+            $central = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $central->goQuery('SELECT db_name FROM empresas WHERE id_empresa = ? AND activo = 1', [$idEmpresa]);
+            $central->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][disenos] Error central empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar empresa.'], 500);
+        }
+        if (empty($rows) || isset($rows['status'])) {
+            return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe o está inactiva."], 404);
+        }
+        $dbName = DB_DRIVER === 'pgsql' ? '' : '`' . $rows[0]['db_name'] . '`.';
+        return [$idEmpresa, $dbName];
+    };
+
+
+    /**
+     * GET /internal/ordenes/{id_empresa}/disenos?id={id_orden}
+     *
+     * Propuestas de diseño (tabla revisiones) de una orden: tipo, estado
+     * (Aprobado / Rechazado / Esperando Respuesta), nº de revisión, imagen y detalles.
+     * La "imagen aprobada" final de la orden no está aquí (vive en el CDN como
+     * {orden}-a.{ext}); la resuelve el MCP contra el CDN.
+     */
+    $app->get('/internal/ordenes/{id_empresa}/disenos', function (Request $request, Response $response, $args) use ($resolverEmpresaInterna) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+        $res = $resolverEmpresaInterna($request, $respondJson);
+        if (!is_array($res)) {
+            return $res;
+        }
+        [$idEmpresa, $dbName] = $res;
+
+        $idOrden = filter_var($request->getQueryParams()['id'] ?? '', FILTER_VALIDATE_INT);
+        if ($idOrden === false || $idOrden <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Parámetro id (id_orden) requerido.'], 400);
+        }
+
+        try {
+            $db = new LocalDB();
+            $orden = $db->goQuery("SELECT _id FROM {$dbName}ordenes WHERE _id = ? LIMIT 1", [$idOrden]);
+            if (isset($orden['status']) || empty($orden)) {
+                $db->disconnect();
+                return $respondJson(['found' => false], 200);
+            }
+            $rows = $db->goQuery("
+                SELECT _id, revision, tipo, estatus, url_image, detalles, moment, id_product
+                FROM {$dbName}revisiones
+                WHERE id_orden = ?
+                ORDER BY _id ASC
+            ", [$idOrden]);
+            $db->disconnect();
+            if (isset($rows['status'])) {
+                throw new \Exception($rows['message'] ?? 'Error al buscar revisiones');
+            }
+        } catch (\Throwable $e) {
+            error_log('[msg_service][ordenes/disenos] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar los diseños.'], 500);
+        }
+
+        $revisiones = array_map(function ($r) {
+            return [
+                '_id'        => (int) $r['_id'],
+                'revision'   => $r['revision'] !== null ? (int) $r['revision'] : null,
+                'tipo'       => $r['tipo'],
+                'estatus'    => $r['estatus'],
+                'url_image'  => $r['url_image'] ?: null,
+                'detalles'   => $r['detalles'],
+                'fecha'      => $r['moment'],
+                'id_product' => $r['id_product'] !== null ? (int) $r['id_product'] : null,
+            ];
+        }, (array) $rows);
+
+        return $respondJson(['found' => true, 'id_orden' => $idOrden, 'revisiones' => $revisiones], 200);
+    });
+
+
+    /**
+     * GET /internal/disenos/{id_empresa}/pendientes
+     *
+     * Propuestas de diseño esperando respuesta del cliente (con imagen), con el nº
+     * de orden y el nombre del cliente. Tope 30, más recientes primero.
+     */
+    $app->get('/internal/disenos/{id_empresa}/pendientes', function (Request $request, Response $response, $args) use ($resolverEmpresaInterna) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+        $res = $resolverEmpresaInterna($request, $respondJson);
+        if (!is_array($res)) {
+            return $res;
+        }
+        [$idEmpresa, $dbName] = $res;
+
+        try {
+            $db = new LocalDB();
+            $rows = $db->goQuery("
+                SELECT r._id, r.id_orden, r.revision, r.tipo, r.url_image, r.detalles, r.moment,
+                       o.status AS status_orden,
+                       CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, '')) AS cliente
+                FROM {$dbName}revisiones r
+                JOIN {$dbName}ordenes o ON o._id = r.id_orden
+                LEFT JOIN {$dbName}customers c ON c._id = o.id_wp
+                WHERE r.estatus = 'Esperando Respuesta'
+                  AND r.url_image IS NOT NULL AND r.url_image <> ''
+                  AND LOWER(o.status) <> 'cancelada'
+                ORDER BY r.moment DESC
+                LIMIT 30
+            ", []);
+            $db->disconnect();
+            if (isset($rows['status'])) {
+                throw new \Exception($rows['message'] ?? 'Error al buscar pendientes');
+            }
+        } catch (\Throwable $e) {
+            error_log('[msg_service][disenos/pendientes] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar diseños pendientes.'], 500);
+        }
+
+        $list = array_map(function ($r) {
+            return [
+                '_id'          => (int) $r['_id'],
+                'id_orden'     => (int) $r['id_orden'],
+                'revision'     => $r['revision'] !== null ? (int) $r['revision'] : null,
+                'tipo'         => $r['tipo'],
+                'url_image'    => $r['url_image'],
+                'detalles'     => $r['detalles'],
+                'fecha'        => $r['moment'],
+                'status_orden' => $r['status_orden'],
+                'cliente'      => trim(preg_replace('/\s+/', ' ', $r['cliente'])),
+            ];
+        }, (array) $rows);
+
+        return $respondJson(['count' => count($list), 'pendientes' => $list], 200);
+    });
+
+
+    /**
      * POST /internal/cliente/{id_empresa}
      *
      * Crea un nuevo cliente en la tabla customers del tenant.
