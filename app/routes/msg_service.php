@@ -1828,6 +1828,39 @@ return function (App $app) {
                 ];
             }
 
+            // Calcular acumulados de prendas/unidades y desglose
+            $totalUnidades = 0.0;
+            $unidadesPorTalla = [];
+            $unidadesPorTela = [];
+            $unidadesPorProducto = [];
+
+            foreach ($formatted as $ordItem) {
+                foreach ($ordItem['productos_coincidentes'] as $cp) {
+                    $cCant = (float) ($cp['cantidad'] ?? 0);
+                    $totalUnidades += $cCant;
+
+                    $cTalla = trim((string) ($cp['talla'] ?? ''));
+                    if ($cTalla === '') $cTalla = 'Sin talla';
+                    $unidadesPorTalla[$cTalla] = round(($unidadesPorTalla[$cTalla] ?? 0.0) + $cCant, 2);
+
+                    $cTela = trim((string) ($cp['tela'] ?? ''));
+                    if ($cTela === '') $cTela = 'Sin tela';
+                    $unidadesPorTela[$cTela] = round(($unidadesPorTela[$cTela] ?? 0.0) + $cCant, 2);
+
+                    $cProd = trim((string) ($cp['name'] ?? ''));
+                    if ($cProd === '') $cProd = 'Sin nombre';
+                    $unidadesPorProducto[$cProd] = round(($unidadesPorProducto[$cProd] ?? 0.0) + $cCant, 2);
+                }
+            }
+
+            $resumen = [
+                'total_ordenes'         => count($formatted),
+                'total_unidades'        => round($totalUnidades, 2),
+                'unidades_por_talla'    => $unidadesPorTalla,
+                'unidades_por_tela'     => $unidadesPorTela,
+                'unidades_por_producto' => $unidadesPorProducto,
+            ];
+
             $tenantConnection->disconnect();
         } catch (\Throwable $e) {
             error_log('[msg_service][ordenes/search-by-product] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
@@ -1836,6 +1869,7 @@ return function (App $app) {
 
         return $respondJson([
             'total'   => count($formatted),
+            'resumen' => $resumen,
             'filters' => [
                 'producto' => $productoParam ?: null,
                 'talla'    => $tallaParam ?: null,
