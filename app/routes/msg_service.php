@@ -1268,6 +1268,210 @@ return function (App $app) {
 
 
     /**
+     * GET /internal/clientes/{id_empresa}/estado-cuenta?customer_id={id}[&phone=][&incluir_entregadas_pagadas=1]
+     *
+     * Estado de cuenta de un cliente: órdenes relevantes con sus totales/saldo,
+     * pagos (método, moneda, monto, tasa, equivalente en moneda base, referencia,
+     * verificado) y ajustes (descuentos / notas de crédito).
+     *
+     * Órdenes relevantes (regla de negocio 2026-09-29): toda orden NO entregada ni
+     * cancelada (cualquier estado, incluidos futuros), más las entregadas que aún
+     * tengan saldo pendiente. Canceladas nunca. Con incluir_entregadas_pagadas=1 se
+     * incluyen también las entregadas ya saldadas.
+     * saldo = total - abonos - descuentos + notas_credito (misma fórmula que by-phone).
+     */
+    $app->get('/internal/clientes/{id_empresa}/estado-cuenta', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+
+        $qp = $request->getQueryParams();
+        $customerIdParam = filter_var($qp['customer_id'] ?? '', FILTER_VALIDATE_INT);
+        $phone = trim($qp['phone'] ?? '');
+        $incluirPagadas = in_array(strtolower((string) ($qp['incluir_entregadas_pagadas'] ?? '')), ['1', 'true', 'si', 'sí'], true);
+        if (($customerIdParam === false || $customerIdParam <= 0) && $phone === '') {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Se requiere customer_id o phone.'], 400);
+        }
+
+        try {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $localConnection->goQuery(
+                'SELECT db_name FROM empresas WHERE id_empresa = ? AND activo = 1',
+                [$idEmpresa]
+            );
+            $localConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][estado-cuenta] Error central empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar empresa.'], 500);
+        }
+        if (empty($rows) || isset($rows['status'])) {
+            return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe o está inactiva."], 404);
+        }
+
+        $dbName = DB_DRIVER === 'pgsql' ? '' : '`' . $rows[0]['db_name'] . '`.';
+
+        try {
+            $db = new LocalDB();
+
+            // 1. Cliente (por id preferido, o por teléfono)
+            if ($customerIdParam !== false && $customerIdParam > 0) {
+                $cust = $db->goQuery(
+                    "SELECT _id, first_name, last_name, phone, cedula FROM {$dbName}customers WHERE _id = ? LIMIT 1",
+                    [$customerIdParam]
+                );
+            } else {
+                $cust = $db->goQuery(
+                    "SELECT _id, first_name, last_name, phone, cedula FROM {$dbName}customers WHERE phone = ? LIMIT 1",
+                    [$phone]
+                );
+            }
+            if (isset($cust['status']) || empty($cust)) {
+                $db->disconnect();
+                return $respondJson(['found' => false], 200);
+            }
+            $c = $cust[0];
+            $customerId = (int) $c['_id'];
+
+            // 2. Órdenes no canceladas del cliente, con totales
+            $orders = $db->goQuery("
+                SELECT o._id AS id_orden, o.status, o.fecha_creacion, o.fecha_entrega, o.pago_total,
+                    COALESCE((SELECT SUM(a.abono) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_abonos,
+                    COALESCE((SELECT SUM(a.descuento) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_descuentos,
+                    COALESCE((SELECT SUM(a.nota_credito) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_notas_credito
+                FROM {$dbName}ordenes o
+                WHERE o.id_wp = ? AND LOWER(o.status) <> 'cancelada'
+                ORDER BY o._id DESC
+            ", [$customerId]);
+            if (isset($orders['status'])) {
+                throw new \Exception($orders['message'] ?? 'Error al buscar órdenes');
+            }
+
+            $saldoTotal = 0.0;
+            $ordenes = [];
+            foreach ((array) $orders as $o) {
+                $total = (float) $o['pago_total'];
+                $abonos = (float) $o['total_abonos'];
+                $desc = (float) $o['total_descuentos'];
+                $nc = (float) $o['total_notas_credito'];
+                $saldo = round($total - $abonos - $desc + $nc, 2);
+                if ($saldo > 0) {
+                    $saldoTotal += $saldo;
+                }
+                $entregada = strtolower((string) $o['status']) === 'entregada';
+                // Regla: no entregadas siempre; entregadas solo con deuda (o si se piden las pagadas).
+                if ($entregada && $saldo <= 0 && !$incluirPagadas) {
+                    continue;
+                }
+                $ordenes[] = [
+                    'id_orden'            => (int) $o['id_orden'],
+                    'status'              => $o['status'],
+                    'fecha_creacion'      => $o['fecha_creacion'],
+                    'fecha_entrega'       => $o['fecha_entrega'],
+                    'pago_total'          => $total,
+                    'total_abonos'        => $abonos,
+                    'total_descuentos'    => $desc,
+                    'total_notas_credito' => $nc,
+                    'saldo_pendiente'     => $saldo,
+                    'entregada_con_deuda' => $entregada && $saldo > 0,
+                ];
+            }
+
+            $ids = array_column($ordenes, 'id_orden');
+            $pagos = [];
+            $ajustes = [];
+            if (!empty($ids)) {
+                $ph = implode(',', array_fill(0, count($ids), '?'));
+
+                // 3. Pagos (desglose por método/moneda). Más recientes primero, tope 100.
+                $mp = $db->goQuery("
+                    SELECT id_orden, moment, metodo_pago, moneda, monto, tasa, detalle, tipo_de_pago, verificado
+                    FROM {$dbName}metodos_de_pago
+                    WHERE id_orden IN ({$ph})
+                    ORDER BY moment DESC
+                    LIMIT 100
+                ", $ids);
+                if (!isset($mp['status'])) {
+                    foreach ((array) $mp as $p) {
+                        $monto = (float) $p['monto'];
+                        $tasa = (float) $p['tasa'];
+                        $pagos[] = [
+                            'fecha'        => $p['moment'],
+                            'id_orden'     => (int) $p['id_orden'],
+                            'metodo_pago'  => $p['metodo_pago'],
+                            'moneda'       => $p['moneda'],
+                            'monto'        => $monto,
+                            'tasa'         => $tasa,
+                            'monto_base'   => $tasa > 0 ? round($monto / $tasa, 2) : $monto,
+                            'referencia'   => $p['detalle'],
+                            'tipo_de_pago' => $p['tipo_de_pago'],
+                            'verificado'   => in_array($p['verificado'], [true, 1, '1', 't', 'true'], true),
+                        ];
+                    }
+                }
+
+                // 4. Ajustes: descuentos y notas de crédito
+                $aj = $db->goQuery("
+                    SELECT id_orden, moment, descuento, nota_credito, detalle
+                    FROM {$dbName}abonos
+                    WHERE id_orden IN ({$ph}) AND (descuento > 0 OR nota_credito > 0)
+                    ORDER BY moment DESC
+                ", $ids);
+                if (!isset($aj['status'])) {
+                    foreach ((array) $aj as $a) {
+                        $ajustes[] = [
+                            'fecha'        => $a['moment'],
+                            'id_orden'     => (int) $a['id_orden'],
+                            'descuento'    => (float) $a['descuento'],
+                            'nota_credito' => (float) $a['nota_credito'],
+                            'detalle'      => $a['detalle'],
+                        ];
+                    }
+                }
+            }
+            $db->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][estado-cuenta] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar el estado de cuenta.'], 500);
+        }
+
+        $resumen = [
+            'ordenes_listadas'           => count($ordenes),
+            'total_facturado'            => round(array_sum(array_column($ordenes, 'pago_total')), 2),
+            'total_abonado'              => round(array_sum(array_column($ordenes, 'total_abonos')), 2),
+            'total_descuentos'           => round(array_sum(array_column($ordenes, 'total_descuentos')), 2),
+            'total_notas_credito'        => round(array_sum(array_column($ordenes, 'total_notas_credito')), 2),
+            'saldo_total_pendiente'      => round($saldoTotal, 2),
+            'entregadas_con_deuda'       => count(array_filter($ordenes, fn($o) => $o['entregada_con_deuda'])),
+            'pagos_sin_verificar'        => count(array_filter($pagos, fn($p) => !$p['verificado'])),
+        ];
+
+        return $respondJson([
+            'found'    => true,
+            'customer' => [
+                '_id'    => $customerId,
+                'nombre' => trim($c['first_name'] . ' ' . $c['last_name']),
+                'phone'  => $c['phone'],
+                'cedula' => $c['cedula'],
+            ],
+            'resumen'  => $resumen,
+            'ordenes'  => $ordenes,
+            'pagos'    => $pagos,
+            'ajustes'  => $ajustes,
+        ], 200);
+    });
+
+
+    /**
      * POST /internal/cliente/{id_empresa}
      *
      * Crea un nuevo cliente en la tabla customers del tenant.
