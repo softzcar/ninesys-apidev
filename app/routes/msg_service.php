@@ -1519,6 +1519,336 @@ return function (App $app) {
 
 
     /**
+     * GET /internal/ordenes/{id_empresa}/search-by-product
+     *
+     * Busca órdenes según los productos que contienen, permitiendo filtrar por:
+     * - producto (o q): texto en el nombre del producto (ej: 'franela', 'franelas sublimadas', 'dtf')
+     * - talla: talla (ej: 'S', 'M', 'L', 'XL', '14', 'Unica')
+     * - tela: nombre o tipo de tela (ej: 'ESCOSIA', 'LICRA SPRINT', 'DRY FIT')
+     * - corte: tipo de corte (ej: 'Damas', 'Caballeros', 'Niños')
+     * - status: estado de la orden. Por defecto ('en_curso' o vacío) excluye órdenes 'entregada' y 'cancelada'.
+     *   Permite también 'todas' o un estado puntual.
+     * - limit: cantidad máxima (default 20, max 50)
+     * - offset: paginación
+     *
+     * Header: Authorization: {id_empresa}
+     * Respuesta 200: { total: number, filters: {...}, ordenes: [...] }
+     */
+    $app->get('/internal/ordenes/{id_empresa}/search-by-product', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+
+        $params = $request->getQueryParams();
+        $productoParam = trim((string) ($params['producto'] ?? ($params['q'] ?? '')));
+        $tallaParam = trim((string) ($params['talla'] ?? ''));
+        $telaParam = trim((string) ($params['tela'] ?? ''));
+        $corteParam = trim((string) ($params['corte'] ?? ''));
+        $statusParam = trim((string) ($params['status'] ?? ''));
+
+        if ($productoParam === '' && $tallaParam === '' && $telaParam === '' && $corteParam === '') {
+            return $respondJson([
+                'error'   => 'bad_request',
+                'message' => 'Debe especificar al menos un criterio de búsqueda (producto, talla, tela o corte).',
+            ], 400);
+        }
+
+        $limit = filter_var($params['limit'] ?? 20, FILTER_VALIDATE_INT);
+        if ($limit === false || $limit < 1) $limit = 20;
+        if ($limit > 50) $limit = 50;
+
+        $offset = filter_var($params['offset'] ?? 0, FILTER_VALIDATE_INT);
+        if ($offset === false || $offset < 0) $offset = 0;
+
+        try {
+            $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
+            $rows = $localConnection->goQuery(
+                'SELECT db_name FROM empresas WHERE id_empresa = ? AND activo = 1',
+                [$idEmpresa]
+            );
+            $localConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][ordenes/search-by-product] Error central empresa ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar empresa.'], 500);
+        }
+
+        if (empty($rows) || isset($rows['status'])) {
+            return $respondJson(['error' => 'not_found', 'message' => "Empresa {$idEmpresa} no existe o está inactiva."], 404);
+        }
+
+        $dbName = DB_DRIVER === 'pgsql' ? '' : '`' . $rows[0]['db_name'] . '`.';
+        $likeOp = DB_DRIVER === 'pgsql' ? 'ILIKE' : 'LIKE';
+
+        try {
+            $tenantConnection = new LocalDB();
+
+            $whereConditions = [];
+            $queryParams = [];
+
+            // Helper para despluralizar en español (ej. franelas -> franela, gorras -> gorra, pantalones -> pantalon)
+            $stripSpanishPlural = function (string $term): string {
+                $term = trim($term);
+                $len = mb_strlen($term);
+                if ($len > 4 && mb_substr($term, -2) === 'es') {
+                    return mb_substr($term, 0, $len - 2);
+                } elseif ($len > 3 && mb_substr($term, -1) === 's') {
+                    return mb_substr($term, 0, $len - 1);
+                }
+                return $term;
+            };
+
+            // 1. Filtro por producto (nombre)
+            if ($productoParam !== '') {
+                $termNorm = $stripSpanishPlural($productoParam);
+                if (strtolower($termNorm) !== strtolower($productoParam)) {
+                    $whereConditions[] = "(op.name {$likeOp} ? OR op.name {$likeOp} ?)";
+                    $queryParams[] = '%' . $productoParam . '%';
+                    $queryParams[] = '%' . $termNorm . '%';
+                } else {
+                    $whereConditions[] = "op.name {$likeOp} ?";
+                    $queryParams[] = '%' . $productoParam . '%';
+                }
+            }
+
+            // 2. Filtro por talla
+            if ($tallaParam !== '') {
+                $whereConditions[] = "(LOWER(TRIM(COALESCE(s.nombre, ''))) = LOWER(?) OR LOWER(TRIM(COALESCE(op.talla, ''))) = LOWER(?) OR COALESCE(op.talla, '') {$likeOp} ?)";
+                $queryParams[] = $tallaParam;
+                $queryParams[] = $tallaParam;
+                $queryParams[] = '%' . $tallaParam . '%';
+            }
+
+            // 3. Filtro por tela
+            if ($telaParam !== '') {
+                $whereConditions[] = "(COALESCE(op.tela, '') {$likeOp} ? OR COALESCE(ct.tela, '') {$likeOp} ?)";
+                $queryParams[] = '%' . $telaParam . '%';
+                $queryParams[] = '%' . $telaParam . '%';
+            }
+
+            // 4. Filtro por corte
+            if ($corteParam !== '') {
+                $whereConditions[] = "COALESCE(op.corte, '') {$likeOp} ?";
+                $queryParams[] = '%' . $corteParam . '%';
+            }
+
+            // 5. Filtro por status de la orden
+            $stLower = strtolower($statusParam);
+            if ($statusParam === '' || in_array($stLower, ['en_curso', 'activas', 'activas_o_pendientes', 'vivas', 'taller'])) {
+                // Comportamiento por defecto solicitado por el usuario: órdenes en curso (no entregadas ni canceladas)
+                $whereConditions[] = "LOWER(o.status) NOT IN ('entregada', 'cancelada')";
+            } elseif (in_array($stLower, ['todas', 'todos', 'all', '*'])) {
+                // Sin filtro de status
+            } else {
+                if (strpos($stLower, 'activa') !== false || strpos($stLower, 'producc') !== false) {
+                    $whereConditions[] = "LOWER(o.status) LIKE '%activa%'";
+                } elseif (strpos($stLower, 'espera') !== false) {
+                    $whereConditions[] = "LOWER(o.status) LIKE '%espera%'";
+                } elseif (strpos($stLower, 'terminad') !== false || strpos($stLower, 'lista') !== false) {
+                    $whereConditions[] = "LOWER(o.status) LIKE '%terminad%'";
+                } elseif (strpos($stLower, 'entregad') !== false) {
+                    $whereConditions[] = "LOWER(o.status) LIKE '%entregad%'";
+                } elseif (strpos($stLower, 'pausad') !== false) {
+                    $whereConditions[] = "LOWER(o.status) LIKE '%pausad%'";
+                } elseif (strpos($stLower, 'cancelad') !== false) {
+                    $whereConditions[] = "LOWER(o.status) LIKE '%cancelad%'";
+                } else {
+                    $whereConditions[] = "LOWER(o.status) = LOWER(?)";
+                    $queryParams[] = $statusParam;
+                }
+            }
+
+            $whereSql = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
+
+            $sql = "
+                SELECT DISTINCT
+                    o._id AS id_orden,
+                    o.status,
+                    o.cliente_nombre,
+                    c.nombre AS vendedor,
+                    o.fecha_inicio,
+                    o.fecha_entrega,
+                    o.pago_total,
+                    o.id_wp,
+                    COALESCE((SELECT SUM(a.abono) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_abonos,
+                    COALESCE((SELECT SUM(a.descuento) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_descuentos,
+                    COALESCE((SELECT SUM(a.nota_credito) FROM {$dbName}abonos a WHERE a.id_orden = o._id), 0) AS total_notas_credito
+                FROM {$dbName}ordenes o
+                JOIN {$dbName}ordenes_productos op ON op.id_orden = o._id
+                LEFT JOIN {$dbName}sizes s ON s._id = op.id_size
+                LEFT JOIN {$dbName}catalogo_telas ct ON ct._id = op.id_tela
+                LEFT JOIN api_empresas.empresas_usuarios c ON c.id_usuario = o.responsable
+                {$whereSql}
+                ORDER BY o._id DESC
+                LIMIT {$limit} OFFSET {$offset}
+            ";
+
+            $orders = $tenantConnection->goQuery($sql, $queryParams);
+            if (isset($orders['status'])) {
+                throw new \Exception($orders['message'] ?? 'Error al buscar órdenes por producto');
+            }
+
+            if (empty($orders)) {
+                $tenantConnection->disconnect();
+                return $respondJson([
+                    'total'   => 0,
+                    'filters' => [
+                        'producto' => $productoParam ?: null,
+                        'talla'    => $tallaParam ?: null,
+                        'tela'     => $telaParam ?: null,
+                        'corte'    => $corteParam ?: null,
+                        'status'   => $statusParam ?: 'en_curso (no entregadas ni canceladas)',
+                    ],
+                    'ordenes' => [],
+                ], 200);
+            }
+
+            // Consultar todos los productos de las órdenes coincidentes
+            $orderIds = array_column($orders, 'id_orden');
+            $productsByOrder = [];
+            if (!empty($orderIds)) {
+                $idsStr = implode(',', array_map('intval', $orderIds));
+                $prodRows = $tenantConnection->goQuery("
+                    SELECT
+                        op._id,
+                        op.id_orden,
+                        op.name,
+                        op.cantidad,
+                        COALESCE(s.nombre, op.talla, '') AS talla,
+                        COALESCE(op.tela, ct.tela, '') AS tela,
+                        op.corte,
+                        op.precio_unitario AS precio
+                    FROM {$dbName}ordenes_productos op
+                    LEFT JOIN {$dbName}sizes s ON s._id = op.id_size
+                    LEFT JOIN {$dbName}catalogo_telas ct ON ct._id = op.id_tela
+                    WHERE op.id_orden IN ({$idsStr})
+                    ORDER BY op._id ASC
+                ");
+                if (!isset($prodRows['status']) && is_array($prodRows)) {
+                    foreach ($prodRows as $pr) {
+                        $oid = (int) $pr['id_orden'];
+                        $cant = (float) ($pr['cantidad'] ?? 0);
+                        $precio = (float) ($pr['precio'] ?? 0);
+                        $productsByOrder[$oid][] = [
+                            'id'       => (int) $pr['_id'],
+                            'name'     => (string) ($pr['name'] ?? ''),
+                            'cantidad' => $cant,
+                            'talla'    => (string) ($pr['talla'] ?? ''),
+                            'tela'     => (string) ($pr['tela'] ?? ''),
+                            'corte'    => (string) ($pr['corte'] ?? ''),
+                            'precio'   => $precio,
+                            'subtotal' => round($cant * $precio, 2),
+                        ];
+                    }
+                }
+            }
+
+            $formatted = [];
+            foreach ($orders as $o) {
+                $oid = (int) $o['id_orden'];
+                $pagoTotal = (float) $o['pago_total'];
+                $totalAbonos = (float) $o['total_abonos'];
+                $totalDescuentos = (float) $o['total_descuentos'];
+                $totalNotasCredito = (float) $o['total_notas_credito'];
+
+                $balance = round($pagoTotal - $totalAbonos - $totalDescuentos + $totalNotasCredito, 2);
+                $saldoPendiente = $balance > 0 ? $balance : 0.0;
+                $sobrepago = $balance < 0 ? abs($balance) : 0.0;
+
+                $estadoPago = 'pendiente_pago';
+                if ($pagoTotal <= 0) {
+                    $estadoPago = 'sin_costo';
+                } elseif ($sobrepago > 0) {
+                    $estadoPago = 'sobrepago';
+                } elseif ($saldoPendiente == 0.0) {
+                    $estadoPago = 'pagado_total';
+                } elseif ($totalAbonos > 0) {
+                    $estadoPago = 'abono_parcial';
+                }
+
+                $allProds = $productsByOrder[$oid] ?? [];
+
+                // Separar productos coincidentes con los filtros para facilitar lectura
+                $coincidentes = [];
+                foreach ($allProds as $p) {
+                    $match = true;
+                    if ($productoParam !== '') {
+                        $pNameLower = mb_strtolower($p['name']);
+                        $termNorm = $stripSpanishPlural($productoParam);
+                        if (mb_strpos($pNameLower, mb_strtolower($productoParam)) === false && mb_strpos($pNameLower, mb_strtolower($termNorm)) === false) {
+                            $match = false;
+                        }
+                    }
+                    if ($match && $tallaParam !== '') {
+                        $pTallaLower = mb_strtolower(trim($p['talla']));
+                        $tParamLower = mb_strtolower($tallaParam);
+                        if ($pTallaLower !== $tParamLower && mb_strpos($pTallaLower, $tParamLower) === false) {
+                            $match = false;
+                        }
+                    }
+                    if ($match && $telaParam !== '') {
+                        if (mb_strpos(mb_strtolower($p['tela']), mb_strtolower($telaParam)) === false) {
+                            $match = false;
+                        }
+                    }
+                    if ($match && $corteParam !== '') {
+                        if (mb_strpos(mb_strtolower($p['corte']), mb_strtolower($corteParam)) === false) {
+                            $match = false;
+                        }
+                    }
+                    if ($match) {
+                        $coincidentes[] = $p;
+                    }
+                }
+
+                $formatted[] = [
+                    'id_orden'               => $oid,
+                    'status'                 => $o['status'],
+                    'cliente_nombre'         => (string) ($o['cliente_nombre'] ?? ''),
+                    'vendedor'               => (string) ($o['vendedor'] ?? 'Sin asignar'),
+                    'fecha_inicio'           => $o['fecha_inicio'],
+                    'fecha_entrega'          => $o['fecha_entrega'],
+                    'pago_total'             => $pagoTotal,
+                    'total_abonos'           => $totalAbonos,
+                    'total_descuentos'       => $totalDescuentos,
+                    'saldo_pendiente'        => $saldoPendiente,
+                    'sobrepago'              => $sobrepago,
+                    'estado_pago'            => $estadoPago,
+                    'productos_coincidentes' => !empty($coincidentes) ? $coincidentes : $allProds,
+                    'total_productos_orden'  => count($allProds),
+                ];
+            }
+
+            $tenantConnection->disconnect();
+        } catch (\Throwable $e) {
+            error_log('[msg_service][ordenes/search-by-product] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al buscar órdenes por producto.'], 500);
+        }
+
+        return $respondJson([
+            'total'   => count($formatted),
+            'filters' => [
+                'producto' => $productoParam ?: null,
+                'talla'    => $tallaParam ?: null,
+                'tela'     => $telaParam ?: null,
+                'corte'    => $corteParam ?: null,
+                'status'   => $statusParam ?: 'en_curso (no entregadas ni canceladas)',
+            ],
+            'ordenes' => $formatted,
+        ], 200);
+    });
+
+
+    /**
      * GET /internal/clientes/{id_empresa}/search?q={texto}
      *
      * Busca clientes por NOMBRE COMPLETO (multi-palabra) + teléfono/cédula, usando
