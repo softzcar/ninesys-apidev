@@ -1309,10 +1309,32 @@ return function (App $app) {
         $qp = $request->getQueryParams();
         $customerIdParam = filter_var($qp['customer_id'] ?? '', FILTER_VALIDATE_INT);
         $phone = trim($qp['phone'] ?? '');
+        $idOrdenParam = filter_var($qp['id_orden'] ?? '', FILTER_VALIDATE_INT);
+        // Nombre del cliente tal como lo escribió el usuario: se usa para verificar que
+        // el customer_id corresponda a esa persona (el LLM a veces inventa IDs).
+        $nombreParam = trim((string) ($qp['nombre'] ?? ''));
         $incluirPagadas = in_array(strtolower((string) ($qp['incluir_entregadas_pagadas'] ?? '')), ['1', 'true', 'si', 'sí'], true);
-        if (($customerIdParam === false || $customerIdParam <= 0) && $phone === '') {
-            return $respondJson(['error' => 'bad_request', 'message' => 'Se requiere customer_id o phone.'], 400);
+        $tieneId = $customerIdParam !== false && $customerIdParam > 0;
+        $tieneOrden = $idOrdenParam !== false && $idOrdenParam > 0;
+        if (!$tieneId && !$tieneOrden && $phone === '') {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Se requiere id_orden, customer_id o phone.'], 400);
         }
+
+        // ¿Todas las palabras del nombre dado aparecen en el nombre real? (sin tildes/mayúsculas)
+        $norm = function ($s) {
+            $s = mb_strtolower((string) $s, 'UTF-8');
+            return strtr($s, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']);
+        };
+        $nombreCoincide = function ($dado, $real) use ($norm) {
+            $real = $norm($real);
+            $tokens = array_filter(preg_split('/\s+/', $norm($dado)), fn($t) => mb_strlen($t) >= 3);
+            foreach ($tokens as $t) {
+                if (strpos($real, $t) === false) {
+                    return false;
+                }
+            }
+            return true;
+        };
 
         try {
             $localConnection = new LocalDB('', EMPRESAS_DNS, EMPRESAS_USER, EMPRESAS_PASS);
@@ -1334,11 +1356,22 @@ return function (App $app) {
         try {
             $db = new LocalDB();
 
-            // 1. Cliente (por id preferido, o por teléfono)
-            if ($customerIdParam !== false && $customerIdParam > 0) {
+            // 1. Cliente. Prioridad: la orden (el servidor deduce el dueño, no depende de
+            //    un ID que el modelo pudo inventar) > customer_id > teléfono.
+            $clienteDesdeOrden = null;
+            if ($tieneOrden) {
+                $ord = $db->goQuery("SELECT id_wp FROM {$dbName}ordenes WHERE _id = ? LIMIT 1", [$idOrdenParam]);
+                if (isset($ord['status']) || empty($ord)) {
+                    $db->disconnect();
+                    return $respondJson(['found' => false, 'motivo' => 'orden_no_existe', 'id_orden' => $idOrdenParam], 200);
+                }
+                $clienteDesdeOrden = (int) $ord[0]['id_wp'];
+            }
+
+            if ($clienteDesdeOrden !== null || $tieneId) {
                 $cust = $db->goQuery(
                     "SELECT _id, first_name, last_name, phone, cedula FROM {$dbName}customers WHERE _id = ? LIMIT 1",
-                    [$customerIdParam]
+                    [$clienteDesdeOrden ?? $customerIdParam]
                 );
             } else {
                 $cust = $db->goQuery(
@@ -1348,10 +1381,30 @@ return function (App $app) {
             }
             if (isset($cust['status']) || empty($cust)) {
                 $db->disconnect();
-                return $respondJson(['found' => false], 200);
+                return $respondJson(['found' => false, 'motivo' => 'cliente_no_existe'], 200);
             }
             $c = $cust[0];
             $customerId = (int) $c['_id'];
+            $nombreReal = trim(preg_replace('/\s+/', ' ', $c['first_name'] . ' ' . $c['last_name']));
+
+            // Verificación de identidad: un customer_id que no corresponde al nombre dado
+            // NO devuelve datos (evita mostrar el estado de cuenta de otra persona).
+            if ($clienteDesdeOrden === null && $tieneId && $nombreParam !== '' && !$nombreCoincide($nombreParam, $nombreReal)) {
+                $db->disconnect();
+                return $respondJson([
+                    'found'         => false,
+                    'motivo'        => 'id_no_coincide_con_nombre',
+                    'customer_id'   => $customerId,
+                    'nombre_dado'   => $nombreParam,
+                    'nombre_del_id' => $nombreReal,
+                ], 200);
+            }
+            // Si vino por orden y el nombre dado no es el del dueño, se avisa (los datos
+            // son de la orden pedida, que es lo verificable).
+            $advertencia = null;
+            if ($clienteDesdeOrden !== null && $nombreParam !== '' && !$nombreCoincide($nombreParam, $nombreReal)) {
+                $advertencia = "La orden {$idOrdenParam} pertenece a {$nombreReal}, no a \"{$nombreParam}\".";
+            }
 
             // 2. Órdenes no canceladas del cliente, con totales
             $orders = $db->goQuery("
@@ -1379,8 +1432,13 @@ return function (App $app) {
                     $saldoTotal += $saldo;
                 }
                 $entregada = strtolower((string) $o['status']) === 'entregada';
-                // Regla: no entregadas siempre; entregadas solo con deuda (o si se piden las pagadas).
-                if ($entregada && $saldo <= 0 && !$incluirPagadas) {
+                if ($tieneOrden) {
+                    // Consulta de una orden concreta: solo esa, en cualquier estado.
+                    if ((int) $o['id_orden'] !== $idOrdenParam) {
+                        continue;
+                    }
+                } elseif ($entregada && $saldo <= 0 && !$incluirPagadas) {
+                    // Regla: no entregadas siempre; entregadas solo con deuda (o si se piden las pagadas).
                     continue;
                 }
                 $ordenes[] = [
@@ -1500,10 +1558,12 @@ return function (App $app) {
         ];
 
         return $respondJson([
-            'found'    => true,
+            'found'       => true,
+            'id_orden'    => $tieneOrden ? $idOrdenParam : null,
+            'advertencia' => $advertencia,
             'customer' => [
                 '_id'    => $customerId,
-                'nombre' => trim($c['first_name'] . ' ' . $c['last_name']),
+                'nombre' => $nombreReal,
                 'phone'  => $c['phone'],
                 'cedula' => $c['cedula'],
             ],
