@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "sí, revisa las otras herramientas del MCP" (riesgo de salidas truncadas como en el caso de las órdenes urgentes inventadas)
+- **Fecha y Hora:** 2026-09-30 16:17:13
+- **Proyecto(s):** mcp_ninesys + Backend (ninesys-api)
+- **Archivos Involucrados:** `mcp_ninesys/src/tools/orders.ts`, `mcp_ninesys/src/types/api.ts`, `mcp_ninesys/src/constants.ts`; `ninesys-api/app/routes/msg_service.php` (search-by-product, by-status)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `3619c30` (ninesys-api); mcp_ninesys: fix(orders) sin salidas truncadas + 3 ajustes posteriores
+- **Acción Realizada:** Auditoría con un cliente MCP real contra mcp.nineteengreen.com (empresa 194, casos más grandes: cliente 584247341084 con 234 órdenes, orden #1005 con 27 productos, listas con limit 50), midiendo cada herramienta en markdown y JSON contra el límite de 12.000 caracteres. Truncadas: get_orders_by_phone (ambos formatos), search_orders_by_product (ambos), list_orders_by_status (JSON); get_order_by_id JSON al borde (10.741). Se encontró además que search-by-product calculaba el total de órdenes y las unidades solo sobre las órdenes devueltas por LIMIT (franela en la empresa: 50 órdenes/879 und en vez de 56/938) y que by-status informaba como total la cantidad devuelta. Cambios API: 'total' y resumen sobre TODAS las coincidencias (consulta de ids sin LIMIT + lógica de coincidencia reutilizada) y campo 'devueltas'; by-status con COUNT real. Cambios MCP: sin formato JSON en las 4 herramientas de órdenes con listas; una línea por orden; resúmenes con totales reales al inicio; get_orders_by_phone con resumen del cliente, detalle de las órdenes con deuda y las demás resumidas (30 más recientes); search_orders_by_product con hasta 3 productos por orden (+N); glosario: "sin entregar"/"en la empresa" = en_curso; aclaración de que por teléfono no cuenta canceladas.
+- **Inconvenientes y Desafíos:** Las herramientas cortas (catálogos, clientes, diseños, galería, horario, estado de cuenta) quedaron muy por debajo del límite (máx. 7.119) y conservan su opción JSON.
+- **Decisión Final y Justificación:** Totales siempre calculados en el servidor sobre el universo completo; la lista es solo ilustrativa y compacta.
+- **Herramienta(s) Utilizada(s):** script con @modelcontextprotocol/sdk (Client + StreamableHTTP) en el VPS, `psql`, `deploy_backend_dev.sh`, `deploy_mcp_dev.sh`, `curl` al agente IA.
+- **Resultado:** Éxito.
+- **Verificación:** Nueva medición: get_orders_by_phone 1.840, get_order_by_id 4.024, list_orders_by_status (50) 8.401, search_orders_by_product peor caso (franela, todas, 50) 11.795, ninguna truncada. API vs SQL: franela en_curso 56 órdenes/938 und (SQL 56/938); by-status entregada total 6.913 con 20 devueltas. Agente: "¿Cuántas franelas tenemos en la empresa sin entregar?" -> 938 en 56 órdenes; cliente 584247341084 -> 233 órdenes (sin canceladas; 234 con la cancelada) y /bin/bash de deuda.
+- **Logro Conseguido:** El asistente ya no recibe listas cortadas ni totales parciales.
+- **Referencias de Sesión (Contexto):**
+    - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Cambios de API solo en Desarrollo (el chat sigue oculto en Producción); desplegarlos a Producción cuando se lleve el asistente allá.
+- **Respuesta de Gemini:** N/A.
