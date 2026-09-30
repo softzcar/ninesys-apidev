@@ -1645,7 +1645,13 @@ return function (App $app) {
                     (SELECT dep.departamento FROM lotes_detalles_empleados_asignados ld
                       JOIN departamentos dep ON dep._id = ld.id_departamento
                       WHERE ld.id_orden = a._id AND ld.fecha_terminado IS NULL
-                      ORDER BY dep.orden_proceso ASC LIMIT 1) AS paso_actual
+                      ORDER BY dep.orden_proceso ASC LIMIT 1) AS paso_actual,
+                    -- Mismo criterio que el filtro SOLO IMPRESIÓN de la pantalla: todos
+                    -- sus productos físicos son servicios de impresión.
+                    CASE WHEN NOT EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON p._id = op.id_woo
+                                          WHERE op.id_orden = a._id AND p.fisico = 1
+                                            AND COALESCE(p.es_servicio_de_impresion, 0) <> 1)
+                         THEN 1 ELSE 0 END AS solo_impresion
                 FROM ordenes a
                 LEFT JOIN customers cus ON cus._id = a.id_wp
                 WHERE a.status IN ('activa', 'pausada', 'En espera')
@@ -1664,7 +1670,7 @@ return function (App $app) {
         }
 
         $hoy = date('Y-m-d');
-        $resumen = ['por_estado' => [], 'por_paso' => [], 'urgentes' => 0, 'atrasadas' => 0, 'por_asignar' => 0];
+        $resumen = ['por_estado' => [], 'por_paso' => [], 'urgentes' => 0, 'atrasadas' => 0, 'por_asignar' => 0, 'solo_impresion' => 0];
         $formatted = [];
         foreach ((array) $orders as $o) {
             $total = (int) $o['total_departamentos'];
@@ -1686,6 +1692,8 @@ return function (App $app) {
             if ($urgente) $resumen['urgentes']++;
             if ($atrasada) $resumen['atrasadas']++;
             if ($paso === 'Por asignar') $resumen['por_asignar']++;
+            $soloImpresion = (int) $o['solo_impresion'] === 1;
+            if ($soloImpresion) $resumen['solo_impresion']++;
 
             $formatted[] = [
                 'id_orden'      => (int) $o['id_orden'],
@@ -1698,6 +1706,7 @@ return function (App $app) {
                 'fecha_inicio'  => $o['fecha_inicio'],
                 'fecha_entrega' => $o['fecha_entrega'],
                 'atrasada'      => $atrasada,
+                'solo_impresion' => $soloImpresion,
             ];
         }
         arsort($resumen['por_paso']);
