@@ -1589,6 +1589,123 @@ return function (App $app) {
 
 
     /**
+     * GET /internal/ordenes/{id_empresa}/en-curso
+     *
+     * "Órdenes en curso" con EXACTAMENTE el mismo criterio que la pantalla
+     * Control de producción de app_multi (GET /sse/produccion en
+     * production.php + filtro de producto físico de controlDeProduccionPro.vue):
+     * status 'activa' | 'pausada' | 'En espera', con lote de producción y con
+     * al menos un producto físico (products.fisico = 1). Es la fuente correcta
+     * para "¿cuántas órdenes hay en producción?" -- devuelve el total real (sin
+     * límite), un resumen y la lista en el mismo orden de la pantalla.
+     *
+     * Header: Authorization: {id_empresa}
+     * Respuesta 200: { total, resumen: {por_estado, por_paso, urgentes, atrasadas, por_asignar}, ordenes: [...] }
+     */
+    $app->get('/internal/ordenes/{id_empresa}/en-curso', function (Request $request, Response $response, $args) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+
+        $authHeader = $request->getHeader('Authorization')[0] ?? '';
+        $idEmpresa = filter_var($authHeader, FILTER_VALIDATE_INT);
+        if ($idEmpresa === false || $idEmpresa <= 0) {
+            return $respondJson(['error' => 'bad_request', 'message' => 'Authorization inválido.'], 400);
+        }
+
+        try {
+            $tenantConnection = new LocalDB();
+            // Mismo criterio que /sse/produccion (items) + filtro físico del
+            // frontend. Subconsultas escalares en vez de JOIN para no
+            // multiplicar filas ni depender de GROUP BY.
+            $orders = $tenantConnection->goQuery("
+                SELECT
+                    a._id AS id_orden,
+                    a.status,
+                    COALESCE(NULLIF(TRIM(CONCAT(cus.first_name, ' ', cus.last_name)), ''), a.cliente_nombre) AS cliente,
+                    a.fecha_inicio,
+                    a.fecha_entrega,
+                    (SELECT MAX(l.prioridad) FROM lotes l WHERE l.id_orden = a._id) AS prioridad,
+                    (SELECT f.orden_fila FROM ordenes_fila_orden f WHERE f.id_orden = a._id LIMIT 1) AS orden_fila,
+                    (SELECT SUM(op.cantidad) FROM ordenes_productos op JOIN products p ON p._id = op.id_woo
+                      WHERE op.id_orden = a._id AND p.fisico = 1) AS unidades,
+                    (SELECT COUNT(DISTINCT ld.id_departamento) FROM lotes_detalles_empleados_asignados ld
+                      WHERE ld.id_orden = a._id) AS total_departamentos,
+                    (SELECT COUNT(DISTINCT ld.id_departamento) FROM lotes_detalles_empleados_asignados ld
+                      WHERE ld.id_orden = a._id AND ld.fecha_terminado IS NOT NULL) AS departamentos_terminados,
+                    (SELECT dep.departamento FROM lotes_detalles_empleados_asignados ld
+                      JOIN departamentos dep ON dep._id = ld.id_departamento
+                      WHERE ld.id_orden = a._id AND ld.fecha_terminado IS NULL
+                      ORDER BY dep.orden_proceso ASC LIMIT 1) AS paso_actual
+                FROM ordenes a
+                LEFT JOIN customers cus ON cus._id = a.id_wp
+                WHERE a.status IN ('activa', 'pausada', 'En espera')
+                  AND EXISTS (SELECT 1 FROM lotes l WHERE l.id_orden = a._id)
+                  AND EXISTS (SELECT 1 FROM ordenes_productos op JOIN products p ON p._id = op.id_woo
+                              WHERE op.id_orden = a._id AND p.fisico = 1)
+                ORDER BY orden_fila ASC NULLS LAST, a._id ASC
+            ");
+            $tenantConnection->disconnect();
+            if (isset($orders['status'])) {
+                throw new \Exception($orders['message'] ?? 'Error al listar órdenes en curso');
+            }
+        } catch (\Throwable $e) {
+            error_log('[msg_service][ordenes/en-curso] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar órdenes en curso.'], 500);
+        }
+
+        $hoy = date('Y-m-d');
+        $resumen = ['por_estado' => [], 'por_paso' => [], 'urgentes' => 0, 'atrasadas' => 0, 'por_asignar' => 0];
+        $formatted = [];
+        foreach ((array) $orders as $o) {
+            $total = (int) $o['total_departamentos'];
+            $terminados = (int) $o['departamentos_terminados'];
+            // Mismo cálculo de "paso" que la pantalla.
+            if ($total === 0) {
+                $paso = 'Por asignar';
+            } elseif ($o['paso_actual'] === null) {
+                $paso = 'Terminado';
+            } else {
+                $paso = $o['paso_actual'];
+            }
+            $entrega = substr((string) ($o['fecha_entrega'] ?? ''), 0, 10);
+            $atrasada = $entrega !== '' && $entrega < $hoy;
+            $urgente = (int) ($o['prioridad'] ?? 0) === 1;
+
+            $resumen['por_estado'][$o['status']] = ($resumen['por_estado'][$o['status']] ?? 0) + 1;
+            $resumen['por_paso'][$paso] = ($resumen['por_paso'][$paso] ?? 0) + 1;
+            if ($urgente) $resumen['urgentes']++;
+            if ($atrasada) $resumen['atrasadas']++;
+            if ($paso === 'Por asignar') $resumen['por_asignar']++;
+
+            $formatted[] = [
+                'id_orden'      => (int) $o['id_orden'],
+                'status'        => $o['status'],
+                'cliente'       => $o['cliente'],
+                'paso'          => $paso,
+                'progreso'      => $total > 0 ? (int) round($terminados * 100 / $total) : 0,
+                'unidades'      => (float) ($o['unidades'] ?? 0),
+                'urgente'       => $urgente,
+                'fecha_inicio'  => $o['fecha_inicio'],
+                'fecha_entrega' => $o['fecha_entrega'],
+                'atrasada'      => $atrasada,
+            ];
+        }
+        arsort($resumen['por_paso']);
+
+        return $respondJson([
+            'total'   => count($formatted),
+            'resumen' => $resumen,
+            'ordenes' => $formatted,
+        ], 200);
+    });
+
+
+    /**
      * GET /internal/ordenes/{id_empresa}/search-by-product
      *
      * Busca órdenes según los productos que contienen, permitiendo filtrar por:
