@@ -946,8 +946,9 @@ return function (App $app) {
      * - { acceso:true, id_usuario, nombre, email, acceso_admin, empresas_admin, id_empresa, id_departamento, nombre_departamento }
      *
      * Solo se ofrecen las empresas donde tiene un departamento habilitado.
-     * Admin en imprime = tiene Administración (5) en esa empresa: acceso_admin
-     * para la empresa de la sesión, empresas_admin para todas las elegibles.
+     * Admin en imprime = eligió Administración (5) como departamento de la
+     * sesión (como el select de departamento del sidebar de app_multi). Solo
+     * en ese caso empresas_admin lista las empresas donde tiene Administración.
      */
     $app->post('/internal/imprime/verificar-empleado', function (Request $request, Response $response, $args) {
         if ($errorResponse = validarTokenInterno($request, $response)) {
@@ -1135,8 +1136,8 @@ return function (App $app) {
             'id_usuario' => (int) $usuario_data['id_usuario'],
             'nombre' => $usuario_data['nombre'],
             'email' => $usuario_data['email'],
-            'acceso_admin' => in_array($idEmpresaFinal, $empresasAdmin, true),
-            'empresas_admin' => $empresasAdmin,
+            'acceso_admin' => $idDepartamentoFinal === 5,
+            'empresas_admin' => $idDepartamentoFinal === 5 ? $empresasAdmin : [],
             'id_empresa' => $idEmpresaFinal,
             'id_departamento' => $idDepartamentoFinal,
             'nombre_departamento' => $nombreDepartamentoFinal,
