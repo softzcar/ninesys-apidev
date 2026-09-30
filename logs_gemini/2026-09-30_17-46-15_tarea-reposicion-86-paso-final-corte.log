@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "revisar un caso puntual en 'producción'... problema con la reposición id 86. Parece que el empleado Jesus terminó esa reposición pero no se fue (según sus propias palabras) entonces revisemos si esa reposición si se procesó, si se generó un pago para Jesus por esa reposición, si realmente tiene un pago asignado, si el empleado que sigue la está viendo para trabajar en ella y resolver la situación si hay algo que resolver con ella"
+- **Fecha y Hora:** 2026-09-30 17:46:15
+- **Proyecto(s):** Backend (ninesys-api) + datos de Desarrollo (lectura en Producción, autorizada por el usuario)
+- **Archivos Involucrados:** `app/routes/manufacturing.php` (consulta de reposiciones de /empleados/ordenes-asignadas/v2)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `a4b750e`
+- **Acción Realizada:** Reposición #86 (orden 6047, entregada; 9 unidades; pedida por Corte el 27-jul). Datos idénticos en Producción y Desarrollo: Jesús terminó Montar Tallas e Impresión el 30-jul y tiene 2 pagos de $0,66 (generados el 27-jul, pagados el 31-jul); pasó al pool de Estampado, que Andreina Barilla hizo el 18-ago (pago $0,66 pagado el 21-ago); desde entonces espera en Corte (departamento que la pidió, último del recorrido) sin empleado y SIN pago por el paso de Corte. Sí la ven los empleados de Corte (Andreina y danuil), pero enterrada: su lista en Producción tenía 53 y 51 ítems (25 eliminadas, 45 de órdenes cerradas, ~5 útiles). Hallazgos propios: (1) en Desarrollo cerré hoy la #86 y la #92 (misma orden y estado) dentro del lote de 26 restos de órdenes entregadas, sin revisar caso por caso que les faltaba el paso de Corte y su pago: restauradas desde el respaldo (terminada=0 y filas 44 y 2 de ordenes_fila_reposiciones; pagos 265 y tareas 306 sin cambios); (2) el filtro de la vista del empleado que agregué hoy ocultaba las reposiciones de órdenes entregadas y habría dejado la #86 invisible: ahora solo oculta las entregadas NO aprobadas (se conservan las aprobadas, que tienen un paso por registrar), más las eliminadas, rechazadas y de órdenes canceladas. Decisión del usuario: Corte registra el paso y cobra.
+- **Inconvenientes y Desafíos:** Las 22 reposiciones restantes de órdenes entregadas (Producción) y #65, #84, #100, #116 (terminadas) y #143 (activa) están en la misma situación: pasos previos pagados, paso de Corte sin registrar. El mismo patrón en 19 reposiciones pedidas por Corte: Andreina (que trabaja en Estampado y en Corte) termina Estampado y la reposición queda esperando su propio paso en Corte.
+- **Decisión Final y Justificación:** No crear pagos a mano: el empleado de Corte debe registrar su paso desde su pantalla para que el sistema genere su pago con la lógica normal. No se cierra ninguna otra reposición hasta decidir si Corte cobra ese paso en todas.
+- **Herramienta(s) Utilizada(s):** `psql` (solo lectura en Producción), script de restauración en Desarrollo, `deploy_backend_dev.sh`.
+- **Resultado:** Parcial: diagnóstico y preparación completos; falta que un empleado de Corte registre el paso en Producción (acción operativa).
+- **Verificación:** Con el filtro nuevo la lista del empleado de Corte incluye #86 y #92 (Desarrollo: 8 ítems; Producción: 27 ítems en vez de 53/51).
+- **Logro Conseguido:** Caso aclarado: Jesús fue procesado y pagado; el pendiente real es el paso final de Corte.
+- **Referencias de Sesión (Contexto):**
+    - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Producción no se modificó. El fix de visibilidad queda solo en Desarrollo hasta confirmación del usuario.
+- **Respuesta de Gemini:** N/A.
