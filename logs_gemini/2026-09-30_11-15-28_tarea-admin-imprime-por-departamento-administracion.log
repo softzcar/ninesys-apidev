@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "creo al empleado 'Julio' en la empresa 194 y digo que es un administrador... Luego al mismo empleado 'Julio' le damos de alta en la emresa 208, solo que alli no es adminstrador, en la empresa 208 se le asigna el departamento de Producción. Entonces Al momento de ingresar sus credenciales en imprime solo puede tener acceso como admnistrador de la empresa 194, en este caso la empresa 208 no debe apracer... si en la empresa 208 en lugar de PRoducción se le asigna el departamento de Diseño... se muestren las dos empresas, donde en la 194 tendrá acceso como admonistrados y en la empresa 208 solo acceso como empelado" + "para saber si es administrador en ninesys podemos validar que tenga ese departamento asigando o no? Si tiene el departamento Admisntracion Asigando ES ADIMINISTRADOR"
+- **Fecha y Hora:** 2026-09-30 11:15:28
+- **Proyecto(s):** Backend (ninesys-api), consumido por imprime (sublima)
+- **Archivos Involucrados:** `app/routes/auth.php` (POST /internal/imprime/verificar-empleado)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `ed41dae`
+- **Acción Realizada:** (1) El selector de empresas ahora solo ofrece las empresas donde el empleado tiene al menos un departamento de la lista blanca [1,5,6,7] (una consulta a `empresas_usuarios_departamentos` filtrada por esos IDs fijos, sin cambiar de base); si ninguna es elegible -> `departamento_no_habilitado`; si se pide una no elegible -> `sin_acceso_a_empresa`. (2) Admin por empresa = tiene Administración (id 5) asignado en ESA empresa: `acceso_admin` para la empresa de la sesión, `empresas_admin` para todas las elegibles. `empresas_usuarios.acceso` deja de usarse en este endpoint. Identidades sin `empresas_usuarios_empresas` siguen usando `empresas_usuarios.id_empresa`.
+- **Inconvenientes y Desafíos:** Se verificó que `empresas_usuarios.acceso` es un valor por persona: vincular a un empleado en otra empresa como no administrador (`employees.php:300`) o editarlo (`employees.php:674`) lo sobrescribe para todas sus empresas. Por eso no servía para "admin en 194 y empleado en 208". El usuario definió la regla por departamento, que ya es por empresa, sin cambios de esquema ni en app_multi (que sigue usando `acceso` para su propio login).
+- **Decisión Final y Justificación:** Regla del usuario (departamento Administración). Como Administración está en la lista blanca, un admin siempre tiene un departamento válido; no hace falta excepción para admins.
+- **Herramienta(s) Utilizada(s):** `Edit`, `php -l`, `ninesys-hub/bin/deploy_backend_dev.sh` (v1.0.55 sin cambio), `curl` contra imprime.nineteengreen.com.
+- **Resultado:** Éxito.
+- **Verificación:** Empleado desechable "Julio" (716) asignado a 194 y 208: (1) 194 Administración + 208 Producción -> entra directo a 194 como admin, empresasAdmin [194], forzar 208 rechazado; (2) 194 Administración + 208 Diseño -> selector con 194 y 208; en 194 admin (Servicios 194=200, 208=403), en 208 empleado (Servicios 403); (3) Administración en ambas -> admin con [194,208] en cualquiera; (4) solo Producción -> "Su departamento no tiene acceso a imprime"; (5) Diseño+Impresión+Producción -> selector solo Impresión y Diseño; (6) Administración+Diseño eligiendo Diseño -> sigue siendo admin. Julio eliminado.
+- **Logro Conseguido:** El acceso y el rol de admin en imprime se deciden por empresa, con los departamentos que ya se asignan en Ninesys.
+- **Referencias de Sesión (Contexto):**
+    - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude Code).
+- **Respuesta de Gemini:** N/A.
