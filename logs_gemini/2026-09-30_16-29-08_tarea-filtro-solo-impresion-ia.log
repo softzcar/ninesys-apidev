@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "Vamos a afinar la busqueda para ordenes que sean de 'solo impresion' si aplico el filtro de la pagina /test para filtrar 'SOLO IMPRESIÓN' me muestra 6 ordenes, pero la IA solo encontró una la 7172 que no me aparece al aplicar el filtro de SOLO IMPRESIÓN las que me muestra aplicando este filtro son 7104, 7236, 7245, 7246, 7247 y 7248"
+- **Fecha y Hora:** 2026-09-30 16:29:08
+- **Proyecto(s):** Backend (ninesys-api) + mcp_ninesys
+- **Archivos Involucrados:** `app/routes/msg_service.php` (GET /internal/ordenes/{id}/en-curso); `mcp_ninesys/src/tools/orders.ts`, `mcp_ninesys/src/types/api.ts`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `807190d` (ninesys-api); mcp_ninesys feat(orders): filtro solo_impresion
+- **Acción Realizada:** Criterio de la pantalla (controlDeProduccionPro.vue, esImpresionOrdersMap): dentro de las órdenes en curso, una orden es "solo impresión" si todos sus productos físicos (products.fisico=1) tienen es_servicio_de_impresion=1. Verificado en SQL: 7104, 7236, 7245, 7246, 7247, 7248 (idéntico a la pantalla). La #7172 que devolvió la IA está 'terminada' y tiene un producto que no es servicio de impresión (SUBLIMACION POR METROS CON TELA); la IA la encontró buscando "impresión" por nombre de producto. Cambios: el endpoint en-curso agrega por orden 'solo_impresion' (NOT EXISTS producto físico con es_servicio_de_impresion<>1) y el conteo en el resumen; la herramienta ninesys_ordenes_en_curso acepta solo='solo_impresion', lista esas órdenes en el resumen y la descripción lo define; search_orders_by_product indica no usarla para esta pregunta.
+- **Inconvenientes y Desafíos:** Ninguno.
+- **Decisión Final y Justificación:** Calcular el criterio en el servidor igual que la pantalla, en vez de que la IA infiera por nombres de producto.
+- **Herramienta(s) Utilizada(s):** `psql`, `Edit`, `deploy_backend_dev.sh`, `deploy_mcp_dev.sh`, `curl` al agente IA.
+- **Resultado:** Éxito.
+- **Verificación:** Tres formulaciones distintas ("¿Qué órdenes son de solo impresión?", "¿cuántas ordenes de solo impresion tenemos en producción?", "dime las ordenes que solo llevan impresión, sin costura"): las tres usaron solo='solo_impresion' y devolvieron 7104, 7236, 7245, 7246, 7247 y 7248.
+- **Logro Conseguido:** La IA responde "solo impresión" igual que el filtro del taller.
+- **Referencias de Sesión (Contexto):**
+    - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Solo Desarrollo (chat oculto en Producción).
+- **Respuesta de Gemini:** N/A.
