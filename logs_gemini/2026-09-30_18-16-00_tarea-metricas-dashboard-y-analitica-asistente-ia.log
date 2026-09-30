@@ -1,0 +1,33 @@
+- **Solicitud del Usuario:** "Vamos a resolver el punto 2 prmocion a producción y resubida" -> "1" (limpiar img rotas en órdenes 7022 y 7312) -> "procede" (proceder con el Punto 1: implementar el plan para dotar al Asistente de IA de las consultas, métricas y comparativas del Dashboard de Administración).
+- **Fecha y Hora:** 2026-09-30 18:16:00
+- **Proyecto(s):** Backend (`ninesys-api`), Servidor MCP (`mcp_ninesys`), Agente de IA (`ninesys-ai-agent`) en Desarrollo (`vps-contabo-dev`).
+- **Archivos Involucrados:**
+    - `ninesys-api/app/routes/ai_dashboard.php` (nuevo)
+    - `ninesys-api/app/routes.php`
+    - `mcp_ninesys/src/types/api.ts`
+    - `mcp_ninesys/src/tools/dashboard.ts` (nuevo)
+    - `mcp_ninesys/src/tools/index.ts`
+    - `ninesys-ai-agent/src/agent.ts`
+- **Commits Relacionados:**
+    - Backend: `8715cc5` (`feat(ai): endpoints de resumen del dashboard, comparativa de ventas y top productos`)
+    - MCP: `7cabcd3` (`feat(tools): agregar herramientas dashboard summary, sales analytics y top products`)
+    - Agente: `ddee946` (`feat(prompt): incorporar instrucciones y directrices de analítica de dashboard`)
+- **Acción Realizada:** 
+    1. Se implementaron tres nuevos endpoints internos bajo `/internal/dashboard/{id_empresa}/...` en `ai_dashboard.php`:
+       - `/internal/dashboard/{id_empresa}/summary`: Devuelve en un único payload estructurado las tasas de cambio activas, semáforo operativo de entregas (retrasadas, en el día, a tiempo, por iniciar, pausadas), estado global de órdenes (activas, terminadas, en espera, pausadas), cuellos de botella por departamento, métricas del mes actual (facturado, cobrado, saldo pendiente, % recaudación), acumulado de diseños y movimiento de órdenes de los últimos 7 días.
+       - `/internal/dashboard/{id_empresa}/sales-comparison`: Consulta y compara ventas, cobros, descuentos, saldo por cobrar y ticket promedio entre períodos arbitrarios o preestablecidos (mes actual vs anterior, año actual vs anterior, etc.), calculando deltas en dólares y variaciones porcentuales (%).
+       - `/internal/dashboard/{id_empresa}/top-products`: Calcula el ranking de los productos más elaborados (criterio 'producidos' con fecha_terminado de lotes, idéntico al widget del dashboard) o pedidos (criterio 'pedidos' por fecha de orden) con porcentajes y unidades.
+    2. Se crearon e integraron 3 nuevas herramientas en `mcp_ninesys`: `ninesys_get_dashboard_summary`, `ninesys_get_sales_analytics` y `ninesys_get_top_products_ranking`.
+    3. Se actualizó el system prompt de `ninesys-ai-agent` para orientar al LLM sobre la interpretación de los KPIs, variaciones y cuellos de botella del taller.
+    4. Se desplegaron los tres componentes a Desarrollo (`vps-contabo-dev`) usando los scripts oficiales centralizados (`deploy_backend_dev.sh`, `deploy_mcp_dev.sh`, `deploy_agent_dev.sh`).
+- **Inconvenientes y Desafíos:** Ninguno. Las consultas SQL fueron optimizadas para PostgreSQL preservando compatibilidad con los tipos de datos y funciones de fecha.
+- **Decisión Final y Justificación:** Centralizar las métricas en endpoints dedicados bajo `ai_dashboard.php` garantiza desacoplamiento, alto rendimiento y consistencia exacta con los widgets de `DashboardAdministracion.vue`.
+- **Herramienta(s) Utilizada(s):** PHP (Slim 4), TypeScript, MCP SDK, PM2, cURL, Git, scripts de despliegue en `ninesys-hub/bin/`.
+- **Resultado:** Éxito total.
+- **Verificación:** 
+    - Pruebas directas de cURL a los endpoints en `https://api.nineteengreen.com` verificaron valores idénticos a los del dashboard real (empresa 194: 68 retrasadas, $20,365.91 ventas mes, $11,302.24 cobrado, etc.).
+    - Pruebas conversacionales con el asistente de IA vía `POST /ai/chat` respondieron con precisión sobre el resumen del taller, la comparativa de ventas vs agosto (-32.9% en ventas, -52.0% en cobros) y el top de productos producidos del mes (1. Lanyard Una Cara: 1500 unidades, 2. Pañoelito: 1000 unidades, etc.).
+- **Logro Conseguido:** El Asistente de IA ahora tiene conocimiento completo del Dashboard de Administración y es capaz de analizar el estado operativo y comparar ventas de cualquier temporada.
+- **Referencias de Sesión (Contexto):** Sesión Antigravity / Gemini.
+- **Observaciones de Gemini:** Funcionalidad 100% operativa y verificada en el entorno de Desarrollo.
+- **Respuesta de Gemini:** Tarea completada exitosamente.
