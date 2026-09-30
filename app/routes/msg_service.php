@@ -1893,18 +1893,21 @@ return function (App $app) {
         }
 
         $resumen = ['cantidad' => count($items), 'unidades' => 0, 'por_estado' => [], 'por_departamento_solicitante' => [],
+                    'costo_por_departamento_solicitante' => [],
                     'por_producto' => [], 'costo_insumos' => 0, 'costo_mano_obra' => 0, 'costo_tinta' => 0, 'costo_total' => 0];
         foreach ($items as $it) {
             $resumen['unidades'] += $it['unidades'];
             $resumen['por_estado'][$it['estado']] = ($resumen['por_estado'][$it['estado']] ?? 0) + 1;
             $dep = $it['departamento_solicitante'] ?: 'Sin departamento';
             $resumen['por_departamento_solicitante'][$dep] = ($resumen['por_departamento_solicitante'][$dep] ?? 0) + 1;
+            $resumen['costo_por_departamento_solicitante'][$dep] = round(($resumen['costo_por_departamento_solicitante'][$dep] ?? 0) + $it['costo_total'], 2);
             $prod = trim((string) $it['producto']) ?: 'Sin producto';
             $resumen['por_producto'][$prod] = ($resumen['por_producto'][$prod] ?? 0) + $it['unidades'];
             foreach (['costo_insumos', 'costo_mano_obra', 'costo_tinta', 'costo_total'] as $k) $resumen[$k] += $it[$k];
         }
         foreach (['costo_insumos', 'costo_mano_obra', 'costo_tinta', 'costo_total'] as $k) $resumen[$k] = round($resumen[$k], 2);
         arsort($resumen['por_departamento_solicitante']);
+        arsort($resumen['costo_por_departamento_solicitante']);
         arsort($resumen['por_producto']);
 
         usort($items, fn ($a, $b) => $b['id_reposicion'] <=> $a['id_reposicion']);
