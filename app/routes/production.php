@@ -50,6 +50,198 @@ function resolveTintaCostMl($costMap, $fallbackMap, $idImpresora, $colorCode) {
   return $costMap[$idImpresora][$colKey] ?? ($fallbackMap[$colKey] ?? 0.0);
 }
 
+/**
+ * Reposiciones con su costo, calculado igual que siempre lo hizo el reporte
+ * /reposiciones-reporte: insumos consumidos en la ventana de la reposición,
+ * comisiones pagadas por ella (mano de obra) y tinta. Compartida por ese
+ * reporte y por el endpoint interno del asistente IA (msg_service.php) para
+ * que ambos den el mismo número.
+ * $whereParams usa los alias re (reposiciones), ord (ordenes) y op
+ * (ordenes_productos). Devuelve filas con costo_insumos, costo_mano_obra,
+ * costo_tinta y material_consumido (total).
+ */
+function calcularCostosReposiciones($localConnection, string $whereParams, array $sqlParams) {
+    if (DB_DRIVER === 'pgsql') {
+      $sql = "SELECT
+                  re._id id_reposicion,
+                  re.id_orden,
+                  re.id_empleado,
+                  re.id_empleado_emisor,
+                  re.id_ordenes_productos,
+                  op.id_woo id_producto,
+                  ord.status estatus_orden,    
+                  op.name producto,
+                  op.talla,
+                  op.corte,
+                  op.tela,
+                  re.unidades unidades,
+                  em_emisor.nombre empleado_emisor,
+                  em_asignado.nombre empleado_asignado,
+                  re.detalle_emisor detalle_emisor,
+                  re.detalle detalle_encargado,
+                  re.moment moment_raw,
+                  COALESCE(
+                    SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
+                  ) costo_insumos,
+                  COALESCE(
+                    (SELECT SUM(monto_pago) FROM pagos WHERE id_reposicion = re._id), 0
+                  ) costo_mano_obra,
+                  re.id_departamento_solicitante,
+                  dsol.departamento departamento_solicitante,
+                  re.id_departamento,
+                  dasig.departamento departamento_asignado,
+                  re.aprobada,
+                  re.terminada,
+                  re.eliminada,
+                  '$' as unidad,
+                  TO_CHAR(re.moment, 'DD/MM/YYYY') fecha_creacion,
+                  TO_CHAR(re.moment, 'HH12:MI AM') hora_creacion
+              FROM
+                  reposiciones re
+              LEFT JOIN api_empresas.empresas_usuarios em_asignado ON re.id_empleado = em_asignado.id_usuario
+              LEFT JOIN ordenes ord On ord._id = re.id_orden
+              JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
+              JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
+              LEFT JOIN inventario_movimientos inm ON (inm.id_reposicion = re._id) OR (inm.id_reposicion IS NULL AND inm.id_orden = re.id_orden AND inm.moment >= re.moment AND inm.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = re.id_orden AND re_next.moment > re.moment AND re_next.eliminada = 0), '9999-12-31 23:59:59'))
+              LEFT JOIN inventario inv ON inv._id = inm.id_insumo
+              LEFT JOIN departamentos dsol ON dsol._id = re.id_departamento_solicitante
+              LEFT JOIN departamentos dasig ON dasig._id = re.id_departamento
+              {$whereParams}
+              GROUP BY re._id, re.id_orden, re.id_empleado, re.id_empleado_emisor, re.id_ordenes_productos, op.id_woo, ord.status, op.name, op.talla, op.corte, op.tela, re.unidades, em_emisor.nombre, em_asignado.nombre, re.detalle_emisor, re.detalle, re.moment, re.id_departamento_solicitante, dsol.departamento, re.id_departamento, dasig.departamento, re.aprobada, re.terminada, re.eliminada
+              ORDER BY re.id_orden ASC, re._id ASC;";
+    } else {
+      $sql = "SELECT
+                  re._id id_reposicion,
+                  re.id_orden,
+                  re.id_empleado,
+                  re.id_empleado_emisor,
+                  re.id_ordenes_productos,
+                  op.id_woo id_producto,
+                  ord.status estatus_orden,    
+                  op.name producto,
+                  op.talla,
+                  op.corte,
+                  op.tela,
+                  re.unidades unidades,
+                  em_emisor.nombre empleado_emisor,
+                  em_asignado.nombre empleado_asignado,
+                  re.detalle_emisor detalle_emisor,
+                  re.detalle detalle_encargado,
+                  re.moment moment_raw,
+                  COALESCE(
+                    SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
+                  ) costo_insumos,
+                  COALESCE(
+                    (SELECT SUM(monto_pago) FROM pagos WHERE id_reposicion = re._id), 0
+                  ) costo_mano_obra,
+                  re.id_departamento_solicitante,
+                  dsol.departamento departamento_solicitante,
+                  re.id_departamento,
+                  dasig.departamento departamento_asignado,
+                  re.aprobada,
+                  re.terminada,
+                  re.eliminada,
+                  '$' as unidad,
+                  DATE_FORMAT(re.moment, '%d/%m/%Y') fecha_creacion,
+                  DATE_FORMAT(re.moment, '%h:%i %p') hora_creacion
+              FROM
+                  reposiciones re
+              LEFT JOIN api_empresas.empresas_usuarios em_asignado ON re.id_empleado = em_asignado.id_usuario
+              LEFT JOIN ordenes ord On ord._id = re.id_orden
+              JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
+              JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
+              LEFT JOIN inventario_movimientos inm ON (inm.id_reposicion = re._id) OR (inm.id_reposicion IS NULL AND inm.id_orden = re.id_orden AND inm.moment >= re.moment AND inm.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = re.id_orden AND re_next.moment > re.moment AND re_next.eliminada = 0), '9999-12-31 23:59:59'))
+              LEFT JOIN inventario inv ON inv._id = inm.id_insumo
+              LEFT JOIN departamentos dsol ON dsol._id = re.id_departamento_solicitante
+              LEFT JOIN departamentos dasig ON dasig._id = re.id_departamento
+              {$whereParams}
+              GROUP BY re._id
+              ORDER BY re.id_orden ASC, re._id ASC;";
+    }
+
+    $object = $localConnection->goQuery($sql, $sqlParams);
+    if (!is_array($object) || isset($object['status'])) {
+      return $object;
+    }
+
+    // Sumar costo de tinta a material_consumido (calculado en PHP, no en SQL
+    // -- ver buildTintaCostMaps: un JOIN directo por id_color_tinta duplicaría
+    // el costo porque hay varias filas de inventario por color).
+    if (!empty($object)) {
+      $idsOrdenReposiciones = array_values(array_unique(array_map(function ($row) {
+        return (int)$row['id_orden'];
+      }, $object)));
+
+      if (!empty($idsOrdenReposiciones)) {
+        $idsOrdenStr = implode(',', $idsOrdenReposiciones);
+
+        // Todas las reposiciones (no solo las filtradas) para calcular la
+        // ventana [moment, siguiente_moment) de cada una, igual que el JOIN
+        // de insumos de esta misma consulta.
+        $todasRepos = $localConnection->goQuery(
+          "SELECT id_orden, moment FROM reposiciones WHERE id_orden IN ({$idsOrdenStr}) AND eliminada = 0 ORDER BY id_orden ASC, moment ASC"
+        );
+        $momentosPorOrden = [];
+        if (is_array($todasRepos) && !isset($todasRepos['status'])) {
+          foreach ($todasRepos as $tr) {
+            $momentosPorOrden[$tr['id_orden']][] = $tr['moment'];
+          }
+        }
+
+        $tintasRaw = $localConnection->goQuery(
+          "SELECT t.id_orden, t.moment, cct.codigo AS color_code, t.cantidad, t.id_catalogo_impresoras
+           FROM tintas t
+           JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id
+           WHERE t.id_orden IN ({$idsOrdenStr})"
+        );
+        $tintasPorOrden = [];
+        if (is_array($tintasRaw) && !isset($tintasRaw['status'])) {
+          foreach ($tintasRaw as $t) {
+            $tintasPorOrden[$t['id_orden']][] = $t;
+          }
+        }
+
+        list($costMap, $fallbackMap) = buildTintaCostMaps($localConnection);
+
+        foreach ($object as &$row) {
+          $idOrden = $row['id_orden'];
+          $momentInicio = $row['moment_raw'];
+          $momentFin = '9999-12-31 23:59:59';
+          foreach ($momentosPorOrden[$idOrden] ?? [] as $m) {
+            if ($m > $momentInicio && ($momentFin === '9999-12-31 23:59:59' || $m < $momentFin)) {
+              $momentFin = $m;
+            }
+          }
+
+          $costoTinta = 0.0;
+          foreach ($tintasPorOrden[$idOrden] ?? [] as $t) {
+            if ($t['moment'] >= $momentInicio && $t['moment'] < $momentFin) {
+              $costMl = resolveTintaCostMl($costMap, $fallbackMap, $t['id_catalogo_impresoras'], $t['color_code']);
+              $costoTinta += (float)$t['cantidad'] * $costMl;
+            }
+          }
+
+          $row['costo_tinta'] = $costoTinta;
+        }
+        unset($row);
+      }
+    }
+
+    // material_consumido = total (insumos + comisiones pagadas + tinta): es el
+    // número que siempre mostró el reporte de reposiciones.
+    foreach ($object as &$row) {
+      $row['costo_insumos'] = (float)$row['costo_insumos'];
+      $row['costo_mano_obra'] = (float)$row['costo_mano_obra'];
+      $row['costo_tinta'] = (float)($row['costo_tinta'] ?? 0);
+      $row['material_consumido'] = $row['costo_insumos'] + $row['costo_mano_obra'] + $row['costo_tinta'];
+      unset($row['moment_raw']);
+    }
+    unset($row);
+
+    return $object;
+
+}
+
 return function (App $app) {
 
 
@@ -1230,151 +1422,7 @@ return function (App $app) {
       $whereParams = "WHERE " . implode(" AND ", $whereConditions);
     }
 
-    if (DB_DRIVER === 'pgsql') {
-      $sql = "SELECT
-                  re._id id_reposicion,
-                  re.id_orden,
-                  re.id_empleado,
-                  re.id_empleado_emisor,
-                  re.id_ordenes_productos,
-                  op.id_woo id_producto,
-                  ord.status estatus_orden,    
-                  op.name producto,
-                  op.talla,
-                  op.corte,
-                  op.tela,
-                  re.unidades unidades,
-                  em_emisor.nombre empleado_emisor,
-                  em_asignado.nombre empleado_asignado,
-                  re.detalle_emisor detalle_emisor,
-                  re.detalle detalle_encargado,
-                  re.moment moment_raw,
-                  COALESCE(
-                    SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
-                  ) +
-                  COALESCE(
-                    (SELECT SUM(monto_pago) FROM pagos WHERE id_reposicion = re._id), 0
-                  ) material_consumido,
-                  '$' as unidad,
-                  TO_CHAR(re.moment, 'DD/MM/YYYY') fecha_creacion,
-                  TO_CHAR(re.moment, 'HH12:MI AM') hora_creacion
-              FROM
-                  reposiciones re
-              LEFT JOIN api_empresas.empresas_usuarios em_asignado ON re.id_empleado = em_asignado.id_usuario
-              LEFT JOIN ordenes ord On ord._id = re.id_orden
-              JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
-              JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
-              LEFT JOIN inventario_movimientos inm ON (inm.id_reposicion = re._id) OR (inm.id_reposicion IS NULL AND inm.id_orden = re.id_orden AND inm.moment >= re.moment AND inm.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = re.id_orden AND re_next.moment > re.moment AND re_next.eliminada = 0), '9999-12-31 23:59:59'))
-              LEFT JOIN inventario inv ON inv._id = inm.id_insumo
-              {$whereParams}
-              GROUP BY re._id, re.id_orden, re.id_empleado, re.id_empleado_emisor, re.id_ordenes_productos, op.id_woo, ord.status, op.name, op.talla, op.corte, op.tela, re.unidades, em_emisor.nombre, em_asignado.nombre, re.detalle_emisor, re.detalle, re.moment
-              ORDER BY re.id_orden ASC, re._id ASC;";
-    } else {
-      $sql = "SELECT
-                  re._id id_reposicion,
-                  re.id_orden,
-                  re.id_empleado,
-                  re.id_empleado_emisor,
-                  re.id_ordenes_productos,
-                  op.id_woo id_producto,
-                  ord.status estatus_orden,    
-                  op.name producto,
-                  op.talla,
-                  op.corte,
-                  op.tela,
-                  re.unidades unidades,
-                  em_emisor.nombre empleado_emisor,
-                  em_asignado.nombre empleado_asignado,
-                  re.detalle_emisor detalle_emisor,
-                  re.detalle detalle_encargado,
-                  re.moment moment_raw,
-                  COALESCE(
-                    SUM((inm.valor_inicial - inm.valor_final) * (inv.costo / NULLIF(inv.cantidad_inicial, 0))), 0
-                  ) +
-                  COALESCE(
-                    (SELECT SUM(monto_pago) FROM pagos WHERE id_reposicion = re._id), 0
-                  ) material_consumido,
-                  '$' as unidad,
-                  DATE_FORMAT(re.moment, '%d/%m/%Y') fecha_creacion,
-                  DATE_FORMAT(re.moment, '%h:%i %p') hora_creacion
-              FROM
-                  reposiciones re
-              LEFT JOIN api_empresas.empresas_usuarios em_asignado ON re.id_empleado = em_asignado.id_usuario
-              LEFT JOIN ordenes ord On ord._id = re.id_orden
-              JOIN api_empresas.empresas_usuarios em_emisor ON re.id_empleado_emisor = em_emisor.id_usuario
-              JOIN ordenes_productos op ON op._id = re.id_ordenes_productos 
-              LEFT JOIN inventario_movimientos inm ON (inm.id_reposicion = re._id) OR (inm.id_reposicion IS NULL AND inm.id_orden = re.id_orden AND inm.moment >= re.moment AND inm.moment < COALESCE((SELECT MIN(re_next.moment) FROM reposiciones re_next WHERE re_next.id_orden = re.id_orden AND re_next.moment > re.moment AND re_next.eliminada = 0), '9999-12-31 23:59:59'))
-              LEFT JOIN inventario inv ON inv._id = inm.id_insumo
-              {$whereParams}
-              GROUP BY re._id
-              ORDER BY re.id_orden ASC, re._id ASC;";
-    }
-
-    $object = $localConnection->goQuery($sql, $sqlParams);
-
-    // Sumar costo de tinta a material_consumido (calculado en PHP, no en SQL
-    // -- ver buildTintaCostMaps: un JOIN directo por id_color_tinta duplicaría
-    // el costo porque hay varias filas de inventario por color).
-    if (is_array($object) && !isset($object['status']) && !empty($object)) {
-      $idsOrdenReposiciones = array_values(array_unique(array_map(function ($row) {
-        return (int)$row['id_orden'];
-      }, $object)));
-
-      if (!empty($idsOrdenReposiciones)) {
-        $idsOrdenStr = implode(',', $idsOrdenReposiciones);
-
-        // Todas las reposiciones (no solo las filtradas) para calcular la
-        // ventana [moment, siguiente_moment) de cada una, igual que el JOIN
-        // de insumos de esta misma consulta.
-        $todasRepos = $localConnection->goQuery(
-          "SELECT id_orden, moment FROM reposiciones WHERE id_orden IN ({$idsOrdenStr}) AND eliminada = 0 ORDER BY id_orden ASC, moment ASC"
-        );
-        $momentosPorOrden = [];
-        if (is_array($todasRepos) && !isset($todasRepos['status'])) {
-          foreach ($todasRepos as $tr) {
-            $momentosPorOrden[$tr['id_orden']][] = $tr['moment'];
-          }
-        }
-
-        $tintasRaw = $localConnection->goQuery(
-          "SELECT t.id_orden, t.moment, cct.codigo AS color_code, t.cantidad, t.id_catalogo_impresoras
-           FROM tintas t
-           JOIN catalogo_colores_tintas cct ON t.id_color_tinta = cct._id
-           WHERE t.id_orden IN ({$idsOrdenStr})"
-        );
-        $tintasPorOrden = [];
-        if (is_array($tintasRaw) && !isset($tintasRaw['status'])) {
-          foreach ($tintasRaw as $t) {
-            $tintasPorOrden[$t['id_orden']][] = $t;
-          }
-        }
-
-        list($costMap, $fallbackMap) = buildTintaCostMaps($localConnection);
-
-        foreach ($object as &$row) {
-          $idOrden = $row['id_orden'];
-          $momentInicio = $row['moment_raw'];
-          $momentFin = '9999-12-31 23:59:59';
-          foreach ($momentosPorOrden[$idOrden] ?? [] as $m) {
-            if ($m > $momentInicio && ($momentFin === '9999-12-31 23:59:59' || $m < $momentFin)) {
-              $momentFin = $m;
-            }
-          }
-
-          $costoTinta = 0.0;
-          foreach ($tintasPorOrden[$idOrden] ?? [] as $t) {
-            if ($t['moment'] >= $momentInicio && $t['moment'] < $momentFin) {
-              $costMl = resolveTintaCostMl($costMap, $fallbackMap, $t['id_catalogo_impresoras'], $t['color_code']);
-              $costoTinta += (float)$t['cantidad'] * $costMl;
-            }
-          }
-
-          $row['material_consumido'] = (float)$row['material_consumido'] + $costoTinta;
-          unset($row['moment_raw']);
-        }
-        unset($row);
-      }
-    }
+    $object = calcularCostosReposiciones($localConnection, $whereParams, $sqlParams);
 
     $localConnection->disconnect();
 

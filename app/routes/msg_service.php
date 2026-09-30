@@ -1383,6 +1383,26 @@ return function (App $app) {
                 'imagenes_observaciones' => $imagenesObservaciones,
             ];
 
+            // Reposiciones de la orden (no eliminadas), con el estado según los
+            // criterios de Control de producción.
+            $reposRows = $tenantConnection->goQuery("
+                SELECT r._id AS id_reposicion, op.name AS producto, r.unidades, r.detalle_emisor AS motivo,
+                       TO_CHAR(r.moment, 'DD/MM/YYYY') AS fecha,
+                       CASE
+                         WHEN r.terminada = 1 THEN 'terminada'
+                         WHEN r.aprobada = 0 AND COALESCE(TRIM(r.detalle), '') <> '' THEN 'rechazada'
+                         WHEN (r.aprobada IS NULL OR r.aprobada = 0) AND (r.id_empleado IS NULL OR r.id_empleado = 0) THEN 'por_aprobar'
+                         WHEN r.aprobada = 1 AND r.id_empleado IS NOT NULL AND r.id_empleado <> 0 THEN 'en_curso'
+                         WHEN r.aprobada = 1 THEN 'aprobada_sin_asignar'
+                         ELSE 'otro'
+                       END AS estado
+                FROM {$dbName}reposiciones r
+                LEFT JOIN {$dbName}ordenes_productos op ON op._id = r.id_ordenes_productos
+                WHERE r.id_orden = ? AND r.eliminada = 0
+                ORDER BY r._id ASC
+            ", [$idOrden]);
+            $orden['reposiciones'] = (is_array($reposRows) && !isset($reposRows['status'])) ? $reposRows : [];
+
             $tenantConnection->disconnect();
         } catch (\Throwable $e) {
             error_log('[msg_service][ordenes/by-id] Error tenant ' . $idEmpresa . ': ' . $e->getMessage());
@@ -1715,6 +1735,184 @@ return function (App $app) {
             'total'   => count($formatted),
             'resumen' => $resumen,
             'ordenes' => $formatted,
+        ], 200);
+    });
+
+
+    /**
+     * Estado de una reposición según sus indicadores, con los mismos criterios
+     * de la pantalla Control de producción (por aprobar / en curso).
+     */
+    $estadoReposicion = function (array $r): string {
+        if ((int) $r['eliminada'] === 1) return 'eliminada';
+        if ((int) $r['terminada'] === 1) return 'terminada';
+        $aprobada = $r['aprobada'] === null ? null : (int) $r['aprobada'];
+        $conEmpleado = !empty($r['id_empleado']) && (int) $r['id_empleado'] !== 0;
+        $conMotivoEncargado = trim((string) ($r['detalle_encargado'] ?? '')) !== '';
+        if ($aprobada === 0 && $conMotivoEncargado) return 'rechazada';
+        if (($aprobada === null || $aprobada === 0) && !$conEmpleado) return 'por_aprobar';
+        if ($aprobada === 1 && $conEmpleado) return 'en_curso';
+        if ($aprobada === 1) return 'aprobada_sin_asignar';
+        return 'otro';
+    };
+
+    $formatearReposicion = function (array $r, string $estado): array {
+        return [
+            'id_reposicion'            => (int) $r['id_reposicion'],
+            'id_orden'                 => (int) $r['id_orden'],
+            'estado'                   => $estado,
+            'estado_orden'             => $r['estatus_orden'],
+            'producto'                 => $r['producto'],
+            'talla'                    => $r['talla'],
+            'tela'                     => $r['tela'],
+            'corte'                    => $r['corte'],
+            'unidades'                 => (float) $r['unidades'],
+            'departamento_solicitante' => $r['departamento_solicitante'],
+            'solicitada_por'           => $r['empleado_emisor'],
+            'motivo'                   => $r['detalle_emisor'],
+            'asignada_a'               => $r['empleado_asignado'],
+            'departamento_asignado'    => $r['departamento_asignado'],
+            'nota_encargado'           => $r['detalle_encargado'],
+            'fecha'                    => $r['fecha_creacion'],
+            'costo_insumos'            => round((float) $r['costo_insumos'], 2),
+            'costo_mano_obra'          => round((float) $r['costo_mano_obra'], 2),
+            'costo_tinta'              => round((float) $r['costo_tinta'], 2),
+            'costo_total'              => round((float) $r['material_consumido'], 2),
+        ];
+    };
+
+    /**
+     * GET /internal/reposiciones/{id_empresa}/en-curso
+     *
+     * Lo que el taller tiene pendiente: reposiciones por aprobar y en curso,
+     * con los mismos criterios de la pantalla Control de producción, más las
+     * "aprobadas sin asignar" (aprobadas, sin terminar y sin empleado: la
+     * pantalla no las muestra), marcando si su orden sigue en producción.
+     *
+     * Header: Authorization: {id_empresa}
+     */
+    $app->get('/internal/reposiciones/{id_empresa}/en-curso', function (Request $request, Response $response, $args) use ($estadoReposicion, $formatearReposicion) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+        try {
+            $db = new LocalDB();
+            $rows = calcularCostosReposiciones($db, 'WHERE re.eliminada = 0 AND re.terminada = 0', []);
+            $db->disconnect();
+            if (isset($rows['status'])) throw new \Exception($rows['message'] ?? 'Error al consultar reposiciones');
+        } catch (\Throwable $e) {
+            error_log('[msg_service][reposiciones/en-curso] ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar reposiciones.'], 500);
+        }
+        $out = ['por_aprobar' => [], 'en_curso' => [], 'aprobada_sin_asignar' => []];
+        foreach ((array) $rows as $r) {
+            $estado = $estadoReposicion($r);
+            if (!isset($out[$estado])) continue;
+            $item = $formatearReposicion($r, $estado);
+            if ($estado === 'aprobada_sin_asignar') {
+                $item['orden_en_produccion'] = in_array(strtolower((string) $r['estatus_orden']), ['en espera', 'activa', 'pausada'], true);
+            }
+            $out[$estado][] = $item;
+        }
+        $sinAsignar = $out['aprobada_sin_asignar'];
+        return $respondJson([
+            'por_aprobar'           => $out['por_aprobar'],
+            'en_curso'              => $out['en_curso'],
+            'aprobadas_sin_asignar' => $sinAsignar,
+            'totales'               => [
+                'por_aprobar'           => count($out['por_aprobar']),
+                'en_curso'              => count($out['en_curso']),
+                'aprobadas_sin_asignar' => count($sinAsignar),
+                'aprobadas_sin_asignar_con_orden_en_produccion' => count(array_filter($sinAsignar, fn ($x) => $x['orden_en_produccion'])),
+            ],
+        ], 200);
+    });
+
+    /**
+     * GET /internal/reposiciones/{id_empresa}/historial
+     *   ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&id_orden=&departamento=&estado=&limit=
+     *
+     * Historial y costos de reposiciones (costo calculado igual que el reporte
+     * de reposiciones: insumos + mano de obra/comisiones + tinta). Totales y
+     * resumen sobre TODAS las coincidencias; la lista trae las 'limit' más
+     * recientes. estado: terminada | rechazada | en_curso | por_aprobar |
+     * aprobada_sin_asignar | eliminada | todas (default: todas menos eliminadas).
+     * departamento: departamento que la solicitó (texto, sin distinguir tildes).
+     */
+    $app->get('/internal/reposiciones/{id_empresa}/historial', function (Request $request, Response $response, $args) use ($estadoReposicion, $formatearReposicion) {
+        if ($errorResponse = validarTokenInterno($request, $response)) {
+            return $errorResponse;
+        }
+        $respondJson = function (array $payload, int $status) use ($response) {
+            $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+        };
+        $q = $request->getQueryParams();
+        $desde = (string) ($q['desde'] ?? '');
+        $hasta = (string) ($q['hasta'] ?? '');
+        $idOrden = (int) ($q['id_orden'] ?? 0);
+        $departamento = trim((string) ($q['departamento'] ?? ''));
+        $estadoFiltro = strtolower(trim((string) ($q['estado'] ?? '')));
+        $limit = max(1, min(50, (int) ($q['limit'] ?? 20)));
+
+        $conds = [];
+        $params = [];
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) { $conds[] = 're.moment >= ?'; $params[] = $desde . ' 00:00:00'; }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) { $conds[] = 're.moment <= ?'; $params[] = $hasta . ' 23:59:59'; }
+        if ($idOrden > 0) { $conds[] = 're.id_orden = ?'; $params[] = $idOrden; }
+        if (!in_array($estadoFiltro, ['eliminada', 'eliminadas', 'todas_incluidas_eliminadas'], true)) { $conds[] = 're.eliminada = 0'; }
+        $where = $conds ? 'WHERE ' . implode(' AND ', $conds) : '';
+
+        try {
+            $db = new LocalDB();
+            $rows = calcularCostosReposiciones($db, $where, $params);
+            $db->disconnect();
+            if (isset($rows['status'])) throw new \Exception($rows['message'] ?? 'Error al consultar reposiciones');
+        } catch (\Throwable $e) {
+            error_log('[msg_service][reposiciones/historial] ' . $e->getMessage());
+            return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar reposiciones.'], 500);
+        }
+
+        $norm = function (string $t): string {
+            $t = mb_strtolower(trim($t));
+            return strtr($t, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u']);
+        };
+        $items = [];
+        foreach ((array) $rows as $r) {
+            $estado = $estadoReposicion($r);
+            if ($estadoFiltro !== '' && !in_array($estadoFiltro, ['todas', 'todas_incluidas_eliminadas'], true)
+                && rtrim($estadoFiltro, 's') !== rtrim($estado, 's')) continue;
+            if ($departamento !== '' && strpos($norm((string) $r['departamento_solicitante']), $norm($departamento)) === false) continue;
+            $items[] = $formatearReposicion($r, $estado);
+        }
+
+        $resumen = ['cantidad' => count($items), 'unidades' => 0, 'por_estado' => [], 'por_departamento_solicitante' => [],
+                    'por_producto' => [], 'costo_insumos' => 0, 'costo_mano_obra' => 0, 'costo_tinta' => 0, 'costo_total' => 0];
+        foreach ($items as $it) {
+            $resumen['unidades'] += $it['unidades'];
+            $resumen['por_estado'][$it['estado']] = ($resumen['por_estado'][$it['estado']] ?? 0) + 1;
+            $dep = $it['departamento_solicitante'] ?: 'Sin departamento';
+            $resumen['por_departamento_solicitante'][$dep] = ($resumen['por_departamento_solicitante'][$dep] ?? 0) + 1;
+            $prod = trim((string) $it['producto']) ?: 'Sin producto';
+            $resumen['por_producto'][$prod] = ($resumen['por_producto'][$prod] ?? 0) + $it['unidades'];
+            foreach (['costo_insumos', 'costo_mano_obra', 'costo_tinta', 'costo_total'] as $k) $resumen[$k] += $it[$k];
+        }
+        foreach (['costo_insumos', 'costo_mano_obra', 'costo_tinta', 'costo_total'] as $k) $resumen[$k] = round($resumen[$k], 2);
+        arsort($resumen['por_departamento_solicitante']);
+        arsort($resumen['por_producto']);
+
+        usort($items, fn ($a, $b) => $b['id_reposicion'] <=> $a['id_reposicion']);
+        return $respondJson([
+            'total'        => count($items),
+            'devueltas'    => min($limit, count($items)),
+            'filtros'      => ['desde' => $desde ?: null, 'hasta' => $hasta ?: null, 'id_orden' => $idOrden ?: null,
+                               'departamento' => $departamento ?: null, 'estado' => $estadoFiltro ?: 'todas (sin eliminadas)'],
+            'resumen'      => $resumen,
+            'reposiciones' => array_slice($items, 0, $limit),
         ], 200);
     });
 
