@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** Definición de los estados de orden (canceladas y entregadas fuera del flujo; terminadas con producción terminada esperando envío/retiro; el resto en producción; pausada = fabricación detenida en un departamento con motivo) y: "es delicado lo de las ordenes pausadas! debemos arreglarlo! debemos corregir los registros que esten mal escritos y detectar el codigo que lo está escribiendo mal para arreglarlo. las ordenes canceladas en mayusculas tambien las podemos poner en minusculas como las demás. Procede y si confirmo Estas en lo cierto con los status En espera y en proceso, dale!"
+- **Fecha y Hora:** 2026-09-30 15:25:28
+- **Proyecto(s):** Backend (ninesys-api) + mcp_ninesys + datos (Dev y Prod)
+- **Archivos Involucrados:** `app/routes/ordenes-sin-asignacion.php`, `app/routes/products.php`, `app/routes/orders.php`, `app/lib/woome.php`, `app/routes/msg_service.php`; `mcp_ninesys/src/constants.ts`, `mcp_ninesys/src/tools/orders.ts`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `cb1f466` (v1.0.57, ninesys-api), `f52d080` (mcp_ninesys)
+- **Acción Realizada:** Relevamiento: en datos existen 'En espera', 'activa', 'terminada', 'entregada', 'cancelada' y 4 'Cancelada' (#3528-3532 de 2025-12-22, 194); el sistema escribe 'pausada' (POST /pausas) y el editor de órdenes ofrece los 6 estados oficiales. Errores encontrados: (1) ordenes-sin-asignacion y /customers/orders-count comparaban 'Pausada' (mayúscula) -> no veían órdenes pausadas; corregido a 'pausada'. (2) 'En proceso' (residuo, sin datos) en la estimación de fecha de entrega de /ordenes/nueva/simple y /ordenes/contexto-ia: ahora En espera + activa + pausada (la estimación sube a su tope de 14 días con la carga actual). (3) /orden/actualizar-estado guardaba el estado tal como llegaba: ahora solo acepta los 6 estados (sin distinguir mayúsculas) y los guarda con su escritura canónica. (4) WooMe::updateOrderStatus eliminado (sin uso desde 2026-08-07, SQL concatenado). (5) search-by-product: status='en_produccion'. Datos: respaldo en /home/backups/normalizacion_estados/ y UPDATE de las 4 'Cancelada' -> 'cancelada' en Dev y Prod (0 estados fuera de catálogo en 194 y 208). MCP: glosario de estados (constante GLOSARIO_ESTADOS_ORDEN) en las 5 herramientas de órdenes.
+- **Inconvenientes y Desafíos:** Ningún código actual escribe 'Pausada'/'Cancelada' con mayúscula: las 4 filas son históricas; el riesgo vigente era de lectura y la entrada sin validar de actualizar-estado.
+- **Decisión Final y Justificación:** Se mantuvo el default de search-by-product ('en_curso' = en la empresa, pedido previo del usuario) y se agregó 'en_produccion' para distinguir.
+- **Herramienta(s) Utilizada(s):** `psql`, `grep`, `Edit`, `deploy_backend_dev.sh`, `deploy_backend_prod.sh`, `deploy_mcp_dev.sh`, `curl` al agente IA.
+- **Resultado:** Éxito.
+- **Verificación:** Dev: /customers/orders-count responde (ordenes_ns=3 para un cliente con órdenes en producción); search-by-product franela en_produccion = 20 órdenes/142 und (activa 19, En espera 1) vs en_curso = 50 (incluye 30 terminadas). Agente IA: "¿Cuántas franelas tenemos en producción?" -> 142 en 20 órdenes (usa status en_produccion); "¿Qué significa terminada?" -> producción finalizada, mercancía en la empresa, no está en producción. Prod en v1.0.57 (cb1f466): products y customers 200.
+- **Logro Conseguido:** Las órdenes pausadas ya no se pierden en las consultas, los estados quedan limpios y validados, y la IA entiende los estados como el negocio.
+- **Referencias de Sesión (Contexto):**
+    - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude Code).
+- **Respuesta de Gemini:** N/A.
