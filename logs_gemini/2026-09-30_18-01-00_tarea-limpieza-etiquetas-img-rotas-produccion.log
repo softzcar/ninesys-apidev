@@ -1,0 +1,17 @@
+- **Solicitud del Usuario:** "1" (en respuesta a la propuesta de limpiar las etiquetas <img> rotas de las órdenes 7022 y 7312 en la base de datos de producción).
+- **Fecha y Hora:** 2026-09-30 18:01:00
+- **Proyecto(s):** Backend (ninesys-api) / Base de Datos Producción (`vps-contabo-prod`, DB: `api_emp_194`)
+- **Archivos Involucrados:** N/A (modificación controlada en base de datos PostgreSQL)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: N/A
+- **Acción Realizada:** Se procedió a sanitizar el campo `observaciones` de la tabla `ordenes_observaciones` en la empresa 194 de Producción para las órdenes 7022 y 7312. Se eliminaron mediante `regexp_replace` dentro de una transacción (`BEGIN...COMMIT`) las etiquetas `<p><img ...></p>` que apuntaban a las imágenes físicas faltantes (`8d78aba7c7bf2f23.jpeg` y `90e4ebc12496c6f6.jpg`), preservando intacto todo el contenido textual del diseño, listas de tallas y observaciones de confección.
+- **Inconvenientes y Desafíos:** Ninguno. La transacción se ejecutó y validó de forma atómica.
+- **Decisión Final y Justificación:** Eliminar las etiquetas huérfanas evita que el frontend o el visor de imágenes intente cargar recursos inexistentes (404) y previene la visualización de iconos de imagen rota en la interfaz de usuario.
+- **Herramienta(s) Utilizada(s):** SSH, `psql` (PostgreSQL en `vps-contabo-prod`).
+- **Resultado:** Éxito total.
+- **Verificación:** Se consultó la tabla `ordenes_observaciones` inmediatamente después de la actualización confirmando que el texto de las dos órdenes se mantiene completo y sin tags de imagen rotas.
+- **Logro Conseguido:** Interfaz de usuario limpia sin referencias a archivos borrados en las órdenes 7022 y 7312.
+- **Referencias de Sesión (Contexto):** Sesión Antigravity / Gemini.
+- **Observaciones de Gemini:** N/A.
+- **Respuesta de Gemini:** Tarea completada y documentada en bitácora.
