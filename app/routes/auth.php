@@ -943,7 +943,7 @@ return function (App $app) {
      * - { requiere_seleccion_empresa:true, empresas:[{id_empresa,nombre}] }
      * - { acceso:false, motivo:'departamento_no_habilitado' }
      * - { requiere_seleccion_departamento:true, departamentos:[{id_departamento,nombre}] }
-     * - { acceso:true, id_usuario, nombre, email, acceso_admin, id_empresa, id_departamento, nombre_departamento }
+     * - { acceso:true, id_usuario, nombre, email, acceso_admin, empresas_admin, id_empresa, id_departamento, nombre_departamento }
      */
     $app->post('/internal/imprime/verificar-empleado', function (Request $request, Response $response, $args) {
         if ($errorResponse = validarTokenInterno($request, $response)) {
@@ -1090,12 +1090,23 @@ return function (App $app) {
             $nombreDepartamentoFinal = $match['nombre'];
         }
 
+        // Empresas que puede administrar en imprime: "Administrador" (acceso=1)
+        // es un nivel por persona, no por empresa, así que aplica a todas las
+        // empresas a las que está asignado activamente.
+        $empresasAdmin = [];
+        if ((int) $usuario_data['acceso'] === 1) {
+            $empresasAdmin = !empty($asignaciones)
+                ? array_map('intval', array_column($asignaciones, 'id_empresa'))
+                : [$idEmpresaFinal];
+        }
+
         return $respondJson([
             'acceso' => true,
             'id_usuario' => (int) $usuario_data['id_usuario'],
             'nombre' => $usuario_data['nombre'],
             'email' => $usuario_data['email'],
             'acceso_admin' => (bool) $usuario_data['acceso'],
+            'empresas_admin' => $empresasAdmin,
             'id_empresa' => $idEmpresaFinal,
             'id_departamento' => $idDepartamentoFinal,
             'nombre_departamento' => $nombreDepartamentoFinal,
