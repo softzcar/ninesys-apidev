@@ -944,6 +944,10 @@ return function (App $app) {
      * - { acceso:false, motivo:'departamento_no_habilitado' }
      * - { requiere_seleccion_departamento:true, departamentos:[{id_departamento,nombre}] }
      * - { acceso:true, id_usuario, nombre, email, acceso_admin, empresas_admin, id_empresa, id_departamento, nombre_departamento }
+     *
+     * Solo se ofrecen las empresas donde tiene un departamento habilitado.
+     * Admin en imprime = tiene Administración (5) en esa empresa: acceso_admin
+     * para la empresa de la sesión, empresas_admin para todas las elegibles.
      */
     $app->post('/internal/imprime/verificar-empleado', function (Request $request, Response $response, $args) {
         if ($errorResponse = validarTokenInterno($request, $response)) {
@@ -998,33 +1002,69 @@ return function (App $app) {
             ? (int) $datosAcceso['id_empresa']
             : null;
 
-        if (!empty($asignaciones)) {
-            $idsAsignados = array_map('intval', array_column($asignaciones, 'id_empresa'));
-
-            if ($idEmpresaSolicitada === null) {
-                if (count($asignaciones) > 1) {
-                    $localConnection->disconnect();
-                    return $respondJson([
-                        'requiere_seleccion_empresa' => true,
-                        'empresas' => array_map(function ($a) {
-                            return ['id_empresa' => (int) $a['id_empresa'], 'nombre' => $a['nombre']];
-                        }, $asignaciones),
-                    ]);
-                }
-                $idEmpresaFinal = $idsAsignados[0];
-            } else {
-                if (!in_array($idEmpresaSolicitada, $idsAsignados, true)) {
-                    $localConnection->disconnect();
-                    return $respondJson(['acceso' => false, 'motivo' => 'sin_acceso_a_empresa'], 403);
-                }
-                $idEmpresaFinal = $idEmpresaSolicitada;
-            }
-        } else {
-            // Identidad huérfana / sin backfill de empresas_usuarios_empresas --
-            // mismo comportamiento retrocompatible que /login: usar el
-            // id_empresa que ya trae la fila de empresas_usuarios.
-            $idEmpresaFinal = $idEmpresaSolicitada ?? (int) $usuario_data['id_empresa'];
+        // Identidad huérfana / sin backfill de empresas_usuarios_empresas --
+        // mismo comportamiento retrocompatible que /login: usar el id_empresa
+        // que ya trae la fila de empresas_usuarios.
+        if (empty($asignaciones)) {
+            $asignaciones = $localConnection->goQuery(
+                'SELECT id_empresa, nombre FROM empresas WHERE id_empresa = ?',
+                [(int) $usuario_data['id_empresa']]
+            );
         }
+
+        // Solo son elegibles las empresas donde tiene al menos un departamento
+        // de la lista blanca (pedido del usuario, 2026-09-30: una empresa donde
+        // solo es, p. ej., Producción no debe aparecer). Los IDs son fijos, así
+        // que alcanza con la tabla central, sin cambiar de base.
+        $placeholders = implode(',', array_fill(0, count($departamentosPermitidos), '?'));
+        $deptosValidos = $localConnection->goQuery(
+            "SELECT id_empresa, id_departamento FROM empresas_usuarios_departamentos WHERE id_empleado = ? AND id_departamento IN ($placeholders)",
+            array_merge([$usuario_data['id_usuario']], $departamentosPermitidos)
+        );
+        $empresasConDepto = [];
+        $empresasAdministracion = [];
+        foreach ((array) $deptosValidos as $d) {
+            $empresasConDepto[(int) $d['id_empresa']] = true;
+            // Administrador de una empresa = tiene Administración (5) en ESA
+            // empresa (regla del usuario; no empresas_usuarios.acceso, que es
+            // un valor por persona y no por empresa).
+            if ((int) $d['id_departamento'] === 5) {
+                $empresasAdministracion[(int) $d['id_empresa']] = true;
+            }
+        }
+
+        $elegibles = array_values(array_filter((array) $asignaciones, function ($a) use ($empresasConDepto) {
+            return isset($empresasConDepto[(int) $a['id_empresa']]);
+        }));
+        $idsElegibles = array_map('intval', array_column($elegibles, 'id_empresa'));
+
+        if (empty($elegibles)) {
+            $localConnection->disconnect();
+            return $respondJson(['acceso' => false, 'motivo' => 'departamento_no_habilitado']);
+        }
+
+        if ($idEmpresaSolicitada === null) {
+            if (count($elegibles) > 1) {
+                $localConnection->disconnect();
+                return $respondJson([
+                    'requiere_seleccion_empresa' => true,
+                    'empresas' => array_map(function ($a) {
+                        return ['id_empresa' => (int) $a['id_empresa'], 'nombre' => $a['nombre']];
+                    }, $elegibles),
+                ]);
+            }
+            $idEmpresaFinal = $idsElegibles[0];
+        } else {
+            if (!in_array($idEmpresaSolicitada, $idsElegibles, true)) {
+                $localConnection->disconnect();
+                return $respondJson(['acceso' => false, 'motivo' => 'sin_acceso_a_empresa'], 403);
+            }
+            $idEmpresaFinal = $idEmpresaSolicitada;
+        }
+
+        $empresasAdmin = array_values(array_filter($idsElegibles, function ($id) use ($empresasAdministracion) {
+            return isset($empresasAdministracion[$id]);
+        }));
 
         // Departamentos del empleado EN ESA EMPRESA -- empresas_usuarios_departamentos
         // es central pero departamentos vive en la BD de la empresa, así que
@@ -1090,22 +1130,12 @@ return function (App $app) {
             $nombreDepartamentoFinal = $match['nombre'];
         }
 
-        // Empresas que puede administrar en imprime: "Administrador" (acceso=1)
-        // es un nivel por persona, no por empresa, así que aplica a todas las
-        // empresas a las que está asignado activamente.
-        $empresasAdmin = [];
-        if ((int) $usuario_data['acceso'] === 1) {
-            $empresasAdmin = !empty($asignaciones)
-                ? array_map('intval', array_column($asignaciones, 'id_empresa'))
-                : [$idEmpresaFinal];
-        }
-
         return $respondJson([
             'acceso' => true,
             'id_usuario' => (int) $usuario_data['id_usuario'],
             'nombre' => $usuario_data['nombre'],
             'email' => $usuario_data['email'],
-            'acceso_admin' => (bool) $usuario_data['acceso'],
+            'acceso_admin' => in_array($idEmpresaFinal, $empresasAdmin, true),
             'empresas_admin' => $empresasAdmin,
             'id_empresa' => $idEmpresaFinal,
             'id_departamento' => $idDepartamentoFinal,
