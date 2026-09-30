@@ -96,6 +96,26 @@ return function (App $app) {
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
+        // Protección de integridad referencial:
+        // Si el archivo ya está referenciado en la base de datos de observaciones de órdenes,
+        // NUNCA borrarlo del disco.
+        try {
+            $db = new LocalDB();
+            $enUso = $db->goQuery(
+                "SELECT _id FROM ordenes_observaciones WHERE observaciones LIKE ? LIMIT 1",
+                ['%' . $filename . '%']
+            );
+            if (!empty($enUso) && !isset($enUso['status'])) {
+                $response->getBody()->write(json_encode([
+                    'success' => false,
+                    'message' => 'La imagen está en uso por una orden guardada y no puede ser eliminada'
+                ]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+            }
+        } catch (\Throwable $e) {
+            error_log('[delete-order-detail-image] Error verificando ordenes_observaciones: ' . $e->getMessage());
+        }
+
         $directory = __DIR__ . '/../../public/images-orders-details';
         $filepath = $directory . DIRECTORY_SEPARATOR . $filename;
 
@@ -106,6 +126,32 @@ return function (App $app) {
 
         $response->getBody()->write(json_encode(['success' => true]));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+    });
+
+    /**
+     * GET /images-orders-details/{filename}
+     * Fallback de servicio de imágenes cuando LiteSpeed redirige a index.php.
+     * Si el archivo no existe en disco, devuelve 404 Not Found limpio en lugar de 405.
+     */
+    $app->get('/images-orders-details/{filename}', function (Request $request, Response $response, array $args) {
+        $filename = basename(trim((string) ($args['filename'] ?? '')));
+        $directory = __DIR__ . '/../../public/images-orders-details';
+        $filepath = $directory . DIRECTORY_SEPARATOR . $filename;
+
+        if (file_exists($filepath) && is_file($filepath)) {
+            $mime = mime_content_type($filepath) ?: 'image/jpeg';
+            $response->getBody()->write(file_get_contents($filepath));
+            return $response
+                ->withHeader('Content-Type', $mime)
+                ->withHeader('Cache-Control', 'public, max-age=604800')
+                ->withStatus(200);
+        }
+
+        $response->getBody()->write(json_encode([
+            'error' => 'Imagen no encontrada',
+            'message' => 'El archivo solicitado no existe en el servidor'
+        ]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
     });
 };
 
