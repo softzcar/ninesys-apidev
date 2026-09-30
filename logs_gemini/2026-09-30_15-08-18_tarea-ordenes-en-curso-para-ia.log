@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "le he preguntado al chat ¿Cuántas ordenes tenemos en producción? me ha respondido que 20 ordenes, sin embargo eso no es cierto porque si entro a control de producción me muestra 73 ordenes en curso, entonces vamos a entender como estamos determinando en la pagina /test las ordenes que consideramos 'Órdenes en curso' para pasarle esta misma información a la IA, es importante entender que la manera como esta página trae las ordenes en curso es la manera correcta"
+- **Fecha y Hora:** 2026-09-30 15:08:18
+- **Proyecto(s):** Backend (ninesys-api) + mcp_ninesys
+- **Archivos Involucrados:** `app/routes/msg_service.php` (nuevo GET /internal/ordenes/{id_empresa}/en-curso); `mcp_ninesys/src/tools/orders.ts`, `mcp_ninesys/src/types/api.ts`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `6595cf3` (ninesys-api), `7aeb87f` (mcp_ninesys)
+- **Acción Realizada:** Criterio de la pantalla (pages/test -> components/produccionsse/controlDeProduccionPro.vue): muestra itemsFiltrados de GET /sse/produccion (production.php): ordenes con status IN ('activa','pausada','En espera') con JOIN lotes, filtradas en el frontend a las que tienen al menos un producto con products.fisico = 1. Causa del "20": el asistente usó ninesys_list_orders_by_status, que filtra solo status LIKE '%activa%', devuelve como máximo 20 (limit default) y reporta total = cantidad devuelta. Solución: endpoint interno nuevo con exactamente ese criterio (EXISTS lote + EXISTS producto físico, subconsultas escalares para no multiplicar filas), sin límite, con resumen por estado, por paso (mismo cálculo de 'paso' que la pantalla: Por asignar / Terminado / primer departamento pendiente por orden_proceso), urgentes (prioridad=1), atrasadas (fecha_entrega < hoy) y por asignar, y la lista en el orden de la fila de producción. Herramienta MCP nueva ninesys_ordenes_en_curso que lo consume, descrita como la fuente para "¿cuántas órdenes hay en producción/en curso/en el taller?"; la descripción de ninesys_list_orders_by_status ahora aclara que no sirve para contar.
+- **Inconvenientes y Desafíos:** La pantalla se ve contra la base de vps-contabo-dev (73 en api_emp_194); en vps-contabo-prod la misma consulta da 49 (datos distintos). Solo por status serían 89 (16 sin lote o sin productos físicos).
+- **Decisión Final y Justificación:** Replicar el criterio de la pantalla en el backend (fuente única) en vez de enseñarle a la IA a filtrar.
+- **Herramienta(s) Utilizada(s):** `psql` (conteos de verificación), `Edit`, `deploy_backend_dev.sh`, `deploy_mcp_dev.sh`, `curl` al agente IA.
+- **Resultado:** Éxito.
+- **Verificación:** Conteo SQL con el criterio de la pantalla: 73 (194) y 9 (208) en Dev. Endpoint en Dev: total 73 (activa 67, En espera 6; por paso Limpieza 29, Estampado 17, Impresión 13, Por asignar 6...; urgentes 2, atrasadas 65) y 9 en 208. Pregunta real al agente IA (empresa 194): "Actualmente tenemos 73 órdenes en producción. 67 están activas y 6 en espera." usando ninesys_ordenes_en_curso.
+- **Logro Conseguido:** El asistente IA responde el mismo número de órdenes en producción que ve el taller.
+- **Referencias de Sesión (Contexto):**
+    - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Solo Desarrollo; el chat sigue oculto en Producción. search-by-product tiene su propio "en_curso" (excluye solo entregada/cancelada, incluye terminada): distinto del criterio del taller.
+- **Respuesta de Gemini:** N/A.
