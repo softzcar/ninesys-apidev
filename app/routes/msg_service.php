@@ -1389,12 +1389,12 @@ return function (App $app) {
                 SELECT r._id AS id_reposicion, op.name AS producto, r.unidades, r.detalle_emisor AS motivo,
                        TO_CHAR(r.moment, 'DD/MM/YYYY') AS fecha,
                        CASE
-                         WHEN r.terminada = 1 THEN 'terminada'
                          WHEN r.aprobada = 0 AND COALESCE(TRIM(r.detalle), '') <> '' THEN 'rechazada'
+                         WHEN r.terminada = 1 THEN 'terminada'
                          WHEN (r.aprobada IS NULL OR r.aprobada = 0) AND (r.id_empleado IS NULL OR r.id_empleado = 0) THEN 'por_aprobar'
                          WHEN r.aprobada = 1 AND r.id_empleado IS NOT NULL AND r.id_empleado <> 0 THEN 'en_curso'
                          WHEN r.aprobada = 1 THEN 'aprobada_sin_asignar'
-                         ELSE 'otro'
+                         ELSE 'inconsistente'
                        END AS estado
                 FROM {$dbName}reposiciones r
                 LEFT JOIN {$dbName}ordenes_productos op ON op._id = r.id_ordenes_productos
@@ -1745,15 +1745,17 @@ return function (App $app) {
      */
     $estadoReposicion = function (array $r): string {
         if ((int) $r['eliminada'] === 1) return 'eliminada';
-        if ((int) $r['terminada'] === 1) return 'terminada';
         $aprobada = $r['aprobada'] === null ? null : (int) $r['aprobada'];
         $conEmpleado = !empty($r['id_empleado']) && (int) $r['id_empleado'] !== 0;
         $conMotivoEncargado = trim((string) ($r['detalle_encargado'] ?? '')) !== '';
+        // Rechazada antes que terminada: hay rechazos que luego se cerraron.
         if ($aprobada === 0 && $conMotivoEncargado) return 'rechazada';
+        if ((int) $r['terminada'] === 1) return 'terminada';
         if (($aprobada === null || $aprobada === 0) && !$conEmpleado) return 'por_aprobar';
         if ($aprobada === 1 && $conEmpleado) return 'en_curso';
         if ($aprobada === 1) return 'aprobada_sin_asignar';
-        return 'otro';
+        // Asignada a un empleado pero nunca aprobada: la pantalla no la muestra.
+        return 'inconsistente';
     };
 
     $formatearReposicion = function (array $r, string $estado): array {
@@ -1840,7 +1842,7 @@ return function (App $app) {
      * de reposiciones: insumos + mano de obra/comisiones + tinta). Totales y
      * resumen sobre TODAS las coincidencias; la lista trae las 'limit' más
      * recientes. estado: terminada | rechazada | en_curso | por_aprobar |
-     * aprobada_sin_asignar | eliminada | todas (default: todas menos eliminadas).
+     * aprobada_sin_asignar | inconsistente | eliminada | todas (default: todas menos eliminadas).
      * departamento: departamento que la solicitó (texto, sin distinguir tildes).
      */
     $app->get('/internal/reposiciones/{id_empresa}/historial', function (Request $request, Response $response, $args) use ($estadoReposicion, $formatearReposicion) {
