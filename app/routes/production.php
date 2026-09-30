@@ -420,7 +420,7 @@ return function (App $app) {
         '-',
         (SELECT COUNT(*) FROM reposiciones WHERE (aprobada IS NULL OR (aprobada = 0 AND detalle IS NULL)) AND id_empleado IS NULL AND eliminada = 0),
         '-',
-        (SELECT COUNT(*) FROM reposiciones WHERE aprobada = 1 AND terminada = 0 AND id_empleado IS NOT NULL AND eliminada = 0)
+        (SELECT COUNT(*) FROM reposiciones r2 LEFT JOIN ordenes o2 ON o2._id = r2.id_orden WHERE r2.aprobada = 1 AND r2.terminada = 0 AND r2.eliminada = 0 AND ((r2.id_empleado IS NOT NULL AND r2.id_empleado <> 0) OR LOWER(COALESCE(o2.status, '')) IN ('en espera', 'activa', 'pausada', 'terminada')))
     ) as checksum";
 
     $result = $localConnection->goQuery($sql);
@@ -741,8 +741,14 @@ return function (App $app) {
           LEFT JOIN api_empresas.empresas_usuarios e ON e.id_usuario = a.id_empleado
           LEFT JOIN departamentos dep ON dep._id = a.id_departamento
           JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
+          LEFT JOIN ordenes ord_rep ON ord_rep._id = a.id_orden
           WHERE
-              a.aprobada = 1 AND a.terminada = 0 AND a.id_empleado IS NOT NULL AND a.id_empleado <> 0 AND a.eliminada = 0
+              a.aprobada = 1 AND a.terminada = 0 AND a.eliminada = 0
+              AND (
+                (a.id_empleado IS NOT NULL AND a.id_empleado <> 0)
+                -- Esperando en el pool de un departamento (sin empleado): solo si su orden sigue en la empresa
+                OR LOWER(COALESCE(ord_rep.status, '')) IN ('en espera', 'activa', 'pausada', 'terminada')
+              )
           ORDER BY d.orden_fila ASC;
           ";
       } else {
@@ -771,8 +777,14 @@ return function (App $app) {
           LEFT JOIN api_empresas.empresas_usuarios e ON e.id_usuario = a.id_empleado
           LEFT JOIN departamentos dep ON dep._id = a.id_departamento
           JOIN ordenes_productos c ON c._id = a.id_ordenes_productos
+          LEFT JOIN ordenes ord_rep ON ord_rep._id = a.id_orden
           WHERE
-              a.aprobada = 1 AND a.terminada = 0 AND a.id_empleado IS NOT NULL AND a.id_empleado <> 0 AND a.eliminada = 0
+              a.aprobada = 1 AND a.terminada = 0 AND a.eliminada = 0
+              AND (
+                (a.id_empleado IS NOT NULL AND a.id_empleado <> 0)
+                -- Esperando en el pool de un departamento (sin empleado): solo si su orden sigue en la empresa
+                OR LOWER(COALESCE(ord_rep.status, '')) IN ('en espera', 'activa', 'pausada', 'terminada')
+              )
           ORDER BY d.orden_fila ASC;
           ";
       }

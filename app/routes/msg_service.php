@@ -1393,7 +1393,7 @@ return function (App $app) {
                          WHEN r.terminada = 1 THEN 'terminada'
                          WHEN (r.aprobada IS NULL OR r.aprobada = 0) AND (r.id_empleado IS NULL OR r.id_empleado = 0) THEN 'por_aprobar'
                          WHEN r.aprobada = 1 AND r.id_empleado IS NOT NULL AND r.id_empleado <> 0 THEN 'en_curso'
-                         WHEN r.aprobada = 1 THEN 'aprobada_sin_asignar'
+                         WHEN r.aprobada = 1 THEN 'esperando_departamento'
                          ELSE 'inconsistente'
                        END AS estado
                 FROM {$dbName}reposiciones r
@@ -1753,7 +1753,7 @@ return function (App $app) {
         if ((int) $r['terminada'] === 1) return 'terminada';
         if (($aprobada === null || $aprobada === 0) && !$conEmpleado) return 'por_aprobar';
         if ($aprobada === 1 && $conEmpleado) return 'en_curso';
-        if ($aprobada === 1) return 'aprobada_sin_asignar';
+        if ($aprobada === 1) return 'esperando_departamento';
         // Asignada a un empleado pero nunca aprobada: la pantalla no la muestra.
         return 'inconsistente';
     };
@@ -1810,26 +1810,26 @@ return function (App $app) {
             error_log('[msg_service][reposiciones/en-curso] ' . $e->getMessage());
             return $respondJson(['error' => 'internal_error', 'message' => 'Error al consultar reposiciones.'], 500);
         }
-        $out = ['por_aprobar' => [], 'en_curso' => [], 'aprobada_sin_asignar' => []];
+        $ordenVigente = fn ($r) => in_array(strtolower((string) $r['estatus_orden']), ['en espera', 'activa', 'pausada', 'terminada'], true);
+        $out = ['por_aprobar' => [], 'en_curso' => [], 'esperando_departamento' => []];
+        $restos = 0;
         foreach ((array) $rows as $r) {
             $estado = $estadoReposicion($r);
+            if ($estado === 'esperando_departamento' && !$ordenVigente($r)) { $restos++; continue; }
             if (!isset($out[$estado])) continue;
-            $item = $formatearReposicion($r, $estado);
-            if ($estado === 'aprobada_sin_asignar') {
-                $item['orden_en_produccion'] = in_array(strtolower((string) $r['estatus_orden']), ['en espera', 'activa', 'pausada'], true);
-            }
-            $out[$estado][] = $item;
+            $out[$estado][] = $formatearReposicion($r, $estado);
         }
-        $sinAsignar = $out['aprobada_sin_asignar'];
+        // Como en Control de producción: las que esperan en un departamento se muestran dentro de "en curso".
+        $enCurso = array_merge($out['en_curso'], $out['esperando_departamento']);
         return $respondJson([
-            'por_aprobar'           => $out['por_aprobar'],
-            'en_curso'              => $out['en_curso'],
-            'aprobadas_sin_asignar' => $sinAsignar,
-            'totales'               => [
-                'por_aprobar'           => count($out['por_aprobar']),
-                'en_curso'              => count($out['en_curso']),
-                'aprobadas_sin_asignar' => count($sinAsignar),
-                'aprobadas_sin_asignar_con_orden_en_produccion' => count(array_filter($sinAsignar, fn ($x) => $x['orden_en_produccion'])),
+            'por_aprobar' => $out['por_aprobar'],
+            'en_curso'    => $enCurso,
+            'totales'     => [
+                'por_aprobar'             => count($out['por_aprobar']),
+                'en_curso'                => count($enCurso),
+                'con_empleado_asignado'   => count($out['en_curso']),
+                'esperando_departamento'  => count($out['esperando_departamento']),
+                'restos_de_ordenes_cerradas' => $restos,
             ],
         ], 200);
     });
@@ -1842,7 +1842,7 @@ return function (App $app) {
      * de reposiciones: insumos + mano de obra/comisiones + tinta). Totales y
      * resumen sobre TODAS las coincidencias; la lista trae las 'limit' más
      * recientes. estado: terminada | rechazada | en_curso | por_aprobar |
-     * aprobada_sin_asignar | inconsistente | eliminada | todas (default: todas menos eliminadas).
+     * esperando_departamento | inconsistente | eliminada | todas (default: todas menos eliminadas).
      * departamento: departamento que la solicitó (texto, sin distinguir tildes).
      */
     $app->get('/internal/reposiciones/{id_empresa}/historial', function (Request $request, Response $response, $args) use ($estadoReposicion, $formatearReposicion) {

@@ -3708,6 +3708,11 @@ return function (App $app) {
             LEFT JOIN departamentos d ON d._id = a.id_departamento
             LEFT JOIN lotes l ON l.id_orden = a.id_orden
             WHERE a.terminada = 0
+                -- Solo reposiciones vigentes: no eliminadas, no rechazadas y de órdenes
+                -- que siguen en la empresa (antes también salían las de órdenes entregadas)
+                AND a.eliminada = 0
+                AND NOT (a.aprobada = 0 AND COALESCE(TRIM(a.detalle), '') <> '')
+                AND LOWER(COALESCE(b.status, '')) NOT IN ('entregada', 'cancelada')
                 AND (
                     a.id_empleado = {$args['id_empleado']} 
                     OR a.id_departamento_solicitante = {$args['id_departamento']}
