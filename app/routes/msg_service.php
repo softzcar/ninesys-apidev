@@ -1499,11 +1499,15 @@ return function (App $app) {
             if (isset($orders['status'])) {
                 throw new \Exception($orders['message'] ?? 'Error al listar órdenes por estado');
             }
+            // Cantidad real con ese estado (la lista de arriba está limitada).
+            $countRows = $tenantConnection->goQuery("SELECT COUNT(*) AS n FROM {$dbName}ordenes o {$whereClause}", $queryParams);
+            $totalReal = (int) ($countRows[0]['n'] ?? 0);
 
             if (empty($orders)) {
                 $tenantConnection->disconnect();
                 return $respondJson([
-                    'total'         => 0,
+                    'total'         => $totalReal,
+                    'devueltas'     => 0,
                     'status_filter' => $statusQuery ?: 'todas',
                     'ordenes'       => [],
                 ], 200);
@@ -1581,7 +1585,8 @@ return function (App $app) {
         }
 
         return $respondJson([
-            'total'         => count($formatted),
+            'total'         => $totalReal,
+            'devueltas'     => count($formatted),
             'status_filter' => $statusQuery ?: 'todas',
             'ordenes'       => $formatted,
         ], 200);
@@ -1889,6 +1894,21 @@ return function (App $app) {
                 throw new \Exception($orders['message'] ?? 'Error al buscar órdenes por producto');
             }
 
+            // Totales sobre TODAS las coincidencias, no solo las devueltas por
+            // LIMIT -- si no, "¿cuántas franelas hay?" daba cifras parciales.
+            $allIdRows = $tenantConnection->goQuery("
+                SELECT DISTINCT o._id AS id_orden
+                FROM {$dbName}ordenes o
+                JOIN {$dbName}ordenes_productos op ON op.id_orden = o._id
+                LEFT JOIN {$dbName}sizes s ON s._id = op.id_size
+                LEFT JOIN {$dbName}catalogo_telas ct ON ct._id = op.id_tela
+                {$whereSql}
+            ", $queryParams);
+            if (isset($allIdRows['status'])) {
+                throw new \Exception($allIdRows['message'] ?? 'Error al contar órdenes por producto');
+            }
+            $allIds = array_map('intval', array_column((array) $allIdRows, 'id_orden'));
+
             if (empty($orders)) {
                 $tenantConnection->disconnect();
                 return $respondJson([
@@ -1905,7 +1925,7 @@ return function (App $app) {
             }
 
             // Consultar todos los productos de las órdenes coincidentes
-            $orderIds = array_column($orders, 'id_orden');
+            $orderIds = $allIds;
             $productsByOrder = [];
             if (!empty($orderIds)) {
                 $idsStr = implode(',', array_map('intval', $orderIds));
@@ -1944,32 +1964,8 @@ return function (App $app) {
                 }
             }
 
-            $formatted = [];
-            foreach ($orders as $o) {
-                $oid = (int) $o['id_orden'];
-                $pagoTotal = (float) $o['pago_total'];
-                $totalAbonos = (float) $o['total_abonos'];
-                $totalDescuentos = (float) $o['total_descuentos'];
-                $totalNotasCredito = (float) $o['total_notas_credito'];
-
-                $balance = round($pagoTotal - $totalAbonos - $totalDescuentos + $totalNotasCredito, 2);
-                $saldoPendiente = $balance > 0 ? $balance : 0.0;
-                $sobrepago = $balance < 0 ? abs($balance) : 0.0;
-
-                $estadoPago = 'pendiente_pago';
-                if ($pagoTotal <= 0) {
-                    $estadoPago = 'sin_costo';
-                } elseif ($sobrepago > 0) {
-                    $estadoPago = 'sobrepago';
-                } elseif ($saldoPendiente == 0.0) {
-                    $estadoPago = 'pagado_total';
-                } elseif ($totalAbonos > 0) {
-                    $estadoPago = 'abono_parcial';
-                }
-
-                $allProds = $productsByOrder[$oid] ?? [];
-
-                // Separar productos coincidentes con los filtros para facilitar lectura
+            // Productos de una orden que cumplen los filtros (para leer y para totalizar).
+            $coincidentesDe = function (array $allProds) use ($productoParam, $tallaParam, $telaParam, $corteParam, $stripSpanishPlural): array {
                 $coincidentes = [];
                 foreach ($allProds as $p) {
                     $match = true;
@@ -2002,6 +1998,36 @@ return function (App $app) {
                     }
                 }
 
+                return $coincidentes;
+            };
+
+            $formatted = [];
+            foreach ($orders as $o) {
+                $oid = (int) $o['id_orden'];
+                $pagoTotal = (float) $o['pago_total'];
+                $totalAbonos = (float) $o['total_abonos'];
+                $totalDescuentos = (float) $o['total_descuentos'];
+                $totalNotasCredito = (float) $o['total_notas_credito'];
+
+                $balance = round($pagoTotal - $totalAbonos - $totalDescuentos + $totalNotasCredito, 2);
+                $saldoPendiente = $balance > 0 ? $balance : 0.0;
+                $sobrepago = $balance < 0 ? abs($balance) : 0.0;
+
+                $estadoPago = 'pendiente_pago';
+                if ($pagoTotal <= 0) {
+                    $estadoPago = 'sin_costo';
+                } elseif ($sobrepago > 0) {
+                    $estadoPago = 'sobrepago';
+                } elseif ($saldoPendiente == 0.0) {
+                    $estadoPago = 'pagado_total';
+                } elseif ($totalAbonos > 0) {
+                    $estadoPago = 'abono_parcial';
+                }
+
+                $allProds = $productsByOrder[$oid] ?? [];
+
+                $coincidentes = $coincidentesDe($allProds);
+
                 $formatted[] = [
                     'id_orden'               => $oid,
                     'status'                 => $o['status'],
@@ -2026,8 +2052,10 @@ return function (App $app) {
             $unidadesPorTela = [];
             $unidadesPorProducto = [];
 
-            foreach ($formatted as $ordItem) {
-                foreach ($ordItem['productos_coincidentes'] as $cp) {
+            foreach ($allIds as $oidAll) {
+                $prodsAll = $productsByOrder[$oidAll] ?? [];
+                $coincAll = $coincidentesDe($prodsAll);
+                foreach (!empty($coincAll) ? $coincAll : $prodsAll as $cp) {
                     $cCant = (float) ($cp['cantidad'] ?? 0);
                     $totalUnidades += $cCant;
 
@@ -2046,7 +2074,7 @@ return function (App $app) {
             }
 
             $resumen = [
-                'total_ordenes'         => count($formatted),
+                'total_ordenes'         => count($allIds),
                 'total_unidades'        => round($totalUnidades, 2),
                 'unidades_por_talla'    => $unidadesPorTalla,
                 'unidades_por_tela'     => $unidadesPorTela,
@@ -2060,8 +2088,9 @@ return function (App $app) {
         }
 
         return $respondJson([
-            'total'   => count($formatted),
-            'resumen' => $resumen,
+            'total'     => count($allIds),
+            'devueltas' => count($formatted),
+            'resumen'   => $resumen,
             'filters' => [
                 'producto' => $productoParam ?: null,
                 'talla'    => $tallaParam ?: null,
