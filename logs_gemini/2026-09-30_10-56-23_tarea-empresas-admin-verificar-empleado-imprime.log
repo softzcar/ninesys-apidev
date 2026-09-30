@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "si un Admnistrador es 'Administrador' en ambas empresas SI puede administrar ambas empresas, de los contrario solo puede administrar la empresa en la que es administrador. Respecto al login de imprime, al momento de solicitar seleccionar un departametno vamos a asegurarnos que solo muestre los departamentos que hemos indicado como válidos para ingresar..."
+- **Fecha y Hora:** 2026-09-30 10:56:23
+- **Proyecto(s):** Backend (ninesys-api) -- parte de un cambio conjunto con imprime (repo sublima)
+- **Archivos Involucrados:** `app/routes/auth.php` (POST /internal/imprime/verificar-empleado)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `aa2169d`
+- **Acción Realizada:** La respuesta `acceso:true` de verificar-empleado ahora incluye `empresas_admin`: si el empleado es Administrador (`empresas_usuarios.acceso=1`, el "Nivel de acceso: Administrador" de EmpleadoNuevo/EmpleadoEditar en app_multi), la lista de empresas a las que está asignado activamente (`empresas_usuarios_empresas.activo=1`), o `[id_empresa del login]` si es una identidad sin asignaciones; si no es Administrador, `[]`. imprime lo usa para limitar qué empresas administra cada admin. El filtro de departamentos del login (lista blanca [1,5,6,7]) ya existía y se verificó sin cambios.
+- **Inconvenientes y Desafíos:** `acceso` es un campo por persona, no por empresa: en el esquema actual no es posible ser Administrador en una empresa y empleado común en otra con la misma identidad. Por eso "Administrador en ambas" = acceso=1 + asignado a ambas.
+- **Decisión Final y Justificación:** Calcularlo en Ninesys (dueño de los datos) y devolverlo en el mismo endpoint del login, sin endpoint nuevo ni cambios de esquema.
+- **Herramienta(s) Utilizada(s):** `Edit`, `php -l`, `ninesys-hub/bin/deploy_backend_dev.sh` (versión v1.0.55 sin cambio).
+- **Resultado:** Éxito.
+- **Verificación:** Desplegado en Desarrollo (HEAD remoto aa2169d). Con empleados desechables: admin asignado a 194 y 208 -> empresas_admin [194,208]; admin solo en 208 -> [208]; empleado con Diseño+Impresión+Producción -> selector con solo Impresión y Diseño; forzar Producción -> sin_acceso_a_departamento; con Diseño+Producción entra directo con Diseño. Datos de prueba eliminados (713-715).
+- **Logro Conseguido:** imprime respeta quién es Administrador de qué empresa según Ninesys.
+- **Referencias de Sesión (Contexto):**
+    - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude Code).
+- **Respuesta de Gemini:** N/A.
