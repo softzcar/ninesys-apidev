@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "pero entonces tenemos que despplegar la api! sino cuanod suban imagenes puede TRONAR! actualicemos la APi en producción"
+- **Fecha y Hora:** 2026-09-30 14:45:49
+- **Proyecto(s):** Backend (ninesys-api) -- despliegue a Producción
+- **Archivos Involucrados:** ninguno modificado (despliegue); `ninesys-hub/current_versions.json`, `CHANGELOG.md`
+- **Commits Relacionados:**
+    - Frontend: N/A (app_multi v1.2.3 desplegado solo en Desarrollo, pendiente de verificación del usuario antes de Producción)
+    - Backend: tag `v1.0.56` = `4e3ddc8`
+- **Acción Realizada:** Producción estaba en v1.0.55 (a89b11b) y Desarrollo tenía 22 commits más sin versión registrada (entre ellos 18c2908, la parte de servidor del fix de borrado de imágenes en uso, y 8ae4031, búsqueda de clientes con unaccent). Como deploy_backend_prod.sh despliega el TAG registrado en Desarrollo, primero se registró v1.0.56 con deploy_backend_dev.sh (tag + CHANGELOG). Antes de desplegar se creó la extensión `unaccent` en api_emp_194 y api_emp_208 de Producción (no existía; sin ella la nueva búsqueda de clientes fallaría). Luego deploy_backend_prod.sh promovió v1.0.56 (checkout del tag + reset de OPcache). Las variables nuevas del .env (AGENT_URL/AGENT_TOKEN, del chat IA) tienen valores por defecto y el chat queda oculto: no se tocó el .env de Producción.
+- **Inconvenientes y Desafíos:** Un corte de luz interrumpió antes el despliegue del frontend a Desarrollo (durante la compilación, sin tocar servidores); se verificó integridad de repos con git fsck y se relanzó.
+- **Decisión Final y Justificación:** Promover por tag (flujo del sistema de versionado) en vez de actualizar la rama a mano en el servidor.
+- **Herramienta(s) Utilizada(s):** `ninesys-hub/bin/deploy_backend_dev.sh`, `ninesys-hub/bin/deploy_backend_prod.sh`, `psql` (CREATE EXTENSION), `curl`.
+- **Resultado:** Éxito.
+- **Verificación:** HEAD de Producción = 4e3ddc8 (v1.0.56); `unaccent('Diseño Ángel')` = 'Diseno Angel' en ambas bases; GET /products y GET /customers?buscar=jose con empresa 194 -> 200 con datos reales; access_log: solo 500 de las pruebas sin credenciales (mismo comportamiento que Desarrollo); app.log sin errores nuevos de la app.
+- **Logro Conseguido:** Producción protegida contra el borrado de imágenes en uso y con la búsqueda de clientes nueva.
+- **Referencias de Sesión (Contexto):**
+    - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude Code).
+- **Respuesta de Gemini:** N/A.
