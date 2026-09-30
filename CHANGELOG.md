@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.56] - 2026-09-30
+- Protección contra borrado de imágenes en uso, búsqueda de clientes sin tildes, estado de cuenta, endpoints de imprime y del agente IA
+
 ## [v1.0.55] - 2026-09-25
 - Fix: Meta de insumos inflada en Eficiencia de Insumos (input-efficiency) al sumar todos los departamentos ya terminados en vez de solo el responsable de cada insumo
 
