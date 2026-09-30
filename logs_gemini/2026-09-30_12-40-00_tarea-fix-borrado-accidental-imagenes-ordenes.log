@@ -1,0 +1,35 @@
+# Bitácora de Tarea: Corrección de autodestrucción de imágenes al resetear formularios de órdenes
+Fecha y Hora: 2026-09-30 12:40:00
+Responsable: Antigravity / Gemini
+
+## Contexto del Problema
+El usuario reportó que en órdenes recientes (como la orden #7312 y la #7022), las imágenes guardadas en las observaciones dejaban de verse y respondían con código de estado HTTP 405 en lugar de mostrarse.
+
+## Diagnóstico Forense (Logs de Producción)
+1. **Cronología en logs de LiteSpeed (`api.nineteengreen.com.access_log`):**
+   - 10:31:15: `POST /upload-order-detail-image` 200 (la imagen `90e4ebc12496c6f6.jpg` se subió con éxito).
+   - 10:31:15: `GET /images-orders-details/90e4ebc12496c6f6.jpg` 200 (se descargó con éxito para mostrarse en el editor Quill).
+   - 10:31:25: `POST /ordenes/nueva/custom` 200 (se guardó la orden 7312 exitosamente en la base de datos).
+   - 10:31:28: `POST /delete-order-detail-image` 200 (¡el propio sistema borró la imagen 3 segundos después de guardada la orden!).
+   - 10:48:34: `GET /images-orders-details/90e4ebc12496c6f6.jpg` 405 (el archivo ya no existía en disco).
+2. **Causa Raíz en Frontend (`app_multi`):**
+   - El plugin `nuxt-quill-plugin.js` implementa `limpiarImagenesQuillHuerfanas`, diseñado para borrar del servidor imágenes si el usuario las borra con retroceso antes de guardar.
+   - Sin embargo, cuando la orden se guardaba con éxito, `nueva.vue` y `presupuesto.vue` ejecutaban `clearForm()` reseteando `this.form.obs = ""`.
+   - Al vaciarse el editor, `@change="onEditorChange"` detectaba que el HTML pasó de tener la imagen recién guardada a estar vacío, interpretándolo erróneamente como un borrado manual por parte del usuario, e invocaba de inmediato `POST /delete-order-detail-image` borrando la imagen física recién asociada a la orden.
+3. **Causa del código 405:**
+   - Cuando un archivo no existe en disco, LiteSpeed aplica la regla de `.htaccess` `RewriteCond %{REQUEST_FILENAME} !-f` redirigiendo la petición a `index.php` (Slim).
+   - Slim no tenía ruta `GET /images-orders-details/{filename}`, pero sí tenía `$app->options('/{routes:.*}')`, por lo que el enrutador de Slim respondía con `405 Method Not Allowed. Must be one of: OPTIONS` en vez de un 404 limpio.
+
+## Solución Aplicada
+1. **Frontend (`app_multi/plugins/nuxt-quill-plugin.js`):**
+   - Se añadió una guarda estricta en `limpiarImagenesQuillHuerfanas`: si `htmlNuevo` está vacío o solo contiene `<p><br></p>` (reseteo de formulario, cambio de pestaña, limpieza de modal), **NUNCA** se ejecuta borrado de imágenes.
+2. **Frontend (`app_multi/components/ordenes/nueva.vue` y `presupuesto.vue`):**
+   - En `clearForm()`, se establece explícitamente `this._quillHtmlAnterior = null` antes de limpiar el estado para evitar cualquier comparación falsa en el siguiente ciclo del editor.
+3. **Backend (`ninesys-api/app/routes/upload.php`):**
+   - **Integridad referencial:** En `POST /delete-order-detail-image`, antes de ejecutar `unlink()`, se consulta la base de datos (`ordenes_observaciones`) para verificar si el archivo está en uso por alguna orden existente. Si está en uso, se bloquea el borrado.
+   - **Manejo de rutas y 404:** Se agregó la ruta `GET /images-orders-details/{filename}`. Si LiteSpeed la redirige a PHP porque el archivo no existe en disco, devuelve un `404 Not Found` limpio con JSON informativo en vez de un confuso 405. Si el archivo existe, lo entrega directamente con cabecera `Content-Type` de imagen.
+
+## Despliegue y Verificación
+- Backend desplegado a Contabo Desarrollo (`vps-contabo-dev`) con `deploy_backend_dev.sh` (commit `18c2908`), OPcache reseteado.
+- Verificación con curl de petición a imagen inexistente: responde HTTP/2 404 (en vez de 405).
+- Cambios de frontend comiteados en `app_multi` (commit `2fa8ac8`).
