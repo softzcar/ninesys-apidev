@@ -1713,7 +1713,9 @@ return function (App $app) {
      * - talla: talla (ej: 'S', 'M', 'L', 'XL', '14', 'Unica')
      * - tela: nombre o tipo de tela (ej: 'ESCOSIA', 'LICRA SPRINT', 'DRY FIT')
      * - corte: tipo de corte (ej: 'Damas', 'Caballeros', 'Niños')
-     * - status: estado de la orden. Por defecto ('en_curso' o vacío) excluye órdenes 'entregada' y 'cancelada'.
+     * - status: estado de la orden. Por defecto ('en_curso' o vacío) excluye órdenes 'entregada' y 'cancelada'
+     *   (= todo lo que sigue dentro de la empresa, incluidas las terminadas). 'en_produccion' = solo
+     *   En espera / activa / pausada.
      *   Permite también 'todas' o un estado puntual.
      * - limit: cantidad máxima (default 20, max 50)
      * - offset: paginación
@@ -1830,7 +1832,10 @@ return function (App $app) {
 
             // 5. Filtro por status de la orden
             $stLower = strtolower($statusParam);
-            if ($statusParam === '' || in_array($stLower, ['en_curso', 'activas', 'activas_o_pendientes', 'vivas', 'taller'])) {
+            if (in_array($stLower, ['en_produccion', 'produccion', 'en produccion', 'en producción'])) {
+                // En fabricación: mismo conjunto de estados que Control de producción.
+                $whereConditions[] = "LOWER(o.status) IN ('en espera', 'activa', 'pausada')";
+            } elseif ($statusParam === '' || in_array($stLower, ['en_curso', 'activas', 'activas_o_pendientes', 'vivas', 'taller'])) {
                 // Comportamiento por defecto solicitado por el usuario: órdenes en curso (no entregadas ni canceladas)
                 $whereConditions[] = "LOWER(o.status) NOT IN ('entregada', 'cancelada')";
             } elseif (in_array($stLower, ['todas', 'todos', 'all', '*'])) {

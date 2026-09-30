@@ -548,21 +548,6 @@ class WooMe
       return $myOrder;
       // return $order_data;
   } */
-  public function updateOrderStatus($id, $status)
-  {
-    $sql = "UPDATE
-            ordenes
-        SET
-            status = '" . $status . "'
-        WHERE
-            _id = " . $id . ';';
-
-    $localConnection = new LocalDB();
-    $data = $localConnection->goQuery($sql);
-    $localConnection->disconnect();
-
-    return json_encode($data);
-  }
 
   /** FIN ORDENES */
 

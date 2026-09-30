@@ -31,7 +31,7 @@ return function (App $app) {
             lotes_detalles_empleados_asignados b ON b.id_orden = a._id
         WHERE
             b.id_orden IS NULL
-            AND (a.status = 'En espera' OR a.status = 'Pausada' OR a.status = 'activa')
+            AND (a.status = 'En espera' OR a.status = 'pausada' OR a.status = 'activa')
             AND a.responsable = ?
     ";
 

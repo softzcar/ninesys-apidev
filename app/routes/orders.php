@@ -175,6 +175,17 @@ return function (App $app) {
       return $errorResponse;
     }
     $order = $request->getParsedBody();
+
+    // Solo los estados válidos de una orden, siempre con la misma escritura
+    // (un 'Pausada' o 'Cancelada' mal escrito deja la orden fuera de los
+    // filtros que comparan el texto exacto).
+    $estadosValidos = ['en espera' => 'En espera', 'activa' => 'activa', 'pausada' => 'pausada', 'terminada' => 'terminada', 'entregada' => 'entregada', 'cancelada' => 'cancelada'];
+    $estadoNormalizado = $estadosValidos[mb_strtolower(trim((string) ($order['estado'] ?? '')))] ?? null;
+    if ($estadoNormalizado === null) {
+      return ApiResponse::validationError($response, 'Estado de orden no válido');
+    }
+    $order['estado'] = $estadoNormalizado;
+
     $localConnection = new LocalDB();
 
     // 1. OBTENER ESTADO ACTUAL DE LA ORDEN
@@ -4471,7 +4482,7 @@ $object['sales_commission_ISSET'][] = false;
       // ==========================================================
       // Calcular días de producción basado en órdenes activas
       $sql_ordenes_activas = "SELECT COUNT(*) as total FROM ordenes 
-                              WHERE status IN ('En espera', 'En proceso')";
+                              WHERE status IN ('En espera', 'activa', 'pausada')";
       $ordenes_activas = $localConnection->goQuery($sql_ordenes_activas);
       $total_ordenes = $ordenes_activas[0]['total'] ?? 0;
 
@@ -5328,7 +5339,7 @@ $object['sales_commission_ISSET'][] = false;
     }
 
     // Calcular fecha de entrega
-    $sql_ordenes = "SELECT COUNT(*) as total FROM ordenes WHERE status IN ('En espera', 'En proceso')";
+    $sql_ordenes = "SELECT COUNT(*) as total FROM ordenes WHERE status IN ('En espera', 'activa', 'pausada')";
     $ordenes = $db->goQuery($sql_ordenes);
     $total = $ordenes[0]['total'] ?? 0;
     $dias = min(2 + ceil($total * 0.5), 14);

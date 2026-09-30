@@ -1016,7 +1016,7 @@ return function (App $app) {
 
     // Buscar si teiene ordenes activas en el sistema de prodsucción
     $localConnection = new LocalDB();
-    $sql = "SELECT COUNT(a._id) total_ordenes FROM ordenes a WHERE (a.status = 'En espera' OR a.status = 'Pausada' OR a.status = 'activa') AND a.id_wp = ?";
+    $sql = "SELECT COUNT(a._id) total_ordenes FROM ordenes a WHERE (a.status = 'En espera' OR a.status = 'pausada' OR a.status = 'activa') AND a.id_wp = ?";
     $tmpRes = $localConnection->goQuery($sql, [intval($args['customer_id'])]);
     $object['ordenes_ns'] = (is_array($tmpRes) && isset($tmpRes[0]['total_ordenes'])) ? intval($tmpRes[0]['total_ordenes']) : 0;
 
