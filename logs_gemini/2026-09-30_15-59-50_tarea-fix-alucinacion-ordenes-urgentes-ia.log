@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "tenemos este problema [captura: el asistente respondió que las urgentes eran la #7258 y la #7183; Control de producción con filtro URGENTES muestra la #7188 y la #7189]. Como ves esta alucinando veamos que ha sucedido y lo arreglamos"
+- **Fecha y Hora:** 2026-09-30 15:59:50
+- **Proyecto(s):** mcp_ninesys (herramienta del asistente IA)
+- **Archivos Involucrados:** `mcp_ninesys/src/tools/orders.ts`, `mcp_ninesys/src/tools/helpers.ts`
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: mcp_ninesys (fix(orders): órdenes en curso sin truncar y con filtros)
+- **Acción Realizada:** Diagnóstico: el endpoint /internal/ordenes/194/en-curso marca bien las urgentes (#7188, #7189, puestos 56 y 57 de 73); #7258 y #7183 ni siquiera están en curso. Al reproducir la conversación, la IA llamó a ninesys_ordenes_en_curso con response_format='json': la lista JSON indentada medía 21.680 caracteres y el MCP la corta en 12.000 (solo 40 de 73 órdenes), así que las urgentes quedaban fuera y el modelo las inventó (dos intentos, órdenes distintas cada vez); en markdown respondía bien. Cambios: la herramienta ya no ofrece JSON; líneas compactas (~6.000 caracteres para las 73); el resumen incluye los números de las urgentes y de las por asignar; filtros opcionales solo (urgentes/atrasadas/por_asignar), paso y estado; la descripción aclara que la entrega es la fecha comprometida (la pantalla muestra además una proyección) y prohíbe completar con números inventados; el aviso de truncado de helpers.ts ahora le indica a la IA que no complete datos faltantes.
+- **Inconvenientes y Desafíos:** El historial del agente guarda solo el texto de cada turno (no los resultados de herramientas), por eso la IA debe volver a consultar en la segunda pregunta; con los filtros lo hace pidiendo solo lo necesario.
+- **Decisión Final y Justificación:** Filtrar del lado del MCP (los datos completos ya llegan en una sola llamada) y achicar la salida, en vez de subir el límite de caracteres.
+- **Herramienta(s) Utilizada(s):** `curl` al endpoint y al agente IA, `deploy_mcp_dev.sh`.
+- **Resultado:** Éxito.
+- **Verificación:** Misma conversación repetida 3 veces tras el fix: las 3 llamaron ninesys_ordenes_en_curso con solo='urgentes' y respondieron #7188 (ALVARO RAUL, Limpieza) y #7189 (COLEGIO ELISEO MAGNO FREITES, Estampado). "¿Qué órdenes están en Impresión?" -> filtro paso='Impresión', 13 órdenes con datos reales.
+- **Logro Conseguido:** El asistente deja de inventar órdenes al listar subconjuntos del taller.
+- **Referencias de Sesión (Contexto):**
+    - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** Otras herramientas del MCP con listas largas y opción JSON podrían tener el mismo riesgo de truncado.
+- **Respuesta de Gemini:** N/A.
