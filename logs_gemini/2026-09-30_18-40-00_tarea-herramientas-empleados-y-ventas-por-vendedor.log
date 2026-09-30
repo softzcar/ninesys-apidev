@@ -1,0 +1,35 @@
+- **Solicitud del Usuario:** "vamos a darle la capacidad al MCP de proporcioanr informacion para solicitar información sobre los empleados, sus mobres, staus y departamentos asignados, de manera de poder consultar por ejemplo 'Dime cuantas ordens ha vendido sayerlin este mes'"
+- **Fecha y Hora:** 2026-09-30 18:40:00
+- **Proyecto(s):** Backend (`ninesys-api`), Servidor MCP (`mcp_ninesys`), Agente de IA (`ninesys-ai-agent`) en Desarrollo (`vps-contabo-dev`).
+- **Archivos Involucrados:**
+    - `ninesys-api/app/routes/ai_employees.php` (nuevo)
+    - `ninesys-api/app/routes.php`
+    - `mcp_ninesys/src/types/api.ts`
+    - `mcp_ninesys/src/tools/employees.ts` (nuevo)
+    - `mcp_ninesys/src/tools/index.ts`
+    - `ninesys-ai-agent/src/agent.ts`
+- **Commits Relacionados:**
+    - Backend: `a9421aa` (`feat(ai): endpoints de empleados y ventas por vendedor`)
+    - MCP: `2a3b663` (`feat(tools): agregar herramientas de empleados y ventas por empleado`)
+    - Agente: `a3de148` (`feat(prompt): directrices para herramientas de empleados y ventas por empleado`)
+- **Acción Realizada:**
+    1. Se crearon dos endpoints internos en `ai_employees.php`:
+       - `GET /internal/empleados/{id_empresa}/list`: Permite listar empleados y buscar por nombre o correo, filtrando por departamento o estatus activo/inactivo. Extrae el departamento principal y los departamentos asignados adicionales mediante agregación JSON de `api_empresas.empresas_usuarios_departamentos`.
+       - `GET /internal/empleados/{id_empresa}/ventas`: Consulta el volumen comercial de un empleado específico (total órdenes, facturado, cobrado, saldo pendiente, ticket promedio, desglose por estado y últimas 5 órdenes vendidas) o, si no se indica un empleado, devuelve el ranking completo de vendedores del período.
+    2. Se crearon dos nuevas herramientas en `mcp_ninesys`:
+       - `ninesys_get_employees`: Consulta nómina y departamentos del personal.
+       - `ninesys_get_employee_sales`: Desempeño comercial por vendedor y ranking.
+    3. Se actualizó el prompt principal en `ninesys-ai-agent` para orientar al LLM sobre la resolución de nombres de vendedores y consultas comerciales.
+    4. Se compilaron y desplegaron los tres componentes a Desarrollo (`vps-contabo-dev`) vía los scripts de despliegue centralizados.
+- **Inconvenientes y Desafíos:** Ninguno. Se verificó que la clave foránea en `empresas_usuarios_departamentos` es `id_empleado`.
+- **Decisión Final y Justificación:** Mapear la relación de ventas por `ordenes.responsable` = `empresas_usuarios.id_usuario` permite atribuir con total fidelidad el origen de cada orden al vendedor asignado.
+- **Herramienta(s) Utilizada(s):** PHP, PostgreSQL, TypeScript, MCP SDK, PM2, cURL, Git, scripts en `ninesys-hub/bin/`.
+- **Resultado:** Éxito total.
+- **Verificación:**
+    - Se ejecutó la prueba exacta solicitada por el usuario: `"Dime cuántas órdenes ha vendido Sayerlin este mes"` -> El asistente respondió con total exactitud: *"Sayerlin ha vendido 74 órdenes este mes."*
+    - Se probó la consulta combinada de departamentos y ventas: confirmó que Sayerlin pertenece a Administración y Comercialización, con $9,934.05 facturados.
+    - Se probó el ranking de vendedores del mes: 1. Sarahit Mojica (295 órdenes), 2. Sayerlin (74 órdenes), 3. Ricardo Fernandez (3 órdenes).
+- **Logro Conseguido:** El Asistente de IA ahora tiene conocimiento completo del personal, sus departamentos y el rendimiento comercial individual o colectivo.
+- **Referencias de Sesión (Contexto):** Sesión Antigravity / Gemini.
+- **Observaciones de Gemini:** Funcionalidad desplegada y operativa en Desarrollo.
+- **Respuesta de Gemini:** Tarea completada exitosamente.
