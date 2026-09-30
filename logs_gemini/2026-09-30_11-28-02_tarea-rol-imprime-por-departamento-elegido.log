@@ -1,0 +1,18 @@
+- **Solicitud del Usuario:** "Si el empleado tiene mas de un departamento asignado en una empresa en la lista blanca se deben mostrar los depaetamentos asignados para que elija, depende del departamento que elija se aplican los permisos, si elije Administracion ingresa como administrador, si elija Diseño entra con permisos de empleado"
+- **Fecha y Hora:** 2026-09-30 11:28:02
+- **Proyecto(s):** Backend (ninesys-api), consumido por imprime (sublima)
+- **Archivos Involucrados:** `app/routes/auth.php` (POST /internal/imprime/verificar-empleado)
+- **Commits Relacionados:**
+    - Frontend: N/A
+    - Backend: `c83b6da`
+- **Acción Realizada:** El rol en imprime ya no depende de TENER Administración en la empresa sino del departamento ELEGIDO al entrar (mismo criterio que el select de departamento del sidebar de app_multi): `acceso_admin = (id_departamento elegido === 5)`; `empresas_admin` = empresas elegibles con Administración solo si entró como Administración, si no `[]`. El selector de departamentos ya mostraba solo los de la lista blanca [1,5,6,7] asignados en esa empresa. Contexto del usuario: `empresas_usuarios.acceso` NO se usa para validar permisos (reservado para otros usos).
+- **Inconvenientes y Desafíos:** Ninguno técnico. La versión anterior (ed41dae) consideraba admin a quien tuviera Administración asignado aunque eligiera Diseño; el usuario lo aclaró.
+- **Decisión Final y Justificación:** Regla explícita del usuario, consistente con app_multi.
+- **Herramienta(s) Utilizada(s):** `Edit` (python), `php -l`, `ninesys-hub/bin/deploy_backend_dev.sh`, `curl` contra imprime.nineteengreen.com.
+- **Resultado:** Éxito.
+- **Verificación:** Empleado desechable "Julio" (717) en 194 y 208: con 194 Administración+Diseño y 208 Administración, entrar a 194 pide elegir departamento (Administración, Diseño); eligiendo Administración -> rol admin, empresasAdmin [194,208], Servicios 194 y 208 = 200; eligiendo Diseño -> rol empleado, empresasAdmin [], Servicios 403. Con 194 solo Administración y 208 Diseño: 194 admin [194] (Servicios 208 = 403), 208 empleado. Con 194 Administración+Producción: Producción no se ofrece, entra directo como admin. Julio eliminado, sin restos.
+- **Logro Conseguido:** Los permisos en imprime dependen del departamento con el que se entra, igual que en app_multi.
+- **Referencias de Sesión (Contexto):**
+    - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude Code).
+- **Respuesta de Gemini:** N/A.
