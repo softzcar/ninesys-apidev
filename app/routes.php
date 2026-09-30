@@ -176,6 +176,9 @@ return function (App $app) {
   // RUTAS INTERNAS DE ANALÍTICA Y DASHBOARD PARA EL ASISTENTE DE IA
   (require __DIR__ . '/routes/ai_dashboard.php')($app);
 
+  // RUTAS INTERNAS DE EMPLEADOS Y VENTAS POR VENDEDOR PARA EL ASISTENTE DE IA
+  (require __DIR__ . '/routes/ai_employees.php')($app);
+
   // RUTAS DEL MODULO DE CRM
   (require __DIR__ . '/routes/crm.php')($app);
 
