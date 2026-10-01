@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Ver también `ninesys-hub/releases/` para el contexto de negocio detrás de cada cambio (qué problema resolvía, qué otros repos se tocaron junto con este).
 
+## [v1.0.57.1] - 2026-10-02
+- Hotfix para imprime en Producción: endpoints internos de empleados (listado con IDs de departamento) y campos `id_usuario`/`puede_ser_admin` en la selección de `verificar-empleado`. Solo esos 3 commits sobre v1.0.57.
+
 ## [v1.0.56] - 2026-09-30
 - Protección contra borrado de imágenes en uso, búsqueda de clientes sin tildes, estado de cuenta, endpoints de imprime y del agente IA
 
