@@ -1,0 +1,13 @@
+- **Solicitud del Usuario:** En imprime > Usuarios solo deben verse los empleados asignados a departamentos de la lista blanca (Impresión 1, Administración 5, Comercialización 6, Diseño 7); el nombre del departamento no sirve para filtrar (en la 194 existe "Comecialización" con typo).
+- **Fecha y Hora:** 2026-10-02
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:** `app/routes/ai_employees.php` (GET /internal/empleados/{id_empresa}/list)
+- **Commits Relacionados:** Backend: commit de esta tarea
+- **Acción Realizada:** El listado interno de empleados ahora devuelve además `departamentos_ids` (IDs de los departamentos asignados, vía `d._id`). Cambio aditivo: los campos existentes no cambian (lo usan el asistente MCP e imprime).
+- **Inconvenientes y Desafíos:** Ninguno; se descartó filtrar por nombre por el typo "Comecialización".
+- **Decisión Final y Justificación:** IDs fijos y no editables de Ninesys en vez de nombres; sin tocar el contrato existente.
+- **Herramienta(s) Utilizada(s):** Read, Edit, php -l, deploy_backend_dev.sh.
+- **Resultado:** Éxito
+- **Verificación:** `php -l` sin errores; ver la verificación en vivo en la bitácora de imprime de la misma fecha.
+- **Logro Conseguido:** imprime puede filtrar al personal elegible por su lista blanca de departamentos.
+- **Respuesta de Gemini:** Ver resumen entregado al usuario.
