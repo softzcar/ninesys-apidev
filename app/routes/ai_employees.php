@@ -175,7 +175,11 @@ return function (App $app) {
                 COALESCE(
                     json_agg(DISTINCT d.departamento) FILTER (WHERE d.departamento IS NOT NULL),
                     '[]'::json
-                ) as departamentos_asignados
+                ) as departamentos_asignados,
+                COALESCE(
+                    json_agg(DISTINCT d._id) FILTER (WHERE d._id IS NOT NULL),
+                    '[]'::json
+                ) as departamentos_ids
             FROM api_empresas.empresas_usuarios u
             JOIN api_empresas.empresas_usuarios_empresas eue 
                 ON eue.id_usuario = u.id_usuario
@@ -196,6 +200,8 @@ return function (App $app) {
             if (!empty($rows) && !isset($rows['status'])) {
                 foreach ($rows as $r) {
                     $depsAsig = json_decode($r['departamentos_asignados'] ?? '[]', true) ?: [];
+                    // IDs (fijos en Ninesys): imprime filtra por su lista blanca de departamentos con estos, no por nombre.
+                    $depsIds = array_map('intval', json_decode($r['departamentos_ids'] ?? '[]', true) ?: []);
                     $empleados[] = [
                         'id_usuario'              => (int) $r['id_usuario'],
                         'nombre'                  => $r['nombre'] ?: 'Sin nombre',
@@ -203,6 +209,7 @@ return function (App $app) {
                         'telefono'                => $r['telefono'] ?: '',
                         'departamento_principal'  => $r['departamento_principal'] ?: 'Sin departamento',
                         'departamentos_asignados' => $depsAsig,
+                        'departamentos_ids'       => $depsIds,
                         'activo'                  => (int) ($r['empresa_activo'] ?? 0) === 1,
                         'acceso_sistema'          => (int) ($r['acceso'] ?? 0) === 1,
                         'status'                  => ((int) ($r['empresa_activo'] ?? 0) === 1) ? 'activo' : 'inactivo',
