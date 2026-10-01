@@ -1,0 +1,13 @@
+- **Solicitud del Usuario:** En imprime, un empleado sin acceso primero debe elegir departamento y recién después ve el mensaje de falta de acceso: "¿Es necesario este paso de solicitar el departamento para validar si se le da acceso?"
+- **Fecha y Hora:** 2026-10-02
+- **Proyecto(s):** Backend (ninesys-api) + imprime
+- **Archivos Involucrados:** `app/routes/auth.php` (POST /internal/imprime/verificar-empleado)
+- **Commits Relacionados:** Backend: commit de esta tarea
+- **Acción Realizada:** Las respuestas `requiere_seleccion_empresa` y `requiere_seleccion_departamento` ahora incluyen `id_usuario` y `puede_ser_admin` (cambio aditivo). imprime verifica el interruptor de acceso con eso y corta antes de pedir elegir.
+- **Inconvenientes y Desafíos:** El rol de admin depende del departamento elegido (Administración), por eso `puede_ser_admin` deja pasar a quien podría entrar como administrador.
+- **Decisión Final y Justificación:** No hace falta elegir departamento para decidir el acceso; solo los posibles administradores siguen al paso de elegir.
+- **Herramienta(s) Utilizada(s):** Read, Edit, php -l, deploy_backend_dev.sh.
+- **Resultado:** Éxito
+- **Verificación:** `php -l`; la verificación completa está en la bitácora de imprime de la misma fecha.
+- **Logro Conseguido:** El empleado sin acceso ve el aviso de inmediato, sin elegir empresa ni departamento.
+- **Respuesta de Gemini:** Ver resumen entregado al usuario.

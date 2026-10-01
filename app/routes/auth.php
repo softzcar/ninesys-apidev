@@ -1049,6 +1049,10 @@ return function (App $app) {
                 $localConnection->disconnect();
                 return $respondJson([
                     'requiere_seleccion_empresa' => true,
+                    // imprime verifica ya el interruptor de acceso (sin pedir elegir): si no
+                    // puede entrar como admin en ninguna empresa y su cuenta está apagada, se corta aquí.
+                    'id_usuario' => (int) $usuario_data['id_usuario'],
+                    'puede_ser_admin' => !empty($empresasAdministracion),
                     'empresas' => array_map(function ($a) {
                         return ['id_empresa' => (int) $a['id_empresa'], 'nombre' => $a['nombre']];
                     }, $elegibles),
@@ -1108,6 +1112,8 @@ return function (App $app) {
             if (count($deptosHabilitados) > 1) {
                 return $respondJson([
                     'requiere_seleccion_departamento' => true,
+                    'id_usuario' => (int) $usuario_data['id_usuario'],
+                    'puede_ser_admin' => count(array_filter($deptosHabilitados, function ($d) { return (int) $d['id_departamento'] === 5; })) > 0,
                     'id_empresa' => $idEmpresaFinal,
                     'departamentos' => array_map(function ($d) {
                         return ['id_departamento' => (int) $d['id_departamento'], 'nombre' => $d['nombre']];
