@@ -1,0 +1,20 @@
+- **Solicitud del Usuario:** Permitir que el asistente consulte una orden concreta por su número, y corregir las consultas internas que fallaban en Postgres.
+- **Fecha y Hora:** 2026-09-28 14:29 a 14:35 (rango de commits)
+- **Proyecto(s):** Backend (ninesys-api) + mcp_ninesys
+- **Archivos Involucrados:** 
+  - `ninesys-api/app/routes/msg_service.php` (nuevo `GET /internal/ordenes/{id_empresa}/by-id`; corrección de `/internal/ordenes/{id_empresa}/by-phone`)
+  - `mcp_ninesys/src/tools/orders.ts`, `src/types/api.ts` (herramienta `ninesys_get_order_by_id`)
+- **Commits Relacionados:** 
+  - Backend: `1c347d8` (+132), `d049b2a`, `a3d6a54`
+  - mcp_ninesys: `ee73eec`
+- **Acción Realizada:** Nuevo endpoint interno `GET /internal/ordenes/{id_empresa}/by-id?id=` que devuelve una orden por su `_id` con el mismo detalle de `by-phone` (estado, entrega, totales, saldo, productos) más los datos del cliente; lo consume la nueva herramienta del MCP `ninesys_get_order_by_id` (herramienta #10). Durante la prueba apareció un bug de portabilidad: `IFNULL` es de MySQL y falla en Postgres (Desarrollo). Se reemplazó por `COALESCE` en `by-id` y, por ser el mismo patrón, también en `by-phone`, que estaba roto en Postgres y afectaba tanto a la herramienta por teléfono del MCP como al bot de WhatsApp (vía `contextEnricher`).
+- **Inconvenientes y Desafíos:** El bug de `IFNULL` no se veía con MySQL: solo apareció al probar contra Desarrollo (Postgres). El endpoint hermano llevaba tiempo roto sin que nadie lo hubiera detectado.
+- **Decisión Final y Justificación:** Corregir también `by-phone` en el mismo día (mismo bug, mismo impacto en el bot de WhatsApp) en vez de dejarlo para otra tarea.
+- **Herramienta(s) Utilizada(s):** `git`, `npm`, `Write`/`Edit`, `ssh`, `curl`, `psql`
+- **Resultado:** Éxito.
+- **Verificación:** Verificado de punta a punta con datos reales: orden 119 de la empresa 208 por `by-id`, y la consulta por teléfono de un cliente real (Gabriela Castillo, 584247296691) tras el cambio a `COALESCE`.
+- **Logro Conseguido:** El asistente puede consultar cualquier orden por su número y el bot de WhatsApp recuperó su consulta de órdenes por teléfono en Postgres.
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude Code). Bitácora RECONSTRUIDA el 2026-10-01 a partir de los commits y las notas del proyecto, porque en su momento no se escribió.
+- **Respuesta de Gemini:** N/A.

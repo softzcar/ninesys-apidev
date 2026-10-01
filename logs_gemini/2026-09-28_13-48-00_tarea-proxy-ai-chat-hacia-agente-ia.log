@@ -1,0 +1,19 @@
+- **Solicitud del Usuario:** Hacer que el chat de app_multi use el nuevo agente de IA: reescribir `POST /ai/chat` de la API como proxy autenticado hacia `ninesys-ai-agent`, sin exponer secretos al navegador (app_multi es una SPA estática).
+- **Fecha y Hora:** 2026-09-28 13:48
+- **Proyecto(s):** Backend (ninesys-api)
+- **Archivos Involucrados:** 
+  - `app/routes/ai.php` (POST /ai/chat reescrito como proxy)
+  - `app/config.php` (constantes `AGENT_URL` y `AGENT_TOKEN`)
+- **Commits Relacionados:** 
+  - Backend: `a9e3f87` (2 archivos, +53 −50)
+- **Acción Realizada:** `POST /ai/chat` valida el JWT de la sesión, deriva la empresa (`ID_EMPRESA`) del token y reenvía la consulta por Guzzle al servicio `ninesys-ai-agent` (`127.0.0.1:3200/chat`) con `Bearer AGENT_TOKEN`, pasando `query`, `history` e `id_empresa`. El bucle de IA deja de vivir en `GeminiChatAssistant` para este endpoint. Se agregan `AGENT_URL` (por defecto `http://127.0.0.1:3200/chat`) y `AGENT_TOKEN` en `config.php`, leídos del `.env`. Se desplegó a Desarrollo (rama `feature/postgresql-support`, HEAD a9e3f87) con el `.env` remoto apuntando al agente local.
+- **Inconvenientes y Desafíos:** El endpoint anterior mezclaba la lógica de IA con el de creación de órdenes por chat; se mantuvo solo la parte de consulta (el flujo de escritura queda para una fase 2).
+- **Decisión Final y Justificación:** Proxy en la API y no llamar al agente desde el navegador: así la empresa sale del JWT (el cliente no puede elegirla) y no se publican tokens en el frontend.
+- **Herramienta(s) Utilizada(s):** `git`, `npm`, `Write`/`Edit`, `ssh`, `curl`
+- **Resultado:** Éxito.
+- **Verificación:** `php -l` sin errores; `POST /ai/chat` en la API pública de Desarrollo (empresa 208) respondió con datos reales (precio de franelas y telas) pasando por agente y MCP.
+- **Logro Conseguido:** El asistente de app_multi consulta datos reales a través de una ruta segura y con la empresa tomada del token.
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude Code). Bitácora RECONSTRUIDA el 2026-10-01 a partir de los commits y las notas del proyecto, porque en su momento no se escribió.
+- **Respuesta de Gemini:** N/A.

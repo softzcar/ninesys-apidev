@@ -1,0 +1,16 @@
+- **Solicitud del Usuario:** Verificar en vivo contra Producción que los dos temas que habían quedado pendientes de la auditoría de inyección SQL (contraseñas en texto plano y SQL generado por IA) quedaron realmente cerrados por la fase de seguridad, antes de dar la auditoría por terminada.
+- **Fecha y Hora:** 2026-09-28 14:28
+- **Proyecto(s):** Backend (ninesys-api) -- verificación, sin cambios de código
+- **Archivos Involucrados:** Ninguno modificado. Revisados: `app/lib/PasswordHelper.php`, `app/classes/AI/GeminiAssistant.php`, `app/routes.php`; tabla `api_empresas.empresas_usuarios` y roles de Postgres en Producción.
+- **Commits Relacionados:** N/A (verificación). Commits confirmados como ancestros directos de `a89b11b` (HEAD real en Producción): `cb23b07` (bcrypt), `0fe2930` (`validateSqlQuery()` endurecido), `c815d9a` (rol de solo lectura).
+- **Acción Realizada:** Contraseñas en texto plano: confirmado el hash bcrypt activo (`PasswordHelper.php`, `cb23b07`) con migración transparente al primer login; una muestra real de `empresas_usuarios` en Producción muestra la mayoría en formato `$2y$10$...` (60 caracteres); las que siguen en texto plano son cuentas que no han iniciado sesión desde el despliegue del 16-sep y se rehashean solas en su próximo ingreso, sin acción. SQL generado por IA: confirmado `validateSqlQuery()` endurecido (`0fe2930`) y el rol de Postgres de solo lectura `ninesys_ai_readonly` (`c815d9a`): el rol existe en Producción y el código real lo referencia en `GeminiAssistant.php` y `routes.php`. Se verificó que ambos commits son ancestros de `a89b11b`, el HEAD que realmente estaba desplegado.
+- **Inconvenientes y Desafíos:** Para dar por cerrado el tema había que comprobar el estado REAL de Producción y no solo el repositorio (la rama local y lo desplegado pueden divergir).
+- **Decisión Final y Justificación:** Cerrar la auditoría con evidencia contra Producción, y documentar que las cuentas viejas en texto plano son esperables y no requieren intervención.
+- **Herramienta(s) Utilizada(s):** `ssh`, `psql` (solo lectura), `git merge-base`, `grep`
+- **Resultado:** Éxito.
+- **Verificación:** Muestra real de contraseñas en Producción, existencia del rol `ninesys_ai_readonly` y verificación de ascendencia de los commits respecto a `a89b11b`.
+- **Logro Conseguido:** Auditoría de inyección SQL cerrada por completo y verificada en Producción; sin acciones pendientes.
+- **Referencias de Sesión (Contexto):**
+  - Sesión Claude Code: https://claude.ai/code/session_01DGUJFb8c9NYbAFUZLRQfLE
+- **Observaciones de Gemini:** N/A (tarea ejecutada por Claude Code). Bitácora RECONSTRUIDA el 2026-10-01 a partir de los commits y las notas del proyecto, porque en su momento no se escribió.
+- **Respuesta de Gemini:** N/A.
