@@ -79,16 +79,20 @@ return function (App $app) {
             $cod = !empty($raw['cod']) ? (int) $raw['cod'] : null;
             $nombreBuscado = trim((string) ($raw['productoNombre'] ?? $raw['nombre'] ?? ''));
 
-            // 1. Buscar producto en catálogo
+            // 1. Buscar producto en catálogo (precio en products_prices, categoría en category_ids)
             $prodRow = null;
+            $sqlSelectProd = "SELECT p._id, p.product, p.category_ids,
+                COALESCE((SELECT pp.price FROM products_prices pp WHERE pp.id_product = p._id ORDER BY pp._id ASC LIMIT 1), 0) as price
+                FROM products p";
+
             if ($cod) {
-                $rows = $db->goQuery('SELECT _id, product, price, id_category FROM products WHERE _id = ? AND eliminado = 0 LIMIT 1', [$cod]);
+                $rows = $db->goQuery("{$sqlSelectProd} WHERE p._id = ? AND p.eliminado = 0 LIMIT 1", [$cod]);
                 if (!empty($rows) && !isset($rows['status'])) {
                     $prodRow = $rows[0];
                 }
             }
             if (!$prodRow && $nombreBuscado !== '') {
-                $rows = $db->goQuery('SELECT _id, product, price, id_category FROM products WHERE product ILIKE ? AND eliminado = 0 LIMIT 1', ["%{$nombreBuscado}%"]);
+                $rows = $db->goQuery("{$sqlSelectProd} WHERE p.product ILIKE ? AND p.eliminado = 0 LIMIT 1", ["%{$nombreBuscado}%"]);
                 if (!empty($rows) && !isset($rows['status'])) {
                     $prodRow = $rows[0];
                 }
@@ -104,7 +108,12 @@ return function (App $app) {
 
             $prodId = (int) $prodRow['_id'];
             $prodNombre = $prodRow['product'];
-            $catId = (int) $prodRow['id_category'];
+            $catId = 1;
+            if (!empty($prodRow['category_ids'])) {
+                $parts = explode(',', (string) $prodRow['category_ids']);
+                $firstCat = (int) trim($parts[0]);
+                if ($firstCat > 0) $catId = $firstCat;
+            }
 
             // 2. Nombre de categoría
             $catNombre = 'General';
