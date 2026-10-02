@@ -1,0 +1,75 @@
+================================================================================
+BITÁCORA DE TAREA: IMPLEMENTACIÓN DE INVENTARIO, NÓMINA Y OPERACIONES DE TALLER EN ASISTENTE DE IA
+Fecha y Hora: 2026-10-02 12:08:54 -04:00
+Entorno: Desarrollo (vps-contabo-dev)
+Módulos Afectados: ninesys-api, mcp_ninesys, ninesys-ai-agent
+================================================================================
+
+1. OBJETIVO:
+Implementar los 3 primeros puntos de la hoja de ruta de capacidades para el Asistente de IA:
+  a) Inventario, Telas y Consumibles (existencias por tipo/color, rollos/papel DTF, tintas, insumos generales, alertas de bajo stock y agotados).
+  b) Nómina y Comisiones por Empleado (consultar comisiones y pagos por tareas/destajo acumulados por trabajador en taller y ventas, pendientes por liquidar con fecha_pago IS NULL o liquidados con fecha_pago IS NOT NULL, desglose por concepto y tareas).
+  c) Operaciones de Taller y Control de Producción (detalle de órdenes retrasadas del semáforo con días de retraso, clientes, estación actual; y carga de trabajo de diseñadores con propuestas esperando cliente).
+
+2. CAMBIOS REALIZADOS:
+
+Backend (ninesys-api, rama feature/postgresql-support):
+- app/routes/ai_inventory.php:
+  * GET /internal/inventario/{id_empresa}/stock
+  * Filtros: tipo, buscar, departamento, solo_bajo_stock, umbral, limit.
+  * Resumen global por tipo de insumo y listado detallado con alertas.
+- app/routes/ai_payroll.php:
+  * GET /internal/nomina/{id_empresa}/comisiones
+  * Soporte para consultar un empleado individual (desglose por concepto y tareas recientes) o el ranking global de nómina de la empresa.
+  * Filtros: empleado, estado ('pendientes', 'pagadas', 'todas'), desde, hasta, limit.
+- app/routes/ai_operations.php:
+  * GET /internal/taller/{id_empresa}/ordenes-retrasadas
+    - Días de retraso (CURRENT_DATE - fecha_entrega), estación/departamento actual donde está frenada (lotes.paso), montos, saldos pendientes y productos.
+  * GET /internal/taller/{id_empresa}/disenadores-carga
+    - Diseños activos en cola (terminado = 0), terminados y propuestas en espera de cliente (estatus = 'Esperando Respuesta').
+- app/routes.php:
+  * Registro de los 3 archivos de rutas internas.
+
+MCP (mcp_ninesys, rama main):
+- src/types/api.ts:
+  * Definición de interfaces TypeScript: InventoryStockResponse, InventoryStockItem, EmployeePayrollResponse, PayrollConceptItem, PayrollTaskItem, PayrollEmployeeSummary, DelayedOrdersResponse, DelayedOrderItem, DesignerWorkloadResponse, DesignerWorkloadItem, PendingProposalItem.
+- src/tools/inventory.ts:
+  * Tool ninesys_get_inventory_stock con esquema Zod completo y formateo de respuesta amigable.
+- src/tools/payroll.ts:
+  * Tool ninesys_get_employee_commissions con soporte individual y consolidado general.
+- src/tools/operations.ts:
+  * Tools ninesys_get_delayed_orders y ninesys_get_designers_workload.
+- src/tools/index.ts:
+  * Registro de las nuevas herramientas en registerAllTools.
+
+Agente de IA (ninesys-ai-agent, rama main):
+- src/agent.ts:
+  * Actualización del defaultSystemPrompt para instruir al modelo sobre cuándo invocar ninesys_get_inventory_stock, ninesys_get_employee_commissions, ninesys_get_delayed_orders y ninesys_get_designers_workload.
+
+3. DESPLIEGUE Y COMPILACIÓN (Contabo Dev - vps-contabo-dev):
+- Se ejecutaron los scripts oficiales desde ninesys-hub/bin/:
+  * deploy_backend_dev.sh -> Commit 7a6a998 desplegado, OPcache reseteado.
+  * deploy_mcp_dev.sh -> Commit 87d5df0 desplegado, TypeScript compilado, PM2 ID 5 (ninesys-mcp-server) reiniciado.
+  * deploy_agent_dev.sh -> Commit a4f2cf4 desplegado, TypeScript compilado, PM2 ID 6 (ninesys-ai-agent) reiniciado.
+
+4. PRUEBAS DE VERIFICACIÓN END-TO-END (POST https://api.nineteengreen.com/ai/chat con empresa 194):
+- Test 1 (Inventario / Telas / Consumibles):
+  * Consulta: "¿Qué materiales tienen bajo stock o están por agotarse?"
+  * Respuesta: "Actualmente tenemos 42 ítems con bajo stock o agotados. Entre los agotados se encuentran varias telas como atletica blanco, papel de sublimacion, tafeta blanca y tintas DTF y de sublimación. También hay varias telas con bajo stock como new flex blanca, licra titanic verde y licra illinois morado, con menos de 5 unidades."
+  * Resultado: EXITOSO.
+- Test 2 (Nómina y Comisiones):
+  * Consulta: "¿Cuánto se le debe en comisiones a Andreina y cuál es el desglose?"
+  * Respuesta: "A Andreina Barilla, empleada de Impresión, se le deben un total de $207.57 en comisiones. El desglose es el siguiente: Estampado: $207.07 (36 tareas), Personalización: $0.30 (1 tarea), Ajuste: $0.20 (1 tarea)..."
+  * Resultado: EXITOSO.
+- Test 3 (Órdenes Retrasadas):
+  * Consulta: "¿Cuáles son las órdenes que están retrasadas y en qué departamentos están frenadas?"
+  * Respuesta: "Hay un total de 73 órdenes retrasadas. Los departamentos con más órdenes frenadas son: Limpieza: 29 órdenes, Estampado: 16 órdenes, Producción: 13 órdenes, Impresión: 9 órdenes. Las 20 órdenes con mayor retraso son: Orden #6155... con 79 días de retraso..."
+  * Resultado: EXITOSO.
+- Test 4 (Carga de Diseñadores):
+  * Consulta: "¿Cómo está la carga de trabajo de los diseñadores y cuántas propuestas están esperando al cliente?"
+  * Respuesta: "En el departamento de diseño, hay un total de 409 diseños activos en cola y 16 propuestas están esperando respuesta del cliente. Por diseñador: Enemias: 252 diseños activos en cola... Maru: 107 diseños activos en cola... Andreina Barilla: 48..."
+  * Resultado: EXITOSO.
+
+5. ESTADO:
+COMPLETADO Y VERIFICADO EN DESARROLLO (vps-contabo-dev).
+================================================================================
