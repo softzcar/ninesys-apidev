@@ -398,11 +398,28 @@ return function (App $app) {
                 $vndRows = $db->goQuery("SELECT u.id_usuario, u.nombre
                     FROM api_empresas.empresas_usuarios u
                     JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = u.id_usuario AND eue.id_empresa = {$idEmpresa}
-                    WHERE u.activo = 1 AND (u.departamento = 'Comercialización' OR u.departamentos_asignados::text ILIKE '%Comercialización%')
+                    LEFT JOIN api_empresas.empresas_usuarios_departamentos eud ON eud.id_empleado = u.id_usuario AND eud.id_empresa = {$idEmpresa}
+                    LEFT JOIN departamentos d ON d._id = eud.id_departamento AND d.eliminado = 0
+                    WHERE u.activo = 1 AND (
+                        u.departamento ILIKE '%Comercial%'
+                        OR d.departamento ILIKE '%Comercial%'
+                        OR eud.id_departamento = 6
+                    )
                     ORDER BY RANDOM() LIMIT 1");
                 if (!empty($vndRows) && !isset($vndRows['status'])) {
                     $vendedorId = (int) $vndRows[0]['id_usuario'];
                     $vendedorNombre = $vndRows[0]['nombre'];
+                } else {
+                    // Fallback a cualquier usuario activo de la empresa
+                    $vndFallback = $db->goQuery("SELECT u.id_usuario, u.nombre
+                        FROM api_empresas.empresas_usuarios u
+                        JOIN api_empresas.empresas_usuarios_empresas eue ON eue.id_usuario = u.id_usuario AND eue.id_empresa = {$idEmpresa}
+                        WHERE u.activo = 1
+                        ORDER BY RANDOM() LIMIT 1");
+                    if (!empty($vndFallback) && !isset($vndFallback['status'])) {
+                        $vendedorId = (int) $vndFallback[0]['id_usuario'];
+                        $vendedorNombre = $vndFallback[0]['nombre'];
+                    }
                 }
             } else {
                 // Obtener nombre del vendedor
