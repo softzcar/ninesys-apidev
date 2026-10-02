@@ -117,9 +117,9 @@ return function (App $app) {
 
             // 2. Nombre de categoría
             $catNombre = 'General';
-            $catRows = $db->goQuery('SELECT name FROM categories WHERE _id = ? LIMIT 1', [$catId]);
+            $catRows = $db->goQuery('SELECT nombre FROM categories WHERE _id = ? LIMIT 1', [$catId]);
             if (!empty($catRows) && !isset($catRows['status'])) {
-                $catNombre = $catRows[0]['name'];
+                $catNombre = $catRows[0]['nombre'];
             }
 
             // 3. Resolver Talla
