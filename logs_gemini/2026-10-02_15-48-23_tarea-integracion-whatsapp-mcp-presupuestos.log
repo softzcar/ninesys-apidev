@@ -1,0 +1,70 @@
+================================================================================
+BITÁCORA DE TAREA: INTEGRACIÓN DE WHATSAPP CON MCP Y COTIZACIÓN/CREACIÓN DE PRESUPUESTOS (MUTACIONES)
+Fecha y Hora: 2026-10-02 15:48:23 -04:00
+Entorno: Desarrollo (vps-contabo-dev)
+Módulos Afectados: ninesys-api, mcp_ninesys, ninesys-ai-agent, msg_ninesys
+================================================================================
+
+1. OBJETIVO:
+Dar al MCP y al Asistente de IA la capacidad de calcular cotizaciones en tiempo real y crear presupuestos formales (mutaciones INSERT seguras con integridad referencial y transacciones ACID). Integrar la aplicación de WhatsApp (msg_ninesys) delegando la creación de presupuestos a este nuevo servicio centralizado, manteniendo fallback de resiliencia.
+
+2. ARQUITECTURA DE LA SOLUCIÓN:
+Se desacopló la lógica de cotización y generación de presupuestos:
+- Cálculo Puro (Read-only): Validación de productos contra catálogo, cálculo de precios base, multiplicadores por tallas grandes (XL, 2XL, etc.), detección de cortes y subtotales.
+- Creación de Presupuesto (Mutation): Transacción ACID completa (`BEGIN` ... `COMMIT` / `ROLLBACK`). Resolución y upsert seguro de clientes en `customers`, asignación automática equitativa de vendedor asignado al departamento de Comercialización (o vendedor recurrente previo del cliente), inserción de cabecera en `presupuestos` y detalle de ítems en `presupuestos_productos`.
+- MCP Server (`mcp_ninesys`): Exposición de 2 herramientas: `ninesys_calculate_quote` y `ninesys_create_presupuesto`.
+- Agente IA (`ninesys-ai-agent`): Actualización del prompt de sistema para cotizar preventivamente y solicitar confirmación explícita con datos del cliente antes de invocar la creación formal del presupuesto.
+- WhatsApp Bot (`msg_ninesys`): Refactorización de `presupuestoService.js` para delegar la creación al endpoint `POST /internal/presupuestos/{id_empresa}/crear`, con respaldo seguro a base de datos.
+
+3. CAMBIOS REALIZADOS:
+
+Backend (ninesys-api, rama feature/postgresql-support):
+- app/routes/ai_quotes.php:
+  * POST /internal/presupuestos/{id_empresa}/calcular
+  * POST /internal/presupuestos/{id_empresa}/crear
+  * Adaptado al esquema PostgreSQL: precios en `products_prices`, categorías en `categories.nombre`, soporte de normalización de tallas y cortes.
+  * Transacciones ACID con `beginTransaction()`, `commit()`, `rollback()`.
+- app/routes.php:
+  * Registro de `ai_quotes.php`.
+
+MCP Server (mcp_ninesys, rama main):
+- src/services/apiClient.ts:
+  * Incorporación del método genérico `apiPost<T>()`.
+- src/types/api.ts:
+  * Definición de interfaces: `CalculateQuoteParams`, `CalculateQuoteResponse`, `CreatePresupuestoParams`, `CreatePresupuestoResponse`.
+- src/tools/quotes.ts:
+  * Herramientas `ninesys_calculate_quote` y `ninesys_create_presupuesto`.
+- src/tools/index.ts:
+  * Registro de las nuevas herramientas.
+
+Agente de IA (ninesys-ai-agent, rama main):
+- src/agent.ts:
+  * Reglas de cotización y presupuestos en `defaultSystemPrompt`:
+    - Regla 1: Usar `ninesys_calculate_quote` para estimar totales y desglose.
+    - Regla 2: Solo llamar a `ninesys_create_presupuesto` cuando el cliente confirme explícitamente y proporcione nombre y contacto.
+
+WhatsApp Bot (msg_ninesys, rama feat/baileys-7-upgrade):
+- src/services/presupuestoService.js:
+  * Delegación HTTP a `POST /internal/presupuestos/{id_empresa}/crear`.
+  * Fallback transparente a inserción directa si la API no está disponible o falla la red.
+
+4. DESPLIEGUE Y VERIFICACIÓN EN DESARROLLO (vps-contabo-dev):
+- ninesys-api: Desplegado vía `ninesys-hub/bin/deploy_backend_dev.sh` (HEAD 8355024). OPcache reseteado.
+- mcp_ninesys: Compilado (`npm run build`) y desplegado en PM2 (id 5, HEAD 9e9a8f4).
+- ninesys-ai-agent: Compilado (`npm run build`) y desplegado en PM2 (id 6, HEAD c3768fd).
+- msg_ninesys: Desplegado en PM2 (id 0, HEAD 2d59ba3).
+
+5. PRUEBAS DE FUNCIONAMIENTO:
+- Test 1 (Endpoint Calcular):
+  * Petición: 10 franelas L ($20 c/u) + 5 franelas 2XL ($22 c/u con recargo XL).
+  * Resultado: Éxito total $310.00 con desglose por ítem y categoría Franelas (#38).
+- Test 2 (Endpoint Crear):
+  * Petición: Cliente "Carlos Pérez", V-12345678, 2 Franelas Oversize L.
+  * Resultado: Presupuesto #21 creado exitosamente, cliente vinculado (#2105), asesor asignado ("Sayerlin").
+- Test 3 (Chat IA - Cotizar):
+  * Query: "Cotízame 10 Franela Oversize en tela microfibra talla L y 5 Franela Oversize en microfibra talla 2XL".
+  * Resultado: El agente ejecutó `ninesys_calculate_quote` y devolvió el cálculo exacto de $310.00 con desglose amigable.
+- Test 4 (Chat IA - Crear Presupuesto Formal):
+  * Query: "Por favor genera y crea formalmente el presupuesto para el cliente María Gómez, cédula V-9988776, teléfono 04141234567, de 10 Franela Oversize en tela microfibra talla L corte damas".
+  * Resultado: El agente ejecutó `ninesys_create_presupuesto`, generó el Presupuesto oficial #22, asignó asesora Zenaida y retornó la confirmación formateada con éxito.
+================================================================================
