@@ -263,9 +263,21 @@ return function (App $app) {
         }
 
         $clienteData = is_array($payload['cliente'] ?? null) ? $payload['cliente'] : [];
-        $nombreCliente = trim((string) ($clienteData['nombre'] ?? ''));
+        $nombreCliente = trim((string) ($clienteData['nombre'] ?? $payload['cliente_nombre'] ?? ''));
         if ($nombreCliente === '') {
-            return $respondJson(['error' => 'bad_request', 'message' => 'Se requiere el nombre del cliente en cliente.nombre.'], 400);
+            return $respondJson(['error' => 'bad_request', 'message' => 'Se requiere el nombre del cliente en cliente.nombre o cliente_nombre.'], 400);
+        }
+
+        $apellidoCliente = trim((string) ($clienteData['apellido'] ?? $payload['cliente_apellido'] ?? ''));
+        $cedulaCliente = trim((string) ($clienteData['cedula'] ?? $payload['cliente_cedula'] ?? ''));
+        $telefonoCliente = trim((string) ($clienteData['telefono'] ?? $payload['cliente_telefono'] ?? ''));
+        $emailCliente = trim((string) ($clienteData['email'] ?? $payload['cliente_email'] ?? ''));
+        $direccionCliente = trim((string) ($clienteData['direccion'] ?? $payload['cliente_direccion'] ?? ''));
+
+        if ($apellidoCliente === '' && strpos($nombreCliente, ' ') !== false) {
+            $nameParts = explode(' ', $nombreCliente, 2);
+            $nombreCliente = $nameParts[0];
+            $apellidoCliente = $nameParts[1];
         }
 
         $itemsRaw = is_array($payload['items'] ?? null) ? $payload['items'] : [];
@@ -292,12 +304,6 @@ return function (App $app) {
 
             // 2. Iniciar transacción atómica ACID
             $db->beginTransaction();
-
-            $apellidoCliente = trim((string) ($clienteData['apellido'] ?? ''));
-            $cedulaCliente = trim((string) ($clienteData['cedula'] ?? ''));
-            $telefonoCliente = trim((string) ($clienteData['telefono'] ?? ''));
-            $emailCliente = trim((string) ($clienteData['email'] ?? ''));
-            $direccionCliente = trim((string) ($clienteData['direccion'] ?? ''));
 
             $nombreCompleto = trim("{$nombreCliente} {$apellidoCliente}");
 
