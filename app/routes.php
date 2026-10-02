@@ -179,6 +179,15 @@ return function (App $app) {
   // RUTAS INTERNAS DE EMPLEADOS Y VENTAS POR VENDEDOR PARA EL ASISTENTE DE IA
   (require __DIR__ . '/routes/ai_employees.php')($app);
 
+  // RUTAS INTERNAS DE INVENTARIO, TELAS Y CONSUMIBLES PARA EL ASISTENTE DE IA
+  (require __DIR__ . '/routes/ai_inventory.php')($app);
+
+  // RUTAS INTERNAS DE NÓMINA Y COMISIONES POR EMPLEADO PARA EL ASISTENTE DE IA
+  (require __DIR__ . '/routes/ai_payroll.php')($app);
+
+  // RUTAS INTERNAS DE OPERACIONES DE TALLER Y DISEÑO PARA EL ASISTENTE DE IA
+  (require __DIR__ . '/routes/ai_operations.php')($app);
+
   // RUTAS DEL MODULO DE CRM
   (require __DIR__ . '/routes/crm.php')($app);
 
