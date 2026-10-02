@@ -188,6 +188,9 @@ return function (App $app) {
   // RUTAS INTERNAS DE OPERACIONES DE TALLER Y DISEÑO PARA EL ASISTENTE DE IA
   (require __DIR__ . '/routes/ai_operations.php')($app);
 
+  // RUTAS INTERNAS DE COTIZACIÓN Y CREACIÓN DE PRESUPUESTOS PARA EL ASISTENTE DE IA Y WHATSAPP
+  (require __DIR__ . '/routes/ai_quotes.php')($app);
+
   // RUTAS DEL MODULO DE CRM
   (require __DIR__ . '/routes/crm.php')($app);
 
